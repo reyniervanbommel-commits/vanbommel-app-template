@@ -1,0 +1,45 @@
+---
+description: Code kwaliteitsregels voor React componenten en hooks
+alwaysApply: true
+---
+
+# Component grootte (kritiek)
+
+- Maximaal 300 regels per component
+- Bij 250+ regels: waarschuwen en splitsing voorstellen
+- Bij 300+ regels: stoppen en eerst splitsen
+- Controleer altijd de bestandsgrootte vóór wijzigingen
+
+# Component structuur
+
+- Groepeer components per feature in submappen
+- Gebruik `index.js` voor exports
+- Maximaal 4 niveaus JSX nesting
+- Maximaal 10 props per component
+
+# State management
+
+- Bij 5+ `useState` calls: overweeg een custom hook
+- Bij 10+ `useState` calls: custom hook verplicht
+- Voorkom duplicatie van state logica
+
+# Performance
+
+- Gebruik `useMemo` voor dure berekeningen
+- Gebruik `useCallback` voor event handlers
+- Gebruik `React.memo` voor grid- en list-components
+- Geen inline functions in JSX
+
+# Code organisatie
+
+- Herbruikbare logica → custom hooks
+- Herhaalde UI → losse components
+- Memoize arrays en objects die als dependency dienen
+
+# Stop signalen
+
+Stop en splits wanneer:
+- Bestand gaat over 300 regels
+- Meer dan 4 niveaus JSX nesting
+- 10+ useState calls
+- Herhaalde code patronen zichtbaar

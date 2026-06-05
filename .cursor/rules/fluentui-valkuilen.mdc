@@ -1,0 +1,32 @@
+---
+description: Bekende FluentUI v9 valkuilen en hoe ze te vermijden
+alwaysApply: true
+---
+
+# Tooltip portal pre-rendering (KRITIEK)
+
+`<Tooltip>` rendert zijn content in een portal in `document.body`, ook als niet gehoverd.
+Dit veroorzaakt een groot wit vlak bovenaan de pagina.
+
+**NOOIT** gebruiken in:
+- Scrollbare panels
+- Lijsten (`.map()`)
+- Dynamisch zichtbare componenten
+
+**Gebruik in plaats daarvan:** `<div title={tekst || undefined}>`
+
+# Dropdown overflow
+
+Fluent UI dropdowns respecteren geen `overflow: hidden` van parent containers.
+**Oplossing:** `React.createPortal` naar `document.body`.
+
+# Portal-componenten alleen op top-level
+
+`<Tooltip>`, `<Menu>`, `<Popover>`, `<Dialog>` alleen op losse knoppen in een vaste toolbar.
+**Nooit** in herhaalde lijstitems.
+
+# makeStyles voor alle styling
+
+- Gebruik `makeStyles` + `tokens.*` voor alle stijlen
+- Geen inline style objects met hardcoded kleuren
+- Geen globale CSS voor component-specifieke stijlen

@@ -1,0 +1,44 @@
+{
+  "name": "[app-naam]",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "dev:frontend": "vite",
+    "dev:backend": "node --watch server/server.js",
+    "dev:all": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "build": "vite build",
+    "start": "node server/server.js",
+    "migrate:db": "node scripts/db/run-migrations.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "@fluentui/react-components": "^9.54.0",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.2.0",
+    "express-session": "^1.18.0",
+    "connect-mssql-v2": "^2.0.2",
+    "mssql": "^10.0.4",
+    "bcrypt": "^5.1.1",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4",
+    "@azure/communication-email": "^1.0.0",
+    "winston": "^3.13.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "vitest": "^2.0.5",
+    "@testing-library/react": "^16.0.0",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.3",
+    "concurrently": "^8.2.2"
+  }
+}

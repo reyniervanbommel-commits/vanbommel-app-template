@@ -1,0 +1,132 @@
+'use strict';
+
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const sql = require('mssql');
+
+function getPool() {
+  return sql.connect(process.env.SQL_CONNECTION_STRING);
+}
+
+function normalizeEmail(email) {
+  return (email || '').toLowerCase().trim();
+}
+
+function validatePasswordRules(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, error: 'Wachtwoord moet minimaal 8 tekens lang zijn' };
+  }
+  return { valid: true };
+}
+
+async function hashPassword(password) {
+  return bcrypt.hash(password, 12);
+}
+
+async function getUserByEmail(email) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('email', sql.NVarChar, normalizeEmail(email))
+    .query('SELECT * FROM dbo.users WHERE email = @email');
+  return result.recordset[0] || null;
+}
+
+async function applyProgressiveDelay(failedAttempts) {
+  if (!failedAttempts) return;
+  const delay = [1000, 2000, 4000][Math.min(failedAttempts - 1, 2)];
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+async function login(email, password) {
+  const user = await getUserByEmail(email);
+  if (!user) throw new Error('E-mailadres of wachtwoord is onjuist');
+  if (user.is_locked) throw new Error('Account geblokkeerd. Vraag nieuw wachtwoord aan.');
+
+  if (user.must_set_password || !user.password_hash) {
+    const bootstrapEmail = normalizeEmail(process.env.BOOTSTRAP_ADMIN_EMAIL || '');
+    const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+    if (bootstrapEmail && bootstrapPassword && normalizeEmail(email) === bootstrapEmail && password === bootstrapPassword) {
+      const pool = await getPool();
+      const hash = await hashPassword(password);
+      await pool.request()
+        .input('id', sql.Int, user.id)
+        .input('hash', sql.NVarChar, hash)
+        .query("UPDATE dbo.users SET password_hash = @hash, must_set_password = 0, role = 'admin', updated_at = SYSUTCDATETIME() WHERE id = @id");
+      return { user: { ...user, role: 'admin', must_set_password: false } };
+    }
+    return { requiresPasswordSetup: true, user };
+  }
+
+  const passwordValid = await bcrypt.compare(password || '', user.password_hash);
+  if (!passwordValid) {
+    await applyProgressiveDelay(user.failed_attempts);
+    const pool = await getPool();
+    const newAttempts = (user.failed_attempts || 0) + 1;
+    const locked = newAttempts >= 3 ? 1 : 0;
+    await pool.request()
+      .input('id', sql.Int, user.id)
+      .input('attempts', sql.Int, newAttempts)
+      .input('locked', sql.Bit, locked)
+      .query('UPDATE dbo.users SET failed_attempts = @attempts, is_locked = @locked, updated_at = SYSUTCDATETIME() WHERE id = @id');
+    if (locked) throw new Error('Account geblokkeerd na 3 mislukte pogingen. Vraag nieuw wachtwoord aan.');
+    throw new Error('E-mailadres of wachtwoord is onjuist');
+  }
+
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.Int, user.id)
+    .query('UPDATE dbo.users SET failed_attempts = 0, last_login = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME() WHERE id = @id');
+
+  return { user };
+}
+
+async function setPasswordForUser(userId, password) {
+  const validation = validatePasswordRules(password);
+  if (!validation.valid) throw new Error(validation.error);
+  const pool = await getPool();
+  const hash = await hashPassword(password);
+  await pool.request()
+    .input('id', sql.Int, userId)
+    .input('hash', sql.NVarChar, hash)
+    .query('UPDATE dbo.users SET password_hash = @hash, must_set_password = 0, updated_at = SYSUTCDATETIME() WHERE id = @id');
+}
+
+async function requestPasswordReset(email) {
+  const user = await getUserByEmail(email);
+  if (!user) return { success: false, code: 'EMAIL_NOT_FOUND' };
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const pool = await getPool();
+  await pool.request()
+    .input('userId', sql.Int, user.id)
+    .input('tokenHash', sql.NVarChar, tokenHash)
+    .query('INSERT INTO dbo.password_reset_tokens (user_id, token_hash, expires_at) VALUES (@userId, @tokenHash, DATEADD(HOUR, 1, SYSUTCDATETIME()))');
+
+  return { success: true, user, token };
+}
+
+async function resetPassword(token, password) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('hash', sql.NVarChar, tokenHash)
+    .query('SELECT * FROM dbo.password_reset_tokens WHERE token_hash = @hash AND expires_at > SYSUTCDATETIME() AND used_at IS NULL');
+
+  const record = result.recordset[0];
+  if (!record) throw new Error('Resetlink is ongeldig of verlopen');
+
+  await setPasswordForUser(record.user_id, password);
+
+  await pool.request()
+    .input('id', sql.Int, record.id)
+    .query('UPDATE dbo.password_reset_tokens SET used_at = SYSUTCDATETIME() WHERE id = @id');
+
+  const userResult = await pool.request()
+    .input('id', sql.Int, record.user_id)
+    .query('SELECT * FROM dbo.users WHERE id = @id');
+  return userResult.recordset[0];
+}
+
+module.exports = { login, setPasswordForUser, requestPasswordReset, resetPassword, validatePasswordRules, getUserByEmail, normalizeEmail };

@@ -1,0 +1,23 @@
+---
+description: Versie- en Git-beheer regels voor dit project
+alwaysApply: true
+---
+
+# Plannen en specs
+
+- Alle implementatieplannen worden opgeslagen in `.cursor/plans/` met naamgeving `YYYY-MM-DD-onderwerp.plan.md`
+- Alle design specs worden opgeslagen in `docs/specs/`
+
+# Git-werkwijze
+
+- Werk zelf met Git wanneer nodig (commit, branch, merge, push, etc.)
+- Geef altijd expliciet aan wanneer je een Git-actie hebt gedaan
+- **`develop-from-devops` / OTAP-feature-flow:** voer `git push` en `gh pr create` zelf uit na commit — geen akkoord vragen
+- Commit message prefix: `feat`, `fix`, `refactor`, `docs`, `perf`
+- Branch naamgeving: `feature/naam`, `fix/naam`, `refactor/naam`, `docs/naam`
+
+# OTAP branches
+
+- `feature/*` → lokale ontwikkeling
+- `develop` → integratiebranch, deploy naar dev
+- `main` → productie/staging
