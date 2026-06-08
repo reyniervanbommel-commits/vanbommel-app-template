@@ -24,6 +24,7 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [devResetUrl, setDevResetUrl] = useState('');
+  const [devNotice, setDevNotice] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,6 +33,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
       const data = await res.json().catch(() => ({}));
       if (data && data.devResetUrl) setDevResetUrl(data.devResetUrl);
+      if (data && data.devNotice) setDevNotice(data.devNotice);
       setSent(true);
     } finally {
       setLoading(false);
@@ -51,6 +53,9 @@ export default function ForgotPasswordPage() {
                 <br />
                 <a href={devResetUrl}>{devResetUrl}</a>
               </div>
+            )}
+            {!devResetUrl && devNotice && (
+              <div className={styles.devBox}>{devNotice}</div>
             )}
             <Button onClick={() => navigate('/login')} style={{ marginTop: '16px' }}>Terug naar inloggen</Button>
           </div>

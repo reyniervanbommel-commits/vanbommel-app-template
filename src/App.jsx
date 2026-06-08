@@ -8,6 +8,7 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
+import AppVersionBadge from './components/shared/AppVersionBadge';
 
 const useStyles = makeStyles({
   appShell: {
@@ -28,16 +29,7 @@ const useStyles = makeStyles({
     padding: '4px 12px', borderRadius: '4px',
     fontSize: '12px', fontWeight: 600, zIndex: 9999,
   },
-  footer: {
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-    padding: '8px 16px',
-    fontSize: '12px',
-    color: tokens.colorNeutralForeground3,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
 });
-
-const APP_VERSION = 'v1.0.4';
 
 function HomePage() {
   const styles = useStyles();
@@ -67,7 +59,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <footer className={styles.footer}>{APP_VERSION}</footer>
+      <AppVersionBadge />
     </div>
   );
 }
