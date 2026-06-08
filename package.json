@@ -2,6 +2,9 @@
   "name": "[app-naam]",
   "version": "1.0.0",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev:frontend": "vite",
     "dev:backend": "node --watch server/server.js",
