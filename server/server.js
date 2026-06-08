@@ -6,7 +6,9 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const MSSQLStore = require('connect-mssql-v2');
+const connectMssql = require('connect-mssql-v2');
+const MSSQLStore = connectMssql.default || connectMssql;
+const { parseSqlConnectionString } = require('./utils/sqlConnectionConfig');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
@@ -37,9 +39,9 @@ app.use(rateLimit({
 
 app.use(express.json());
 
-const sessionStore = new MSSQLStore({
-  connectionString: process.env.SQL_CONNECTION_STRING,
-});
+const sessionStore = new MSSQLStore(
+  parseSqlConnectionString(process.env.SQL_CONNECTION_STRING),
+);
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
