@@ -18,4 +18,15 @@ function requireRole(role) {
   };
 }
 
-module.exports = { requireSession, requireRole };
+function requireAnyRole(roles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Niet geauthenticeerd' });
+    if (req.user.role === 'admin') return next();
+    if (!Array.isArray(roles) || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Geen toegang — onvoldoende rechten' });
+    }
+    return next();
+  };
+}
+
+module.exports = { requireSession, requireRole, requireAnyRole };

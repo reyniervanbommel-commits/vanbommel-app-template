@@ -8,39 +8,62 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
+import { PurchaseOrdersPage } from './components/supplier';
+import { AppFooter } from './components/layout';
 
 const useStyles = makeStyles({
+  appShell: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  content: {
+    flexGrow: 1,
+  },
   devBanner: {
-    position: 'fixed', bottom: '16px', right: '16px',
+    position: 'fixed',
+    bottom: '16px',
+    right: '16px',
     backgroundColor: tokens.colorPaletteMarigoldBackground2,
     color: tokens.colorNeutralForeground1,
-    padding: '4px 12px', borderRadius: '4px',
-    fontSize: '12px', fontWeight: 600, zIndex: 9999,
+    padding: '4px 12px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: 600,
+    zIndex: 9999,
+  },
+  devBadgeWrap: {
+    position: 'fixed',
+    bottom: '16px',
+    right: '16px',
   },
 });
 
-function HomePage() {
-  const styles = useStyles();
-  return (
-    <div style={{ padding: '24px' }}>
-      <h1>Home</h1>
-      <p>Vervang dit met je app-inhoud.</p>
-      {import.meta.env.DEV && <div className={styles.devBanner}>DEV</div>}
-    </div>
-  );
-}
-
 export default function App() {
+  const styles = useStyles();
+
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/set-password" element={<SetPasswordPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/mfa" element={<MfaPage />} />
-      <Route path="/admin" element={<AuthGuard><AdminPage /></AuthGuard>} />
-      <Route path="/" element={<AuthGuard><HomePage /></AuthGuard>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <div className={styles.appShell}>
+      <div className={styles.content}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/set-password" element={<SetPasswordPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/mfa" element={<MfaPage />} />
+          <Route path="/admin" element={<AuthGuard><AdminPage /></AuthGuard>} />
+          <Route path="/" element={<AuthGuard><PurchaseOrdersPage /></AuthGuard>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+
+      <AppFooter />
+
+      {import.meta.env.DEV ? (
+        <div className={styles.devBadgeWrap}>
+          <div className={styles.devBanner}>DEV</div>
+        </div>
+      ) : null}
+    </div>
   );
 }
