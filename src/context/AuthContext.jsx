@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
     logout: auth.actions.logout,
     checkAuth: auth.actions.checkAuth,
     setPassword: auth.actions.setPassword,
+    hasRole: role => auth.user?.role === role,
   }), [auth]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

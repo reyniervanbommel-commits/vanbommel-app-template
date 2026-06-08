@@ -3,6 +3,7 @@
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const sql = require('mssql');
+const { ROLES, isAllowedRole } = require('../constants/roles');
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -10,6 +11,27 @@ function getPool() {
 
 function normalizeEmail(email) {
   return (email || '').toLowerCase().trim();
+}
+
+function normalizeRole(role) {
+  const normalizedRole = (role || '').toLowerCase().trim();
+  if (!isAllowedRole(normalizedRole)) return null;
+  return normalizedRole;
+}
+
+function mapUserForSession(user) {
+  if (!user) return null;
+  const normalizedRole = normalizeRole(user.role) || ROLES.SUPPLIER;
+  return {
+    id: user.id,
+    email: user.email,
+    display_name: user.display_name || null,
+    role: normalizedRole,
+    mfa_enabled: Boolean(user.mfa_enabled),
+    must_set_password: Boolean(user.must_set_password),
+    is_locked: Boolean(user.is_locked),
+    last_login: user.last_login || null,
+  };
 }
 
 function validatePasswordRules(password) {
@@ -52,9 +74,9 @@ async function login(email, password) {
         .input('id', sql.Int, user.id)
         .input('hash', sql.NVarChar, hash)
         .query("UPDATE dbo.users SET password_hash = @hash, must_set_password = 0, role = 'admin', updated_at = SYSUTCDATETIME() WHERE id = @id");
-      return { user: { ...user, role: 'admin', must_set_password: false } };
+      return { user: { ...mapUserForSession(user), role: ROLES.ADMIN, must_set_password: false } };
     }
-    return { requiresPasswordSetup: true, user };
+    return { requiresPasswordSetup: true, user: mapUserForSession(user) };
   }
 
   const passwordValid = await bcrypt.compare(password || '', user.password_hash);
@@ -77,7 +99,7 @@ async function login(email, password) {
     .input('id', sql.Int, user.id)
     .query('UPDATE dbo.users SET failed_attempts = 0, last_login = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME() WHERE id = @id');
 
-  return { user };
+  return { user: mapUserForSession(user) };
 }
 
 async function setPasswordForUser(userId, password) {
@@ -126,7 +148,17 @@ async function resetPassword(token, password) {
   const userResult = await pool.request()
     .input('id', sql.Int, record.user_id)
     .query('SELECT * FROM dbo.users WHERE id = @id');
-  return userResult.recordset[0];
+  return mapUserForSession(userResult.recordset[0]);
 }
 
-module.exports = { login, setPasswordForUser, requestPasswordReset, resetPassword, validatePasswordRules, getUserByEmail, normalizeEmail };
+module.exports = {
+  login,
+  setPasswordForUser,
+  requestPasswordReset,
+  resetPassword,
+  validatePasswordRules,
+  getUserByEmail,
+  normalizeEmail,
+  normalizeRole,
+  mapUserForSession,
+};

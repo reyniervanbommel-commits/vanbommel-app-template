@@ -45,9 +45,10 @@ router.post('/set-password', async (req, res, next) => {
     const user = await authService.getUserByEmail(email);
     if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
     await authService.setPasswordForUser(user.id, password);
+    const safeUser = authService.mapUserForSession(user);
     req.session.userId = user.id;
-    req.session.user = user;
-    res.json({ user });
+    req.session.user = safeUser;
+    res.json({ user: safeUser });
   } catch (err) {
     next(err);
   }
@@ -80,7 +81,7 @@ router.post('/reset-password', async (req, res, next) => {
 });
 
 router.get('/me', requireSession, (req, res) => {
-  res.json({ user: req.session.user });
+  res.json({ user: req.user });
 });
 
 module.exports = router;
