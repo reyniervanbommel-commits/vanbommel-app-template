@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, makeStyles, tokens, Spinner } from '@fluentui/react-components';
+import { Button, makeStyles, tokens, Spinner, Text, shorthands } from '@fluentui/react-components';
+import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import { apiRequest } from '../../utils/api';
 import DataTable from '../shared/DataTable';
@@ -8,7 +9,23 @@ import ConfirmDialog from '../shared/ConfirmDialog';
 import EmptyState from '../shared/EmptyState';
 
 const useStyles = makeStyles({
-  page: { padding: '24px' },
+  page: { display: 'flex', minHeight: '100%' },
+  nav: {
+    width: '220px',
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.padding('12px'),
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+  },
+  navTitle: {
+    ...shorthands.padding('4px', '8px', '10px', '8px'),
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+    marginBottom: '2px',
+  },
+  navButton: { justifyContent: 'flex-start' },
+  content: { flex: 1, ...shorthands.padding('24px') },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
   title: { fontSize: '24px', fontWeight: 600 },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
@@ -17,6 +34,7 @@ const useStyles = makeStyles({
 export default function AdminPage() {
   const styles = useStyles();
   const { logout } = useAuth();
+  const [adminTab, setAdminTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,24 +98,56 @@ export default function AdminPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <div className={styles.title}>Gebruikersbeheer</div>
-        <Button onClick={logout} appearance="subtle">Uitloggen</Button>
+      <aside className={styles.nav}>
+        <Text size={500} weight="semibold" className={styles.navTitle}>
+          Admin
+        </Text>
+        <Button
+          appearance={adminTab === 'users' ? 'primary' : 'subtle'}
+          icon={<Person24Regular />}
+          className={styles.navButton}
+          onClick={() => setAdminTab('users')}
+        >
+          Gebruikers
+        </Button>
+        <Button
+          appearance={adminTab === 'analytics' ? 'primary' : 'subtle'}
+          icon={<Table24Regular />}
+          className={styles.navButton}
+          onClick={() => setAdminTab('analytics')}
+        >
+          Analytics
+        </Button>
+      </aside>
+
+      <div className={styles.content}>
+        <div className={styles.header}>
+          <div className={styles.title}>{adminTab === 'users' ? 'Gebruikersbeheer' : 'Analytics (placeholder)'}</div>
+          <Button onClick={logout} appearance="subtle">Uitloggen</Button>
+        </div>
+
+        {adminTab === 'analytics' ? (
+          <EmptyState title="Analytics" description="Analytics-overzicht volgt in een volgende stap." />
+        ) : (
+          <>
+            {error && <div className={styles.error}>{error}</div>}
+            {loading ? <Spinner /> : users.length === 0 ? (
+              <EmptyState title="Geen gebruikers" description="Er zijn nog geen gebruikers aangemaakt." />
+            ) : (
+              <DataTable columns={columns} items={users} />
+            )}
+          </>
+        )}
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="Gebruiker verwijderen"
+          message="Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+          confirmText="Verwijderen"
+          onConfirm={() => handleDelete(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
-      {error && <div className={styles.error}>{error}</div>}
-      {loading ? <Spinner /> : users.length === 0 ? (
-        <EmptyState title="Geen gebruikers" description="Er zijn nog geen gebruikers aangemaakt." />
-      ) : (
-        <DataTable columns={columns} items={users} />
-      )}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Gebruiker verwijderen"
-        message="Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
-        confirmText="Verwijderen"
-        onConfirm={() => handleDelete(deleteTarget)}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   );
 }

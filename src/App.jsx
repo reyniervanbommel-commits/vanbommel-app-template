@@ -10,7 +10,7 @@ import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
 import { ROLES } from './constants/roles';
 import { PurchaseOrdersPage } from './components/supplier';
-import { AppFooter } from './components/layout';
+import { AppFooter, AppLayout } from './components/layout';
 
 const useStyles = makeStyles({
   appShell: {
@@ -52,8 +52,26 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/mfa" element={<MfaPage />} />
-          <Route path="/admin" element={<AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}><AdminPage /></AuthGuard>} />
-          <Route path="/" element={<AuthGuard><PurchaseOrdersPage /></AuthGuard>} />
+          <Route
+            path="/admin"
+            element={
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
+                <AppLayout>
+                  <AdminPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <AuthGuard>
+                <AppLayout>
+                  <PurchaseOrdersPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
-import { APP_VERSION } from '../../version';
+import { APP_VERSION } from '../../config/version';
 
 const useStyles = makeStyles({
   badge: {

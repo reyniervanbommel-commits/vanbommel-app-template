@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "d365-fo-mcp": {
+      "url": "https://vanbommel-acc.sandbox.operations.dynamics.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:D365_MCP_TOKEN}"
+      }
+    }
+  }
+}
