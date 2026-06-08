@@ -32,7 +32,7 @@ Zie `README.md` en `package.json`:
 
 - `npm run dev:all` — frontend + backend
 - `npm run migrate:db` — database-migraties
-- `npm test` — Vitest (geen testbestanden in template; vereist `jsdom` als je tests toevoegt)
+- `npm test` — Vitest (jsdom + unit tests in `**/*.test.js`)
 - `npm run build` — Vite productie-build
 
 Er is geen `lint`-script geconfigureerd; ESLint staat wel als devDependency.
