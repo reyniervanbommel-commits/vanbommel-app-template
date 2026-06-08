@@ -2,6 +2,28 @@
 
 ## Cursor Cloud specific instructions
 
+### Node / npm (cloud agents)
+
+| Onderdeel | Waarde / actie |
+|-----------|----------------|
+| Node.js | **22.x** (zie `Dockerfile`: `node:22-alpine`) |
+| Package manager | **npm** — gebruik altijd `package-lock.json` |
+| Installatie | `npm ci` (niet `npm install` in CI/cloud) |
+| Peer-deps | `.npmrc` bevat `legacy-peer-deps=true` (Fluent UI v9 conflict) |
+| VM update script | `npm ci` — draait bij elke cloud-agent sessie na `git pull` |
+
+**Lockfile-regel:** wijzig je `package.json`, commit altijd de bijgewerkte `package-lock.json` in dezelfde commit. Zonder lockfile-sync faalt `npm ci` en werken build/test niet direct.
+
+**Verwachte checks na installatie (zonder handmatige fixes):**
+
+```bash
+npm ci
+npm test
+npm run build
+```
+
+`jsdom` staat in `devDependencies` + lockfile (vereist voor Vitest/jsdom-environment).
+
 ### Vereiste services (lokaal)
 
 | Service | Poort | Opmerking |
