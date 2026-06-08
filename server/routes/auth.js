@@ -57,11 +57,24 @@ router.post('/forgot-password', strictLimiter, async (req, res, next) => {
   try {
     const { email } = req.body;
     const result = await authService.requestPasswordReset(email);
+
+    const response = { success: true, message: 'Als het e-mailadres bekend is, ontvang je een resetlink.' };
+
     if (result.success) {
       const resetUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/reset-password?token=' + result.token;
-      await emailService.sendPasswordResetEmail(result.user.email, resetUrl).catch(() => {});
+      const emailResult = await emailService.sendPasswordResetEmail(result.user.email, resetUrl).catch(() => ({ skipped: true }));
+
+      // DEV-fallback: zonder werkende mail (bv. ACS niet ingericht) geven we de resetlink
+      // direct terug in de response zodat lokaal/DEV testen mogelijk is. Nooit in productie.
+      const isProduction = process.env.NODE_ENV === 'production';
+      const mailSkipped = emailResult && emailResult.skipped;
+      if (!isProduction && mailSkipped) {
+        response.devResetUrl = resetUrl;
+        response.devNotice = 'DEV: mail niet verstuurd, gebruik deze resetlink direct.';
+      }
     }
-    res.json({ success: true, message: 'Als het e-mailadres bekend is, ontvang je een resetlink.' });
+
+    res.json(response);
   } catch (err) {
     next(err);
   }

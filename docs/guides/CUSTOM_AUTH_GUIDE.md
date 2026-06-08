@@ -37,6 +37,17 @@ Bij de eerste login met dit e-mailadres + wachtwoord wordt de gebruiker automati
 2. Gebruiker klikt link → `/reset-password?token=...`
 3. `/api/auth/reset-password` → valideert token (1 uur geldig), stelt nieuw wachtwoord in
 
+### DEV-fallback zonder mail (ACS niet ingericht)
+
+Zolang Azure Communication Services nog niet is geconfigureerd, kan er geen
+echte resetmail worden verstuurd. In dat geval (en alleen als `NODE_ENV` niet
+`production` is) geeft `/api/auth/forgot-password` de resetlink direct terug in
+de response (`devResetUrl`). De UI toont deze link dan ook direct.
+
+- Token-flow blijft identiek en veilig (1 uur geldig, eenmalig bruikbaar).
+- In productie wordt de link **nooit** in de response teruggegeven.
+- Activeer mail door `ACS_CONNECTION_STRING` en `ACS_FROM_EMAIL` te zetten.
+
 ## Account lockout
 
 Na 3 mislukte inlogpogingen wordt `is_locked = 1` in de `users` tabel gezet.
