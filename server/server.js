@@ -12,8 +12,9 @@ const { parseSqlConnectionString } = require('./utils/sqlConnectionConfig');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
-const { requireSession, requireRole } = require('./middleware/auth');
+const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
+const { ROLES } = require('./constants/roles');
 
 const app = express();
 
@@ -42,9 +43,12 @@ app.use(express.json());
 const sessionStore = new MSSQLStore(
   parseSqlConnectionString(process.env.SQL_CONNECTION_STRING),
 );
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+  throw new Error('SESSION_SECRET moet gezet zijn en minimaal 32 tekens bevatten');
+}
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: sessionStore,
@@ -58,7 +62,7 @@ app.use(session({
 }));
 
 app.use('/api/auth', authRouter);
-app.use('/api/admin', requireSession, requireRole('admin'), adminRouter);
+app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

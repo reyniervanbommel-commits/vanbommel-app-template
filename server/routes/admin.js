@@ -7,6 +7,7 @@ const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
+const { ROLES, isAllowedRole } = require('../constants/roles');
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -36,10 +37,14 @@ router.post('/users', async (req, res, next) => {
   try {
     const { email, role, display_name } = req.body;
     if (!email) return res.status(400).json({ error: 'E-mailadres is vereist' });
+    const normalizedRole = authService.normalizeRole(role || ROLES.SUPPLIER);
+    if (!isAllowedRole(normalizedRole)) {
+      return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+    }
     const pool = await getPool();
     const result = await pool.request()
       .input('email', sql.NVarChar, authService.normalizeEmail(email))
-      .input('role', sql.NVarChar, role || 'user')
+      .input('role', sql.NVarChar, normalizedRole)
       .input('displayName', sql.NVarChar, display_name || null)
       .query('INSERT INTO dbo.users (email, role, display_name) OUTPUT INSERTED.* VALUES (@email, @role, @displayName)');
     const newUser = result.recordset[0];
@@ -60,7 +65,14 @@ router.patch('/users/:id', async (req, res, next) => {
     const setClauses = [];
     const request = pool.request().input('id', sql.Int, parseInt(id));
 
-    if (role !== undefined) { setClauses.push('role = @role'); request.input('role', sql.NVarChar, role); }
+    if (role !== undefined) {
+      const normalizedRole = authService.normalizeRole(role);
+      if (!isAllowedRole(normalizedRole)) {
+        return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+      }
+      setClauses.push('role = @role');
+      request.input('role', sql.NVarChar, normalizedRole);
+    }
     if (is_locked !== undefined) { setClauses.push('is_locked = @locked'); request.input('locked', sql.Bit, is_locked ? 1 : 0); }
     if (mfa_required !== undefined) { setClauses.push('mfa_required = @mfaRequired'); request.input('mfaRequired', sql.Bit, mfa_required ? 1 : 0); }
 
