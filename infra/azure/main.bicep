@@ -22,6 +22,18 @@ param sqlDatabaseName string = 'sqldb-vendorportal'
 @description('Naam van de Container Apps Environment.')
 param containerAppsEnvironmentName string
 
+@description('Naam van de DEV Container App.')
+param containerAppDevName string = 'vendorportal-dev'
+
+@description('Naam van de PROD Container App.')
+param containerAppProdName string = 'vendorportal-prod'
+
+@description('Container image voor DEV.')
+param containerAppDevImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+
+@description('Container image voor PROD.')
+param containerAppProdImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+
 @description('Tags voor alle resources.')
 param tags object = {}
 
@@ -72,7 +84,83 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   properties: {}
 }
 
+resource containerAppDev 'Microsoft.App/containerApps@2024-03-01' = {
+  name: containerAppDevName
+  location: location
+  tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: 3000
+        transport: 'auto'
+      }
+      secrets: []
+      activeRevisionsMode: 'Single'
+    }
+    template: {
+      containers: [
+        {
+          name: 'app'
+          image: containerAppDevImage
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 2
+      }
+    }
+  }
+}
+
+resource containerAppProd 'Microsoft.App/containerApps@2024-03-01' = {
+  name: containerAppProdName
+  location: location
+  tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: 3000
+        transport: 'auto'
+      }
+      secrets: []
+      activeRevisionsMode: 'Single'
+    }
+    template: {
+      containers: [
+        {
+          name: 'app'
+          image: containerAppProdImage
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 3
+      }
+    }
+  }
+}
+
 output keyVaultResourceId string = keyVault.id
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlDatabaseResourceId string = sqlDatabase.id
 output containerAppsEnvironmentResourceId string = containerAppsEnvironment.id
+output containerAppDevResourceId string = containerAppDev.id
+output containerAppProdResourceId string = containerAppProd.id

@@ -37,7 +37,7 @@ const useStyles = makeStyles({
   },
 });
 
-const APP_VERSION = 'v1.0.1';
+const APP_VERSION = 'v1.0.2';
 
 function HomePage() {
   const styles = useStyles();
