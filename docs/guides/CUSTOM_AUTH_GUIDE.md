@@ -25,7 +25,7 @@ Login → AuthService.login() → session opslaan in MSSQL → redirect
 
 Stel in `.env`:
 ```
-BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_EMAIL=reyniervanbommel@vanbommel.nl
 BOOTSTRAP_ADMIN_PASSWORD=tijdelijk-wachtwoord
 ```
 
