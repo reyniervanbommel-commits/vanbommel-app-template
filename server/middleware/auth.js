@@ -23,8 +23,11 @@ function requireRole(role) {
 function requireAnyRole(roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Niet geauthenticeerd' });
-    if (req.user.role === ROLES.ADMIN || roles.includes(req.user.role)) return next();
-    return res.status(403).json({ error: 'Geen toegang — ongeldige rol' });
+    if (req.user.role === ROLES.ADMIN) return next();
+    if (!Array.isArray(roles) || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Geen toegang — onvoldoende rechten' });
+    }
+    return next();
   };
 }
 
