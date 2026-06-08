@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "northeurope"
+    },
+    "keyVaultName": {
+      "value": "kv-vendorportal-dev"
+    },
+    "sqlServerName": {
+      "value": "sql-vendorportal-dev"
+    },
+    "sqlAdminLogin": {
+      "value": "sqladminuser"
+    },
+    "sqlAdminPassword": {
+      "value": "<set-in-pipeline-or-keyvault>"
+    },
+    "sqlDatabaseName": {
+      "value": "sqldb-vendorportal-dev"
+    },
+    "containerAppsEnvironmentName": {
+      "value": "cae-vendorportal-dev"
+    },
+    "containerAppDevName": {
+      "value": "vendorportal-dev"
+    },
+    "containerAppProdName": {
+      "value": "vendorportal-prod"
+    },
+    "containerAppDevImage": {
+      "value": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    },
+    "containerAppProdImage": {
+      "value": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    },
+    "tags": {
+      "value": {
+        "app": "vendorportal",
+        "environment": "dev",
+        "managedBy": "iac"
+      }
+    }
+  }
+}

@@ -31,11 +31,34 @@ BOOTSTRAP_ADMIN_PASSWORD=tijdelijk-wachtwoord
 
 Bij de eerste login met dit e-mailadres + wachtwoord wordt de gebruiker automatisch aangemaakt als admin en het wachtwoord ingesteld. Verwijder de bootstrap-variabelen daarna uit `.env`.
 
+### Seed admin-account (`reyniervanbommel@vanbommel.nl`)
+
+Migratie `002_seed_admin.sql` maakt het admin-account `reyniervanbommel@vanbommel.nl`
+idempotent aan met `must_set_password = 1` (zonder wachtwoord in code). Het wachtwoord
+stel je daarna zelf veilig in via één van deze routes:
+
+1. Login met dit e-mailadres → flow stuurt door naar `/set-password` → kies je wachtwoord.
+2. Of via "wachtwoord vergeten" → in DEV krijg je de resetlink direct terug.
+3. Of via de bootstrap-login met `BOOTSTRAP_ADMIN_PASSWORD` uit je lokale `.env`.
+
+Zo blijft er nergens een wachtwoord in de codebase staan.
+
 ## Wachtwoord-reset flow
 
 1. `/api/auth/forgot-password` → genereert token, stuurt mail via ACS
 2. Gebruiker klikt link → `/reset-password?token=...`
 3. `/api/auth/reset-password` → valideert token (1 uur geldig), stelt nieuw wachtwoord in
+
+### DEV-fallback zonder mail (ACS niet ingericht)
+
+Zolang Azure Communication Services nog niet is geconfigureerd, kan er geen
+echte resetmail worden verstuurd. In dat geval (en alleen als `NODE_ENV` niet
+`production` is) geeft `/api/auth/forgot-password` de resetlink direct terug in
+de response (`devResetUrl`). De UI toont deze link dan ook direct.
+
+- Token-flow blijft identiek en veilig (1 uur geldig, eenmalig bruikbaar).
+- In productie wordt de link **nooit** in de response teruggegeven.
+- Activeer mail door `ACS_CONNECTION_STRING` en `ACS_FROM_EMAIL` te zetten.
 
 ## Account lockout
 

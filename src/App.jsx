@@ -8,8 +8,20 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
+import AppVersionBadge from './components/shared/AppVersionBadge';
 
 const useStyles = makeStyles({
+  appShell: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  appContent: {
+    flex: 1,
+  },
+  homeContainer: {
+    padding: '24px',
+  },
   devBanner: {
     position: 'fixed', bottom: '16px', right: '16px',
     backgroundColor: tokens.colorPaletteMarigoldBackground2,
@@ -22,7 +34,7 @@ const useStyles = makeStyles({
 function HomePage() {
   const styles = useStyles();
   return (
-    <div style={{ padding: '24px' }}>
+    <div className={styles.homeContainer}>
       <h1>Home</h1>
       <p>Vervang dit met je app-inhoud.</p>
       {import.meta.env.DEV && <div className={styles.devBanner}>DEV</div>}
@@ -31,16 +43,23 @@ function HomePage() {
 }
 
 export default function App() {
+  const styles = useStyles();
+
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/set-password" element={<SetPasswordPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/mfa" element={<MfaPage />} />
-      <Route path="/admin" element={<AuthGuard><AdminPage /></AuthGuard>} />
-      <Route path="/" element={<AuthGuard><HomePage /></AuthGuard>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <div className={styles.appShell}>
+      <main className={styles.appContent}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/set-password" element={<SetPasswordPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/mfa" element={<MfaPage />} />
+          <Route path="/admin" element={<AuthGuard><AdminPage /></AuthGuard>} />
+          <Route path="/" element={<AuthGuard><HomePage /></AuthGuard>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <AppVersionBadge />
+    </div>
   );
 }
