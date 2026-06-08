@@ -3,6 +3,7 @@
 const { logger } = require('../utils/logger');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
 function buildHeaders() {
   const headers = {
@@ -42,6 +43,10 @@ function mapPurchaseOrder(record) {
   };
 }
 
+function escapeODataLiteral(value) {
+  return String(value || '').replace(/'/g, "''");
+}
+
 function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
   const baseUrl = getBaseUrl();
   const path = (process.env.D365_ODATA_PURCHASE_ORDERS_PATH || DEFAULT_PURCHASE_ORDERS_PATH).trim();
@@ -53,11 +58,14 @@ function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
   searchParams.set('$top', String(top));
   searchParams.set('$skip', String(skip));
 
+  const safeSupplierAccount = escapeODataLiteral(supplierAccount);
+  const safeCompany = escapeODataLiteral(company);
+
   if (company) {
     searchParams.set('cross-company', 'true');
-    searchParams.set('$filter', "dataAreaId eq '" + company + "' and OrderAccount eq '" + supplierAccount + "'");
+    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "' and OrderAccount eq '" + safeSupplierAccount + "'");
   } else {
-    searchParams.set('$filter', "OrderAccount eq '" + supplierAccount + "'");
+    searchParams.set('$filter', "OrderAccount eq '" + safeSupplierAccount + "'");
   }
 
   return url.toString();
@@ -65,7 +73,25 @@ function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
 
 async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0 }) {
   const url = buildPurchaseOrderUrl({ supplierAccount, top, skip });
-  const response = await fetch(url, { method: 'GET', headers: buildHeaders() });
+  const timeoutMs = Number.parseInt(process.env.D365_ODATA_TIMEOUT_MS || String(DEFAULT_REQUEST_TIMEOUT_MS), 10);
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeout);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: buildHeaders(),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const err = new Error('D365 OData is niet bereikbaar');
+    err.status = error && error.name === 'AbortError' ? 504 : 502;
+    throw err;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 
   if (!response.ok) {
     const responseBody = await response.text().catch(() => '');
@@ -92,4 +118,6 @@ async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0 }) {
 module.exports = {
   fetchPurchaseOrders,
   mapPurchaseOrder,
+  buildPurchaseOrderUrl,
+  escapeODataLiteral,
 };

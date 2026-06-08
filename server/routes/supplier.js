@@ -10,6 +10,7 @@ const purchaseOrdersValidator = [
   query('top').optional().isInt({ min: 1, max: 100 }).withMessage('top moet tussen 1 en 100 liggen'),
   query('skip').optional().isInt({ min: 0, max: 10000 }).withMessage('skip moet tussen 0 en 10000 liggen'),
 ];
+const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -18,6 +19,10 @@ function getSupplierAccount(user) {
   const userEmail = (user && user.email) || '';
   const emailPrefix = userEmail.split('@')[0];
   return String(emailPrefix || '').trim();
+}
+
+function isValidSupplierAccount(value) {
+  return SUPPLIER_ACCOUNT_PATTERN.test(String(value || ''));
 }
 
 router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) => {
@@ -30,6 +35,9 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
     const supplierAccount = getSupplierAccount(req.user);
     if (!supplierAccount) {
       return res.status(400).json({ error: 'Supplier account ontbreekt voor huidige gebruiker' });
+    }
+    if (!isValidSupplierAccount(supplierAccount)) {
+      return res.status(400).json({ error: 'Supplier account heeft ongeldig formaat' });
     }
 
     const top = Number.parseInt(req.query.top || '25', 10);
