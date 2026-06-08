@@ -46,9 +46,9 @@ Nog te doen:
 - Database migraties draaien: `npm run migrate:db`
 - Applicatie starten: `npm run dev:all`
 
-## 4) Azure basis inrichten (OTAP)
+## 4) Azure basis inrichten (DEV/PROD)
 
-Per omgeving (dev/acc/prod):
+Per omgeving (dev/prod):
 
 - Azure SQL Database
 - Azure Container App (of preview app voor feature branches)
@@ -71,7 +71,6 @@ Verplicht in GitHub repository secrets:
 - `ACA_RESOURCE_GROUP`
 - `ACA_ENVIRONMENT`
 - `SQL_CONNECTION_STRING_DEV`
-- `SQL_CONNECTION_STRING_ACC`
 - `SQL_CONNECTION_STRING_PROD`
 - `SESSION_SECRET`
 - `ACS_CONNECTION_STRING` (als e-mail actief is)
@@ -109,8 +108,7 @@ Test minimaal:
 
 - `feature/*` push -> preview deployment
 - `develop` push -> DEV deploy
-- `main` push -> ACC deploy
-- `workflow_dispatch` -> PROD deploy
+- `main` push of `workflow_dispatch` -> PROD deploy
 
 Controleer daarna:
 
