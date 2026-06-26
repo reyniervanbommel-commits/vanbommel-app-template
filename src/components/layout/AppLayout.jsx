@@ -1,13 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import AppShellHeader from './AppShellHeader';
+import SidebarNavItem from '../shared/SidebarNavItem';
 
 const RAIL_WIDTH = 48;
-const PANEL_WIDTH = 280;
+const PANEL_WIDTH = 260;
 const HEADER_HEIGHT = '57px';
 
 const useStyles = makeStyles({
@@ -23,21 +24,21 @@ const useStyles = makeStyles({
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
+    alignItems: 'stretch',
     paddingTop: '8px',
-    ...shorthands.gap('4px'),
     zIndex: 1500,
+    overflowX: 'visible',
   },
   railItem: {
     position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    '&:hover > [data-tooltip]': { opacity: 1, visibility: 'visible', transitionDelay: '0.8s' },
+    '&:hover > [data-tooltip]': { opacity: 1, visibility: 'visible', transitionDelay: '0.7s' },
   },
   railTooltip: {
     position: 'absolute',
     left: '100%',
-    marginLeft: '8px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    marginLeft: '10px',
     backgroundColor: tokens.colorNeutralBackground1,
     color: tokens.colorNeutralForeground1,
     ...shorthands.padding('6px', '10px'),
@@ -62,10 +63,10 @@ const useStyles = makeStyles({
     height: `calc(100vh - ${HEADER_HEIGHT})`,
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding('12px'),
+    paddingTop: '8px',
+    paddingBottom: '8px',
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('4px'),
     boxShadow: tokens.shadow16,
     zIndex: 1800,
     overflowY: 'auto',
@@ -76,12 +77,11 @@ const useStyles = makeStyles({
   panelClosed: { transform: 'translateX(-8px)', opacity: 0, pointerEvents: 'none' },
   panelOpen: { transform: 'translateX(0)', opacity: 1, pointerEvents: 'auto' },
   panelBackdrop: { position: 'fixed', inset: 0, zIndex: 1700, backgroundColor: 'transparent' },
-  navButton: { justifyContent: 'flex-start', width: '100%' },
   main: {
     flex: 1,
     minWidth: 0,
     marginLeft: `${RAIL_WIDTH}px`,
-    ...shorthands.padding('24px'),
+    ...shorthands.padding('28px', '32px'),
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
   },
@@ -133,21 +133,18 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
 
       <div className={styles.body}>
         <aside className={styles.rail}>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = location.pathname === item.path;
-            return (
-              <div key={item.id} className={styles.railItem}>
-                <Button
-                  appearance={active ? 'primary' : 'subtle'}
-                  icon={<Icon />}
-                  onClick={() => handleNavigate(item.path)}
-                  aria-label={item.label}
-                />
-                <span data-tooltip className={styles.railTooltip}>{item.label}</span>
-              </div>
-            );
-          })}
+          {navItems.map((item) => (
+            <div key={item.id} className={styles.railItem}>
+              <SidebarNavItem
+                icon={item.icon}
+                label={item.label}
+                active={location.pathname === item.path}
+                onClick={() => handleNavigate(item.path)}
+                compact
+              />
+              <span data-tooltip className={styles.railTooltip}>{item.label}</span>
+            </div>
+          ))}
         </aside>
 
         {sidebarOpen && (
@@ -158,21 +155,15 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
           ? `${styles.panel} ${styles.panelOpen}`
           : `${styles.panel} ${styles.panelClosed}`}
         >
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = location.pathname === item.path;
-            return (
-              <Button
-                key={item.id}
-                appearance={active ? 'primary' : 'subtle'}
-                icon={<Icon />}
-                className={styles.navButton}
-                onClick={() => handleNavigate(item.path)}
-              >
-                {item.label}
-              </Button>
-            );
-          })}
+          {navItems.map((item) => (
+            <SidebarNavItem
+              key={item.id}
+              icon={item.icon}
+              label={item.label}
+              active={location.pathname === item.path}
+              onClick={() => handleNavigate(item.path)}
+            />
+          ))}
         </aside>
 
         <main className={styles.main}>{children}</main>

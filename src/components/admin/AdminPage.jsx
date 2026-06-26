@@ -7,31 +7,31 @@ import {
   Spinner,
   shorthands,
 } from '@fluentui/react-components';
-import {
-  Person24Regular,
-  Table24Regular,
-} from '@fluentui/react-icons';
+import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import DataTable from '../shared/DataTable';
 import StatusBadge from '../shared/StatusBadge';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import EmptyState from '../shared/EmptyState';
+import SidebarNavItem from '../shared/SidebarNavItem';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
   sidebar: {
-    width: '240px',
+    width: '220px',
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding('16px'),
+    paddingTop: '8px',
+    paddingBottom: '8px',
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('4px'),
     flexShrink: 0,
   },
-  sidebarTitle: { marginBottom: '12px' },
-  navButton: { justifyContent: 'flex-start', width: '100%', marginBottom: '4px' },
-  content: { flex: 1, ...shorthands.padding('24px'), backgroundColor: tokens.colorNeutralBackground1 },
+  content: {
+    flex: 1,
+    ...shorthands.padding('28px', '32px'),
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
   pageHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -112,23 +112,18 @@ export default function AdminPage() {
   return (
     <div className={styles.page}>
       <aside className={styles.sidebar}>
-        <Text size={500} weight="semibold" className={styles.sidebarTitle}>Beheer</Text>
-        <Button
-          appearance={adminTab === 'users' ? 'primary' : 'subtle'}
-          icon={<Person24Regular />}
-          className={styles.navButton}
+        <SidebarNavItem
+          icon={Person24Regular}
+          label="Gebruikers"
+          active={adminTab === 'users'}
           onClick={() => setAdminTab('users')}
-        >
-          Gebruikers
-        </Button>
-        <Button
-          appearance={adminTab === 'analytics' ? 'primary' : 'subtle'}
-          icon={<Table24Regular />}
-          className={styles.navButton}
+        />
+        <SidebarNavItem
+          icon={Table24Regular}
+          label="Analytics"
+          active={adminTab === 'analytics'}
           onClick={() => setAdminTab('analytics')}
-        >
-          Analytics
-        </Button>
+        />
       </aside>
 
       <div className={styles.content}>
