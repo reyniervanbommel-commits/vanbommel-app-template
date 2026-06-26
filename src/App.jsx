@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { makeStyles, tokens } from '@fluentui/react-components';
+import { FluentProvider, makeStyles, tokens } from '@fluentui/react-components';
+import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
 import LoginPage from './components/auth/LoginPage';
 import SetPasswordPage from './components/auth/SetPasswordPage';
@@ -21,26 +22,22 @@ const useStyles = makeStyles({
   content: {
     flexGrow: 1,
   },
-  devBanner: {
+  devBadgeWrap: {
     position: 'fixed',
     bottom: '16px',
     right: '16px',
+  },
+  devBanner: {
     backgroundColor: tokens.colorPaletteMarigoldBackground2,
     color: tokens.colorNeutralForeground1,
     padding: '4px 12px',
     borderRadius: '4px',
     fontSize: '12px',
     fontWeight: 600,
-    zIndex: 9999,
-  },
-  devBadgeWrap: {
-    position: 'fixed',
-    bottom: '16px',
-    right: '16px',
   },
 });
 
-export default function App() {
+function AppInner({ isDarkMode, onToggleTheme }) {
   const styles = useStyles();
 
   return (
@@ -56,7 +53,7 @@ export default function App() {
             path="/admin"
             element={
               <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
-                <AppLayout>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <AdminPage />
                 </AppLayout>
               </AuthGuard>
@@ -66,7 +63,7 @@ export default function App() {
             path="/"
             element={
               <AuthGuard>
-                <AppLayout>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <PurchaseOrdersPage />
                 </AppLayout>
               </AuthGuard>
@@ -84,5 +81,17 @@ export default function App() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function App() {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const theme = createCustomTheme(isDarkMode);
+  const handleToggleTheme = () => setIsDarkMode((v) => !v);
+
+  return (
+    <FluentProvider theme={theme}>
+      <AppInner isDarkMode={isDarkMode} onToggleTheme={handleToggleTheme} />
+    </FluentProvider>
   );
 }

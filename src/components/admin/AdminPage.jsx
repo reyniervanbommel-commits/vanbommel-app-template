@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, makeStyles, tokens, Spinner, Text, shorthands } from '@fluentui/react-components';
-import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
-import { useAuth } from '../../context/AuthContext';
+import {
+  Button,
+  Text,
+  makeStyles,
+  tokens,
+  Spinner,
+  shorthands,
+} from '@fluentui/react-components';
+import {
+  Person24Regular,
+  Table24Regular,
+} from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import DataTable from '../shared/DataTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -10,30 +19,30 @@ import EmptyState from '../shared/EmptyState';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
-  nav: {
-    width: '220px',
+  sidebar: {
+    width: '240px',
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding('12px'),
+    ...shorthands.padding('16px'),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('4px'),
+    flexShrink: 0,
   },
-  navTitle: {
-    ...shorthands.padding('4px', '8px', '10px', '8px'),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    marginBottom: '2px',
+  sidebarTitle: { marginBottom: '12px' },
+  navButton: { justifyContent: 'flex-start', width: '100%', marginBottom: '4px' },
+  content: { flex: 1, ...shorthands.padding('24px'), backgroundColor: tokens.colorNeutralBackground1 },
+  pageHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '24px',
   },
-  navButton: { justifyContent: 'flex-start' },
-  content: { flex: 1, ...shorthands.padding('24px') },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  title: { fontSize: '24px', fontWeight: 600 },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
 });
 
 export default function AdminPage() {
   const styles = useStyles();
-  const { logout } = useAuth();
   const [adminTab, setAdminTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,54 +63,56 @@ export default function AdminPage() {
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  async function handleToggleLock(user) {
+  const handleToggleLock = useCallback(async (user) => {
     try {
       await apiRequest('/admin/users/' + user.id, { method: 'PATCH', body: { is_locked: !user.is_locked } });
       await loadUsers();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+    } catch (err) { setError(err.message); }
+  }, [loadUsers]);
 
-  async function handleForceReset(userId) {
+  const handleForceReset = useCallback(async (userId) => {
     try {
       await apiRequest('/admin/users/' + userId + '/force-reset', { method: 'POST', body: {} });
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+    } catch (err) { setError(err.message); }
+  }, []);
 
-  async function handleDelete(userId) {
+  const handleDelete = useCallback(async (userId) => {
     try {
       await apiRequest('/admin/users/' + userId, { method: 'DELETE' });
       setDeleteTarget(null);
       await loadUsers();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+    } catch (err) { setError(err.message); }
+  }, [loadUsers]);
 
   const columns = [
-    { key: 'email', header: 'E-mailadres', render: u => u.email },
-    { key: 'role', header: 'Rol', render: u => u.role },
-    { key: 'status', header: 'Status', render: u => (
-      <StatusBadge variant={u.is_locked ? 'error' : 'success'}>{u.is_locked ? 'Geblokkeerd' : 'Actief'}</StatusBadge>
-    )},
-    { key: 'actions', header: '', render: u => (
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <Button size="small" onClick={() => handleToggleLock(u)}>{u.is_locked ? 'Deblokkeren' : 'Blokkeren'}</Button>
-        <Button size="small" onClick={() => handleForceReset(u.id)}>Reset mail</Button>
-        <Button size="small" appearance="subtle" onClick={() => setDeleteTarget(u.id)}>Verwijderen</Button>
-      </div>
-    )},
+    { key: 'email', header: 'E-mailadres', render: (u) => u.email },
+    { key: 'role', header: 'Rol', render: (u) => u.role },
+    {
+      key: 'status', header: 'Status', render: (u) => (
+        <StatusBadge variant={u.is_locked ? 'error' : 'success'}>
+          {u.is_locked ? 'Geblokkeerd' : 'Actief'}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'actions', header: '', render: (u) => (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button size="small" onClick={() => handleToggleLock(u)}>
+            {u.is_locked ? 'Deblokkeren' : 'Blokkeren'}
+          </Button>
+          <Button size="small" onClick={() => handleForceReset(u.id)}>Reset mail</Button>
+          <Button size="small" appearance="subtle" onClick={() => setDeleteTarget(u.id)}>
+            Verwijderen
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className={styles.page}>
-      <aside className={styles.nav}>
-        <Text size={500} weight="semibold" className={styles.navTitle}>
-          Admin
-        </Text>
+      <aside className={styles.sidebar}>
+        <Text size={500} weight="semibold" className={styles.sidebarTitle}>Beheer</Text>
         <Button
           appearance={adminTab === 'users' ? 'primary' : 'subtle'}
           icon={<Person24Regular />}
@@ -121,9 +132,10 @@ export default function AdminPage() {
       </aside>
 
       <div className={styles.content}>
-        <div className={styles.header}>
-          <div className={styles.title}>{adminTab === 'users' ? 'Gebruikersbeheer' : 'Analytics (placeholder)'}</div>
-          <Button onClick={logout} appearance="subtle">Uitloggen</Button>
+        <div className={styles.pageHeader}>
+          <Text size={600} weight="semibold">
+            {adminTab === 'users' ? 'Gebruikersbeheer' : 'Analytics'}
+          </Text>
         </div>
 
         {adminTab === 'analytics' ? (
@@ -138,16 +150,16 @@ export default function AdminPage() {
             )}
           </>
         )}
-
-        <ConfirmDialog
-          open={!!deleteTarget}
-          title="Gebruiker verwijderen"
-          message="Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
-          confirmText="Verwijderen"
-          onConfirm={() => handleDelete(deleteTarget)}
-          onCancel={() => setDeleteTarget(null)}
-        />
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Gebruiker verwijderen"
+        message="Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+        confirmText="Verwijderen"
+        onConfirm={() => handleDelete(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

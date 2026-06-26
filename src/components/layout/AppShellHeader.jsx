@@ -10,6 +10,8 @@ import {
 import {
   Navigation24Regular,
   Person24Regular,
+  WeatherMoon24Regular,
+  WeatherSunny24Regular,
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -17,73 +19,54 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...shorthands.padding('12px', '16px'),
+    ...shorthands.padding('12px', '20px'),
     backgroundColor: tokens.colorNeutralBackground2,
+    boxShadow: tokens.shadow4,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke1),
     position: 'sticky',
     top: 0,
     zIndex: 1000,
   },
-  left: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('12px'),
-  },
-  right: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('12px'),
-    position: 'relative',
-  },
-  avatarButton: {
-    backgroundColor: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0,
-    display: 'flex',
-    alignItems: 'center',
-  },
-  menuBackdrop: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 1499,
-  },
+  headerLeft: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
+  headerRight: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
+  menuBackdrop: { position: 'fixed', inset: 0, zIndex: 2999 },
   menu: {
     position: 'absolute',
     top: '100%',
     right: 0,
     marginTop: '8px',
-    minWidth: '220px',
     backgroundColor: tokens.colorNeutralBackground1,
     boxShadow: tokens.shadow16,
+    borderRadius: '8px',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius('8px'),
-    ...shorthands.padding('12px'),
-    zIndex: 1500,
+    ...shorthands.padding('16px'),
+    minWidth: '240px',
+    zIndex: 3000,
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('4px'),
   },
-  menuHeader: {
-    ...shorthands.padding('4px', '8px', '8px', '8px'),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    marginBottom: '4px',
+  menuUserRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('12px'),
+    marginBottom: '12px',
   },
-  menuUserName: {
-    fontWeight: 600,
+  menuDivider: {
+    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke1),
+    paddingTop: '8px',
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('4px'),
   },
-  menuUserEmail: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: '12px',
-  },
-  menuButton: {
-    justifyContent: 'flex-start',
-  },
+  menuButton: { justifyContent: 'flex-start' },
 });
 
 export default function AppShellHeader({
   sidebarOpen,
   onToggleSidebar,
+  isDarkMode,
+  onToggleTheme,
   user,
   userMenuOpen,
   onToggleUserMenu,
@@ -97,52 +80,72 @@ export default function AppShellHeader({
 
   return (
     <header className={styles.header}>
-      <div className={styles.left}>
+      <div className={styles.headerLeft}>
         <Button
           appearance={sidebarOpen ? 'primary' : 'subtle'}
           icon={<Navigation24Regular />}
           onClick={onToggleSidebar}
           aria-label="Zijbalk openen of sluiten"
         />
-        <Text size={500} weight="semibold">
-          Supplier Portal
+        <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
+          [APP_NAME]
         </Text>
       </div>
 
-      <div className={styles.right}>
-        <button
-          type="button"
-          className={styles.avatarButton}
-          onClick={onToggleUserMenu}
-          aria-label="Gebruikersmenu openen"
-        >
-          <Avatar name={avatarName} size={36} color="colorful" />
-        </button>
+      <div className={styles.headerRight}>
+        <Button
+          appearance="subtle"
+          icon={isDarkMode ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />}
+          onClick={onToggleTheme}
+          aria-label={isDarkMode ? 'Licht thema' : 'Donker thema'}
+        />
 
-        {userMenuOpen ? <div className={styles.menuBackdrop} onClick={onCloseUserMenu} /> : null}
-        {userMenuOpen ? (
-          <div className={styles.menu}>
-            <div className={styles.menuHeader}>
-              <div className={styles.menuUserName}>{avatarName}</div>
-              <div className={styles.menuUserEmail}>{user?.email || '-'}</div>
-            </div>
+        {user && (
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={onToggleUserMenu}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              aria-label="Gebruikersmenu"
+            >
+              <Avatar name={avatarName} size={36} color="colorful" />
+            </button>
 
-            {canAccessAdmin ? (
-              <Button
-                appearance="subtle"
-                icon={<Person24Regular />}
-                className={styles.menuButton}
-                onClick={onNavigateAdmin}
-              >
-                Admin
-              </Button>
-            ) : null}
-
-            <Button appearance="subtle" className={styles.menuButton} onClick={onLogout}>
-              Uitloggen
-            </Button>
+            {userMenuOpen && (
+              <>
+                <div className={styles.menuBackdrop} onClick={onCloseUserMenu} />
+                <div className={styles.menu}>
+                  <div className={styles.menuUserRow}>
+                    <Avatar name={avatarName} size={48} color="colorful" />
+                    <div>
+                      <Text weight="semibold" block>{avatarName}</Text>
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>{user.email}</Text>
+                    </div>
+                  </div>
+                  <div className={styles.menuDivider}>
+                    {canAccessAdmin && (
+                      <Button
+                        appearance="subtle"
+                        icon={<Person24Regular />}
+                        className={styles.menuButton}
+                        onClick={() => { onNavigateAdmin(); onCloseUserMenu(); }}
+                      >
+                        Admin
+                      </Button>
+                    )}
+                    <Button
+                      appearance="subtle"
+                      className={styles.menuButton}
+                      onClick={onLogout}
+                    >
+                      Uitloggen
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        ) : null}
+        )}
       </div>
     </header>
   );

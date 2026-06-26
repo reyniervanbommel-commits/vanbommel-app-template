@@ -1,0 +1,76 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Utility: opt-in geen tekst selectie */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Decoratieve afbeeldingen: niet focusbaar of draggable */
+header img,
+nav img,
+[class*="fui-Card"] img:not([data-selectable]) {
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* Behoud selectie voor interactieve elementen */
+input,
+textarea,
+select,
+[contenteditable="true"],
+td,
+th,
+pre,
+code,
+.editable-cell,
+[data-selectable] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+.editable-cell {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.editable-cell:hover {
+  background-color: rgba(22, 38, 61, 0.08);
+}
+
+/* Consistente rijhoogte voor Fluent UI tabellen */
+.fui-Table tbody tr,
+.fui-Table tbody td {
+  box-sizing: border-box;
+}
+
+.fui-Table tbody tr {
+  height: 28px !important;
+  max-height: 28px !important;
+}
+
+.fui-Table tbody td {
+  height: 28px !important;
+  padding: 2px 6px !important;
+  vertical-align: middle !important;
+}
+
+.fui-Table {
+  width: 100% !important;
+}
