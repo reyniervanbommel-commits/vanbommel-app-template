@@ -18,7 +18,17 @@ async function runMigrations() {
 
   for (const file of files) {
     const filePath = path.join(migrationsDir, file);
-    const sqlContent = fs.readFileSync(filePath, 'utf8');
+    let sqlContent = fs.readFileSync(filePath, 'utf8');
+
+    // Vervang ${VAR_NAME} placeholders door env var waarden
+    sqlContent = sqlContent.replace(/\$\{([A-Z0-9_]+)\}/g, (_, varName) => {
+      const value = process.env[varName];
+      if (!value) {
+        throw new Error(`Ontbrekende env var in migratie ${file}: ${varName}`);
+      }
+      return value.replace(/'/g, "''"); // SQL-escape single quotes
+    });
+
     console.log('Uitvoeren: ' + file);
     await pool.request().batch(sqlContent);
     console.log('Klaar: ' + file);
