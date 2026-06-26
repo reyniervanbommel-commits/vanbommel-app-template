@@ -11,7 +11,7 @@
 
 | Script | Wat |
 |--------|-----|
-| `npm run dev:all` | Frontend (5173) + backend (3000) tegelijk |
+| `npm run dev:all` | Frontend (5178) + backend (3008) tegelijk |
 | `npm run migrate:db` | MSSQL-migraties uitvoeren |
 | `npm run build` | Vite productie-build |
 | `npm test` | Vitest tests |

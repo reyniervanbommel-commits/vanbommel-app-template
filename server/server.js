@@ -70,7 +70,7 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3008;
 app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
 
 module.exports = app;

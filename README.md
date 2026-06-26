@@ -30,7 +30,7 @@ npm run migrate:db
 npm run dev:all
 ```
 
-De app draait op `http://localhost:5173` (frontend) en `http://localhost:3000` (backend).
+De app draait op `http://localhost:5178` (frontend) en `http://localhost:3008` (backend).
 
 ## Template instellen
 

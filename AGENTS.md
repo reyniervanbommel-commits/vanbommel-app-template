@@ -29,8 +29,8 @@ npm run build
 | Service | Poort | Opmerking |
 |---------|-------|-----------|
 | SQL Server | 1433 | Geen `docker-compose` in repo; start handmatig via Docker |
-| Express backend | 3000 | `npm run dev:backend` |
-| Vite frontend | 5173 | `npm run dev:frontend` of `npm run dev:all` |
+| Express backend | 3008 | `npm run dev:backend` |
+| Vite frontend | 5178 | `npm run dev:frontend` of `npm run dev:all` |
 
 ### Eerste setup (eenmalig per VM)
 
