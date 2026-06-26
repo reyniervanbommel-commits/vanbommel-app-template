@@ -8,6 +8,7 @@ const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
 const { ROLES, isAllowedRole } = require('../constants/roles');
+const settingsService = require('../services/SettingsService');
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -119,6 +120,98 @@ router.delete('/users/:id', async (req, res, next) => {
       .query('DELETE FROM dbo.users OUTPUT DELETED.email WHERE id = @id');
     if (!result.recordset.length) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
     await auditLog(req.user.id, req.user.email, 'DELETE_USER', 'users', id, { email: result.recordset[0].email });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Pagina-permissies ───────────────────────────────────────────────────────
+
+router.get('/users/:id/permissions', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('userId', sql.Int, parseInt(req.params.id))
+      .query('SELECT page_name FROM dbo.user_page_permissions WHERE user_id = @userId ORDER BY page_name');
+    res.json(result.recordset);
+  } catch (err) { next(err); }
+});
+
+router.patch('/users/:id/permissions', async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const permissions = req.body.permissions || [];
+    const pool = await getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      await transaction.request()
+        .input('userId', sql.Int, userId)
+        .query('DELETE FROM dbo.user_page_permissions WHERE user_id = @userId');
+      for (const perm of permissions) {
+        if (perm.page_name) {
+          await transaction.request()
+            .input('userId', sql.Int, userId)
+            .input('pageName', sql.NVarChar, perm.page_name)
+            .query('INSERT INTO dbo.user_page_permissions (user_id, page_name) VALUES (@userId, @pageName)');
+        }
+      }
+      await transaction.commit();
+      await auditLog(req.user.id, req.user.email, 'UPDATE_PERMISSIONS', 'user_page_permissions', userId, { count: permissions.length });
+      res.json({ success: true });
+    } catch (err) { await transaction.rollback(); throw err; }
+  } catch (err) { next(err); }
+});
+
+// ─── Pagina-weergaven bijhouden ──────────────────────────────────────────────
+
+router.post('/analytics/track-page', async (req, res, next) => {
+  try {
+    const { page_name } = req.body;
+    if (!page_name) return res.status(400).json({ error: 'page_name vereist' });
+    const pool = await getPool();
+    await pool.request()
+      .input('userId', sql.Int, req.user.id)
+      .input('userEmail', sql.NVarChar, req.user.email)
+      .input('pageName', sql.NVarChar, page_name)
+      .query('INSERT INTO dbo.user_page_views (user_id, user_email, page_name) VALUES (@userId, @userEmail, @pageName)');
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+router.get('/settings/odata', async (req, res, next) => {
+  try {
+    const config = await settingsService.getODataConfig();
+    // Maskeer de bearer token
+    if (config.D365_ODATA_BEARER_TOKEN) {
+      config.D365_ODATA_BEARER_TOKEN_SET = true;
+      config.D365_ODATA_BEARER_TOKEN = '';
+    } else {
+      config.D365_ODATA_BEARER_TOKEN_SET = false;
+    }
+    res.json({ settings: config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/odata', async (req, res, next) => {
+  try {
+    const allowed = [...settingsService.ODATA_KEYS];
+    const incoming = req.body || {};
+
+    // Leeg token = niet overschrijven
+    if (incoming.D365_ODATA_BEARER_TOKEN === '') {
+      delete incoming.D365_ODATA_BEARER_TOKEN;
+    }
+
+    const filtered = Object.fromEntries(
+      Object.entries(incoming).filter(([k]) => allowed.includes(k))
+    );
+
+    await settingsService.saveODataConfig(filtered, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_ODATA_SETTINGS', 'app_settings', null, { keys: Object.keys(filtered) });
     res.json({ success: true });
   } catch (err) {
     next(err);

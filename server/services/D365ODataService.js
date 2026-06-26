@@ -1,31 +1,27 @@
 'use strict';
 
 const { logger } = require('../utils/logger');
+const settingsService = require('./SettingsService');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
-function buildHeaders() {
-  const headers = {
-    Accept: 'application/json',
-  };
-
-  const bearerToken = process.env.D365_ODATA_BEARER_TOKEN;
+async function buildHeaders() {
+  const headers = { Accept: 'application/json' };
+  const bearerToken = await settingsService.getAsync('D365_ODATA_BEARER_TOKEN');
   if (bearerToken) {
     headers.Authorization = 'Bearer ' + bearerToken;
   }
-
   return headers;
 }
 
-function getBaseUrl() {
-  const rawBaseUrl = (process.env.D365_ODATA_BASE_URL || '').trim();
+async function getBaseUrl() {
+  const rawBaseUrl = (await settingsService.getAsync('D365_ODATA_BASE_URL')).trim();
   if (!rawBaseUrl) {
     const err = new Error('D365_ODATA_BASE_URL ontbreekt');
     err.status = 500;
     throw err;
   }
-
   return rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
 }
 
@@ -47,10 +43,10 @@ function escapeODataLiteral(value) {
   return String(value || '').replace(/'/g, "''");
 }
 
-function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
-  const baseUrl = getBaseUrl();
-  const path = (process.env.D365_ODATA_PURCHASE_ORDERS_PATH || DEFAULT_PURCHASE_ORDERS_PATH).trim();
-  const company = (process.env.D365_ODATA_COMPANY || '').trim();
+async function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
+  const baseUrl = await getBaseUrl();
+  const path = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', DEFAULT_PURCHASE_ORDERS_PATH)).trim();
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
   const normalizedPath = path.startsWith('/') ? path : '/' + path;
   const url = new URL(baseUrl + normalizedPath);
   const searchParams = url.searchParams;
@@ -72,8 +68,9 @@ function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
 }
 
 async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0 }) {
-  const url = buildPurchaseOrderUrl({ supplierAccount, top, skip });
-  const timeoutMs = Number.parseInt(process.env.D365_ODATA_TIMEOUT_MS || String(DEFAULT_REQUEST_TIMEOUT_MS), 10);
+  const url = await buildPurchaseOrderUrl({ supplierAccount, top, skip });
+  const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
+  const timeoutMs = Number.parseInt(timeoutRaw, 10);
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeout);
@@ -82,7 +79,7 @@ async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0 }) {
   try {
     response = await fetch(url, {
       method: 'GET',
-      headers: buildHeaders(),
+      headers: await buildHeaders(),
       signal: controller.signal,
     });
   } catch (error) {
