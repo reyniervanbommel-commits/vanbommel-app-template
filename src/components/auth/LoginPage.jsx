@@ -108,7 +108,7 @@ export default function LoginPage() {
 
         <div>
           <Text className={styles.title} block>Inloggen</Text>
-          <Text className={styles.subtitle} block>[APP_NAME]</Text>
+          <Text className={styles.subtitle} block>Vendor Collaboration App</Text>
         </div>
 
         {error && (

@@ -88,7 +88,7 @@ export default function AppShellHeader({
           aria-label="Zijbalk openen of sluiten"
         />
         <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
-          [APP_NAME]
+          Vendor Collaboration App
         </Text>
       </div>
 
