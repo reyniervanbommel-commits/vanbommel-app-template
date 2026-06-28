@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -26,6 +27,12 @@ const useStyles = makeStyles({
   controlHeaderCell: {
     width: '44px',
     textAlign: 'center',
+  },
+  controlHeaderButton: {
+    minWidth: '28px',
+    width: '28px',
+    height: '28px',
+    ...shorthands.padding('0'),
   },
   groupRowCell: {
     backgroundColor: '#f4e6ed',
@@ -76,28 +83,6 @@ const useStyles = makeStyles({
     ...shorthands.padding('8px', '8px', '12px', '46px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
-  subTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  subHeaderCell: {
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('6px', '8px'),
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground2,
-    backgroundColor: tokens.colorNeutralBackground3,
-    whiteSpace: 'nowrap',
-  },
-  subCell: {
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('6px', '8px'),
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground1,
-  },
   empty: {
     ...shorthands.padding('16px'),
     color: tokens.colorNeutralForeground3,
@@ -105,25 +90,18 @@ const useStyles = makeStyles({
   },
 });
 
-function getRowId(order, index) {
-  if (order?.id) return String(order.id);
-  if (order?.orderNumber) return String(order.orderNumber) + '-' + String(index);
-  return 'row-' + String(index);
-}
-
-function toDisplay(value) {
-  if (value === null || value === undefined || value === '') return '-';
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
-  return '-';
-}
-
 function PurchaseOrdersBoardTable({ items, columns }) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
+  const [headersOnly, setHeadersOnly] = useState(false);
 
   const rows = useMemo(
-    () => items.map((order, index) => ({ order, rowId: getRowId(order, index) })),
+    () =>
+      items.map((order, index) => ({
+        order,
+        rowId: order?.id ? String(order.id) : (order?.orderNumber ? String(order.orderNumber) + '-' + String(index) : 'row-' + String(index)),
+      })),
     [items]
   );
 
@@ -138,6 +116,17 @@ function PurchaseOrdersBoardTable({ items, columns }) {
     });
     return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
   }, [rows]);
+  const allGroupsCollapsed = useMemo(
+    () =>
+      groupedRows.length > 0 &&
+      groupedRows.every((group) => !!collapsedGroups[group.groupName]),
+    [collapsedGroups, groupedRows]
+  );
+  const allOrderRowsWithLines = useMemo(() => rows
+    .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
+    .map(({ rowId }) => rowId), [rows]);
+  const allSubgroupsCollapsed = useMemo(() =>
+    allOrderRowsWithLines.length > 0 && allOrderRowsWithLines.every((rowId) => !expandedOrders[rowId]), [allOrderRowsWithLines, expandedOrders]);
 
   useEffect(() => {
     setExpandedOrders((prev) => {
@@ -165,6 +154,29 @@ function PurchaseOrdersBoardTable({ items, columns }) {
     if (!rowId) return;
     setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
   }, []);
+  const handleToggleAllGroups = useCallback(() => {
+    setCollapsedGroups((prev) => {
+      const shouldCollapseAll = !groupedRows.every((group) => !!prev[group.groupName]);
+      const next = { ...prev };
+      groupedRows.forEach((group) => {
+        next[group.groupName] = shouldCollapseAll;
+      });
+      return next;
+    });
+  }, [groupedRows]);
+  const handleToggleAllSubgroups = useCallback(() => {
+    setExpandedOrders((prev) => {
+      const next = { ...prev };
+      const shouldExpandAll = allSubgroupsCollapsed;
+      allOrderRowsWithLines.forEach((rowId) => {
+        next[rowId] = shouldExpandAll;
+      });
+      return next;
+    });
+  }, [allOrderRowsWithLines, allSubgroupsCollapsed]);
+  const handleToggleHeadersOnly = useCallback(() => {
+    setHeadersOnly((prev) => !prev);
+  }, []);
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
@@ -175,7 +187,38 @@ function PurchaseOrdersBoardTable({ items, columns }) {
       <table className={styles.table}>
         <thead>
           <tr>
-            <th className={`${styles.headerCell} ${styles.controlHeaderCell}`} />
+            <th className={`${styles.headerCell} ${styles.controlHeaderCell}`}>
+              <Button
+                size="small"
+                appearance="subtle"
+                className={styles.controlHeaderButton}
+                onClick={handleToggleAllGroups}
+                title={allGroupsCollapsed ? 'Alles uitklappen' : 'Alles inklappen'}
+                aria-label={allGroupsCollapsed ? 'Alles uitklappen' : 'Alles inklappen'}
+              >
+                {allGroupsCollapsed ? '+' : '-'}
+              </Button>
+              <Button
+                size="small"
+                appearance="subtle"
+                className={styles.controlHeaderButton}
+                onClick={handleToggleAllSubgroups}
+                title={allSubgroupsCollapsed ? 'Alle subgroepen uitklappen' : 'Alle subgroepen inklappen'}
+                aria-label={allSubgroupsCollapsed ? 'Alle subgroepen uitklappen' : 'Alle subgroepen inklappen'}
+              >
+                {allSubgroupsCollapsed ? '++' : '--'}
+              </Button>
+              <Button
+                size="small"
+                appearance={headersOnly ? 'primary' : 'subtle'}
+                className={styles.controlHeaderButton}
+                onClick={handleToggleHeadersOnly}
+                title={headersOnly ? 'Normale weergave' : 'Alleen headers tonen'}
+                aria-label={headersOnly ? 'Normale weergave' : 'Alleen headers tonen'}
+              >
+                H
+              </Button>
+            </th>
             {columns.map((column) => (
               <th key={column.key} className={styles.headerCell}>
                 {column.header}
@@ -203,7 +246,7 @@ function PurchaseOrdersBoardTable({ items, columns }) {
                     </button>
                   </td>
                 </tr>
-                {!isCollapsed && group.entries.map(({ order, rowId }) => {
+                {!isCollapsed && !headersOnly && group.entries.map(({ order, rowId }) => {
                   const lines = Array.isArray(order.lines) ? order.lines : [];
                   const hasLines = lines.length > 0;
                   const isExpanded = !!expandedOrders[rowId];
@@ -235,30 +278,7 @@ function PurchaseOrdersBoardTable({ items, columns }) {
                       {hasLines && isExpanded ? (
                         <tr>
                           <td colSpan={columns.length + 1} className={styles.subitemsContainer}>
-                            <table className={styles.subTable}>
-                              <thead>
-                                <tr>
-                                  <th className={styles.subHeaderCell}>Subitem-ID</th>
-                                  <th className={styles.subHeaderCell}>Subitemnaam</th>
-                                  <th className={styles.subHeaderCell}>What To Test</th>
-                                  <th className={styles.subHeaderCell}>Description</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {lines.map((line, index) => (
-                                  <tr key={`${rowId}-line-${line.lineNumber || index}`}>
-                                    <td className={styles.subCell}>
-                                      {toDisplay(line.purchaseOrderNumber)}-{toDisplay(line.lineNumber)}
-                                    </td>
-                                    <td className={styles.subCell}>{toDisplay(line.itemNumber)}</td>
-                                    <td className={styles.subCell}>{toDisplay(line.description)}</td>
-                                    <td className={styles.subCell}>
-                                      {toDisplay(line.quantity)} {toDisplay(line.unit)} | {toDisplay(line.lineAmount)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <PurchaseOrdersSubitemsTable rowId={rowId} lines={lines} />
                           </td>
                         </tr>
                       ) : null}
