@@ -14,6 +14,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
+import { APP_DISPLAY_NAME } from '../../config/app';
 import { APP_VERSION } from '../../config/version';
 
 const useStyles = makeStyles({
@@ -108,7 +109,7 @@ export default function LoginPage() {
 
         <div>
           <Text className={styles.title} block>Inloggen</Text>
-          <Text className={styles.subtitle} block>Vendor Collaboration App</Text>
+          <Text className={styles.subtitle} block>{APP_DISPLAY_NAME}</Text>
         </div>
 
         {error && (

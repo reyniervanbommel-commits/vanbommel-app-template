@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
-import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
+import {
+  Person24Regular,
+  Table24Regular,
+  CloudLink24Regular,
+} from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
 import UserAnalytics from './UserAnalytics';
+import AdminODataSettings from './AdminODataSettings';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
@@ -27,18 +32,39 @@ const useStyles = makeStyles({
 
 export default function AdminPage() {
   const styles = useStyles();
-  const [tab, setTab] = useState('users');
+  const [adminTab, setAdminTab] = useState('users');
+
+  const handleTabUsers = useCallback(() => setAdminTab('users'), []);
+  const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
+  const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
 
   return (
     <div className={styles.page}>
       <aside className={styles.sidebar}>
-        <SidebarNavItem icon={Person24Regular} label="Gebruikers"
-          active={tab === 'users'} onClick={() => setTab('users')} />
-        <SidebarNavItem icon={Table24Regular} label="Analytics"
-          active={tab === 'analytics'} onClick={() => setTab('analytics')} />
+        <SidebarNavItem
+          icon={Person24Regular}
+          label="Gebruikers"
+          active={adminTab === 'users'}
+          onClick={handleTabUsers}
+        />
+        <SidebarNavItem
+          icon={Table24Regular}
+          label="Analytics"
+          active={adminTab === 'analytics'}
+          onClick={handleTabAnalytics}
+        />
+        <SidebarNavItem
+          icon={CloudLink24Regular}
+          label="OData"
+          active={adminTab === 'odata'}
+          onClick={handleTabOdata}
+        />
       </aside>
+
       <div className={styles.content}>
-        {tab === 'users' ? <UsersManagement /> : <UserAnalytics />}
+        {adminTab === 'users' && <UsersManagement />}
+        {adminTab === 'analytics' && <UserAnalytics />}
+        {adminTab === 'odata' && <AdminODataSettings />}
       </div>
     </div>
   );

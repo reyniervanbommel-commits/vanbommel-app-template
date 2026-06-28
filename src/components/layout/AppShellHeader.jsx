@@ -13,6 +13,7 @@ import {
   WeatherMoon24Regular,
   WeatherSunny24Regular,
 } from '@fluentui/react-icons';
+import { APP_DISPLAY_NAME } from '../../config/app';
 
 const useStyles = makeStyles({
   header: {
@@ -88,7 +89,7 @@ export default function AppShellHeader({
           aria-label="Zijbalk openen of sluiten"
         />
         <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
-          Vendor Collaboration App
+          {APP_DISPLAY_NAME}
         </Text>
       </div>
 

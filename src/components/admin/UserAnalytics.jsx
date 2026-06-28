@@ -1,13 +1,27 @@
 import React from 'react';
 import {
-  makeStyles, tokens, shorthands, Text, Field, Input, Button, Select,
-  MessageBar, MessageBarBody, Spinner,
-  Table, TableBody, TableCell, TableRow, TableHeader, TableHeaderCell,
+  makeStyles,
+  tokens,
+  Text,
+  Field,
+  Input,
+  Button,
+  MessageBar,
+  MessageBarBody,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+  TableHeader,
+  TableHeaderCell,
+  Spinner,
+  Select,
+  shorthands,
 } from '@fluentui/react-components';
 import { ArrowSync24Regular } from '@fluentui/react-icons';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { useAnalyticsData, formatDuration } from '../../hooks/useAnalyticsData';
 
@@ -15,17 +29,27 @@ const useStyles = makeStyles({
   container: { display: 'flex', flexDirection: 'column', ...shorthands.gap('24px') },
   filters: { display: 'flex', ...shorthands.gap('16px'), alignItems: 'flex-end', flexWrap: 'wrap' },
   section: {
-    display: 'flex', flexDirection: 'column', ...shorthands.gap('12px'),
-    ...shorthands.padding('16px'), backgroundColor: tokens.colorNeutralBackground2,
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('16px'),
+    ...shorthands.padding('16px'),
+    backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
   },
-  chartWrap: { width: '100%', height: '280px', marginTop: '8px' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', ...shorthands.gap('12px') },
-  statCard: {
-    ...shorthands.padding('16px'), backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.borderRadius(tokens.borderRadiusMedium), boxShadow: tokens.shadow4,
+  chartContainer: { width: '100%', height: '300px', marginTop: '16px' },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    ...shorthands.gap('16px'),
+    marginBottom: '16px',
   },
-  statLabel: { color: tokens.colorNeutralForeground3 },
+  statCard: {
+    ...shorthands.padding('16px'),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    boxShadow: tokens.shadow4,
+  },
+  tableContainer: { marginTop: '16px' },
 });
 
 export default function UserAnalytics() {
@@ -34,39 +58,54 @@ export default function UserAnalytics() {
     startDate, setStartDate, endDate, setEndDate,
     selectedUserId, setSelectedUserId,
     loading, error, users,
-    loginStats, pageUsage, sessionStats, userLoginStats,
+    loginStats, pageUsage, sessionStats, userLoginStats, clickStats,
     handleRefresh,
   } = useAnalyticsData();
 
   return (
     <div className={styles.container}>
-      <Text size={600} weight="semibold">Gebruiksanalytics</Text>
+      <Text size={600} weight="semibold">Gebruikersanalytics</Text>
       <MessageBar intent="info">
-        <MessageBarBody>Data wordt bijgehouden vanaf het moment dat analytics actief is.</MessageBarBody>
+        <MessageBarBody>Activiteitsdata wordt maximaal 90 dagen bewaard.</MessageBarBody>
       </MessageBar>
-
       {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
 
       <div className={styles.filters}>
         <Field label="Startdatum">
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <div lang="nl-NL">
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </div>
         </Field>
         <Field label="Einddatum">
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <div lang="nl-NL">
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
         </Field>
         <Field label="Gebruiker">
-          <Select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} style={{ minWidth: '200px' }}>
+          <Select
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+            style={{ minWidth: '200px' }}
+          >
             <option value="">Alle gebruikers</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.email}</option>)}
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>{user.email}</option>
+            ))}
           </Select>
         </Field>
-        <Button appearance="subtle" icon={<ArrowSync24Regular />} onClick={handleRefresh} disabled={loading} />
+        <Button
+          appearance="subtle"
+          icon={<ArrowSync24Regular />}
+          onClick={handleRefresh}
+          disabled={loading}
+          title="Vernieuwen"
+        />
       </div>
 
-      {loading && !sessionStats && (
+      {loading && !loginStats && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <Spinner size="large" />
-          <Text style={{ display: 'block', marginTop: '12px' }}>Data laden...</Text>
+          <Text style={{ display: 'block', marginTop: '16px' }}>Data laden...</Text>
         </div>
       )}
 
@@ -75,19 +114,19 @@ export default function UserAnalytics() {
           <Text size={500} weight="semibold">Sessiestatistieken</Text>
           <div className={styles.statsGrid}>
             <div className={styles.statCard}>
-              <Text size={200} className={styles.statLabel} block>Totaal sessies</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Totaal sessies</Text>
               <Text size={600} weight="semibold">{sessionStats.total_sessions || 0}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={200} className={styles.statLabel} block>Gem. duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Gemiddelde duur</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.avg_duration_seconds)}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={200} className={styles.statLabel} block>Min. duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Min. duur</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.min_duration_seconds)}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={200} className={styles.statLabel} block>Max. duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Max. duur</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.max_duration_seconds)}</Text>
             </div>
           </div>
@@ -96,16 +135,16 @@ export default function UserAnalytics() {
 
       {loginStats?.by_day?.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Logins per dag</Text>
-          <div className={styles.chartWrap}>
+          <Text size={500} weight="semibold">Inlogstatistieken per dag</Text>
+          <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={loginStats.by_day}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip />
+                <RechartsTooltip />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke={tokens.colorBrandForeground1} name="Logins" />
+                <Line type="monotone" dataKey="count" stroke="#2775CE" name="Inlogpogingen" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -115,61 +154,102 @@ export default function UserAnalytics() {
       {pageUsage.length > 0 && (
         <div className={styles.section}>
           <Text size={500} weight="semibold">Paginagebruik</Text>
-          <div className={styles.chartWrap}>
+          <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pageUsage}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="page_name" />
                 <YAxis />
-                <Tooltip />
+                <RechartsTooltip />
                 <Legend />
-                <Bar dataKey="count" fill={tokens.colorBrandForeground1} name="Bezoeken" />
+                <Bar dataKey="count" fill="#2775CE" name="Bezoeken" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHeaderCell>Pagina</TableHeaderCell>
-                <TableHeaderCell>Bezoeken</TableHeaderCell>
-                <TableHeaderCell>Unieke gebruikers</TableHeaderCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageUsage.map((p, i) => (
-                <TableRow key={i}>
-                  <TableCell>{p.page_name}</TableCell>
-                  <TableCell>{p.count}</TableCell>
-                  <TableCell>{p.unique_users}</TableCell>
+          <div className={styles.tableContainer}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Pagina</TableHeaderCell>
+                  <TableHeaderCell>Bezoeken</TableHeaderCell>
+                  <TableHeaderCell>Unieke gebruikers</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {pageUsage.map((page, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{page.page_name || 'Onbekend'}</TableCell>
+                    <TableCell>{page.count || 0}</TableCell>
+                    <TableCell>{page.unique_users || 0}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
       {userLoginStats.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Logins per gebruiker</Text>
-          <div className={styles.chartWrap}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={userLoginStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="user_email" angle={-30} textAnchor="end" height={80} />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="login_count" fill={tokens.colorBrandForeground1} name="Logins" />
-              </BarChart>
-            </ResponsiveContainer>
+          <Text size={500} weight="semibold">Inlogstatistieken per gebruiker</Text>
+          <div className={styles.tableContainer}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Gebruiker</TableHeaderCell>
+                  <TableHeaderCell>Aantal inlogpogingen</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {userLoginStats.map((stat, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{stat.user_email}</TableCell>
+                    <TableCell>{stat.login_count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
 
-      {!loading && !sessionStats && pageUsage.length === 0 && userLoginStats.length === 0 && (
-        <MessageBar intent="info">
-          <MessageBarBody>Nog geen analytics data beschikbaar voor deze periode.</MessageBarBody>
-        </MessageBar>
+      {clickStats.length > 0 && (
+        <div className={styles.section}>
+          <Text size={500} weight="semibold">Klikstatistieken</Text>
+          <div className={styles.tableContainer}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Pagina</TableHeaderCell>
+                  <TableHeaderCell>Element</TableHeaderCell>
+                  <TableHeaderCell>Klikken</TableHeaderCell>
+                  <TableHeaderCell>Unieke gebruikers</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clickStats.map((stat, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{stat.page_name}</TableCell>
+                    <TableCell>{stat.element_type}</TableCell>
+                    <TableCell>{stat.count}</TableCell>
+                    <TableCell>{stat.unique_users}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {!loading &&
+        (!sessionStats || sessionStats.total_sessions === 0) &&
+        (!loginStats || loginStats.by_day?.length === 0) &&
+        pageUsage.length === 0 &&
+        userLoginStats.length === 0 &&
+        clickStats.length === 0 && (
+          <MessageBar intent="info">
+            <MessageBarBody>Geen analytics-data gevonden voor de geselecteerde periode.</MessageBarBody>
+          </MessageBar>
       )}
     </div>
   );

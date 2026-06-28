@@ -1,30 +1,49 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Select, Field } from '@fluentui/react-components';
+import { Field, Select } from '@fluentui/react-components';
 import { ChevronDown24Regular } from '@fluentui/react-icons';
 
-function UserSecurityActionsComponent({ user, onEditPermissions, onLockToggle, onMfaRequiredToggle, onForceReset, onDeleteClick }) {
+function UserSecurityActionsComponent({
+  user,
+  onEditPermissions,
+  onLockToggle,
+  onMfaRequiredToggle,
+  onForceReset,
+  onDeleteClick,
+}) {
   const [selectedAction, setSelectedAction] = useState('');
 
-  const handleChange = useCallback((event) => {
+  const handleEditPermissions = useCallback(() => onEditPermissions(user), [onEditPermissions, user]);
+  const handleLockToggle = useCallback(() => onLockToggle(user.id, user.is_locked), [onLockToggle, user]);
+  const handleMfaToggle = useCallback(
+    () => onMfaRequiredToggle(user.id, user.mfa_required),
+    [onMfaRequiredToggle, user]
+  );
+  const handleForceReset = useCallback(() => onForceReset(user.id), [onForceReset, user.id]);
+  const handleRemove = useCallback(() => onDeleteClick(user), [onDeleteClick, user]);
+
+  const handleActionChange = useCallback((event) => {
     const action = event.target.value;
-    setSelectedAction(action);
-    if (action === 'permissions')  onEditPermissions(user);
-    if (action === 'lock-toggle')  onLockToggle(user.id, user.is_locked);
-    if (action === 'mfa-toggle')   onMfaRequiredToggle(user.id, user.mfa_required);
-    if (action === 'force-reset')  onForceReset(user.id);
-    if (action === 'remove')       onDeleteClick(user);
     setSelectedAction('');
-  }, [user, onEditPermissions, onLockToggle, onMfaRequiredToggle, onForceReset, onDeleteClick]);
+    if (action === 'permissions') handleEditPermissions();
+    if (action === 'lock-toggle') handleLockToggle();
+    if (action === 'mfa-toggle') handleMfaToggle();
+    if (action === 'force-reset') handleForceReset();
+    if (action === 'remove') handleRemove();
+  }, [handleEditPermissions, handleLockToggle, handleMfaToggle, handleForceReset, handleRemove]);
 
   return (
     <Field validationMessage="">
-      <Select value={selectedAction} onChange={handleChange} contentAfter={<ChevronDown24Regular />}>
+      <Select
+        value={selectedAction}
+        onChange={handleActionChange}
+        contentAfter={<ChevronDown24Regular />}
+      >
         <option value="">Actie kiezen</option>
         <option value="permissions">Rechten beheren</option>
         <option value="lock-toggle">{user.is_locked ? 'Deblokkeren' : 'Blokkeren'}</option>
-        <option value="mfa-toggle">{user.mfa_required ? 'MFA optioneel maken' : 'MFA verplichten'}</option>
+        <option value="mfa-toggle">{user.mfa_required ? 'MFA optioneel maken' : 'MFA verplicht maken'}</option>
         <option value="force-reset">Wachtwoord reset forceren</option>
-        <option value="remove">Verwijderen</option>
+        <option value="remove">Gebruiker verwijderen</option>
       </Select>
     </Field>
   );

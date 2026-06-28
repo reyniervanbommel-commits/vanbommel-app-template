@@ -1,15 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
-
-const PAGE_LABEL_MAP = {
-  home: 'Hoofdpagina',
-  supplier: 'Purchase orders',
-  settings: 'Instellingen',
-};
+import { PAGE_PERMISSION_LABELS } from '../constants/pagePermissions';
 
 /**
- * useUsersManagement
- * Beheert state en handlers voor het gebruikersbeheer scherm.
+ * useUsersManagement — state en handlers voor admin gebruikersbeheer.
  */
 export function useUsersManagement() {
   const [users, setUsers] = useState([]);
@@ -23,26 +17,28 @@ export function useUsersManagement() {
   const [deleteDialogUser, setDeleteDialogUser] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recentlyUpdatedUserId, setRecentlyUpdatedUserId] = useState(null);
-  const [resetLink, setResetLink] = useState(null);
+  const [resetMessage, setResetMessage] = useState('');
 
   const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const data = await apiRequest('/admin/users');
-      const userList = data.users || [];
-      setUsers(userList);
+      const data = await apiRequest('/admin/users?pageSize=500');
+      const list = data.users || [];
+      setUsers(list);
 
       const permissionsMap = {};
-      await Promise.all(userList.map(async (user) => {
+      await Promise.all(list.map(async (user) => {
         try {
           const perms = await apiRequest(`/admin/users/${user.id}/permissions`);
-          permissionsMap[user.id] = perms.map((p) => p.page_name);
+          permissionsMap[user.id] = (Array.isArray(perms) ? perms : []).map((p) => p.page_name);
         } catch {
           permissionsMap[user.id] = [];
         }
       }));
       setUserPermissions(permissionsMap);
     } catch (err) {
-      setError(err.message || 'Laden van gebruikers mislukt');
+      setError(err.message || 'Gebruikers laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -54,30 +50,37 @@ export function useUsersManagement() {
     if (!searchTerm.trim()) return users;
     const term = searchTerm.toLowerCase();
     return users.filter((u) =>
-      u.email.toLowerCase().includes(term) || u.role.toLowerCase().includes(term)
+      u.email.toLowerCase().includes(term) ||
+      (u.role || '').toLowerCase().includes(term)
     );
   }, [users, searchTerm]);
 
   const handleLockToggle = useCallback(async (userId, isLocked) => {
     try {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { is_locked: !isLocked } });
-      loadUsers();
-    } catch (err) { setError(err.message); }
+      await loadUsers();
+    } catch (err) {
+      setError(err.message || 'Gebruiker bijwerken mislukt');
+    }
   }, [loadUsers]);
 
   const handleMfaRequiredToggle = useCallback(async (userId, isRequired) => {
     try {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { mfa_required: !isRequired } });
-      loadUsers();
-    } catch (err) { setError(err.message); }
+      await loadUsers();
+    } catch (err) {
+      setError(err.message || 'MFA-instelling bijwerken mislukt');
+    }
   }, [loadUsers]);
 
   const handleForceReset = useCallback(async (userId) => {
     try {
-      const data = await apiRequest(`/admin/users/${userId}/force-reset`, { method: 'POST', body: {} });
-      setResetLink(data.resetUrl || null);
-      loadUsers();
-    } catch (err) { setError(err.message); }
+      await apiRequest(`/admin/users/${userId}/force-reset`, { method: 'POST', body: {} });
+      setResetMessage('Wachtwoord-reset e-mail is verstuurd.');
+      await loadUsers();
+    } catch (err) {
+      setError(err.message || 'Reset versturen mislukt');
+    }
   }, [loadUsers]);
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -86,9 +89,9 @@ export function useUsersManagement() {
       await apiRequest(`/admin/users/${deleteDialogUser.id}`, { method: 'DELETE' });
       setDeleteDialogOpen(false);
       setDeleteDialogUser(null);
-      loadUsers();
+      await loadUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Gebruiker verwijderen mislukt');
       setDeleteDialogOpen(false);
     }
   }, [deleteDialogUser, loadUsers]);
@@ -113,20 +116,40 @@ export function useUsersManagement() {
   }, [permDialogUser?.id, loadUsers]);
 
   const getDisplayPermissions = useCallback((rawPermissions) => {
-    return rawPermissions
-      .map((perm) => PAGE_LABEL_MAP[perm])
-      .filter(Boolean);
+    const unique = new Set();
+    rawPermissions.forEach((perm) => {
+      const label = PAGE_PERMISSION_LABELS[perm];
+      if (label) unique.add(label);
+    });
+    return Array.from(unique);
   }, []);
 
   return {
-    users, filteredUsers, userPermissions, loading, error,
-    searchTerm, setSearchTerm,
-    createDialogOpen, setCreateDialogOpen,
-    permDialogUser, permDialogOpen, setPermDialogOpen,
-    deleteDialogUser, deleteDialogOpen, setDeleteDialogOpen,
-    recentlyUpdatedUserId, resetLink, setResetLink,
-    loadUsers, handleLockToggle, handleMfaRequiredToggle,
-    handleForceReset, handleDeleteClick, handleDeleteConfirm,
-    handleEditPermissions, handlePermissionsSaved, getDisplayPermissions,
+    filteredUsers,
+    userPermissions,
+    loading,
+    error,
+    searchTerm,
+    setSearchTerm,
+    createDialogOpen,
+    setCreateDialogOpen,
+    permDialogUser,
+    permDialogOpen,
+    setPermDialogOpen,
+    deleteDialogUser,
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    recentlyUpdatedUserId,
+    resetMessage,
+    setResetMessage,
+    loadUsers,
+    handleLockToggle,
+    handleMfaRequiredToggle,
+    handleForceReset,
+    handleDeleteClick,
+    handleDeleteConfirm,
+    handleEditPermissions,
+    handlePermissionsSaved,
+    getDisplayPermissions,
   };
 }

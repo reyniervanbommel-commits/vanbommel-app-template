@@ -29,12 +29,12 @@ function mapPurchaseOrder(record) {
   return {
     id: record.PurchaseOrderNumber || record.PurchaseOrderId || record.RecId || null,
     orderNumber: record.PurchaseOrderNumber || record.PurchId || null,
-    vendorAccount: record.OrderAccount || record.VendorAccountNumber || record.VendorAccount || null,
-    vendorName: record.VendorName || record.OrderAccountName || null,
-    status: record.DocumentStatus || record.PurchaseOrderStatus || null,
+    vendorAccount: record.OrderVendorAccountNumber || record.InvoiceVendorAccountNumber || record.VendorAccountNumber || null,
+    vendorName: record.PurchaseOrderName || record.VendorName || null,
+    status: record.PurchaseOrderStatus || record.DocumentStatus || null,
     currencyCode: record.CurrencyCode || null,
-    requestedDeliveryDate: record.RequestedDeliveryDateTime || record.RequestedDeliveryDate || null,
-    createdDateTime: record.CreatedDateTime || null,
+    requestedDeliveryDate: record.RequestedDeliveryDate || record.RequestedDeliveryDateTime || null,
+    createdDateTime: record.CreatedDateTime || record.AccountingDate || null,
     raw: record,
   };
 }
@@ -57,11 +57,14 @@ async function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
   const safeSupplierAccount = escapeODataLiteral(supplierAccount);
   const safeCompany = escapeODataLiteral(company);
 
-  if (company) {
+  if (company && supplierAccount) {
     searchParams.set('cross-company', 'true');
-    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "' and OrderAccount eq '" + safeSupplierAccount + "'");
-  } else {
-    searchParams.set('$filter', "OrderAccount eq '" + safeSupplierAccount + "'");
+    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "' and OrderVendorAccountNumber eq '" + safeSupplierAccount + "'");
+  } else if (company) {
+    searchParams.set('cross-company', 'true');
+    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "'");
+  } else if (supplierAccount) {
+    searchParams.set('$filter', "OrderVendorAccountNumber eq '" + safeSupplierAccount + "'");
   }
 
   return url.toString();

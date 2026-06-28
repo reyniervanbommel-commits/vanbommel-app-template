@@ -26,7 +26,7 @@ router.get('/users', async (req, res, next) => {
     const result = await pool.request()
       .input('offset', sql.Int, offset)
       .input('pageSize', sql.Int, pageSize)
-      .query('SELECT id, email, display_name, role, must_set_password, is_locked, mfa_enabled, last_login, created_at FROM dbo.users ORDER BY created_at DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY');
+      .query('SELECT id, email, display_name, role, must_set_password, is_locked, mfa_enabled, mfa_required, last_login, created_at FROM dbo.users ORDER BY created_at DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY');
 
     res.json({ users: result.recordset, meta: buildPaginationMeta(total, page, pageSize) });
   } catch (err) {
@@ -126,14 +126,14 @@ router.delete('/users/:id', async (req, res, next) => {
   }
 });
 
-// ─── Pagina-permissies ───────────────────────────────────────────────────────
+// ─── Permissions ────────────────────────────────────────────────────────────
 
 router.get('/users/:id/permissions', async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await pool.request()
       .input('userId', sql.Int, parseInt(req.params.id))
-      .query('SELECT page_name FROM dbo.user_page_permissions WHERE user_id = @userId ORDER BY page_name');
+      .query('SELECT page_name FROM dbo.user_permissions WHERE user_id = @userId');
     res.json(result.recordset);
   } catch (err) { next(err); }
 });
@@ -141,56 +141,134 @@ router.get('/users/:id/permissions', async (req, res, next) => {
 router.patch('/users/:id/permissions', async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id);
-    const permissions = req.body.permissions || [];
+    const { permissions = [] } = req.body;
     const pool = await getPool();
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-    try {
-      await transaction.request()
-        .input('userId', sql.Int, userId)
-        .query('DELETE FROM dbo.user_page_permissions WHERE user_id = @userId');
-      for (const perm of permissions) {
-        if (perm.page_name) {
-          await transaction.request()
-            .input('userId', sql.Int, userId)
-            .input('pageName', sql.NVarChar, perm.page_name)
-            .query('INSERT INTO dbo.user_page_permissions (user_id, page_name) VALUES (@userId, @pageName)');
-        }
-      }
-      await transaction.commit();
-      await auditLog(req.user.id, req.user.email, 'UPDATE_PERMISSIONS', 'user_page_permissions', userId, { count: permissions.length });
-      res.json({ success: true });
-    } catch (err) { await transaction.rollback(); throw err; }
-  } catch (err) { next(err); }
-});
 
-// ─── Pagina-weergaven bijhouden ──────────────────────────────────────────────
-
-router.post('/analytics/track-page', async (req, res, next) => {
-  try {
-    const { page_name } = req.body;
-    if (!page_name) return res.status(400).json({ error: 'page_name vereist' });
-    const pool = await getPool();
     await pool.request()
-      .input('userId', sql.Int, req.user.id)
-      .input('userEmail', sql.NVarChar, req.user.email)
-      .input('pageName', sql.NVarChar, page_name)
-      .query('INSERT INTO dbo.user_page_views (user_id, user_email, page_name) VALUES (@userId, @userEmail, @pageName)');
+      .input('userId', sql.Int, userId)
+      .query('DELETE FROM dbo.user_permissions WHERE user_id = @userId');
+
+    for (const { page_name } of permissions) {
+      if (page_name) {
+        await pool.request()
+          .input('userId', sql.Int, userId)
+          .input('pageName', sql.NVarChar, page_name)
+          .query('INSERT INTO dbo.user_permissions (user_id, page_name) VALUES (@userId, @pageName)');
+      }
+    }
+
+    await auditLog(req.user.id, req.user.email, 'UPDATE_PERMISSIONS', 'user_permissions', userId, { permissions });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
 
+// ─── Analytics ──────────────────────────────────────────────────────────────
+
+router.post('/analytics/log-route', async (req, res, next) => {
+  try {
+    const { page_name, session_id } = req.body;
+    if (!page_name || !req.user?.id) return res.json({ success: true });
+    const pool = await getPool();
+    await pool.request()
+      .input('userId', sql.Int, req.user.id)
+      .input('sessionId', sql.NVarChar, session_id || 'unknown')
+      .input('pageName', sql.NVarChar, page_name)
+      .query(`INSERT INTO dbo.user_activity (user_id, session_id, activity_type, page_name)
+              VALUES (@userId, @sessionId, 'route_change', @pageName)`);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/page-usage', async (req, res, next) => {
+  try {
+    const { startDate, endDate, userId } = req.query;
+    const pool = await getPool();
+    const request = pool.request();
+    let where = "activity_type = 'route_change'";
+    if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
+    if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    if (userId) { where += ' AND user_id = @userId'; request.input('userId', sql.Int, parseInt(userId)); }
+    const result = await request.query(`
+      SELECT page_name, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users
+      FROM dbo.user_activity WHERE ${where}
+      GROUP BY page_name ORDER BY count DESC`);
+    res.json({ stats: result.recordset });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/sessions', async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const pool = await getPool();
+    const request = pool.request();
+    let where = "activity_type = 'login'";
+    if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
+    if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    const result = await request.query(`
+      SELECT COUNT(*) as total_sessions,
+             AVG(CAST(session_duration_seconds AS FLOAT)) as avg_duration_seconds,
+             MIN(session_duration_seconds) as min_duration_seconds,
+             MAX(session_duration_seconds) as max_duration_seconds
+      FROM dbo.user_activity WHERE ${where}`);
+    res.json(result.recordset[0] || {});
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/login-stats', async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const pool = await getPool();
+    const request = pool.request();
+    let where = "action = 'LOGIN'";
+    if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
+    if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    const result = await request.query(`
+      SELECT CAST(created_at AS DATE) as date, COUNT(*) as count
+      FROM dbo.audit_log WHERE ${where}
+      GROUP BY CAST(created_at AS DATE) ORDER BY date`);
+    res.json({ by_day: result.recordset });
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/user-login-stats', async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const pool = await getPool();
+    const request = pool.request();
+    let where = "action = 'LOGIN'";
+    if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
+    if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    const result = await request.query(`
+      SELECT user_email, COUNT(*) as login_count
+      FROM dbo.audit_log WHERE ${where}
+      GROUP BY user_email ORDER BY login_count DESC`);
+    res.json(result.recordset);
+  } catch (err) { next(err); }
+});
+
+router.get('/analytics/click-stats', async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const pool = await getPool();
+    const request = pool.request();
+    let where = "activity_type = 'click'";
+    if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
+    if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    const result = await request.query(`
+      SELECT page_name, element_type, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users
+      FROM dbo.user_activity WHERE ${where}
+      GROUP BY page_name, element_type ORDER BY count DESC`);
+    res.json({ stats: result.recordset });
+  } catch (err) { next(err); }
+});
+
+// ─── OData settings ──────────────────────────────────────────────────────────
+
 router.get('/settings/odata', async (req, res, next) => {
   try {
     const config = await settingsService.getODataConfig();
-    // Maskeer de bearer token
-    if (config.D365_ODATA_BEARER_TOKEN) {
-      config.D365_ODATA_BEARER_TOKEN_SET = true;
-      config.D365_ODATA_BEARER_TOKEN = '';
-    } else {
-      config.D365_ODATA_BEARER_TOKEN_SET = false;
-    }
-    res.json({ settings: config });
+    config.D365_ODATA_BEARER_TOKEN_SET = !!config.D365_ODATA_BEARER_TOKEN;
+    res.json({ settings: config, source: 'app_settings' });
   } catch (err) {
     next(err);
   }

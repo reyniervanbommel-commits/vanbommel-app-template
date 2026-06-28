@@ -1,21 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Dialog, DialogSurface, DialogTitle, DialogBody, DialogActions,
-  DialogContent, DialogTrigger, Button, Checkbox, Text,
-  MessageBar, MessageBarBody, makeStyles, tokens, shorthands,
+  Button,
+  Text,
+  Checkbox,
+  MessageBar,
+  MessageBarBody,
+  Dialog,
+  DialogTrigger,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogActions,
+  DialogContent,
+  makeStyles,
+  tokens,
+  shorthands,
 } from '@fluentui/react-components';
 import { Shield24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
-
-const PAGE_NAMES = [
-  { id: 'home',     label: 'Hoofdpagina',     description: 'Toegang tot de hoofdpagina' },
-  { id: 'supplier', label: 'Purchase orders', description: 'Inzien van inkooporders' },
-  { id: 'settings', label: 'Instellingen',    description: 'Toegang tot instellingen' },
-];
+import { PAGE_PERMISSIONS } from '../../constants/pagePermissions';
 
 const useStyles = makeStyles({
-  list: { display: 'flex', flexDirection: 'column', ...shorthands.gap('8px'), marginTop: '8px' },
-  description: {
+  permissionsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+    marginTop: '8px',
+  },
+  permissionDescription: {
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
     marginLeft: '28px',
@@ -37,18 +49,24 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
     setError(null);
     try {
       const data = await apiRequest(`/admin/users/${user.id}/permissions`);
-      setPermissions(data.map((p) => p.page_name));
-    } catch { setError('Laden van rechten mislukt'); }
-    finally { setLoading(false); }
+      setPermissions((Array.isArray(data) ? data : []).map((p) => p.page_name));
+    } catch {
+      setError('Rechten laden mislukt');
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
   useEffect(() => {
-    if (open && user?.id) { setSuccess(false); loadPermissions(); }
+    if (open && user?.id) {
+      setSuccess(false);
+      loadPermissions();
+    }
   }, [open, user?.id, loadPermissions]);
 
-  const toggle = useCallback((id) => {
+  const handlePermissionToggle = useCallback((pageName) => {
     setPermissions((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+      prev.includes(pageName) ? prev.filter((p) => p !== pageName) : [...prev, pageName]
     );
   }, []);
 
@@ -56,39 +74,56 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
     if (!user?.id) return;
     setSaving(true);
     setError(null);
+    setSuccess(false);
     try {
       await apiRequest(`/admin/users/${user.id}/permissions`, {
         method: 'PATCH',
-        body: { permissions: permissions.map((p) => ({ page_name: p })) },
+        body: { permissions: permissions.map((page_name) => ({ page_name })) },
       });
       setSuccess(true);
       onSaved();
-      setTimeout(() => onOpenChange(false), 1000);
+      setTimeout(() => onOpenChange(false), 1200);
     } catch (err) {
-      setError(err.message || 'Opslaan mislukt');
-    } finally { setSaving(false); }
+      setError(err.message || 'Rechten opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
   }, [user?.id, permissions, onSaved, onOpenChange]);
+
+  const handleOpenChange = useCallback((_, data) => {
+    onOpenChange(data.open);
+  }, [onOpenChange]);
 
   if (!user) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Rechten: {user.email}</DialogTitle>
+          <DialogTitle>Rechten voor {user.email}</DialogTitle>
           <DialogContent>
-            {error && <MessageBar intent="error" style={{ marginBottom: '8px' }}><MessageBarBody>{error}</MessageBarBody></MessageBar>}
-            {success && <MessageBar intent="success" style={{ marginBottom: '8px' }}><MessageBarBody>Opgeslagen</MessageBarBody></MessageBar>}
-            {loading ? <Text>Laden...</Text> : (
-              <div className={styles.list}>
-                {PAGE_NAMES.map((page) => (
+            {error && (
+              <MessageBar intent="error" style={{ marginBottom: '8px' }}>
+                <MessageBarBody>{error}</MessageBarBody>
+              </MessageBar>
+            )}
+            {success && (
+              <MessageBar intent="success" style={{ marginBottom: '8px' }}>
+                <MessageBarBody>Rechten opgeslagen</MessageBarBody>
+              </MessageBar>
+            )}
+            {loading ? (
+              <Text>Laden...</Text>
+            ) : (
+              <div className={styles.permissionsList}>
+                {PAGE_PERMISSIONS.map((page) => (
                   <div key={page.id}>
                     <Checkbox
                       label={page.label}
                       checked={permissions.includes(page.id)}
-                      onChange={() => toggle(page.id)}
+                      onChange={() => handlePermissionToggle(page.id)}
                     />
-                    <Text className={styles.description}>{page.description}</Text>
+                    <Text className={styles.permissionDescription}>{page.description}</Text>
                   </div>
                 ))}
               </div>
@@ -98,8 +133,13 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
             <DialogTrigger disableButtonEnhancement>
               <Button appearance="secondary">Annuleren</Button>
             </DialogTrigger>
-            <Button appearance="primary" icon={<Shield24Regular />} onClick={handleSave} disabled={saving || loading}>
-              {saving ? 'Opslaan...' : 'Rechten opslaan'}
+            <Button
+              appearance="primary"
+              icon={<Shield24Regular />}
+              onClick={handleSave}
+              disabled={saving || loading}
+            >
+              {saving ? 'Opslaan...' : 'Opslaan'}
             </Button>
           </DialogActions>
         </DialogBody>

@@ -12,7 +12,6 @@ const { parseSqlConnectionString } = require('./utils/sqlConnectionConfig');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
-const analyticsRouter = require('./routes/analytics');
 const supplierRouter = require('./routes/supplier');
 const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
@@ -65,7 +64,6 @@ app.use(session({
 
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
-app.use('/api/admin/analytics', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), analyticsRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, 'user']), supplierRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

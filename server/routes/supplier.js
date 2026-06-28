@@ -3,6 +3,7 @@
 const express = require('express');
 const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
+const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -25,6 +26,10 @@ function isValidSupplierAccount(value) {
   return SUPPLIER_ACCOUNT_PATTERN.test(String(value || ''));
 }
 
+function isStaffUser(user) {
+  return user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+}
+
 router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -32,12 +37,16 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
       return res.status(400).json({ error: 'Ongeldige query-parameters', details: errors.array() });
     }
 
-    const supplierAccount = getSupplierAccount(req.user);
-    if (!supplierAccount) {
-      return res.status(400).json({ error: 'Supplier account ontbreekt voor huidige gebruiker' });
-    }
-    if (!isValidSupplierAccount(supplierAccount)) {
-      return res.status(400).json({ error: 'Supplier account heeft ongeldig formaat' });
+    const staffUser = isStaffUser(req.user);
+    const supplierAccount = staffUser ? null : getSupplierAccount(req.user);
+
+    if (!staffUser) {
+      if (!supplierAccount) {
+        return res.status(400).json({ error: 'Supplier account ontbreekt voor huidige gebruiker' });
+      }
+      if (!isValidSupplierAccount(supplierAccount)) {
+        return res.status(400).json({ error: 'Supplier account heeft ongeldig formaat' });
+      }
     }
 
     const top = Number.parseInt(req.query.top || '25', 10);
@@ -45,7 +54,8 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
     const result = await fetchPurchaseOrders({ supplierAccount, top, skip });
 
     return res.json({
-      supplierAccount,
+      supplierAccount: supplierAccount || null,
+      scope: staffUser ? 'company' : 'supplier',
       meta: { top, skip, total: result.total },
       purchaseOrders: result.items,
     });
