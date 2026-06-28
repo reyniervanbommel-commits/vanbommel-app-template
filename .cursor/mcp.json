@@ -5,6 +5,21 @@
       "headers": {
         "Authorization": "Bearer ${env:D365_MCP_TOKEN}"
       }
+    },
+    "Devops": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure-devops/mcp",
+        "ReyniervanBommel0745",
+        "-d",
+        "core",
+        "work",
+        "work-items"
+      ],
+      "env": {
+        "ado_mcp_project": "d7db55dd-a46b-4c68-a6a1-b6cbc1ef23c7"
+      }
     }
   }
 }
