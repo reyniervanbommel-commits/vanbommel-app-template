@@ -63,12 +63,17 @@ export default function PurchaseOrdersPage() {
 
   const columns = useMemo(
     () => [
-      { key: 'orderNumber', header: 'PO nummer', render: item => item.orderNumber || '-' },
-      { key: 'vendorAccount', header: 'Leveranciersaccount', render: item => item.vendorAccount || '-' },
-      { key: 'vendorName', header: 'Leverancier', render: item => item.vendorName || '-' },
-      { key: 'status', header: 'Status', render: item => item.status || '-' },
-      { key: 'currencyCode', header: 'Valuta', render: item => item.currencyCode || '-' },
-      { key: 'requestedDeliveryDate', header: 'Gevraagde leverdatum', render: item => item.requestedDeliveryDate || '-' },
+      { key: 'orderNumber', header: 'PO nummer', type: 'text', render: item => item.orderNumber || '-' },
+      { key: 'vendorAccount', header: 'Leveranciersaccount', type: 'text', render: item => item.vendorAccount || '-' },
+      { key: 'vendorName', header: 'Leverancier', type: 'text', render: item => item.vendorName || '-' },
+      { key: 'status', header: 'Status', type: 'status', render: item => item.status || '-' },
+      { key: 'currencyCode', header: 'Valuta', type: 'text', render: item => item.currencyCode || '-' },
+      {
+        key: 'requestedDeliveryDate',
+        header: 'Gevraagde leverdatum',
+        type: 'date',
+        render: item => item.requestedDeliveryDate || '-',
+      },
     ],
     []
   );
