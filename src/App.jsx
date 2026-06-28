@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { FluentProvider, makeStyles, tokens } from '@fluentui/react-components';
+import { FluentProvider, makeStyles } from '@fluentui/react-components';
 import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
 import LoginPage from './components/auth/LoginPage';
@@ -11,7 +11,7 @@ import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
 import { ROLES } from './constants/roles';
 import { PurchaseOrdersPage } from './components/supplier';
-import { AppFooter, AppLayout } from './components/layout';
+import { AppFooter, AppLayout, DevFeatureChecklist } from './components/layout';
 
 const useStyles = makeStyles({
   appShell: {
@@ -22,23 +22,11 @@ const useStyles = makeStyles({
   content: {
     flexGrow: 1,
   },
-  devBadgeWrap: {
-    position: 'fixed',
-    bottom: '16px',
-    right: '16px',
-  },
-  devBanner: {
-    backgroundColor: tokens.colorPaletteMarigoldBackground2,
-    color: tokens.colorNeutralForeground1,
-    padding: '4px 12px',
-    borderRadius: '4px',
-    fontSize: '12px',
-    fontWeight: 600,
-  },
 });
 
 function AppInner({ isDarkMode, onToggleTheme }) {
   const styles = useStyles();
+  const isDevEnvironment = import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'dev';
 
   return (
     <div className={styles.appShell}>
@@ -75,11 +63,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
 
       <AppFooter />
 
-      {import.meta.env.DEV ? (
-        <div className={styles.devBadgeWrap}>
-          <div className={styles.devBanner}>DEV</div>
-        </div>
-      ) : null}
+      {isDevEnvironment ? <DevFeatureChecklist /> : null}
     </div>
   );
 }

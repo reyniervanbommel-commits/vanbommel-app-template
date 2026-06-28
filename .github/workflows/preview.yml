@@ -46,7 +46,7 @@ jobs:
 
       - name: Docker image bouwen en pushen
         run: |
-          IMAGE="${ACR_LOGIN_SERVER}/[APP_NAME]:${{ steps.set-name.outputs.image_tag }}"
+          IMAGE="${ACR_LOGIN_SERVER}/vendorportal:${{ steps.set-name.outputs.image_tag }}"
           docker build --build-arg VITE_APP_ENV="preview" -t "$IMAGE" .
           docker push "$IMAGE"
 
@@ -64,7 +64,7 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
         run: |
-          IMAGE="${ACR_LOGIN_SERVER}/[APP_NAME]:${{ steps.set-name.outputs.image_tag }}"
+          IMAGE="${ACR_LOGIN_SERVER}/vendorportal:${{ steps.set-name.outputs.image_tag }}"
           APP_NAME="${{ steps.set-name.outputs.app_name }}"
 
           EXISTS=$(az containerapp show \

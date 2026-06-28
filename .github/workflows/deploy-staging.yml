@@ -9,7 +9,7 @@ env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
   ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
   ACA_RESOURCE_GROUP: ${{ secrets.ACA_RESOURCE_GROUP }}
-  APP_NAME: [APP_NAME]-acc
+  APP_NAME: vendorportal-acc
 
 jobs:
   deploy:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Docker image bouwen en pushen
         run: |
-          IMAGE="${ACR_LOGIN_SERVER}/[APP_NAME]:acc-${GITHUB_SHA:0:8}"
+          IMAGE="${ACR_LOGIN_SERVER}/vendorportal:acc-${GITHUB_SHA:0:8}"
           docker build --build-arg VITE_APP_ENV="acc" -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV

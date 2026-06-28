@@ -12,7 +12,7 @@ env:
   ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
   ACA_RESOURCE_GROUP: ${{ secrets.ACA_RESOURCE_GROUP }}
   KEY_VAULT_NAME: ${{ secrets.KEY_VAULT_NAME_PROD }}
-  APP_NAME: [APP_NAME]-prod
+  APP_NAME: vendorportal-prod
 
 jobs:
   deploy:
@@ -32,7 +32,7 @@ jobs:
 
       - name: Docker image bouwen en pushen
         run: |
-          IMAGE="${ACR_LOGIN_SERVER}/[APP_NAME]:prod-${GITHUB_SHA:0:8}"
+          IMAGE="${ACR_LOGIN_SERVER}/vendorportal:prod-${GITHUB_SHA:0:8}"
           docker build --build-arg VITE_APP_ENV="production" -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -51,8 +51,8 @@ jobs:
             --name "$APP_NAME" \
             --resource-group "$ACA_RESOURCE_GROUP" \
             --secrets \
-              sql-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/sql-connection-string,identityref:system" \
-              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret,identityref:system"
+              sql-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/sql-connection-string-prod,identityref:system" \
+              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-prod,identityref:system"
 
           az containerapp update \
             --name "$APP_NAME" \

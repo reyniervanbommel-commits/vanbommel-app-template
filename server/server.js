@@ -2,6 +2,7 @@
 
 require('dotenv').config({ override: true });
 const express = require('express');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -53,7 +54,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: sessionStore,
-  name: process.env.SESSION_COOKIE_NAME || '[app-naam].sid',
+  name: process.env.SESSION_COOKIE_NAME || 'vendorportal.sid',
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -64,9 +65,22 @@ app.use(session({
 
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
-app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, 'user']), supplierRouter);
+app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.resolve(__dirname, '../dist');
+
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+
+    return res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 app.use(errorHandler);
 
