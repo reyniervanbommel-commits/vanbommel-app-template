@@ -1,0 +1,30 @@
+---
+description: Stel automatisch een ADR voor na afgeronde architectuurbeslissingen
+alwaysApply: true
+---
+
+# ADR vastlegging
+
+## Wanneer een ADR voorstellen
+
+Stel aan het einde van een sessie een ADR voor wanneer er tijdens het gesprek:
+- Een **caching, auth, database of deployment strategie** is gekozen
+- Een **nieuw architectuurpatroon** is geïntroduceerd (hook-extractie, service worker, nieuwe tabel)
+- **Alternatieven zijn besproken** en er bewust voor één optie is gekozen
+- Een **fundamenteel probleem** is opgelost met een aanpak die toekomstige ontwikkelaars moeten kennen
+
+## Hoe voorstellen
+
+Zeg aan het einde van de sessie:
+> "We hebben een architectuurbeslissing genomen. Wil je dat ik hier een ADR voor aanmaak in `docs/adr/`?"
+
+## Niet voorstellen bij
+
+- Bugfixes, styling, kleine refactors
+- Configuratiewijzigingen zonder architectuurimpact
+- Features die bestaande patronen volgen zonder nieuwe keuzes
+
+## ADR-locatie
+
+Alle ADR's staan in `docs/adr/` met nummering `001`, `002`, etc.
+Gebruik de skill `create-adr` voor het genereren van het document.

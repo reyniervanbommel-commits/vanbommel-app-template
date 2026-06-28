@@ -1,0 +1,57 @@
+---
+description: Koppelt superpowers skills aan de juiste docs/ mappen en documentatie-pipeline
+alwaysApply: true
+---
+
+# Superpowers documentatie-routing
+
+## Mappad-overrides
+
+De superpowers skills gebruiken standaard `docs/superpowers/`. In dit project worden de volgende paden gebruikt:
+
+| Skill | Standaard pad | **Gebruik dit pad** |
+|-------|---------------|---------------------|
+| `brainstorming` (specs) | `docs/superpowers/specs/` | `docs/specs/` |
+| `writing-plans` (plannen) | `docs/superpowers/plans/` | `.cursor/plans/` |
+
+Bestandsnaam-formaat blijft hetzelfde: `YYYY-MM-DD-<naam>.plan.md` voor plannen, `YYYY-MM-DD-<naam>-design.md` voor specs.
+
+## Uitgebreide pipeline
+
+Na de standaard superpowers flow zijn er extra stappen:
+
+```
+brainstorming       → docs/specs/        (design doc)
+writing-plans       → .cursor/plans/     (implementatieplan)
+    ↓
+post-plan-to-devops → docs/devops/       (DevOps Feature + evt. child User Stories)
+    ↓
+executing-plans     → bouwen
+    ↓
+create-adr          → docs/adr/          (architectuurbeslissingen vastleggen)
+finishing-branch    → merge
+```
+
+### Na writing-plans
+
+Stel voor:
+> "Plan opgeslagen. Wil je dat ik hier een DevOps Feature van maak?"
+
+Gebruik de skill `post-plan-to-devops` als de gebruiker ja zegt.
+
+### Na executing-plans / finishing-branch
+
+Stel voor als er architectuurbeslissingen zijn genomen:
+> "We hebben architectuurbeslissingen genomen. Wil je dat ik hier een ADR voor aanmaak?"
+
+Gebruik de skill `create-adr` als de gebruiker ja zegt.
+
+## Samenvatting docs/ structuur
+
+| Map | Inhoud | Wanneer |
+|-----|--------|---------|
+| `.cursor/plans/` | Implementatieplannen | Na brainstorm/planning |
+| `docs/specs/` | Technische ontwerpen | Na brainstorm (design doc) |
+| `docs/devops/` | DevOps work item documenten | Na plan → Feature aanmaken |
+| `docs/adr/` | Architecture Decision Records | Na afronding bouw |
+| `docs/guides/` | Handleidingen en referenties | Permanent |

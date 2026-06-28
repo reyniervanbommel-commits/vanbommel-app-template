@@ -1,0 +1,60 @@
+# Azure infrastructuur — Container Apps only
+
+## ⚠️ Kritieke regel
+
+**Alle omgevingen draaien als Azure Container Apps.**  
+De App Service `vanbommel-apps-api` is een **legacy resource** en wordt NIET meer gebruikt.
+
+Gebruik NOOIT `az webapp config appsettings set` voor deze applicatie.
+
+## Resource group
+
+Alle actieve resources staan in: `vanbommel-qaqc` (regio: northeurope)
+
+## Container Apps
+
+| Container App | Omgeving |
+|---|---|
+| `qaqc-app-prod` | Productie |
+| `qaqc-app-dev` | DEV |
+| `preview-*` | Feature previews |
+
+## Omgevingsvariabelen instellen
+
+Altijd via Container App CLI:
+
+```bash
+# Stap 1: secret toevoegen
+az containerapp secret set --name <app> --resource-group vanbommel-qaqc --secrets "key=value"
+
+# Stap 2: als plain env var
+az containerapp update --name <app> --resource-group vanbommel-qaqc --set-env-vars "KEY=value"
+
+# Stap 2 (alternatief): als secret-referentie
+az containerapp update --name <app> --resource-group vanbommel-qaqc --set-env-vars "KEY=secretref:<secret-naam>"
+```
+
+## ⚠️ OTAP-volgorde — verplicht
+
+**Nooit rechtstreeks wijzigingen doorvoeren op `qaqc-app-prod`.**
+
+Verplichte volgorde:
+1. Wijziging doorvoeren op `qaqc-app-dev`
+2. Testen en bevestiging vragen aan de gebruiker: "Werkt het in DEV?"
+3. Pas na expliciete goedkeuring: wijziging doorvoeren op `qaqc-app-prod`
+
+Dit geldt voor env vars, secrets, configuratie én code-deploys.
+
+## Azure DevOps — correct project
+
+| | |
+|---|---|
+| Organisatie | `https://reyniervanbommel0745.visualstudio.com` |
+| Project | `QAQC Module` |
+
+Gebruik NOOIT `https://dev.azure.com/vanbommel` voor QA-QC work items — dat is een ander project.
+
+## Legacy resources (niet aanraken)
+
+- `vanbommel-apps-api` — oude App Service, niet actief
+- `vanbommelqaqc-app` — oude frontend App Service, niet actief

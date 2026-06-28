@@ -1,33 +1,37 @@
 ---
-description: Security- en dataregels voor dit project
+description: Data opslag, SQL backend en security regels
 alwaysApply: true
 ---
 
-# Secrets
+# Data opslag & SQL backend
 
-- Nooit secrets, API keys of connectiestrings hardcoden in code
-- Altijd via `.env` / `process.env.*`
-- `.env` staat altijd in `.gitignore`
+- Canvas layouts worden opgeslagen in `QAQC_canvas_layouts` (kolom: `layout_state` als JSON)
+- Nieuwe layout-elementen toevoegen als nieuwe JSON-properties, niet als nieuwe SQL-kolommen
+- Board- en user-instellingen worden beheerd in `QAQC_user_board_settings`
+- `localStorage` is alleen cache/fallback, niet de bron van waarheid
 
-# Auth
+## Versiebeheer layout
 
-- Alle beveiligde routes achter `requireSession` middleware
-- Admin-routes ook achter `requireRole('admin')`
-- Session secret via `SESSION_SECRET` env var (minimaal 32 tekens)
-- Wachtwoorden: bcrypt met minimaal 12 rounds
+- Het veld `version` in `QAQC_canvas_layouts` wordt gebruikt voor migraties
+- Bij grote structuurwijzigingen: verhoog `version` en zorg voor backwards-compatible migratielogica
 
-# CORS
+# Security en privacy
 
-- `ALLOWED_ORIGINS` env var instellen per omgeving
-- Fallback naar `['http://localhost:5173']` — nooit wildcard `*` in productie
+- Geen API keys in code — gebruik environment variables
+- Valideer alle user input
+- Houd altijd maximaal rekening met security en privacy
 
-# Input validatie
+# Prioriteiten
 
-- Alle user input server-kant valideren
-- SQL injection: altijd parameterized queries via mssql `.input()`
-- Geen `eval()`, `innerHTML`, of directe SQL string interpolation
+1. Code kwaliteit boven snelheid
+2. Kleine components boven grote monoliths
+3. Herbruikbaarheid boven duplicatie
+4. Duidelijkheid boven slimheid
+5. Testen boven aannames
 
-# Rate limiting
+# Referentie documenten
 
-- Globale rate limiter: 100 req/min
-- Auth-endpoints: 5 req/min (login, forgot-password)
+- `DEVELOPMENT_WORKFLOW.md` — volledige workflow guide
+- `BRANCH_STRATEGY.md` — git strategie
+- `REFACTOR_PLAN.md` — refactoring guide
+- `APP_SCHEMA.md` — architectuur overzicht

@@ -1,16 +1,34 @@
-# /promote-to-prod — Promoveer naar productie
+Promoot de huidige staging branch naar main (productie).
 
-Voer handmatig uit via GitHub Actions:
+Voer de volgende stappen uit:
 
-```bash
-gh workflow run deploy-prod.yml --field confirm=deploy-prod
-```
+1. Controleer of de huidige branch `staging` is via `git branch --show-current`. Als dat niet zo is, stop dan en meld: "Je moet op de staging branch staan om naar productie te promoten. Gebruik eerst /promote-to-acc."
 
-Of via de GitHub UI: Actions → "Deploy naar Productie" → Run workflow → typ "deploy-prod" in het bevestigingsveld.
+2. Controleer of er uncommitted changes zijn via `git status --porcelain`. Als er wijzigingen zijn, meld dan: "Er zijn uncommitted changes. Commit of stash ze eerst."
 
-**Vereisten vóór uitvoering:**
-- ACC-omgeving is getest en goedgekeurd
-- Team Lead heeft 🟢 GOEDGEKEURD gegeven
-- Database-migraties zijn idempotent en getest op ACC
+3. Vraag expliciet om bevestiging: "Weet je zeker dat je naar PRODUCTIE wilt deployen? (ja/nee)"
+   - Als het antwoord niet "ja" is: stop.
 
-Rapporteer de workflow run ID en wacht op succesvolle completion.
+4. Pull de laatste wijzigingen van staging:
+   ```bash
+   git pull origin staging
+   ```
+
+5. Switch naar main en merge staging erin:
+   ```bash
+   git checkout main
+   git pull origin main
+   git merge staging --no-edit
+   ```
+
+6. Push naar main:
+   ```bash
+   git push origin main
+   ```
+
+7. Ga terug naar develop:
+   ```bash
+   git checkout develop
+   ```
+
+8. Meld de gebruiker: "Gepromoot naar productie. GitHub Actions deployt nu naar vanbommelqaqc-app.azurewebsites.net — dit duurt ~2-3 minuten."

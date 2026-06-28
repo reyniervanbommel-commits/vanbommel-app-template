@@ -1,0 +1,51 @@
+---
+description: Regels voor herbruikbare React hooks
+globs: src/**/*.{js,jsx,ts,tsx}
+alwaysApply: false
+---
+
+# Herbruikbare hooks
+
+## Doel en grenzen
+
+- Alleen logica in de hook — geen JSX
+- De view rendert, de hook levert data en handlers
+- Gebruik hooks om regels in de view te reduceren
+
+## Naamgeving en locatie
+
+- Naam begint met `use` en beschrijft de feature (bijv. `useCards`, `useFilterState`)
+- Algemene hooks in `src/hooks/`
+- Feature-specifieke hooks in de map van die feature
+
+## API contract
+
+- Return alleen wat de view nodig heeft
+- Geef een object terug met stabiele referenties via `useMemo` en `useCallback`
+- Lever ook `loading` en `error` terug wanneer van toepassing
+
+## Side effects
+
+- Netwerkcalls via `useEffect` met heldere dependencies en cleanup
+- Foutafhandeling in de hook, geef een eenvoudige `error` waarde terug
+- Memoize afgeleide data om onnodige renders te voorkomen
+
+## Wanneer een hook maken
+
+- Bij 5+ losse stukjes state in een component
+- Bij 10+ stukjes state: verplicht
+- Bij terugkerende patronen: data laden, filteren, sorteren, selectie, paginatie, autorisatie
+
+## Stop signalen voor hooks
+
+- Hook heeft meer dan één verantwoordelijkheid → splits
+- Hook bevat meer dan 3 `useEffect` blokken → heroverweeg
+- Hook geeft meer dan 10 waarden terug → versmal de API
+
+## Checklist na wijziging
+
+- Geen JSX in de hook
+- Handlers en afgeleide data gestabiliseerd met `useCallback` en `useMemo`
+- ESLint rules-of-hooks geeft geen meldingen
+- Korte JSDoc aanwezig (doel, input, output)
+- Versienummer verhoogd

@@ -3,21 +3,24 @@ description: Versie- en Git-beheer regels voor dit project
 alwaysApply: true
 ---
 
+# Versiebeheer
+
+- Voeg altijd een footer toe met versienummer
+- Verhoog het versienummer bij elke code-aanpassing
+- Gebruik semantic versioning: MAJOR.MINOR.PATCH (bijv. v8.0.0)
+
 # Plannen en specs
 
 - Alle implementatieplannen worden opgeslagen in `.cursor/plans/` met naamgeving `YYYY-MM-DD-onderwerp.plan.md`
-- Alle design specs worden opgeslagen in `docs/specs/`
+- Alle design specs worden opgeslagen in `docs/specs/` met naamgeving `YYYY-MM-DD-onderwerp-design.md`
+- Nooit plannen opslaan in `docs/plans/` of `docs/superpowers/plans/`
 
 # Git-werkwijze
 
 - Werk zelf met Git wanneer nodig (commit, branch, merge, push, etc.)
 - Geef altijd expliciet aan wanneer je een Git-actie hebt gedaan
 - **`develop-from-devops` / OTAP-feature-flow:** voer `git push` en `gh pr create` zelf uit na commit — geen akkoord vragen
+- **Overige wijzigingen:** voer commit/push zelf uit tenzij de gebruiker expliciet om akkoord vraagt; meld achteraf de uitgevoerde commando's
 - Commit message prefix: `feat`, `fix`, `refactor`, `docs`, `perf`
 - Branch naamgeving: `feature/naam`, `fix/naam`, `refactor/naam`, `docs/naam`
-
-# OTAP branches
-
-- `feature/*` → lokale ontwikkeling
-- `develop` → integratiebranch, deploy naar dev
-- `main` → productie/staging
+- Zie `BRANCH_STRATEGY.md` voor details

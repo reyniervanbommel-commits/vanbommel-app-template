@@ -1,0 +1,21 @@
+---
+description: Communicatieregels voor AI-antwoorden in dit project
+alwaysApply: true
+---
+
+# Communicatie
+
+- Antwoord altijd in het Nederlands
+- Begin elke reactie met een korte samenvatting in een lijst met rode ronde bolletjes (HTML `<span style="color:red">`)
+- Vink elk punt af zodra het klaar is
+- Geef geen uitgebreide uitleg over de code
+- Geef een kleine samenvatting van wat je hebt aangepast, zonder codevoorbeelden
+- Voer acties zelf uit waar mogelijk — vraag de gebruiker niet om code uit te voeren
+- Start nooit zelf een server
+
+# App-taal (UI)
+
+- Alle gebruikerszichtbare teksten in de app zijn **Engels**
+- Schrijf altijd nieuwe UI-teksten in het Engels: labels, knoppen, placeholders, foutmeldingen, tooltips, aria-labels, empty states
+- Schrijf **nooit** Nederlandse teksten in JSX of in hooks die strings teruggeven aan de UI
+- Dit geldt voor alle components in `src/`

@@ -1,0 +1,45 @@
+---
+description: Azure DevOps workflow — work items, comments en commit-koppeling
+alwaysApply: true
+---
+
+# Azure DevOps Workflow
+
+## Work items aanmaken
+
+Wanneer een nieuw plan is opgeslagen in `.cursor/plans/` en de gebruiker vraagt een work item aan te maken:
+
+1. Lees de inhoud van het planbestand
+2. Maak een User Story aan via de Azure DevOps MCP met:
+   - **Title**: eerste `#`-regel uit het planbestand
+   - **Description**: volledige inhoud van het planbestand + onderaan de regel `Plan: .cursor/plans/<bestandsnaam>`
+3. Geef het work item ID terug aan de gebruiker
+
+## Branch aanmaken
+
+Gebruik altijd het work item ID in de branchnaam:
+- Formaat: `feature/<id>-korte-beschrijving`
+- Voorbeeld: `feature/142-login-flow`
+
+## Commit messages
+
+Voeg altijd `#AB:<id>` toe aan commit messages om commits te koppelen aan het work item:
+- Voorbeeld: `feat: login flow gebouwd #AB:142`
+
+## Comments schrijven
+
+Post automatisch een comment op het gekoppelde work item wanneer:
+- Een PR klaar is voor review
+- Een feature branch gemerged is
+- Er een belangrijke beslissing is genomen tijdens het bouwen
+
+## Comments lezen
+
+Wanneer de gebruiker vraagt naar feedback of comments, lees de comments van het opgegeven work item voor en vat ze samen.
+
+## Voorbeeldprompts
+
+- "Maak een work item aan voor het plan in .cursor/plans/2026-05-07-naam.plan.md"
+- "Toon mijn openstaande user stories"
+- "Zijn er nieuwe comments op work item #142?"
+- "Post een comment op #142 dat de PR klaar is voor review"

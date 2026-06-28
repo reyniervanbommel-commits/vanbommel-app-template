@@ -1,0 +1,39 @@
+---
+description: Database migraties altijd op zowel dev als prod uitvoeren
+alwaysApply: true
+---
+
+# Database migraties — dev én prod tegelijk
+
+Volledige OTAP-checklist (schema vs data, pipelines): `docs/guides/AZURE_INRICHTING_OTAP.md` → sectie **SQL: schema vs data**.
+
+Bij elke SQL-migratie (nieuwe kolommen, tabellen, indexen):
+
+1. Zet het script in `scripts/db/migrations/00N_naam.sql` (nooit alleen handmatig in Azure/SSMS op DEV)
+2. Voer het script uit op de **dev** database (`SQL_CONNECTION_STRING`) — lokaal of via `preview.yml` / `deploy-dev.yml`
+3. Voer het script uit op de **prod** database (`SQL_CONNECTION_STRING_PROD`) — lokaal en/of bij merge naar `main` (`deploy-prod.yml`)
+4. Gebruik altijd idempotente scripts (`IF NOT EXISTS`) zodat ze veilig meerdere keren kunnen worden uitgevoerd
+
+## Uitvoeren via Node.js
+
+```js
+require('dotenv').config();
+const sql = require('mssql');
+const fs = require('fs');
+const script = fs.readFileSync('scripts/jouw-migratie.sql', 'utf8');
+
+// Dev
+await sql.connect(process.env.SQL_CONNECTION_STRING);
+await sql.query(script);
+
+// Prod
+await sql.connect(process.env.SQL_CONNECTION_STRING_PROD);
+await sql.query(script);
+```
+
+## Databases
+
+| Omgeving | Variabele | Database |
+|----------|-----------|----------|
+| Dev | `SQL_CONNECTION_STRING` | `vanbommel-qaqc-database-dev` |
+| Prod | `SQL_CONNECTION_STRING_PROD` | `vanbommel-qaqc-database` |

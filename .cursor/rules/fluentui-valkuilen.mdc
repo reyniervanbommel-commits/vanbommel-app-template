@@ -1,32 +1,102 @@
+# Fluent UI — Bekende valkuilen
+
+## 🚨 Tooltip portal pre-rendering (KRITIEK)
+
+**Probleem:**
+Fluent UI `<Tooltip>` van `@fluentui/react-components` rendert zijn tooltip-content in een **portal direct in `document.body`**, zelfs als de tooltip nooit zichtbaar is (niet gehoverd). Dit portal-element wordt initieel gepositioneerd op `top: 0, left: 0` en is zichtbaar als **groot wit vlak bovenaan de pagina**.
+
+**Symptomen:**
+- Groot wit vlak verschijnt bovenaan de pagina bij het openen van een panel
+- Het probleem treedt alleen op bij componenten die `<Tooltip>` bevatten
+- Het verdwijnt zodra alle `<Tooltip>`-wrappers verwijderd worden
+- Moeilijk te debuggen omdat het visueel lijkt op een layout-probleem
+
+**Ontdekt:** april 2026, tijdens debug van `GridColumnSection` in de canvas inspector
+
+**Verkeerde diagnoses onderweg:**
+- Accordion breedte-overflow → niet de oorzaak
+- flex `min-height: auto` → niet de oorzaak
+- Inspector panel hoogte niet begrensd → niet de oorzaak
+
+**Oplossing:**
+Gebruik **nooit** `<Tooltip>` van Fluent UI in componenten die:
+- Binnen een scrollbaar panel renderen
+- Meerdere instanties tegelijk renderen (bijv. een lijst met rijen)
+- Dynamisch zichtbaar/onzichtbaar worden
+
+Gebruik in plaats daarvan:
+```jsx
+// ❌ NIET gebruiken in lijsten/panels:
+<Tooltip content={preview} relationship="description" withArrow>
+  {rowContent}
+</Tooltip>
+
+// ✅ Gebruik native title attribuut:
+<div title={preview || undefined}>
+  {rowContent}
+</div>
+```
+
+**Acceptabele Tooltip-gebruik:**
+- Losse knoppen in een vaste toolbar (niet in een lijst)
+- Maximaal 1-2 Tooltips tegelijk zichtbaar in de DOM
+- Nooit in een component dat herhaald gerenderd wordt (`.map()`)
+
 ---
-description: Bekende FluentUI v9 valkuilen en hoe ze te vermijden
-alwaysApply: true
+
 ---
 
-# Tooltip portal pre-rendering (KRITIEK)
+## 🚨 Status dropdown afgeknipt door overflow:hidden (jan 2026)
 
-`<Tooltip>` rendert zijn content in een portal in `document.body`, ook als niet gehoverd.
-Dit veroorzaakt een groot wit vlak bovenaan de pagina.
+**Probleem:**
+Status dropdowns werden onzichtbaar omdat parent containers `overflow: hidden` hadden. Fluent UI dropdowns renderen inline en respecteren geen overflow-grenzen van parents.
 
-**NOOIT** gebruiken in:
-- Scrollbare panels
-- Lijsten (`.map()`)
-- Dynamisch zichtbare componenten
+**Oplossing:**
+`StatusDropdownPortal` component gemaakt via `React.createPortal` naar `document.body`. Dropdown opent naar boven als er geen ruimte is onderaan.
 
-**Gebruik in plaats daarvan:** `<div title={tekst || undefined}>`
+**Commits:** `50b1239`, `8de8de9`
 
-# Dropdown overflow
+**Regel:** Dropdowns die kunnen overflows bij parent containers → altijd via een Portal implementeren.
 
-Fluent UI dropdowns respecteren geen `overflow: hidden` van parent containers.
-**Oplossing:** `React.createPortal` naar `document.body`.
+---
 
-# Portal-componenten alleen op top-level
+## 🚨 Flyout menu onzichtbaar achter logo (feb 2026)
 
-`<Tooltip>`, `<Menu>`, `<Popover>`, `<Dialog>` alleen op losse knoppen in een vaste toolbar.
-**Nooit** in herhaalde lijstitems.
+**Probleem:**
+Flyout navigatiemenu had een lagere `z-index` dan een logo-element, waardoor het menu achter het logo verdween.
 
-# makeStyles voor alle styling
+**Oplossing:**
+`z-index` van flyout verhoogd in `PageNavigationMenu.jsx`.
 
-- Gebruik `makeStyles` + `tokens.*` voor alle stijlen
-- Geen inline style objects met hardcoded kleuren
-- Geen globale CSS voor component-specifieke stijlen
+**Commit:** `5f8facd`
+
+**Regel:** Flyout/dropdown menus altijd een `z-index` van minimaal 1000 geven. Logo- en decoratie-elementen nooit een hogere z-index dan overlay UI.
+
+---
+
+## Andere bekende Fluent UI valkuilen
+
+### Accordion in flex containers
+`<Accordion>` van Fluent UI gedraagt zich onvoorspelbaar in geneste flex containers:
+- Kan de container breder of hoger maken dan verwacht
+- Gebruik liever `InspectorDivider` secties met gewone `<div>` containers
+
+### Portal-gebaseerde componenten
+De volgende Fluent UI componenten gebruiken portals en kunnen dezelfde witte-vlak problemen veroorzaken:
+- `<Tooltip>` ← grootste risico in lijsten
+- `<Menu>` / `<MenuPopover>`
+- `<Popover>`
+- `<Dialog>`
+
+**Regel:** Portal-componenten **alleen** gebruiken op top-level knoppen/acties, nooit in herhaalde lijstitems.
+
+---
+
+## Overzicht bekende issues (chronologisch)
+
+| Datum | Issue | Oplossing | Commit |
+|-------|-------|-----------|--------|
+| Jan 2026 | Status dropdown afgeknipt door overflow:hidden | React.createPortal naar document.body | `50b1239` |
+| Jan 2026 | Dropdown achtergrond transparant | Expliciete witte achtergrond op portal element | `8de8de9` |
+| Feb 2026 | Flyout menu achter logo (z-index) | z-index verhoogd in PageNavigationMenu | `5f8facd` |
+| Apr 2026 | Tooltip portal veroorzaakt groot wit vlak | Tooltip vervangen door native title attribuut | `abe23a9` |

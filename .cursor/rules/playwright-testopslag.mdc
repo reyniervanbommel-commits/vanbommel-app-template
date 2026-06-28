@@ -1,0 +1,28 @@
+---
+description: Verplichte mappenstructuur en regels voor Playwright-tests en testrapporten
+globs: ["playwright/**", "test-reports/**", ".vscode/mcp.json"]
+alwaysApply: true
+---
+
+# Playwright — testopslag
+
+## Mappenstructuur
+
+```
+playwright/
+  live.js            ← testscript
+  screenshots/       ← screenshots van live.js
+  videos/            ← video-opnames (.webm)
+  mcp/               ← automatische output van @playwright/mcp
+test-reports/        ← alleen .md rapporten
+```
+
+## Verplichte regels
+
+- **Screenshots** → altijd `playwright/screenshots/<fase-nr>-<naam>.png`
+- **Video's** → altijd `playwright/videos/<naam>.webm`
+- **MCP-output** (snapshots/logs) → gaat automatisch naar `playwright/mcp/` via `.vscode/mcp.json`
+- **Testrapporten** → `test-reports/test-report-feature-<nr>-<naam>-<datum>.md`
+- Zet **nooit** `.webm`, `.png`, `.log`, `.yml` direct in `test-reports/`
+- `live.js` gebruikt altijd `headless: true` — video-opname werkt niet met `headless: false` op Windows
+- De map `.playwright-mcp/` bestaat niet meer — alles staat in `playwright/mcp/`

@@ -1,0 +1,35 @@
+---
+description: Scan alle beschikbare skills bij het begin van elke sessie
+alwaysApply: true
+---
+
+# Skills discovery
+
+## Bij het begin van elke sessie
+
+Voordat je een taak start die mogelijk een skill raakt (feature bouwen, refactoren, plannen, analyseren, opruimen), scan eerst de volledige skills-mappen:
+
+1. `C:\Users\reynier\.cursor\skills\` (persoonlijke skills)
+2. `.cursor\skills\` (project skills)
+
+Draai een Glob op `**/SKILL.md` in beide mappen en lees de frontmatter (name + description) van skills die je niet kent. Dit voorkomt dat je:
+- Een skill dupliceert die al bestaat
+- Een workflow mist die al is ingericht
+- Output opslaat op een plek die een bestaande skill al afhandelt
+
+## Bij het aanmaken van een nieuwe skill
+
+Voordat je een nieuwe skill schrijft:
+
+1. Scan beide skills-mappen
+2. Controleer of er al een skill is die hetzelfde doel dient
+3. Als er overlap is: breid de bestaande skill uit in plaats van een nieuwe te maken
+4. Sla de skill altijd op in BEIDE locaties (persoonlijk + repo)
+
+## Skills-mappen
+
+| Locatie | Pad | Scope |
+|---------|-----|-------|
+| Persoonlijk | `C:\Users\reynier\.cursor\skills\` | Alle projecten |
+| Repo | `.cursor\skills\` | Dit project |
+| Cursor intern | `C:\Users\reynier\.cursor\skills-cursor\` | Niet aanpassen |

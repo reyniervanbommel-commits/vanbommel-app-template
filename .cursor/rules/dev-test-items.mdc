@@ -1,0 +1,40 @@
+# Dev test-items
+
+## Altijd bij elke push naar develop of feature branch
+
+Vóór elke commit/push die naar DEV of preview gaat:
+
+1. Lees de huidige versie: `node -e "console.log(require('./package.json').version)"`
+2. Controleer of `src/config/devTestItems.js` al items heeft voor die versie
+3. Zo niet: voeg minimaal één item toe dat beschrijft wat getest moet worden
+4. Commit het bestand mee in dezelfde commit of als aparte commit vóór de push
+
+## Format
+
+```js
+{
+  id: '<unieke-slug>',        // kebab-case, bijv. 'monday-oauth-fix'
+  version: '<x.y.z>',        // exact zelfde als package.json version
+  category: '<categorie>',   // 'Feature', 'Fix', 'UI', 'Backend', 'Monday.com'
+  label: '<testomschrijving>',
+}
+```
+
+## Versie ophogen
+
+Versie staat in `package.json`. Verhoog de PATCH bij elke fix, MINOR bij nieuwe feature.
+`version.js` wordt automatisch gesynchroniseerd — pas die NIET meer handmatig aan.
+
+## Wanneer dit geldt
+
+- Bij `git push origin develop` (directe push)
+- Bij `git push origin feature/*` (preview flow)
+- Bij merge van feature naar develop (via PR)
+
+## Nooit overslaan
+
+Als er geen zinvolle testomschrijving te bedenken is, voeg dan minimaal toe:
+
+```js
+{ id: 'algemeen-<versie>', version: '<versie>', category: 'Fix', label: 'Algemene stabiliteitsverbetering — controleer of de app normaal laadt' }
+```

@@ -1,24 +1,31 @@
-# /promote-to-acc — Promoveer develop naar main (ACC deploy)
+Promoot de huidige develop branch naar staging (acceptatie).
 
-Voer uit zonder te vragen:
+Voer de volgende stappen uit:
 
-1. Zorg dat je op `develop` staat en up-to-date bent:
+1. Controleer of de huidige branch `develop` is via `git branch --show-current`. Als dat niet zo is, stop dan en meld: "Je moet op de develop branch staan om naar acceptatie te promoten."
+
+2. Controleer of er uncommitted changes zijn via `git status --porcelain`. Als er wijzigingen zijn, meld dan: "Er zijn uncommitted changes. Commit of stash ze eerst."
+
+3. Pull de laatste wijzigingen van develop:
    ```bash
-   git checkout develop && git pull
+   git pull origin develop
    ```
 
-2. Merge naar main:
+4. Switch naar staging en merge develop erin:
    ```bash
-   git checkout main && git pull && git merge develop --no-ff -m "chore: promote develop to main for ACC deploy"
+   git checkout staging
+   git pull origin staging
+   git merge develop --no-edit
    ```
 
-3. Push main:
+5. Push naar staging:
    ```bash
-   git push origin main
+   git push origin staging
    ```
 
-4. Dit triggert automatisch `deploy-staging.yml` → deploy naar `[APP_NAME]-acc`
+6. Ga terug naar develop:
+   ```bash
+   git checkout develop
+   ```
 
-5. Rapporteer: commit hash, branch, en wat er getriggerd is.
-
-Gebruik dit commando alleen na succesvolle dev-tests en team review goedkeuring.
+7. Meld de gebruiker: "Gepromoot naar acceptatie. GitHub Actions deployt nu naar vanbommelqaqc-app-acc.azurewebsites.net — dit duurt ~2-3 minuten."

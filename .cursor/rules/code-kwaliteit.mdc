@@ -21,6 +21,7 @@ alwaysApply: true
 
 - Bij 5+ `useState` calls: overweeg een custom hook
 - Bij 10+ `useState` calls: custom hook verplicht
+- Gebruik `useCanvasLayout` en `useFilterState` waar van toepassing
 - Voorkom duplicatie van state logica
 
 # Performance
@@ -35,11 +36,32 @@ alwaysApply: true
 - Herbruikbare logica → custom hooks
 - Herhaalde UI → losse components
 - Memoize arrays en objects die als dependency dienen
+- Documenteer complexe logica met korte comments
+
+# Pre-change checklist
+
+1. Controleer huidige bestandsgrootte (moet onder 300 regels blijven)
+2. Plan de wijziging en schat het aantal regels in
+3. Als het totaal boven 300 uitkomt: eerst splitsen
+
+# Post-change checklist
+
+1. Geen JSX syntax errors
+2. Component blijft onder 300 regels
+3. Memoization toegepast waar nodig
+4. Versienummer verhoogd in de footer
+5. Commit met juist prefix (`feat`, `fix`, etc.)
 
 # Stop signalen
 
 Stop en splits wanneer:
 - Bestand gaat over 300 regels
-- Meer dan 4 niveaus JSX nesting
+- Meer dan 3 niveaus JSX nesting
 - 10+ useState calls
 - Herhaalde code patronen zichtbaar
+- Fouten in JSX structuur
+
+Actie:
+1. Extraheer logische secties naar nieuwe components of hooks
+2. Test grondig
+3. Merge pas wanneer alles onder 300 regels blijft
