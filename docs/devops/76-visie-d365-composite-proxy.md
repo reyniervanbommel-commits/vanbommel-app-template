@@ -145,4 +145,27 @@ PO-endpoints horen **niet** in [admin.js](../../server/routes/admin.js) achter `
 
 ---
 
+## 8. Addendum — D365 ERP MCP Server als geverifieerde optie (juni 2026)
+
+De claims over de MCP-server zijn via web search geverifieerd. Relevante feiten:
+
+- **GA op 18 februari 2026**, meegeleverd met F&O release **10.0.47** (niet 10.0.45 zoals eerder genoemd).
+- De MCP heeft drie soorten tools: **Data tools** (CRUD direct op data entities), **Form tools** (handelingen via schermen, mét business logic) en **Action tools** (X++-classes aanroepen).
+- De **Data tools kunnen de metadata van het systeem ophalen, inclusief eigen custom data entities en relaties.** De MCP kan dus antwoord geven op "waar liggen de links tussen entiteiten" — inclusief interne relaties die OData niet als navigation property exposeert.
+- De MCP draait onder **dezelfde security roles, permissions en legal entity boundaries als de ingelogde gebruiker**. In deze fase (alleen eigen medewerkers) is dat een voordeel.
+
+### Afweging: `$metadata` vs. MCP voor het bepalen van entiteit-links
+
+| | `$metadata` (script `scripts/d365/inspect-metadata.mjs`) | MCP Data tools |
+|---|---|---|
+| Beschikbaar | Nu, gratis, één GET | Vereist MCP-setup + Azure AD app |
+| Antwoord | Exact, deterministisch | Via AI; ook interne relaties die OData niet exposeert |
+| Inspanning | Minuten | Dagen (setup) |
+
+**Conclusie:** voor de eenmalige Fase 0-vraag "waar leg ik de links" volstaat `$metadata` — minuten werk, exact. De MCP optuigen alleen voor schema-inspectie is overkill. De MCP wordt pas een serieuze kandidaat voor het **runtime-datapad** (samengestelde reads en terugschrijven mét business logic) op het moment dat de composite-proxy tegen `$expand`- en Action-grenzen aanloopt (zie §4.2 en §4.3). Dat is een latere beslissing, geen Fase 0-werk.
+
+**Bronnen:** Microsoft Learn (`copilot-mcp`, `build-agent-mcp`), Microsoft Partners GA-blog, ERP Software Blog (10.0.47 release).
+
+---
+
 *Concept ter bespreking. Na akkoord uitwerken tot implementatieplan; sluit aan op de bestaande Supplier Portal-backlog ([73-supplier-portal-implementatieplan.md](73-supplier-portal-implementatieplan.md), Story C en G).*
