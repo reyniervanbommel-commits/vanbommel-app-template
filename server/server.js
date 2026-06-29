@@ -18,6 +18,18 @@ const purchaseOrdersRouter = require('./routes/purchaseOrders');
 const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
+const { logger } = require('./utils/logger');
+
+// Robuustheid: een transiente fout buiten de request-keten (bv. een 'error'-event van de
+// MSSQL-connection-pool of session-store bij een korte DB-hapering) zou anders een
+// uncaughtException geven en het proces met exit 1 omleggen (crash-loop in containers).
+// We loggen die gevallen i.p.v. crashen; de pool reconnect vanzelf bij de volgende query.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Onverwerkte promise-rejection', { reason: reason && reason.message ? reason.message : String(reason) });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Onverwerkte uitzondering', { error: err && err.stack ? err.stack : String(err) });
+});
 
 const app = express();
 
@@ -46,6 +58,12 @@ app.use(express.json());
 const sessionStore = new MSSQLStore(
   parseSqlConnectionString(process.env.SQL_CONNECTION_STRING),
 );
+// Vang connectiefouten van de session-store op zodat een DB-hapering het proces niet omlegt.
+if (typeof sessionStore.on === 'function') {
+  sessionStore.on('error', (err) => {
+    logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
+  });
+}
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   throw new Error('SESSION_SECRET moet gezet zijn en minimaal 32 tekens bevatten');
 }
