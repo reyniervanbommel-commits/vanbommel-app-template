@@ -96,65 +96,77 @@ async function refresh() {
     const modifiedAt = toDateOrNull(raw.ModifiedDateTime);
     if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
 
-    await pool.request()
-      .input('dataAreaId', sql.NVarChar(16), dataAreaId)
-      .input('orderNumber', sql.NVarChar(64), orderNumber)
-      .input('vendorAccount', sql.NVarChar(64), order.vendorAccount || null)
-      .input('vendorName', sql.NVarChar(256), order.vendorName || null)
-      .input('status', sql.NVarChar(64), order.status || null)
-      .input('currencyCode', sql.NVarChar(8), order.currencyCode || null)
-      .input('requestedDeliveryDate', sql.DateTime2, toDateOrNull(order.requestedDeliveryDate))
-      .input('createdDateTime', sql.DateTime2, toDateOrNull(order.createdDateTime))
-      .input('modifiedAt', sql.DateTime2, modifiedAt)
-      .input('rawJson', sql.NVarChar(sql.MAX), JSON.stringify(raw))
-      .input('syncedAt', sql.DateTime2, refreshStart)
-      .query(`
-        MERGE dbo.po_cache_headers AS target
-        USING (SELECT @dataAreaId AS data_area_id, @orderNumber AS order_number) AS src
-          ON target.data_area_id = src.data_area_id AND target.order_number = src.order_number
-        WHEN MATCHED THEN UPDATE SET
-          vendor_account = @vendorAccount, vendor_name = @vendorName, status = @status,
-          currency_code = @currencyCode, requested_delivery_date = @requestedDeliveryDate,
-          created_date_time = @createdDateTime, d365_modified_at = @modifiedAt,
-          raw_json = @rawJson, synced_at = @syncedAt, removed_in_d365 = 0
-        WHEN NOT MATCHED THEN INSERT
-          (data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
-           requested_delivery_date, created_date_time, d365_modified_at, raw_json, synced_at, first_seen_at, removed_in_d365)
-          VALUES (@dataAreaId, @orderNumber, @vendorAccount, @vendorName, @status, @currencyCode,
-           @requestedDeliveryDate, @createdDateTime, @modifiedAt, @rawJson, @syncedAt, @syncedAt, 0);
-      `);
-
-    // Regels: vervang volledig (delete + insert) — eenvoudig en correct voor een full resync.
-    await pool.request()
-      .input('dataAreaId', sql.NVarChar(16), dataAreaId)
-      .input('orderNumber', sql.NVarChar(64), orderNumber)
-      .query('DELETE FROM dbo.po_cache_lines WHERE data_area_id = @dataAreaId AND order_number = @orderNumber');
-
     const lines = Array.isArray(order.lines) ? order.lines : [];
-    for (const line of lines) {
-      const lineNumber = toNumberOrNull(line.lineNumber);
-      if (lineNumber === null) continue;
-      await pool.request()
+
+    // Header + regels per order atomair: voorkomt een header zonder regels als de
+    // refresh halverwege faalt (delete + insert van regels mag niet half slagen).
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      await new sql.Request(tx)
         .input('dataAreaId', sql.NVarChar(16), dataAreaId)
         .input('orderNumber', sql.NVarChar(64), orderNumber)
-        .input('lineNumber', sql.Int, lineNumber)
-        .input('itemNumber', sql.NVarChar(64), line.itemNumber || null)
-        .input('description', sql.NVarChar(512), line.description || null)
-        .input('quantity', sql.Decimal(18, 4), toNumberOrNull(line.quantity))
-        .input('unit', sql.NVarChar(16), line.unit || null)
-        .input('lineAmount', sql.Decimal(18, 4), toNumberOrNull(line.lineAmount))
-        .input('currencyCode', sql.NVarChar(8), line.currencyCode || null)
-        .input('requestedDeliveryDate', sql.DateTime2, toDateOrNull(line.requestedDeliveryDate))
-        .input('rawJson', sql.NVarChar(sql.MAX), JSON.stringify(line.raw || {}))
+        .input('vendorAccount', sql.NVarChar(64), order.vendorAccount || null)
+        .input('vendorName', sql.NVarChar(256), order.vendorName || null)
+        .input('status', sql.NVarChar(64), order.status || null)
+        .input('currencyCode', sql.NVarChar(8), order.currencyCode || null)
+        .input('requestedDeliveryDate', sql.DateTime2, toDateOrNull(order.requestedDeliveryDate))
+        .input('createdDateTime', sql.DateTime2, toDateOrNull(order.createdDateTime))
+        .input('modifiedAt', sql.DateTime2, modifiedAt)
+        .input('rawJson', sql.NVarChar(sql.MAX), JSON.stringify(raw))
         .input('syncedAt', sql.DateTime2, refreshStart)
         .query(`
-          INSERT INTO dbo.po_cache_lines
-            (data_area_id, order_number, line_number, item_number, description, quantity, unit,
-             line_amount, currency_code, requested_delivery_date, raw_json, synced_at)
-          VALUES
-            (@dataAreaId, @orderNumber, @lineNumber, @itemNumber, @description, @quantity, @unit,
-             @lineAmount, @currencyCode, @requestedDeliveryDate, @rawJson, @syncedAt);
+          MERGE dbo.po_cache_headers AS target
+          USING (SELECT @dataAreaId AS data_area_id, @orderNumber AS order_number) AS src
+            ON target.data_area_id = src.data_area_id AND target.order_number = src.order_number
+          WHEN MATCHED THEN UPDATE SET
+            vendor_account = @vendorAccount, vendor_name = @vendorName, status = @status,
+            currency_code = @currencyCode, requested_delivery_date = @requestedDeliveryDate,
+            created_date_time = @createdDateTime, d365_modified_at = @modifiedAt,
+            raw_json = @rawJson, synced_at = @syncedAt, removed_in_d365 = 0
+          WHEN NOT MATCHED THEN INSERT
+            (data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
+             requested_delivery_date, created_date_time, d365_modified_at, raw_json, synced_at, first_seen_at, removed_in_d365)
+            VALUES (@dataAreaId, @orderNumber, @vendorAccount, @vendorName, @status, @currencyCode,
+             @requestedDeliveryDate, @createdDateTime, @modifiedAt, @rawJson, @syncedAt, @syncedAt, 0);
         `);
+
+      // Regels: vervang volledig (delete + insert) binnen dezelfde transactie.
+      await new sql.Request(tx)
+        .input('dataAreaId', sql.NVarChar(16), dataAreaId)
+        .input('orderNumber', sql.NVarChar(64), orderNumber)
+        .query('DELETE FROM dbo.po_cache_lines WHERE data_area_id = @dataAreaId AND order_number = @orderNumber');
+
+      for (const line of lines) {
+        const lineNumber = toNumberOrNull(line.lineNumber);
+        if (lineNumber === null) continue;
+        await new sql.Request(tx)
+          .input('dataAreaId', sql.NVarChar(16), dataAreaId)
+          .input('orderNumber', sql.NVarChar(64), orderNumber)
+          .input('lineNumber', sql.Int, lineNumber)
+          .input('itemNumber', sql.NVarChar(64), line.itemNumber || null)
+          .input('description', sql.NVarChar(512), line.description || null)
+          .input('quantity', sql.Decimal(18, 4), toNumberOrNull(line.quantity))
+          .input('unit', sql.NVarChar(16), line.unit || null)
+          .input('lineAmount', sql.Decimal(18, 4), toNumberOrNull(line.lineAmount))
+          .input('currencyCode', sql.NVarChar(8), line.currencyCode || null)
+          .input('requestedDeliveryDate', sql.DateTime2, toDateOrNull(line.requestedDeliveryDate))
+          .input('rawJson', sql.NVarChar(sql.MAX), JSON.stringify(line.raw || {}))
+          .input('syncedAt', sql.DateTime2, refreshStart)
+          .query(`
+            INSERT INTO dbo.po_cache_lines
+              (data_area_id, order_number, line_number, item_number, description, quantity, unit,
+               line_amount, currency_code, requested_delivery_date, raw_json, synced_at)
+            VALUES
+              (@dataAreaId, @orderNumber, @lineNumber, @itemNumber, @description, @quantity, @unit,
+               @lineAmount, @currencyCode, @requestedDeliveryDate, @rawJson, @syncedAt);
+          `);
+      }
+
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
     }
   }
 
@@ -316,6 +328,9 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
   const order = String(orderNumber || '').trim();
   if (!area || !order) {
     throw Object.assign(new Error('dataAreaId en orderNumber zijn verplicht'), { status: 400 });
+  }
+  if (area.length > 16 || order.length > 64) {
+    throw Object.assign(new Error('dataAreaId of orderNumber is te lang'), { status: 400 });
   }
 
   // Header-niveau → sentinel -1; line-niveau → echt regelnummer (verplicht).

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dropdown,
   Input,
@@ -66,10 +66,16 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
   const styles = useStyles();
   const [localValue, setLocalValue] = useState(value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
+  const savedTimerRef = useRef(null);
 
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
+
+  // Ruim de "opgeslagen"-timer op bij unmount (voorkomt state-update op unmounted component).
+  useEffect(() => () => {
+    if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+  }, []);
 
   const commit = useCallback(async (nextValue) => {
     // Niets opslaan als de waarde niet wijzigde.
@@ -79,7 +85,8 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
       await onSave(nextValue);
       setStatus('saved');
       // Reset de "opgeslagen"-indicatie na korte tijd.
-      window.setTimeout(() => setStatus('idle'), 1500);
+      if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch {
       setStatus('error');
       setLocalValue(value); // herstel zichtbare waarde bij fout
@@ -146,7 +153,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
         onChange={(_, data) => setLocalValue(data.value)}
-        onBlur={() => commit(localValue)}
+        onBlur={() => commit(localValue === '' || localValue == null ? null : Number(localValue))}
       />
     );
   } else {

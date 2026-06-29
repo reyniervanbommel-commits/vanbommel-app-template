@@ -157,6 +157,14 @@ async function renameColumn(columnId, label, userId) {
     throw Object.assign(new Error('Label is verplicht'), { status: 400 });
   }
 
+  const existing = await getColumnById(columnId);
+  if (!existing) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  if (existing.source !== 'custom') {
+    throw Object.assign(new Error('D365-kolommen kunnen niet hernoemd worden'), { status: 400 });
+  }
+
   const pool = await getPool();
   const result = await pool.request()
     .input('id', sql.BigInt, columnId)
