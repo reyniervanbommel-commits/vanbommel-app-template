@@ -31,4 +31,4 @@ Voer de volgende stappen uit:
    git checkout develop
    ```
 
-8. Meld de gebruiker: "Gepromoot naar productie. GitHub Actions deployt nu naar vanbommelqaqc-app.azurewebsites.net — dit duurt ~2-3 minuten."
+8. Meld de gebruiker: "Gepromoot naar productie. GitHub Actions deployt nu naar de Container App vendorportal-prod (https://vendorportal-prod.graysand-65442c41.northeurope.azurecontainerapps.io) — dit duurt ~2-3 minuten."

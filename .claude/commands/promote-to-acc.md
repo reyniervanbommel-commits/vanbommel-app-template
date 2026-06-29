@@ -28,4 +28,4 @@ Voer de volgende stappen uit:
    git checkout develop
    ```
 
-7. Meld de gebruiker: "Gepromoot naar acceptatie. GitHub Actions deployt nu naar vanbommelqaqc-app-acc.azurewebsites.net — dit duurt ~2-3 minuten."
+7. Meld de gebruiker: "Gepromoot naar acceptatie. GitHub Actions deployt nu naar de Container App vendorportal-acc (https://vendorportal-acc.graysand-65442c41.northeurope.azurecontainerapps.io) — dit duurt ~2-3 minuten."
