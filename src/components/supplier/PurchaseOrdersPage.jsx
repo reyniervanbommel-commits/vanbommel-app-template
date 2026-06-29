@@ -1,10 +1,18 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Button, makeStyles, Spinner, tokens } from '@fluentui/react-components';
+import React, { useCallback, useState } from 'react';
+import {
+  Badge,
+  Button,
+  makeStyles,
+  Spinner,
+  tokens,
+} from '@fluentui/react-components';
+import { ArrowClockwiseRegular, AddRegular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import EmptyState from '../shared/EmptyState';
-import PurchaseOrderColumnsDialog from './PurchaseOrderColumnsDialog';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
+import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
+import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
   page: {
@@ -23,77 +31,52 @@ const useStyles = makeStyles({
   title: { fontSize: '24px', fontWeight: 600 },
   subtitle: { color: tokens.colorNeutralForeground3 },
   actions: { display: 'flex', gap: '8px' },
+  toolbar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+  },
+  freshness: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+  toolbarSpacer: { flexGrow: 1 },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
-  warning: { color: tokens.colorPaletteDarkOrangeForeground1, marginBottom: '12px' },
 });
 
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user, logout } = useAuth();
-  const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-
-  const baseColumns = useMemo(
-    () => [
-      { key: 'orderNumber', header: 'Item-ID', type: 'text', render: (item) => item.orderNumber || '-' },
-      { key: 'vendorName', header: 'Itemnaam', type: 'text', render: (item) => item.vendorName || '-' },
-      { key: 'vendorAccount', header: 'Vendor', type: 'text', render: (item) => item.vendorAccount || '-' },
-      { key: 'status', header: 'Groep', type: 'text', render: (item) => item.status || '-' },
-      { key: 'vendorGroup', header: 'Vendor groep', type: 'text', render: (item) => item.vendorGroup || '-' },
-      { key: 'lineCount', header: 'Subitems', type: 'text', render: (item) => String(item.lineCount ?? 0) },
-      { key: 'currencyCode', header: 'Valuta', type: 'text', render: (item) => item.currencyCode || '-' },
-      {
-        key: 'requestedDeliveryDate',
-        header: 'Leverdatum',
-        type: 'date',
-        render: (item) => item.requestedDeliveryDate || '-',
-      },
-    ],
-    []
-  );
-
-  const defaultColumnKeys = useMemo(
-    () => baseColumns.map((column) => column.key),
-    [baseColumns]
-  );
+  const [addColumnOpen, setAddColumnOpen] = useState(false);
 
   const {
-    purchaseOrders,
-    meta,
+    orders,
+    visibleHeaderColumns,
+    lineColumns,
+    syncedAt,
+    stale,
+    hasCache,
+    total,
     loading,
+    refreshing,
     error,
-    visibleColumnKeys,
-    columnOrder,
-    savingColumns,
-    saveVisibleColumns,
     refresh,
-  } = usePurchaseOrdersPage(defaultColumnKeys);
+    saveValue,
+    addColumn,
+  } = usePurchaseOrdersPage();
 
   const handleLogout = useCallback(() => {
     logout();
   }, [logout]);
 
-  const handleOpenColumnsDialog = useCallback(() => {
-    setColumnsDialogOpen(true);
-  }, []);
+  const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
 
-  const handleCloseColumnsDialog = useCallback((nextOpen) => {
-    setColumnsDialogOpen(nextOpen);
-  }, []);
-
-  const selectedColumns = useMemo(() => {
-    const byKey = new Map(baseColumns.map((column) => [column.key, column]));
-    const orderedKeys = [
-      ...columnOrder.filter((key) => byKey.has(key)),
-      ...baseColumns.map((column) => column.key).filter((key) => !columnOrder.includes(key)),
-    ];
-
-    return orderedKeys
-      .filter((key) => visibleColumnKeys.includes(key))
-      .map((key) => byKey.get(key))
-      .filter(Boolean);
-  }, [baseColumns, columnOrder, visibleColumnKeys]);
-
-  const columns = selectedColumns;
+  const relativeSynced = formatSyncedAt(syncedAt);
 
   return (
     <div className={styles.page}>
@@ -101,45 +84,73 @@ export default function PurchaseOrdersPage() {
         <div className={styles.titleWrap}>
           <div className={styles.title}>Supplier Portal - Purchase Orders</div>
           <div className={styles.subtitle}>
-            Ingelogd als {user?.email || 'onbekend'} | Totaal: {meta.total}
+            Ingelogd als {user?.email || 'onbekend'} | Totaal: {total}
           </div>
         </div>
         <div className={styles.actions}>
-          <Button appearance="subtle" onClick={handleOpenColumnsDialog}>
-            Kolommen
-          </Button>
-          <Button onClick={refresh}>Vernieuwen</Button>
           <Button onClick={handleLogout} appearance="subtle">
             Uitloggen
           </Button>
         </div>
       </div>
 
-      {error ? <div className={styles.error}>{error}</div> : null}
-      {meta.truncated ? (
-        <div className={styles.warning}>
-          Niet alle rijen geladen. Verfijn filters in D365 of verhoog backend-limiet.
+      <div className={styles.toolbar}>
+        <div className={styles.freshness}>
+          {!hasCache ? (
+            <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+          ) : (
+            <>
+              <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
+              {stale ? (
+                <Badge color="warning" appearance="tint">Verouderd</Badge>
+              ) : (
+                <Badge color="success" appearance="tint">Actueel</Badge>
+              )}
+            </>
+          )}
         </div>
-      ) : null}
+
+        <div className={styles.toolbarSpacer} />
+
+        <Button
+          appearance="secondary"
+          icon={<AddRegular />}
+          onClick={handleOpenAddColumn}
+        >
+          Kolom toevoegen
+        </Button>
+        <Button
+          appearance="primary"
+          icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
+          onClick={refresh}
+          disabled={refreshing}
+        >
+          {refreshing ? 'Vernieuwen...' : 'Vernieuwen'}
+        </Button>
+      </div>
+
+      {error ? <div className={styles.error}>{error}</div> : null}
 
       {loading ? (
         <Spinner label="Purchase orders laden..." />
-      ) : purchaseOrders.length === 0 ? (
+      ) : orders.length === 0 ? (
         <EmptyState
           title="Geen purchase orders gevonden"
-          description="Controleer D365 OData configuratie of probeer opnieuw te laden."
+          description="Vernieuw de gegevens of controleer de D365-synchronisatie."
         />
       ) : (
-        <PurchaseOrdersBoardTable columns={columns} items={purchaseOrders} />
+        <PurchaseOrdersBoardTable
+          columns={visibleHeaderColumns}
+          lineColumns={lineColumns}
+          items={orders}
+          onSaveValue={saveValue}
+        />
       )}
 
-      <PurchaseOrderColumnsDialog
-        open={columnsDialogOpen}
-        onOpenChange={handleCloseColumnsDialog}
-        columnOptions={baseColumns}
-        visibleColumnKeys={visibleColumnKeys}
-        onSave={saveVisibleColumns}
-        saving={savingColumns}
+      <PurchaseOrderAddColumnDialog
+        open={addColumnOpen}
+        onOpenChange={setAddColumnOpen}
+        onAdd={addColumn}
       />
     </div>
   );
