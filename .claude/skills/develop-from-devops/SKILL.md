@@ -191,7 +191,7 @@ Haal de URL op uit Azure Container Apps:
 ```bash
 az containerapp show \
   --name "preview-<slug>" \
-  --resource-group vanbommel-qaqc \
+  --resource-group <resource-group-naam> \
   --query "properties.configuration.ingress.fqdn" -o tsv
 ```
 
