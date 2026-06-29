@@ -41,6 +41,8 @@ jobs:
         run: node scripts/db/run-migrations.js
         env:
           SQL_CONNECTION_STRING: ${{ secrets.SQL_CONNECTION_STRING_DEV }}
+          BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.BOOTSTRAP_ADMIN_EMAIL }}
+          BOOTSTRAP_ADMIN_DISPLAY_NAME: ${{ secrets.BOOTSTRAP_ADMIN_DISPLAY_NAME }}
 
       - name: Container App bijwerken
         run: |
