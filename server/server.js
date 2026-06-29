@@ -9,7 +9,6 @@ const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const connectMssql = require('connect-mssql-v2');
 const MSSQLStore = connectMssql.default || connectMssql;
-const { parseSqlConnectionString } = require('./utils/sqlConnectionConfig');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
@@ -55,9 +54,11 @@ app.use(rateLimit({
 
 app.use(express.json());
 
-const sessionStore = new MSSQLStore(
-  parseSqlConnectionString(process.env.SQL_CONNECTION_STRING),
-);
+// Geef de store de rauwe connectiestring: mssql's ConnectionPool parset die correct
+// (incl. tcp:-prefix, 'Initial Catalog' en Encrypt), net als de rest van de app.
+// De zelfgemaakte parseSqlConnectionString liet die details vallen, waardoor de
+// store-pool nooit verbond en elke store.get (= elke authenticated request) bleef hangen.
+const sessionStore = new MSSQLStore(process.env.SQL_CONNECTION_STRING);
 // Vang connectiefouten van de session-store op zodat een DB-hapering het proces niet omlegt.
 if (typeof sessionStore.on === 'function') {
   sessionStore.on('error', (err) => {
