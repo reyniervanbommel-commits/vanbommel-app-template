@@ -3,7 +3,7 @@ name: push-feature-to-dev
 description: >-
   Merge een goedgekeurde feature branch naar develop. Maakt een PR aan,
   GitHub Actions deployed automatisch naar DEV en ruimt de preview Container App
-  en Entra redirect URI op. Post een comment op het DevOps work item.
+  op. Post een comment op het DevOps work item.
   Gebruik wanneer de gebruiker zegt "push feature preview to DEV",
   "feature is akkoord", "merge naar dev" of "feature naar dev".
 ---
@@ -12,7 +12,6 @@ description: >-
 
 Merget de goedgekeurde feature branch naar `develop`. GitHub Actions doet daarna automatisch:
 - Preview Container App verwijderen
-- Entra ID redirect URI van de preview opruimen
 - Nieuwe deploy naar `<dev-container-app-naam>`
 
 ---
@@ -111,7 +110,7 @@ Na het aanmaken van de PR:
 
 1. Merge de PR (handmatig of via `gh pr merge <nr> --merge`)
 2. GitHub Actions start automatisch twee jobs:
-   - `cleanup-preview` (preview.yml): verwijdert de preview Container App en Entra redirect URI
+   - `cleanup-preview` (preview.yml): verwijdert de preview Container App
    - `build-and-deploy` (deploy-dev.yml): deployt naar `<dev-container-app-naam>`
 
 Volg de voortgang:
@@ -187,7 +186,7 @@ Comment:
 
 **DEV URL:** https://<dev-fqdn>
 **Branch:** `<branchnaam>` → gemerged naar `develop`
-**Preview:** opgeruimd (Container App + redirect URI verwijderd)
+**Preview:** opgeruimd (Container App verwijderd)
 **Datum:** <datum>
 ```
 
@@ -237,7 +236,6 @@ Zie `docs/guides/AZURE_INRICHTING_OTAP.md` → **SQL: schema vs data**.
 | Actie | Workflow | Resultaat |
 |---|---|---|
 | Preview Container App verwijderen | `preview.yml` cleanup job | `preview-<slug>` niet meer bereikbaar |
-| Redirect URI verwijderen uit Entra | `preview.yml` cleanup job | Geen losse URIs meer |
 | Deploy naar DEV | `deploy-dev.yml` | `<dev-container-app-naam>` bijgewerkt |
 | DB migraties uitvoeren | `preview.yml` + `deploy-dev.yml` | DEV-database up-to-date (zelfde DB) |
 

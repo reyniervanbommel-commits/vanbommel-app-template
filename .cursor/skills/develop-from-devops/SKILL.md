@@ -199,11 +199,7 @@ Preview URL = `https://<fqdn>`
 
 Bij een mislukte run: fix autonoom, commit opnieuw, push opnieuw, herhaal.
 
-### 6d — Redirect URI registreren
-
-Registreer de preview URL lokaal in Entra ID via `az rest` (bestaande URIs + nieuwe preview URL). Voer direct uit — geen bevestiging nodig. Zie `docs/guides/AZURE_INRICHTING_OTAP.md` voor app IDs.
-
-### 6e — Post preview URL op DevOps work item
+### 6d — Post preview URL op DevOps work item
 
 Via `wit_add_work_item_comment` op het Feature work item:
 
@@ -330,7 +326,7 @@ Gemerged op: <datum>
 - Git werkdirectory schoon op `develop`
 - `.claude/team/` map aanwezig in repo
 - `gh` CLI beschikbaar voor PR aanmaken
-- Azure CLI ingelogd (`az login`) voor preview URL en redirect URI
+- Azure CLI ingelogd (`az login`) voor preview URL
 
 ## Referentie skills
 
