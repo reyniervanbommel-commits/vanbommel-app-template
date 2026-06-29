@@ -21,12 +21,19 @@ router.get('/', async (req, res, next) => {
   try {
     const autoRefresh = req.query.autoRefresh === '1' || req.query.autoRefresh === 'true';
     let refreshed = false;
+    let refreshError = null;
     if (autoRefresh && (await cacheService.isStale())) {
-      await cacheService.refresh();
-      refreshed = true;
+      try {
+        await cacheService.refresh();
+        refreshed = true;
+      } catch (refreshErr) {
+        // Een mislukte lazy refresh (bv. D365 niet geconfigureerd) mag het lezen niet blokkeren:
+        // toon de (mogelijk lege) cache met een melding i.p.v. een 500.
+        refreshError = refreshErr.message || 'Verversen mislukt';
+      }
     }
     const data = await cacheService.read();
-    return res.json({ ...data, refreshed });
+    return res.json({ ...data, refreshed, refreshError });
   } catch (err) {
     return next(err);
   }
