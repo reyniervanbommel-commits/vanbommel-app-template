@@ -163,7 +163,9 @@ function mapPurchaseOrderLine(record) {
     unit: record.PurchaseUnitSymbol || null,
     lineAmount: record.LineAmount ?? null,
     currencyCode: record.CurrencyCode || null,
-    requestedDeliveryDate: record.RequestedReceiptDate || null,
+    // Echte property op PurchaseOrderLineV2 (geverifieerd via $metadata) is RequestedDeliveryDate;
+    // RequestedReceiptDate bestaat niet op deze entiteit (#131-2).
+    requestedDeliveryDate: record.RequestedDeliveryDate || record.RequestedReceiptDate || null,
     raw: record,
   };
 }
@@ -184,7 +186,7 @@ function escapeODataLiteral(value) {
   return String(value || '').replace(/'/g, "''");
 }
 
-async function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
+async function buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter = '' }) {
   const baseUrl = await getBaseUrl();
   const path = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', DEFAULT_PURCHASE_ORDERS_PATH)).trim();
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
@@ -197,18 +199,16 @@ async function buildPurchaseOrderUrl({ supplierAccount, top, skip }) {
   searchParams.set('$count', 'true');
   searchParams.set('$expand', 'PurchaseOrderLines');
 
-  const safeSupplierAccount = escapeODataLiteral(supplierAccount);
-  const safeCompany = escapeODataLiteral(company);
+  // Filterclausules opbouwen en met 'and' samenvoegen, zodat een optionele scope-filter
+  // (B2: begrenst de cache-sync) bij elke combinatie van company/supplier werkt.
+  const clauses = [];
+  if (company) clauses.push("dataAreaId eq '" + escapeODataLiteral(company) + "'");
+  if (supplierAccount) clauses.push("OrderVendorAccountNumber eq '" + escapeODataLiteral(supplierAccount) + "'");
+  const trimmedExtra = String(extraFilter || '').trim();
+  if (trimmedExtra) clauses.push('(' + trimmedExtra + ')');
 
-  if (company && supplierAccount) {
-    searchParams.set('cross-company', 'true');
-    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "' and OrderVendorAccountNumber eq '" + safeSupplierAccount + "'");
-  } else if (company) {
-    searchParams.set('cross-company', 'true');
-    searchParams.set('$filter', "dataAreaId eq '" + safeCompany + "'");
-  } else if (supplierAccount) {
-    searchParams.set('$filter', "OrderVendorAccountNumber eq '" + safeSupplierAccount + "'");
-  }
+  if (company) searchParams.set('cross-company', 'true');
+  if (clauses.length) searchParams.set('$filter', clauses.join(' and '));
 
   return url.toString();
 }
@@ -294,13 +294,17 @@ function resolveNextLink(nextLink, baseUrl) {
   }
 }
 
-async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, fetchAll }) {
-  let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top, skip });
+async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, fetchAll, extraFilter = '', maxItems = MAX_PURCHASE_ORDER_ITEMS }) {
+  let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter });
   const records = [];
   let total = null;
   let pagesFetched = 0;
   let hasMore = false;
   let truncated = false;
+  // Harde bovengrens: nooit meer dan de geconfigureerde cap (en nooit boven de absolute MAX).
+  const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
+    ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
+    : MAX_PURCHASE_ORDER_ITEMS;
 
   while (currentUrl) {
     const payload = await fetchODataJson(currentUrl, timeout);
@@ -322,7 +326,7 @@ async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, 
       break;
     }
 
-    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || records.length >= MAX_PURCHASE_ORDER_ITEMS) {
+    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || records.length >= effectiveMax) {
       currentUrl = null;
       hasMore = true;
       truncated = true;
@@ -342,7 +346,7 @@ async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, 
   };
 }
 
-async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0, fetchAll = false }) {
+async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0, fetchAll = false, extraFilter = '', maxItems }) {
   const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
@@ -359,6 +363,8 @@ async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0, fetchA
     skip,
     timeout,
     fetchAll,
+    extraFilter,
+    maxItems,
   });
   const vendorAccounts = Array.from(new Set(
     records

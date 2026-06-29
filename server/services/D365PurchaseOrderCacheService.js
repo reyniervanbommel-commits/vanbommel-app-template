@@ -12,6 +12,10 @@ const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
 
 const DEFAULT_STALE_MINUTES = 15;
 const HEADER_LEVEL_LINE = -1; // sentinel: header-niveau custom-waarde
+// B2: begrens de cache-sync. Zonder scope haalt refresh alle ~19.913 orders met $expand op
+// (gemeten ~21s per 200 rijen) en loopt vast. PO_SYNC_FILTER = ruwe OData-filter (scope),
+// PO_SYNC_MAX_ORDERS = harde bovengrens als vangnet. Aanname A1: business verfijnt de scope later.
+const DEFAULT_PO_SYNC_MAX_ORDERS = 2000;
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -78,12 +82,27 @@ async function isStale() {
 // ---------------------------------------------------------------------------
 // refresh — volledige resync vanuit D365 naar po_cache_headers/lines
 // ---------------------------------------------------------------------------
+async function getSyncScope() {
+  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
+  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(DEFAULT_PO_SYNC_MAX_ORDERS));
+  const parsedMax = Number.parseInt(rawMax, 10);
+  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : DEFAULT_PO_SYNC_MAX_ORDERS;
+  return { extraFilter, maxItems };
+}
+
 async function refresh() {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const refreshStart = new Date();
 
-  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true });
+  // B2: begrensde sync — scope-filter + harde cap voorkomen dat refresh op de volledige dataset vastloopt.
+  const { extraFilter, maxItems } = await getSyncScope();
+  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
   const items = Array.isArray(result.items) ? result.items : [];
+  if (result.truncated) {
+    logger.warn('PO-cache sync afgekapt op de cap; verfijn PO_SYNC_FILTER voor volledige dekking', {
+      cap: maxItems, opgehaald: items.length, totaalInD365: result.total,
+    });
+  }
   const pool = await getPool();
   let watermark = null;
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
+import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -34,7 +35,7 @@ const useStyles = makeStyles({
   },
 });
 
-export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, columns, onSaveValue }) {
+export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, columns, onSaveValue, onRenameColumn, onRemoveColumn }) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
 
@@ -48,7 +49,11 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
         <tr>
           {lineColumns.map((column) => (
             <th key={column.key} className={styles.subHeaderCell}>
-              {column.label}
+              <PurchaseOrderColumnHeader
+                column={column}
+                onRename={onRenameColumn}
+                onRemove={onRemoveColumn}
+              />
             </th>
           ))}
         </tr>

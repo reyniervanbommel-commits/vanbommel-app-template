@@ -3,6 +3,7 @@
 const {
   buildPurchaseOrderUrl,
   mapPurchaseOrder,
+  mapPurchaseOrderLine,
   fetchPurchaseOrders,
   escapeODataLiteral,
   getAccessToken,
@@ -247,5 +248,55 @@ describe('D365ODataService', () => {
     expect(result.items).toHaveLength(3);
     expect(result.pagesFetched).toBe(2);
     expect(result.fetchedAll).toBe(true);
+  });
+
+  it('voegt een scope-filter (extraFilter) toe aan het $filter (B2)', async () => {
+    const url = await buildPurchaseOrderUrl({
+      supplierAccount: null,
+      top: 5,
+      skip: 0,
+      extraFilter: "PurchaseOrderStatus ne 'Canceled'",
+    });
+    const filter = new URL(url).searchParams.get('$filter');
+    expect(filter).toContain("dataAreaId eq 'WHSL'");
+    expect(filter).toContain("(PurchaseOrderStatus ne 'Canceled')");
+    expect(filter).toContain(' and ');
+  });
+
+  it('mapt regel-leverdatum uit het echte veld RequestedDeliveryDate (#131-2)', () => {
+    const mapped = mapPurchaseOrderLine({
+      PurchaseOrderNumber: 'PO-1',
+      LineNumber: 1,
+      RequestedDeliveryDate: '2026-07-01',
+    });
+    expect(mapped.requestedDeliveryDate).toBe('2026-07-01');
+  });
+
+  it('kapt de sync af op maxItems en markeert truncated (B2)', async () => {
+    const fetchSpy = vi.fn().mockImplementation(async (url) => {
+      const urlString = String(url);
+      if (urlString.includes('/data/VendorsV2')) {
+        return { ok: true, json: async () => ({ value: [] }) };
+      }
+      // Elke PO-pagina levert 2 records + een nextLink (zou eindeloos doorlopen zonder cap).
+      return {
+        ok: true,
+        json: async () => ({
+          '@odata.count': 9999,
+          '@odata.nextLink': 'https://example.operations.dynamics.com/data/PurchaseOrderHeadersV2?$top=2&$skip=2',
+          value: [
+            { PurchaseOrderNumber: 'PO-A', OrderVendorAccountNumber: 'SUPP' },
+            { PurchaseOrderNumber: 'PO-B', OrderVendorAccountNumber: 'SUPP' },
+          ],
+        }),
+      };
+    });
+    global.fetch = fetchSpy;
+
+    const result = await fetchPurchaseOrders({ supplierAccount: null, top: 2, skip: 0, fetchAll: true, maxItems: 2 });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+    expect(result.fetchedAll).toBe(false);
   });
 });
