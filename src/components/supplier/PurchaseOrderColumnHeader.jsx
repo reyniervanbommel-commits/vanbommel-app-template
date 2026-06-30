@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Badge,
   Button,
   Dialog,
   DialogActions,
@@ -43,6 +44,9 @@ const useStyles = makeStyles({
     height: '20px',
     ...shorthands.padding('0'),
   },
+  rowBadge: {
+    marginLeft: '6px',
+  },
 });
 
 /**
@@ -50,9 +54,10 @@ const useStyles = makeStyles({
  * kolommen een menu met Hernoemen / Verwijderen (soft-delete, met bevestiging).
  * D365-kolommen tonen alleen het label (read-only referentie).
  */
-export default function PurchaseOrderColumnHeader({ column, onRename, onRemove }) {
+export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
+  const writable = !!column.writableToD365;
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
@@ -97,7 +102,30 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove }
   }, [onRemove, column.id]);
 
   if (!isCustom) {
-    return <span>{column.label}</span>;
+    // D365-kolom. Toon een write-back-badge indien aan; admin kan het via een menu togglen.
+    const badge = writable ? (
+      <Badge className={styles.rowBadge} color="brand" appearance="tint" size="small">write-back</Badge>
+    ) : null;
+    if (!isAdmin || !onToggleWriteback || !column.d365Field) {
+      return <span className={styles.labelWrap}>{column.label}{badge}</span>;
+    }
+    return (
+      <div className={styles.header}>
+        <span className={styles.labelWrap}>{column.label}{badge}</span>
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back-opties voor ${column.label}`} />
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>
+                {writable ? 'Write-back uitzetten' : 'Write-back toestaan'}
+              </MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      </div>
+    );
   }
 
   return (

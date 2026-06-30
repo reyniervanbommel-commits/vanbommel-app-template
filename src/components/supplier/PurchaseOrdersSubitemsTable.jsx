@@ -2,6 +2,7 @@ import React from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
+import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -35,7 +36,7 @@ const useStyles = makeStyles({
   },
 });
 
-export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, columns, onSaveValue, onRenameColumn, onRemoveColumn }) {
+export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, columns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
 
@@ -53,6 +54,8 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
                 column={column}
                 onRename={onRenameColumn}
                 onRemove={onRemoveColumn}
+                isAdmin={isAdmin}
+                onToggleWriteback={onToggleWriteback}
               />
             </th>
           ))}
@@ -79,6 +82,27 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
                           orderNumber: order.orderNumber,
                           lineNumber: line.lineNumber,
                           value,
+                        })
+                      }
+                    />
+                  </td>
+                );
+              }
+              if (column.source === 'd365' && column.writableToD365 && onCorrect) {
+                return (
+                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell}>
+                    <PurchaseOrderWriteBackCell
+                      column={column}
+                      value={rawValue}
+                      onCorrect={({ value, basedOnValue }) =>
+                        onCorrect({
+                          columnId: column.id,
+                          columnKey: column.key,
+                          dataAreaId: order.dataAreaId,
+                          orderNumber: order.orderNumber,
+                          lineNumber: line.lineNumber,
+                          value,
+                          basedOnValue,
                         })
                       }
                     />

@@ -3,6 +3,7 @@ import { Badge, Button, makeStyles, shorthands, tokens } from '@fluentui/react-c
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
+import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -116,7 +117,7 @@ const useStyles = makeStyles({
 // AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
 // krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
 
-function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn }) {
+function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
@@ -235,6 +236,27 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
       );
     }
 
+    // D365-veld met write-back toegestaan (admin) → bewuste correctie-actie.
+    if (column.source === 'd365' && column.writableToD365 && onCorrect) {
+      return (
+        <PurchaseOrderWriteBackCell
+          column={column}
+          value={rawValue}
+          onCorrect={({ value, basedOnValue }) =>
+            onCorrect({
+              columnId: column.id,
+              columnKey: key,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: null,
+              value,
+              basedOnValue,
+            })
+          }
+        />
+      );
+    }
+
     const display = formatCellValue(rawValue, column.dataType);
     if (isFirst && order.removedInD365) {
       return (
@@ -262,7 +284,7 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
       );
     }
     return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
-  }, [onSaveValue, styles.removedBadge, styles.removedText, styles.rowBadge]);
+  }, [onSaveValue, onCorrect, styles.removedBadge, styles.removedText, styles.rowBadge]);
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
@@ -313,6 +335,8 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
                   column={column}
                   onRename={onRenameColumn}
                   onRemove={onRemoveColumn}
+                  isAdmin={isAdmin}
+                  onToggleWriteback={onToggleWriteback}
                 />
               </th>
             ))}
@@ -375,6 +399,9 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
                               onSaveValue={onSaveValue}
                               onRenameColumn={onRenameColumn}
                               onRemoveColumn={onRemoveColumn}
+                              onCorrect={onCorrect}
+                              isAdmin={isAdmin}
+                              onToggleWriteback={onToggleWriteback}
                             />
                           </td>
                         </tr>

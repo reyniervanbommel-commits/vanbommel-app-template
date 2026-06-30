@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-134',
+    title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
+    checks: [
+      'Admin kan op een D365-kolomkop via het menu "Write-back toestaan" aanzetten (badge "write-back" verschijnt)',
+      'Een write-back-kolom toont een upload-icoon; klikken opent "Corrigeren in D365" met bevestiging',
+      'Na bevestigen wordt de waarde teruggeschreven naar D365 en in het scherm bijgewerkt',
+      'Bij een conflict (waarde intussen in D365 gewijzigd) volgt een nette foutmelding, geen overschrijving',
+      'Niet-toegestane kolommen blijven read-only; alleen admin ziet de write-back-toggle',
+    ],
+  },
+  {
     id: 'story-133',
     title: 'Story #133 - Nieuw-/gewijzigd-detectie per gebruiker (Fase 2)',
     checks: [

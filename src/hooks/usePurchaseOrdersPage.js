@@ -177,6 +177,36 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
+  // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
+  const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
+    const isLine = lineNumber !== null && lineNumber !== undefined;
+    let previousOrders = null;
+    setOrders((prev) => {
+      previousOrders = prev;
+      return prev.map((order) => {
+        if (order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber) return order;
+        if (isLine) {
+          return {
+            ...order,
+            lines: (order.lines || []).map((line) =>
+              line.lineNumber === lineNumber ? { ...line, values: { ...line.values, [columnKey]: value } } : line
+            ),
+          };
+        }
+        return { ...order, values: { ...order.values, [columnKey]: value } };
+      });
+    });
+    try {
+      await apiRequest('/purchase-orders/correct', {
+        method: 'POST',
+        body: { columnId, dataAreaId, orderNumber, lineNumber: isLine ? lineNumber : null, value, basedOnValue },
+      });
+    } catch (err) {
+      if (previousOrders) setOrders(previousOrders);
+      throw err;
+    }
+  }, []);
+
   // Herlaadt alleen de kolomdefinities (na toevoegen/hernoemen/verwijderen).
   const reloadColumns = useCallback(async () => {
     const [headerData, lineData] = await Promise.all([
@@ -198,6 +228,15 @@ export function usePurchaseOrdersPage() {
 
   const renameColumn = useCallback(async (id, label) => {
     await apiRequest('/purchase-orders/columns/' + id, { method: 'PATCH', body: { label } });
+    await reloadColumns();
+  }, [reloadColumns]);
+
+  // Admin: zet write-back aan/uit op een D365-kolom (#134).
+  const toggleWriteback = useCallback(async (columnId, writable) => {
+    await apiRequest('/purchase-orders/columns/' + columnId + '/writeback', {
+      method: 'PATCH',
+      body: { writable, mechanism: 'patch' },
+    });
     await reloadColumns();
   }, [reloadColumns]);
 
@@ -271,6 +310,8 @@ export function usePurchaseOrdersPage() {
     refresh,
     markViewed,
     saveValue,
+    correctField,
+    toggleWriteback,
     addColumn,
     renameColumn,
     removeColumn,
@@ -296,6 +337,8 @@ export function usePurchaseOrdersPage() {
     refresh,
     markViewed,
     saveValue,
+    correctField,
+    toggleWriteback,
     addColumn,
     renameColumn,
     removeColumn,

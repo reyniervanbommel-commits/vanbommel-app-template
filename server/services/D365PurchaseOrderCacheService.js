@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
-const { fetchPurchaseOrders } = require('./D365ODataService');
+const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
 
 // Content-hash van een order (header + compacte regel-samenvatting). Wijzigt de hash tussen
@@ -488,10 +488,103 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
   return { columnId, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine, value: empty ? null : value };
 }
 
+// ---------------------------------------------------------------------------
+// correctField — D365-veldcorrectie terugschrijven (#133 write-back, Fase 3)
+// Alleen voor D365-kolommen die admin als writable_to_d365 markeerde. Audit + status
+// in po_field_corrections; optimistic concurrency via writeBackField (If-Match + waarde-check).
+// ---------------------------------------------------------------------------
+async function correctField({ columnId, dataAreaId, orderNumber, lineNumber, value, basedOnValue }, userId) {
+  const column = await getColumnById(columnId);
+  if (!column || !column.isActive) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  if (column.source !== 'd365' || !column.writableToD365 || !column.d365Field) {
+    throw Object.assign(new Error('Deze kolom is niet ingesteld voor write-back naar D365'), { status: 400 });
+  }
+
+  const area = String(dataAreaId || '').trim();
+  const order = String(orderNumber || '').trim();
+  if (!area || !order) {
+    throw Object.assign(new Error('dataAreaId en orderNumber zijn verplicht'), { status: 400 });
+  }
+
+  let resolvedLine = HEADER_LEVEL_LINE;
+  if (column.level === 'line') {
+    const ln = toNumberOrNull(lineNumber);
+    if (ln === null) throw Object.assign(new Error('lineNumber is verplicht voor een regel-kolom'), { status: 400 });
+    resolvedLine = ln;
+  }
+
+  // Typecoercie volgens data_type.
+  let newValue;
+  if (column.dataType === 'number') newValue = toNumberOrNull(value);
+  else if (column.dataType === 'date') { const d = toDateOrNull(value); newValue = d ? d.toISOString() : null; }
+  else if (column.dataType === 'boolean') newValue = value === true || value === 'true' || value === 1 || value === '1';
+  else newValue = value === null || value === undefined ? null : String(value);
+
+  const pool = await getPool();
+  // 1) Audit: pending
+  const ins = await pool.request()
+    .input('columnId', sql.BigInt, columnId)
+    .input('area', sql.NVarChar(16), area)
+    .input('order', sql.NVarChar(64), order)
+    .input('line', sql.Int, resolvedLine)
+    .input('field', sql.NVarChar(128), column.d365Field)
+    .input('old', sql.NVarChar(sql.MAX), basedOnValue === null || basedOnValue === undefined ? null : String(basedOnValue))
+    .input('new', sql.NVarChar(sql.MAX), newValue === null || newValue === undefined ? null : String(newValue))
+    .input('by', sql.Int, userId || null)
+    .query(`
+      INSERT INTO dbo.po_field_corrections
+        (column_id, data_area_id, order_number, line_number, d365_field, old_value, new_value, status, created_by)
+      OUTPUT INSERTED.id
+      VALUES (@columnId, @area, @order, @line, @field, @old, @new, 'pending', @by);
+    `);
+  const correctionId = ins.recordset[0].id;
+
+  // 2) Terugschrijven naar D365
+  try {
+    await writeBackField({
+      level: column.level, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine,
+      d365Field: column.d365Field, newValue, basedOnValue,
+    });
+  } catch (err) {
+    await pool.request()
+      .input('id', sql.BigInt, correctionId)
+      .input('err', sql.NVarChar(sql.MAX), err.message || 'Onbekende fout')
+      .query("UPDATE dbo.po_field_corrections SET status = 'failed', error = @err WHERE id = @id");
+    throw err;
+  }
+
+  // 3) Applied + cache bijwerken (best-effort; volgende refresh corrigeert hoe dan ook)
+  await pool.request()
+    .input('id', sql.BigInt, correctionId)
+    .query("UPDATE dbo.po_field_corrections SET status = 'applied', applied_at = SYSUTCDATETIME() WHERE id = @id");
+
+  const dbCol = column.level === 'line' ? LINE_FIELD_BY_KEY[column.key] : HEADER_FIELD_BY_KEY[column.key];
+  if (dbCol) {
+    const table = column.level === 'line' ? 'po_cache_lines' : 'po_cache_headers';
+    const whereLine = column.level === 'line' ? ' AND line_number = @line' : '';
+    try {
+      const req = pool.request()
+        .input('area', sql.NVarChar(16), area)
+        .input('order', sql.NVarChar(64), order)
+        .input('val', sql.NVarChar(sql.MAX), newValue === null || newValue === undefined ? null : String(newValue));
+      if (column.level === 'line') req.input('line', sql.Int, resolvedLine);
+      // dbCol komt uit onze interne mapping (geen user-input) → veilig in de query.
+      await req.query(`UPDATE dbo.${table} SET ${dbCol} = @val WHERE data_area_id = @area AND order_number = @order${whereLine}`);
+    } catch (cacheErr) {
+      logger.warn('Cache-update na write-back mislukt (wordt bij volgende refresh hersteld)', { error: cacheErr.message });
+    }
+  }
+
+  return { success: true, correctionId, value: newValue };
+}
+
 module.exports = {
   refresh,
   read,
   saveCustomValue,
+  correctField,
   getSyncState,
   isStale,
   getStaleThresholdMinutes,
