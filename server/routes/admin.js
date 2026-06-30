@@ -9,6 +9,7 @@ const { auditLog } = require('../middleware/auditLog');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
+const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -311,6 +312,34 @@ router.post('/settings/odata', async (req, res, next) => {
     await settingsService.saveODataConfig(filtered, req.user?.id ?? null);
     await auditLog(req.user.id, req.user.email, 'UPDATE_ODATA_SETTINGS', 'app_settings', null, { keys: Object.keys(filtered) });
     res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Password reset email template (admin only) ─────────────────────────────
+
+router.get('/settings/password-reset-email-template', async (req, res, next) => {
+  try {
+    const template = await passwordResetEmailTemplateService.getPasswordResetTemplate();
+    res.json({ template });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/settings/password-reset-email-template', async (req, res, next) => {
+  try {
+    const template = await passwordResetEmailTemplateService.updatePasswordResetTemplate(req.body || {}, req.user?.id ?? null);
+    await auditLog(
+      req.user.id,
+      req.user.email,
+      'UPDATE_PASSWORD_RESET_EMAIL_TEMPLATE',
+      'app_settings',
+      null,
+      { key: 'auth.passwordResetEmailTemplate' }
+    );
+    res.json({ success: true, template });
   } catch (err) {
     next(err);
   }
