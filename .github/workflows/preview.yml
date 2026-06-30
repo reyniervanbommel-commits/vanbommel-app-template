@@ -34,7 +34,7 @@ jobs:
           SLUG=$(echo "$BRANCH" | sed 's|feature/||' | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | sed 's/-$//' | cut -c1-24)
           APP_NAME="preview-${SLUG}"
           echo "app_name=${APP_NAME}" >> $GITHUB_OUTPUT
-          echo "image_tag=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
+          echo "image_tag=preview-${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
 
       - name: Inloggen op Azure
         uses: azure/login@v2
@@ -154,3 +154,13 @@ jobs:
             --name "$APP_NAME" \
             --resource-group "$ACA_RESOURCE_GROUP" \
             --yes 2>/dev/null || echo "App bestond niet meer"
+
+      - name: Oude preview-images opruimen
+        run: |
+          # Previews zijn tijdelijk: houd de 5 meest recente preview-* image-tags,
+          # verwijder de oudere zodat het container-register niet onbeperkt groeit.
+          TAGS=$(az acr repository show-tags --name "$ACR_NAME" --repository vendorportal --orderby time_desc -o tsv 2>/dev/null | grep '^preview-' || true)
+          echo "$TAGS" | tail -n +6 | while read -r TAG; do
+            [ -n "$TAG" ] && az acr repository delete --name "$ACR_NAME" --image "vendorportal:$TAG" --yes 2>/dev/null || true
+          done
+          echo "Preview-images opgeschoond (laatste 5 behouden)"
