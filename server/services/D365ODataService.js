@@ -213,6 +213,90 @@ async function buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter =
   return url.toString();
 }
 
+// Standaard regel-entiteit voor write-back op regelniveau (geverifieerd via $metadata).
+const DEFAULT_PURCHASE_ORDER_LINES_PATH = '/data/PurchaseOrderLinesV2';
+
+async function fetchWithTimeout(url, options, timeout) {
+  const controller = new AbortController();
+  const handle = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    const err = new Error('D365 OData is niet bereikbaar');
+    err.status = error && error.name === 'AbortError' ? 504 : 502;
+    throw err;
+  } finally {
+    clearTimeout(handle);
+  }
+}
+
+// Bouwt de OData-sleutel-URL voor één entiteit, bv.
+// .../PurchaseOrderHeadersV2(dataAreaId='WHSL',PurchaseOrderNumber='WSPO-1')
+function buildEntityKeyUrl(baseUrl, entityPath, keyParts) {
+  const normalizedPath = entityPath.startsWith('/') ? entityPath : '/' + entityPath;
+  const keyStr = keyParts
+    .map(({ name, value, quote }) => (quote ? `${name}='${escapeODataLiteral(value)}'` : `${name}=${value}`))
+    .join(',');
+  return baseUrl + normalizedPath + '(' + keyStr + ')';
+}
+
+/**
+ * Schrijft één veld terug naar D365 met optimistic concurrency:
+ *  1) GET de entiteit → huidige waarde + @odata.etag.
+ *  2) Conflict (409) als de huidige waarde afwijkt van basedOnValue (iemand anders wijzigde 'm).
+ *  3) PATCH met If-Match (etag of '*'); 412 → conflict.
+ * Alleen het PATCH-pad (vrij veld). Boekingsacties (bound Actions) vallen buiten deze fase.
+ */
+async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365Field, newValue, basedOnValue }) {
+  if (!d365Field) {
+    const err = new Error('Geen D365-veld opgegeven'); err.status = 400; throw err;
+  }
+  const baseUrl = await getBaseUrl();
+  const headerPath = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', DEFAULT_PURCHASE_ORDERS_PATH)).trim();
+  const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
+  const timeout = Number.parseInt(timeoutRaw, 10) || DEFAULT_REQUEST_TIMEOUT_MS;
+
+  const isLine = level === 'line';
+  const entityPath = isLine ? DEFAULT_PURCHASE_ORDER_LINES_PATH : headerPath;
+  const keyParts = [
+    { name: 'dataAreaId', value: dataAreaId, quote: true },
+    { name: 'PurchaseOrderNumber', value: orderNumber, quote: true },
+  ];
+  if (isLine) keyParts.push({ name: 'LineNumber', value: Number(lineNumber), quote: false });
+  const entityUrl = buildEntityKeyUrl(baseUrl, entityPath, keyParts) + '?cross-company=true';
+
+  // 1) GET huidige waarde + etag
+  const getRes = await fetchWithTimeout(entityUrl, { method: 'GET', headers: await buildHeaders() }, timeout);
+  if (getRes.status === 404) { const e = new Error('Record niet gevonden in D365'); e.status = 404; throw e; }
+  if (!getRes.ok) { const e = new Error('Kon D365-record niet lezen'); e.status = 502; throw e; }
+  const current = await getRes.json();
+  const etag = current['@odata.etag'] || getRes.headers.get('ETag') || null;
+
+  // 2) concurrency-check op de waarde die de gebruiker zag
+  const norm = (v) => (v === null || v === undefined ? '' : String(v));
+  if (norm(current[d365Field]) !== norm(basedOnValue)) {
+    const e = new Error('De waarde is in D365 gewijzigd sinds u las. Ververs eerst en probeer opnieuw.');
+    e.status = 409; throw e;
+  }
+
+  // 3) PATCH met If-Match
+  const patchHeaders = { ...(await buildHeaders()), 'Content-Type': 'application/json', 'If-Match': etag || '*' };
+  const patchRes = await fetchWithTimeout(
+    entityUrl,
+    { method: 'PATCH', headers: patchHeaders, body: JSON.stringify({ [d365Field]: newValue }) },
+    timeout,
+  );
+  if (patchRes.status === 412) {
+    const e = new Error('Conflict: het record is net gewijzigd in D365. Ververs eerst.'); e.status = 409; throw e;
+  }
+  if (!patchRes.ok) {
+    const body = await patchRes.text().catch(() => '');
+    logger.error('D365 write-back PATCH mislukt', { status: patchRes.status, bodyPreview: body.slice(0, 300) });
+    const e = new Error('Terugschrijven naar D365 mislukt'); e.status = 502; throw e;
+  }
+  return { ok: true };
+}
+
 async function fetchODataJson(url, timeout) {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeout);
@@ -410,5 +494,6 @@ module.exports = {
   buildPurchaseOrderUrl,
   escapeODataLiteral,
   getAccessToken,
+  writeBackField,
   __resetOAuthTokenCache,
 };

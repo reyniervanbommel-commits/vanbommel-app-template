@@ -7,6 +7,8 @@
 const express = require('express');
 const cacheService = require('../services/D365PurchaseOrderCacheService');
 const columnsService = require('../services/PurchaseOrderColumnsService');
+const { requireAnyRole } = require('../middleware/auth');
+const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -122,6 +124,35 @@ router.put('/values', async (req, res, next) => {
       req.user.id,
     );
     return res.json({ success: true, ...saved });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/purchase-orders/columns/:id/writeback — admin: zet write-back aan/uit per D365-kolom.
+router.patch('/columns/:id/writeback', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const { writable, mechanism } = req.body || {};
+    const column = await columnsService.setWriteBackConfig(columnId, { writable, mechanism });
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/purchase-orders/correct — D365-veldcorrectie terugschrijven (write-back).
+router.post('/correct', async (req, res, next) => {
+  try {
+    const { columnId, dataAreaId, orderNumber, lineNumber, value, basedOnValue } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const result = await cacheService.correctField(
+      { columnId: id, dataAreaId, orderNumber, lineNumber, value, basedOnValue },
+      req.user.id,
+    );
+    return res.json(result);
   } catch (err) {
     return next(err);
   }

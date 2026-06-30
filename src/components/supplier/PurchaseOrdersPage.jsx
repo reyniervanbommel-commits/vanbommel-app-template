@@ -71,7 +71,11 @@ export default function PurchaseOrdersPage() {
     changedCount,
     markViewed,
     markingViewed,
+    correctField,
+    toggleWriteback,
   } = usePurchaseOrdersPage();
+
+  const isAdmin = user?.role === 'admin';
 
   const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
 
@@ -156,6 +160,9 @@ export default function PurchaseOrdersPage() {
           onSaveValue={saveValue}
           onRenameColumn={renameColumn}
           onRemoveColumn={removeColumn}
+          onCorrect={correctField}
+          isAdmin={isAdmin}
+          onToggleWriteback={toggleWriteback}
         />
       )}
 

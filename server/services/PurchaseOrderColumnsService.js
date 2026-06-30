@@ -208,13 +208,48 @@ async function deactivateColumn(columnId, userId) {
   return { id: columnId, isActive: false };
 }
 
+// Write-back-config (admin-only): markeer een D365-kolom als terugschrijfbaar (#134).
+const WRITE_MECHANISMS = ['patch', 'action'];
+
+async function setWriteBackConfig(columnId, { writable, mechanism }) {
+  const existing = await getColumnById(columnId);
+  if (!existing) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  if (existing.source !== 'd365' || !existing.d365Field) {
+    throw Object.assign(new Error('Write-back kan alleen op D365-velden worden ingesteld'), { status: 400 });
+  }
+  const isWritable = writable === true || writable === 'true' || writable === 1 || writable === '1';
+  const mech = isWritable ? (WRITE_MECHANISMS.includes(mechanism) ? mechanism : 'patch') : null;
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('writable', sql.Bit, isWritable ? 1 : 0)
+    .input('mechanism', sql.NVarChar(16), mech)
+    .query(`
+      UPDATE dbo.po_columns
+      SET writable_to_d365 = @writable, write_mechanism = @mechanism, updated_at = SYSUTCDATETIME()
+      OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
+             INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  return mapColumnRow(result.recordset[0]);
+}
+
 module.exports = {
   LEVELS,
   DATA_TYPES,
+  WRITE_MECHANISMS,
   listColumns,
   getColumnById,
   createColumn,
   renameColumn,
   deactivateColumn,
+  setWriteBackConfig,
   slugify,
 };
