@@ -39,9 +39,13 @@ export function usePurchaseOrdersPage() {
   const [hasCache, setHasCache] = useState(false);
   const [staleThresholdMinutes, setStaleThresholdMinutes] = useState(0);
   const [total, setTotal] = useState(0);
+  // Nieuw-detectie per gebruiker (#133)
+  const [newCount, setNewCount] = useState(0);
+  const [changedCount, setChangedCount] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [markingViewed, setMarkingViewed] = useState(false);
   const [error, setError] = useState('');
 
   // Board-settings t.b.v. zichtbaarheid/volgorde van header-kolommen (op key-basis).
@@ -60,6 +64,8 @@ export function usePurchaseOrdersPage() {
     setHasCache(Boolean(data?.hasCache));
     setStaleThresholdMinutes(Number(data?.staleThresholdMinutes) || 0);
     setTotal(Number(data?.total) || 0);
+    setNewCount(Number(data?.newCount) || 0);
+    setChangedCount(Number(data?.changedCount) || 0);
   }, []);
 
   const loadPurchaseOrders = useCallback(async () => {
@@ -109,6 +115,21 @@ export function usePurchaseOrdersPage() {
       setError(err.message);
     } finally {
       setRefreshing(false);
+    }
+  }, [applyData]);
+
+  // Markeer alles als gezien: zet het laatst-bekeken-watermerk en herlaad zodat de highlights verdwijnen.
+  const markViewed = useCallback(async () => {
+    setMarkingViewed(true);
+    setError('');
+    try {
+      await apiRequest('/purchase-orders/viewed', { method: 'POST' });
+      const data = await apiRequest('/purchase-orders');
+      applyData(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMarkingViewed(false);
     }
   }, [applyData]);
 
@@ -239,12 +260,16 @@ export function usePurchaseOrdersPage() {
     hasCache,
     staleThresholdMinutes,
     total,
+    newCount,
+    changedCount,
     loading,
     refreshing,
+    markingViewed,
     error,
     visibleColumnKeys: effectiveVisibleKeys,
     savingColumns,
     refresh,
+    markViewed,
     saveValue,
     addColumn,
     renameColumn,
@@ -260,12 +285,16 @@ export function usePurchaseOrdersPage() {
     hasCache,
     staleThresholdMinutes,
     total,
+    newCount,
+    changedCount,
     loading,
     refreshing,
+    markingViewed,
     error,
     effectiveVisibleKeys,
     savingColumns,
     refresh,
+    markViewed,
     saveValue,
     addColumn,
     renameColumn,

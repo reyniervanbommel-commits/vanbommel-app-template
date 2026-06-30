@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-133',
+    title: 'Story #133 - Nieuw-/gewijzigd-detectie per gebruiker (Fase 2)',
+    checks: [
+      'Nieuwe orders (sinds laatste bezoek) krijgen een groene rij-markering + badge "nieuw"',
+      'Gewijzigde orders krijgen een oranje rij-markering + badge "gewijzigd"',
+      'Toolbar toont tellingen (x nieuw / x gewijzigd) zodra er iets is',
+      'Knop "Markeer als gezien" wist de markeringen; bij herladen blijven ze weg',
+      'Eerste bezoek toont geen markeringen (geen scherm vol vlaggen)',
+    ],
+  },
+  {
     id: 'feature-138',
     title: 'Fase 0/1-afronding #131/#132 - sync-scope, OData-pagina, veldfixes',
     checks: [

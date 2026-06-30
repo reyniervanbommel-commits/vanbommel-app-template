@@ -4,11 +4,27 @@
 // Fase 1 (#AB:132): lezen gaat altijd uit SQL; D365 wordt alleen geraadpleegd bij refresh.
 // Write-back (po_field_corrections) volgt in Fase 3; per-user nieuw-detectie in Fase 2.
 
+const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders } = require('./D365ODataService');
 const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
+
+// Content-hash van een order (header + compacte regel-samenvatting). Wijzigt de hash tussen
+// twee syncs, dan is de order "gewijzigd" (#133). ModifiedDateTime is niet beschikbaar in D365.
+function computeOrderHash(order) {
+  const lines = Array.isArray(order.lines) ? order.lines : [];
+  const lineDigest = lines
+    .map((l) => [l.lineNumber, l.itemNumber, l.quantity, l.unit, l.lineAmount, l.description].join('~'))
+    .sort()
+    .join('|');
+  const payload = [
+    order.vendorAccount, order.vendorName, order.status, order.currencyCode,
+    order.requestedDeliveryDate, order.createdDateTime, lines.length, lineDigest,
+  ].join('¶');
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
 
 const DEFAULT_STALE_MINUTES = 15;
 const HEADER_LEVEL_LINE = -1; // sentinel: header-niveau custom-waarde
@@ -116,6 +132,7 @@ async function refresh() {
     if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
 
     const lines = Array.isArray(order.lines) ? order.lines : [];
+    const contentHash = computeOrderHash(order);
 
     // Header + regels per order atomair: voorkomt een header zonder regels als de
     // refresh halverwege faalt (delete + insert van regels mag niet half slagen).
@@ -134,6 +151,7 @@ async function refresh() {
         .input('modifiedAt', sql.DateTime2, modifiedAt)
         .input('rawJson', sql.NVarChar(sql.MAX), JSON.stringify(raw))
         .input('syncedAt', sql.DateTime2, refreshStart)
+        .input('contentHash', sql.NVarChar(64), contentHash)
         .query(`
           MERGE dbo.po_cache_headers AS target
           USING (SELECT @dataAreaId AS data_area_id, @orderNumber AS order_number) AS src
@@ -142,12 +160,17 @@ async function refresh() {
             vendor_account = @vendorAccount, vendor_name = @vendorName, status = @status,
             currency_code = @currencyCode, requested_delivery_date = @requestedDeliveryDate,
             created_date_time = @createdDateTime, d365_modified_at = @modifiedAt,
-            raw_json = @rawJson, synced_at = @syncedAt, removed_in_d365 = 0
+            raw_json = @rawJson, synced_at = @syncedAt, removed_in_d365 = 0,
+            -- "gewijzigd": alleen bijwerken als de hash daadwerkelijk verandert.
+            content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> @contentHash THEN @syncedAt ELSE target.content_changed_at END,
+            content_hash = @contentHash
           WHEN NOT MATCHED THEN INSERT
             (data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
-             requested_delivery_date, created_date_time, d365_modified_at, raw_json, synced_at, first_seen_at, removed_in_d365)
+             requested_delivery_date, created_date_time, d365_modified_at, raw_json, synced_at, first_seen_at, removed_in_d365,
+             content_hash, content_changed_at)
             VALUES (@dataAreaId, @orderNumber, @vendorAccount, @vendorName, @status, @currencyCode,
-             @requestedDeliveryDate, @createdDateTime, @modifiedAt, @rawJson, @syncedAt, @syncedAt, 0);
+             @requestedDeliveryDate, @createdDateTime, @modifiedAt, @rawJson, @syncedAt, @syncedAt, 0,
+             @contentHash, @syncedAt);
         `);
 
       // Regels: vervang volledig (delete + insert) binnen dezelfde transactie.
@@ -213,16 +236,20 @@ async function refresh() {
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit po_cache_* + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
-async function read({ includeRemoved = false } = {}) {
+async function read({ includeRemoved = false, userId = null } = {}) {
   const pool = await getPool();
   const [headerCols, lineCols] = await Promise.all([
     listColumns({ level: 'header', includeInactive: false }),
     listColumns({ level: 'line', includeInactive: false }),
   ]);
 
+  const lastViewedAt = await getLastViewedAt(userId);
+  const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
+
   const headersResult = await pool.request().query(`
     SELECT data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
-           requested_delivery_date, created_date_time, d365_modified_at, removed_in_d365
+           requested_delivery_date, created_date_time, d365_modified_at, removed_in_d365,
+           first_seen_at, content_changed_at
     FROM dbo.po_cache_headers
     ${includeRemoved ? '' : 'WHERE removed_in_d365 = 0'}
     ORDER BY order_number
@@ -294,16 +321,30 @@ async function read({ includeRemoved = false } = {}) {
     return values;
   }
 
+  let newCount = 0;
+  let changedCount = 0;
   const orders = headersResult.recordset.map((h) => {
     const orderKey = `${h.data_area_id}|${h.order_number}`;
     const lines = (linesByOrder.get(orderKey) || []).map((ln) => ({
       lineNumber: ln.line_number,
       values: lineValues(ln),
     }));
+
+    // Nieuw/gewijzigd t.o.v. het laatste bezoek van deze gebruiker. Eerste bezoek
+    // (geen last_viewed_at) → niets highlighten, zodat het scherm niet vol vlaggen staat.
+    const firstSeenMs = h.first_seen_at ? new Date(h.first_seen_at).getTime() : null;
+    const changedMs = h.content_changed_at ? new Date(h.content_changed_at).getTime() : null;
+    const isNew = lastViewedMs !== null && firstSeenMs !== null && firstSeenMs > lastViewedMs;
+    const isChanged = !isNew && lastViewedMs !== null && changedMs !== null && changedMs > lastViewedMs;
+    if (isNew) newCount += 1;
+    else if (isChanged) changedCount += 1;
+
     return {
       dataAreaId: h.data_area_id,
       orderNumber: h.order_number,
       removedInD365: Boolean(h.removed_in_d365),
+      isNew,
+      isChanged,
       values: headerValues(h),
       lines,
       lineCount: lines.length,
@@ -323,12 +364,43 @@ async function read({ includeRemoved = false } = {}) {
     columns: { header: headerCols, line: lineCols },
     orders,
     total: orders.length,
+    lastViewedAt: lastViewedAt ? new Date(lastViewedAt).toISOString() : null,
+    newCount,
+    changedCount,
   };
 }
 
 function normalizeOut(value) {
   if (value instanceof Date) return value.toISOString();
   return value === undefined ? null : value;
+}
+
+// ---------------------------------------------------------------------------
+// Nieuw-detectie per gebruiker: laatst-bekeken-watermerk (#133)
+// ---------------------------------------------------------------------------
+async function getLastViewedAt(userId) {
+  if (!userId) return null;
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('userId', sql.Int, userId)
+    .query('SELECT last_viewed_at FROM dbo.po_user_view_state WHERE user_id = @userId');
+  return result.recordset.length ? result.recordset[0].last_viewed_at : null;
+}
+
+async function markViewed(userId) {
+  if (!userId) {
+    throw Object.assign(new Error('Geen gebruiker'), { status: 401 });
+  }
+  const pool = await getPool();
+  await pool.request()
+    .input('userId', sql.Int, userId)
+    .query(`
+      MERGE dbo.po_user_view_state AS target
+      USING (SELECT @userId AS user_id) AS src ON target.user_id = src.user_id
+      WHEN MATCHED THEN UPDATE SET last_viewed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN INSERT (user_id, last_viewed_at) VALUES (@userId, SYSUTCDATETIME());
+    `);
+  return { success: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,4 +495,7 @@ module.exports = {
   getSyncState,
   isStale,
   getStaleThresholdMinutes,
+  getLastViewedAt,
+  markViewed,
+  computeOrderHash,
 };

@@ -91,6 +91,16 @@ const useStyles = makeStyles({
   removedBadge: {
     marginLeft: '6px',
   },
+  // Nieuw/gewijzigd sinds laatste bezoek (#133): subtiele linkerrand-markering.
+  newRow: {
+    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
+  },
+  changedRow: {
+    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
+  },
+  rowBadge: {
+    marginLeft: '6px',
+  },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.padding('8px', '8px', '12px', '46px'),
@@ -236,8 +246,23 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
         </span>
       );
     }
+    if (isFirst && (order.isNew || order.isChanged)) {
+      return (
+        <span>
+          {display}
+          <Badge
+            className={styles.rowBadge}
+            color={order.isNew ? 'success' : 'warning'}
+            appearance="tint"
+            size="small"
+          >
+            {order.isNew ? 'nieuw' : 'gewijzigd'}
+          </Badge>
+        </span>
+      );
+    }
     return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
-  }, [onSaveValue, styles.removedBadge, styles.removedText]);
+  }, [onSaveValue, styles.removedBadge, styles.removedText, styles.rowBadge]);
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
@@ -320,7 +345,7 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
 
                   return (
                     <React.Fragment key={rowId}>
-                      <tr className={`${styles.itemRow} ${order.removedInD365 ? styles.removedRow : ''}`}>
+                      <tr className={`${styles.itemRow} ${order.removedInD365 ? styles.removedRow : (order.isNew ? styles.newRow : (order.isChanged ? styles.changedRow : ''))}`}>
                         <td className={styles.controlCell}>
                           {hasLines ? (
                             <Button
