@@ -7,8 +7,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const connectMssql = require('connect-mssql-v2');
-const MSSQLStore = connectMssql.default || connectMssql;
+const SqlSessionStore = require('./services/SqlSessionStore');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
@@ -55,17 +54,15 @@ app.use(rateLimit({
 
 app.use(express.json());
 
-// Geef de store de rauwe connectiestring: mssql's ConnectionPool parset die correct
-// (incl. tcp:-prefix, 'Initial Catalog' en Encrypt), net als de rest van de app.
-// De zelfgemaakte parseSqlConnectionString liet die details vallen, waardoor de
-// store-pool nooit verbond en elke store.get (= elke authenticated request) bleef hangen.
-const sessionStore = new MSSQLStore(process.env.SQL_CONNECTION_STRING);
+// Eigen MSSQL-session-store op de gedeelde app-pool (sql.connect), i.p.v. connect-mssql-v2.
+// Die had een eigen losse pool met een race in ready(): bij parallelle requests vlak na login
+// bleef store.get hangen (alleen in de container). Door dezelfde, bewezen werkende pool als de
+// routes te gebruiken, verdwijnt die hang. Zie server/services/SqlSessionStore.js.
+const sessionStore = new SqlSessionStore();
 // Vang connectiefouten van de session-store op zodat een DB-hapering het proces niet omlegt.
-if (typeof sessionStore.on === 'function') {
-  sessionStore.on('error', (err) => {
-    logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
-  });
-}
+sessionStore.on('error', (err) => {
+  logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
+});
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   throw new Error('SESSION_SECRET moet gezet zijn en minimaal 32 tekens bevatten');
 }
