@@ -1,29 +1,14 @@
-import React, { useCallback, useState } from 'react';
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  MessageBar,
-  Spinner,
-  Tooltip,
-  makeStyles,
-  shorthands,
-  tokens,
-} from '@fluentui/react-components';
-import { CloudArrowUpRegular } from '@fluentui/react-icons';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Input, Spinner, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { CloudArrowUpRegular, ErrorCircleRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px') },
-  // D365-veld dat terugschrijfbaar is: subtiel onderscheiden van read-only D365-velden.
-  editBtn: { minWidth: '22px', width: '22px', height: '22px', ...shorthands.padding('0'), color: tokens.colorBrandForeground1 },
-  warn: { marginTop: '8px' },
+  cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: '120px' },
+  // Write-back-veld: subtiel onderscheiden (merk-icoon) van read-only D365-cellen.
+  input: { minWidth: '100px' },
+  wbIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase300, whiteSpace: 'nowrap' },
+  errIcon: { color: tokens.colorPaletteRedForeground1 },
 });
 
 function toInputValue(value, dataType) {
@@ -36,77 +21,64 @@ function toInputValue(value, dataType) {
 }
 
 /**
- * Cel voor een D365-veld dat admin als write-back-toegestaan markeerde. Toont de waarde
- * read-only met een knop "Corrigeren in D365"; wijzigen is een bewuste actie met bevestiging,
- * optimistic concurrency (server vergelijkt met de waarde die je zag) en foutmelding.
+ * Inline write-back-cel voor een D365-veld dat admin als terugschrijfbaar markeerde (#134).
+ * Bewerken gebeurt direct in de cel (geen popup). Bij blur/Enter wordt de waarde teruggeschreven
+ * naar D365; optimistic concurrency en conflicten worden inline getoond. Bij fout keert de oude
+ * waarde terug en verschijnt een fout-icoon met de melding als tooltip.
  */
 export default function PurchaseOrderWriteBackCell({ column, value, onCorrect }) {
   const styles = useStyles();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [local, setLocal] = useState(toInputValue(value, column.dataType));
+  const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const [error, setError] = useState('');
+  const savedTimer = useRef(null);
 
-  const openDialog = useCallback(() => {
-    setDraft(toInputValue(value, column.dataType));
-    setError('');
-    setOpen(true);
-  }, [value, column.dataType]);
+  useEffect(() => { setLocal(toInputValue(value, column.dataType)); }, [value, column.dataType]);
+  useEffect(() => () => { if (savedTimer.current) window.clearTimeout(savedTimer.current); }, []);
 
-  const submit = useCallback(async () => {
-    setBusy(true);
+  const commit = useCallback(async () => {
+    if (local === toInputValue(value, column.dataType)) return; // niets gewijzigd
+    setStatus('saving');
     setError('');
     try {
-      await onCorrect({ value: draft, basedOnValue: value });
-      setOpen(false);
+      await onCorrect({ value: local, basedOnValue: value });
+      setStatus('saved');
+      if (savedTimer.current) window.clearTimeout(savedTimer.current);
+      savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch (err) {
-      setError(err.message || 'Terugschrijven mislukt.');
-    } finally {
-      setBusy(false);
+      setStatus('error');
+      setError(err.message || 'Terugschrijven mislukt');
+      setLocal(toInputValue(value, column.dataType)); // oude waarde terug
     }
-  }, [draft, value, onCorrect]);
+  }, [local, value, column.dataType, onCorrect]);
+
+  const onKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') e.currentTarget.blur();
+    if (e.key === 'Escape') { setLocal(toInputValue(value, column.dataType)); e.currentTarget.blur(); }
+  }, [value, column.dataType]);
 
   return (
     <span className={styles.cell}>
-      <span>{formatCellValue(value, column.dataType)}</span>
-      <Tooltip content="Corrigeren in D365" relationship="label">
-        <Button
-          size="small"
-          appearance="subtle"
-          className={styles.editBtn}
-          icon={<CloudArrowUpRegular />}
-          onClick={openDialog}
-          aria-label={`${column.label} corrigeren in D365`}
-        />
+      <Tooltip content="Terugschrijven naar D365 bij wijzigen" relationship="label">
+        <CloudArrowUpRegular className={styles.wbIcon} />
       </Tooltip>
-
-      <Dialog open={open} onOpenChange={(_, d) => !busy && setOpen(d.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Corrigeren in D365 — {column.label}</DialogTitle>
-            <DialogContent>
-              <Field label="Nieuwe waarde">
-                <Input
-                  type={column.dataType === 'number' ? 'number' : (column.dataType === 'date' ? 'date' : 'text')}
-                  value={draft}
-                  onChange={(_, data) => setDraft(data.value)}
-                />
-              </Field>
-              <MessageBar intent="warning" className={styles.warn}>
-                Dit schrijft de waarde terug naar D365 (veld {column.d365Field}). Als de waarde
-                daar intussen is gewijzigd, wordt de actie geweigerd — ververs dan eerst.
-              </MessageBar>
-              {error ? <MessageBar intent="error" className={styles.warn}>{error}</MessageBar> : null}
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setOpen(false)} disabled={busy}>Annuleren</Button>
-              <Button appearance="primary" icon={busy ? <Spinner size="tiny" /> : null} onClick={submit} disabled={busy}>
-                {busy ? 'Bezig...' : 'Corrigeren in D365'}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      <Input
+        className={styles.input}
+        size="small"
+        type={column.dataType === 'number' ? 'number' : (column.dataType === 'date' ? 'date' : 'text')}
+        value={local}
+        aria-label={`${column.label} (terugschrijven naar D365)`}
+        onChange={(_, data) => setLocal(data.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
+      />
+      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Terugschrijven" /> : null}
+      {status === 'saved' ? <span className={styles.saved}>✓</span> : null}
+      {status === 'error' ? (
+        <Tooltip content={error} relationship="label">
+          <ErrorCircleRegular className={styles.errIcon} />
+        </Tooltip>
+      ) : null}
     </span>
   );
 }
