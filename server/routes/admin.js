@@ -267,8 +267,27 @@ router.get('/analytics/click-stats', async (req, res, next) => {
 router.get('/settings/odata', async (req, res, next) => {
   try {
     const config = await settingsService.getODataConfig();
-    config.D365_ODATA_BEARER_TOKEN_SET = !!config.D365_ODATA_BEARER_TOKEN;
-    res.json({ settings: config, source: 'app_settings' });
+
+    // Geheimen nooit als waarde teruggeven; alleen of ze ingesteld zijn.
+    const secretKeys = settingsService.ODATA_SECRET_KEYS || ['D365_ODATA_CLIENT_SECRET', 'D365_ODATA_BEARER_TOKEN'];
+    for (const key of secretKeys) {
+      config[key + '_SET'] = !!config[key];
+      config[key] = '';
+    }
+
+    // Afgeleide, leesbare status zodat de admin ziet wat er gebeurt.
+    const baseUrl = (config.D365_ODATA_BASE_URL || '').replace(/\/$/, '');
+    const usingClientCredentials = !!(config.D365_ODATA_TENANT_ID && config.D365_ODATA_CLIENT_ID && config.D365_ODATA_CLIENT_SECRET_SET);
+    const derived = {
+      authMethod: usingClientCredentials ? 'oauth_client_credentials' : (config.D365_ODATA_BEARER_TOKEN_SET ? 'static_bearer_token' : 'none'),
+      scope: baseUrl ? baseUrl + '/.default' : '',
+      tokenEndpoint: config.D365_ODATA_TENANT_ID
+        ? 'https://login.microsoftonline.com/' + config.D365_ODATA_TENANT_ID + '/oauth2/v2.0/token'
+        : '',
+      entityUrl: baseUrl ? baseUrl + (config.D365_ODATA_PURCHASE_ORDERS_PATH || '') : '',
+    };
+
+    res.json({ settings: config, derived, source: 'app_settings' });
   } catch (err) {
     next(err);
   }
@@ -279,9 +298,10 @@ router.post('/settings/odata', async (req, res, next) => {
     const allowed = [...settingsService.ODATA_KEYS];
     const incoming = req.body || {};
 
-    // Leeg token = niet overschrijven
-    if (incoming.D365_ODATA_BEARER_TOKEN === '') {
-      delete incoming.D365_ODATA_BEARER_TOKEN;
+    // Leeg secret/token = niet overschrijven (behoud bestaande waarde).
+    const secretKeys = settingsService.ODATA_SECRET_KEYS || ['D365_ODATA_CLIENT_SECRET', 'D365_ODATA_BEARER_TOKEN'];
+    for (const key of secretKeys) {
+      if (incoming[key] === '') delete incoming[key];
     }
 
     const filtered = Object.fromEntries(

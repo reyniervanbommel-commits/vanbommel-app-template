@@ -74,9 +74,21 @@ const ODATA_KEYS = [
   'D365_ODATA_BASE_URL',
   'D365_ODATA_PURCHASE_ORDERS_PATH',
   'D365_ODATA_COMPANY',
-  'D365_ODATA_BEARER_TOKEN',
   'D365_ODATA_TIMEOUT_MS',
+  // OAuth2 client-credentials (primaire auth; vervangt het statische bearer token)
+  'D365_ODATA_TENANT_ID',
+  'D365_ODATA_CLIENT_ID',
+  'D365_ODATA_CLIENT_SECRET',
+  // Cache-sync scope/versheid (Fase 1, B2)
+  'PO_SYNC_FILTER',
+  'PO_SYNC_MAX_ORDERS',
+  'PO_CACHE_STALE_MINUTES',
+  // Legacy fallback-token (alleen gebruikt als client-credentials ontbreken)
+  'D365_ODATA_BEARER_TOKEN',
 ];
+
+// Geheime sleutels worden nooit als waarde teruggegeven aan de UI (alleen een *_SET-vlag).
+const ODATA_SECRET_KEYS = ['D365_ODATA_CLIENT_SECRET', 'D365_ODATA_BEARER_TOKEN'];
 
 async function getODataConfig() {
   await init();
@@ -91,4 +103,4 @@ async function saveODataConfig(settings, userId = null) {
   }
 }
 
-module.exports = { init, get, getAsync, set, getODataConfig, saveODataConfig, ODATA_KEYS };
+module.exports = { init, get, getAsync, set, getODataConfig, saveODataConfig, ODATA_KEYS, ODATA_SECRET_KEYS };

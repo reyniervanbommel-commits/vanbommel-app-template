@@ -68,6 +68,8 @@ export default function PurchaseOrdersPage() {
     refresh,
     saveValue,
     addColumn,
+    renameColumn,
+    removeColumn,
   } = usePurchaseOrdersPage();
 
   const handleLogout = useCallback(() => {
@@ -144,6 +146,8 @@ export default function PurchaseOrdersPage() {
           lineColumns={lineColumns}
           items={orders}
           onSaveValue={saveValue}
+          onRenameColumn={renameColumn}
+          onRemoveColumn={removeColumn}
         />
       )}
 

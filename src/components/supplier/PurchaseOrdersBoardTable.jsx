@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
 import EditableCell from './EditableCell';
+import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -105,7 +106,7 @@ const useStyles = makeStyles({
 // AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
 // krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
 
-function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue }) {
+function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn }) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
@@ -283,7 +284,11 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue }) 
             </th>
             {columns.map((column) => (
               <th key={column.key} className={styles.headerCell}>
-                {column.label}
+                <PurchaseOrderColumnHeader
+                  column={column}
+                  onRename={onRenameColumn}
+                  onRemove={onRemoveColumn}
+                />
               </th>
             ))}
           </tr>
@@ -343,6 +348,8 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue }) 
                               lines={lines}
                               columns={lineColumns}
                               onSaveValue={onSaveValue}
+                              onRenameColumn={onRenameColumn}
+                              onRemoveColumn={onRemoveColumn}
                             />
                           </td>
                         </tr>
