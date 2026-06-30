@@ -14,6 +14,7 @@ const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
 const purchaseOrdersRouter = require('./routes/purchaseOrders');
+const dataRouter = require('./routes/data');
 const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
@@ -87,6 +88,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 app.use('/api/purchase-orders', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), purchaseOrdersRouter);
+// Generieke Table Builder-data-API (#AB:152, Fase A) — staat naast /api/purchase-orders (strangler-fig).
+app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

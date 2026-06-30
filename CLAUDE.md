@@ -1,5 +1,12 @@
 # CLAUDE.md — Van Bommel App Template
 
+## Azure DevOps
+
+- **Bord/project: `Vendor-App`** in org `https://dev.azure.com/reyniervanbommel0745` (klassieke URL: `https://reyniervanbommel0745.visualstudio.com/Vendor-App`).
+- ⚠️ Het lokale `az devops`-default staat (verkeerd) op project **`QAQC Module`** — dat is een **andere app**. Filter work-item-queries altijd expliciet op `[System.TeamProject] = 'Vendor-App'` of geef `Vendor-App` in de URL mee.
+- Work items van deze app: Feature `#130` (D365 PO) en `#142` (tech-debt) met hun child-stories (`#130`–`#151`).
+- Toegang: Azure DevOps REST API met een `az account get-access-token` token (geen MCP in Claude Code).
+
 ## Tech stack
 
 - React 18 + Vite + Fluent UI v9 (`@fluentui/react-components`)
