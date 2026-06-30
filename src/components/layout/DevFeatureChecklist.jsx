@@ -56,6 +56,10 @@ export default function DevFeatureChecklist() {
     useDevFeatureChecklist();
 
   const checkedIdSet = useMemo(() => new Set(checkedIds), [checkedIds]);
+  const openItems = useMemo(
+    () => items.filter((item) => !checkedIdSet.has(item.id)),
+    [items, checkedIdSet],
+  );
 
   const handleToggleOpen = useCallback(() => {
     setIsOpen((current) => !current);
@@ -89,7 +93,7 @@ export default function DevFeatureChecklist() {
 
       {isOpen ? (
         <div className={styles.body}>
-          {items.map((item) => (
+          {openItems.map((item) => (
             <Checkbox
               key={item.id}
               data-feature-id={item.id}
