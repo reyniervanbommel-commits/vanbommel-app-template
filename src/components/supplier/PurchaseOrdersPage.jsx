@@ -7,7 +7,6 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { ArrowClockwiseRegular, AddRegular, CheckmarkRegular } from '@fluentui/react-icons';
-import { useAuth } from '../../context/AuthContext';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
@@ -30,7 +29,6 @@ const useStyles = makeStyles({
   titleWrap: { display: 'flex', flexDirection: 'column', gap: '4px' },
   title: { fontSize: '24px', fontWeight: 600 },
   subtitle: { color: tokens.colorNeutralForeground3 },
-  actions: { display: 'flex', gap: '8px' },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
@@ -51,7 +49,6 @@ const useStyles = makeStyles({
 
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
-  const { user, logout } = useAuth();
   const [addColumnOpen, setAddColumnOpen] = useState(false);
 
   const {
@@ -76,10 +73,6 @@ export default function PurchaseOrdersPage() {
     markingViewed,
   } = usePurchaseOrdersPage();
 
-  const handleLogout = useCallback(() => {
-    logout();
-  }, [logout]);
-
   const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
 
   const relativeSynced = formatSyncedAt(syncedAt);
@@ -88,15 +81,10 @@ export default function PurchaseOrdersPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div className={styles.titleWrap}>
-          <div className={styles.title}>Supplier Portal - Purchase Orders</div>
+          <div className={styles.title}>Purchase Orders</div>
           <div className={styles.subtitle}>
-            Ingelogd als {user?.email || 'onbekend'} | Totaal: {total}
+            Total: {total}
           </div>
-        </div>
-        <div className={styles.actions}>
-          <Button onClick={handleLogout} appearance="subtle">
-            Uitloggen
-          </Button>
         </div>
       </div>
 
