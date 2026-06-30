@@ -11,6 +11,7 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
+import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -49,6 +50,7 @@ const useStyles = makeStyles({
 
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
+  const { user } = useAuth();
   const [addColumnOpen, setAddColumnOpen] = useState(false);
 
   const {
