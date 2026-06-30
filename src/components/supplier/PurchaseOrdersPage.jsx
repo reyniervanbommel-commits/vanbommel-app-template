@@ -6,7 +6,7 @@ import {
   Spinner,
   tokens,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, AddRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular, AddRegular, CheckmarkRegular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
@@ -70,6 +70,10 @@ export default function PurchaseOrdersPage() {
     addColumn,
     renameColumn,
     removeColumn,
+    newCount,
+    changedCount,
+    markViewed,
+    markingViewed,
   } = usePurchaseOrdersPage();
 
   const handleLogout = useCallback(() => {
@@ -111,6 +115,22 @@ export default function PurchaseOrdersPage() {
             </>
           )}
         </div>
+
+        {(newCount > 0 || changedCount > 0) ? (
+          <div className={styles.freshness}>
+            {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
+            {changedCount > 0 ? <Badge color="warning" appearance="filled">{changedCount} gewijzigd</Badge> : null}
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<CheckmarkRegular />}
+              onClick={markViewed}
+              disabled={markingViewed}
+            >
+              {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
+            </Button>
+          </div>
+        ) : null}
 
         <div className={styles.toolbarSpacer} />
 

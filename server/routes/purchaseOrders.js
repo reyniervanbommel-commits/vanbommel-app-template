@@ -32,8 +32,18 @@ router.get('/', async (req, res, next) => {
         refreshError = refreshErr.message || 'Verversen mislukt';
       }
     }
-    const data = await cacheService.read();
+    const data = await cacheService.read({ userId: req.user.id });
     return res.json({ ...data, refreshed, refreshError });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/purchase-orders/viewed — markeer alles als gezien (reset nieuw/gewijzigd voor deze gebruiker).
+router.post('/viewed', async (req, res, next) => {
+  try {
+    const result = await cacheService.markViewed(req.user.id);
+    return res.json(result);
   } catch (err) {
     return next(err);
   }
@@ -43,7 +53,7 @@ router.get('/', async (req, res, next) => {
 router.post('/refresh', async (req, res, next) => {
   try {
     const summary = await cacheService.refresh();
-    const data = await cacheService.read();
+    const data = await cacheService.read({ userId: req.user.id });
     return res.json({ ...data, refresh: summary, refreshed: true });
   } catch (err) {
     return next(err);
