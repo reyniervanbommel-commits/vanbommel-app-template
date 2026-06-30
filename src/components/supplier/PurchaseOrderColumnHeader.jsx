@@ -15,11 +15,12 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
+  Tooltip,
   makeStyles,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { MoreVerticalRegular, EditRegular } from '@fluentui/react-icons';
+import { MoreVerticalRegular, EditRegular, LockClosedRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: {
@@ -46,6 +47,11 @@ const useStyles = makeStyles({
   },
   rowBadge: {
     marginLeft: '6px',
+  },
+  lockIcon: {
+    marginLeft: '6px',
+    color: tokens.colorNeutralForeground4,
+    fontSize: tokens.fontSizeBase200,
   },
 });
 
@@ -108,6 +114,17 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
     ) : null;
     if (!isAdmin || !onToggleWriteback || !column.d365Field) {
       return <span className={styles.labelWrap}>{column.label}{badge}</span>;
+    }
+    // Niet-terugschrijfbaar (sleutel/boekings-/systeemveld): markeren met een slot, geen toggle.
+    if (column.writeBackAllowed === false) {
+      return (
+        <span className={styles.labelWrap}>
+          {column.label}
+          <Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label">
+            <LockClosedRegular className={styles.lockIcon} />
+          </Tooltip>
+        </span>
+      );
     }
     return (
       <div className={styles.header}>

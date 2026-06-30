@@ -15,6 +15,18 @@ function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
 }
 
+// D365-velden die nooit terugschrijfbaar zijn: sleutelvelden + boekings-/systeemgestuurde velden.
+// Write-back kan hier niet op aangezet worden (de toggle staat uit in de UI).
+const NON_WRITABLE_KEYS = {
+  header: ['orderNumber', 'status', 'createdDateTime'],
+  line: ['lineNumber'],
+};
+
+function isWriteBackAllowed(col) {
+  if (col.source !== 'd365' || !col.d365Field) return false;
+  return !(NON_WRITABLE_KEYS[col.level] || []).includes(col.key);
+}
+
 function mapColumnRow(row) {
   let options = null;
   if (row.options) {
@@ -37,6 +49,8 @@ function mapColumnRow(row) {
     writeMechanism: row.write_mechanism || null,
     isActive: Boolean(row.is_active),
     sortOrder: Number(row.sort_order),
+    // Mag write-back hierop aangezet worden? (false voor sleutel/boekings-/systeemvelden en custom)
+    writeBackAllowed: isWriteBackAllowed({ source: row.source, d365Field: row.d365_field || null, level: row.level, key: row.key }),
   };
 }
 
@@ -219,6 +233,9 @@ async function setWriteBackConfig(columnId, { writable, mechanism }) {
   if (existing.source !== 'd365' || !existing.d365Field) {
     throw Object.assign(new Error('Write-back kan alleen op D365-velden worden ingesteld'), { status: 400 });
   }
+  if (!isWriteBackAllowed({ source: existing.source, d365Field: existing.d365Field, level: existing.level, key: existing.key })) {
+    throw Object.assign(new Error('Dit veld is niet terugschrijfbaar (sleutel of boekings-/systeemveld)'), { status: 400 });
+  }
   const isWritable = writable === true || writable === 'true' || writable === 1 || writable === '1';
   const mech = isWritable ? (WRITE_MECHANISMS.includes(mechanism) ? mechanism : 'patch') : null;
 
@@ -245,6 +262,8 @@ module.exports = {
   LEVELS,
   DATA_TYPES,
   WRITE_MECHANISMS,
+  NON_WRITABLE_KEYS,
+  isWriteBackAllowed,
   listColumns,
   getColumnById,
   createColumn,
