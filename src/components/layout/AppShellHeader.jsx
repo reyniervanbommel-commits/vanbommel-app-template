@@ -29,6 +29,14 @@ const useStyles = makeStyles({
     zIndex: 1000,
   },
   headerLeft: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
+  brand: { display: 'flex', alignItems: 'center', ...shorthands.gap('10px') },
+  logo: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+    flexShrink: 0,
+  },
   headerRight: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
   menuBackdrop: { position: 'fixed', inset: 0, zIndex: 2999 },
   menu: {
@@ -88,9 +96,12 @@ export default function AppShellHeader({
           onClick={onToggleSidebar}
           aria-label="Zijbalk openen of sluiten"
         />
-        <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
-          {APP_DISPLAY_NAME}
-        </Text>
+        <div className={styles.brand}>
+          <img src="/logo-circle.png" alt={APP_DISPLAY_NAME + ' logo'} className={styles.logo} />
+          <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
+            {APP_DISPLAY_NAME}
+          </Text>
+        </div>
       </div>
 
       <div className={styles.headerRight}>

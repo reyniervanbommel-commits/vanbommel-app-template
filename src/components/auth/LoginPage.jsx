@@ -101,9 +101,9 @@ export default function LoginPage() {
       <Card className={styles.loginCard}>
         <div className={styles.logos}>
           <img
-            src="https://nl.florisvanbommel.com/on/demandware.static/Sites-NL-Site/-/default/dw0580f06b/images/logo/fvb-logo.svg"
-            alt="Floris van Bommel"
-            style={{ maxHeight: '48px', objectFit: 'contain' }}
+            src="/logo-circle.png"
+            alt={APP_DISPLAY_NAME + ' logo'}
+            style={{ width: '88px', height: '88px', borderRadius: '50%', objectFit: 'cover' }}
           />
         </div>
 
