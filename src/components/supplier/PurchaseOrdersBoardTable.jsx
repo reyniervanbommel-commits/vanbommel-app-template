@@ -1,6 +1,10 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Badge, Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
+import EditableCell from './EditableCell';
+import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
+import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
+import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -62,6 +66,13 @@ const useStyles = makeStyles({
       backgroundColor: tokens.colorNeutralBackground1Hover,
     },
   },
+  removedRow: {
+    backgroundColor: tokens.colorNeutralBackgroundDisabled,
+  },
+  removedText: {
+    textDecorationLine: 'line-through',
+    color: tokens.colorNeutralForeground3,
+  },
   controlCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
@@ -78,6 +89,19 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     verticalAlign: 'middle',
   },
+  removedBadge: {
+    marginLeft: '6px',
+  },
+  // Nieuw/gewijzigd sinds laatste bezoek (#133): subtiele linkerrand-markering.
+  newRow: {
+    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
+  },
+  changedRow: {
+    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
+  },
+  rowBadge: {
+    marginLeft: '6px',
+  },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.padding('8px', '8px', '12px', '46px'),
@@ -90,7 +114,10 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrdersBoardTable({ items, columns }) {
+// AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
+// krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
+
+function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
@@ -100,15 +127,19 @@ function PurchaseOrdersBoardTable({ items, columns }) {
     () =>
       items.map((order, index) => ({
         order,
-        rowId: order?.id ? String(order.id) : (order?.orderNumber ? String(order.orderNumber) + '-' + String(index) : 'row-' + String(index)),
+        rowId: order?.orderNumber
+          ? `${order.dataAreaId || ''}-${order.orderNumber}-${index}`
+          : 'row-' + String(index),
       })),
     [items]
   );
 
+  // AANNAME: groepering op status-kolomwaarde (uit order.values.status indien
+  // aanwezig); valt terug op 'Zonder status'.
   const groupedRows = useMemo(() => {
     const byGroup = new Map();
     rows.forEach((entry) => {
-      const groupKey = entry.order.status || 'Zonder status';
+      const groupKey = entry.order.values?.status || 'Zonder status';
       if (!byGroup.has(groupKey)) {
         byGroup.set(groupKey, []);
       }
@@ -116,6 +147,7 @@ function PurchaseOrdersBoardTable({ items, columns }) {
     });
     return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
   }, [rows]);
+
   const allGroupsCollapsed = useMemo(
     () =>
       groupedRows.length > 0 &&
@@ -178,9 +210,99 @@ function PurchaseOrdersBoardTable({ items, columns }) {
     setHeadersOnly((prev) => !prev);
   }, []);
 
+  // Rendert één header-cel: custom kolommen zijn inline bewerkbaar.
+  const renderHeaderCell = useCallback((order, column, isFirst) => {
+    const key = column.key;
+    const rawValue = order.values?.[key];
+
+    if (column.source === 'custom') {
+      return (
+        <EditableCell
+          dataType={column.dataType}
+          value={rawValue}
+          options={column.options}
+          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onSave={(value) =>
+            onSaveValue({
+              columnId: column.id,
+              columnKey: key,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: null,
+              value,
+            })
+          }
+        />
+      );
+    }
+
+    // D365-veld met write-back toegestaan (admin) → bewuste correctie-actie.
+    if (column.source === 'd365' && column.writableToD365 && onCorrect) {
+      return (
+        <PurchaseOrderWriteBackCell
+          column={column}
+          value={rawValue}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onCorrect={({ value, basedOnValue }) =>
+            onCorrect({
+              columnId: column.id,
+              columnKey: key,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: null,
+              value,
+              basedOnValue,
+            })
+          }
+        />
+      );
+    }
+
+    const display = formatCellValue(rawValue, column.dataType);
+    if (isFirst && order.removedInD365) {
+      return (
+        <span>
+          <span className={styles.removedText}>{display}</span>
+          <Badge className={styles.removedBadge} color="danger" appearance="tint" size="small">
+            verwijderd in D365
+          </Badge>
+        </span>
+      );
+    }
+    if (isFirst && (order.isNew || order.isChanged)) {
+      return (
+        <span>
+          {display}
+          <Badge
+            className={styles.rowBadge}
+            color={order.isNew ? 'success' : 'warning'}
+            appearance="tint"
+            size="small"
+          >
+            {order.isNew ? 'nieuw' : 'gewijzigd'}
+          </Badge>
+        </span>
+      );
+    }
+    return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
+  }, [onSaveValue, onCorrect, styles.removedBadge, styles.removedText, styles.rowBadge]);
+
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
   }
+
+  const colCount = columns.length + 1;
 
   return (
     <div className={styles.wrapper}>
@@ -221,7 +343,13 @@ function PurchaseOrdersBoardTable({ items, columns }) {
             </th>
             {columns.map((column) => (
               <th key={column.key} className={styles.headerCell}>
-                {column.header}
+                <PurchaseOrderColumnHeader
+                  column={column}
+                  onRename={onRenameColumn}
+                  onRemove={onRemoveColumn}
+                  isAdmin={isAdmin}
+                  onToggleWriteback={onToggleWriteback}
+                />
               </th>
             ))}
           </tr>
@@ -232,7 +360,7 @@ function PurchaseOrdersBoardTable({ items, columns }) {
             return (
               <React.Fragment key={group.groupName}>
                 <tr>
-                  <td colSpan={columns.length + 1} className={styles.groupRowCell}>
+                  <td colSpan={colCount} className={styles.groupRowCell}>
                     <button
                       type="button"
                       className={styles.groupButton}
@@ -253,7 +381,7 @@ function PurchaseOrdersBoardTable({ items, columns }) {
 
                   return (
                     <React.Fragment key={rowId}>
-                      <tr className={styles.itemRow}>
+                      <tr className={`${styles.itemRow} ${order.removedInD365 ? styles.removedRow : (order.isNew ? styles.newRow : (order.isChanged ? styles.changedRow : ''))}`}>
                         <td className={styles.controlCell}>
                           {hasLines ? (
                             <Button
@@ -266,19 +394,27 @@ function PurchaseOrdersBoardTable({ items, columns }) {
                             </Button>
                           ) : null}
                         </td>
-                        {columns.map((column) => {
-                          const value = column.render ? column.render(order) : order[column.key];
-                          return (
-                            <td key={`${rowId}-${column.key}`} className={styles.itemCell}>
-                              {value}
-                            </td>
-                          );
-                        })}
+                        {columns.map((column, columnIndex) => (
+                          <td key={`${rowId}-${column.key}`} className={styles.itemCell}>
+                            {renderHeaderCell(order, column, columnIndex === 0)}
+                          </td>
+                        ))}
                       </tr>
                       {hasLines && isExpanded ? (
                         <tr>
-                          <td colSpan={columns.length + 1} className={styles.subitemsContainer}>
-                            <PurchaseOrdersSubitemsTable rowId={rowId} lines={lines} />
+                          <td colSpan={colCount} className={styles.subitemsContainer}>
+                            <PurchaseOrdersSubitemsTable
+                              rowId={rowId}
+                              order={order}
+                              lines={lines}
+                              columns={lineColumns}
+                              onSaveValue={onSaveValue}
+                              onRenameColumn={onRenameColumn}
+                              onRemoveColumn={onRemoveColumn}
+                              onCorrect={onCorrect}
+                              isAdmin={isAdmin}
+                              onToggleWriteback={onToggleWriteback}
+                            />
                           </td>
                         </tr>
                       ) : null}
@@ -295,4 +431,3 @@ function PurchaseOrdersBoardTable({ items, columns }) {
 }
 
 export default memo(PurchaseOrdersBoardTable);
-

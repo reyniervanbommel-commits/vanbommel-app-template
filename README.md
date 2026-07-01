@@ -6,7 +6,7 @@
 
 - **Frontend:** React 18 + Vite + Fluent UI v9
 - **Backend:** Express + MSSQL (session-based custom auth)
-- **Infra:** Azure Container Apps (OTAP: dev / acc / prod)
+- **Infra:** Azure Container Apps (dev / prod)
 - **Auth:** Custom session-auth met bcrypt, rate limiting, account lockout
 
 ## Lokale setup (5 stappen)
@@ -61,7 +61,6 @@ Stel deze secrets in via GitHub → Settings → Secrets → Actions:
 | `ACA_RESOURCE_GROUP` | Resource group van Container Apps |
 | `ACA_ENVIRONMENT` | Container Apps environment naam |
 | `SQL_CONNECTION_STRING_DEV` | DB-connectiestring DEV |
-| `SQL_CONNECTION_STRING_ACC` | DB-connectiestring ACC |
 | `SQL_CONNECTION_STRING_PROD` | DB-connectiestring PROD |
 | `SESSION_SECRET` | Willekeurige string (64+ tekens) |
 | `ACS_CONNECTION_STRING` | Azure Communication Services (voor e-mail) |

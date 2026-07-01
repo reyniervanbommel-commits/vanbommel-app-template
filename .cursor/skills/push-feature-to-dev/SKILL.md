@@ -3,7 +3,7 @@ name: push-feature-to-dev
 description: >-
   Merge een goedgekeurde feature branch naar develop. Maakt een PR aan,
   GitHub Actions deployed automatisch naar DEV en ruimt de preview Container App
-  en Entra redirect URI op. Post een comment op het DevOps work item.
+  op. Post een comment op het DevOps work item.
   Gebruik wanneer de gebruiker zegt "push feature preview to DEV",
   "feature is akkoord", "merge naar dev" of "feature naar dev".
 ---
@@ -12,8 +12,7 @@ description: >-
 
 Merget de goedgekeurde feature branch naar `develop`. GitHub Actions doet daarna automatisch:
 - Preview Container App verwijderen
-- Entra ID redirect URI van de preview opruimen
-- Nieuwe deploy naar `qaqc-app-dev`
+- Nieuwe deploy naar `<dev-container-app-naam>`
 
 ---
 
@@ -111,8 +110,8 @@ Na het aanmaken van de PR:
 
 1. Merge de PR (handmatig of via `gh pr merge <nr> --merge`)
 2. GitHub Actions start automatisch twee jobs:
-   - `cleanup-preview` (preview.yml): verwijdert de preview Container App en Entra redirect URI
-   - `build-and-deploy` (deploy-dev.yml): deployt naar `qaqc-app-dev`
+   - `cleanup-preview` (preview.yml): verwijdert de preview Container App
+   - `build-and-deploy` (deploy-dev.yml): deployt naar `<dev-container-app-naam>`
 
 Volg de voortgang:
 
@@ -143,8 +142,8 @@ Controleer of de app bereikbaar is:
 
 ```bash
 az containerapp show \
-  --name qaqc-app-dev \
-  --resource-group vanbommel-qaqc \
+  --name <dev-container-app-naam> \
+  --resource-group <resource-group-naam> \
   --query "properties.configuration.ingress.fqdn" -o tsv
 ```
 
@@ -158,7 +157,7 @@ De `preview.yml` cleanup-job zou de preview automatisch moeten verwijderen. **Ve
 
 ```bash
 az containerapp list \
-  --resource-group vanbommel-qaqc \
+  --resource-group <resource-group-naam> \
   --query "[?starts_with(name,'preview-')].name" -o tsv
 ```
 
@@ -167,7 +166,7 @@ Als de preview Container App van deze feature **nog bestaat**, verwijder hem han
 ```bash
 az containerapp delete \
   --name <preview-app-naam> \
-  --resource-group vanbommel-qaqc \
+  --resource-group <resource-group-naam> \
   --yes
 ```
 
@@ -185,9 +184,9 @@ Comment:
 
 ## ✅ Feature staat op DEV
 
-**DEV URL:** https://qaqc-app-dev.nicebeach-47b5eee5.northeurope.azurecontainerapps.io
+**DEV URL:** https://<dev-fqdn>
 **Branch:** `<branchnaam>` → gemerged naar `develop`
-**Preview:** opgeruimd (Container App + redirect URI verwijderd)
+**Preview:** opgeruimd (Container App verwijderd)
 **Datum:** <datum>
 ```
 
@@ -198,7 +197,7 @@ $token = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca69
 $headers = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" }
 $body = @{ text = "<comment tekst>" } | ConvertTo-Json
 Invoke-RestMethod -Method Post `
-  -Uri "https://dev.azure.com/reyniervanbommel0745/QAQC Module/_apis/wit/workItems/<id>/comments?api-version=7.1-preview.3" `
+  -Uri "https://dev.azure.com/<organisatie>/<project>/_apis/wit/workItems/<id>/comments?api-version=7.1-preview.3" `
   -Headers $headers -Body $body
 ```
 
@@ -213,7 +212,7 @@ $token = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca69
 $headers = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json-patch+json" }
 $body = '[{"op":"add","path":"/fields/System.State","value":"Closed"}]'
 $result = Invoke-RestMethod -Method Patch `
-  -Uri "https://dev.azure.com/reyniervanbommel0745/QAQC Module/_apis/wit/workItems/<id>?api-version=7.1" `
+  -Uri "https://dev.azure.com/<organisatie>/<project>/_apis/wit/workItems/<id>?api-version=7.1" `
   -Headers $headers -Body $body
 Write-Host "State: $($result.fields.'System.State')"
 ```
@@ -237,8 +236,7 @@ Zie `docs/guides/AZURE_INRICHTING_OTAP.md` → **SQL: schema vs data**.
 | Actie | Workflow | Resultaat |
 |---|---|---|
 | Preview Container App verwijderen | `preview.yml` cleanup job | `preview-<slug>` niet meer bereikbaar |
-| Redirect URI verwijderen uit Entra | `preview.yml` cleanup job | Geen losse URIs meer |
-| Deploy naar DEV | `deploy-dev.yml` | `qaqc-app-dev` bijgewerkt |
+| Deploy naar DEV | `deploy-dev.yml` | `<dev-container-app-naam>` bijgewerkt |
 | DB migraties uitvoeren | `preview.yml` + `deploy-dev.yml` | DEV-database up-to-date (zelfde DB) |
 
 ---

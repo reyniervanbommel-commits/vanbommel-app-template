@@ -6,8 +6,8 @@ Voert een volledige team-review uit en pusht daarna naar de huidige branch.
 
 Voer uit: `git branch --show-current`
 
-Als de branch `staging` of `main` is: STOP en zeg:
-"Je staat op `[branch]`. Gebruik `/promote-to-prod` voor staging→main of werk op een feature branch."
+Als de branch `main` is: STOP en zeg:
+"Je staat op `main`. Gebruik `/promote-to-prod` voor develop→main, of werk op een feature branch."
 
 ## Stap 2: Voer /review uit
 

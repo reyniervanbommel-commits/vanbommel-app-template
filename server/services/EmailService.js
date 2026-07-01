@@ -1,6 +1,7 @@
 'use strict';
 
 const { EmailClient } = require('@azure/communication-email');
+const passwordResetEmailTemplateService = require('./PasswordResetEmailTemplateService');
 
 function getClient() {
   const connectionString = process.env.ACS_CONNECTION_STRING;
@@ -15,13 +16,10 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
     console.warn('[EmailService] ACS niet geconfigureerd; reset-mail overgeslagen');
     return { skipped: true };
   }
+  const content = await passwordResetEmailTemplateService.renderPasswordResetEmail(resetUrl);
   const poller = await client.beginSend({
     senderAddress,
-    content: {
-      subject: 'Wachtwoord opnieuw instellen',
-      html: '<p>Klik op onderstaande link om je wachtwoord opnieuw in te stellen:</p><p><a href="' + resetUrl + '">' + resetUrl + '</a></p><p>Deze link is 1 uur geldig.</p>',
-      plainText: 'Ga naar: ' + resetUrl + '\n\nDeze link is 1 uur geldig.',
-    },
+    content,
     recipients: { to: [{ address: toEmail }] },
   });
   return poller.pollUntilDone();

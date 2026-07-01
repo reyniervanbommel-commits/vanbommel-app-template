@@ -2,10 +2,12 @@
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const sql = require('mssql');
 const router = express.Router();
 const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
 const { requireSession } = require('../middleware/auth');
+const { auditLog } = require('../middleware/auditLog');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -14,6 +16,72 @@ const strictLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+async function recordLoginAnalytics(userId, sessionId) {
+  if (!userId || !sessionId) return;
+  try {
+    const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
+    await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('sessionId', sql.NVarChar, sessionId)
+      .query(`INSERT INTO dbo.user_activity (user_id, session_id, activity_type, page_name)
+              VALUES (@userId, @sessionId, 'login', 'auth/login')`);
+  } catch (err) {
+    console.error('[auth.analytics] LOGIN activity logging mislukt:', err.message);
+  }
+}
+
+async function recordLogoutAnalytics(userId, sessionId, loggedInAt) {
+  if (!userId) return;
+  try {
+    const loginDate = loggedInAt ? new Date(loggedInAt) : null;
+    const durationSeconds = loginDate && !Number.isNaN(loginDate.getTime())
+      ? Math.max(0, Math.round((Date.now() - loginDate.getTime()) / 1000))
+      : null;
+    const safeSessionId = sessionId || 'unknown';
+
+    const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
+    const latestLoginQuery = sessionId
+      ? `;WITH latest_login AS (
+           SELECT TOP (1) id
+           FROM dbo.user_activity
+           WHERE user_id = @userId
+             AND session_id = @sessionId
+             AND activity_type = 'login'
+           ORDER BY created_at DESC
+         )
+         UPDATE dbo.user_activity
+         SET session_duration_seconds = COALESCE(@durationSeconds, session_duration_seconds)
+         WHERE id IN (SELECT id FROM latest_login)`
+      : `;WITH latest_login AS (
+           SELECT TOP (1) id
+           FROM dbo.user_activity
+           WHERE user_id = @userId
+             AND activity_type = 'login'
+           ORDER BY created_at DESC
+         )
+         UPDATE dbo.user_activity
+         SET session_duration_seconds = COALESCE(@durationSeconds, session_duration_seconds)
+         WHERE id IN (SELECT id FROM latest_login)`;
+
+    const updateRequest = pool.request()
+      .input('userId', sql.Int, userId)
+      .input('durationSeconds', sql.Int, durationSeconds);
+    if (sessionId) {
+      updateRequest.input('sessionId', sql.NVarChar, sessionId);
+    }
+    await updateRequest.query(latestLoginQuery);
+
+    await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('sessionId', sql.NVarChar, safeSessionId)
+      .input('durationSeconds', sql.Int, durationSeconds)
+      .query(`INSERT INTO dbo.user_activity (user_id, session_id, activity_type, page_name, session_duration_seconds)
+              VALUES (@userId, @sessionId, 'logout', 'auth/logout', @durationSeconds)`);
+  } catch (err) {
+    console.error('[auth.analytics] LOGOUT activity logging mislukt:', err.message);
+  }
+}
 
 router.post('/login', strictLimiter, async (req, res, next) => {
   try {
@@ -25,6 +93,9 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     }
     req.session.userId = result.user.id;
     req.session.user = result.user;
+    req.session.loggedInAt = new Date().toISOString();
+    await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
+    await recordLoginAnalytics(result.user.id, req.sessionID);
     res.json({ user: result.user });
   } catch (err) {
     if (err.message.includes('onjuist') || err.message.includes('geblokkeerd')) {
@@ -34,7 +105,17 @@ router.post('/login', strictLimiter, async (req, res, next) => {
   }
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const sessionUserId = req.session?.userId || req.session?.user?.id || null;
+  const sessionUserEmail = req.session?.user?.email || null;
+  const sessionId = req.sessionID;
+  const loggedInAt = req.session?.loggedInAt || null;
+
+  if (sessionUserId) {
+    await recordLogoutAnalytics(sessionUserId, sessionId, loggedInAt);
+    await auditLog(sessionUserId, sessionUserEmail, 'LOGOUT', 'users', sessionUserId, {});
+  }
+
   req.session.destroy(() => res.json({ success: true }));
 });
 
@@ -48,6 +129,9 @@ router.post('/set-password', async (req, res, next) => {
     const safeUser = authService.mapUserForSession(user);
     req.session.userId = user.id;
     req.session.user = safeUser;
+    req.session.loggedInAt = new Date().toISOString();
+    await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
+    await recordLoginAnalytics(user.id, req.sessionID);
     res.json({ user: safeUser });
   } catch (err) {
     next(err);

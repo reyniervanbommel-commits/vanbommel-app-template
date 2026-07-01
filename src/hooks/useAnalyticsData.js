@@ -39,27 +39,27 @@ export function useAnalyticsData() {
       if (selectedUserId) params.append('userId', selectedUserId);
       const qs = params.toString();
 
-      const [pageRes, sessionRes] = await Promise.all([
+      const analyticsResults = await Promise.allSettled([
         apiRequest(`/admin/analytics/page-usage?${qs}`),
         apiRequest(`/admin/analytics/sessions?${qs}`),
+        apiRequest(`/admin/analytics/login-stats?${qs}`),
+        apiRequest(`/admin/analytics/user-login-stats?${qs}`),
+        apiRequest(`/admin/analytics/click-stats?${qs}`),
       ]);
-      setPageUsage(pageRes.stats || []);
-      setSessionStats(sessionRes);
 
-      try {
-        const loginRes = await apiRequest(`/admin/analytics/login-stats?${qs}`);
-        setLoginStats(loginRes);
-      } catch { setLoginStats({ by_day: [] }); }
+      const [pageUsageResult, sessionStatsResult, loginStatsResult, userLoginStatsResult, clickStatsResult] = analyticsResults;
 
-      try {
-        const userLoginRes = await apiRequest(`/admin/analytics/user-login-stats?${qs}`);
-        setUserLoginStats(userLoginRes || []);
-      } catch { setUserLoginStats([]); }
+      setPageUsage(pageUsageResult.status === 'fulfilled' ? (pageUsageResult.value.stats || []) : []);
+      setSessionStats(sessionStatsResult.status === 'fulfilled' ? sessionStatsResult.value : null);
+      setLoginStats(loginStatsResult.status === 'fulfilled' ? loginStatsResult.value : { by_day: [] });
+      setUserLoginStats(userLoginStatsResult.status === 'fulfilled' ? (userLoginStatsResult.value || []) : []);
+      setClickStats(clickStatsResult.status === 'fulfilled' ? (clickStatsResult.value.stats || []) : []);
 
-      try {
-        const clickRes = await apiRequest(`/admin/analytics/click-stats?${qs}`);
-        setClickStats(clickRes.stats || []);
-      } catch { setClickStats([]); }
+      const failedResults = analyticsResults.filter((result) => result.status === 'rejected');
+      if (failedResults.length === analyticsResults.length) {
+        const firstFailure = failedResults[0];
+        setError(firstFailure.reason?.message || 'Analytics laden mislukt');
+      }
     } catch (err) {
       setError(err.message || 'Analytics laden mislukt');
     } finally {

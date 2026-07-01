@@ -1,20 +1,20 @@
 ---
 name: repo-cleanup-guardrails
-description: Use when the user asks to clean up the repository, reorganize files, move plans, check for stray files, or keep the QA-QC module repo tidy. Also use when creating new files to determine where they should go.
+description: Use when the user asks to clean up the repository, reorganize files, move plans, check for stray files, or keep the project repo tidy. Also use when creating new files to determine where they should go.
 ---
 
-# Repo Cleanup Guardrails — QA-QC Module
+# Repo Cleanup Guardrails
 
 ## Doel
 
-Bewaar de QA-QC module repository overzichtelijk door elke sessie dezelfde mappenstructuur te hanteren en nieuwe bestanden direct op de juiste plek te zetten.
+Bewaar de repository overzichtelijk door elke sessie dezelfde mappenstructuur te hanteren en nieuwe bestanden direct op de juiste plek te zetten.
 
 ---
 
 ## Vastgestelde mappenstructuur
 
 ```
-QA-QC_module/
+<repo-root>/
 ├── .claude/          ← Claude team-rollen, commando's en hooks
 ├── .cursor/
 │   ├── plans/        ← ALLE implementatieplannen (van Cursor én superpowers)

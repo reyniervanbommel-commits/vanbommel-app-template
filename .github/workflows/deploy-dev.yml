@@ -41,6 +41,8 @@ jobs:
         run: node scripts/db/run-migrations.js
         env:
           SQL_CONNECTION_STRING: ${{ secrets.SQL_CONNECTION_STRING_DEV }}
+          BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.BOOTSTRAP_ADMIN_EMAIL }}
+          BOOTSTRAP_ADMIN_DISPLAY_NAME: ${{ secrets.BOOTSTRAP_ADMIN_DISPLAY_NAME }}
 
       - name: Container App bijwerken
         run: |
@@ -72,3 +74,13 @@ jobs:
           echo "Laatste revision: $REVISION"
 
           curl --fail --silent --show-error "https://${FQDN}/api/health"
+
+      - name: Oude dev-images opruimen
+        run: |
+          # Houd de 5 meest recente dev-* image-tags, verwijder oudere zodat het
+          # container-register niet onbeperkt groeit. De actuele image blijft staan.
+          TAGS=$(az acr repository show-tags --name "$ACR_NAME" --repository vendorportal --orderby time_desc -o tsv 2>/dev/null | grep '^dev-' || true)
+          echo "$TAGS" | tail -n +6 | while read -r TAG; do
+            [ -n "$TAG" ] && az acr repository delete --name "$ACR_NAME" --image "vendorportal:$TAG" --yes 2>/dev/null || true
+          done
+          echo "Dev-images opgeschoond (laatste 5 behouden)"

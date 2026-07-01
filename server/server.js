@@ -7,16 +7,28 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const connectMssql = require('connect-mssql-v2');
-const MSSQLStore = connectMssql.default || connectMssql;
-const { parseSqlConnectionString } = require('./utils/sqlConnectionConfig');
+const SqlSessionStore = require('./services/SqlSessionStore');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
+const purchaseOrdersRouter = require('./routes/purchaseOrders');
+const dataRouter = require('./routes/data');
 const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
+const { logger } = require('./utils/logger');
+
+// Robuustheid: een transiente fout buiten de request-keten (bv. een 'error'-event van de
+// MSSQL-connection-pool of session-store bij een korte DB-hapering) zou anders een
+// uncaughtException geven en het proces met exit 1 omleggen (crash-loop in containers).
+// We loggen die gevallen i.p.v. crashen; de pool reconnect vanzelf bij de volgende query.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Onverwerkte promise-rejection', { reason: reason && reason.message ? reason.message : String(reason) });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Onverwerkte uitzondering', { error: err && err.stack ? err.stack : String(err) });
+});
 
 const app = express();
 
@@ -42,9 +54,15 @@ app.use(rateLimit({
 
 app.use(express.json());
 
-const sessionStore = new MSSQLStore(
-  parseSqlConnectionString(process.env.SQL_CONNECTION_STRING),
-);
+// Eigen MSSQL-session-store op de gedeelde app-pool (sql.connect), i.p.v. connect-mssql-v2.
+// Die had een eigen losse pool met een race in ready(): bij parallelle requests vlak na login
+// bleef store.get hangen (alleen in de container). Door dezelfde, bewezen werkende pool als de
+// routes te gebruiken, verdwijnt die hang. Zie server/services/SqlSessionStore.js.
+const sessionStore = new SqlSessionStore();
+// Vang connectiefouten van de session-store op zodat een DB-hapering het proces niet omlegt.
+sessionStore.on('error', (err) => {
+  logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
+});
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   throw new Error('SESSION_SECRET moet gezet zijn en minimaal 32 tekens bevatten');
 }
@@ -66,6 +84,9 @@ app.use(session({
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
+app.use('/api/purchase-orders', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), purchaseOrdersRouter);
+// Generieke Table Builder-data-API (#AB:152, Fase A) — staat naast /api/purchase-orders (strangler-fig).
+app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

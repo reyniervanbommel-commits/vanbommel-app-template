@@ -1,0 +1,133 @@
+'use strict';
+
+// Generieke Table Builder-data-API (#AB:152, Fase A). Gemonteerd op /api/data achter requireSession +
+// medewerker/admin-rol (zie server.js). tableKey-gedreven; lezen gaat uit tb_cache, bron alleen via refresh.
+// Strangler-fig: dit pad staat NAAST /api/purchase-orders (dat blijft het bestaande PO-scherm voeden).
+
+const express = require('express');
+const dataService = require('../services/TableDataService');
+const columnsService = require('../services/TableColumnsService');
+const registry = require('../services/TableRegistryService');
+
+const router = express.Router();
+
+function toColumnId(raw) {
+  const id = Number.parseInt(raw, 10);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+// GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
+router.get('/:tableKey', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const autoRefresh = req.query.autoRefresh === '1' || req.query.autoRefresh === 'true';
+    let refreshed = false;
+    let refreshError = null;
+    if (autoRefresh && (await dataService.isStale(tableKey))) {
+      try {
+        await dataService.refresh(tableKey);
+        refreshed = true;
+      } catch (refreshErr) {
+        refreshError = refreshErr.message || 'Verversen mislukt';
+      }
+    }
+    const data = await dataService.read({ tableKey, userId: req.user.id });
+    return res.json({ ...data, refreshed, refreshError });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/refresh — forceer een bron-refresh.
+router.post('/:tableKey/refresh', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const summary = await dataService.refresh(tableKey);
+    const data = await dataService.read({ tableKey, userId: req.user.id });
+    return res.json({ ...data, refresh: summary, refreshed: true });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/viewed — markeer alles als gezien (reset nieuw/gewijzigd voor deze gebruiker).
+router.post('/:tableKey/viewed', async (req, res, next) => {
+  try {
+    const result = await dataService.markViewed(req.user.id, req.params.tableKey);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/columns?scope=&includeInactive=
+router.get('/:tableKey/columns', async (req, res, next) => {
+  try {
+    const scope = req.query.scope ? String(req.query.scope) : null;
+    if (scope && !registry.SCOPES.includes(scope)) {
+      return res.status(400).json({ error: 'Ongeldige scope' });
+    }
+    const table = await registry.getTableByKey(req.params.tableKey);
+    const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+    const columns = await registry.listColumns({ tableId: table.id, scope, includeInactive });
+    return res.json({ columns });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/columns — app-native kolom toevoegen.
+router.post('/:tableKey/columns', async (req, res, next) => {
+  try {
+    const { scope, label, dataType, options } = req.body || {};
+    const column = await columnsService.createColumn(
+      { tableKey: req.params.tableKey, scope, label, dataType, options },
+      req.user.id,
+    );
+    return res.status(201).json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id — app-native kolom hernoemen.
+router.patch('/:tableKey/columns/:id', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// DELETE /api/data/:tableKey/columns/:id — soft-delete (waarden blijven behouden).
+router.delete('/:tableKey/columns/:id', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const result = await columnsService.deactivateColumn(columnId, req.user.id);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/data/:tableKey/value — app-native kolomwaarde opslaan (instant).
+router.put('/:tableKey/value', async (req, res, next) => {
+  try {
+    const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const saved = await dataService.saveCustomValue(
+      { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value },
+      req.user.id,
+    );
+    return res.json({ success: true, ...saved });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+module.exports = router;

@@ -3,9 +3,11 @@
 const {
   buildPurchaseOrderUrl,
   mapPurchaseOrder,
+  mapPurchaseOrderLine,
   fetchPurchaseOrders,
   escapeODataLiteral,
   getAccessToken,
+  writeBackField,
   __resetOAuthTokenCache,
 } = require('./D365ODataService');
 
@@ -247,5 +249,111 @@ describe('D365ODataService', () => {
     expect(result.items).toHaveLength(3);
     expect(result.pagesFetched).toBe(2);
     expect(result.fetchedAll).toBe(true);
+  });
+
+  it('voegt een scope-filter (extraFilter) toe aan het $filter (B2)', async () => {
+    const url = await buildPurchaseOrderUrl({
+      supplierAccount: null,
+      top: 5,
+      skip: 0,
+      extraFilter: "PurchaseOrderStatus ne 'Canceled'",
+    });
+    const filter = new URL(url).searchParams.get('$filter');
+    expect(filter).toContain("dataAreaId eq 'WHSL'");
+    expect(filter).toContain("(PurchaseOrderStatus ne 'Canceled')");
+    expect(filter).toContain(' and ');
+  });
+
+  it('mapt regel-leverdatum uit het echte veld RequestedDeliveryDate (#131-2)', () => {
+    const mapped = mapPurchaseOrderLine({
+      PurchaseOrderNumber: 'PO-1',
+      LineNumber: 1,
+      RequestedDeliveryDate: '2026-07-01',
+    });
+    expect(mapped.requestedDeliveryDate).toBe('2026-07-01');
+  });
+
+  it('kapt de sync af op maxItems en markeert truncated (B2)', async () => {
+    const fetchSpy = vi.fn().mockImplementation(async (url) => {
+      const urlString = String(url);
+      if (urlString.includes('/data/VendorsV2')) {
+        return { ok: true, json: async () => ({ value: [] }) };
+      }
+      // Elke PO-pagina levert 2 records + een nextLink (zou eindeloos doorlopen zonder cap).
+      return {
+        ok: true,
+        json: async () => ({
+          '@odata.count': 9999,
+          '@odata.nextLink': 'https://example.operations.dynamics.com/data/PurchaseOrderHeadersV2?$top=2&$skip=2',
+          value: [
+            { PurchaseOrderNumber: 'PO-A', OrderVendorAccountNumber: 'SUPP' },
+            { PurchaseOrderNumber: 'PO-B', OrderVendorAccountNumber: 'SUPP' },
+          ],
+        }),
+      };
+    });
+    global.fetch = fetchSpy;
+
+    const result = await fetchPurchaseOrders({ supplierAccount: null, top: 2, skip: 0, fetchAll: true, maxItems: 2 });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+    expect(result.fetchedAll).toBe(false);
+  });
+
+  describe('writeBackField (#134)', () => {
+    it('schrijft een veld terug met PATCH + If-Match bij ongewijzigde waarde', async () => {
+      const calls = [];
+      global.fetch = vi.fn(async (url, options) => {
+        calls.push({ url: String(url), method: options.method, headers: options.headers, body: options.body });
+        if (options.method === 'GET') {
+          return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ PurchaseOrderName: 'oud', '@odata.etag': 'W/"123"' }) };
+        }
+        return { ok: true, status: 204, headers: { get: () => null }, text: async () => '' };
+      });
+
+      const res = await writeBackField({
+        level: 'header', dataAreaId: 'WHSL', orderNumber: 'PO-1',
+        d365Field: 'PurchaseOrderName', newValue: 'nieuw', basedOnValue: 'oud',
+      });
+
+      expect(res.ok).toBe(true);
+      const patch = calls.find((c) => c.method === 'PATCH');
+      expect(patch.headers['If-Match']).toBe('W/"123"');
+      expect(JSON.parse(patch.body)).toEqual({ PurchaseOrderName: 'nieuw' });
+      expect(patch.url).toContain("PurchaseOrderNumber='PO-1'");
+      expect(patch.url).toContain('cross-company=true');
+    });
+
+    it('weigert (409) als de huidige D365-waarde afwijkt van wat de gebruiker zag', async () => {
+      global.fetch = vi.fn(async () => ({
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ PurchaseOrderName: 'door-iemand-anders-gewijzigd' }),
+      }));
+
+      await expect(writeBackField({
+        level: 'header', dataAreaId: 'WHSL', orderNumber: 'PO-1',
+        d365Field: 'PurchaseOrderName', newValue: 'x', basedOnValue: 'oud',
+      })).rejects.toMatchObject({ status: 409 });
+    });
+
+    it('gebruikt de regel-entiteit + LineNumber-sleutel op regelniveau', async () => {
+      const calls = [];
+      global.fetch = vi.fn(async (url, options) => {
+        calls.push({ url: String(url), method: options.method });
+        if (options.method === 'GET') {
+          return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ LineDescription: 'oud' }) };
+        }
+        return { ok: true, status: 204, headers: { get: () => null }, text: async () => '' };
+      });
+
+      await writeBackField({
+        level: 'line', dataAreaId: 'WHSL', orderNumber: 'PO-1', lineNumber: 2,
+        d365Field: 'LineDescription', newValue: 'nieuw', basedOnValue: 'oud',
+      });
+
+      expect(calls[0].url).toContain('/data/PurchaseOrderLinesV2(');
+      expect(calls[0].url).toContain('LineNumber=2');
+    });
   });
 });

@@ -12,6 +12,7 @@ import AdminPage from './components/admin/AdminPage';
 import { ROLES } from './constants/roles';
 import { PurchaseOrdersPage } from './components/supplier';
 import { AppFooter, AppLayout, DevFeatureChecklist } from './components/layout';
+import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
 const useStyles = makeStyles({
   appShell: {
@@ -27,6 +28,7 @@ const useStyles = makeStyles({
 function AppInner({ isDarkMode, onToggleTheme }) {
   const styles = useStyles();
   const isDevEnvironment = import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'dev';
+  useRouteAnalytics();
 
   return (
     <div className={styles.appShell}>

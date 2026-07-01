@@ -10,7 +10,7 @@ description: >-
 
 # Push DEV to PROD
 
-Merget `develop` naar `main`. GitHub Actions deployt daarna automatisch naar `qaqc-app-prod`.
+Merget `develop` naar `main`. GitHub Actions deployt daarna automatisch naar `<prod-container-app-naam>`.
 
 ---
 
@@ -88,7 +88,7 @@ Na het aanmaken:
 2. GitHub Actions `deploy-prod.yml` start automatisch:
    - Docker image bouwen met PROD-configuratie
    - DB migraties uitvoeren op PROD database
-   - `qaqc-app-prod` bijwerken
+   - `<prod-container-app-naam>` bijwerken
 
 Volg de voortgang:
 
@@ -116,8 +116,8 @@ Volledige checklist: `docs/guides/AZURE_INRICHTING_OTAP.md` → **SQL: schema vs
 
 ```bash
 az containerapp show \
-  --name qaqc-app-prod \
-  --resource-group vanbommel-qaqc \
+  --name <prod-container-app-naam> \
+  --resource-group <resource-group-naam> \
   --query "properties.configuration.ingress.fqdn" -o tsv
 ```
 
@@ -138,7 +138,7 @@ Comment:
 
 ## 🚀 Productie-deploy uitgevoerd
 
-**PROD URL:** https://qaqc-app-prod.nicebeach-47b5eee5.northeurope.azurecontainerapps.io
+**PROD URL:** https://<prod-fqdn>
 **Branch:** `develop` → gemerged naar `main`
 **Deploy:** GitHub Actions `deploy-prod.yml` — succesvol
 **Datum:** <datum>
@@ -152,13 +152,13 @@ Comment:
 |---|---|---|
 | Docker image bouwen (PROD config) | `deploy-prod.yml` | Image getagd als `prod-<sha>` |
 | DB migraties op PROD | `deploy-prod.yml` | PROD database up-to-date |
-| Container App bijwerken | `deploy-prod.yml` | `qaqc-app-prod` draait nieuwe versie |
+| Container App bijwerken | `deploy-prod.yml` | `<prod-container-app-naam>` draait nieuwe versie |
 
 ---
 
 ## Rollback (indien nodig)
 
-Bij een probleem na deploy: de oude App Service (`vanbommelqaqc-app`) draait nog zolang DevOps #29 niet is uitgevoerd. Dat is de noodrem.
+Bij een probleem na deploy: de oude App Service (`<legacy-appservice-naam>`) draait nog zolang DevOps #29 niet is uitgevoerd. Dat is de noodrem.
 
 ---
 
