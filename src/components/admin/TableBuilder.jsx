@@ -497,7 +497,10 @@ export default function TableBuilder() {
     const entity = assistSuggestion.sourceEntity || '';
     const entitySet = assistSuggestion.entitySet || entity;
     if (!entity) {
-      setError('De AI-suggestie bevat geen bron-entiteit; pas het aanmaakformulier handmatig aan.');
+      // Geen bruikbare entiteit (bv. AI vond niets passends): toon de reden/waarschuwing i.p.v. iets
+      // ongeldigs voor te vullen. De admin verfijnt de omschrijving of gebruikt de picker.
+      setError(assistSuggestion.warning || assistSuggestion.reason
+        || 'De AI kon geen bron-entiteit bepalen; verfijn je omschrijving of gebruik de picker.');
       return;
     }
     // Label afleiden uit entitySet als het veld nog leeg is (fix #4).

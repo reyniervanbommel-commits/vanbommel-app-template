@@ -129,13 +129,15 @@ describe('suggest — met gemockte SDK', () => {
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
-  it('voegt een waarschuwing toe als de voorgestelde entiteit niet in de bronlijst staat', async () => {
+  it('geeft geen ongeldige entitySet terug als de voorgestelde entiteit niet in de bronlijst staat', async () => {
     createMock.mockResolvedValue({
       content: [{ type: 'tool_use', name: 'stel_tabel_voor', input: { entitySet: 'OnbekendeEntiteit', reason: 'gok' } }],
     });
     const result = await suggest({ sourceId: 1, prompt: 'iets vaags' });
-    expect(result.suggestion.entitySet).toBe('OnbekendeEntiteit');
-    expect(result.suggestion.warning).toContain('OnbekendeEntiteit');
+    // Geen match -> entitySet/sourceEntity null (geen /data/<garbage>) + een waarschuwing.
+    expect(result.suggestion.entitySet).toBeNull();
+    expect(result.suggestion.sourceEntity).toBeNull();
+    expect(result.suggestion.warning).toBeTruthy();
   });
 
   it('gooit 502 als het model geen tool_use teruggeeft', async () => {

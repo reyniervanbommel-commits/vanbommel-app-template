@@ -64,41 +64,76 @@ const TOOL_DEF = {
 // alfabetische top als er te weinig matches zijn, zodat het model altijd genoeg (maar niet te veel)
 // kandidaten ziet. Nooit meer dan SHORTLIST_MAX namen.
 // ---------------------------------------------------------------------------
+// NL->EN domein-synoniemen: de UI is Nederlands, maar D365-entiteitsnamen zijn Engels. Zonder deze
+// vertaling matcht een NL-prompt ("inkooporders", "leverancier") nooit op de Engelse namen en krijgt
+// het model een nutteloze (alfabetische) shortlist. Elk NL-woord mapt op fragmenten die in de
+// entiteitsnamen voorkomen. Uitbreidbaar; onbekende woorden vallen terug op letterlijke substring-match.
+const TERM_SYNONYMS = {
+  inkoop: ['purchase'], inkooporder: ['purchase', 'order'], inkooporders: ['purchase', 'order'],
+  order: ['order'], orders: ['order'], orderregel: ['line'], orderregels: ['line'], regel: ['line'], regels: ['line'],
+  leverancier: ['vendor'], leveranciers: ['vendor'], crediteur: ['vendor'], crediteuren: ['vendor'],
+  klant: ['customer'], klanten: ['customer'], debiteur: ['customer'], debiteuren: ['customer'],
+  verkoop: ['sales'], verkooporder: ['sales', 'order'], verkooporders: ['sales', 'order'],
+  factuur: ['invoice'], facturen: ['invoice'],
+  artikel: ['item', 'product'], artikelen: ['item', 'product'], product: ['product', 'item'], producten: ['product', 'item'],
+  betaling: ['payment'], betalingen: ['payment'], grootboek: ['ledger'], rekening: ['account'],
+  medewerker: ['worker', 'employee', 'personnel'], werknemer: ['worker', 'employee'], personeel: ['personnel', 'worker'],
+  project: ['project'], projecten: ['project'], bedrijf: ['company', 'legalentity'],
+  magazijn: ['warehouse'], voorraad: ['inventory'], prijs: ['price'], prijzen: ['price'],
+  contract: ['agreement'], contracten: ['agreement'], levering: ['delivery'], leverdatum: ['delivery', 'date'],
+  datum: ['date'], bedrag: ['amount'], hoeveelheid: ['quantity'], aantal: ['quantity'],
+  bank: ['bank'], adres: ['address'], adressen: ['address'],
+};
+
+// Bouwt de zoektermen uit de prompt: elk woord (>=3 tekens) zelf + eventuele NL->EN-synoniemen.
+function promptSearchTerms(prompt) {
+  const words = String(prompt || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+  const terms = new Set();
+  for (const w of words) {
+    terms.add(w);
+    for (const syn of (TERM_SYNONYMS[w] || [])) terms.add(syn);
+  }
+  return Array.from(terms);
+}
+
 function buildShortlist(entities, prompt, { min = SHORTLIST_MIN, max = SHORTLIST_MAX } = {}) {
   const names = (Array.isArray(entities) ? entities : [])
     .map((e) => (typeof e === 'string' ? e : e && e.name))
     .filter((n) => typeof n === 'string' && n.length > 0);
 
-  // Woorden uit de prompt: alfanumerieke tokens van >=3 tekens, lowercase, uniek.
-  const words = Array.from(new Set(
-    String(prompt || '')
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length >= 3),
-  ));
+  const terms = promptSearchTerms(prompt);
+
+  // 1) Score elke naam op het AANTAL distinct matchende zoektermen. Namen die meer concept-woorden
+  // dekken (bv. "PurchaseOrderHeadersV2" = purchase + order) scoren hoger en komen bovenaan, zodat de
+  // kernentiteit binnen de cap valt i.p.v. weggeknipt te worden door alfabetisch vroege naamgenoten.
+  const scored = [];
+  if (terms.length) {
+    for (const name of names) {
+      const lower = name.toLowerCase();
+      let score = 0;
+      for (const t of terms) if (lower.includes(t)) score += 1;
+      if (score > 0) scored.push({ name, score });
+    }
+    // Bij gelijke score: geef de voorkeur aan de canonieke entiteit. CDS*-namen zijn Common-Data-Service-
+    // integratie-entiteiten (zelden wat een beheerder wil); V2/V3-varianten zijn meestal de actuele.
+    const canonicalRank = (name) => (/^CDS/i.test(name) ? 3 : 0) + (/V\d+$/.test(name) ? -1 : 0);
+    scored.sort((a, b) =>
+      (b.score - a.score)
+      || (canonicalRank(a.name) - canonicalRank(b.name))
+      || a.name.localeCompare(b.name));
+  }
 
   const seen = new Set();
   const shortlist = [];
-
-  // 1) Naam-matches op prompt-woorden (behoud de bron-volgorde = alfabetisch).
-  if (words.length) {
-    for (const name of names) {
-      if (shortlist.length >= max) break;
-      const lower = name.toLowerCase();
-      if (words.some((w) => lower.includes(w)) && !seen.has(name)) {
-        seen.add(name);
-        shortlist.push(name);
-      }
-    }
+  for (const { name } of scored) {
+    if (shortlist.length >= max) break;
+    if (!seen.has(name)) { seen.add(name); shortlist.push(name); }
   }
 
-  // 2) Aanvullen met een alfabetische top tot `min` (of tot de lijst op is), zonder `max` te overschrijden.
+  // 2) Aanvullen met een alfabetische top tot `min` (alleen als er te weinig matches waren).
   for (const name of names) {
     if (shortlist.length >= min || shortlist.length >= max) break;
-    if (!seen.has(name)) {
-      seen.add(name);
-      shortlist.push(name);
-    }
+    if (!seen.has(name)) { seen.add(name); shortlist.push(name); }
   }
 
   return shortlist.slice(0, max);
@@ -305,13 +340,16 @@ async function suggest({ sourceId, prompt }) {
   const proposedEntitySet = String(input.entitySet || '').trim();
   const fields = Array.isArray(input.fields) ? input.fields : [];
 
-  // Valideer dat de voorgestelde entiteit echt bestaat; anders best-effort fuzzy match + waarschuwing.
+  // Valideer dat de voorgestelde entiteit echt bestaat. Zo niet: geef GEEN /data/<garbage> terug
+  // (dat zou een kapotte tabel opleveren) — entitySet/sourceEntity worden null en de frontend toont
+  // de waarschuwing i.p.v. iets voor te vullen. Het model gebruikt '<UNKNOWN>' als het niets passends
+  // in de shortlist vindt; die weigering vertalen we naar een duidelijke, niet-invulbare suggestie.
   const matched = findEntityByName(allEntities, proposedEntitySet);
-  const entitySet = matched ? matched.name : proposedEntitySet;
-  const sourceEntity = '/data/' + entitySet;
+  const entitySet = matched ? matched.name : null;
+  const sourceEntity = matched ? '/data/' + matched.name : null;
   const warning = matched
     ? null
-    : `De voorgestelde entiteit '${proposedEntitySet}' is niet exact in de bronlijst gevonden; controleer de keuze.`;
+    : 'De AI kon geen passende entiteit in de bron bepalen. Verfijn je omschrijving of kies handmatig via de picker.';
 
   return {
     ok: true,
