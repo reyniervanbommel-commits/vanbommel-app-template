@@ -16,6 +16,10 @@ import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
   page: {
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '100%',
+    minWidth: 0,
     paddingTop: '24px',
     paddingBottom: '24px',
     paddingLeft: '24px',
@@ -46,6 +50,17 @@ const useStyles = makeStyles({
   },
   toolbarSpacer: { flexGrow: 1 },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
+  tableRegion: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    '& > *': {
+      flex: 1,
+      minHeight: 0,
+      overflowY: 'auto',
+      scrollbarGutter: 'stable',
+    },
+  },
 });
 
 export default function PurchaseOrdersPage() {
@@ -155,17 +170,19 @@ export default function PurchaseOrdersPage() {
           description="Vernieuw de gegevens of controleer de D365-synchronisatie."
         />
       ) : (
-        <PurchaseOrdersBoardTable
-          columns={visibleHeaderColumns}
-          lineColumns={lineColumns}
-          items={orders}
-          onSaveValue={saveValue}
-          onRenameColumn={renameColumn}
-          onRemoveColumn={removeColumn}
-          onCorrect={correctField}
-          isAdmin={isAdmin}
-          onToggleWriteback={toggleWriteback}
-        />
+        <div className={styles.tableRegion}>
+          <PurchaseOrdersBoardTable
+            columns={visibleHeaderColumns}
+            lineColumns={lineColumns}
+            items={orders}
+            onSaveValue={saveValue}
+            onRenameColumn={renameColumn}
+            onRemoveColumn={removeColumn}
+            onCorrect={correctField}
+            isAdmin={isAdmin}
+            onToggleWriteback={toggleWriteback}
+          />
+        </div>
       )}
 
       <PurchaseOrderAddColumnDialog
