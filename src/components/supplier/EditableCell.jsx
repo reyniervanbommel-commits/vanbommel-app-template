@@ -9,6 +9,7 @@ import {
   Switch,
   tokens,
 } from '@fluentui/react-components';
+import CellHistoryPopover from './CellHistoryPopover';
 
 // AANNAME: DatePicker is niet beschikbaar in @fluentui/react-components@9.54
 // (zit in een apart pakket). Per opdracht gebruiken we daarom een native
@@ -62,7 +63,7 @@ function toDateInputValue(value) {
  * dataType het juiste Fluent-control en slaat bij blur/change automatisch op
  * via onSave(value). Toont kort een opslaan-/fout-indicatie.
  */
-export default function EditableCell({ dataType, value, options, onSave, ariaLabel }) {
+export default function EditableCell({ dataType, value, options, onSave, ariaLabel, cellKeys }) {
   const styles = useStyles();
   const [localValue, setLocalValue] = useState(value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
@@ -173,6 +174,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     <div className={styles.cell}>
       {control}
       {renderStatus()}
+      {cellKeys ? <CellHistoryPopover cellKeys={cellKeys} dataType={dataType} /> : null}
     </div>
   );
 }

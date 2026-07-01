@@ -482,7 +482,22 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
         updated_by = @userId, updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT
         (column_id, data_area_id, order_number, line_number, value_text, value_number, value_date, updated_by)
-        VALUES (@columnId, @dataAreaId, @orderNumber, @lineNumber, @valueText, @valueNumber, @valueDate, @userId);
+        VALUES (@columnId, @dataAreaId, @orderNumber, @lineNumber, @valueText, @valueNumber, @valueDate, @userId)
+      -- Cel-geschiedenis atomair meeschrijven: deleted = oude waarde (NULL bij insert), inserted = nieuwe.
+      OUTPUT
+        inserted.column_id, inserted.data_area_id, inserted.order_number, inserted.line_number,
+        CASE
+          WHEN $action = 'INSERT' THEN 'insert'
+          WHEN @valueText IS NULL AND @valueNumber IS NULL AND @valueDate IS NULL THEN 'clear'
+          ELSE 'update'
+        END,
+        deleted.value_text, deleted.value_number, deleted.value_date,
+        inserted.value_text, inserted.value_number, inserted.value_date,
+        @userId, SYSUTCDATETIME()
+      INTO dbo.po_cell_history
+        (column_id, data_area_id, order_number, line_number, action,
+         old_value_text, old_value_number, old_value_date,
+         new_value_text, new_value_number, new_value_date, changed_by, changed_at);
     `);
 
   return { columnId, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine, value: empty ? null : value };
@@ -580,11 +595,100 @@ async function correctField({ columnId, dataAreaId, orderNumber, lineNumber, val
   return { success: true, correctionId, value: newValue };
 }
 
+// ---------------------------------------------------------------------------
+// Cel-geschiedenis (audit trail) — leeslaag
+// ---------------------------------------------------------------------------
+
+// Kiest uit een getypeerd triplet de eerste niet-lege waarde; datums → yyyy-mm-dd.
+function pickTypedValue({ text, number, date }) {
+  if (date !== null && date !== undefined) {
+    const d = date instanceof Date ? date : new Date(date);
+    return Number.isNaN(d.getTime()) ? String(date) : d.toISOString().slice(0, 10);
+  }
+  if (number !== null && number !== undefined) return Number(number);
+  if (text !== null && text !== undefined) return text;
+  return null;
+}
+
+// Normaliseert één historie-rij (uit po_cell_history óf po_field_corrections) naar de API-vorm.
+function formatHistoryRow(row) {
+  return {
+    source: row.source,                       // 'custom' | 'writeback'
+    action: row.action,                       // 'insert' | 'update' | 'clear' | 'correct'
+    at: row.at instanceof Date ? row.at.toISOString() : row.at,
+    oldValue: pickTypedValue({ text: row.old_value_text, number: row.old_value_number, date: row.old_value_date }),
+    newValue: pickTypedValue({ text: row.new_value_text, number: row.new_value_number, date: row.new_value_date }),
+    status: row.status || null,               // alleen write-back (pending/applied/failed)
+    reason: row.change_reason || null,
+    user: (row.user_name || row.user_email)
+      ? { name: row.user_name || null, email: row.user_email || null }
+      : null,
+  };
+}
+
+// getCellHistory — verenigde, chronologische tijdlijn voor één cel:
+// eigen-kolom-edits (po_cell_history) + D365-veldcorrecties (po_field_corrections).
+async function getCellHistory({ columnId, dataAreaId, orderNumber, lineNumber }) {
+  const column = await getColumnById(columnId);
+  if (!column || !column.isActive) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+
+  const area = String(dataAreaId || '').trim();
+  const order = String(orderNumber || '').trim();
+  if (!area || !order) {
+    throw Object.assign(new Error('dataAreaId en orderNumber zijn verplicht'), { status: 400 });
+  }
+  if (area.length > 16 || order.length > 64) {
+    throw Object.assign(new Error('dataAreaId of orderNumber is te lang'), { status: 400 });
+  }
+
+  let resolvedLine = HEADER_LEVEL_LINE;
+  if (column.level === 'line') {
+    const ln = toNumberOrNull(lineNumber);
+    if (ln === null) throw Object.assign(new Error('lineNumber is verplicht voor een regel-kolom'), { status: 400 });
+    resolvedLine = ln;
+  }
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('columnId', sql.BigInt, columnId)
+    .input('area', sql.NVarChar(16), area)
+    .input('order', sql.NVarChar(64), order)
+    .input('line', sql.Int, resolvedLine)
+    .query(`
+      SELECT 'custom' AS source, h.action, h.changed_at AS at,
+             h.old_value_text, h.old_value_number, h.old_value_date,
+             h.new_value_text, h.new_value_number, h.new_value_date,
+             CAST(NULL AS NVARCHAR(16)) AS status, h.change_reason,
+             u.email AS user_email, u.display_name AS user_name
+      FROM dbo.po_cell_history h
+      LEFT JOIN dbo.users u ON u.id = h.changed_by
+      WHERE h.column_id = @columnId AND h.data_area_id = @area
+        AND h.order_number = @order AND h.line_number = @line
+      UNION ALL
+      SELECT 'writeback' AS source, 'correct' AS action, c.created_at AS at,
+             c.old_value AS old_value_text, CAST(NULL AS DECIMAL(38,10)) AS old_value_number, CAST(NULL AS DATETIME2) AS old_value_date,
+             c.new_value AS new_value_text, CAST(NULL AS DECIMAL(38,10)) AS new_value_number, CAST(NULL AS DATETIME2) AS new_value_date,
+             c.status, CAST(NULL AS NVARCHAR(512)) AS change_reason,
+             u2.email AS user_email, u2.display_name AS user_name
+      FROM dbo.po_field_corrections c
+      LEFT JOIN dbo.users u2 ON u2.id = c.created_by
+      WHERE c.column_id = @columnId AND c.data_area_id = @area
+        AND c.order_number = @order AND c.line_number = @line
+      ORDER BY at DESC;
+    `);
+
+  return result.recordset.map(formatHistoryRow);
+}
+
 module.exports = {
   refresh,
   read,
   saveCustomValue,
   correctField,
+  getCellHistory,
+  formatHistoryRow,
   getSyncState,
   isStale,
   getStaleThresholdMinutes,
