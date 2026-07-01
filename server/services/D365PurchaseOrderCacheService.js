@@ -462,7 +462,11 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
   }
 
   const pool = await getPool();
-  await pool.request()
+  // Waarde opslaan (primair) + de oude/nieuwe waarde vastleggen in een table-variable.
+  // OUTPUT ... INTO mag NIET rechtstreeks naar po_cell_history: MSSQL verbiedt een OUTPUT-doel
+  // met een foreign key of CHECK-constraint. Daarom vangen we de wijziging op in @changes en
+  // schrijven we de historie daarna weg (best-effort — zie onder).
+  const result = await pool.request()
     .input('columnId', sql.BigInt, columnId)
     .input('dataAreaId', sql.NVarChar(16), area)
     .input('orderNumber', sql.NVarChar(64), order)
@@ -472,6 +476,11 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
     .input('valueDate', sql.DateTime2, valueDate)
     .input('userId', sql.Int, userId || null)
     .query(`
+      DECLARE @changes TABLE (
+        action NVARCHAR(16),
+        old_value_text NVARCHAR(MAX), old_value_number DECIMAL(38,10), old_value_date DATETIME2,
+        new_value_text NVARCHAR(MAX), new_value_number DECIMAL(38,10), new_value_date DATETIME2
+      );
       MERGE dbo.po_custom_values AS target
       USING (SELECT @columnId AS column_id, @dataAreaId AS data_area_id,
                     @orderNumber AS order_number, @lineNumber AS line_number) AS src
@@ -483,22 +492,50 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
       WHEN NOT MATCHED THEN INSERT
         (column_id, data_area_id, order_number, line_number, value_text, value_number, value_date, updated_by)
         VALUES (@columnId, @dataAreaId, @orderNumber, @lineNumber, @valueText, @valueNumber, @valueDate, @userId)
-      -- Cel-geschiedenis atomair meeschrijven: deleted = oude waarde (NULL bij insert), inserted = nieuwe.
       OUTPUT
-        inserted.column_id, inserted.data_area_id, inserted.order_number, inserted.line_number,
         CASE
           WHEN $action = 'INSERT' THEN 'insert'
           WHEN @valueText IS NULL AND @valueNumber IS NULL AND @valueDate IS NULL THEN 'clear'
           ELSE 'update'
         END,
-        deleted.value_text, deleted.value_number, deleted.value_date,
-        inserted.value_text, inserted.value_number, inserted.value_date,
-        @userId, SYSUTCDATETIME()
-      INTO dbo.po_cell_history
-        (column_id, data_area_id, order_number, line_number, action,
-         old_value_text, old_value_number, old_value_date,
-         new_value_text, new_value_number, new_value_date, changed_by, changed_at);
+        deleted.value_text, deleted.value_number, deleted.value_date,   -- oude waarde (NULL bij insert)
+        inserted.value_text, inserted.value_number, inserted.value_date -- nieuwe waarde
+      INTO @changes (action, old_value_text, old_value_number, old_value_date,
+                     new_value_text, new_value_number, new_value_date);
+      SELECT action, old_value_text, old_value_number, old_value_date,
+             new_value_text, new_value_number, new_value_date FROM @changes;
     `);
+
+  // Cel-geschiedenis (audit trail) best-effort wegschrijven. De waarde is nu al opgeslagen;
+  // een fout hier (bv. tabel nog niet gemigreerd) mag de opslag nooit laten mislukken.
+  const change = result.recordset && result.recordset[0];
+  if (change) {
+    try {
+      await pool.request()
+        .input('columnId', sql.BigInt, columnId)
+        .input('dataAreaId', sql.NVarChar(16), area)
+        .input('orderNumber', sql.NVarChar(64), order)
+        .input('lineNumber', sql.Int, resolvedLine)
+        .input('action', sql.NVarChar(16), change.action)
+        .input('oldText', sql.NVarChar(sql.MAX), change.old_value_text)
+        .input('oldNumber', sql.Decimal(38, 10), change.old_value_number)
+        .input('oldDate', sql.DateTime2, change.old_value_date)
+        .input('newText', sql.NVarChar(sql.MAX), change.new_value_text)
+        .input('newNumber', sql.Decimal(38, 10), change.new_value_number)
+        .input('newDate', sql.DateTime2, change.new_value_date)
+        .input('userId', sql.Int, userId || null)
+        .query(`
+          INSERT INTO dbo.po_cell_history
+            (column_id, data_area_id, order_number, line_number, action,
+             old_value_text, old_value_number, old_value_date,
+             new_value_text, new_value_number, new_value_date, changed_by)
+          VALUES (@columnId, @dataAreaId, @orderNumber, @lineNumber, @action,
+             @oldText, @oldNumber, @oldDate, @newText, @newNumber, @newDate, @userId);
+        `);
+    } catch (histErr) {
+      logger.warn('Cel-geschiedenis wegschrijven mislukt (waarde zelf is opgeslagen)', { error: histErr.message });
+    }
+  }
 
   return { columnId, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine, value: empty ? null : value };
 }

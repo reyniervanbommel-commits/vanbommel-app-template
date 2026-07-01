@@ -164,23 +164,19 @@ WHEN NOT MATCHED THEN INSERT
   VALUES (@tableId, @columnId, @scope, @partitionKey, @recordKey, @detailKey,
           @valueText, @valueNumber, @valueDate, @userId)
 OUTPUT
-  inserted.table_id, inserted.column_id, inserted.scope,
-  inserted.partition_key, inserted.record_key, inserted.detail_key,
   CASE
     WHEN $action = 'INSERT' THEN 'insert'
     WHEN @valueText IS NULL AND @valueNumber IS NULL AND @valueDate IS NULL THEN 'clear'
     ELSE 'update'
   END,
   deleted.value_text, deleted.value_number, deleted.value_date,     -- oude waarde (NULL bij INSERT)
-  inserted.value_text, inserted.value_number, inserted.value_date,  -- nieuwe waarde
-  @userId, SYSUTCDATETIME()
-INTO dbo.tb_cell_history
-  (table_id, column_id, scope, partition_key, record_key, detail_key, action,
-   old_value_text, old_value_number, old_value_date,
-   new_value_text, new_value_number, new_value_date, changed_by, changed_at);
+  inserted.value_text, inserted.value_number, inserted.value_date   -- nieuwe waarde
+INTO @changes (action, old_value_text, old_value_number, old_value_date,
+               new_value_text, new_value_number, new_value_date);
+-- Daarna: INSERT INTO tb_cell_history SELECT … FROM @changes (best-effort).
 ```
 
-> MSSQL-detail: `MERGE` met `OUTPUT … INTO` is toegestaan; `action` staat als `CASE $action …`-expressie in de OUTPUT-lijst. Integratietest in Fase 4.
+> ⚠️ **MSSQL-restrictie (geleerd bij de bouw):** een `MERGE … OUTPUT … INTO` mag **niet** rechtstreeks naar een tabel schrijven die een **foreign key** of **CHECK-constraint** heeft — en `tb_cell_history` heeft beide. Daarom vangt `OUTPUT` de wijziging op in een **table-variable** `@changes`, waarna een aparte `INSERT` de historie wegschrijft. Die historie-insert is **best-effort** (in een try/catch): de waarde-opslag is primair en mag nooit falen door de audit-trail (bv. als de tabel nog niet gemigreerd is). Deze aanpak is in de PO-implementatie gebouwd en getest.
 
 ### 6.2 Nieuwe service-functie: `getCellHistory`
 Eén bron-neutrale functie die beide bronnen unioneert, joint met `users`, chronologisch teruggeeft.
