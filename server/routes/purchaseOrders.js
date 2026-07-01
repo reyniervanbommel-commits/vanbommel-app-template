@@ -129,6 +129,25 @@ router.put('/values', async (req, res, next) => {
   }
 });
 
+// GET /api/purchase-orders/history — cel-geschiedenis (audit trail) van één cel.
+// Verenigt eigen-kolom-edits (po_cell_history) met D365-correcties (po_field_corrections).
+router.get('/history', async (req, res, next) => {
+  try {
+    const id = toColumnId(req.query.columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const { dataAreaId, orderNumber } = req.query;
+    const lineNumber = req.query.lineNumber !== undefined && req.query.lineNumber !== ''
+      ? Number.parseInt(req.query.lineNumber, 10)
+      : null;
+    const history = await cacheService.getCellHistory({
+      columnId: id, dataAreaId, orderNumber, lineNumber,
+    });
+    return res.json({ history });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PATCH /api/purchase-orders/columns/:id/writeback — admin: zet write-back aan/uit per D365-kolom.
 router.patch('/columns/:id/writeback', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
   try {

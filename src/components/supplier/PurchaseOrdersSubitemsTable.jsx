@@ -74,6 +74,12 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
                       value={rawValue}
                       options={column.options}
                       ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
+                      cellKeys={{
+                        columnId: column.id,
+                        dataAreaId: order.dataAreaId,
+                        orderNumber: order.orderNumber,
+                        lineNumber: line.lineNumber,
+                      }}
                       onSave={(value) =>
                         onSaveValue({
                           columnId: column.id,
@@ -94,6 +100,12 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
                     <PurchaseOrderWriteBackCell
                       column={column}
                       value={rawValue}
+                      cellKeys={{
+                        columnId: column.id,
+                        dataAreaId: order.dataAreaId,
+                        orderNumber: order.orderNumber,
+                        lineNumber: line.lineNumber,
+                      }}
                       onCorrect={({ value, basedOnValue }) =>
                         onCorrect({
                           columnId: column.id,

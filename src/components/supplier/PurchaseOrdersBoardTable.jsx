@@ -222,6 +222,12 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
           value={rawValue}
           options={column.options}
           ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
           onSave={(value) =>
             onSaveValue({
               columnId: column.id,
@@ -242,6 +248,12 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
           onCorrect={({ value, basedOnValue }) =>
             onCorrect({
               columnId: column.id,

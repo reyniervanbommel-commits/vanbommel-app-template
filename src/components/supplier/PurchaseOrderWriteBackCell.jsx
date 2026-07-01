@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Input, Spinner, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { CloudArrowUpRegular, ErrorCircleRegular } from '@fluentui/react-icons';
+import CellHistoryPopover from './CellHistoryPopover';
 
 const useStyles = makeStyles({
   cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: '120px' },
@@ -26,7 +27,7 @@ function toInputValue(value, dataType) {
  * naar D365; optimistic concurrency en conflicten worden inline getoond. Bij fout keert de oude
  * waarde terug en verschijnt een fout-icoon met de melding als tooltip.
  */
-export default function PurchaseOrderWriteBackCell({ column, value, onCorrect }) {
+export default function PurchaseOrderWriteBackCell({ column, value, onCorrect, cellKeys }) {
   const styles = useStyles();
   const [local, setLocal] = useState(toInputValue(value, column.dataType));
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
@@ -79,6 +80,7 @@ export default function PurchaseOrderWriteBackCell({ column, value, onCorrect })
           <ErrorCircleRegular className={styles.errIcon} />
         </Tooltip>
       ) : null}
+      {cellKeys ? <CellHistoryPopover cellKeys={cellKeys} dataType={column.dataType} /> : null}
     </span>
   );
 }
