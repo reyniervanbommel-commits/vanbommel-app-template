@@ -12,6 +12,7 @@
 
 const express = require('express');
 const tableBuilder = require('../services/TableBuilderService');
+const tableAssist = require('../services/TableAssistService');
 const { auditLog } = require('../middleware/auditLog');
 const { requireSession, requireRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
@@ -88,6 +89,18 @@ router.get('/sources', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/admin/sources/:id/entities?q=&limit= — beschikbare entiteiten voor de entiteit-picker.
+router.get('/sources/:id/entities', adminOnly, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ongeldig bron-id' });
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const limit = req.query.limit;
+    const result = await tableBuilder.discoverEntities(id, { q, limit });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /api/admin/sources/:id/test — verbindingstest via de provider.
 router.post('/sources/:id/test', adminOnly, async (req, res, next) => {
   try {
@@ -130,6 +143,26 @@ router.post('/tables/:id/columns', adminOnly, async (req, res, next) => {
     const saved = await tableBuilder.curateColumns(id, columns, req.user.id);
     await auditLog(req.user.id, req.user.email, 'CURATE_COLUMNS', 'tb_columns', id, { aantal: saved.length });
     res.status(201).json({ columns: saved });
+  } catch (err) { next(err); }
+});
+
+// ─── AI-authoring-assistent ───────────────────────────────────────────────────
+
+// POST /api/admin/tables/assist — laat de AI-assistent een entiteit + velden voorstellen.
+// Body: { sourceId, prompt }. Zonder ANTHROPIC_API_KEY -> 503 met code 'AI_NOT_CONFIGURED'.
+// LET OP: geen volledige prompt in de audit-payload (kan gevoelige inhoud bevatten); alleen lengte.
+router.post('/tables/assist', adminOnly, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const sourceId = toId(body.sourceId);
+    if (!sourceId) return res.status(400).json({ error: 'Ongeldig bron-id (sourceId)' });
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+
+    await auditLog(req.user.id, req.user.email, 'TABLE_ASSIST', 'tb_tables', sourceId, {
+      promptLength: prompt.length,
+    });
+    const result = await tableAssist.suggest({ sourceId, prompt });
+    res.json(result);
   } catch (err) { next(err); }
 });
 

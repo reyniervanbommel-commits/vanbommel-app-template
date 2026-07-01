@@ -12,11 +12,19 @@
 /**
  * @typedef {Object} ProviderCapabilities
  * @property {boolean} discoverFields  Kan velden ontdekken voor de admin-kolompicker.
+ * @property {boolean} [discoverEntities] Kan de beschikbare entiteiten ontdekken (entiteit-picker).
  * @property {boolean} serverFilter    Ondersteunt filteren aan de bronkant.
  * @property {boolean} serverPaging    Ondersteunt paging aan de bronkant.
  * @property {boolean} masterDetail    Ondersteunt master-detail (1 -> 0..1) ophalen.
  * @property {boolean} writeBack       Ondersteunt terugschrijven van bronvelden.
  * @property {boolean} needsCache      Data moet in tb_cache gematerialiseerd worden (i.p.v. live lezen).
+ */
+
+/**
+ * @typedef {Object} DiscoveredEntity
+ * @property {string} name          Entity-set-naam (het pad-segment, bv. "PurchaseOrderHeadersV2").
+ * @property {string} sourceEntity  Volledig bron-pad zoals in tb_tables (bv. "/data/PurchaseOrderHeadersV2").
+ * @property {string} [entityType]  Volledig gekwalificeerde EntityType-naam uit de bron-metadata.
  */
 
 /**
@@ -51,6 +59,15 @@ class SourceProvider {
    */
   capabilities() {
     throw new Error('capabilities() niet geïmplementeerd door deze provider');
+  }
+
+  /**
+   * Ontdek de beschikbare entiteiten (voor de admin-entiteit-picker), zodat de admin een entiteit
+   * kan KIEZEN i.p.v. de naam te typen. Alleen zinvol als capabilities.discoverEntities === true.
+   * @returns {Promise<DiscoveredEntity[]>}
+   */
+  async discoverEntities() {
+    throw Object.assign(new Error('discoverEntities() niet ondersteund door deze provider'), { status: 501 });
   }
 
   /**

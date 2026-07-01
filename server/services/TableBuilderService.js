@@ -127,6 +127,34 @@ async function testSource(id) {
   return { ok, sourceId: source.id, providerType: source.providerType, capabilities, message };
 }
 
+// Ontdek de beschikbare entiteiten van een bron zodat de admin er één kan KIEZEN i.p.v. te typen.
+// Filtert server-side op `q` (case-insensitive substring op name) en capt op `limit` (default 50, max 200).
+// Return { entities, total, truncated } — total = aantal treffers vóór de cap.
+async function discoverEntities(sourceId, { q, limit } = {}) {
+  const source = await getSource(sourceId);
+  if (!source) throw Object.assign(new Error('Bron niet gevonden'), { status: 404 });
+
+  const provider = getProvider(source.providerType);
+  const caps = provider.capabilities();
+  if (!caps.discoverEntities) {
+    throw Object.assign(new Error('Deze bron ondersteunt geen entiteit-discovery'), { status: 501 });
+  }
+
+  const all = await provider.discoverEntities();
+
+  const needle = String(q || '').trim().toLowerCase();
+  const matched = needle
+    ? all.filter((e) => String(e.name || '').toLowerCase().includes(needle))
+    : all;
+
+  let cap = Number.parseInt(limit, 10);
+  if (!Number.isFinite(cap) || cap <= 0) cap = 50;
+  if (cap > 200) cap = 200;
+
+  const entities = matched.slice(0, cap);
+  return { entities, total: matched.length, truncated: matched.length > entities.length };
+}
+
 // ---------------------------------------------------------------------------
 // Tabellen (tb_tables)
 // ---------------------------------------------------------------------------
@@ -480,6 +508,7 @@ module.exports = {
   listSources,
   getSource,
   testSource,
+  discoverEntities,
   // relatie
   getRelation,
   setRelation,

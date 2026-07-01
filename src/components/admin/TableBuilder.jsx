@@ -3,12 +3,14 @@ import {
   Badge,
   Button,
   Checkbox,
+  Combobox,
   Dropdown,
   Field,
   Input,
   Option,
   Spinner,
   Text,
+  Textarea,
   makeStyles,
   tokens,
   shorthands,
@@ -21,6 +23,7 @@ import {
   PlugConnected24Regular,
   Save24Regular,
   Search24Regular,
+  Sparkle24Regular,
 } from '@fluentui/react-icons';
 import {
   listTables,
@@ -29,6 +32,8 @@ import {
   listSources,
   testSource,
   discoverFields,
+  discoverEntities,
+  assistTable,
   saveColumns,
   saveRelation,
 } from '../../utils/tableBuilderApi';
@@ -133,7 +138,41 @@ const useStyles = makeStyles({
   summaryGrid: { display: 'flex', flexDirection: 'column', ...shorthands.gap('6px') },
   summaryRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'center', flexWrap: 'wrap' },
   summaryLabel: { color: tokens.colorNeutralForeground3, minWidth: '190px', fontSize: tokens.fontSizeBase200 },
+  // Gedempte voorbeeldwaarde per veld (stap 3). Bewust inline i.p.v. Tooltip
+  // (zie fluentui-valkuilen.mdc: geen Tooltip in herhaalde lijstrijen).
+  sample: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    fontStyle: 'italic',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+  },
+  // AI-assistent-paneel (accent-achtergrond zodat het opvalt als hulpmiddel).
+  assistPanel: {
+    backgroundColor: tokens.colorBrandBackground2,
+    ...shorthands.borderRadius('8px'),
+    ...shorthands.padding('16px'),
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('12px'),
+    border: `1px solid ${tokens.colorBrandStroke2}`,
+  },
+  assistResult: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.borderRadius('6px'),
+    ...shorthands.padding('12px'),
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+  },
+  chips: { display: 'flex', ...shorthands.gap('6px'), flexWrap: 'wrap' },
+  comboOption: { display: 'flex', flexDirection: 'column', ...shorthands.gap('2px') },
+  comboOptionSub: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase100 },
 });
+
+const ENTITY_SEARCH_LIMIT = 25;
 
 const DATA_TYPES = [
   { value: 'text', label: 'Tekst' },
@@ -161,19 +200,31 @@ const STEPS = [
 ];
 
 // Bepaalt of een ontdekt/gecureerd veld standaard aangevinkt moet zijn.
-function fieldRowFromDiscovered(f) {
+// `suggestedKeys` is een Set van 'scope::field'-sleutels uit een AI-suggestie
+// (zie handleAssist/overnemen): matchende velden worden meteen voorgevinkt.
+function fieldRowFromDiscovered(f, suggestedKeys) {
+  const suggested = suggestedKeys ? suggestedKeys.has(`${f.scope}::${f.field}`) : false;
+  const curated = !!f.alreadyCurated || suggested;
   return {
     field: f.field,
     label: f.label || f.field,
     dataType: f.dataType || 'text',
     scope: f.scope,
     nullable: f.nullable,
-    // alreadyCurated → curated: veld is al opgeslagen, dus voorgevinkt.
-    curated: !!f.alreadyCurated,
-    isDefaultVisible: !!f.alreadyCurated,
+    // korte voorbeeldwaarde uit echte data, of null → niets tonen.
+    sample: f.sample ?? null,
+    // alreadyCurated → curated (al opgeslagen); AI-suggestie → curated (voorgevinkt).
+    curated,
+    isDefaultVisible: curated,
     filterable: false,
     sortable: false,
   };
+}
+
+// Kapt lange voorbeeldwaarden af zodat rijen compact blijven.
+function truncateSample(value, max = 40) {
+  const s = String(value);
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
 export default function TableBuilder() {
@@ -199,6 +250,23 @@ export default function TableBuilder() {
     keyFields: '',
     cacheMode: 'auto',
   });
+
+  // Zoekbare entiteit-picker (stap 2)
+  const [entityQuery, setEntityQuery] = useState('');
+  const [entityOptions, setEntityOptions] = useState([]);
+  const [entityMeta, setEntityMeta] = useState({ total: 0, truncated: false });
+  const [entityLoading, setEntityLoading] = useState(false);
+
+  // AI-authoring-assistent (stap 2)
+  const [assistPrompt, setAssistPrompt] = useState('');
+  const [assistBusy, setAssistBusy] = useState(false);
+  const [assistSuggestion, setAssistSuggestion] = useState(null);
+  const [assistError, setAssistError] = useState('');
+  // null = onbekend, true = beschikbaar, false = 503 AI_NOT_CONFIGURED (knop verbergen).
+  const [assistAvailable, setAssistAvailable] = useState(null);
+  // Voorgestelde velden uit een overgenomen suggestie; worden in stap 3
+  // voorgevinkt zodra discover geladen is. Set van 'scope::field'.
+  const [suggestedFieldKeys, setSuggestedFieldKeys] = useState(null);
 
   // Velden
   const [masterFields, setMasterFields] = useState([]);
@@ -322,6 +390,89 @@ export default function TableBuilder() {
     }
   }, [newTableForm, selectedSourceId, resetFeedback, loadTableDetail]);
 
+  // Zoekbare entiteit-picker: debounce ~300ms → server-side zoeken.
+  // Server doorzoekt ~5163 entiteiten, dus we sturen altijd een `q`.
+  useEffect(() => {
+    const q = entityQuery.trim();
+    if (!selectedSourceId || q.length === 0) {
+      setEntityOptions([]);
+      setEntityMeta({ total: 0, truncated: false });
+      setEntityLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setEntityLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await discoverEntities(selectedSourceId, { q, limit: ENTITY_SEARCH_LIMIT });
+        if (cancelled) return;
+        setEntityOptions(res.entities || []);
+        setEntityMeta({ total: res.total || 0, truncated: !!res.truncated });
+      } catch (err) {
+        if (!cancelled) {
+          setEntityOptions([]);
+          setEntityMeta({ total: 0, truncated: false });
+          setError(err.message);
+        }
+      } finally {
+        if (!cancelled) setEntityLoading(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [entityQuery, selectedSourceId]);
+
+  // Selectie uit de picker: zet sourceEntity op de gekozen entiteit.
+  const handleEntitySelect = useCallback((_, data) => {
+    // optionValue = sourceEntity (uniek); optionText = name (voor het invoerveld).
+    const sourceEntity = data.optionValue;
+    if (!sourceEntity) return;
+    setNewTableForm((p) => ({ ...p, sourceEntity }));
+    setEntityQuery(data.optionText || sourceEntity);
+  }, []);
+
+  // --- AI-authoring-assistent ----------------------------------------------
+
+  const handleAssist = useCallback(async () => {
+    const prompt = assistPrompt.trim();
+    if (!prompt) { setAssistError('Beschrijf eerst wat je zoekt.'); return; }
+    if (!selectedSourceId) { setAssistError('Kies eerst een bron in stap 1.'); return; }
+    setAssistBusy(true);
+    setAssistError('');
+    setAssistSuggestion(null);
+    try {
+      const res = await assistTable({ sourceId: selectedSourceId, prompt });
+      setAssistSuggestion(res.suggestion || null);
+      setAssistAvailable(true);
+    } catch (err) {
+      // 503 met code AI_NOT_CONFIGURED → assistent niet ingesteld; knop verbergen.
+      if (err.status === 503 && err.data?.code === 'AI_NOT_CONFIGURED') {
+        setAssistAvailable(false);
+        setAssistError('AI-assistent is niet geconfigureerd (beheerder moet ANTHROPIC_API_KEY instellen).');
+      } else {
+        setAssistError(err.message || 'AI-suggestie mislukt.');
+      }
+    } finally {
+      setAssistBusy(false);
+    }
+  }, [assistPrompt, selectedSourceId]);
+
+  // "Overnemen": vul de picker voor met de voorgestelde entiteit en onthoud
+  // de voorgestelde velden zodat ze in stap 3 voorgevinkt worden na discover.
+  const handleAdoptSuggestion = useCallback(() => {
+    if (!assistSuggestion) return;
+    if (assistSuggestion.sourceEntity) {
+      setNewTableForm((p) => ({ ...p, sourceEntity: assistSuggestion.sourceEntity }));
+      setEntityQuery(assistSuggestion.entitySet || assistSuggestion.sourceEntity);
+    }
+    const keys = new Set(
+      (assistSuggestion.fields || [])
+        .filter((f) => f.field)
+        .map((f) => `${f.scope || 'master'}::${f.field}`),
+    );
+    setSuggestedFieldKeys(keys.size ? keys : null);
+    setFeedback('Suggestie overgenomen — voorgestelde velden worden in stap 3 voorgevinkt.');
+  }, [assistSuggestion]);
+
   // --- Stap 3: velden ontdekken & cureren ----------------------------------
 
   const handleDiscover = useCallback(async () => {
@@ -330,16 +481,23 @@ export default function TableBuilder() {
     resetFeedback();
     try {
       const { fields } = await discoverFields(activeTable.id);
-      const rows = (fields || []).map(fieldRowFromDiscovered);
+      const rows = (fields || []).map((f) => fieldRowFromDiscovered(f, suggestedFieldKeys));
       setMasterFields(rows.filter((r) => r.scope === 'master'));
       setDetailFields(rows.filter((r) => r.scope === 'detail'));
-      setFeedback(`${rows.length} veld(en) ontdekt.`);
+      const suggestedHit = suggestedFieldKeys
+        ? rows.filter((r) => suggestedFieldKeys.has(`${r.scope}::${r.field}`)).length
+        : 0;
+      setFeedback(
+        suggestedHit > 0
+          ? `${rows.length} veld(en) ontdekt — ${suggestedHit} voorgevinkt uit AI-suggestie.`
+          : `${rows.length} veld(en) ontdekt.`,
+      );
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
-  }, [activeTable, resetFeedback]);
+  }, [activeTable, resetFeedback, suggestedFieldKeys]);
 
   // Ontdek automatisch bij binnenkomst in stap 3 als er nog niets is.
   useEffect(() => {
@@ -567,6 +725,79 @@ export default function TableBuilder() {
             )}
           </div>
 
+          {/* AI-authoring-assistent: beschrijf wat je zoekt → suggestie. */}
+          {assistAvailable !== false && (
+            <div className={styles.assistPanel}>
+              <div className={styles.spread}>
+                <Text weight="semibold">AI-assistent — beschrijf wat je zoekt</Text>
+                <Sparkle24Regular color={tokens.colorBrandForeground1} />
+              </div>
+              <Text className={styles.hint} block>
+                Bijv. &quot;inkooporders met leverancier, bedrag en leverdatum&quot;. De assistent stelt
+                een entiteit en velden voor; met &quot;Overnemen&quot; vul je de picker en velden voor.
+              </Text>
+              <Field>
+                <Textarea
+                  value={assistPrompt}
+                  onChange={(_, d) => setAssistPrompt(d.value)}
+                  placeholder="Beschrijf de tabel die je nodig hebt..."
+                  resize="vertical"
+                  disabled={assistBusy}
+                  aria-label="Beschrijf wat je zoekt"
+                />
+              </Field>
+              <div className={styles.actions}>
+                <Button
+                  appearance="primary"
+                  icon={assistBusy ? <Spinner size="tiny" /> : <Sparkle24Regular />}
+                  onClick={handleAssist}
+                  disabled={assistBusy || !assistPrompt.trim() || !selectedSourceId}
+                >
+                  {assistBusy ? 'AI denkt na...' : 'AI-suggestie'}
+                </Button>
+                {assistError && <Text className={styles.error}>{assistError}</Text>}
+              </div>
+
+              {assistSuggestion && (
+                <div className={styles.assistResult}>
+                  <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Voorgestelde entiteit</span>
+                    <Text weight="semibold">{assistSuggestion.entitySet || assistSuggestion.sourceEntity}</Text>
+                  </div>
+                  {assistSuggestion.sourceEntity && (
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>source_entity</span>
+                      <span className={styles.mono}>{assistSuggestion.sourceEntity}</span>
+                    </div>
+                  )}
+                  {assistSuggestion.reason && (
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>Reden</span>
+                      <Text className={styles.hint}>{assistSuggestion.reason}</Text>
+                    </div>
+                  )}
+                  {(assistSuggestion.fields || []).length > 0 && (
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>Voorgestelde velden</span>
+                      <span className={styles.chips}>
+                        {assistSuggestion.fields.map((f) => (
+                          <Badge key={`${f.scope || 'master'}::${f.field}`} appearance="tint" color="brand">
+                            {f.label || f.field}
+                          </Badge>
+                        ))}
+                      </span>
+                    </div>
+                  )}
+                  <div className={styles.actions}>
+                    <Button appearance="secondary" icon={<CheckmarkCircle24Regular />} onClick={handleAdoptSuggestion}>
+                      Overnemen
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className={styles.section}>
             <Text weight="semibold" className={styles.sectionTitle}>Nieuwe tabel aanmaken</Text>
             <Field label="Label" required>
@@ -576,7 +807,46 @@ export default function TableBuilder() {
                 placeholder="Bijv. Inkooporders"
               />
             </Field>
-            <Field label="Bron-entiteit (source_entity)" required hint="Bijv. /data/PurchaseOrderHeadersV2">
+            <Field
+              label="Bron-entiteit zoeken"
+              hint={
+                entityMeta.truncated
+                  ? `Toont eerste ${entityOptions.length} van ${entityMeta.total} — verfijn je zoekopdracht.`
+                  : 'Typ om te zoeken in de bron-entiteiten (server-side).'
+              }
+            >
+              <Combobox
+                freeform
+                value={entityQuery}
+                onChange={(e) => setEntityQuery(e.target.value)}
+                onOptionSelect={handleEntitySelect}
+                placeholder="Typ om te zoeken, bijv. PurchaseOrder"
+                aria-label="Bron-entiteit zoeken"
+                expandIcon={entityLoading ? <Spinner size="tiny" /> : <Search24Regular />}
+              >
+                {entityQuery.trim().length === 0 ? (
+                  <Option key="__hint" text="" disabled>Typ om te zoeken…</Option>
+                ) : entityLoading ? (
+                  <Option key="__loading" text="" disabled>Zoeken…</Option>
+                ) : entityOptions.length === 0 ? (
+                  <Option key="__empty" text="" disabled>Geen entiteiten gevonden.</Option>
+                ) : (
+                  entityOptions.map((opt) => (
+                    <Option key={opt.sourceEntity} value={opt.sourceEntity} text={opt.name}>
+                      <span className={styles.comboOption}>
+                        <span>{opt.name}</span>
+                        {opt.entityType && <span className={styles.comboOptionSub}>{opt.entityType}</span>}
+                      </span>
+                    </Option>
+                  ))
+                )}
+              </Combobox>
+            </Field>
+            <Field
+              label="Bron-entiteit (source_entity)"
+              required
+              hint="Gevuld door de picker of AI, of typ hier zelf letterlijk een pad."
+            >
               <Input
                 value={newTableForm.sourceEntity}
                 onChange={(_, d) => setNewTableForm((p) => ({ ...p, sourceEntity: d.value }))}
@@ -810,6 +1080,11 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate }
                   disabled={!r.curated}
                 />
                 <span className={styles.mono}>{r.field}</span>
+                {r.sample != null && String(r.sample).trim() !== '' && (
+                  <span className={styles.sample} title={String(r.sample)}>
+                    bv. {truncateSample(r.sample)}
+                  </span>
+                )}
               </div>
               <Dropdown
                 value={DATA_TYPE_LABELS[r.dataType]}

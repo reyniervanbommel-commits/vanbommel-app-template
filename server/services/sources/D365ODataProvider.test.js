@@ -8,10 +8,12 @@ const {
   edmToDataType,
   humanizeFieldName,
   parseEntityProperties,
+  parseEntitySets,
   indexEntityTypes,
   resolveNavTargetType,
   entitySetName,
   findEntityType,
+  normalizeSample,
 } = require('./D365ODataProvider');
 
 // Verkorte, representatieve $metadata-fixture (master + detail via NavigationProperty).
@@ -41,12 +43,26 @@ const METADATA_FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
  </edmx:DataServices>
 </edmx:Edmx>`;
 
+// $metadata-fixture met EntitySets (voor de entiteit-discovery-parser).
+const ENTITYSETS_FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0"><edmx:DataServices>
+  <Schema Namespace="Microsoft.Dynamics.DataEntities">
+    <EntityContainer Name="Resources">
+      <EntitySet Name="PurchaseOrderHeadersV2" EntityType="Microsoft.Dynamics.DataEntities.PurchaseOrderHeaderV2" />
+      <EntitySet Name="VendorsV2" EntityType="Microsoft.Dynamics.DataEntities.VendorV2" />
+      <EntitySet Name="Customers" EntityType="Microsoft.Dynamics.DataEntities.Customer" />
+      <EntitySet Name="PurchaseOrderHeadersV2" EntityType="Microsoft.Dynamics.DataEntities.PurchaseOrderHeaderV2" />
+    </EntityContainer>
+  </Schema>
+</edmx:DataServices></edmx:Edmx>`;
+
 describe('D365ODataProvider capabilities', () => {
   it('rapporteert de verwachte capability-shape (allemaal true voor D365)', () => {
     const provider = new D365ODataProvider();
     const caps = provider.capabilities();
     expect(caps).toEqual({
       discoverFields: true,
+      discoverEntities: true,
       serverFilter: true,
       serverPaging: true,
       masterDetail: true,
@@ -55,6 +71,52 @@ describe('D365ODataProvider capabilities', () => {
     });
     // Alle capability-vlaggen zijn booleans.
     for (const value of Object.values(caps)) expect(typeof value).toBe('boolean');
+  });
+});
+
+describe('parseEntitySets — entiteit-discovery uit $metadata', () => {
+  it('parseert EntitySets naar { name, sourceEntity, entityType } en sorteert op naam', () => {
+    const sets = parseEntitySets(ENTITYSETS_FIXTURE);
+    expect(sets.map((s) => s.name)).toEqual(['Customers', 'PurchaseOrderHeadersV2', 'VendorsV2']);
+    const po = sets.find((s) => s.name === 'PurchaseOrderHeadersV2');
+    expect(po).toEqual({
+      name: 'PurchaseOrderHeadersV2',
+      sourceEntity: '/data/PurchaseOrderHeadersV2',
+      entityType: 'Microsoft.Dynamics.DataEntities.PurchaseOrderHeaderV2',
+    });
+  });
+
+  it('ontdubbelt EntitySets met dezelfde naam', () => {
+    const sets = parseEntitySets(ENTITYSETS_FIXTURE);
+    expect(sets.filter((s) => s.name === 'PurchaseOrderHeadersV2')).toHaveLength(1);
+  });
+
+  it('geeft een lege lijst bij metadata zonder EntitySets', () => {
+    expect(parseEntitySets('<edmx:Edmx></edmx:Edmx>')).toEqual([]);
+  });
+});
+
+describe('normalizeSample — veld-voorbeeldwaarden', () => {
+  it('geeft null voor lege/ontbrekende waarden', () => {
+    expect(normalizeSample(null)).toBeNull();
+    expect(normalizeSample(undefined)).toBeNull();
+    expect(normalizeSample('')).toBeNull();
+    expect(normalizeSample('   ')).toBeNull();
+  });
+  it('kapt ISO-datumtijd af tot alleen de datum', () => {
+    expect(normalizeSample('2026-07-01T00:00:00Z')).toBe('2026-07-01');
+  });
+  it('serialiseert getallen en booleans naar string', () => {
+    expect(normalizeSample(42)).toBe('42');
+    expect(normalizeSample(0)).toBe('0');
+    expect(normalizeSample(true)).toBe('true');
+    expect(normalizeSample(false)).toBe('false');
+  });
+  it('kapt lange strings af op ~60 tekens met ellipsis', () => {
+    const long = 'x'.repeat(120);
+    const out = normalizeSample(long);
+    expect(out.length).toBeLessThanOrEqual(60);
+    expect(out.endsWith('…')).toBe(true);
   });
 });
 

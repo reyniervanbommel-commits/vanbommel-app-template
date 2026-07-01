@@ -45,6 +45,25 @@ export function testSource(id) {
   return apiRequest(`/admin/sources/${id}/test`, { method: 'POST' });
 }
 
+// GET /sources/:id/entities?q=&limit= → { entities:[{ name, sourceEntity, entityType }], total, truncated }
+// Server-side zoeken door ~5163 entiteiten — stuur dus altijd een `q`.
+export function discoverEntities(sourceId, { q = '', limit = 25 } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return apiRequest(`/admin/sources/${sourceId}/entities${qs ? `?${qs}` : ''}`);
+}
+
+// --- AI-authoring-assistent -------------------------------------------------
+
+// POST /tables/assist { sourceId, prompt } → { ok:true, suggestion:{ entitySet, sourceEntity, reason, fields:[{ scope, field, label }] } }
+// Zonder AI-key antwoordt de backend met HTTP 503 en body { error, code:'AI_NOT_CONFIGURED' };
+// die fout borrelt via apiRequest op als Error met .status=503 en .data.code.
+export function assistTable({ sourceId, prompt }) {
+  return apiRequest('/admin/tables/assist', { method: 'POST', body: { sourceId, prompt } });
+}
+
 // --- Velden ontdekken & kolommen -------------------------------------------
 
 // GET /tables/:id/discover → { fields: [...] }

@@ -16,6 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.0",
     "@azure/communication-email": "^1.0.0",
     "@fluentui/react-components": "^9.54.0",
     "bcrypt": "^5.1.1",

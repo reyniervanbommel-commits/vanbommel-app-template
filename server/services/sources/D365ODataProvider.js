@@ -23,6 +23,12 @@ const METADATA_PATH = '/data/$metadata';
 const METADATA_TTL_MS = 10 * 60 * 1000; // 10 minuten in-memory cache voor het (grote) $metadata-document.
 const DEFAULT_METADATA_TIMEOUT_MS = 20000;
 
+// Sampling: korte, vaste $top-fetch om representatieve voorbeeldwaarden per veld te tonen in de picker.
+// Bewust klein en faalt-veilig: sampling mag discovery NOOIT laten crashen of vertragen.
+const SAMPLE_TOP = 3;
+const SAMPLE_TIMEOUT_MS = 6000;
+const SAMPLE_MAX_LEN = 60;
+
 // In-memory $metadata-cache (per baseUrl). Voorkomt dat elke discover-call het volledige document ophaalt.
 const _metadataCache = new Map(); // baseUrl -> { xml, expiresAt }
 
@@ -50,6 +56,30 @@ function edmToDataType(edmType) {
   // Niet-Edm (bv. Microsoft.Dynamics.DataEntities.NoYes of een enum-type) -> keuzelijst.
   if (t && !t.startsWith('Edm.')) return 'select';
   return 'text';
+}
+
+// Normaliseer een bron-waarde naar een korte weergave-string voor de veld-sample.
+// - null/undefined/'' -> null (geen bruikbare sample).
+// - Datums (ISO met 'T') -> alleen het datum-deel (YYYY-MM-DD).
+// - Objecten/arrays -> compacte JSON.
+// - Lange strings -> afgekapt op SAMPLE_MAX_LEN met ellipsis.
+function normalizeSample(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return String(value);
+  let str;
+  if (typeof value === 'object') {
+    try { str = JSON.stringify(value); } catch { str = String(value); }
+  } else {
+    str = String(value);
+  }
+  str = str.trim();
+  if (!str) return null;
+  // ISO-datum/tijd -> alleen datum-deel.
+  const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})T[\d:.]+/);
+  if (isoMatch) str = isoMatch[1];
+  if (str.length > SAMPLE_MAX_LEN) str = str.slice(0, SAMPLE_MAX_LEN - 1).trimEnd() + '…';
+  return str || null;
 }
 
 // Kort, leesbaar label uit een PascalCase-veldnaam ("PurchaseOrderNumber" -> "Purchase Order Number").
@@ -100,6 +130,95 @@ async function fetchMetadataXml() {
   const xml = await response.text();
   _metadataCache.set(baseUrl, { xml, expiresAt: Date.now() + METADATA_TTL_MS });
   return { xml, baseUrl };
+}
+
+// Haal ~SAMPLE_TOP rijen op uit een entiteit (optioneel met detail-expand) en bouw een sample-map:
+//   { 'master|<Field>': <sample>, 'detail|<Field>': <sample> }
+// Neemt per veld de EERSTE niet-lege waarde over de opgehaalde rijen. Faalt-veilig: elke fout of
+// timeout -> lege map (discovery valt dan terug op sample:null). Vaste kleine $top; geen paging.
+async function fetchFieldSamples({ masterEntity, navName }) {
+  const samples = new Map();
+  let baseUrl;
+  try {
+    baseUrl = await getBaseUrl();
+  } catch {
+    return samples; // Geen bron-config -> geen samples (faalt-veilig).
+  }
+
+  // Master-samples: lichte fetch ZÓNDER expand. Dit is snel (~1s) en betrouwbaar; een detail-expand
+  // maakt dezelfde call juist zwaar (bv. PO+lines: ~22s -> timeout), dus die halen we apart op.
+  const masterUrl = new URL(baseUrl + '/data/' + masterEntity);
+  masterUrl.searchParams.set('$top', String(SAMPLE_TOP));
+  masterUrl.searchParams.set('$count', 'false');
+  masterUrl.searchParams.set('cross-company', 'true');
+  for (const row of await fetchSampleRows(masterUrl)) {
+    collectRowSamples(row, 'master', samples);
+  }
+
+  // Detail-samples: aparte, faalt-veilige fetch mét expand op één master-rij (best-effort). Slaagt dit
+  // niet binnen de timeout, dan houden de detail-velden gewoon sample:null; master-samples blijven staan.
+  if (navName) {
+    const detailUrl = new URL(baseUrl + '/data/' + masterEntity);
+    detailUrl.searchParams.set('$top', '1');
+    detailUrl.searchParams.set('$count', 'false');
+    detailUrl.searchParams.set('cross-company', 'true');
+    detailUrl.searchParams.set('$expand', navName);
+    for (const row of await fetchSampleRows(detailUrl)) {
+      if (Array.isArray(row[navName])) {
+        for (const detail of row[navName]) collectRowSamples(detail, 'detail', samples);
+      }
+    }
+  }
+  return samples;
+}
+
+// Haalt de rijen (payload.value) van een sample-URL op met korte timeout. Faalt-veilig: elke
+// fout/timeout/niet-ok -> lege array, zodat sampling discovery nooit breekt.
+async function fetchSampleRows(url) {
+  const controller = new AbortController();
+  const handle = setTimeout(() => controller.abort(), SAMPLE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url.toString(), { method: 'GET', headers: await buildHeaders(), signal: controller.signal });
+    if (!response || !response.ok) return [];
+    const payload = await response.json().catch(() => null);
+    return payload && Array.isArray(payload.value) ? payload.value : [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(handle);
+  }
+}
+
+// Vul per (scope, field) de eerste niet-lege sample in de map.
+function collectRowSamples(row, scope, samples) {
+  if (!row || typeof row !== 'object') return;
+  for (const [field, value] of Object.entries(row)) {
+    if (field.startsWith('@') || field.startsWith('#')) continue; // OData-annotaties overslaan.
+    const key = scope + '|' + field;
+    if (samples.has(key)) continue;
+    const norm = normalizeSample(value);
+    if (norm !== null) samples.set(key, norm);
+  }
+}
+
+// Parse alle <EntitySet Name="..." EntityType="..."/>-elementen uit het $metadata-document.
+// Vorm: <EntitySet Name="PurchaseOrderHeadersV2" EntityType="Microsoft.Dynamics.DataEntities.PurchaseOrderHeaderV2" />
+// De Name = het pad-segment; sourceEntity krijgt de vorm '/data/<Name>'. Gesorteerd op name (case-insensitive).
+function parseEntitySets(xml) {
+  const out = [];
+  const seen = new Set();
+  const re = /<EntitySet\s+([^>]*?)\/?>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const attrs = m[1];
+    const name = (attrs.match(/\bName="([^"]+)"/) || [])[1];
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const entityType = (attrs.match(/\bEntityType="([^"]+)"/) || [])[1] || null;
+    out.push({ name, sourceEntity: '/data/' + name, entityType });
+  }
+  out.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  return out;
 }
 
 // Knip het document in <EntityType ...>...</EntityType>-blokken en index op naam (hoofdletterongevoelig).
@@ -154,6 +273,7 @@ class D365ODataProvider extends SourceProvider {
   capabilities() {
     return {
       discoverFields: true,
+      discoverEntities: true,
       serverFilter: true,
       serverPaging: true,
       masterDetail: true,
@@ -163,8 +283,20 @@ class D365ODataProvider extends SourceProvider {
   }
 
   /**
+   * Ontdek alle beschikbare entiteiten (EntitySets) via $metadata, zodat de admin er één kan KIEZEN.
+   * Hergebruikt de gecachete $metadata-XML. Return gesorteerd op name.
+   * @returns {Promise<Array<{name:string, sourceEntity:string, entityType:string|null}>>}
+   */
+  async discoverEntities() {
+    const { xml } = await fetchMetadataXml();
+    return parseEntitySets(xml);
+  }
+
+  /**
    * Ontdek master- + detailvelden via $metadata. De master-entiteit komt uit sourceEntity; de
    * detail-entiteit uit relation.detailSourceEntity (nav-property op de master).
+   * Elk veld krijgt een `sample`: een representatieve niet-lege waarde uit echte data (lichte $top-fetch).
+   * Sampling is faalt-veilig: mislukt/leeg -> sample:null; discovery crasht er nooit door.
    */
   async discoverFields({ sourceEntity, relation } = {}) {
     const masterEntity = entitySetName(sourceEntity);
@@ -185,8 +317,10 @@ class D365ODataProvider extends SourceProvider {
     const fields = parseEntityProperties(master.block, 'master');
 
     // Detail-velden via de nav-property (indien een expand-relatie geconfigureerd is).
-    const navName = relation && relation.detailSourceEntity ? relation.detailSourceEntity : null;
-    if (navName && relation.kind !== 'none') {
+    const navName = relation && relation.detailSourceEntity && relation.kind !== 'none'
+      ? relation.detailSourceEntity
+      : null;
+    if (navName) {
       const targetType = resolveNavTargetType(master.block, navName);
       const detail = targetType ? findEntityType(byName, targetType) : null;
       if (detail) {
@@ -196,7 +330,10 @@ class D365ODataProvider extends SourceProvider {
       }
     }
 
-    return fields;
+    // Voorbeelddata per veld (faalt-veilig). De expand voor detail-samples werkt alleen bij een echte
+    // nav-property; anders krijgen detail-velden sample:null.
+    const samples = await fetchFieldSamples({ masterEntity, navName });
+    return fields.map((f) => ({ ...f, sample: samples.get(`${f.scope}|${f.field}`) ?? null }));
   }
 
   /**
@@ -303,9 +440,11 @@ module.exports = {
   edmToDataType,
   humanizeFieldName,
   parseEntityProperties,
+  parseEntitySets,
   indexEntityTypes,
   resolveNavTargetType,
   entitySetName,
   findEntityType,
+  normalizeSample,
   __resetMetadataCache,
 };
