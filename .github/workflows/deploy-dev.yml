@@ -45,20 +45,24 @@ jobs:
           BOOTSTRAP_ADMIN_DISPLAY_NAME: ${{ secrets.BOOTSTRAP_ADMIN_DISPLAY_NAME }}
 
       - name: Container App bijwerken
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           az containerapp secret set \
             --name "$APP_NAME" \
             --resource-group "$ACA_RESOURCE_GROUP" \
             --secrets \
               sql-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/sql-connection-string-dev,identityref:system" \
-              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-dev,identityref:system"
+              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-dev,identityref:system" \
+              anthropic-api-key="$ANTHROPIC_API_KEY"
 
           az containerapp update \
             --name "$APP_NAME" \
             --resource-group "$ACA_RESOURCE_GROUP" \
             --set-env-vars \
               SQL_CONNECTION_STRING=secretref:sql-connection-string \
-              SESSION_SECRET=secretref:session-secret
+              SESSION_SECRET=secretref:session-secret \
+              ANTHROPIC_API_KEY=secretref:anthropic-api-key
 
           az containerapp update \
             --name "$APP_NAME" \
