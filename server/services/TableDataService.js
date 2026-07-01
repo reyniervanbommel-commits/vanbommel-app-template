@@ -5,77 +5,18 @@
 // is config-gedreven: per tabel bepalen de actieve bron-kolommen (tb_columns, source='source') wélke
 // velden in data_json landen.
 //
-// Fase A gebruikt een interne fetch-adapter per tabel; in Fase B (#139) wordt dit vervangen door de
-// SourceProvider-interface (D365ODataProvider.fetch/discoverFields). Write-back (correctField) blijft in
-// Fase A nog op het bestaande po_*-pad en wordt in Fase C generiek via de provider.
+// Fase A gebruikte een interne fetch-adapter per tabel; sinds Fase B (#139) gaat de fetch via de
+// SourceProvider-interface (providerFactory -> D365ODataProvider.fetch/discoverFields), geresolved uit
+// tb_sources.provider_type. Geen enkele laag hier kent nog D365. Write-back (correctField) blijft in
+// deze fase nog op het bestaande po_*-pad en wordt later generiek via de provider.
 
 const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
-const settingsService = require('./SettingsService');
-const { fetchPurchaseOrders } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns } = require('./TableRegistryService');
+const { getProviderForTable } = require('./sources/providerFactory');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
-
-// ---------------------------------------------------------------------------
-// Fetch-adapters: vertalen een bron naar generieke records {partitionKey, recordKey, master, details}.
-// TODO (Fase B / #139): vervang door SourceProvider.fetch(), geresolved uit tb_sources.provider_type.
-// ---------------------------------------------------------------------------
-async function purchaseOrdersFetch(table) {
-  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
-  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const parsedMax = Number.parseInt(rawMax, 10);
-  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
-
-  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
-  const items = Array.isArray(result.items) ? result.items : [];
-
-  const records = items.map((order) => {
-    const raw = order.raw || {};
-    return {
-      partitionKey: String(raw.dataAreaId || company || '').trim(),
-      recordKey: String(order.orderNumber || raw.PurchaseOrderNumber || '').trim(),
-      modifiedAt: raw.ModifiedDateTime || null,
-      master: {
-        orderNumber: order.orderNumber,
-        vendorAccount: order.vendorAccount,
-        vendorName: order.vendorName,
-        status: order.status,
-        currencyCode: order.currencyCode,
-        requestedDeliveryDate: order.requestedDeliveryDate,
-        createdDateTime: order.createdDateTime,
-      },
-      details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({
-        detailKey: toNumberOrNull(line.lineNumber),
-        values: {
-          lineNumber: line.lineNumber,
-          itemNumber: line.itemNumber,
-          description: line.description,
-          quantity: line.quantity,
-          unit: line.unit,
-          lineAmount: line.lineAmount,
-          currencyCode: line.currencyCode,
-          requestedDeliveryDate: line.requestedDeliveryDate,
-        },
-      })),
-    };
-  });
-  return { records, total: result.total, truncated: Boolean(result.truncated) };
-}
-
-const FETCH_ADAPTERS = {
-  'purchase-orders': purchaseOrdersFetch,
-};
-
-function getFetchAdapter(table) {
-  const adapter = FETCH_ADAPTERS[table.key];
-  if (!adapter) {
-    throw Object.assign(new Error(`Geen fetch-adapter voor tabel '${table.key}' (komt in Fase B via SourceProvider)`), { status: 501 });
-  }
-  return adapter;
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -140,7 +81,7 @@ async function refresh(tableKey) {
   if (table.cacheMode === 'never') {
     return { orders: 0, truncated: false, syncedAt: null, skipped: 'cache_mode=never' };
   }
-  const adapter = getFetchAdapter(table);
+  const provider = getProviderForTable(table);
   const refreshStart = new Date();
 
   const [masterCols, detailCols] = await Promise.all([
@@ -150,7 +91,13 @@ async function refresh(tableKey) {
   const masterSource = masterCols.filter((c) => c.source === 'source');
   const detailSource = detailCols.filter((c) => c.source === 'source');
 
-  const { records, total, truncated } = await adapter(table);
+  // Bron-neutraal: de provider levert de generieke records-vorm (master + details).
+  const { records, total, truncated } = await provider.fetch({
+    source: table.source,
+    table,
+    columns: { master: masterSource, detail: detailSource },
+    relation: table.relation,
+  });
   if (truncated) {
     logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
       tableKey, opgehaald: records.length, totaalInBron: total,
@@ -492,5 +439,4 @@ module.exports = {
   getLastViewedAt,
   markViewed,
   computeContentHash,
-  FETCH_ADAPTERS,
 };

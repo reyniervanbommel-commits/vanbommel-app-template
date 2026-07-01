@@ -495,5 +495,8 @@ module.exports = {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  // Geëxporteerd voor #139: de D365ODataProvider heeft dezelfde auth/baseUrl nodig om $metadata op te halen.
+  buildHeaders,
+  getBaseUrl,
   __resetOAuthTokenCache,
 };

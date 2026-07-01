@@ -1,0 +1,311 @@
+'use strict';
+
+// D365ODataProvider — implementeert het SourceProvider-contract voor Dynamics 365 F&O (#139, Fase B).
+// Wrapt de bestaande D365ODataService. In Fase B blijft fetch() voor de PO-entiteit functioneel
+// identiek aan de oude purchaseOrdersFetch-adapter (PO-pariteit): dezelfde mapping, dezelfde
+// records-vorm. discoverFields() is nieuw: het haalt het D365 $metadata-document op en parseert de
+// EntityTypes/Properties/NavigationProperties (zelfde regex-aanpak als scripts/d365/inspect-metadata.mjs).
+//
+// Strangler-fig: de hardcoded PO-mapping die eerst in TableDataService.js stond, verhuist hierheen.
+// Geen andere laag kent D365; dit bestand is het enige raakvlak.
+
+const { SourceProvider } = require('./SourceProvider');
+const { logger } = require('../../utils/logger');
+const settingsService = require('../SettingsService');
+const {
+  fetchPurchaseOrders,
+  writeBackField,
+  buildHeaders,
+  getBaseUrl,
+} = require('../D365ODataService');
+
+const METADATA_PATH = '/data/$metadata';
+const METADATA_TTL_MS = 10 * 60 * 1000; // 10 minuten in-memory cache voor het (grote) $metadata-document.
+const DEFAULT_METADATA_TIMEOUT_MS = 20000;
+
+// In-memory $metadata-cache (per baseUrl). Voorkomt dat elke discover-call het volledige document ophaalt.
+const _metadataCache = new Map(); // baseUrl -> { xml, expiresAt }
+
+// ---------------------------------------------------------------------------
+// EDM-type -> app data_type mapping.
+// EDM-primitieven staan als "Edm.String", "Edm.Decimal", enz. in $metadata. Enums (custom types)
+// mappen we op 'select'; onbekende/complexe types vallen terug op 'text'.
+// ---------------------------------------------------------------------------
+function edmToDataType(edmType) {
+  const t = String(edmType || '').replace(/^Collection\(/, '').replace(/\)$/, '');
+  if (t === 'Edm.Boolean') return 'boolean';
+  if (
+    t === 'Edm.Int16' || t === 'Edm.Int32' || t === 'Edm.Int64' ||
+    t === 'Edm.Decimal' || t === 'Edm.Double' || t === 'Edm.Single' || t === 'Edm.Byte'
+  ) {
+    return 'number';
+  }
+  if (
+    t === 'Edm.Date' || t === 'Edm.DateTimeOffset' || t === 'Edm.DateTime' ||
+    t === 'Edm.Time' || t === 'Edm.TimeOfDay'
+  ) {
+    return 'date';
+  }
+  if (t === 'Edm.String' || t === 'Edm.Guid') return 'text';
+  // Niet-Edm (bv. Microsoft.Dynamics.DataEntities.NoYes of een enum-type) -> keuzelijst.
+  if (t && !t.startsWith('Edm.')) return 'select';
+  return 'text';
+}
+
+// Kort, leesbaar label uit een PascalCase-veldnaam ("PurchaseOrderNumber" -> "Purchase Order Number").
+function humanizeFieldName(field) {
+  return String(field || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
+// $metadata ophalen (met in-memory TTL-cache) en parsen.
+// ---------------------------------------------------------------------------
+async function fetchMetadataXml() {
+  const baseUrl = await getBaseUrl();
+  const cached = _metadataCache.get(baseUrl);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { xml: cached.xml, baseUrl };
+  }
+
+  const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_METADATA_TIMEOUT_MS));
+  const timeout = Number.parseInt(timeoutRaw, 10) || DEFAULT_METADATA_TIMEOUT_MS;
+
+  // Auth-headers hergebruiken; $metadata is XML, dus expliciet Accept overschrijven.
+  const headers = { ...(await buildHeaders()), Accept: 'application/xml' };
+
+  const controller = new AbortController();
+  const handle = setTimeout(() => controller.abort(), timeout);
+  let response;
+  try {
+    response = await fetch(baseUrl + METADATA_PATH, { method: 'GET', headers, signal: controller.signal });
+  } catch (error) {
+    const err = new Error('D365 $metadata is niet bereikbaar');
+    err.status = error && error.name === 'AbortError' ? 504 : 502;
+    throw err;
+  } finally {
+    clearTimeout(handle);
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    logger.error('D365 $metadata ophalen mislukt', { status: response.status, bodyPreview: body.slice(0, 300) });
+    const err = new Error('Kon D365 $metadata niet ophalen');
+    err.status = 502;
+    throw err;
+  }
+
+  const xml = await response.text();
+  _metadataCache.set(baseUrl, { xml, expiresAt: Date.now() + METADATA_TTL_MS });
+  return { xml, baseUrl };
+}
+
+// Knip het document in <EntityType ...>...</EntityType>-blokken en index op naam (hoofdletterongevoelig).
+function indexEntityTypes(xml) {
+  const blocks = xml.match(/<EntityType\b[\s\S]*?<\/EntityType>/g) || [];
+  const byName = new Map();
+  for (const block of blocks) {
+    const name = (block.match(/<EntityType\s+Name="([^"]+)"/) || [])[1] || '';
+    if (name) byName.set(name.toLowerCase(), { name, block });
+  }
+  return byName;
+}
+
+// Alle scalar Properties (dus geen NavigationProperty) uit één EntityType-blok halen.
+function parseEntityProperties(block, scope) {
+  const props = [];
+  const propRe = /<Property\s+([^>]*?)\/?>/g;
+  let m;
+  while ((m = propRe.exec(block)) !== null) {
+    const attrs = m[1];
+    const name = (attrs.match(/\bName="([^"]+)"/) || [])[1];
+    const type = (attrs.match(/\bType="([^"]+)"/) || [])[1];
+    if (!name || !type) continue;
+    const nullableAttr = (attrs.match(/\bNullable="([^"]+)"/) || [])[1];
+    props.push({
+      field: name,
+      label: humanizeFieldName(name),
+      dataType: edmToDataType(type),
+      scope,
+      // In EDM is Nullable standaard true als het attribuut ontbreekt.
+      nullable: nullableAttr ? nullableAttr === 'true' : true,
+    });
+  }
+  return props;
+}
+
+// Resolve de doel-EntityType van een NavigationProperty (bv. "PurchaseOrderLines") in de master-entiteit.
+function resolveNavTargetType(masterBlock, navName) {
+  const navRe = new RegExp(`<NavigationProperty\\s+Name="${navName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}"\\s+Type="([^"]+)"`, 'i');
+  const match = masterBlock.match(navRe);
+  if (!match) return null;
+  // Type is bv. "Collection(Microsoft.Dynamics.DataEntities.PurchaseOrderLineV2)" -> laatste segment.
+  return match[1].replace(/^Collection\(/, '').replace(/\)$/, '').replace(/^.*\./, '');
+}
+
+// Uit "/data/PurchaseOrderHeadersV2" of "PurchaseOrderHeadersV2" -> "PurchaseOrderHeadersV2".
+function entitySetName(sourceEntity) {
+  return String(sourceEntity || '').replace(/^\/?data\//i, '').replace(/^\//, '').trim();
+}
+
+class D365ODataProvider extends SourceProvider {
+  capabilities() {
+    return {
+      discoverFields: true,
+      serverFilter: true,
+      serverPaging: true,
+      masterDetail: true,
+      writeBack: true,
+      needsCache: true,
+    };
+  }
+
+  /**
+   * Ontdek master- + detailvelden via $metadata. De master-entiteit komt uit sourceEntity; de
+   * detail-entiteit uit relation.detailSourceEntity (nav-property op de master).
+   */
+  async discoverFields({ sourceEntity, relation } = {}) {
+    const masterEntity = entitySetName(sourceEntity);
+    if (!masterEntity) {
+      throw Object.assign(new Error('Geen bron-entiteit opgegeven voor velddiscovery'), { status: 400 });
+    }
+
+    const { xml } = await fetchMetadataXml();
+    const byName = indexEntityTypes(xml);
+
+    // D365 entity-sets heten meestal net iets anders dan de EntityType. Probeer eerst exact,
+    // dan zonder trailing "V2"/"V3", dan enkelvoud (drop trailing 's').
+    const master = findEntityType(byName, masterEntity);
+    if (!master) {
+      throw Object.assign(new Error(`Entiteit '${masterEntity}' niet gevonden in D365 $metadata`), { status: 404 });
+    }
+
+    const fields = parseEntityProperties(master.block, 'master');
+
+    // Detail-velden via de nav-property (indien een expand-relatie geconfigureerd is).
+    const navName = relation && relation.detailSourceEntity ? relation.detailSourceEntity : null;
+    if (navName && relation.kind !== 'none') {
+      const targetType = resolveNavTargetType(master.block, navName);
+      const detail = targetType ? findEntityType(byName, targetType) : null;
+      if (detail) {
+        fields.push(...parseEntityProperties(detail.block, 'detail'));
+      } else {
+        logger.warn('Detail-entiteit van nav-property niet gevonden in $metadata', { navName, targetType });
+      }
+    }
+
+    return fields;
+  }
+
+  /**
+   * Haal rijen op. Fase B: voor de PO-entiteit hergebruiken we de bestaande fetchPurchaseOrders en
+   * produceren exact de records-vorm die de oude purchaseOrdersFetch-adapter maakte (PO-pariteit).
+   * De generieke $select/$expand-bouwer volgt in een latere fase.
+   */
+  async fetch({ table } = {}) {
+    if (!table) throw Object.assign(new Error('Geen tabel opgegeven voor fetch'), { status: 400 });
+    return purchaseOrdersFetch(table);
+  }
+
+  /**
+   * Dunne wrapper rond de bestaande write-back (Fase B: nog niet via routes ontsloten).
+   */
+  async writeField({ level, dataAreaId, orderNumber, lineNumber, field, value, basedOnValue } = {}) {
+    return writeBackField({
+      level, dataAreaId, orderNumber, lineNumber,
+      d365Field: field, newValue: value, basedOnValue,
+    });
+  }
+}
+
+// Zoek een EntityType op naam met tolerante fallbacks. D365 entity-sets heten vaak in het meervoud
+// met een V-suffix (bv. "PurchaseOrderHeadersV2") terwijl de EntityType enkelvoud is
+// ("PurchaseOrderHeaderV2"). We proberen elke combinatie van: exact / zonder V-suffix / enkelvoud.
+function findEntityType(byName, wanted) {
+  const base = String(wanted || '').toLowerCase();
+  const version = (base.match(/v\d+$/) || [''])[0];       // bv. "v2"
+  const stem = base.replace(/v\d+$/, '');                  // "purchaseorderheaders"
+  const singularStem = stem.replace(/s$/, '');             // "purchaseorderheader"
+
+  const candidates = [
+    base,                       // purchaseorderheadersv2
+    stem,                       // purchaseorderheaders
+    singularStem + version,     // purchaseorderheaderv2
+    singularStem,               // purchaseorderheader
+  ];
+  for (const c of candidates) {
+    if (c && byName.has(c)) return byName.get(c);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// PO-fetch — verhuisd uit TableDataService.js (PO-pariteit). Levert de generieke records-vorm.
+// ---------------------------------------------------------------------------
+function toNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function purchaseOrdersFetch(table) {
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
+  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
+  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
+  const parsedMax = Number.parseInt(rawMax, 10);
+  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+
+  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
+  const items = Array.isArray(result.items) ? result.items : [];
+
+  const records = items.map((order) => {
+    const raw = order.raw || {};
+    return {
+      partitionKey: String(raw.dataAreaId || company || '').trim(),
+      recordKey: String(order.orderNumber || raw.PurchaseOrderNumber || '').trim(),
+      modifiedAt: raw.ModifiedDateTime || null,
+      master: {
+        orderNumber: order.orderNumber,
+        vendorAccount: order.vendorAccount,
+        vendorName: order.vendorName,
+        status: order.status,
+        currencyCode: order.currencyCode,
+        requestedDeliveryDate: order.requestedDeliveryDate,
+        createdDateTime: order.createdDateTime,
+      },
+      details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({
+        detailKey: toNumberOrNull(line.lineNumber),
+        values: {
+          lineNumber: line.lineNumber,
+          itemNumber: line.itemNumber,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          lineAmount: line.lineAmount,
+          currencyCode: line.currencyCode,
+          requestedDeliveryDate: line.requestedDeliveryDate,
+        },
+      })),
+    };
+  });
+  return { records, total: result.total, truncated: Boolean(result.truncated) };
+}
+
+function __resetMetadataCache() {
+  _metadataCache.clear();
+}
+
+module.exports = {
+  D365ODataProvider,
+  // Geëxporteerd voor unit-tests (DB-/netwerk-vrij):
+  edmToDataType,
+  humanizeFieldName,
+  parseEntityProperties,
+  indexEntityTypes,
+  resolveNavTargetType,
+  entitySetName,
+  findEntityType,
+  __resetMetadataCache,
+};

@@ -3,6 +3,7 @@ import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import {
   Person24Regular,
   Table24Regular,
+  TableSettings24Regular,
   CloudLink24Regular,
   Mail24Regular,
 } from '@fluentui/react-icons';
@@ -10,6 +11,7 @@ import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
 import UserAnalytics from './UserAnalytics';
 import AdminODataSettings from './AdminODataSettings';
+import TableBuilder from './TableBuilder';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 
 const useStyles = makeStyles({
@@ -39,6 +41,7 @@ export default function AdminPage() {
   const handleTabUsers = useCallback(() => setAdminTab('users'), []);
   const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
   const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
+  const handleTabTableBuilder = useCallback(() => setAdminTab('table-builder'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
 
   return (
@@ -63,6 +66,12 @@ export default function AdminPage() {
           onClick={handleTabOdata}
         />
         <SidebarNavItem
+          icon={TableSettings24Regular}
+          label="Table Builder"
+          active={adminTab === 'table-builder'}
+          onClick={handleTabTableBuilder}
+        />
+        <SidebarNavItem
           icon={Mail24Regular}
           label="Mail template"
           active={adminTab === 'mail-template'}
@@ -74,6 +83,7 @@ export default function AdminPage() {
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}
         {adminTab === 'odata' && <AdminODataSettings />}
+        {adminTab === 'table-builder' && <TableBuilder />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
       </div>
     </div>

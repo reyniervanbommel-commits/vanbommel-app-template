@@ -11,6 +11,7 @@ const SqlSessionStore = require('./services/SqlSessionStore');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
+const tableBuilderRouter = require('./routes/tableBuilder');
 const supplierRouter = require('./routes/supplier');
 const purchaseOrdersRouter = require('./routes/purchaseOrders');
 const dataRouter = require('./routes/data');
@@ -82,6 +83,12 @@ app.use(session({
 }));
 
 app.use('/api/auth', authRouter);
+// Table Builder-admin (#139, Fase B): kaal gemonteerd; de admin-gate (requireSession + requireRole)
+// zit PER ROUTE in tableBuilder.js, niet op de mount. Reden: mount-level middleware draait voor élk
+// /api/admin/*-pad, dus een admin-only mount-gate hier zou employees ten onrechte uit de generieke
+// admin-router hieronder sluiten (/users, /analytics, /settings/*). Niet-matchende paden vallen nu
+// schoon door naar die router, die zijn eigen requireAnyRole([ADMIN, EMPLOYEE]) afdwingt.
+app.use('/api/admin', tableBuilderRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 app.use('/api/purchase-orders', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), purchaseOrdersRouter);
