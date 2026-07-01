@@ -15,6 +15,12 @@ env:
   ACA_RESOURCE_GROUP: ${{ secrets.ACA_RESOURCE_GROUP }}
   ACA_ENVIRONMENT: ${{ secrets.ACA_ENVIRONMENT }}
 
+# De default GITHUB_TOKEN is read-only; de stap "Preview-URL als commit-status posten"
+# heeft statuses:write nodig (anders 403 "Resource not accessible by integration").
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   deploy-preview:
     if: github.event_name == 'push'

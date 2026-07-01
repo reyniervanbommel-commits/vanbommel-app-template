@@ -7,13 +7,13 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const connectMssql = require('connect-mssql-v2');
-const MSSQLStore = connectMssql.default || connectMssql;
+const SqlSessionStore = require('./services/SqlSessionStore');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
 const purchaseOrdersRouter = require('./routes/purchaseOrders');
+const dataRouter = require('./routes/data');
 const { requireSession, requireAnyRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
@@ -54,17 +54,15 @@ app.use(rateLimit({
 
 app.use(express.json());
 
-// Geef de store de rauwe connectiestring: mssql's ConnectionPool parset die correct
-// (incl. tcp:-prefix, 'Initial Catalog' en Encrypt), net als de rest van de app.
-// De zelfgemaakte parseSqlConnectionString liet die details vallen, waardoor de
-// store-pool nooit verbond en elke store.get (= elke authenticated request) bleef hangen.
-const sessionStore = new MSSQLStore(process.env.SQL_CONNECTION_STRING);
+// Eigen MSSQL-session-store op de gedeelde app-pool (sql.connect), i.p.v. connect-mssql-v2.
+// Die had een eigen losse pool met een race in ready(): bij parallelle requests vlak na login
+// bleef store.get hangen (alleen in de container). Door dezelfde, bewezen werkende pool als de
+// routes te gebruiken, verdwijnt die hang. Zie server/services/SqlSessionStore.js.
+const sessionStore = new SqlSessionStore();
 // Vang connectiefouten van de session-store op zodat een DB-hapering het proces niet omlegt.
-if (typeof sessionStore.on === 'function') {
-  sessionStore.on('error', (err) => {
-    logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
-  });
-}
+sessionStore.on('error', (err) => {
+  logger.error('Session-store fout', { error: err && err.message ? err.message : String(err) });
+});
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   throw new Error('SESSION_SECRET moet gezet zijn en minimaal 32 tekens bevatten');
 }
@@ -87,6 +85,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 app.use('/api/purchase-orders', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), purchaseOrdersRouter);
+// Generieke Table Builder-data-API (#AB:152, Fase A) — staat naast /api/purchase-orders (strangler-fig).
+app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
