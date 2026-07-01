@@ -104,6 +104,28 @@ function safeJson(raw) {
   }
 }
 
+// Lijst van ACTIEVE tabellen voor de dynamische navigatie (GET /api/data). Levert bewust ALLEEN
+// key + label + hasDetail — geen bron-/config-details. `hasDetail` = of er een tb_relations-rij is met
+// een relatie-soort ≠ 'none'. Gesorteerd zoals de admin-lijst (sort_order, label).
+async function listActiveTables() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT t.[key], t.label,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM dbo.tb_relations r
+             WHERE r.table_id = t.id AND r.relation_kind <> 'none'
+           ) THEN 1 ELSE 0 END AS has_detail
+    FROM dbo.tb_tables t
+    WHERE t.is_active = 1
+    ORDER BY t.sort_order, t.label
+  `);
+  return result.recordset.map((row) => ({
+    key: row.key,
+    label: row.label,
+    hasDetail: Boolean(row.has_detail),
+  }));
+}
+
 async function listColumns({ tableId, scope = null, includeInactive = false }) {
   const pool = await getPool();
   const request = pool.request().input('tableId', sql.BigInt, tableId);
@@ -134,6 +156,7 @@ module.exports = {
   DATA_TYPES,
   getPool,
   getTableByKey,
+  listActiveTables,
   listColumns,
   getColumnById,
   mapColumnRow,

@@ -13,6 +13,7 @@
  * @typedef {Object} ProviderCapabilities
  * @property {boolean} discoverFields  Kan velden ontdekken voor de admin-kolompicker.
  * @property {boolean} [discoverEntities] Kan de beschikbare entiteiten ontdekken (entiteit-picker).
+ * @property {boolean} [discoverRelations] Kan de relatie-kandidaten (nav-properties) ontdekken (relatie-picker).
  * @property {boolean} serverFilter    Ondersteunt filteren aan de bronkant.
  * @property {boolean} serverPaging    Ondersteunt paging aan de bronkant.
  * @property {boolean} masterDetail    Ondersteunt master-detail (1 -> 0..1) ophalen.
@@ -68,6 +69,16 @@ class SourceProvider {
    */
   async discoverEntities() {
     throw Object.assign(new Error('discoverEntities() niet ondersteund door deze provider'), { status: 501 });
+  }
+
+  /**
+   * Ontdek de relatie-kandidaten (navigatie-eigenschappen) van de master-entiteit, zodat de admin de
+   * detail-entiteit kan KIEZEN i.p.v. te typen. Alleen zinvol als capabilities.discoverRelations === true.
+   * @param {{ sourceEntity: string }} _args
+   * @returns {Promise<Array<{name:string, targetEntityType:string, isCollection:boolean}>>}
+   */
+  async discoverRelations(_args) {
+    throw Object.assign(new Error('discoverRelations() niet ondersteund door deze provider'), { status: 501 });
   }
 
   /**

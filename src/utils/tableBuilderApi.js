@@ -66,9 +66,15 @@ export function assistTable({ sourceId, prompt }) {
 
 // --- Velden ontdekken & kolommen -------------------------------------------
 
-// GET /tables/:id/discover → { fields: [...] }
-export function discoverFields(id) {
-  return apiRequest(`/admin/tables/${id}/discover`);
+// GET /tables/:id/discover[?detailSourceEntity=<nav>] → { fields: [...] }
+// Zonder detailSourceEntity worden alleen master-velden ontdekt. Mét een
+// nav-property worden óók detail-velden ontdekt vóórdat de relatie is
+// opgeslagen (fix #2: volgorde detail-velden). Zie handleDiscover in de wizard.
+export function discoverFields(id, { detailSourceEntity } = {}) {
+  const qs = detailSourceEntity
+    ? `?detailSourceEntity=${encodeURIComponent(detailSourceEntity)}`
+    : '';
+  return apiRequest(`/admin/tables/${id}/discover${qs}`);
 }
 
 // GET /tables/:id/columns → { columns:{ master, detail } }
@@ -86,4 +92,16 @@ export function saveColumns(id, columns) {
 // POST /tables/:id/relation → { relation }
 export function saveRelation(id, body) {
   return apiRequest(`/admin/tables/${id}/relation`, { method: 'POST', body });
+}
+
+// GET /tables/:id/relations → { relations:[{ name, targetEntityType, isCollection }] }
+// Nav-property-kandidaten voor de detail-relatie. isCollection:true = master→N detail.
+export function listRelations(id) {
+  return apiRequest(`/admin/tables/${id}/relations`);
+}
+
+// POST /tables/:id/relation/suggest → { ok, suggestion:{ detailSourceEntity, kind, detailKeyFields:[...], reason } }
+// Zonder AI-key → HTTP 503 { error, code:'AI_NOT_CONFIGURED' } (borrelt op als Error met .status=503).
+export function suggestRelation(id) {
+  return apiRequest(`/admin/tables/${id}/relation/suggest`, { method: 'POST' });
 }

@@ -11,6 +11,7 @@ import MfaPage from './components/auth/MfaPage';
 import AdminPage from './components/admin/AdminPage';
 import { ROLES } from './constants/roles';
 import { PurchaseOrdersPage } from './components/supplier';
+import { TableViewerPage } from './components/tables';
 import { AppFooter, AppLayout, DevFeatureChecklist } from './components/layout';
 import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
@@ -55,6 +56,17 @@ function AppInner({ isDarkMode, onToggleTheme }) {
               <AuthGuard>
                 <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <PurchaseOrdersPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          {/* Generieke tabel-viewer (#139): tableKey uit de route → useTableGrid. */}
+          <Route
+            path="/tables/:tableKey"
+            element={
+              <AuthGuard>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                  <TableViewerPage />
                 </AppLayout>
               </AuthGuard>
             }

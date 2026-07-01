@@ -20,11 +20,13 @@ import {
   ArrowLeft24Regular,
   ArrowRight24Regular,
   CheckmarkCircle24Regular,
+  Open24Regular,
   PlugConnected24Regular,
   Save24Regular,
   Search24Regular,
   Sparkle24Regular,
 } from '@fluentui/react-icons';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   listTables,
   createTable,
@@ -36,6 +38,8 @@ import {
   assistTable,
   saveColumns,
   saveRelation,
+  listRelations,
+  suggestRelation,
 } from '../../utils/tableBuilderApi';
 
 // User Story #139 — admin TableBuilder-wizard.
@@ -227,6 +231,20 @@ function truncateSample(value, max = 40) {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+// Leidt een leesbaar label af uit een entitySet/entiteitpad (fix #4). Neemt het
+// laatste padsegment, splitst PascalCase/camelCase en snake_case, en strip een
+// trailing versienummer (bv. "PurchaseOrderHeadersV2" → "Purchase Order Headers").
+function humanizeEntityLabel(entitySet) {
+  if (!entitySet) return '';
+  const last = String(entitySet).split(/[/\\]/).filter(Boolean).pop() || '';
+  return last
+    .replace(/V\d+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default function TableBuilder() {
   const styles = useStyles();
 
@@ -281,6 +299,13 @@ export default function TableBuilder() {
     detailKeyFields: '',
     joinKeys: '',
   });
+  // Nav-property-kandidaten (#C): dropdown gevuld uit GET /tables/:id/relations.
+  const [relationOptions, setRelationOptions] = useState([]);
+  const [relationOptionsLoading, setRelationOptionsLoading] = useState(false);
+  // AI-relatiesuggestie: null=onbekend, true=beschikbaar, false=503 (knop verbergen).
+  const [relationSuggestAvailable, setRelationSuggestAvailable] = useState(null);
+  const [relationSuggestBusy, setRelationSuggestBusy] = useState(false);
+  const [relationSuggestReason, setRelationSuggestReason] = useState('');
 
   // --- Laden ----------------------------------------------------------------
 
@@ -335,6 +360,9 @@ export default function TableBuilder() {
     try {
       const { table } = await getTable(id);
       setActiveTable(table);
+      // Nieuwe/andere tabel → relatie-kandidaten opnieuw laten laden in stap 4.
+      setRelationOptions([]);
+      setRelationSuggestReason('');
       if (table.relation) {
         setRelationForm({
           detailSourceEntity: table.relation.detailSourceEntity || '',
@@ -456,21 +484,43 @@ export default function TableBuilder() {
     }
   }, [assistPrompt, selectedSourceId]);
 
-  // "Overnemen": vul de picker voor met de voorgestelde entiteit en onthoud
-  // de voorgestelde velden zodat ze in stap 3 voorgevinkt worden na discover.
+  // "Overnemen" (fix #4): vult ECHT het aanmaakformulier voor zodat de gebruiker
+  // meteen "Tabel aanmaken" kan klikken. Vult sourceEntity + (indien leeg) een
+  // gehumaniseerd Label, onthoudt de voorgestelde velden voor stap 3, en geeft
+  // duidelijke vervolg-feedback. Faalt nooit stil: bij een lege/incomplete
+  // suggestie tonen we een expliciete melding i.p.v. niets te doen.
   const handleAdoptSuggestion = useCallback(() => {
-    if (!assistSuggestion) return;
-    if (assistSuggestion.sourceEntity) {
-      setNewTableForm((p) => ({ ...p, sourceEntity: assistSuggestion.sourceEntity }));
-      setEntityQuery(assistSuggestion.entitySet || assistSuggestion.sourceEntity);
+    if (!assistSuggestion) {
+      setError('Geen suggestie om over te nemen — vraag eerst een AI-suggestie aan.');
+      return;
     }
+    const entity = assistSuggestion.sourceEntity || '';
+    const entitySet = assistSuggestion.entitySet || entity;
+    if (!entity) {
+      setError('De AI-suggestie bevat geen bron-entiteit; pas het aanmaakformulier handmatig aan.');
+      return;
+    }
+    // Label afleiden uit entitySet als het veld nog leeg is (fix #4).
+    const derivedLabel = humanizeEntityLabel(entitySet);
+    setNewTableForm((p) => ({
+      ...p,
+      sourceEntity: entity,
+      label: p.label.trim() ? p.label : (derivedLabel || p.label),
+    }));
+    setEntityQuery(entitySet);
+
     const keys = new Set(
       (assistSuggestion.fields || [])
         .filter((f) => f.field)
         .map((f) => `${f.scope || 'master'}::${f.field}`),
     );
     setSuggestedFieldKeys(keys.size ? keys : null);
-    setFeedback('Suggestie overgenomen — voorgestelde velden worden in stap 3 voorgevinkt.');
+    setError('');
+    setFeedback(
+      `Suggestie overgenomen — controleer het label en klik hieronder "Tabel aanmaken". ${
+        keys.size ? `${keys.size} veld(en) worden in stap 3 voorgevinkt.` : ''
+      }`.trim(),
+    );
   }, [assistSuggestion]);
 
   // --- Stap 3: velden ontdekken & cureren ----------------------------------
@@ -480,7 +530,11 @@ export default function TableBuilder() {
     setBusy(true);
     resetFeedback();
     try {
-      const { fields } = await discoverFields(activeTable.id);
+      // Fix #2 (volgorde detail-velden): geef de reeds gekozen detail-entiteit mee
+      // (uit de relatie-picker/AI-suggestie in stap 4) zodat detail-velden óók
+      // ontdekt worden vóór de relatie is opgeslagen. Zonder keuze → alleen master.
+      const detailSourceEntity = relationForm.detailSourceEntity.trim() || undefined;
+      const { fields } = await discoverFields(activeTable.id, { detailSourceEntity });
       const rows = (fields || []).map((f) => fieldRowFromDiscovered(f, suggestedFieldKeys));
       setMasterFields(rows.filter((r) => r.scope === 'master'));
       setDetailFields(rows.filter((r) => r.scope === 'detail'));
@@ -497,7 +551,7 @@ export default function TableBuilder() {
     } finally {
       setBusy(false);
     }
-  }, [activeTable, resetFeedback, suggestedFieldKeys]);
+  }, [activeTable, resetFeedback, suggestedFieldKeys, relationForm.detailSourceEntity]);
 
   // Ontdek automatisch bij binnenkomst in stap 3 als er nog niets is.
   useEffect(() => {
@@ -540,6 +594,62 @@ export default function TableBuilder() {
   }, [activeTable, masterFields, detailFields, resetFeedback, loadTableDetail]);
 
   // --- Stap 4: detail-relatie ----------------------------------------------
+
+  // Laadt nav-property-kandidaten (#C) voor de detail-relatie-picker.
+  const loadRelationOptions = useCallback(async (tableId) => {
+    if (!tableId) return;
+    setRelationOptionsLoading(true);
+    try {
+      const { relations } = await listRelations(tableId);
+      setRelationOptions(Array.isArray(relations) ? relations : []);
+    } catch (err) {
+      // Kandidaten zijn een hulpmiddel; bij fout blijft handmatige invoer mogelijk.
+      setRelationOptions([]);
+      setError(err.message);
+    } finally {
+      setRelationOptionsLoading(false);
+    }
+  }, []);
+
+  // Laad de kandidaten bij binnenkomst in stap 4 (eenmalig per tabel).
+  useEffect(() => {
+    if (stepIndex === 3 && activeTable && relationOptions.length === 0) {
+      loadRelationOptions(activeTable.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex, activeTable]);
+
+  // "AI stelt relatie voor" (#C): vult detailSourceEntity + detailKeyFields voor.
+  const handleSuggestRelation = useCallback(async () => {
+    if (!activeTable) return;
+    setRelationSuggestBusy(true);
+    resetFeedback();
+    setRelationSuggestReason('');
+    try {
+      const res = await suggestRelation(activeTable.id);
+      setRelationSuggestAvailable(true);
+      const s = res.suggestion || {};
+      setRelationForm((p) => ({
+        ...p,
+        detailSourceEntity: s.detailSourceEntity || p.detailSourceEntity,
+        kind: s.kind || p.kind,
+        detailKeyFields: Array.isArray(s.detailKeyFields)
+          ? s.detailKeyFields.join(', ')
+          : (s.detailKeyFields || p.detailKeyFields),
+      }));
+      setRelationSuggestReason(s.reason || '');
+      setFeedback('AI-relatie voorgesteld — controleer de velden en sla op.');
+    } catch (err) {
+      if (err.status === 503 && err.data?.code === 'AI_NOT_CONFIGURED') {
+        setRelationSuggestAvailable(false);
+        setError('AI-assistent is niet geconfigureerd (beheerder moet ANTHROPIC_API_KEY instellen).');
+      } else {
+        setError(err.message || 'AI-relatiesuggestie mislukt.');
+      }
+    } finally {
+      setRelationSuggestBusy(false);
+    }
+  }, [activeTable, resetFeedback]);
 
   const handleSaveRelation = useCallback(async () => {
     if (!activeTable) return;
@@ -925,17 +1035,89 @@ export default function TableBuilder() {
       {/* --- Stap 4: detail-relatie (optioneel) --- */}
       {stepIndex === 3 && (
         <div className={styles.section}>
-          <Text weight="semibold" className={styles.sectionTitle}>Stap 4 — Detail-relatie (optioneel)</Text>
+          <div className={styles.spread}>
+            <Text weight="semibold" className={styles.sectionTitle}>Stap 4 — Detail-relatie (optioneel)</Text>
+            {relationSuggestAvailable !== false && (
+              <Button
+                appearance="secondary"
+                icon={relationSuggestBusy ? <Spinner size="tiny" /> : <Sparkle24Regular />}
+                onClick={handleSuggestRelation}
+                disabled={relationSuggestBusy || busy}
+              >
+                {relationSuggestBusy ? 'AI denkt na...' : 'AI stelt relatie voor'}
+              </Button>
+            )}
+          </div>
           <Text className={styles.hint} block>
-            Koppel een detail-entiteit (regels) aan deze master-tabel. Laat leeg en ga verder als er geen detail is.
+            Koppel een detail-entiteit (regels) aan deze master-tabel. Kies een nav-property
+            hieronder of laat leeg als er geen detail is. Kandidaten met een collectie-badge
+            zijn de logische detail-relaties.
           </Text>
-          <Field label="Detail-entiteit (detailSourceEntity)" hint="Bijv. /data/PurchaseOrderLinesV2">
+
+          {/* Nav-property-picker uit GET /tables/:id/relations (#C). */}
+          <Field
+            label="Detail-relatie (nav-property)"
+            hint={
+              relationOptionsLoading
+                ? 'Kandidaten laden…'
+                : relationOptions.length
+                  ? 'Kies een navigatie-eigenschap; collectie-relaties leveren detailregels.'
+                  : 'Geen kandidaten gevonden — typ hieronder handmatig een detail-entiteit.'
+            }
+          >
+            <Combobox
+              value={relationForm.detailSourceEntity}
+              selectedOptions={relationForm.detailSourceEntity ? [relationForm.detailSourceEntity] : []}
+              onOptionSelect={(_, d) =>
+                setRelationForm((p) => ({ ...p, detailSourceEntity: d.optionValue || '' }))}
+              placeholder="Kies een nav-property"
+              aria-label="Detail-relatie (nav-property)"
+              disabled={relationOptionsLoading}
+              expandIcon={relationOptionsLoading ? <Spinner size="tiny" /> : undefined}
+            >
+              {relationOptions.length === 0 ? (
+                <Option key="__none" text="" disabled>Geen kandidaten beschikbaar.</Option>
+              ) : (
+                relationOptions.map((rel) => (
+                  <Option key={rel.name} value={rel.name} text={rel.name}>
+                    <span className={styles.comboOption}>
+                      <span>
+                        {rel.name}
+                        {rel.isCollection ? (
+                          <Badge appearance="tint" color="brand" size="small" style={{ marginLeft: '6px' }}>
+                            collectie
+                          </Badge>
+                        ) : null}
+                      </span>
+                      {rel.targetEntityType && (
+                        <span className={styles.comboOptionSub}>{rel.targetEntityType}</span>
+                      )}
+                    </span>
+                  </Option>
+                ))
+              )}
+            </Combobox>
+          </Field>
+
+          {/* Handmatige fallback: letterlijk een detail-entiteit/nav-property typen. */}
+          <Field
+            label="Detail-entiteit (detailSourceEntity)"
+            hint="Gevuld door de picker of AI, of typ hier zelf een nav-property/pad."
+          >
             <Input
               value={relationForm.detailSourceEntity}
               onChange={(_, d) => setRelationForm((p) => ({ ...p, detailSourceEntity: d.value }))}
-              placeholder="/data/PurchaseOrderLinesV2"
+              placeholder="PurchaseOrderLines of /data/PurchaseOrderLinesV2"
             />
           </Field>
+
+          {relationSuggestReason && (
+            <div className={styles.summaryRow}>
+              <span className={styles.summaryLabel}>AI-reden</span>
+              <Text className={styles.hint}>{relationSuggestReason}</Text>
+            </div>
+          )}
+
           <Field label="Detail-sleutelvelden (komma-gescheiden)">
             <Input
               value={relationForm.detailKeyFields}
@@ -950,6 +1132,10 @@ export default function TableBuilder() {
               placeholder="PurchaseOrderNumber"
             />
           </Field>
+          <Text className={styles.hint} block>
+            Tip: heb je hier een detail-entiteit gekozen? Ga terug naar stap 3 en klik
+            "Opnieuw ontdekken" om de detail-velden te cureren.
+          </Text>
           <div className={styles.actions}>
             <Button appearance="primary" icon={<Save24Regular />} onClick={handleSaveRelation} disabled={busy}>
               {busy ? 'Opslaan...' : 'Relatie opslaan'}
@@ -1000,10 +1186,29 @@ export default function TableBuilder() {
           ) : (
             <div className={styles.empty}>Geen tabel geselecteerd.</div>
           )}
+          {/* Fix #F: de tekst klopt nu met de nieuwe viewer + het dynamische menu. */}
           <Text className={styles.hint} block>
-            De tabel is opgeslagen in <strong>dbo.tb_tables</strong> en verschijnt data-gedreven in de app —
-            er is geen hardcoded menu-aanpassing nodig.
+            De tabel is opgeslagen in <strong>dbo.tb_tables</strong>. Actieve tabellen verschijnen
+            automatisch onder "Tabellen" in het zijmenu en zijn te bekijken via{' '}
+            <span className={styles.mono}>/tables/{activeTable?.key || '<key>'}</span>.
           </Text>
+          {/* "Tabel bekijken" alleen tonen voor publiceerbare (actieve) tabellen met een key. */}
+          {activeTable?.key && activeTable?.isActive ? (
+            <div className={styles.actions}>
+              <Button
+                as={RouterLink}
+                to={`/tables/${activeTable.key}`}
+                appearance="primary"
+                icon={<Open24Regular />}
+              >
+                Tabel bekijken
+              </Button>
+            </div>
+          ) : activeTable ? (
+            <Text className={styles.hint} block>
+              Deze tabel is (nog) niet actief en verschijnt daarom nog niet in de app.
+            </Text>
+          ) : null}
         </div>
       )}
 

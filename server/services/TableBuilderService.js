@@ -382,9 +382,38 @@ async function setRelation(tableId, input) {
 }
 
 // ---------------------------------------------------------------------------
+// Relatie-kandidaten (nav-properties van de master-entiteit) — zodat de admin de detail-entiteit KIEST.
+// Return { relations: [{ name, targetEntityType, isCollection }] } (collection-navs vooraan/gemarkeerd).
+// ---------------------------------------------------------------------------
+async function discoverRelations(tableId) {
+  const table = await getTableByKeyById(tableId);
+  const provider = getProviderForTable(table);
+  const caps = provider.capabilities();
+  if (!caps.discoverRelations) {
+    throw Object.assign(new Error('Deze bron ondersteunt geen relatie-discovery'), { status: 501 });
+  }
+  const relations = await provider.discoverRelations({ sourceEntity: table.sourceEntity });
+  return { relations: Array.isArray(relations) ? relations : [] };
+}
+
+// ---------------------------------------------------------------------------
 // Velddiscovery + kolommen cureren (tb_columns, source='source')
 // ---------------------------------------------------------------------------
-async function discoverFields(tableId) {
+// Bepaal welke relatie de detail-discovery gebruikt: een expliciet meegegeven `detailSourceEntity`
+// (frontend wil detail-velden zien VÓÓRDAT de relatie is opgeslagen) wint van de opgeslagen relatie.
+// Pure helper (DB-vrij) — geëxporteerd voor tests.
+function resolveDiscoverRelation(storedRelation, detailSourceEntity) {
+  const overrideEntity = requireText(detailSourceEntity, 'Detail-entiteit', {
+    max: MAX_ENTITY, required: false,
+  });
+  return overrideEntity
+    ? { detailSourceEntity: overrideEntity, kind: 'expand' }
+    : (storedRelation || null);
+}
+
+// `detailSourceEntity` (optioneel): laat de frontend detail-velden ontdekken VÓÓRDAT de relatie is
+// opgeslagen. Als meegegeven, gebruiken we die als expand-nav-property i.p.v. de opgeslagen table.relation.
+async function discoverFields(tableId, { detailSourceEntity } = {}) {
   const table = await getTableByKeyById(tableId);
   const provider = getProviderForTable(table);
   const caps = provider.capabilities();
@@ -392,10 +421,12 @@ async function discoverFields(tableId) {
     throw Object.assign(new Error('Deze bron ondersteunt geen velddiscovery'), { status: 501 });
   }
 
+  const relation = resolveDiscoverRelation(table.relation, detailSourceEntity);
+
   const fields = await provider.discoverFields({
     source: table.source,
     sourceEntity: table.sourceEntity,
-    relation: table.relation,
+    relation,
   });
 
   // Markeer welke velden al gecureerd zijn (source_field bezet in tb_columns) zodat de picker die
@@ -512,10 +543,12 @@ module.exports = {
   // relatie
   getRelation,
   setRelation,
+  discoverRelations,
   // velden/kolommen
   discoverFields,
   curateColumns,
   // exports voor tests
+  resolveDiscoverRelation,
   slugify,
   slugToColumnKey,
   CACHE_MODES,

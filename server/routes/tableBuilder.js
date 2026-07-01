@@ -114,12 +114,16 @@ router.post('/sources/:id/test', adminOnly, async (req, res, next) => {
 
 // ─── Velddiscovery + kolommen cureren ─────────────────────────────────────────
 
-// GET /api/admin/tables/:id/discover — kandidaatvelden (master + detail) voor de kolompicker.
+// GET /api/admin/tables/:id/discover?detailSourceEntity=... — kandidaatvelden (master + detail).
+// Met detailSourceEntity ontdekt de frontend detail-velden VÓÓRDAT de relatie is opgeslagen; zonder
+// param geldt het bestaande gedrag (gebruik de opgeslagen relatie).
 router.get('/tables/:id/discover', adminOnly, async (req, res, next) => {
   try {
     const id = toId(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ongeldig tabel-id' });
-    const fields = await tableBuilder.discoverFields(id);
+    const detailSourceEntity = typeof req.query.detailSourceEntity === 'string'
+      ? req.query.detailSourceEntity : undefined;
+    const fields = await tableBuilder.discoverFields(id, { detailSourceEntity });
     res.json({ fields });
   } catch (err) { next(err); }
 });
@@ -167,6 +171,28 @@ router.post('/tables/assist', adminOnly, async (req, res, next) => {
 });
 
 // ─── Master-detail-relatie ────────────────────────────────────────────────────
+
+// GET /api/admin/tables/:id/relations — relatie-kandidaten (nav-properties) zodat de admin KIEST i.p.v. typt.
+router.get('/tables/:id/relations', adminOnly, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ongeldig tabel-id' });
+    const result = await tableBuilder.discoverRelations(id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/tables/:id/relation/suggest — Claude stelt de logische detail-relatie voor.
+// Zonder ANTHROPIC_API_KEY -> 503 met code 'AI_NOT_CONFIGURED'. Audit met alleen tableId.
+router.post('/tables/:id/relation/suggest', adminOnly, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ongeldig tabel-id' });
+    await auditLog(req.user.id, req.user.email, 'RELATION_SUGGEST', 'tb_relations', id, {});
+    const result = await tableAssist.suggestRelation({ tableId: id });
+    res.json(result);
+  } catch (err) { next(err); }
+});
 
 // POST /api/admin/tables/:id/relation — master-detail-relatie leggen/bijwerken.
 router.post('/tables/:id/relation', adminOnly, async (req, res, next) => {

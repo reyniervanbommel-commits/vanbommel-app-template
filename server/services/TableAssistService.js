@@ -154,6 +154,115 @@ async function createMessage({ apiKey, userContent }) {
 }
 
 // ---------------------------------------------------------------------------
+// Relatie-suggestie (§3): Claude kiest de logische "detail/regels"-NavigationProperty.
+// ---------------------------------------------------------------------------
+const RELATION_TOOL_NAME = 'stel_relatie_voor';
+
+const RELATION_SYSTEM_PROMPT = [
+  'Je bent een assistent die een beheerder helpt bij het leggen van een master-detail-relatie in een',
+  'generieke Table Builder bovenop Dynamics 365 Finance & Operations. Je krijgt de master-entiteit en de',
+  'lijst NavigationProperties (relatie-kandidaten) van die entiteit. Kies de NavigationProperty die de',
+  'logische "detail/regels"-relatie vertegenwoordigt (bv. de orderregels bij een order). Geef alleen een',
+  'NavigationProperty die in de aangeleverde lijst staat; verzin er geen. Antwoord uitsluitend via het',
+  'tool "stel_relatie_voor". Reden in het Nederlands.',
+].join(' ');
+
+const RELATION_TOOL_DEF = {
+  name: RELATION_TOOL_NAME,
+  description:
+    'Kies de NavigationProperty die de logische detail/regels-relatie is en benoem de detail-sleutelvelden. '
+    + 'Kies navigationProperty uit de aangeleverde lijst.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      navigationProperty: { type: 'string', description: 'De gekozen NavigationProperty-naam uit de lijst.' },
+      detailKeyFields: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'De sleutelvelden van de detail-entiteit (bv. LineNumber).',
+      },
+      reason: { type: 'string', description: 'Korte NL-onderbouwing van de keuze.' },
+    },
+    required: ['navigationProperty', 'reason'],
+  },
+};
+
+// Dunne SDK-wrapper voor de relatie-suggestie (apart van createMessage zodat tests deze los kunnen mocken).
+async function createRelationMessage({ apiKey, userContent }) {
+  const client = new Anthropic({ apiKey });
+  return client.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: RELATION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userContent }],
+    tools: [RELATION_TOOL_DEF],
+    tool_choice: { type: 'tool', name: RELATION_TOOL_NAME },
+  });
+}
+
+// suggestRelation — laat Claude de logische detail-relatie van een tabel voorstellen. Haalt de master +
+// nav-properties op via TableBuilderService.discoverRelations (klein, dus geen shortlist nodig).
+async function suggestRelation({ tableId }) {
+  const apiKey = requireApiKey();
+
+  const { relations } = await tableBuilder.discoverRelations(tableId);
+  const candidates = Array.isArray(relations) ? relations : [];
+  if (!candidates.length) {
+    throw Object.assign(new Error('Geen relatie-kandidaten gevonden voor deze entiteit'), { status: 404 });
+  }
+
+  const table = await tableBuilder.getTable(tableId);
+  const lines = candidates.map(
+    (r) => `- ${r.name} -> ${r.targetEntityType}${r.isCollection ? ' (collectie: master→N-detail)' : ''}`,
+  );
+  const userContent = [
+    `Master-entiteit: ${table.sourceEntity}`,
+    '',
+    'NavigationProperties (relatie-kandidaten):',
+    lines.join('\n'),
+    '',
+    'Kies de NavigationProperty die de detail/regels-relatie is en benoem de detail-sleutelvelden.',
+  ].join('\n');
+
+  logger.info('Table Builder AI-assist: relatie-suggestie', {
+    tableId, kandidaten: candidates.length,
+  });
+
+  // Via module.exports zodat een test-spy op createRelationMessage effect heeft.
+  const response = await module.exports.createRelationMessage({ apiKey, userContent });
+
+  const content = Array.isArray(response && response.content) ? response.content : [];
+  const toolUse = content.find((c) => c && c.type === 'tool_use');
+  if (!toolUse || !toolUse.input) {
+    throw Object.assign(new Error('AI-assistent gaf geen bruikbaar relatie-voorstel terug'), { status: 502 });
+  }
+
+  const input = toolUse.input;
+  const proposed = String(input.navigationProperty || '').trim();
+  // Valideer dat de gekozen nav-property echt bestaat (exact, dan case-insensitive).
+  const matched = candidates.find((r) => r.name === proposed)
+    || candidates.find((r) => r.name.toLowerCase() === proposed.toLowerCase());
+  const detailSourceEntity = matched ? matched.name : proposed;
+  const detailKeyFields = Array.isArray(input.detailKeyFields)
+    ? input.detailKeyFields.map((f) => String(f || '').trim()).filter(Boolean)
+    : [];
+  const warning = matched
+    ? undefined
+    : `De voorgestelde relatie '${proposed}' staat niet in de kandidatenlijst; controleer de keuze.`;
+
+  return {
+    ok: true,
+    suggestion: {
+      detailSourceEntity,
+      kind: 'expand',
+      detailKeyFields,
+      reason: String(input.reason || '').trim(),
+      ...(warning ? { warning } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // suggest — vraag Claude een entiteit + velden voor te stellen op basis van de admin-prompt.
 // ---------------------------------------------------------------------------
 async function suggest({ sourceId, prompt }) {
@@ -218,7 +327,9 @@ async function suggest({ sourceId, prompt }) {
 
 module.exports = {
   suggest,
+  suggestRelation,
   createMessage,
+  createRelationMessage,
   // Geëxporteerd voor unit-tests (DB-/netwerk-vrij):
   buildShortlist,
   findEntityByName,

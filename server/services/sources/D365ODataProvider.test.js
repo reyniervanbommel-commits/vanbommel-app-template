@@ -11,10 +11,19 @@ const {
   parseEntitySets,
   indexEntityTypes,
   resolveNavTargetType,
+  parseNavigationProperties,
   entitySetName,
   findEntityType,
   normalizeSample,
 } = require('./D365ODataProvider');
+
+// Master-entiteit met MEERDERE NavigationProperties: een collectie (master→N-detail) + een 0..1-ref,
+// bewust in niet-gesorteerde volgorde zodat de Collection-first-sortering getest wordt.
+const NAV_FIXTURE_BLOCK = `<EntityType Name="PurchaseOrderHeaderV2">
+  <Property Name="PurchaseOrderNumber" Type="Edm.String"/>
+  <NavigationProperty Name="Vendor" Type="Microsoft.Dynamics.DataEntities.VendorV2"/>
+  <NavigationProperty Name="PurchaseOrderLines" Type="Collection(Microsoft.Dynamics.DataEntities.PurchaseOrderLineV2)"/>
+</EntityType>`;
 
 // Verkorte, representatieve $metadata-fixture (master + detail via NavigationProperty).
 const METADATA_FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
@@ -63,6 +72,7 @@ describe('D365ODataProvider capabilities', () => {
     expect(caps).toEqual({
       discoverFields: true,
       discoverEntities: true,
+      discoverRelations: true,
       serverFilter: true,
       serverPaging: true,
       masterDetail: true,
@@ -185,6 +195,42 @@ describe('$metadata-parser', () => {
     const target = resolveNavTargetType(master.block, 'PurchaseOrderLines');
     expect(target).toBe('PurchaseOrderLineV2');
     expect(findEntityType(byName, target)).toBeTruthy();
+  });
+});
+
+describe('parseNavigationProperties — relatie-kandidaten', () => {
+  it('parseert alle nav-properties met Collection-detectie en target-type', () => {
+    const navs = parseNavigationProperties(NAV_FIXTURE_BLOCK);
+    const byName = Object.fromEntries(navs.map((n) => [n.name, n]));
+    expect(byName.PurchaseOrderLines).toEqual({
+      name: 'PurchaseOrderLines',
+      targetEntityType: 'PurchaseOrderLineV2',
+      isCollection: true,
+    });
+    expect(byName.Vendor).toEqual({
+      name: 'Vendor',
+      targetEntityType: 'VendorV2',
+      isCollection: false,
+    });
+  });
+
+  it('zet collectie-navigaties (master→N-detail) vooraan', () => {
+    const navs = parseNavigationProperties(NAV_FIXTURE_BLOCK);
+    expect(navs[0].name).toBe('PurchaseOrderLines');
+    expect(navs[0].isCollection).toBe(true);
+  });
+
+  it('parseert uit de EntityType-index van de master (via indexEntityTypes)', () => {
+    const byName = indexEntityTypes(METADATA_FIXTURE);
+    const master = byName.get('purchaseorderheaderv2');
+    const navs = parseNavigationProperties(master.block);
+    expect(navs).toEqual([
+      { name: 'PurchaseOrderLines', targetEntityType: 'PurchaseOrderLineV2', isCollection: true },
+    ]);
+  });
+
+  it('geeft een lege lijst bij een blok zonder nav-properties', () => {
+    expect(parseNavigationProperties('<EntityType Name="X"></EntityType>')).toEqual([]);
   });
 });
 

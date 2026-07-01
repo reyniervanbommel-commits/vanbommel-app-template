@@ -1,11 +1,16 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
+import { Person24Regular, Table24Regular, Grid24Regular } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import { apiRequest } from '../../utils/api';
 import AppShellHeader from './AppShellHeader';
 import SidebarNavItem from '../shared/SidebarNavItem';
+
+// De bestaande "Purchase orders"-tegel houdt zijn eigen route (/). We sluiten
+// die tabel daarom uit de dynamische lijst uit om een dubbel menu-item te voorkomen.
+const PURCHASE_ORDERS_KEY = 'purchase-orders';
 
 const RAIL_WIDTH = 48;
 const PANEL_WIDTH = 260;
@@ -85,6 +90,19 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
   },
+  sectionLabel: {
+    ...shorthands.padding('10px', '14px', '4px', '14px'),
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  railDivider: {
+    height: '1px',
+    ...shorthands.margin('6px', '8px'),
+    backgroundColor: tokens.colorNeutralStroke2,
+  },
 });
 
 export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
@@ -94,7 +112,28 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // Dynamische tabellen (#139): geladen uit GET /api/data. purchase-orders wordt
+  // uitgesloten omdat dat zijn eigen vaste "Purchase orders"-item houdt.
+  const [dynamicTables, setDynamicTables] = useState([]);
   const isAdminLike = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+
+  useEffect(() => {
+    let cancelled = false;
+    // Alleen laden voor ingelogde gebruikers (deze layout draait achter AuthGuard).
+    if (!user) { setDynamicTables([]); return undefined; }
+    (async () => {
+      try {
+        const data = await apiRequest('/data');
+        if (cancelled) return;
+        const tables = Array.isArray(data?.tables) ? data.tables : [];
+        setDynamicTables(tables.filter((t) => t && t.key && t.key !== PURCHASE_ORDERS_KEY));
+      } catch {
+        // Menu-uitbreiding is optioneel; bij fout tonen we simpelweg geen sectie.
+        if (!cancelled) setDynamicTables([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const navItems = useMemo(
     () => [
@@ -102,6 +141,16 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
       ...(isAdminLike ? [{ id: 'admin', label: 'Gebruikersbeheer', icon: Person24Regular, path: '/admin' }] : []),
     ],
     [isAdminLike]
+  );
+
+  const tableItems = useMemo(
+    () => dynamicTables.map((t) => ({
+      id: `table-${t.key}`,
+      label: t.label || t.key,
+      icon: Grid24Regular,
+      path: `/tables/${t.key}`,
+    })),
+    [dynamicTables]
   );
 
   const handleNavigate = useCallback(
@@ -145,6 +194,19 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
               <span data-tooltip className={styles.railTooltip}>{item.label}</span>
             </div>
           ))}
+          {tableItems.length > 0 && <div className={styles.railDivider} />}
+          {tableItems.map((item) => (
+            <div key={item.id} className={styles.railItem}>
+              <SidebarNavItem
+                icon={item.icon}
+                label={item.label}
+                active={location.pathname === item.path}
+                onClick={() => handleNavigate(item.path)}
+                compact
+              />
+              <span data-tooltip className={styles.railTooltip}>{item.label}</span>
+            </div>
+          ))}
         </aside>
 
         {sidebarOpen && (
@@ -164,6 +226,20 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
               onClick={() => handleNavigate(item.path)}
             />
           ))}
+          {tableItems.length > 0 && (
+            <>
+              <Text as="div" className={styles.sectionLabel}>Tabellen</Text>
+              {tableItems.map((item) => (
+                <SidebarNavItem
+                  key={item.id}
+                  icon={item.icon}
+                  label={item.label}
+                  active={location.pathname === item.path}
+                  onClick={() => handleNavigate(item.path)}
+                />
+              ))}
+            </>
+          )}
         </aside>
 
         <main className={styles.main}>{children}</main>

@@ -16,6 +16,18 @@ function toColumnId(raw) {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+// GET /api/data — lijst van ACTIEVE tabellen voor de dynamische navigatie.
+// Levert alleen key + label + hasDetail (geen gevoelige bron-/config-data). De frontend beslist zelf
+// welke tabellen te tonen; de backend sluit hier niets uit (ook purchase-orders komt gewoon mee).
+router.get('/', async (req, res, next) => {
+  try {
+    const tables = await registry.listActiveTables();
+    return res.json({ tables });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {

@@ -14,10 +14,11 @@
 const tableBuilder = require('./TableBuilderService');
 const providerFactory = require('./sources/providerFactory');
 const assist = require('./TableAssistService');
-const { suggest, buildShortlist, findEntityByName } = assist;
+const { suggest, suggestRelation, buildShortlist, findEntityByName } = assist;
 
 // Staat voor de gemockte SDK-respons; per test overschreven.
 const createMock = vi.fn();
+const relationMock = vi.fn();
 
 const ENTITIES = [
   { name: 'CustomersV3', sourceEntity: '/data/CustomersV3', entityType: 'x.CustomerV3' },
@@ -33,10 +34,16 @@ const providerStub = {
 
 beforeEach(() => {
   createMock.mockReset();
+  relationMock.mockReset();
   providerStub.discoverEntities.mockReset();
   vi.restoreAllMocks();
   delete process.env.ANTHROPIC_API_KEY;
 });
+
+const RELATION_CANDIDATES = [
+  { name: 'PurchaseOrderLines', targetEntityType: 'PurchaseOrderLineV2', isCollection: true },
+  { name: 'Vendor', targetEntityType: 'VendorV2', isCollection: false },
+];
 
 describe('buildShortlist — begrenst de entiteiten-tokenkost', () => {
   it('matcht prompt-woorden op entity-namen (case-insensitive, deel-woord)', () => {
@@ -134,5 +141,70 @@ describe('suggest — met gemockte SDK', () => {
   it('gooit 502 als het model geen tool_use teruggeeft', async () => {
     createMock.mockResolvedValue({ content: [{ type: 'text', text: 'geen tool' }] });
     await expect(suggest({ sourceId: 1, prompt: 'iets' })).rejects.toMatchObject({ status: 502 });
+  });
+});
+
+describe('suggestRelation — ontbrekende API-key', () => {
+  it('gooit 503 met code AI_NOT_CONFIGURED als ANTHROPIC_API_KEY ontbreekt', async () => {
+    await expect(suggestRelation({ tableId: 1 })).rejects.toMatchObject({
+      status: 503,
+      code: 'AI_NOT_CONFIGURED',
+    });
+    expect(relationMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('suggestRelation — met gemockte SDK', () => {
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    vi.spyOn(tableBuilder, 'discoverRelations').mockResolvedValue({ relations: RELATION_CANDIDATES });
+    vi.spyOn(tableBuilder, 'getTable').mockResolvedValue({ id: 1, sourceEntity: '/data/PurchaseOrderHeadersV2' });
+    vi.spyOn(assist, 'createRelationMessage').mockImplementation((...a) => relationMock(...a));
+  });
+
+  it('geeft de gekozen NavigationProperty terug als expand-relatie', async () => {
+    relationMock.mockResolvedValue({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'stel_relatie_voor',
+          input: {
+            navigationProperty: 'PurchaseOrderLines',
+            detailKeyFields: ['LineNumber'],
+            reason: 'De orderregels bij de order',
+          },
+        },
+      ],
+    });
+
+    const result = await suggestRelation({ tableId: 1 });
+    expect(result.ok).toBe(true);
+    expect(result.suggestion).toMatchObject({
+      detailSourceEntity: 'PurchaseOrderLines',
+      kind: 'expand',
+      detailKeyFields: ['LineNumber'],
+    });
+    expect(result.suggestion.warning).toBeUndefined();
+    expect(relationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('voegt een waarschuwing toe als de voorgestelde nav-property niet in de lijst staat', async () => {
+    relationMock.mockResolvedValue({
+      content: [{ type: 'tool_use', name: 'stel_relatie_voor', input: { navigationProperty: 'Onbekend', reason: 'gok' } }],
+    });
+    const result = await suggestRelation({ tableId: 1 });
+    expect(result.suggestion.detailSourceEntity).toBe('Onbekend');
+    expect(result.suggestion.warning).toContain('Onbekend');
+  });
+
+  it('gooit 404 als er geen relatie-kandidaten zijn', async () => {
+    tableBuilder.discoverRelations.mockResolvedValue({ relations: [] });
+    await expect(suggestRelation({ tableId: 1 })).rejects.toMatchObject({ status: 404 });
+    expect(relationMock).not.toHaveBeenCalled();
+  });
+
+  it('gooit 502 als het model geen tool_use teruggeeft', async () => {
+    relationMock.mockResolvedValue({ content: [{ type: 'text', text: 'geen tool' }] });
+    await expect(suggestRelation({ tableId: 1 })).rejects.toMatchObject({ status: 502 });
   });
 });

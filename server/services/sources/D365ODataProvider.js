@@ -264,6 +264,36 @@ function resolveNavTargetType(masterBlock, navName) {
   return match[1].replace(/^Collection\(/, '').replace(/\)$/, '').replace(/^.*\./, '');
 }
 
+// Parse ALLE <NavigationProperty Name="..." Type="..."/> uit één EntityType-blok. Elke nav-property is
+// een relatie-kandidaat: master→N-detail als de Type een Collection(...) is (isCollection=true), anders
+// een 0..1-referentie. `targetEntityType` = het laatste segment van de (evt. ontwrapte) Type.
+// Vorm in $metadata: <NavigationProperty Name="PurchaseOrderLines" Type="Collection(Ns.PurchaseOrderLineV2)"/>
+function parseNavigationProperties(block) {
+  const out = [];
+  const seen = new Set();
+  const navRe = /<NavigationProperty\s+([^>]*?)\/?>/g;
+  let m;
+  while ((m = navRe.exec(block)) !== null) {
+    const attrs = m[1];
+    const name = (attrs.match(/\bName="([^"]+)"/) || [])[1];
+    const type = (attrs.match(/\bType="([^"]+)"/) || [])[1];
+    if (!name || !type || seen.has(name)) continue;
+    seen.add(name);
+    const isCollection = /^Collection\(/.test(type);
+    const targetEntityType = type
+      .replace(/^Collection\(/, '')
+      .replace(/\)$/, '')
+      .replace(/^.*\./, '');
+    out.push({ name, targetEntityType, isCollection });
+  }
+  // Collection-navigaties (master→N-detail-kandidaten) eerst, daarna alfabetisch op naam.
+  out.sort((a, b) => {
+    if (a.isCollection !== b.isCollection) return a.isCollection ? -1 : 1;
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+  return out;
+}
+
 // Uit "/data/PurchaseOrderHeadersV2" of "PurchaseOrderHeadersV2" -> "PurchaseOrderHeadersV2".
 function entitySetName(sourceEntity) {
   return String(sourceEntity || '').replace(/^\/?data\//i, '').replace(/^\//, '').trim();
@@ -274,6 +304,7 @@ class D365ODataProvider extends SourceProvider {
     return {
       discoverFields: true,
       discoverEntities: true,
+      discoverRelations: true,
       serverFilter: true,
       serverPaging: true,
       masterDetail: true,
@@ -290,6 +321,27 @@ class D365ODataProvider extends SourceProvider {
   async discoverEntities() {
     const { xml } = await fetchMetadataXml();
     return parseEntitySets(xml);
+  }
+
+  /**
+   * Ontdek de relatie-kandidaten (NavigationProperties) van de master-entiteit, zodat de admin de
+   * detail-entiteit KIEST i.p.v. typt. Hergebruikt de gecachete $metadata + de EntityType-index.
+   * Collection-navigaties (master→N-detail) staan vooraan/gemarkeerd (isCollection=true).
+   * @param {{ sourceEntity: string }} _args
+   * @returns {Promise<Array<{name:string, targetEntityType:string, isCollection:boolean}>>}
+   */
+  async discoverRelations({ sourceEntity } = {}) {
+    const masterEntity = entitySetName(sourceEntity);
+    if (!masterEntity) {
+      throw Object.assign(new Error('Geen bron-entiteit opgegeven voor relatie-discovery'), { status: 400 });
+    }
+    const { xml } = await fetchMetadataXml();
+    const byName = indexEntityTypes(xml);
+    const master = findEntityType(byName, masterEntity);
+    if (!master) {
+      throw Object.assign(new Error(`Entiteit '${masterEntity}' niet gevonden in D365 $metadata`), { status: 404 });
+    }
+    return parseNavigationProperties(master.block);
   }
 
   /**
@@ -443,6 +495,7 @@ module.exports = {
   parseEntitySets,
   indexEntityTypes,
   resolveNavTargetType,
+  parseNavigationProperties,
   entitySetName,
   findEntityType,
   normalizeSample,
