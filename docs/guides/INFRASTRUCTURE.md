@@ -21,7 +21,7 @@ Container App healthcheck: `wget -qO- http://localhost:3000/api/health`
 ## Scaling
 
 - Min replicas: 0 (scale-to-zero op dev/preview)
-- Max replicas: 2 (dev/preview), 5+ (acc/prod afhankelijk van load)
+- Max replicas: 2 (dev/preview), 5+ (prod afhankelijk van load)
 
 ## Secrets in Container Apps
 

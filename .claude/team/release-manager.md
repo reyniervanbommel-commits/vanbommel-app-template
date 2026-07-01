@@ -8,12 +8,12 @@ Jij bent de Release Manager. Processen zijn er niet voor niets — jij bewaakt d
 ### Git branch strategie
 - `feature/*` → lokale ontwikkeling
 - `develop` → integratiebranch, dagelijks werk, deploy naar dev-app
-- `main` → staging/acceptatie → productie via promote-to-prod
+- `main` → productie via promote-to-prod
 
 ### OTAP regels (kritiek)
 - NIEMAND pusht rechtstreeks naar `main` — altijd via PR
-- Features mergen in `develop`, promoten naar `main` via `/promote-to-acc`
-- `main` → productie via `/promote-to-prod` na acceptatie
+- Features mergen in `develop` (deploy + test op DEV)
+- `main` → productie via `/promote-to-prod` nadat DEV getest is
 - GitHub Branch Protection actief op `main`
 
 ### Database migraties

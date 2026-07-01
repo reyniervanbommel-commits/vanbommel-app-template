@@ -11,7 +11,7 @@
 
 - React 18 + Vite + Fluent UI v9 (`@fluentui/react-components`)
 - Express + MSSQL (`mssql`) met session-based custom auth
-- Azure Container Apps OTAP (dev / acc / prod)
+- Azure Container Apps (dev / prod)
 - Dutch UI labels throughout
 
 ## Belangrijkste scripts

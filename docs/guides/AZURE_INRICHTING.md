@@ -2,12 +2,12 @@
 
 ## Vereiste Azure-resources per omgeving
 
-| Resource | Dev | Acc | Prod |
-|----------|-----|-----|------|
-| Azure SQL Database | ✅ | ✅ | ✅ |
-| Azure Container Apps | ✅ | ✅ | ✅ |
-| Azure Container Registry | Gedeeld | Gedeeld | Gedeeld |
-| Azure Communication Services | Optioneel | ✅ | ✅ |
+| Resource | Dev | Prod |
+|----------|-----|------|
+| Azure SQL Database | ✅ | ✅ |
+| Azure Container Apps | ✅ | ✅ |
+| Azure Container Registry | Gedeeld | Gedeeld |
+| Azure Communication Services | Optioneel | ✅ |
 
 ## Container App naamgeving
 
@@ -15,7 +15,6 @@
 |----------|------|
 | Preview | `preview-<branch-slug>` (max 32 tekens) |
 | Dev | `[APP_NAME]-dev` |
-| Acc | `[APP_NAME]-acc` |
 | Prod | `[APP_NAME]-prod` |
 
 ## GitHub Secrets instellen
@@ -61,6 +60,5 @@ SQL_CONNECTION_STRING="..." npm run migrate:db
 ```
 feature/* branch → push → preview.yml → preview-<slug> Container App
 develop branch → push → deploy-dev.yml → [APP_NAME]-dev
-main branch → push → deploy-staging.yml → [APP_NAME]-acc
-workflow_dispatch → deploy-prod.yml → [APP_NAME]-prod
+main branch → workflow_dispatch → deploy-prod.yml → [APP_NAME]-prod
 ```
