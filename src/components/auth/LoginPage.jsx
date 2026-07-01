@@ -17,6 +17,30 @@ import {
 import { APP_DISPLAY_NAME } from '../../config/app';
 import { APP_VERSION } from '../../config/version';
 
+const LAST_LOGIN_EMAIL_KEY = 'auth:last-login-email';
+
+function getStoredLoginEmail() {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(LAST_LOGIN_EMAIL_KEY) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function storeLoginEmail(email) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (email) {
+      window.localStorage.setItem(LAST_LOGIN_EMAIL_KEY, email);
+      return;
+    }
+    window.localStorage.removeItem(LAST_LOGIN_EMAIL_KEY);
+  } catch (_) {
+    // Ignore storage errors (private mode/quota) and keep login flow working.
+  }
+}
+
 const useStyles = makeStyles({
   container: {
     display: 'flex',
@@ -68,7 +92,7 @@ export default function LoginPage() {
   const styles = useStyles();
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getStoredLoginEmail());
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,10 +104,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    const loginEmail = email.trim();
     try {
-      const result = await login(email, password);
+      const result = await login(loginEmail, password);
+      storeLoginEmail(loginEmail);
       if (result.requiresPasswordSetup) {
-        navigate('/set-password?email=' + encodeURIComponent(email));
+        navigate('/set-password?email=' + encodeURIComponent(loginEmail));
       } else if (result.requiresMfa) {
         navigate('/mfa');
       } else {
@@ -103,7 +129,7 @@ export default function LoginPage() {
           <img
             src="/logo-circle.png"
             alt={APP_DISPLAY_NAME + ' logo'}
-            style={{ width: '88px', height: '88px', borderRadius: '50%', objectFit: 'cover' }}
+            style={{ width: '112px', height: '112px', borderRadius: '50%', objectFit: 'cover' }}
           />
         </div>
 
@@ -118,9 +144,11 @@ export default function LoginPage() {
           </MessageBar>
         )}
 
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form className={styles.form} onSubmit={handleSubmit} autoComplete="on">
           <Field label="E-mailadres" required>
             <Input
+              id="login-email"
+              name="email"
               type="email"
               value={email}
               onChange={handleEmailChange}
@@ -130,6 +158,8 @@ export default function LoginPage() {
           </Field>
           <Field label="Wachtwoord" required>
             <Input
+              id="login-password"
+              name="password"
               type="password"
               value={password}
               onChange={handlePasswordChange}
