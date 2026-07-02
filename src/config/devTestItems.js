@@ -54,4 +54,14 @@ export const devTestItems = [
       'Sessie bevat alleen veilige user velden zonder password hash',
     ],
   },
+  {
+    id: 'feature-143-typescript',
+    title: 'Feature #143 - TypeScript validation for frontend, backend, and preview CI',
+    checks: [
+      'Preview pipeline runs the TypeScript validation step before database migrations',
+      'Frontend typecheck completes using the frontend TypeScript configuration',
+      'Backend and script typecheck completes using the backend TypeScript configuration',
+      'Dependency lockfile contains the TypeScript tooling required by npm ci',
+    ],
+  },
 ];
