@@ -49,7 +49,10 @@ import {
 // nodig is gebruiken we native `title` of een Field-hint.
 
 const useStyles = makeStyles({
-  root: { maxWidth: '860px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
+  root: { maxWidth: '1200px', width: '100%', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
+  // Formulierstappen (bron/tabel aanmaken/relatie) lezen prettiger op een beperkte breedte;
+  // alleen de veld-tabel (stap 3) mag de volle breedte van `root` gebruiken.
+  formSection: { maxWidth: '760px' },
   pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   dbHint: {
     color: tokens.colorNeutralForeground3,
@@ -143,15 +146,20 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: tokens.colorNeutralBackground1,
   },
-  fieldTable: { minWidth: '720px', display: 'flex', flexDirection: 'column' },
+  fieldTable: { minWidth: '940px', display: 'flex', flexDirection: 'column' },
   fieldScroll: { maxHeight: '460px', ...shorthands.overflow('hidden', 'auto') },
   fieldGrid: {
     display: 'grid',
-    gridTemplateColumns: '36px minmax(180px, 2fr) 124px minmax(170px, 1.5fr) 74px 56px 68px',
+    gridTemplateColumns: '40px minmax(210px, 1.5fr) 140px minmax(280px, 2.2fr) 84px 64px 76px',
     alignItems: 'center',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('10px'),
     ...shorthands.padding('7px', '12px'),
+    // Grid-cellen mogen krimpen tot onder hun content-minimum; anders duwt bv. de Dropdown
+    // (Fluent-default min-width 250px) over de buurkolom heen.
+    '& > *': { minWidth: 0 },
   },
+  // Fluent Dropdown/Input hebben een eigen min-width; forceer ze binnen hun kolom.
+  cellControl: { minWidth: 0, width: '100%', maxWidth: '100%' },
   fieldHeader: {
     position: 'sticky',
     top: 0,
@@ -168,11 +176,17 @@ const useStyles = makeStyles({
     ':hover': { backgroundColor: tokens.colorNeutralBackground1Hover },
   },
   fieldRowDim: { backgroundColor: tokens.colorNeutralBackground2 },
-  fieldMeta: { display: 'flex', flexDirection: 'column', ...shorthands.gap('1px'), minWidth: 0 },
+  // Veld-cel: label en technische naam náást elkaar op één regel (niet gestapeld).
+  fieldMeta: { display: 'flex', flexDirection: 'row', alignItems: 'baseline', ...shorthands.gap('8px'), minWidth: 0 },
+  // Label (bewerkbaar of statisch): mag groeien/krimpen maar houdt voorrang op de technische naam.
+  labelCell: { minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: '110px' },
   fieldName: {
     fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase100,
     color: tokens.colorNeutralForeground3,
+    flexGrow: 0,
+    flexShrink: 2,
+    minWidth: 0,
     ...shorthands.overflow('hidden'),
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -184,8 +198,8 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  // Voorbeeldwaarden als kleine, goed leesbare chips (meerdere per veld).
-  sampleChips: { display: 'flex', flexWrap: 'wrap', ...shorthands.gap('4px'), minWidth: 0 },
+  // Voorbeeldwaarden als kleine, goed leesbare chips op één regel; overloop wordt geklikt (title = volledig).
+  sampleChips: { display: 'flex', flexWrap: 'nowrap', ...shorthands.gap('4px'), minWidth: 0, ...shorthands.overflow('hidden') },
   sampleChip: {
     fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase100,
@@ -195,7 +209,8 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     color: tokens.colorNeutralForeground2,
     border: `1px solid ${tokens.colorNeutralStroke3}`,
-    maxWidth: '100%',
+    flexShrink: 0,
+    maxWidth: '170px',
     ...shorthands.overflow('hidden'),
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -449,11 +464,17 @@ export default function TableBuilder() {
     if (!label) { setError('Geef een tabel-label op.'); return; }
     if (!sourceEntity) { setError('Geef een bron-entiteit op (bv. /data/PurchaseOrderHeadersV2).'); return; }
     if (!selectedSourceId) { setError('Kies eerst een bron in stap 1.'); return; }
+    const keyFields = newTableForm.keyFields
+      .split(',').map((s) => s.trim()).filter(Boolean);
+    if (!keyFields.length) {
+      // Sleutelvelden zijn essentieel: ze vormen de unieke rij-sleutel (zie hint). Zonder unieke sleutel
+      // overschrijven rijen elkaar in de cache en verdwijnt data.
+      setError('Geef minstens één sleutelveld op dat een rij uniek identificeert (bv. dataAreaId, SalesOrderNumber, LineNumber).');
+      return;
+    }
     setBusy(true);
     resetFeedback();
     try {
-      const keyFields = newTableForm.keyFields
-        .split(',').map((s) => s.trim()).filter(Boolean);
       const maxRowsNum = Number.parseInt(newTableForm.maxRows, 10);
       const { table } = await createTable({
         label,
@@ -979,7 +1000,7 @@ export default function TableBuilder() {
             </div>
           )}
 
-          <div className={styles.section}>
+          <div className={[styles.section, styles.formSection].join(' ')}>
             <Text weight="semibold" className={styles.sectionTitle}>Nieuwe tabel aanmaken</Text>
             <Field label="Label" required>
               <Input
@@ -1034,7 +1055,11 @@ export default function TableBuilder() {
                 placeholder="/data/PurchaseOrderHeadersV2"
               />
             </Field>
-            <Field label="Sleutelvelden (komma-gescheiden)" hint="Bijv. PurchaseOrderNumber, DataAreaId">
+            <Field
+              label="Sleutelvelden (komma-gescheiden)"
+              required
+              hint="Velden die samen elke rij UNIEK identificeren — vormen de rij-sleutel. Bij een niet-unieke sleutel overschrijven rijen elkaar en verdwijnt data. Bijv. voor orderregels: dataAreaId, SalesOrderNumber, LineNumber."
+            >
               <Input
                 value={newTableForm.keyFields}
                 onChange={(_, d) => setNewTableForm((p) => ({ ...p, keyFields: d.value }))}
@@ -1127,7 +1152,7 @@ export default function TableBuilder() {
 
       {/* --- Stap 4: detail-relatie (optioneel) --- */}
       {stepIndex === 3 && (
-        <div className={styles.section}>
+        <div className={[styles.section, styles.formSection].join(' ')}>
           <div className={styles.spread}>
             <Text weight="semibold" className={styles.sectionTitle}>Stap 4 — Detail-relatie (optioneel)</Text>
             {relationSuggestAvailable !== false && (
@@ -1338,13 +1363,29 @@ export default function TableBuilder() {
 // Sub-component: één scope-sectie (master of detail) als compacte tabel met sticky header-rij,
 // "selecteer alles", een teller en meerdere voorbeeldwaarden per veld.
 function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, onBulkCurate }) {
+  const [showEmpty, setShowEmpty] = useState(false);
+
+  // Velden zonder voorbeelddata verbergen (die kolommen zijn in de bron leeg → geen zinvolle keuze).
+  // Al gecureerde velden blijven altijd staan. Faalt-veilig: als sampling voor de héle scope niets
+  // opleverde (timeout/mislukt), toon dan alsnog alles — anders zou de lijst onbruikbaar leeg zijn.
+  const anyData = useMemo(() => rows.some((r) => r.samples && r.samples.length > 0), [rows]);
+  const hasData = (r) => (r.samples && r.samples.length > 0) || r.curated;
+  const emptyCount = useMemo(
+    () => (anyData ? rows.filter((r) => !hasData(r)).length : 0),
+    [rows, anyData],
+  );
+  const dataRows = useMemo(
+    () => (!anyData || showEmpty ? rows : rows.filter(hasData)),
+    [rows, anyData, showEmpty],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
+    if (!q) return dataRows;
+    return dataRows.filter(
       (r) => r.field.toLowerCase().includes(q) || (r.label || '').toLowerCase().includes(q),
     );
-  }, [rows, search]);
+  }, [dataRows, search]);
 
   const curatedCount = useMemo(() => rows.filter((r) => r.curated).length, [rows]);
   const allChecked = filtered.length > 0 && filtered.every((r) => r.curated);
@@ -1359,6 +1400,11 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
         <Badge appearance="tint" color={curatedCount ? 'brand' : 'informative'}>
           {curatedCount}/{rows.length} gecureerd
         </Badge>
+        {emptyCount > 0 && (
+          <Button appearance="subtle" size="small" onClick={() => setShowEmpty((v) => !v)}>
+            {showEmpty ? 'Verberg lege velden' : `Toon ${emptyCount} lege velden`}
+          </Button>
+        )}
         <span className={styles.grow} />
         <Input
           contentBefore={<Search24Regular />}
@@ -1414,6 +1460,7 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
                     <div className={styles.fieldMeta} title={r.field}>
                       {r.curated ? (
                         <Input
+                          className={styles.cellControl}
                           appearance="underline"
                           size="small"
                           value={r.label}
@@ -1427,6 +1474,7 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
                     </div>
 
                     <Dropdown
+                      className={styles.cellControl}
                       size="small"
                       value={DATA_TYPE_LABELS[r.dataType]}
                       selectedOptions={[r.dataType]}

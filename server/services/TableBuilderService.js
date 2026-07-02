@@ -165,6 +165,25 @@ async function discoverEntities(sourceId, { q, limit } = {}) {
   return { entities, total: matched.length, truncated: matched.length > entities.length };
 }
 
+// Ontdek de filterbare velden van een entiteit (voor de filter-builder + AI-filterassistent). Werkt op
+// sourceId + sourceEntity zodat het zowel bij het AANMAKEN (entiteit gekozen, nog geen tabel-id) als bij
+// het BEWERKEN van een bestaande tabel bruikbaar is. Licht: alleen $metadata, geen sample-fetch.
+async function discoverFilterFields(sourceId, sourceEntity) {
+  const source = await getSource(sourceId);
+  if (!source) throw Object.assign(new Error('Bron niet gevonden'), { status: 404 });
+  const entity = String(sourceEntity || '').trim();
+  if (!entity) throw Object.assign(new Error('Geen bron-entiteit opgegeven'), { status: 400 });
+
+  const provider = getProvider(source.providerType);
+  const caps = provider.capabilities();
+  if (!caps.discoverFilterFields) {
+    throw Object.assign(new Error('Deze bron ondersteunt geen filterveld-discovery'), { status: 501 });
+  }
+
+  const fields = await provider.discoverFilterFields({ sourceEntity: entity });
+  return { fields: Array.isArray(fields) ? fields : [] };
+}
+
 // ---------------------------------------------------------------------------
 // Tabellen (tb_tables)
 // ---------------------------------------------------------------------------
@@ -202,7 +221,10 @@ function validateTableInput(input, { partial = false } = {}) {
     out.sourceEntity = requireText(input.sourceEntity, 'Bron-entiteit', { max: MAX_ENTITY });
   }
   if (!partial || input.keyFields !== undefined) {
-    out.keyFields = requireText(input.keyFields, 'Sleutelvelden', { max: MAX_ENTITY, required: false });
+    // Sleutelvelden zijn VERPLICHT bij aanmaken: ze vormen de natuurlijke sleutel (partition_key +
+    // record_key) en dus de PK van tb_cache. Zonder unieke sleutel botsen/overschrijven rijen elkaar en
+    // hangen eigen kolomwaarden aan de verkeerde rij. Bij PATCH (partial) niet forceren.
+    out.keyFields = requireText(input.keyFields, 'Sleutelvelden', { max: MAX_ENTITY, required: !partial });
   }
   if (!partial || input.defaultFilter !== undefined) {
     // Bron-neutraal standaardfilter (voor D365 een OData $filter-expressie). Optioneel; door de provider
@@ -557,6 +579,7 @@ module.exports = {
   getSource,
   testSource,
   discoverEntities,
+  discoverFilterFields,
   // relatie
   getRelation,
   setRelation,

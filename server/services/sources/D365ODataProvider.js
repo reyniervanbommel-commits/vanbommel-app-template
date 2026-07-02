@@ -26,12 +26,14 @@ const DEFAULT_METADATA_TIMEOUT_MS = 20000;
 
 // Sampling: korte, vaste $top-fetch om representatieve voorbeeldwaarden per veld te tonen in de picker.
 // Bewust klein en faalt-veilig: sampling mag discovery NOOIT laten crashen of vertragen.
-const SAMPLE_TOP = 3;
-const SAMPLE_TIMEOUT_MS = 6000;
+// Ruimere $top zodat we per veld meerdere distinct voorbeeldwaarden kunnen laten zien (de picker
+// verbergt velden zonder data, dus goede sampling is belangrijk). Nog steeds klein en faalt-veilig.
+const SAMPLE_TOP = 8;
+const SAMPLE_TIMEOUT_MS = 8000;
 const SAMPLE_MAX_LEN = 60;
-// Aantal distinct voorbeeldwaarden dat we per veld tonen in de picker. Uit dezelfde SAMPLE_TOP-rijen,
-// dus geen extra fetch: één voorbeeld gaf te weinig gevoel voor de data, meerdere maakt het type duidelijk.
-const SAMPLE_MAX_PER_FIELD = 3;
+// Aantal distinct voorbeeldwaarden dat we per veld tonen. Uit dezelfde SAMPLE_TOP-rijen, dus geen
+// extra fetch: meerdere voorbeelden maken direct duidelijk wat er in de kolom staat.
+const SAMPLE_MAX_PER_FIELD = 4;
 
 // In-memory $metadata-cache (per baseUrl). Voorkomt dat elke discover-call het volledige document ophaalt.
 const _metadataCache = new Map(); // baseUrl -> { xml, expiresAt }
@@ -60,6 +62,65 @@ function edmToDataType(edmType) {
   // Niet-Edm (bv. Microsoft.Dynamics.DataEntities.NoYes of een enum-type) -> keuzelijst.
   if (t && !t.startsWith('Edm.')) return 'select';
   return 'text';
+}
+
+// ---------------------------------------------------------------------------
+// Filter-metadata: welke operatoren mag een veld hebben, en (voor enums) welke waarden. Voedt zowel de
+// filter-builder (dropdowns) als de AI-filterassistent (context + validatie). Enum-waarden worden als
+// volledig gekwalificeerde OData-literal gebouwd: Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'.
+// ---------------------------------------------------------------------------
+const OPERATORS_BY_TYPE = {
+  text: ['eq', 'ne', 'contains', 'startswith'],
+  number: ['eq', 'ne', 'gt', 'ge', 'lt', 'le'],
+  date: ['eq', 'ne', 'gt', 'ge', 'lt', 'le'],
+  boolean: ['eq', 'ne'],
+  select: ['eq', 'ne'],
+};
+
+function operatorsForType(dataType) {
+  return OPERATORS_BY_TYPE[dataType] || OPERATORS_BY_TYPE.text;
+}
+
+// Bouwt de OData-literal voor één enum-lid: <volledig gekwalificeerd type>'<Member>'.
+function enumMemberLiteral(enumType, member) {
+  return `${enumType}'${member}'`;
+}
+
+// Parse de ledennamen van één EnumType uit $metadata (documentvolgorde, distinct). Zoekt gericht op naam
+// i.p.v. alle EnumTypes te parsen — het metadata-document bevat er honderden.
+function extractEnumMembers(xml, shortName) {
+  if (!shortName) return [];
+  const safe = shortName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const block = (xml.match(new RegExp(`<EnumType\\s+Name="${safe}"[\\s\\S]*?</EnumType>`, 'i')) || [])[0];
+  if (!block) return [];
+  const members = [];
+  const re = /<Member\s+([^>]*?)\/?>/g;
+  let m;
+  while ((m = re.exec(block)) !== null) {
+    const name = (m[1].match(/\bName="([^"]+)"/) || [])[1];
+    if (name && !members.includes(name)) members.push(name);
+  }
+  return members;
+}
+
+// Verrijk velden met filter-metadata: `operators` (per datatype) en, voor enum-velden, `enumMembers`
+// (als OData-literal + ledennaam). Enum-leden worden per type gecachet zodat hetzelfde enum-type niet
+// meerdere keren uit de (grote) XML wordt gehaald.
+function withFilterMeta(fields, xml) {
+  const enumCache = new Map();
+  const membersFor = (enumType) => {
+    if (!enumType) return [];
+    if (enumCache.has(enumType)) return enumCache.get(enumType);
+    const short = enumType.replace(/^.*\./, '');
+    const list = extractEnumMembers(xml, short).map((name) => ({ name, value: enumMemberLiteral(enumType, name) }));
+    enumCache.set(enumType, list);
+    return list;
+  };
+  return fields.map((f) => ({
+    ...f,
+    operators: operatorsForType(f.dataType),
+    enumMembers: f.dataType === 'select' ? membersFor(f.enumType) : [],
+  }));
 }
 
 // Normaliseer een bron-waarde naar een korte weergave-string voor de veld-sample.
@@ -251,10 +312,15 @@ function parseEntityProperties(block, scope) {
     const type = (attrs.match(/\bType="([^"]+)"/) || [])[1];
     if (!name || !type) continue;
     const nullableAttr = (attrs.match(/\bNullable="([^"]+)"/) || [])[1];
+    const dataType = edmToDataType(type);
     props.push({
       field: name,
       label: humanizeFieldName(name),
-      dataType: edmToDataType(type),
+      dataType,
+      // Voor enum-velden ('select') bewaren we het volledig gekwalificeerde type (bv.
+      // Microsoft.Dynamics.DataEntities.PurchStatus). Nodig om (a) de leden op te zoeken in $metadata en
+      // (b) de OData-literal te bouwen. Niet-enum velden: null.
+      enumType: dataType === 'select' ? String(type).replace(/^Collection\(/, '').replace(/\)$/, '') : null,
       scope,
       // In EDM is Nullable standaard true als het attribuut ontbreekt.
       nullable: nullableAttr ? nullableAttr === 'true' : true,
@@ -311,6 +377,7 @@ class D365ODataProvider extends SourceProvider {
   capabilities() {
     return {
       discoverFields: true,
+      discoverFilterFields: true,
       discoverEntities: true,
       discoverRelations: true,
       serverFilter: true,
@@ -412,10 +479,41 @@ class D365ODataProvider extends SourceProvider {
     // Voorbeelddata per veld (faalt-veilig). De expand voor detail-samples werkt alleen bij een echte
     // nav-property; anders krijgen detail-velden sample:null.
     const samples = await fetchFieldSamples({ masterEntity, navName });
-    return fields.map((f) => {
+    // Verrijk met filter-metadata (operators + enum-leden) zodat curatie én filter-builder dezelfde bron
+    // gebruiken; daarna de samples eroverheen.
+    const enriched = withFilterMeta(fields, xml);
+    return enriched.map((f) => {
       const list = samples.get(`${f.scope}|${f.field}`) || [];
       return { ...f, samples: list, sample: list[0] ?? null };
     });
+  }
+
+  /**
+   * Ontdek de filterbare velden van de master-entiteit voor de filter-builder + AI-filterassistent.
+   * Bewust LICHT: alleen $metadata (gecachet) — geen sample-fetch en geen detail-velden. Elk veld krijgt
+   * `operators` (per datatype) en, voor enum-velden, `enumMembers` (OData-literals). Het $filter geldt op
+   * de master-entiteit, dus detailvelden zijn hier niet relevant.
+   */
+  async discoverFilterFields({ sourceEntity } = {}) {
+    const masterEntity = entitySetName(sourceEntity);
+    if (!masterEntity) {
+      throw Object.assign(new Error('Geen bron-entiteit opgegeven voor filtervelden'), { status: 400 });
+    }
+    const { xml } = await fetchMetadataXml();
+    const byName = indexEntityTypes(xml);
+    const master = findEntityType(byName, masterEntity);
+    if (!master) {
+      throw Object.assign(new Error(`Entiteit '${masterEntity}' niet gevonden in D365 $metadata`), { status: 404 });
+    }
+    const fields = parseEntityProperties(master.block, 'master');
+    return withFilterMeta(fields, xml).map((f) => ({
+      field: f.field,
+      label: f.label,
+      dataType: f.dataType,
+      nullable: f.nullable,
+      operators: f.operators,
+      enumMembers: f.enumMembers,
+    }));
   }
 
   /**
@@ -628,5 +726,9 @@ module.exports = {
   entitySetName,
   findEntityType,
   normalizeSample,
+  operatorsForType,
+  enumMemberLiteral,
+  extractEnumMembers,
+  withFilterMeta,
   __resetMetadataCache,
 };

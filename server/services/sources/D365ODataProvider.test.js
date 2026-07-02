@@ -15,7 +15,29 @@ const {
   entitySetName,
   findEntityType,
   normalizeSample,
+  operatorsForType,
+  enumMemberLiteral,
+  extractEnumMembers,
+  withFilterMeta,
 } = require('./D365ODataProvider');
+
+// $metadata-fragment met een EnumType (PurchStatus) — voor de enum-leden-extractie t.b.v. de filter-builder.
+const ENUM_FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0"><edmx:DataServices>
+  <Schema Namespace="Microsoft.Dynamics.DataEntities">
+    <EnumType Name="PurchStatus">
+      <Member Name="None" Value="0"/>
+      <Member Name="Backorder" Value="1"/>
+      <Member Name="Received" Value="2"/>
+      <Member Name="Invoiced" Value="3"/>
+      <Member Name="Canceled" Value="4"/>
+    </EnumType>
+    <EnumType Name="NoYes">
+      <Member Name="No" Value="0"/>
+      <Member Name="Yes" Value="1"/>
+    </EnumType>
+  </Schema>
+</edmx:DataServices></edmx:Edmx>`;
 
 // Master-entiteit met MEERDERE NavigationProperties: een collectie (master→N-detail) + een 0..1-ref,
 // bewust in niet-gesorteerde volgorde zodat de Collection-first-sortering getest wordt.
@@ -71,6 +93,7 @@ describe('D365ODataProvider capabilities', () => {
     const caps = provider.capabilities();
     expect(caps).toEqual({
       discoverFields: true,
+      discoverFilterFields: true,
       discoverEntities: true,
       discoverRelations: true,
       serverFilter: true,
@@ -254,5 +277,58 @@ describe('findEntityType — tolerante resolutie', () => {
   });
   it('geeft null voor een onbekende entiteit', () => {
     expect(findEntityType(byName, 'GeenBestaandeEntiteit')).toBeNull();
+  });
+});
+
+describe('enum-extractie voor de filter-builder', () => {
+  it('extractEnumMembers haalt de ledennamen in documentvolgorde op', () => {
+    expect(extractEnumMembers(ENUM_FIXTURE, 'PurchStatus'))
+      .toEqual(['None', 'Backorder', 'Received', 'Invoiced', 'Canceled']);
+  });
+
+  it('extractEnumMembers matcht het juiste EnumType (niet een naamgenoot)', () => {
+    expect(extractEnumMembers(ENUM_FIXTURE, 'NoYes')).toEqual(['No', 'Yes']);
+  });
+
+  it('extractEnumMembers geeft [] voor een onbekend/leeg type', () => {
+    expect(extractEnumMembers(ENUM_FIXTURE, 'Bestaatniet')).toEqual([]);
+    expect(extractEnumMembers(ENUM_FIXTURE, '')).toEqual([]);
+  });
+
+  it('enumMemberLiteral bouwt de volledig gekwalificeerde OData-literal', () => {
+    expect(enumMemberLiteral('Microsoft.Dynamics.DataEntities.PurchStatus', 'Backorder'))
+      .toBe("Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'");
+  });
+
+  it('operatorsForType levert type-passende operatoren', () => {
+    expect(operatorsForType('select')).toEqual(['eq', 'ne']);
+    expect(operatorsForType('number')).toContain('gt');
+    expect(operatorsForType('text')).toContain('contains');
+    expect(operatorsForType('onbekend')).toEqual(operatorsForType('text'));
+  });
+
+  it('parseEntityProperties bewaart het enumType voor keuzelijst-velden', () => {
+    const byName = indexEntityTypes(METADATA_FIXTURE);
+    const master = findEntityType(byName, 'PurchaseOrderHeaderV2');
+    const props = parseEntityProperties(master.block, 'master');
+    const noYes = props.find((p) => p.field === 'IsChangeManagementActive');
+    expect(noYes.dataType).toBe('select');
+    expect(noYes.enumType).toBe('Microsoft.Dynamics.DataEntities.NoYes');
+    const text = props.find((p) => p.field === 'PurchaseOrderNumber');
+    expect(text.enumType).toBeNull();
+  });
+
+  it('withFilterMeta verrijkt velden met operators + enum-leden (als OData-literals)', () => {
+    const fields = [
+      { field: 'PurchaseOrderStatus', dataType: 'select', enumType: 'Microsoft.Dynamics.DataEntities.PurchStatus' },
+      { field: 'PurchaseOrderNumber', dataType: 'text', enumType: null },
+    ];
+    const [enumField, textField] = withFilterMeta(fields, ENUM_FIXTURE);
+    expect(enumField.operators).toEqual(['eq', 'ne']);
+    expect(enumField.enumMembers).toContainEqual({
+      name: 'Backorder', value: "Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'",
+    });
+    expect(textField.enumMembers).toEqual([]);
+    expect(textField.operators).toContain('contains');
   });
 });

@@ -14,11 +14,30 @@
 const tableBuilder = require('./TableBuilderService');
 const providerFactory = require('./sources/providerFactory');
 const assist = require('./TableAssistService');
-const { suggest, suggestRelation, buildShortlist, findEntityByName } = assist;
+const {
+  suggest, suggestRelation, suggestFilter, buildShortlist, findEntityByName, buildFilterFromClauses,
+} = assist;
 
 // Staat voor de gemockte SDK-respons; per test overschreven.
 const createMock = vi.fn();
 const relationMock = vi.fn();
+const filterMock = vi.fn();
+
+// Filterbare velden zoals discoverFilterFields ze levert (met operators + enum-leden).
+const FILTER_FIELDS = [
+  {
+    field: 'PurchaseOrderStatus',
+    label: 'Purchase Order Status',
+    dataType: 'select',
+    operators: ['eq', 'ne'],
+    enumMembers: [
+      { name: 'Backorder', value: "Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'" },
+      { name: 'Received', value: "Microsoft.Dynamics.DataEntities.PurchStatus'Received'" },
+    ],
+  },
+  { field: 'PurchaseOrderNumber', label: 'Ordernummer', dataType: 'text', operators: ['eq', 'ne', 'contains', 'startswith'], enumMembers: [] },
+  { field: 'TotalDiscountPercentage', label: 'Korting', dataType: 'number', operators: ['eq', 'ne', 'gt', 'ge', 'lt', 'le'], enumMembers: [] },
+];
 
 const ENTITIES = [
   { name: 'CustomersV3', sourceEntity: '/data/CustomersV3', entityType: 'x.CustomerV3' },
@@ -35,6 +54,7 @@ const providerStub = {
 beforeEach(() => {
   createMock.mockReset();
   relationMock.mockReset();
+  filterMock.mockReset();
   providerStub.discoverEntities.mockReset();
   vi.restoreAllMocks();
   delete process.env.ANTHROPIC_API_KEY;
@@ -208,5 +228,107 @@ describe('suggestRelation — met gemockte SDK', () => {
   it('gooit 502 als het model geen tool_use teruggeeft', async () => {
     relationMock.mockResolvedValue({ content: [{ type: 'text', text: 'geen tool' }] });
     await expect(suggestRelation({ tableId: 1 })).rejects.toMatchObject({ status: 502 });
+  });
+});
+
+describe('buildFilterFromClauses — deterministische OData-opbouw + validatie', () => {
+  it('bouwt een enum-clausule om naar de volledig gekwalificeerde OData-literal', () => {
+    const { filter, clauses, dropped } = buildFilterFromClauses(
+      [{ field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder' }],
+      FILTER_FIELDS,
+    );
+    expect(filter).toBe("PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'");
+    expect(clauses).toHaveLength(1);
+    expect(dropped).toBe(0);
+  });
+
+  it('gebruikt contains(...) voor tekst en verbindt clausules met and/or', () => {
+    const { filter } = buildFilterFromClauses(
+      [
+        { field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder' },
+        { field: 'PurchaseOrderNumber', operator: 'contains', value: 'WSPO', join: 'or' },
+      ],
+      FILTER_FIELDS,
+    );
+    expect(filter).toBe(
+      "PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder' or contains(PurchaseOrderNumber,'WSPO')",
+    );
+  });
+
+  it('dropt clausules met onbekend veld, ongeldige operator of niet-bestaande enum-waarde', () => {
+    const { clauses, dropped } = buildFilterFromClauses(
+      [
+        { field: 'Bestaatniet', operator: 'eq', value: 'x' },
+        { field: 'PurchaseOrderStatus', operator: 'gt', value: 'Backorder' }, // gt niet toegestaan op enum
+        { field: 'PurchaseOrderStatus', operator: 'eq', value: 'Onbekend' }, // geen bestaand lid
+        { field: 'TotalDiscountPercentage', operator: 'eq', value: 'geen-getal' }, // ongeldige number
+      ],
+      FILTER_FIELDS,
+    );
+    expect(clauses).toHaveLength(0);
+    expect(dropped).toBe(4);
+  });
+
+  it('escapet enkele quotes in tekstwaarden (geen OData-injectie)', () => {
+    const { filter } = buildFilterFromClauses(
+      [{ field: 'PurchaseOrderNumber', operator: 'eq', value: "O'Brien" }],
+      FILTER_FIELDS,
+    );
+    expect(filter).toBe("PurchaseOrderNumber eq 'O''Brien'");
+  });
+});
+
+describe('suggestFilter — ontbrekende API-key', () => {
+  it('gooit 503 met code AI_NOT_CONFIGURED als ANTHROPIC_API_KEY ontbreekt', async () => {
+    await expect(suggestFilter({ sourceId: 1, sourceEntity: '/data/X', prompt: 'iets' }))
+      .rejects.toMatchObject({ status: 503, code: 'AI_NOT_CONFIGURED' });
+    expect(filterMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('suggestFilter — met gemockte SDK', () => {
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    vi.spyOn(tableBuilder, 'discoverFilterFields').mockResolvedValue({ fields: FILTER_FIELDS });
+    vi.spyOn(assist, 'createFilterMessage').mockImplementation((...a) => filterMock(...a));
+  });
+
+  it('geeft een gevalideerd, samengesteld OData-filter terug', async () => {
+    filterMock.mockResolvedValue({
+      content: [{
+        type: 'tool_use',
+        name: 'stel_filter_voor',
+        input: {
+          clauses: [{ field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder' }],
+          reason: 'Alleen open orders',
+        },
+      }],
+    });
+    const result = await suggestFilter({ sourceId: 1, sourceEntity: '/data/PurchaseOrderHeadersV2', prompt: 'alleen open orders' });
+    expect(result.ok).toBe(true);
+    expect(result.suggestion.filter).toBe("PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'");
+    expect(result.suggestion.clauses).toHaveLength(1);
+    expect(result.suggestion.warning).toBeUndefined();
+    expect(filterMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('waarschuwt en dropt clausules die niet op de bekende velden passen', async () => {
+    filterMock.mockResolvedValue({
+      content: [{
+        type: 'tool_use',
+        name: 'stel_filter_voor',
+        input: { clauses: [{ field: 'Onbekend', operator: 'eq', value: 'x' }], reason: 'gok' },
+      }],
+    });
+    const result = await suggestFilter({ sourceId: 1, sourceEntity: '/data/X', prompt: 'iets vaags' });
+    expect(result.suggestion.filter).toBe('');
+    expect(result.suggestion.clauses).toHaveLength(0);
+    expect(result.suggestion.warning).toBeTruthy();
+  });
+
+  it('gooit 502 als het model geen tool_use teruggeeft', async () => {
+    filterMock.mockResolvedValue({ content: [{ type: 'text', text: 'geen tool' }] });
+    await expect(suggestFilter({ sourceId: 1, sourceEntity: '/data/X', prompt: 'iets' }))
+      .rejects.toMatchObject({ status: 502 });
   });
 });

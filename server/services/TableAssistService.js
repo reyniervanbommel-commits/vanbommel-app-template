@@ -363,14 +363,201 @@ async function suggest({ sourceId, prompt }) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Filter-assistent (§filter): Claude vertaalt een NL-omschrijving naar filterclausules op de bekende
+// velden. WIJ bouwen de OData-$filter deterministisch uit GEVALIDEERDE clausules — nooit een vrije
+// modelstring — zodat er geen ongeldige of geïnjecteerde OData in de tabel-config belandt.
+// ---------------------------------------------------------------------------
+const FILTER_TOOL_NAME = 'stel_filter_voor';
+const FILTER_ENUM_CAP = 50; // Max. aantal keuzelijst-waarden per veld in de context (tokenbewaking).
+
+const FILTER_SYSTEM_PROMPT = [
+  'Je bent een assistent die een beheerder helpt een STANDAARDFILTER op te stellen voor een tabel bovenop',
+  'Dynamics 365 Finance & Operations. Je krijgt de omschrijving van de admin plus de lijst FILTERBARE',
+  'VELDEN van de entiteit (met datatype, toegestane operatoren en, voor keuzelijst-velden, de toegestane',
+  'waarden). Vertaal de omschrijving naar één of meer filterclausules. Gebruik UITSLUITEND velden,',
+  'operatoren en (voor keuzelijsten) waarden uit de aangeleverde lijst; verzin niets. Voor keuzelijst-',
+  'velden geef je de waarde-NAAM (bv. "Backorder"), niet de volledige OData-literal. Antwoord uitsluitend',
+  'via het tool "stel_filter_voor". Reden in het Nederlands.',
+].join(' ');
+
+const FILTER_TOOL_DEF = {
+  name: FILTER_TOOL_NAME,
+  description:
+    'Stel filterclausules voor op basis van de omschrijving. Gebruik alleen velden, operatoren en '
+    + '(voor keuzelijsten) waarden uit de aangeleverde lijst.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      clauses: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', description: 'Veldnaam uit de lijst.' },
+            operator: { type: 'string', description: 'Operator uit de toegestane lijst van dat veld (eq, ne, gt, ge, lt, le, contains, startswith).' },
+            value: { type: 'string', description: 'De waarde. Voor keuzelijst-velden: de waarde-naam uit de lijst.' },
+            join: { type: 'string', enum: ['and', 'or'], description: 'Verbinding met de VORIGE clausule (genegeerd voor de eerste).' },
+          },
+          required: ['field', 'operator', 'value'],
+        },
+      },
+      reason: { type: 'string', description: 'Korte NL-onderbouwing.' },
+    },
+    required: ['clauses', 'reason'],
+  },
+};
+
+// Dunne SDK-wrapper voor de filter-suggestie (apart zodat tests deze los kunnen mocken).
+async function createFilterMessage({ apiKey, userContent }) {
+  const client = new Anthropic({ apiKey });
+  return client.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: FILTER_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userContent }],
+    tools: [FILTER_TOOL_DEF],
+    tool_choice: { type: 'tool', name: FILTER_TOOL_NAME },
+  });
+}
+
+// OData-string-literal escapen (enkele quote verdubbelen).
+function escapeODataString(v) {
+  return String(v == null ? '' : v).replace(/'/g, "''");
+}
+
+// Bouw de OData-expressie voor één clausule tegen een bekend veld-metaobject (uit discoverFilterFields).
+// Retourneert null als operator/waarde niet op het veld passen — zo valt ongeldige input er hard uit.
+function buildClauseExpression(field, operator, rawValue) {
+  const op = String(operator || '').trim();
+  if (!Array.isArray(field.operators) || !field.operators.includes(op)) return null;
+  const val = rawValue == null ? '' : String(rawValue).trim();
+
+  if (field.dataType === 'select') {
+    const members = Array.isArray(field.enumMembers) ? field.enumMembers : [];
+    const member = members.find((m) => m.name.toLowerCase() === val.toLowerCase() || m.value === val);
+    if (!member) return null;
+    return `${field.field} ${op} ${member.value}`;
+  }
+  if (field.dataType === 'boolean') {
+    const b = /^(true|1|ja|yes)$/i.test(val) ? 'true' : /^(false|0|nee|no)$/i.test(val) ? 'false' : null;
+    if (b === null) return null;
+    return `${field.field} ${op} ${b}`;
+  }
+  if (field.dataType === 'number') {
+    if (!/^-?\d+(\.\d+)?$/.test(val)) return null;
+    return `${field.field} ${op} ${val}`;
+  }
+  if (field.dataType === 'date') {
+    let dt = val;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) dt = dt + 'T00:00:00Z'; // alleen datum -> DateTimeOffset.
+    if (!/^\d{4}-\d{2}-\d{2}T[\d:.]+/.test(dt)) return null;
+    return `${field.field} ${op} ${dt}`;
+  }
+  // text
+  if (op === 'contains' || op === 'startswith') {
+    return `${op}(${field.field},'${escapeODataString(val)}')`;
+  }
+  return `${field.field} ${op} '${escapeODataString(val)}'`;
+}
+
+// Valideer de voorgestelde clausules tegen de bekende velden en bouw de OData-$filter. Retourneert de
+// GELDIGE clausules (voor de UI-builder), de samengestelde `filter`-string en het aantal `dropped`.
+function buildFilterFromClauses(rawClauses, fields) {
+  const byName = new Map((Array.isArray(fields) ? fields : []).map((f) => [f.field.toLowerCase(), f]));
+  const clauses = [];
+  const expressions = [];
+  let dropped = 0;
+  for (const c of (Array.isArray(rawClauses) ? rawClauses : [])) {
+    const field = byName.get(String((c && c.field) || '').toLowerCase());
+    if (!field) { dropped += 1; continue; }
+    const expr = buildClauseExpression(field, c.operator, c.value);
+    if (!expr) { dropped += 1; continue; }
+    const join = expressions.length === 0 ? null : (c.join === 'or' ? 'or' : 'and');
+    clauses.push({ field: field.field, operator: String(c.operator).trim(), value: String(c.value ?? ''), join });
+    expressions.push(join ? `${join} ${expr}` : expr);
+  }
+  return { clauses, filter: expressions.join(' '), dropped };
+}
+
+// suggestFilter — Claude vertaalt een NL-omschrijving naar een OData-$filter op de gekozen entiteit. Werkt
+// op sourceId + sourceEntity zodat het bij aanmaken én bewerken bruikbaar is.
+async function suggestFilter({ sourceId, sourceEntity, prompt }) {
+  const apiKey = requireApiKey();
+
+  const cleanPrompt = String(prompt || '').trim();
+  if (!cleanPrompt) throw Object.assign(new Error('Geef een omschrijving op'), { status: 400 });
+  const entity = String(sourceEntity || '').trim();
+  if (!entity) throw Object.assign(new Error('Geen entiteit opgegeven'), { status: 400 });
+
+  const { fields } = await tableBuilder.discoverFilterFields(sourceId, entity);
+  if (!Array.isArray(fields) || !fields.length) {
+    throw Object.assign(new Error('Geen filterbare velden gevonden voor deze entiteit'), { status: 404 });
+  }
+
+  // Compacte context: veldnaam, datatype, operatoren en (voor keuzelijsten) de ledennamen (gecapt).
+  const fieldLines = fields.map((f) => {
+    const base = `- ${f.field} (${f.dataType}; ops: ${(f.operators || []).join('/')})`;
+    if (f.dataType === 'select' && Array.isArray(f.enumMembers) && f.enumMembers.length) {
+      const names = f.enumMembers.slice(0, FILTER_ENUM_CAP).map((m) => m.name).join(', ');
+      return `${base} waarden: ${names}`;
+    }
+    return base;
+  });
+
+  const userContent = [
+    'Verzoek van de admin:',
+    cleanPrompt,
+    '',
+    `Entiteit: ${entity}`,
+    '',
+    'FILTERBARE VELDEN (gebruik alleen deze):',
+    fieldLines.join('\n'),
+  ].join('\n');
+
+  logger.info('Table Builder AI-assist: filter-suggestie', {
+    sourceId, entity, promptLength: cleanPrompt.length, fieldCount: fields.length,
+  });
+
+  // Via module.exports zodat een test-spy op createFilterMessage effect heeft.
+  const response = await module.exports.createFilterMessage({ apiKey, userContent });
+
+  const content = Array.isArray(response && response.content) ? response.content : [];
+  const toolUse = content.find((c) => c && c.type === 'tool_use');
+  if (!toolUse || !toolUse.input) {
+    throw Object.assign(new Error('AI-assistent gaf geen bruikbaar filter terug'), { status: 502 });
+  }
+
+  const { clauses, filter, dropped } = buildFilterFromClauses(toolUse.input.clauses, fields);
+  const warning = !clauses.length
+    ? 'De AI kon geen geldig filter samenstellen uit je omschrijving. Verfijn de omschrijving of stel het filter handmatig samen.'
+    : dropped > 0
+      ? `${dropped} voorgestelde clausule(s) zijn overgeslagen omdat ze niet op een bekend veld, operator of waarde pasten.`
+      : undefined;
+
+  return {
+    ok: true,
+    suggestion: {
+      filter,
+      clauses,
+      reason: String(toolUse.input.reason || '').trim(),
+      ...(warning ? { warning } : {}),
+    },
+  };
+}
+
 module.exports = {
   suggest,
   suggestRelation,
+  suggestFilter,
   createMessage,
   createRelationMessage,
+  createFilterMessage,
   // Geëxporteerd voor unit-tests (DB-/netwerk-vrij):
   buildShortlist,
   findEntityByName,
+  buildClauseExpression,
+  buildFilterFromClauses,
   SHORTLIST_MIN,
   SHORTLIST_MAX,
 };

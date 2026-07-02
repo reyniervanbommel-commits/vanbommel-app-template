@@ -101,6 +101,40 @@ router.get('/sources/:id/entities', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/admin/sources/:id/filter-fields?entity=/data/X — filterbare velden (met operators + enum-leden)
+// voor de filter-builder én als context voor de AI-filterassistent. Werkt bij aanmaken (entiteit gekozen,
+// nog geen tabel) en bij bewerken. Licht: alleen $metadata, geen sample-fetch.
+router.get('/sources/:id/filter-fields', adminOnly, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ongeldig bron-id' });
+    const entity = typeof req.query.entity === 'string' ? req.query.entity : '';
+    if (!entity.trim()) return res.status(400).json({ error: 'Geef een entiteit op (entity)' });
+    const result = await tableBuilder.discoverFilterFields(id, entity);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/sources/:id/filter/suggest — Claude vertaalt een NL-omschrijving naar een OData-$filter.
+// Body: { entity, prompt }. Zonder ANTHROPIC_API_KEY -> 503 met code 'AI_NOT_CONFIGURED'. Audit met alleen
+// entiteit + promptlengte (nooit de volledige prompt).
+router.post('/sources/:id/filter/suggest', adminOnly, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ongeldig bron-id' });
+    const body = req.body || {};
+    const sourceEntity = typeof body.entity === 'string' ? body.entity : '';
+    if (!sourceEntity.trim()) return res.status(400).json({ error: 'Geef een entiteit op (entity)' });
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+
+    await auditLog(req.user.id, req.user.email, 'FILTER_SUGGEST', 'tb_tables', id, {
+      entity: sourceEntity, promptLength: prompt.length,
+    });
+    const result = await tableAssist.suggestFilter({ sourceId: id, sourceEntity, prompt });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /api/admin/sources/:id/test — verbindingstest via de provider.
 router.post('/sources/:id/test', adminOnly, async (req, res, next) => {
   try {
