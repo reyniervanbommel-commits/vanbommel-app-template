@@ -80,6 +80,7 @@ export function useDataModelAdmin() {
     connection: data?.connection || null,
     columns: data?.columns || { header: [], line: [] },
     cache: data?.cache || null,
+    syncFilter: data?.syncFilter || null,
     loading,
     error,
     togglingKey,

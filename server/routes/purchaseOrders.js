@@ -8,6 +8,7 @@ const express = require('express');
 const cacheService = require('../services/D365PurchaseOrderCacheService');
 const columnsService = require('../services/PurchaseOrderColumnsService');
 const settingsService = require('../services/SettingsService');
+const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 
@@ -154,13 +155,23 @@ router.get('/history', async (req, res, next) => {
 // de app haalt PurchaseOrderHeadersV2 op met $expand=PurchaseOrderLines (zie D365ODataService).
 router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
   try {
-    const [baseUrl, headerPath, company, columns, stats] = await Promise.all([
+    const [baseUrl, headerPath, company, columns, stats, rulesJson, rawFilter] = await Promise.all([
       settingsService.getAsync('D365_ODATA_BASE_URL', ''),
       settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', '/data/PurchaseOrderHeadersV2'),
       settingsService.getAsync('D365_ODATA_COMPANY', ''),
       columnsService.listColumns({ includeInactive: true }),
       cacheService.getCacheStats().catch(() => null),
+      settingsService.getAsync('PO_SYNC_RULES', ''),
+      settingsService.getAsync('PO_SYNC_FILTER', ''),
     ]);
+
+    const syncRules = parseSyncRules(rulesJson);
+    let compiledFilter = '';
+    try {
+      compiledFilter = compileSyncRules(syncRules);
+    } catch {
+      compiledFilter = '';
+    }
 
     return res.json({
       entities: [
@@ -198,7 +209,38 @@ router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) =
         line: columns.filter((c) => c.level === 'line'),
       },
       cache: stats,
+      syncFilter: {
+        rules: syncRules,
+        compiled: compiledFilter,
+        rawFilter: rawFilter.trim(),
+        operators: OPERATORS,
+        maxRules: MAX_RULES,
+      },
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/purchase-orders/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan.
+// De regels worden server-side gevalideerd + gecompileerd naar OData $filter; filteren gebeurt
+// dus in de call naar D365 zelf (minder data ophalen, minder load op D365 en op de sync).
+router.put('/sync-filters', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const rules = Array.isArray(req.body?.rules) ? req.body.rules : [];
+
+    // Alleen velden toestaan die als D365 header-kolom bekend zijn in de registry.
+    const headerColumns = await columnsService.listColumns({ level: 'header', includeInactive: true });
+    const allowedFields = new Set(headerColumns.filter((c) => c.source === 'd365' && c.d365Field).map((c) => c.d365Field));
+    for (const rule of rules) {
+      if (!allowedFields.has(String(rule?.field || ''))) {
+        return res.status(400).json({ error: `Onbekend D365-veld: ${rule?.field || '(leeg)'}` });
+      }
+    }
+
+    const compiled = compileSyncRules(rules); // gooit 400 bij ongeldige regels
+    await settingsService.set('PO_SYNC_RULES', JSON.stringify(rules), req.user.id);
+    return res.json({ rules, compiled });
   } catch (err) {
     return next(err);
   }

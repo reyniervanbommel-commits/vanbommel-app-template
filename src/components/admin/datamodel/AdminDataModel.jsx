@@ -9,6 +9,7 @@ import {
 } from '@fluentui/react-components';
 import DataModelDiagram from './DataModelDiagram';
 import EntityColumnsTable from './EntityColumnsTable';
+import SyncFilterBuilder from './SyncFilterBuilder';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 import { formatSyncedAt } from '../../../utils/purchaseOrderFormat';
 
@@ -41,6 +42,7 @@ export default function AdminDataModel() {
     connection,
     columns,
     cache,
+    syncFilter,
     loading,
     error,
     togglingKey,
@@ -94,6 +96,8 @@ export default function AdminDataModel() {
           </div>
         ) : null}
       </div>
+
+      <SyncFilterBuilder headerColumns={columns.header} syncFilter={syncFilter} />
 
       <EntityColumnsTable
         title="Header columns"

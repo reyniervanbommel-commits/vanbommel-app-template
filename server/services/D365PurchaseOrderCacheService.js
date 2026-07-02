@@ -10,6 +10,7 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
+const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
 // Content-hash van een order (header + compacte regel-samenvatting). Wijzigt de hash tussen
 // twee syncs, dan is de order "gewijzigd" (#133). ModifiedDateTime is niet beschikbaar in D365.
@@ -119,11 +120,22 @@ async function isStale() {
 // refresh — volledige resync vanuit D365 naar po_cache_headers/lines
 // ---------------------------------------------------------------------------
 async function getSyncScope() {
-  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
+  const rawFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(DEFAULT_PO_SYNC_MAX_ORDERS));
   const parsedMax = Number.parseInt(rawMax, 10);
   const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : DEFAULT_PO_SYNC_MAX_ORDERS;
-  return { extraFilter, maxItems };
+
+  // Gestructureerde regels (admin-UI) worden server-side gecompileerd naar OData-syntax.
+  // Een compilefout mag de sync niet blokkeren: dan valt de scope terug op alleen het ruwe filter.
+  let rulesFilter = '';
+  try {
+    rulesFilter = compileSyncRules(parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', '')));
+  } catch (err) {
+    logger.warn('PO_SYNC_RULES ongeldig; sync draait zonder gestructureerde filterregels', { error: err.message });
+  }
+
+  const clauses = [rulesFilter, rawFilter].filter(Boolean).map((c) => `(${c})`);
+  return { extraFilter: clauses.join(' and '), maxItems };
 }
 
 async function refresh() {
