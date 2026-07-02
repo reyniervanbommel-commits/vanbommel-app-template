@@ -22,9 +22,20 @@ const NON_WRITABLE_KEYS = {
   line: ['lineNumber'],
 };
 
+// Identificerende kolommen die nooit verborgen mogen worden: zonder deze sleutels
+// is een rij in de tabel niet meer herleidbaar naar een order/regel.
+const NON_HIDEABLE_KEYS = {
+  header: ['orderNumber'],
+  line: ['lineNumber'],
+};
+
 function isWriteBackAllowed(col) {
   if (col.source !== 'd365' || !col.d365Field) return false;
   return !(NON_WRITABLE_KEYS[col.level] || []).includes(col.key);
+}
+
+function isHideAllowed(col) {
+  return !(NON_HIDEABLE_KEYS[col.level] || []).includes(col.key);
 }
 
 function mapColumnRow(row) {
@@ -51,6 +62,8 @@ function mapColumnRow(row) {
     sortOrder: Number(row.sort_order),
     // Mag write-back hierop aangezet worden? (false voor sleutel/boekings-/systeemvelden en custom)
     writeBackAllowed: isWriteBackAllowed({ source: row.source, d365Field: row.d365_field || null, level: row.level, key: row.key }),
+    // Mag deze kolom verborgen worden? (false voor identificerende sleutelkolommen)
+    hideAllowed: isHideAllowed({ level: row.level, key: row.key }),
   };
 }
 
@@ -222,6 +235,37 @@ async function deactivateColumn(columnId, userId) {
   return { id: columnId, isActive: false };
 }
 
+// Zichtbaarheid (admin-only): toon/verberg een kolom in het PO-scherm via is_active.
+// Werkt op D365- én eigen kolommen; identificerende sleutelkolommen kunnen niet verborgen worden.
+async function setColumnVisibility(columnId, visible, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  const isVisible = visible === true || visible === 'true' || visible === 1 || visible === '1';
+  if (!isVisible && !isHideAllowed({ level: existing.level, key: existing.key })) {
+    throw Object.assign(new Error('Deze sleutelkolom kan niet verborgen worden'), { status: 400 });
+  }
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('active', sql.Bit, isVisible ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.po_columns
+      SET is_active = @active, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
+             INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  return mapColumnRow(result.recordset[0]);
+}
+
 // Write-back-config (admin-only): markeer een D365-kolom als terugschrijfbaar (#134).
 const WRITE_MECHANISMS = ['patch', 'action'];
 
@@ -263,12 +307,15 @@ module.exports = {
   DATA_TYPES,
   WRITE_MECHANISMS,
   NON_WRITABLE_KEYS,
+  NON_HIDEABLE_KEYS,
   isWriteBackAllowed,
+  isHideAllowed,
   listColumns,
   getColumnById,
   createColumn,
   renameColumn,
   deactivateColumn,
+  setColumnVisibility,
   setWriteBackConfig,
   slugify,
 };

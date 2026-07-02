@@ -6,12 +6,11 @@ import {
   Input,
   Spinner,
   Text,
-  Textarea,
   makeStyles,
   tokens,
   shorthands,
 } from '@fluentui/react-components';
-import { Eye24Regular, EyeOff24Regular, Save24Regular } from '@fluentui/react-icons';
+import { Save24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import ODataInfoDialog from './ODataInfoDialog';
 
@@ -38,8 +37,6 @@ const useStyles = makeStyles({
   statusRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'center', flexWrap: 'wrap' },
   statusLabel: { color: tokens.colorNeutralForeground3, minWidth: '170px', fontSize: tokens.fontSizeBase200 },
   mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200, wordBreak: 'break-all' },
-  row: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'flex-start' },
-  tokenField: { flex: 1 },
   feedback: { color: tokens.colorPaletteGreenForeground1 },
   error: { color: tokens.colorPaletteRedForeground1 },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
@@ -63,7 +60,6 @@ const EMPTY_FORM = {
   PO_SYNC_FILTER: '',
   PO_SYNC_MAX_ORDERS: '',
   PO_CACHE_STALE_MINUTES: '',
-  D365_ODATA_BEARER_TOKEN: '',
 };
 
 export default function AdminODataSettings() {
@@ -71,9 +67,8 @@ export default function AdminODataSettings() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [derived, setDerived] = useState({});
-  const [secretSet, setSecretSet] = useState({ clientSecret: false, bearer: false });
+  const [secretSet, setSecretSet] = useState({ clientSecret: false });
   const [dbSource, setDbSource] = useState('');
-  const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -89,7 +84,6 @@ export default function AdminODataSettings() {
       setDerived(data.derived || {});
       setSecretSet({
         clientSecret: !!s.D365_ODATA_CLIENT_SECRET_SET,
-        bearer: !!s.D365_ODATA_BEARER_TOKEN_SET,
       });
       setForm({
         D365_ODATA_BASE_URL: s.D365_ODATA_BASE_URL || '',
@@ -102,7 +96,6 @@ export default function AdminODataSettings() {
         PO_SYNC_FILTER: s.PO_SYNC_FILTER || '',
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
-        D365_ODATA_BEARER_TOKEN: '',
       });
     } catch (err) {
       setError(err.message);
@@ -123,10 +116,9 @@ export default function AdminODataSettings() {
     setFeedback('');
     setError('');
     try {
-      // Lege secret/token niet meesturen → bestaande waarde blijft behouden.
+      // Lege secret niet meesturen → bestaande waarde blijft behouden.
       const payload = { ...form };
       if (!payload.D365_ODATA_CLIENT_SECRET) delete payload.D365_ODATA_CLIENT_SECRET;
-      if (!payload.D365_ODATA_BEARER_TOKEN) delete payload.D365_ODATA_BEARER_TOKEN;
       await apiRequest('/admin/settings/odata', { method: 'POST', body: payload });
       setFeedback('Instellingen opgeslagen in SQL (dbo.app_settings).');
       await loadSettings();
@@ -137,9 +129,7 @@ export default function AdminODataSettings() {
     }
   }, [form, loadSettings]);
 
-  const toggleShowToken = useCallback(() => setShowToken((v) => !v), []);
-
-  if (loading) return <Spinner label="Laden uit database..." />;
+  if (loading) return <Spinner label="Loading from database..." />;
 
   const auth = AUTH_LABELS[derived.authMethod] || AUTH_LABELS.none;
 
@@ -151,9 +141,10 @@ export default function AdminODataSettings() {
       </div>
 
       <Text className={styles.dbHint} block>
-        Instellingen worden geladen en opgeslagen in SQL-tabel <strong>dbo.{dbSource}</strong>.
-        Geheimen (client secret, bearer token) worden nooit teruggestuurd naar deze pagina; laat het veld
-        leeg om de bestaande waarde te behouden.
+        Settings are loaded from and saved to SQL table <strong>dbo.{dbSource}</strong>.
+        Secrets (client secret) are never returned to this page; leave the field empty to keep
+        the existing value. Which tables and columns are fetched is managed on the{' '}
+        <strong>Data model</strong> tab.
       </Text>
 
       {/* Statusoverzicht: wat haalt de app op en hoe authenticeert het */}
@@ -247,45 +238,6 @@ export default function AdminODataSettings() {
         </Field>
         <Field label="Cache verouderd na (minuten)">
           <Input type="number" placeholder="15" value={form.PO_CACHE_STALE_MINUTES} onChange={handleChange('PO_CACHE_STALE_MINUTES')} />
-        </Field>
-      </div>
-
-      <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Legacy bearer token (fallback)</Text>
-        <Text className={styles.hint} block>
-          Alleen gebruikt als er géén client-credentials zijn ingesteld. Een handmatig token verloopt
-          na ~1 uur — gebruik bij voorkeur OAuth2 hierboven. Status:{' '}
-          <Badge appearance="tint" color={secretSet.bearer ? 'warning' : 'informative'}>
-            {secretSet.bearer ? 'Ingesteld' : 'Leeg'}
-          </Badge>
-        </Text>
-        <Field label="Bearer token">
-          <div className={styles.row}>
-            {showToken ? (
-              <Textarea
-                className={styles.tokenField}
-                placeholder="Bearer token (JWT)"
-                value={form.D365_ODATA_BEARER_TOKEN}
-                onChange={handleChange('D365_ODATA_BEARER_TOKEN')}
-                rows={5}
-                resize="vertical"
-              />
-            ) : (
-              <Input
-                className={styles.tokenField}
-                type="password"
-                placeholder={secretSet.bearer ? '•••••••• (ingesteld)' : 'Bearer token (JWT)'}
-                value={form.D365_ODATA_BEARER_TOKEN}
-                onChange={handleChange('D365_ODATA_BEARER_TOKEN')}
-              />
-            )}
-            <Button
-              appearance="subtle"
-              icon={showToken ? <EyeOff24Regular /> : <Eye24Regular />}
-              onClick={toggleShowToken}
-              title={showToken ? 'Verbergen' : 'Tonen'}
-            />
-          </div>
         </Field>
       </div>
 

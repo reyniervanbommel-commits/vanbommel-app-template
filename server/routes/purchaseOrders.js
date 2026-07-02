@@ -7,6 +7,7 @@
 const express = require('express');
 const cacheService = require('../services/D365PurchaseOrderCacheService');
 const columnsService = require('../services/PurchaseOrderColumnsService');
+const settingsService = require('../services/SettingsService');
 const { requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 
@@ -143,6 +144,73 @@ router.get('/history', async (req, res, next) => {
       columnId: id, dataAreaId, orderNumber, lineNumber,
     });
     return res.json({ history });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/purchase-orders/datamodel — admin: entiteiten, relatie, kolommen (incl. verborgen) en cache-stats.
+// De entiteit-structuur is bewust hier gedefinieerd (single source of truth voor de admin-UI):
+// de app haalt PurchaseOrderHeadersV2 op met $expand=PurchaseOrderLines (zie D365ODataService).
+router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const [baseUrl, headerPath, company, columns, stats] = await Promise.all([
+      settingsService.getAsync('D365_ODATA_BASE_URL', ''),
+      settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', '/data/PurchaseOrderHeadersV2'),
+      settingsService.getAsync('D365_ODATA_COMPANY', ''),
+      columnsService.listColumns({ includeInactive: true }),
+      cacheService.getCacheStats().catch(() => null),
+    ]);
+
+    return res.json({
+      entities: [
+        {
+          id: 'header',
+          name: 'PurchaseOrderHeadersV2',
+          title: 'Purchase Order Headers',
+          path: headerPath.trim() || '/data/PurchaseOrderHeadersV2',
+          keys: ['dataAreaId', 'PurchaseOrderNumber'],
+          cacheTable: 'po_cache_headers',
+        },
+        {
+          id: 'line',
+          name: 'PurchaseOrderLinesV2',
+          title: 'Purchase Order Lines',
+          path: '/data/PurchaseOrderLinesV2',
+          expandedVia: 'PurchaseOrderLines',
+          keys: ['dataAreaId', 'PurchaseOrderNumber', 'LineNumber'],
+          cacheTable: 'po_cache_lines',
+        },
+      ],
+      relation: {
+        from: 'header',
+        to: 'line',
+        cardinality: '1:n',
+        onFields: ['dataAreaId', 'PurchaseOrderNumber'],
+        description: 'One order header has multiple order lines; fetched in a single call via $expand=PurchaseOrderLines.',
+      },
+      connection: {
+        baseUrl: baseUrl.trim() || null,
+        company: company.trim() || null,
+      },
+      columns: {
+        header: columns.filter((c) => c.level === 'header'),
+        line: columns.filter((c) => c.level === 'line'),
+      },
+      cache: stats,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/purchase-orders/columns/:id/visibility — admin: toon/verberg een kolom in het PO-scherm.
+router.patch('/columns/:id/visibility', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setColumnVisibility(columnId, req.body?.visible, req.user.id);
+    return res.json({ column });
   } catch (err) {
     return next(err);
   }

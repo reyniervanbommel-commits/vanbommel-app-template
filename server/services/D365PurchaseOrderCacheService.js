@@ -88,6 +88,26 @@ async function getSyncState() {
   };
 }
 
+// Statistieken van de SQL-cache t.b.v. het admin-datamodeloverzicht.
+async function getCacheStats() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT
+      (SELECT COUNT(*) FROM dbo.po_cache_headers WHERE removed_in_d365 = 0) AS header_count,
+      (SELECT COUNT(*) FROM dbo.po_cache_headers WHERE removed_in_d365 = 1) AS removed_count,
+      (SELECT COUNT(*) FROM dbo.po_cache_lines) AS line_count
+  `);
+  const row = result.recordset[0] || {};
+  const { lastFullSyncAt } = await getSyncState();
+  return {
+    headerCount: Number(row.header_count) || 0,
+    removedCount: Number(row.removed_count) || 0,
+    lineCount: Number(row.line_count) || 0,
+    lastFullSyncAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
+    stale: await isStale(),
+  };
+}
+
 async function isStale() {
   const { lastFullSyncAt } = await getSyncState();
   if (!lastFullSyncAt) return true;
@@ -722,6 +742,7 @@ async function getCellHistory({ columnId, dataAreaId, orderNumber, lineNumber })
 module.exports = {
   refresh,
   read,
+  getCacheStats,
   saveCustomValue,
   correctField,
   getCellHistory,
