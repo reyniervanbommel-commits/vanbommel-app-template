@@ -19,6 +19,9 @@ const {
   enumMemberLiteral,
   extractEnumMembers,
   withFilterMeta,
+  mapGenericRows,
+  detailKeyFor,
+  stableIntKey,
 } = require('./D365ODataProvider');
 
 // $metadata-fragment met een EnumType (PurchStatus) — voor de enum-leden-extractie t.b.v. de filter-builder.
@@ -330,5 +333,81 @@ describe('enum-extractie voor de filter-builder', () => {
     });
     expect(textField.enumMembers).toEqual([]);
     expect(textField.operators).toContain('contains');
+  });
+});
+
+describe('mapGenericRows — generieke row->record mapping (#141)', () => {
+  const cols = {
+    masterCols: [
+      { key: 'ordernr', sourceField: 'SalesOrderNumber' },
+      { key: 'status', sourceField: 'SalesStatus' },
+    ],
+    detailCols: [{ key: 'artikel', sourceField: 'ItemNumber' }],
+    keyFields: ['dataAreaId', 'SalesOrderNumber', 'LineNumber'],
+    navName: null,
+    detailKeyFields: [],
+  };
+
+  it('keyt records op col.key uit row[col.sourceField] en bouwt partition/record uit key_fields', () => {
+    const rows = [
+      { dataAreaId: 'rtde', SalesOrderNumber: 'SO-1', LineNumber: 10, SalesStatus: 'Open', ItemNumber: 'X' },
+    ];
+    const { records } = mapGenericRows(rows, cols);
+    expect(records).toHaveLength(1);
+    expect(records[0].partitionKey).toBe('rtde');
+    expect(records[0].recordKey).toBe('SO-1|10');
+    expect(records[0].master).toEqual({ ordernr: 'SO-1', status: 'Open' });
+  });
+
+  it('detecteert dubbele (partition|record)-sleutels (niet-unieke key)', () => {
+    const rows = [
+      { dataAreaId: 'rtde', SalesOrderNumber: 'SO-1', LineNumber: 10 },
+      { dataAreaId: 'rtde', SalesOrderNumber: 'SO-1', LineNumber: 10 }, // zelfde sleutel
+      { dataAreaId: 'rtde', SalesOrderNumber: 'SO-2', LineNumber: 20 },
+    ];
+    const { records, duplicateKeys, uniqueKeys } = mapGenericRows(rows, cols);
+    expect(records).toHaveLength(3);
+    expect(duplicateKeys).toBe(1);
+    expect(uniqueKeys).toBe(2);
+  });
+
+  it('slaat rijen zonder record-sleutel over', () => {
+    const rows = [{ dataAreaId: 'rtde' }]; // geen SalesOrderNumber/LineNumber
+    expect(mapGenericRows(rows, cols).records).toHaveLength(0);
+  });
+
+  it('bouwt detail-rijen met een stabiele detail_key uit de nav-property', () => {
+    const withDetail = { ...cols, navName: 'Lines', detailKeyFields: ['LineNumber'] };
+    const rows = [{
+      dataAreaId: 'rtde', SalesOrderNumber: 'SO-1', LineNumber: 1,
+      Lines: [{ LineNumber: 10, ItemNumber: 'A' }, { LineNumber: 20, ItemNumber: 'B' }],
+    }];
+    const { records } = mapGenericRows(rows, withDetail);
+    expect(records[0].details).toEqual([
+      { detailKey: 10, values: { artikel: 'A' } },
+      { detailKey: 20, values: { artikel: 'B' } },
+    ]);
+  });
+});
+
+describe('detailKeyFor + stableIntKey (#141)', () => {
+  it('gebruikt een zuiver numerieke natuurlijke sleutel direct', () => {
+    expect(detailKeyFor({ LineNumber: 30 }, ['LineNumber'], 5)).toBe(30);
+  });
+
+  it('hasht een niet-numerieke sleutel STABIEL (zelfde input -> zelfde key)', () => {
+    const a = detailKeyFor({ InventTransId: 'ABC-123' }, ['InventTransId'], 0);
+    const b = detailKeyFor({ InventTransId: 'ABC-123' }, ['InventTransId'], 9);
+    expect(a).toBe(b); // stabiel, onafhankelijk van de index
+    expect(Number.isInteger(a) && a >= 0 && a < 2147483647).toBe(true);
+  });
+
+  it('valt zonder sleutelveld terug op een index-gebaseerde (maar deterministische) key', () => {
+    expect(detailKeyFor({}, [], 3)).toBe(detailKeyFor({}, [], 3));
+  });
+
+  it('stableIntKey is deterministisch en past in een SQL INT', () => {
+    expect(stableIntKey('x')).toBe(stableIntKey('x'));
+    expect(stableIntKey('PurchaseOrderLine|10')).toBeLessThan(2147483647);
   });
 });

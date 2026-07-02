@@ -20,6 +20,7 @@ import {
   ArrowLeft24Regular,
   ArrowRight24Regular,
   CheckmarkCircle24Regular,
+  Dismiss24Regular,
   Open24Regular,
   PlugConnected24Regular,
   Save24Regular,
@@ -35,6 +36,8 @@ import {
   testSource,
   discoverFields,
   discoverEntities,
+  discoverFilterFields,
+  suggestFilter,
   assistTable,
   saveColumns,
   saveRelation,
@@ -240,6 +243,29 @@ const useStyles = makeStyles({
   chips: { display: 'flex', ...shorthands.gap('6px'), flexWrap: 'wrap' },
   comboOption: { display: 'flex', flexDirection: 'column', ...shorthands.gap('2px') },
   comboOptionSub: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase100 },
+  // --- Standaardfilter-builder ---------------------------------------------
+  filterBuilder: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px') },
+  filterToolbar: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px'), flexWrap: 'wrap' },
+  filterGrow: { flexGrow: 1 },
+  filterRow: {
+    display: 'grid',
+    gridTemplateColumns: '68px minmax(150px, 1.6fr) 128px minmax(140px, 1.4fr) 32px',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
+  filterJoinCell: { display: 'flex', justifyContent: 'center' },
+  filterPreview: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.borderRadius('6px'),
+    ...shorthands.padding('8px', '10px'),
+    wordBreak: 'break-all',
+  },
+  filterEmpty: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200, fontStyle: 'italic' },
+  filterAiRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'flex-start', flexWrap: 'wrap' },
+  filterAiInput: { flexGrow: 1, minWidth: '220px' },
 });
 
 const ENTITY_SEARCH_LIMIT = 25;
@@ -252,6 +278,13 @@ const DATA_TYPES = [
   { value: 'select', label: 'Keuzelijst' },
 ];
 const DATA_TYPE_LABELS = Object.fromEntries(DATA_TYPES.map((t) => [t.value, t.label]));
+
+// OData-operatoren met NL-labels voor de filter-builder-dropdown.
+const OPERATOR_LABELS = {
+  eq: 'is', ne: 'is niet', gt: 'groter dan', ge: 'groter of gelijk',
+  lt: 'kleiner dan', le: 'kleiner of gelijk', contains: 'bevat', startswith: 'begint met',
+};
+const BOOL_OPTIONS = [{ value: 'true', label: 'Ja' }, { value: 'false', label: 'Nee' }];
 
 // Waarden moeten matchen met CK_tb_tables_cache_mode (migratie 011): auto | always | never.
 const CACHE_MODES = [
@@ -1068,13 +1101,14 @@ export default function TableBuilder() {
             </Field>
             <Field
               label="Standaardfilter (optioneel)"
-              hint="OData-$filter dat bij het ophalen wordt toegepast. Bijv. alleen open orders: PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'"
+              hint="OData-$filter dat bij het ophalen wordt toegepast. Stel samen met de keuzelijsten, of laat de AI het uit een omschrijving genereren."
             >
-              <Textarea
+              <FilterBuilder
+                styles={styles}
+                sourceId={selectedSourceId}
+                sourceEntity={newTableForm.sourceEntity}
                 value={newTableForm.defaultFilter}
-                onChange={(_, d) => setNewTableForm((p) => ({ ...p, defaultFilter: d.value }))}
-                placeholder="PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'"
-                resize="vertical"
+                onChange={(v) => setNewTableForm((p) => ({ ...p, defaultFilter: v }))}
               />
             </Field>
             <Field label="Max. rijen (optioneel)" hint="Begrenst hoeveel rijen uit de bron worden opgehaald. Leeg = standaard (2000).">
@@ -1118,6 +1152,7 @@ export default function TableBuilder() {
             <Text className={styles.hint} block>
               Vink de velden aan die je wilt tonen. Reeds gecureerde velden zijn voorgevinkt. De kolom
               <strong> Voorbeelden</strong> toont echte waarden uit de bron zodat je het veld herkent.
+              Velden zonder data in de bron worden verborgen — toon ze eventueel via de knop bij de sectie.
             </Text>
           </div>
 
@@ -1360,6 +1395,351 @@ export default function TableBuilder() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Standaardfilter-builder: Veld → Operator → Waarde-rijen die een OData-$filter samenstellen, met enum-
+// keuzelijsten uit $metadata en een AI-veld (NL → filter). Spiegelt de server-side opbouw
+// (TableAssistService.buildClauseExpression) zodat de gegenereerde string identiek en geldig is.
+// ---------------------------------------------------------------------------
+function escapeODataString(v) {
+  return String(v == null ? '' : v).replace(/'/g, "''");
+}
+
+// Bouw de OData-expressie voor één clausule tegen een bekend veld. null = ongeldig (wordt weggelaten).
+function buildFilterExpression(field, operator, rawValue) {
+  if (!field || !Array.isArray(field.operators) || !field.operators.includes(operator)) return null;
+  const val = rawValue == null ? '' : String(rawValue).trim();
+  if (field.dataType === 'select') {
+    const member = (field.enumMembers || []).find((m) => m.name === val || m.value === val);
+    return member ? `${field.field} ${operator} ${member.value}` : null;
+  }
+  if (field.dataType === 'boolean') {
+    const b = /^(true|1|ja|yes)$/i.test(val) ? 'true' : /^(false|0|nee|no)$/i.test(val) ? 'false' : null;
+    return b === null ? null : `${field.field} ${operator} ${b}`;
+  }
+  if (!val) return null;
+  if (field.dataType === 'number') {
+    return /^-?\d+(\.\d+)?$/.test(val) ? `${field.field} ${operator} ${val}` : null;
+  }
+  if (field.dataType === 'date') {
+    let dt = val;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) dt += 'T00:00:00Z';
+    return /^\d{4}-\d{2}-\d{2}T/.test(dt) ? `${field.field} ${operator} ${dt}` : null;
+  }
+  if (operator === 'contains' || operator === 'startswith') {
+    return `${operator}(${field.field},'${escapeODataString(val)}')`;
+  }
+  return `${field.field} ${operator} '${escapeODataString(val)}'`;
+}
+
+// Stel de volledige OData-$filter samen uit de clausules (alleen geldige tellen mee).
+function composeODataFilter(clauses, byName) {
+  const segments = [];
+  for (const c of clauses) {
+    const expr = buildFilterExpression(byName.get(c.field), c.operator, c.value);
+    if (!expr) continue;
+    segments.push(segments.length === 0 ? expr : `${c.join === 'or' ? 'or' : 'and'} ${expr}`);
+  }
+  return segments.join(' ');
+}
+
+// Standaardwaarde voor een net gekozen/gewijzigd veld (eerste enum-lid / booleaan-default / leeg).
+function defaultValueForField(field) {
+  if (!field) return '';
+  if (field.dataType === 'select') return field.enumMembers && field.enumMembers[0] ? field.enumMembers[0].name : '';
+  if (field.dataType === 'boolean') return 'true';
+  return '';
+}
+
+let _filterClauseSeq = 0;
+function newClause() { _filterClauseSeq += 1; return { uid: _filterClauseSeq, field: '', fieldQuery: '', operator: '', value: '', join: 'and' }; }
+
+function FilterBuilder({ styles, sourceId, sourceEntity, value, onChange }) {
+  // Bestaand (niet-leeg) filter openen we in de geavanceerde tekstweergave: we parsen OData niet terug
+  // naar clausules. Leeg → builder-modus.
+  const [advanced, setAdvanced] = useState(() => Boolean(value && value.trim()));
+  const [clauses, setClauses] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+  const [fieldsError, setFieldsError] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiAvailable, setAiAvailable] = useState(null);
+  const [aiNote, setAiNote] = useState('');
+
+  const byName = useMemo(() => new Map(fields.map((f) => [f.field, f])), [fields]);
+  // Alleen velden mét data tonen in de picker; lege kolommen (geen enkele rij heeft een waarde) laten we
+  // weg. byName houdt wél alle velden, zodat een AI-suggestie op een veld dat toevallig buiten de sample
+  // viel toch oplost.
+  const pickableFields = useMemo(
+    () => fields.filter((f) => Array.isArray(f.samples) && f.samples.length > 0),
+    [fields],
+  );
+
+  // Filtervelden ophalen zodra bron + entiteit bekend zijn (gedebounced; entiteit kan nog getypt worden).
+  const entity = String(sourceEntity || '').trim();
+  useEffect(() => {
+    if (!sourceId || entity.length < 4) { setFields([]); return undefined; }
+    let cancelled = false;
+    setFieldsLoading(true);
+    setFieldsError('');
+    const handle = setTimeout(() => {
+      discoverFilterFields(sourceId, entity)
+        .then((res) => { if (!cancelled) setFields(Array.isArray(res.fields) ? res.fields : []); })
+        .catch((err) => { if (!cancelled) { setFields([]); setFieldsError(err.message || 'Kon filtervelden niet laden.'); } })
+        .finally(() => { if (!cancelled) setFieldsLoading(false); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [sourceId, entity]);
+
+  // Clausules muteren en het samengestelde filter meteen naar de parent doorgeven.
+  const applyClauses = useCallback((next) => {
+    setClauses(next);
+    onChange(composeODataFilter(next, byName));
+  }, [byName, onChange]);
+
+  const addClause = useCallback(() => setClauses((prev) => [...prev, newClause()]), []);
+  const removeClause = useCallback((uid) => applyClauses(clauses.filter((c) => c.uid !== uid)), [applyClauses, clauses]);
+  const updateClause = useCallback((uid, patch) => {
+    applyClauses(clauses.map((c) => (c.uid === uid ? { ...c, ...patch } : c)));
+  }, [applyClauses, clauses]);
+
+  // Veldkeuze: zet veld + reset operator/waarde naar zinvolle defaults voor het nieuwe datatype.
+  const selectField = useCallback((uid, fieldName) => {
+    const field = byName.get(fieldName);
+    updateClause(uid, {
+      field: fieldName,
+      fieldQuery: fieldName,
+      operator: field && field.operators[0] ? field.operators[0] : 'eq',
+      value: defaultValueForField(field),
+    });
+  }, [byName, updateClause]);
+
+  const runAi = useCallback(async () => {
+    const prompt = aiPrompt.trim();
+    if (!prompt || !sourceId || !entity) return;
+    setAiBusy(true); setAiError(''); setAiNote('');
+    try {
+      const res = await suggestFilter(sourceId, { entity, prompt });
+      const s = res.suggestion || {};
+      // De backend levert gevalideerde clausules (field/operator/value); laad ze als builder-rijen.
+      const loaded = (s.clauses || []).map((c) => ({
+        ...newClause(), field: c.field, fieldQuery: c.field, operator: c.operator, value: c.value, join: c.join || 'and',
+      }));
+      setAdvanced(false);
+      applyClauses(loaded);
+      setAiNote([s.reason, s.warning].filter(Boolean).join(' — '));
+    } catch (err) {
+      if (err.status === 503 && err.data && err.data.code === 'AI_NOT_CONFIGURED') {
+        setAiAvailable(false);
+      } else {
+        setAiError(err.message || 'AI-suggestie mislukt.');
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiPrompt, sourceId, entity, applyClauses]);
+
+  const preview = value || '';
+
+  return (
+    <div className={styles.filterBuilder}>
+      <div className={styles.filterToolbar}>
+        <Checkbox
+          label="Geavanceerd (ruwe OData)"
+          checked={advanced}
+          onChange={(_, d) => setAdvanced(!!d.checked)}
+        />
+        <span className={styles.filterGrow} />
+        {fieldsLoading && <Spinner size="tiny" label="Velden laden…" />}
+      </div>
+
+      {advanced ? (
+        <Textarea
+          value={value}
+          onChange={(_, d) => onChange(d.value)}
+          placeholder="PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'"
+          resize="vertical"
+        />
+      ) : (
+        <>
+          {fieldsError && <Text className={styles.error}>{fieldsError}</Text>}
+          {!fieldsError && entity.length < 4 && (
+            <Text className={styles.filterEmpty}>Kies eerst een bron-entiteit; daarna verschijnen de filterbare velden.</Text>
+          )}
+          {!fieldsError && !fieldsLoading && entity.length >= 4 && fields.length > 0 && pickableFields.length === 0 && (
+            <Text className={styles.filterEmpty}>Geen kolommen met data gevonden in de steekproef — gebruik de geavanceerde modus voor een handmatig filter.</Text>
+          )}
+
+          {clauses.map((c, i) => {
+            const field = byName.get(c.field);
+            // Zoekterm alleen toepassen als er getypt wordt (en niet gelijk aan het al gekozen veld), zodat
+            // de lijst na een keuze bij heropenen weer volledig is en tijdens typen filtert.
+            const q = c.fieldQuery && c.fieldQuery !== c.field ? c.fieldQuery.toLowerCase() : '';
+            const options = q
+              ? pickableFields.filter((f) => (`${f.field} ${f.label}`).toLowerCase().includes(q))
+              : pickableFields;
+            return (
+              <div key={c.uid} className={styles.filterRow}>
+                <div className={styles.filterJoinCell}>
+                  {i === 0 ? (
+                    <Text className={styles.filterEmpty}>waar</Text>
+                  ) : (
+                    <Dropdown
+                      size="small"
+                      value={c.join === 'or' ? 'of' : 'en'}
+                      selectedOptions={[c.join || 'and']}
+                      onOptionSelect={(_, d) => updateClause(c.uid, { join: d.optionValue })}
+                      aria-label="Verbinding"
+                    >
+                      <Option value="and">en</Option>
+                      <Option value="or">of</Option>
+                    </Dropdown>
+                  )}
+                </div>
+
+                <Combobox
+                  freeform
+                  size="small"
+                  placeholder="Kies veld"
+                  value={c.fieldQuery ?? ''}
+                  selectedOptions={c.field ? [c.field] : []}
+                  onChange={(e) => updateClause(c.uid, { fieldQuery: e.target.value })}
+                  onOptionSelect={(_, d) => selectField(c.uid, d.optionValue)}
+                  aria-label="Veld"
+                >
+                  {options.length === 0 ? (
+                    <Option key="__none" text="" disabled>Geen veld met data gevonden.</Option>
+                  ) : (
+                    options.slice(0, 50).map((f) => (
+                      <Option key={f.field} value={f.field} text={f.field}>
+                        <span className={styles.comboOption}>
+                          <span>{f.field}</span>
+                          <span className={styles.comboOptionSub}>
+                            {DATA_TYPE_LABELS[f.dataType] || f.dataType}
+                            {f.samples && f.samples.length > 0
+                              ? ` · bv. ${f.samples.slice(0, 3).map((s) => truncateSample(s, 18)).join(', ')}`
+                              : ''}
+                          </span>
+                        </span>
+                      </Option>
+                    ))
+                  )}
+                </Combobox>
+
+                <Dropdown
+                  size="small"
+                  disabled={!field}
+                  value={field ? (OPERATOR_LABELS[c.operator] || c.operator) : ''}
+                  selectedOptions={[c.operator]}
+                  onOptionSelect={(_, d) => updateClause(c.uid, { operator: d.optionValue })}
+                  aria-label="Operator"
+                >
+                  {(field ? field.operators : []).map((op) => (
+                    <Option key={op} value={op}>{OPERATOR_LABELS[op] || op}</Option>
+                  ))}
+                </Dropdown>
+
+                <FilterValueInput styles={styles} field={field} value={c.value} onValue={(v) => updateClause(c.uid, { value: v })} />
+
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<Dismiss24Regular />}
+                  onClick={() => removeClause(c.uid)}
+                  aria-label="Clausule verwijderen"
+                />
+              </div>
+            );
+          })}
+
+          <div>
+            <Button size="small" appearance="secondary" icon={<Add24Regular />} onClick={addClause} disabled={!fields.length}>
+              Voorwaarde toevoegen
+            </Button>
+          </div>
+
+          {aiAvailable !== false && (
+            <div className={styles.filterAiRow}>
+              <Input
+                className={styles.filterAiInput}
+                size="small"
+                placeholder='Beschrijf het filter, bijv. "alleen open orders van dit jaar"'
+                value={aiPrompt}
+                onChange={(_, d) => setAiPrompt(d.value)}
+                disabled={aiBusy || !fields.length}
+              />
+              <Button
+                size="small"
+                appearance="secondary"
+                icon={aiBusy ? <Spinner size="tiny" /> : <Sparkle24Regular />}
+                onClick={runAi}
+                disabled={aiBusy || !aiPrompt.trim() || !fields.length}
+              >
+                {aiBusy ? 'AI denkt na…' : 'AI-filter'}
+              </Button>
+            </div>
+          )}
+          {aiError && <Text className={styles.error}>{aiError}</Text>}
+          {aiNote && <Text className={styles.hint}>{aiNote}</Text>}
+        </>
+      )}
+
+      {preview ? (
+        <div className={styles.filterPreview} title={preview}>{preview}</div>
+      ) : (
+        !advanced && <Text className={styles.filterEmpty}>Geen filter — de hele (gecapte) dataset wordt opgehaald.</Text>
+      )}
+    </div>
+  );
+}
+
+// Waarde-invoer die zich aanpast aan het datatype van het gekozen veld (keuzelijst, ja/nee, datum, tekst/getal).
+function FilterValueInput({ styles, field, value, onValue }) {
+  if (!field) {
+    return <Input size="small" disabled placeholder="waarde" value="" aria-label="Waarde" />;
+  }
+  if (field.dataType === 'select') {
+    const members = field.enumMembers || [];
+    return (
+      <Dropdown
+        size="small"
+        value={value || ''}
+        selectedOptions={value ? [value] : []}
+        onOptionSelect={(_, d) => onValue(d.optionValue)}
+        aria-label="Waarde"
+        placeholder="Kies waarde"
+      >
+        {members.map((m) => (<Option key={m.name} value={m.name}>{m.name}</Option>))}
+      </Dropdown>
+    );
+  }
+  if (field.dataType === 'boolean') {
+    return (
+      <Dropdown
+        size="small"
+        value={value === 'false' ? 'Nee' : 'Ja'}
+        selectedOptions={[value === 'false' ? 'false' : 'true']}
+        onOptionSelect={(_, d) => onValue(d.optionValue)}
+        aria-label="Waarde"
+      >
+        {BOOL_OPTIONS.map((o) => (<Option key={o.value} value={o.value}>{o.label}</Option>))}
+      </Dropdown>
+    );
+  }
+  const type = field.dataType === 'date' ? 'date' : field.dataType === 'number' ? 'number' : 'text';
+  return (
+    <Input
+      size="small"
+      type={type}
+      value={value || ''}
+      onChange={(_, d) => onValue(d.value)}
+      placeholder="waarde"
+      aria-label="Waarde"
+    />
+  );
+}
+
 // Sub-component: één scope-sectie (master of detail) als compacte tabel met sticky header-rij,
 // "selecteer alles", een teller en meerdere voorbeeldwaarden per veld.
 function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, onBulkCurate }) {
@@ -1388,6 +1768,8 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
   }, [dataRows, search]);
 
   const curatedCount = useMemo(() => rows.filter((r) => r.curated).length, [rows]);
+  // Noemer = velden met data (of alles als sampling mislukte), zodat de teller klopt met wat zichtbaar is.
+  const selectableCount = anyData ? rows.length - emptyCount : rows.length;
   const allChecked = filtered.length > 0 && filtered.every((r) => r.curated);
   const someChecked = filtered.some((r) => r.curated);
   const headerChecked = allChecked ? true : someChecked ? 'mixed' : false;
@@ -1398,7 +1780,7 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
       <div className={styles.sectionHeaderRow}>
         <Text weight="semibold" className={styles.sectionTitle}>{title}</Text>
         <Badge appearance="tint" color={curatedCount ? 'brand' : 'informative'}>
-          {curatedCount}/{rows.length} gecureerd
+          {curatedCount}/{selectableCount} gecureerd
         </Badge>
         {emptyCount > 0 && (
           <Button appearance="subtle" size="small" onClick={() => setShowEmpty((v) => !v)}>
@@ -1460,7 +1842,7 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
                     <div className={styles.fieldMeta} title={r.field}>
                       {r.curated ? (
                         <Input
-                          className={styles.cellControl}
+                          className={styles.labelCell}
                           appearance="underline"
                           size="small"
                           value={r.label}
@@ -1468,7 +1850,7 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
                           aria-label={`Label voor ${r.field}`}
                         />
                       ) : (
-                        <span className={styles.fieldLabelStatic}>{r.label}</span>
+                        <span className={[styles.labelCell, styles.fieldLabelStatic].join(' ')}>{r.label}</span>
                       )}
                       <span className={styles.fieldName}>{r.field}</span>
                     </div>
@@ -1487,11 +1869,14 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, 
                       ))}
                     </Dropdown>
 
-                    <div className={styles.sampleChips}>
+                    <div
+                      className={styles.sampleChips}
+                      title={r.samples && r.samples.length > 0 ? r.samples.join('   •   ') : undefined}
+                    >
                       {r.samples && r.samples.length > 0 ? (
                         r.samples.map((s, i) => (
                           <span key={i} className={styles.sampleChip} title={String(s)}>
-                            {truncateSample(s, 22)}
+                            {truncateSample(s, 20)}
                           </span>
                         ))
                       ) : (

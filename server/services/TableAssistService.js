@@ -495,8 +495,13 @@ async function suggestFilter({ sourceId, sourceEntity, prompt }) {
     throw Object.assign(new Error('Geen filterbare velden gevonden voor deze entiteit'), { status: 404 });
   }
 
+  // Bied de AI bij voorkeur alleen velden mét data aan (lege kolommen zijn zelden nuttig om op te filteren);
+  // val terug op alle velden als de sampling niets opleverde (bv. sample-fetch mislukt).
+  const withData = fields.filter((f) => Array.isArray(f.samples) && f.samples.length > 0);
+  const contextFields = withData.length ? withData : fields;
+
   // Compacte context: veldnaam, datatype, operatoren en (voor keuzelijsten) de ledennamen (gecapt).
-  const fieldLines = fields.map((f) => {
+  const fieldLines = contextFields.map((f) => {
     const base = `- ${f.field} (${f.dataType}; ops: ${(f.operators || []).join('/')})`;
     if (f.dataType === 'select' && Array.isArray(f.enumMembers) && f.enumMembers.length) {
       const names = f.enumMembers.slice(0, FILTER_ENUM_CAP).map((m) => m.name).join(', ');

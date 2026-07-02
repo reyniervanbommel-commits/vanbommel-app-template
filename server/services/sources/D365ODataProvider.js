@@ -490,9 +490,10 @@ class D365ODataProvider extends SourceProvider {
 
   /**
    * Ontdek de filterbare velden van de master-entiteit voor de filter-builder + AI-filterassistent.
-   * Bewust LICHT: alleen $metadata (gecachet) — geen sample-fetch en geen detail-velden. Elk veld krijgt
-   * `operators` (per datatype) en, voor enum-velden, `enumMembers` (OData-literals). Het $filter geldt op
-   * de master-entiteit, dus detailvelden zijn hier niet relevant.
+   * Alleen master-velden (het $filter geldt op de master-entiteit). Elk veld krijgt `operators` (per
+   * datatype), voor enum-velden `enumMembers` (OData-literals) en `samples`: enkele echte voorbeeldwaarden
+   * uit de bron. De sample-fetch is faalt-veilig: mislukt/leeg -> samples:[]. De UI verbergt velden zonder
+   * data (lege kolom) en toont de voorbeelden zodat de admin het veld herkent.
    */
   async discoverFilterFields({ sourceEntity } = {}) {
     const masterEntity = entitySetName(sourceEntity);
@@ -506,6 +507,8 @@ class D365ODataProvider extends SourceProvider {
       throw Object.assign(new Error(`Entiteit '${masterEntity}' niet gevonden in D365 $metadata`), { status: 404 });
     }
     const fields = parseEntityProperties(master.block, 'master');
+    // Voorbeeldwaarden per veld (faalt-veilig; geen detail-expand -> navName null).
+    const samples = await fetchFieldSamples({ masterEntity, navName: null });
     return withFilterMeta(fields, xml).map((f) => ({
       field: f.field,
       label: f.label,
@@ -513,6 +516,7 @@ class D365ODataProvider extends SourceProvider {
       nullable: f.nullable,
       operators: f.operators,
       enumMembers: f.enumMembers,
+      samples: samples.get(`master|${f.field}`) || [],
     }));
   }
 
@@ -609,6 +613,64 @@ async function fetchAllRows(startUrl, max) {
   return rows;
 }
 
+// Deterministische 31-bits hash van een string -> stabiele int-sleutel (FNV-1a). Voor detail_key wanneer
+// de natuurlijke detail-sleutel niet zuiver numeriek is: STABIEL over refreshes (essentieel voor het
+// uitlijnen van eigen kolomwaarden), i.t.t. een array-index die per refresh kan verschuiven.
+function stableIntKey(str) {
+  let h = 2166136261;
+  const s = String(str);
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 2147483647; // 0..2^31-2, past in SQL INT
+}
+
+// Stabiele detail_key uit de natuurlijke detail-sleutel: zuiver numeriek -> direct (bv. LineNumber);
+// anders een stabiele hash van de sleutelwaarde(n); zonder sleutel -> positie (laatste redmiddel).
+function detailKeyFor(line, detailKeyFields, idx) {
+  if (detailKeyFields && detailKeyFields.length) {
+    const raw = detailKeyFields
+      .map((f) => line[f]).filter((v) => v !== undefined && v !== null && v !== '').join('|');
+    if (raw !== '') {
+      const n = Number.parseInt(raw, 10);
+      if (Number.isFinite(n) && String(n) === raw) return n;
+      return stableIntKey(raw);
+    }
+  }
+  return stableIntKey('#idx:' + idx);
+}
+
+// Pure mapping van OData-rijen -> generieke records (DB-/netwerk-vrij, geëxporteerd voor tests). Records
+// worden gekeyd op col.key (uit row[col.sourceField]). Detecteert dubbele (partition|record)-sleutels
+// (= niet-unieke natuurlijke sleutel; die overschrijven elkaar in tb_cache) en rapporteert dat.
+function mapGenericRows(rows, { masterCols = [], detailCols = [], keyFields = [], navName = null, detailKeyFields = [] } = {}) {
+  const partitionField = keyFields.find((f) => /dataarea|company|legalentity/i.test(f)) || 'dataAreaId';
+  const recordFields = keyFields.filter((f) => f !== partitionField);
+  const seen = new Set();
+  let duplicateKeys = 0;
+  const records = [];
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    if (!row || typeof row !== 'object') continue;
+    const partitionKey = String(row[partitionField] ?? row.dataAreaId ?? '').trim().slice(0, 32);
+    const recordKey = (recordFields.length ? recordFields : keyFields)
+      .map((f) => row[f]).filter((v) => v !== undefined && v !== null && v !== '').join('|').slice(0, 128);
+    if (!recordKey) continue;
+    const cellKey = partitionKey + '|' + recordKey;
+    if (seen.has(cellKey)) duplicateKeys += 1; else seen.add(cellKey);
+    const master = {};
+    for (const c of masterCols) master[c.key] = row[c.sourceField] ?? null;
+    const detailArr = navName && Array.isArray(row[navName]) ? row[navName] : [];
+    const details = detailArr.map((line, idx) => {
+      const values = {};
+      for (const c of detailCols) values[c.key] = line[c.sourceField] ?? null;
+      return { detailKey: detailKeyFor(line, detailKeyFields, idx), values };
+    });
+    records.push({ partitionKey, recordKey, modifiedAt: row.ModifiedDateTime || null, master, details });
+  }
+  return { records, duplicateKeys, uniqueKeys: seen.size };
+}
+
 async function genericFetch({ table, columns, relation }) {
   const baseUrl = (await getBaseUrl()).replace(/\/+$/, '');
   const entity = entitySetName(table.sourceEntity);
@@ -620,12 +682,11 @@ async function genericFetch({ table, columns, relation }) {
   const navName = relation && relation.detailSourceEntity && relation.kind !== 'none' ? relation.detailSourceEntity : null;
   const detailKeyFields = relation && Array.isArray(relation.detailKeyFields) ? relation.detailKeyFields : [];
 
-  // Partitie = een company-achtig sleutelveld (dataAreaId); record = de overige sleutelvelden.
   const partitionField = keyFields.find((f) => /dataarea|company|legalentity/i.test(f)) || 'dataAreaId';
   const recordFields = keyFields.filter((f) => f !== partitionField);
 
-  // Let op: NIET ModifiedDateTime hardcoderen in $select — veel (regel-)entiteiten hebben dat veld niet,
-  // wat een 400 geeft. modifiedAt is dus best-effort (alleen als de bron het veld toevallig meelevert).
+  // NIET ModifiedDateTime hardcoderen in $select — veel (regel-)entiteiten missen dat veld (400). modifiedAt
+  // is dus best-effort.
   const masterSelect = uniqStrings([partitionField, 'dataAreaId', ...recordFields, ...masterCols.map((c) => c.sourceField)]);
   const url = new URL(baseUrl + '/data/' + entity);
   url.searchParams.set('cross-company', 'true');
@@ -639,28 +700,30 @@ async function genericFetch({ table, columns, relation }) {
   const maxRows = Number.isFinite(table.maxRows) && table.maxRows > 0 ? table.maxRows : 2000;
   url.searchParams.set('$top', String(Math.min(maxRows, 500)));
 
-  const rows = await fetchAllRows(url.toString(), maxRows);
-  const detailKeyField = detailKeyFields[0] || null;
-
-  const records = [];
-  for (const row of rows) {
-    const partitionKey = String(row[partitionField] ?? row.dataAreaId ?? '').trim().slice(0, 32);
-    const recordKey = (recordFields.length ? recordFields : keyFields)
-      .map((f) => row[f]).filter((v) => v !== undefined && v !== null && v !== '').join('|').slice(0, 128);
-    if (!recordKey) continue;
-    const master = {};
-    for (const c of masterCols) master[c.key] = row[c.sourceField] ?? null;
-    const detailArr = navName && Array.isArray(row[navName]) ? row[navName] : [];
-    const details = detailArr.map((line, idx) => {
-      let dk = idx;
-      if (detailKeyField) { const n = Number.parseInt(line[detailKeyField], 10); if (Number.isFinite(n)) dk = n; }
-      const values = {};
-      for (const c of detailCols) values[c.key] = line[c.sourceField] ?? null;
-      return { detailKey: dk, values };
-    });
-    records.push({ partitionKey, recordKey, modifiedAt: row.ModifiedDateTime || null, master, details });
+  let rows;
+  try {
+    rows = await fetchAllRows(url.toString(), maxRows);
+  } catch (err) {
+    // Een 400 komt vaak door een ongeldig veld in $select/$expand (bv. veld bestaat niet op de entiteit).
+    // Degradeer robuust: haal alle velden op (geen $select) + een kale $expand, i.p.v. de hele fetch te
+    // laten falen. Zwaarder, maar de mapping pakt alsnog alleen de gecureerde velden.
+    if (err && err.status === 400 && (url.searchParams.has('$select') || navName)) {
+      logger.warn('Generieke fetch: 400 op $select/$expand — herprobeer robuust zonder $select', { entity });
+      url.searchParams.delete('$select');
+      if (navName) url.searchParams.set('$expand', navName);
+      rows = await fetchAllRows(url.toString(), maxRows);
+    } else {
+      throw err;
+    }
   }
-  return { records, total: records.length, truncated: rows.length >= maxRows };
+
+  const { records, duplicateKeys } = mapGenericRows(rows, { masterCols, detailCols, keyFields, navName, detailKeyFields });
+  if (duplicateKeys > 0) {
+    logger.warn('Generieke fetch: NIET-UNIEKE sleutel — rijen delen dezelfde (partition|record) en overschrijven elkaar in de cache', {
+      entity, keyFields, opgehaald: rows.length, dubbeleSleutels: duplicateKeys,
+    });
+  }
+  return { records, total: records.length, truncated: rows.length >= maxRows, duplicateKeys };
 }
 
 async function purchaseOrdersFetch(table) {
@@ -730,5 +793,8 @@ module.exports = {
   enumMemberLiteral,
   extractEnumMembers,
   withFilterMeta,
+  mapGenericRows,
+  detailKeyFor,
+  stableIntKey,
   __resetMetadataCache,
 };

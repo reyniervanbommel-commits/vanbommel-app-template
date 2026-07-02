@@ -55,6 +55,21 @@ export function discoverEntities(sourceId, { q = '', limit = 25 } = {}) {
   return apiRequest(`/admin/sources/${sourceId}/entities${qs ? `?${qs}` : ''}`);
 }
 
+// --- Standaardfilter (builder + AI) -----------------------------------------
+
+// GET /sources/:id/filter-fields?entity=/data/X → { fields:[{ field, label, dataType, operators, enumMembers }] }
+// Filterbare velden van de gekozen entiteit voor de filter-builder (dropdowns). Licht: alleen $metadata.
+export function discoverFilterFields(sourceId, entity) {
+  return apiRequest(`/admin/sources/${sourceId}/filter-fields?entity=${encodeURIComponent(entity)}`);
+}
+
+// POST /sources/:id/filter/suggest { entity, prompt } → { ok, suggestion:{ filter, clauses:[...], reason, warning? } }
+// Vertaalt een NL-omschrijving naar een gevalideerd OData-$filter. Zonder AI-key → HTTP 503 met code
+// 'AI_NOT_CONFIGURED' (borrelt op als Error met .status=503, .data.code).
+export function suggestFilter(sourceId, { entity, prompt }) {
+  return apiRequest(`/admin/sources/${sourceId}/filter/suggest`, { method: 'POST', body: { entity, prompt } });
+}
+
 // --- AI-authoring-assistent -------------------------------------------------
 
 // POST /tables/assist { sourceId, prompt } → { ok:true, suggestion:{ entitySet, sourceEntity, reason, fields:[{ scope, field, label }] } }

@@ -92,7 +92,7 @@ async function refresh(tableKey) {
   const detailSource = detailCols.filter((c) => c.source === 'source');
 
   // Bron-neutraal: de provider levert de generieke records-vorm (master + details).
-  const { records, total, truncated } = await provider.fetch({
+  const { records, total, truncated, duplicateKeys = 0 } = await provider.fetch({
     source: table.source,
     table,
     columns: { master: masterSource, detail: detailSource },
@@ -101,6 +101,13 @@ async function refresh(tableKey) {
   if (truncated) {
     logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
       tableKey, opgehaald: records.length, totaalInBron: total,
+    });
+  }
+  if (duplicateKeys > 0) {
+    // Niet-unieke natuurlijke sleutel: meerdere bronrijen delen dezelfde (partition|record) en
+    // overschrijven elkaar in tb_cache -> stille rij-verlies. Surfacet via de refresh-respons.
+    logger.warn('tb_cache refresh: niet-unieke sleutel — rijen overschrijven elkaar (kies unieker key_fields)', {
+      tableKey, opgehaald: records.length, dubbeleSleutels: duplicateKeys,
     });
   }
 
@@ -209,7 +216,12 @@ async function refresh(tableKey) {
     `);
 
   logger.info('tb_cache ververst', { tableKey, records: records.length, truncated });
-  return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+  return {
+    orders: records.length,
+    truncated: Boolean(truncated),
+    duplicateKeys,
+    syncedAt: refreshStart.toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------
