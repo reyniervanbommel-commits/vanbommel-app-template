@@ -59,6 +59,9 @@ jobs:
       - name: Dependencies installeren
         run: npm ci --legacy-peer-deps
 
+      - name: Typecheck uitvoeren
+        run: npm run typecheck
+
       - name: Database-migraties uitvoeren (DEV)
         run: node scripts/db/run-migrations.js
         env:

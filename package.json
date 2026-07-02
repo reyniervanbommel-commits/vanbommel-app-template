@@ -10,6 +10,9 @@
     "dev:backend": "node --watch server/server.js",
     "dev:all": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "build": "vite build",
+    "typecheck": "npm run typecheck:frontend && npm run typecheck:backend",
+    "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
+    "typecheck:backend": "tsc --noEmit -p tsconfig.backend.json",
     "start": "node server/server.js",
     "migrate:db": "node scripts/db/run-migrations.js",
     "test": "vitest run",
@@ -37,12 +40,14 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
+    "@types/node": "^24.0.12",
     "@testing-library/react": "^16.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "eslint": "^9.9.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.3.3",
+    "typescript": "^5.9.2",
     "vite": "^5.4.0",
     "vitest": "^2.0.5"
   }
