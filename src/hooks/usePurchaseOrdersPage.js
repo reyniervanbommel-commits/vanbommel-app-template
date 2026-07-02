@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
+import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -66,21 +67,28 @@ export function usePurchaseOrdersPage() {
     setTotal(Number(data?.total) || 0);
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
+    setCachedPurchaseOrdersView(data);
   }, []);
 
-  const loadPurchaseOrders = useCallback(async () => {
-    setLoading(true);
+  const loadPurchaseOrders = useCallback(async ({ skipLoading = false } = {}) => {
+    if (!skipLoading) {
+      setLoading(true);
+    }
     setError('');
     try {
       const data = await apiRequest('/purchase-orders?autoRefresh=1');
       applyData(data);
     } catch (err) {
       setError(err.message);
-      setOrders([]);
-      setHeaderColumns([]);
-      setLineColumns([]);
+      if (!skipLoading) {
+        setOrders([]);
+        setHeaderColumns([]);
+        setLineColumns([]);
+      }
     } finally {
-      setLoading(false);
+      if (!skipLoading) {
+        setLoading(false);
+      }
     }
   }, [applyData]);
 
@@ -100,9 +108,17 @@ export function usePurchaseOrdersPage() {
   }, []);
 
   useEffect(() => {
-    loadPurchaseOrders();
+    const cachedData = getCachedPurchaseOrdersView();
+    const hasCachedData = Boolean(cachedData);
+
+    if (hasCachedData) {
+      applyData(cachedData);
+      setLoading(false);
+    }
+
+    loadPurchaseOrders({ skipLoading: hasCachedData });
     loadBoardSettings();
-  }, [loadPurchaseOrders, loadBoardSettings]);
+  }, [applyData, loadPurchaseOrders, loadBoardSettings]);
 
   // Forceert een D365-refresh server-side en herlaadt de hele state.
   const refresh = useCallback(async () => {

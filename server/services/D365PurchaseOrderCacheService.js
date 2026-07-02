@@ -30,9 +30,76 @@ function computeOrderHash(order) {
 const DEFAULT_STALE_MINUTES = 15;
 const HEADER_LEVEL_LINE = -1; // sentinel: header-niveau custom-waarde
 // B2: begrens de cache-sync. Zonder scope haalt refresh alle ~19.913 orders met $expand op
-// (gemeten ~21s per 200 rijen) en loopt vast. PO_SYNC_FILTER = ruwe OData-filter (scope),
-// PO_SYNC_MAX_ORDERS = harde bovengrens als vangnet. Aanname A1: business verfijnt de scope later.
+// (gemeten ~21s per 200 rijen) en loopt vast. PO_SYNC_RULES = beheerde admin-filterregels,
+// PO_SYNC_MAX_ORDERS = harde bovengrens als vangnet.
 const DEFAULT_PO_SYNC_MAX_ORDERS = 2000;
+
+const EMPTY_REFRESH_PROGRESS = {
+  status: 'idle',
+  fetched: 0,
+  totalToFetch: null,
+  sourceTotal: null,
+  maxItems: null,
+  pagesFetched: 0,
+  truncated: false,
+  startedAt: null,
+  finishedAt: null,
+  error: null,
+};
+
+let refreshProgress = { ...EMPTY_REFRESH_PROGRESS };
+const READ_CACHE_TTL_MS = 30 * 1000;
+const readCacheByScope = new Map();
+
+function getReadCacheKey({ includeRemoved = false, userId = null } = {}) {
+  return `${includeRemoved ? 1 : 0}|${userId ? Number(userId) : 0}`;
+}
+
+function getCachedReadPayload(scope) {
+  const key = getReadCacheKey(scope);
+  const entry = readCacheByScope.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    readCacheByScope.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+function setCachedReadPayload(scope, payload) {
+  const key = getReadCacheKey(scope);
+  readCacheByScope.set(key, {
+    payload,
+    expiresAt: Date.now() + READ_CACHE_TTL_MS,
+  });
+}
+
+function invalidateReadCache({ userId = null } = {}) {
+  if (userId === null || userId === undefined) {
+    readCacheByScope.clear();
+    return;
+  }
+  const numericUserId = Number(userId);
+  for (const key of readCacheByScope.keys()) {
+    const parts = key.split('|');
+    const keyUserId = Number(parts[1] || 0);
+    if (keyUserId === numericUserId) {
+      readCacheByScope.delete(key);
+    }
+  }
+}
+
+function updateRefreshProgress(patch) {
+  refreshProgress = {
+    ...refreshProgress,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function getRefreshProgress() {
+  return { ...refreshProgress };
+}
 
 function getPool() {
   return sql.connect(process.env.SQL_CONNECTION_STRING);
@@ -109,6 +176,149 @@ async function getCacheStats() {
   };
 }
 
+function hasMeaningfulValue(value) {
+  return value !== null && value !== undefined && value !== '' && typeof value !== 'object';
+}
+
+function normalizeSampleValue(value) {
+  if (!hasMeaningfulValue(value)) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  return str.length > 120 ? str.slice(0, 117) + '...' : str;
+}
+
+function inferDataType(value) {
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'text';
+  if (typeof value === 'string') {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber) && value.trim() !== '') return 'number';
+    const asDate = new Date(value);
+    if (!Number.isNaN(asDate.getTime()) && /[T:-]/.test(value)) return 'date';
+    return 'text';
+  }
+  return 'text';
+}
+
+function buildFieldCatalog(level, rows, d365LabelByField) {
+  const byField = new Map();
+  for (const row of rows) {
+    for (const [field, value] of Object.entries(row || {})) {
+      if (!hasMeaningfulValue(value)) continue;
+      if (!byField.has(field)) {
+        byField.set(field, {
+          level,
+          field,
+          label: d365LabelByField.get(field) || field,
+          nonEmptyCount: 0,
+          sampleValues: [],
+          dataTypeVotes: { text: 0, number: 0, date: 0 },
+        });
+      }
+      const info = byField.get(field);
+      info.nonEmptyCount += 1;
+      info.dataTypeVotes[inferDataType(value)] += 1;
+      const sample = normalizeSampleValue(value);
+      if (sample && !info.sampleValues.includes(sample) && info.sampleValues.length < 5) {
+        info.sampleValues.push(sample);
+      }
+    }
+  }
+
+  const totalRows = rows.length || 1;
+  return Array.from(byField.values())
+    .map((item) => {
+      const voteEntries = Object.entries(item.dataTypeVotes);
+      voteEntries.sort((a, b) => b[1] - a[1]);
+      const inferredType = voteEntries[0][0];
+      return {
+        level: item.level,
+        field: item.field,
+        label: item.label,
+        valueType: item.field === 'PurchaseOrderStatus' ? 'enum' : inferredType,
+        nonEmptyCount: item.nonEmptyCount,
+        fillRatio: Number((item.nonEmptyCount / totalRows).toFixed(3)),
+        sampleValues: item.sampleValues,
+      };
+    })
+    .sort((a, b) => {
+      if (b.nonEmptyCount !== a.nonEmptyCount) return b.nonEmptyCount - a.nonEmptyCount;
+      return a.field.localeCompare(b.field);
+    });
+}
+
+function buildPreviewRows(rows, fields, keyBuilder, maxRows) {
+  return rows.slice(0, maxRows).map((raw, idx) => ({
+    id: keyBuilder(raw, idx),
+    values: Object.fromEntries(fields.map((field) => [field, hasMeaningfulValue(raw[field]) ? raw[field] : null])),
+  }));
+}
+
+// Catalogus met filterbare velden + voorbeeldtabellen voor admin-UI.
+// Alleen velden met daadwerkelijke data in de cache worden teruggegeven.
+async function getFilterFieldCatalogAndPreview() {
+  const pool = await getPool();
+  const [headersResult, linesResult, columns] = await Promise.all([
+    pool.request().query(`
+      SELECT TOP 1000 order_number, raw_json
+      FROM dbo.po_cache_headers
+      WHERE removed_in_d365 = 0 AND raw_json IS NOT NULL
+      ORDER BY synced_at DESC
+    `),
+    pool.request().query(`
+      SELECT TOP 2000 order_number, line_number, raw_json
+      FROM dbo.po_cache_lines
+      WHERE raw_json IS NOT NULL
+      ORDER BY synced_at DESC
+    `),
+    listColumns({ includeInactive: true }),
+  ]);
+
+  const headerRows = headersResult.recordset.map((row) => {
+    try { return JSON.parse(row.raw_json); } catch { return {}; }
+  });
+  const lineRows = linesResult.recordset.map((row) => {
+    try { return JSON.parse(row.raw_json); } catch { return {}; }
+  });
+
+  const headerLabels = new Map(
+    columns
+      .filter((c) => c.level === 'header' && c.source === 'd365' && c.d365Field)
+      .map((c) => [c.d365Field, c.label])
+  );
+  const lineLabels = new Map(
+    columns
+      .filter((c) => c.level === 'line' && c.source === 'd365' && c.d365Field)
+      .map((c) => [c.d365Field, c.label])
+  );
+
+  const headerCatalog = buildFieldCatalog('header', headerRows, headerLabels);
+  const lineCatalog = buildFieldCatalog('line', lineRows, lineLabels);
+
+  const headerFields = headerCatalog.map((c) => c.field);
+  const lineFields = lineCatalog.map((c) => c.field);
+  const headerPreviewRows = buildPreviewRows(
+    headerRows,
+    headerFields,
+    (raw, idx) => `${raw.PurchaseOrderNumber || raw.PurchId || idx}`,
+    120
+  );
+  const linePreviewRows = buildPreviewRows(
+    lineRows,
+    lineFields,
+    (raw, idx) => `${raw.PurchaseOrderNumber || 'po'}-${raw.LineNumber || idx}`,
+    200
+  );
+
+  return {
+    catalog: { header: headerCatalog, line: lineCatalog },
+    preview: {
+      header: { columns: headerFields, rows: headerPreviewRows, sampledRows: headerRows.length },
+      line: { columns: lineFields, rows: linePreviewRows, sampledRows: lineRows.length },
+    },
+  };
+}
+
 async function isStale() {
   const { lastFullSyncAt } = await getSyncState();
   if (!lastFullSyncAt) return true;
@@ -120,13 +330,12 @@ async function isStale() {
 // refresh — volledige resync vanuit D365 naar po_cache_headers/lines
 // ---------------------------------------------------------------------------
 async function getSyncScope() {
-  const rawFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(DEFAULT_PO_SYNC_MAX_ORDERS));
   const parsedMax = Number.parseInt(rawMax, 10);
   const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : DEFAULT_PO_SYNC_MAX_ORDERS;
 
   // Gestructureerde regels (admin-UI) worden server-side gecompileerd naar OData-syntax.
-  // Een compilefout mag de sync niet blokkeren: dan valt de scope terug op alleen het ruwe filter.
+  // Een compilefout mag de sync niet blokkeren: dan draait de sync zonder beheerde filterregels.
   let rulesFilter = '';
   try {
     rulesFilter = compileSyncRules(parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', '')));
@@ -134,7 +343,7 @@ async function getSyncScope() {
     logger.warn('PO_SYNC_RULES ongeldig; sync draait zonder gestructureerde filterregels', { error: err.message });
   }
 
-  const clauses = [rulesFilter, rawFilter].filter(Boolean).map((c) => `(${c})`);
+  const clauses = [rulesFilter].filter(Boolean).map((c) => `(${c})`);
   return { extraFilter: clauses.join(' and '), maxItems };
 }
 
@@ -142,19 +351,51 @@ async function refresh() {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const refreshStart = new Date();
 
-  // B2: begrensde sync — scope-filter + harde cap voorkomen dat refresh op de volledige dataset vastloopt.
+  // B2: begrensde sync — beheerde filterregels + cap voorkomen dat refresh te zwaar wordt.
   const { extraFilter, maxItems } = await getSyncScope();
-  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
-  const items = Array.isArray(result.items) ? result.items : [];
-  if (result.truncated) {
-    logger.warn('PO-cache sync afgekapt op de cap; verfijn PO_SYNC_FILTER voor volledige dekking', {
-      cap: maxItems, opgehaald: items.length, totaalInD365: result.total,
-    });
-  }
-  const pool = await getPool();
-  let watermark = null;
+  refreshProgress = {
+    ...EMPTY_REFRESH_PROGRESS,
+    status: 'fetching',
+    maxItems,
+    startedAt: refreshStart.toISOString(),
+    updatedAt: refreshStart.toISOString(),
+  };
 
-  for (const order of items) {
+  let result;
+  try {
+    result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      fetchAll: true,
+      extraFilter,
+      maxItems,
+      onProgress: (progress) => updateRefreshProgress({ status: 'fetching', ...progress }),
+    });
+  } catch (err) {
+    updateRefreshProgress({
+      status: 'error',
+      finishedAt: new Date().toISOString(),
+      error: err.message || 'D365-refresh mislukt',
+    });
+    throw err;
+  }
+  try {
+    const items = Array.isArray(result.items) ? result.items : [];
+    updateRefreshProgress({
+      status: 'saving',
+      fetched: items.length,
+      totalToFetch: refreshProgress.totalToFetch ?? Math.min(result.total || items.length, maxItems),
+      sourceTotal: refreshProgress.sourceTotal ?? result.total ?? null,
+      truncated: Boolean(result.truncated),
+    });
+    if (result.truncated) {
+      logger.warn('PO-cache sync afgekapt op de cap; verfijn PO_SYNC_RULES voor volledige dekking', {
+        cap: maxItems, opgehaald: items.length, totaalInD365: result.total,
+      });
+    }
+    const pool = await getPool();
+    let watermark = null;
+
+    for (const order of items) {
     const raw = order.raw || {};
     const dataAreaId = String(raw.dataAreaId || company || '').trim();
     const orderNumber = String(order.orderNumber || raw.PurchaseOrderNumber || '').trim();
@@ -242,33 +483,57 @@ async function refresh() {
       await tx.rollback();
       throw err;
     }
+    }
+
+    // Headers die deze full resync niet meer raakten = verdwenen in D365.
+    await pool.request()
+      .input('refreshStart', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.po_cache_headers
+        SET removed_in_d365 = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+      `);
+
+    await pool.request()
+      .input('watermark', sql.DateTime2, watermark)
+      .input('syncedAt', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.po_sync_state
+        SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
+        WHERE id = 1
+      `);
+
+    logger.info('PO-cache ververst', { orders: items.length, truncated: result.truncated });
+    invalidateReadCache();
+    updateRefreshProgress({
+      status: 'done',
+      fetched: items.length,
+      totalToFetch: refreshProgress.totalToFetch ?? items.length,
+      sourceTotal: refreshProgress.sourceTotal ?? result.total ?? null,
+      truncated: Boolean(result.truncated),
+      finishedAt: new Date().toISOString(),
+      error: null,
+    });
+    return { orders: items.length, truncated: Boolean(result.truncated), syncedAt: refreshStart.toISOString() };
+  } catch (err) {
+    updateRefreshProgress({
+      status: 'error',
+      finishedAt: new Date().toISOString(),
+      error: err.message || 'D365-refresh opslaan mislukt',
+    });
+    throw err;
   }
-
-  // Headers die deze full resync niet meer raakten = verdwenen in D365.
-  await pool.request()
-    .input('refreshStart', sql.DateTime2, refreshStart)
-    .query(`
-      UPDATE dbo.po_cache_headers
-      SET removed_in_d365 = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
-    `);
-
-  await pool.request()
-    .input('watermark', sql.DateTime2, watermark)
-    .input('syncedAt', sql.DateTime2, refreshStart)
-    .query(`
-      UPDATE dbo.po_sync_state
-      SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
-      WHERE id = 1
-    `);
-
-  logger.info('PO-cache ververst', { orders: items.length, truncated: result.truncated });
-  return { orders: items.length, truncated: Boolean(result.truncated), syncedAt: refreshStart.toISOString() };
 }
 
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit po_cache_* + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
 async function read({ includeRemoved = false, userId = null } = {}) {
+  const readScope = { includeRemoved, userId };
+  const cachedPayload = getCachedReadPayload(readScope);
+  if (cachedPayload) {
+    return cachedPayload;
+  }
+
   const pool = await getPool();
   const [headerCols, lineCols] = await Promise.all([
     listColumns({ level: 'header', includeInactive: false }),
@@ -388,7 +653,7 @@ async function read({ includeRemoved = false, userId = null } = {}) {
   const stale = !lastFullSyncAt
     || (Date.now() - new Date(lastFullSyncAt).getTime() > staleThresholdMinutes * 60 * 1000);
 
-  return {
+  const payload = {
     syncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
     stale,
     hasCache: Boolean(lastFullSyncAt),
@@ -400,6 +665,9 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     newCount,
     changedCount,
   };
+
+  setCachedReadPayload(readScope, payload);
+  return payload;
 }
 
 function normalizeOut(value) {
@@ -432,6 +700,7 @@ async function markViewed(userId) {
       WHEN MATCHED THEN UPDATE SET last_viewed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT (user_id, last_viewed_at) VALUES (@userId, SYSUTCDATETIME());
     `);
+  invalidateReadCache({ userId });
   return { success: true };
 }
 
@@ -569,6 +838,7 @@ async function saveCustomValue({ columnId, dataAreaId, orderNumber, lineNumber, 
     }
   }
 
+  invalidateReadCache();
   return { columnId, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine, value: empty ? null : value };
 }
 
@@ -661,6 +931,7 @@ async function correctField({ columnId, dataAreaId, orderNumber, lineNumber, val
     }
   }
 
+  invalidateReadCache();
   return { success: true, correctionId, value: newValue };
 }
 
@@ -755,6 +1026,7 @@ module.exports = {
   refresh,
   read,
   getCacheStats,
+  getFilterFieldCatalogAndPreview,
   saveCustomValue,
   correctField,
   getCellHistory,
@@ -762,6 +1034,7 @@ module.exports = {
   getSyncState,
   isStale,
   getStaleThresholdMinutes,
+  getRefreshProgress,
   getLastViewedAt,
   markViewed,
   computeOrderHash,
