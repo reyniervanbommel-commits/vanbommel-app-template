@@ -17,6 +17,7 @@ const {
   writeBackField,
   buildHeaders,
   getBaseUrl,
+  getAccessToken,
 } = require('../D365ODataService');
 
 const METADATA_PATH = '/data/$metadata';
@@ -314,6 +315,24 @@ class D365ODataProvider extends SourceProvider {
   }
 
   /**
+   * Lichte verbindingstest: bevestigt dat de bron geconfigureerd is (base-URL) en dat OAuth een token
+   * levert. Haalt bewust NIET het volledige $metadata (57MB) op — dat is te zwaar voor een verbindingstest
+   * en verloopt op een koude cache makkelijk in een timeout. De echte $metadata wordt pas bij discovery
+   * opgehaald (en dan gecachet).
+   * @returns {Promise<boolean>}
+   */
+  async ping() {
+    const baseUrl = await getBaseUrl(); // gooit met een duidelijke fout als de base-URL ontbreekt
+    if (!baseUrl) throw Object.assign(new Error('D365-basis-URL ontbreekt'), { status: 400 });
+    const timeout = new Promise((_, reject) => setTimeout(
+      () => reject(Object.assign(new Error('D365-authenticatie duurde te lang (timeout)'), { status: 504 })),
+      12000,
+    ));
+    await Promise.race([getAccessToken(), timeout]); // bevestigt tenant/client/secret + Azure AD-bereik
+    return true;
+  }
+
+  /**
    * Ontdek alle beschikbare entiteiten (EntitySets) via $metadata, zodat de admin er één kan KIEZEN.
    * Hergebruikt de gecachete $metadata-XML. Return gesorteerd op name.
    * @returns {Promise<Array<{name:string, sourceEntity:string, entityType:string|null}>>}
@@ -441,8 +460,11 @@ function toNumberOrNull(value) {
 
 async function purchaseOrdersFetch(table) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
-  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
+  // Per-tabel standaardfilter (tb_tables.default_filter_json) wint van de globale PO_SYNC_FILTER, zodat een
+  // Table-Builder-tabel bv. alleen open orders kan ophalen. Valt terug op de env als de tabel geen filter heeft.
+  const extraFilter = (table.defaultFilter || await settingsService.getAsync('PO_SYNC_FILTER', '') || '').trim();
+  // Per-tabel maxRows wint; PO_SYNC_MAX_ORDERS blijft de globale fallback.
+  const rawMax = table.maxRows || await settingsService.getAsync('PO_SYNC_MAX_ORDERS', '2000');
   const parsedMax = Number.parseInt(rawMax, 10);
   const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
 

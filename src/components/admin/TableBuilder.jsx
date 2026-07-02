@@ -266,6 +266,8 @@ export default function TableBuilder() {
     label: '',
     sourceEntity: '/data/PurchaseOrderHeadersV2',
     keyFields: '',
+    defaultFilter: '',
+    maxRows: '',
     cacheMode: 'auto',
   });
 
@@ -398,11 +400,14 @@ export default function TableBuilder() {
     try {
       const keyFields = newTableForm.keyFields
         .split(',').map((s) => s.trim()).filter(Boolean);
+      const maxRowsNum = Number.parseInt(newTableForm.maxRows, 10);
       const { table } = await createTable({
         label,
         sourceId: selectedSourceId,
         sourceEntity,
         keyFields: keyFields.length ? keyFields : undefined,
+        defaultFilter: newTableForm.defaultFilter.trim() || undefined,
+        maxRows: Number.isFinite(maxRowsNum) && maxRowsNum > 0 ? maxRowsNum : undefined,
         cacheMode: newTableForm.cacheMode,
       });
       setFeedback(`Tabel "${label}" aangemaakt.`);
@@ -973,6 +978,25 @@ export default function TableBuilder() {
                 placeholder="PurchaseOrderNumber"
               />
             </Field>
+            <Field
+              label="Standaardfilter (optioneel)"
+              hint="OData-$filter dat bij het ophalen wordt toegepast. Bijv. alleen open orders: PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'"
+            >
+              <Textarea
+                value={newTableForm.defaultFilter}
+                onChange={(_, d) => setNewTableForm((p) => ({ ...p, defaultFilter: d.value }))}
+                placeholder="PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'"
+                resize="vertical"
+              />
+            </Field>
+            <Field label="Max. rijen (optioneel)" hint="Begrenst hoeveel rijen uit de bron worden opgehaald. Leeg = standaard (2000).">
+              <Input
+                type="number"
+                value={newTableForm.maxRows}
+                onChange={(_, d) => setNewTableForm((p) => ({ ...p, maxRows: d.value }))}
+                placeholder="bijv. 25"
+              />
+            </Field>
             <Field label="Cache-modus">
               <Dropdown
                 value={CACHE_MODE_LABELS[newTableForm.cacheMode]}
@@ -1166,6 +1190,10 @@ export default function TableBuilder() {
               <div className={styles.summaryRow}>
                 <span className={styles.summaryLabel}>Bron-entiteit</span>
                 <span className={styles.mono}>{activeTable.sourceEntity}</span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Standaardfilter</span>
+                <span className={styles.mono}>{activeTable.defaultFilter || 'Geen'}</span>
               </div>
               <div className={styles.summaryRow}>
                 <span className={styles.summaryLabel}>Cache-modus</span>

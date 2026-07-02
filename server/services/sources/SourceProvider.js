@@ -63,6 +63,15 @@ class SourceProvider {
   }
 
   /**
+   * Lichte verbindingstest (config + auth bereikbaar) — bewust GEEN zware metadata-/data-fetch.
+   * Providers die dit niet implementeren gooien 501; de aanroeper valt dan terug op een discover-rooktest.
+   * @returns {Promise<boolean>}
+   */
+  async ping() {
+    throw Object.assign(new Error('ping() niet ondersteund door deze provider'), { status: 501 });
+  }
+
+  /**
    * Ontdek de beschikbare entiteiten (voor de admin-entiteit-picker), zodat de admin een entiteit
    * kan KIEZEN i.p.v. de naam te typen. Alleen zinvol als capabilities.discoverEntities === true.
    * @returns {Promise<DiscoveredEntity[]>}

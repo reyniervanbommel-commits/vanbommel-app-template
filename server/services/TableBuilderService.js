@@ -67,6 +67,7 @@ function mapTableRow(row) {
     sourceId: Number(row.source_id),
     sourceEntity: row.source_entity,
     keyFields: row.key_fields || null,
+    defaultFilter: row.default_filter_json || null,
     cacheMode: row.cache_mode,
     staleMinutes: Number(row.stale_minutes),
     maxRows: Number(row.max_rows),
@@ -76,7 +77,7 @@ function mapTableRow(row) {
 }
 
 const TABLE_COLUMNS = `
-  id, [key], label, description, source_id, source_entity, key_fields,
+  id, [key], label, description, source_id, source_entity, key_fields, default_filter_json,
   cache_mode, stale_minutes, max_rows, is_active, sort_order
 `;
 
@@ -111,15 +112,24 @@ async function testSource(id) {
   const provider = getProvider(source.providerType);
   const capabilities = provider.capabilities();
 
-  // Als de provider velddiscovery kan, is $metadata bereikbaar een goede rooktest. We proberen dat
-  // alleen als de bron dat ondersteunt; fouten worden als 'niet verbonden' teruggegeven i.p.v. te gooien.
+  // Verbindingstest: gebruik de LICHTE provider.ping() (config + auth), niet een zware $metadata-fetch
+  // (dat 57MB-document verloopt op een koude cache makkelijk in een timeout). Providers zonder ping
+  // gooien 501 → dan vallen we terug op een discover-rooktest. Fouten worden als 'niet verbonden'
+  // teruggegeven i.p.v. te gooien.
   let ok = true;
   let message = 'Bron bereikbaar';
-  if (capabilities.discoverFields) {
-    try {
-      // Een lichte discover op de default-entiteit (PurchaseOrderHeadersV2) forceert het ophalen van $metadata.
-      await provider.discoverFields({ sourceEntity: '/data/PurchaseOrderHeadersV2', relation: null });
-    } catch (err) {
+  try {
+    await provider.ping();
+  } catch (err) {
+    if (err && err.status === 501 && capabilities.discoverFields) {
+      // Geen lichte ping beschikbaar: val terug op een discover-rooktest.
+      try {
+        await provider.discoverFields({ sourceEntity: '/data/PurchaseOrderHeadersV2', relation: null });
+      } catch (err2) {
+        ok = false;
+        message = err2 && err2.message ? err2.message : 'Bron niet bereikbaar';
+      }
+    } else {
       ok = false;
       message = err && err.message ? err.message : 'Bron niet bereikbaar';
     }
@@ -194,6 +204,11 @@ function validateTableInput(input, { partial = false } = {}) {
   if (!partial || input.keyFields !== undefined) {
     out.keyFields = requireText(input.keyFields, 'Sleutelvelden', { max: MAX_ENTITY, required: false });
   }
+  if (!partial || input.defaultFilter !== undefined) {
+    // Bron-neutraal standaardfilter (voor D365 een OData $filter-expressie). Optioneel; door de provider
+    // toegepast bij het ophalen. Niet leeg-verplicht, wel lengte-begrensd tegen misbruik.
+    out.defaultFilter = requireText(input.defaultFilter, 'Standaardfilter', { max: 1024, required: false });
+  }
   if (!partial || input.cacheMode !== undefined) {
     const mode = String(input.cacheMode || 'auto');
     if (!CACHE_MODES.includes(mode)) throw Object.assign(new Error('Ongeldige cache-modus'), { status: 400 });
@@ -228,16 +243,17 @@ async function createTable(input, userId) {
     .input('sourceId', sql.BigInt, sourceId)
     .input('sourceEntity', sql.NVarChar(256), clean.sourceEntity)
     .input('keyFields', sql.NVarChar(256), clean.keyFields)
+    .input('defaultFilter', sql.NVarChar(sql.MAX), clean.defaultFilter || null)
     .input('cacheMode', sql.NVarChar(16), clean.cacheMode || 'auto')
     .input('staleMinutes', sql.Int, clean.staleMinutes ?? 15)
     .input('maxRows', sql.Int, clean.maxRows ?? 2000)
     .input('userId', sql.Int, userId || null)
     .query(`
       INSERT INTO dbo.tb_tables
-        ([key], label, description, source_id, source_entity, key_fields, cache_mode, stale_minutes, max_rows, created_by, updated_by)
+        ([key], label, description, source_id, source_entity, key_fields, default_filter_json, cache_mode, stale_minutes, max_rows, created_by, updated_by)
       OUTPUT ${outputCols('INSERTED')}
       VALUES
-        (@key, @label, @description, @sourceId, @sourceEntity, @keyFields, @cacheMode, @staleMinutes, @maxRows, @userId, @userId)
+        (@key, @label, @description, @sourceId, @sourceEntity, @keyFields, @defaultFilter, @cacheMode, @staleMinutes, @maxRows, @userId, @userId)
     `);
 
   // Start "stale" zodat de eerste lazy refresh de cache opbouwt.
@@ -264,6 +280,7 @@ async function updateTable(id, input, userId) {
     description: ['description', sql.NVarChar(512)],
     sourceEntity: ['source_entity', sql.NVarChar(256)],
     keyFields: ['key_fields', sql.NVarChar(256)],
+    defaultFilter: ['default_filter_json', sql.NVarChar(sql.MAX)],
     cacheMode: ['cache_mode', sql.NVarChar(16)],
     staleMinutes: ['stale_minutes', sql.Int],
     maxRows: ['max_rows', sql.Int],
@@ -309,8 +326,8 @@ async function deactivateTable(id, userId) {
 
 function outputCols(prefix) {
   return `${prefix}.id, ${prefix}.[key], ${prefix}.label, ${prefix}.description, ${prefix}.source_id,
-          ${prefix}.source_entity, ${prefix}.key_fields, ${prefix}.cache_mode, ${prefix}.stale_minutes,
-          ${prefix}.max_rows, ${prefix}.is_active, ${prefix}.sort_order`;
+          ${prefix}.source_entity, ${prefix}.key_fields, ${prefix}.default_filter_json, ${prefix}.cache_mode,
+          ${prefix}.stale_minutes, ${prefix}.max_rows, ${prefix}.is_active, ${prefix}.sort_order`;
 }
 
 async function uniqueTableKey(pool, desired) {

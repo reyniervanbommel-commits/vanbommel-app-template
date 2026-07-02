@@ -153,9 +153,20 @@ async function refresh(tableKey) {
                 WHERE table_id = @tableId AND scope = 'detail'
                   AND partition_key = @partitionKey AND record_key = @recordKey`);
 
+      // Dedupliceer op detail_key: de PK van tb_cache is (table_id, scope, partition, record, detail_key),
+      // dus twee detail-regels met hetzelfde detail_key (bv. dezelfde D365 LineNumber binnen één order)
+      // zouden een PK-violation geven. We houden de eerste en slaan duplicaten over met een waarschuwing.
+      const seenDetailKeys = new Set();
       for (let i = 0; i < rec.details.length; i += 1) {
         const detail = rec.details[i];
         if (detail.detailKey === null || detail.detailKey === undefined) continue;
+        if (seenDetailKeys.has(detail.detailKey)) {
+          logger.warn('Dubbele detail_key overgeslagen bij refresh', {
+            tableKey, recordKey: rec.recordKey, detailKey: detail.detailKey,
+          });
+          continue;
+        }
+        seenDetailKeys.add(detail.detailKey);
         await new sql.Request(tx)
           .input('tableId', sql.BigInt, table.id)
           .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
