@@ -9,14 +9,3 @@
     "strict": true
   }
 }
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "strict": true
-  }
-}
