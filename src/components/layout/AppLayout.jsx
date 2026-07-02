@@ -133,7 +133,9 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+    // location.pathname als dep: herlaad de tabellenlijst bij elke navigatie, zodat een zojuist in de
+    // Table Builder aangemaakte tabel direct in het menu verschijnt (geen page-reload nodig).
+  }, [user, location.pathname]);
 
   const navItems = useMemo(
     () => [
