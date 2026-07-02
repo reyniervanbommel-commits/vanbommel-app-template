@@ -127,32 +127,83 @@ const useStyles = makeStyles({
     ...shorthands.padding('12px'),
     textAlign: 'center',
   },
-  fieldRow: {
-    display: 'grid',
-    gridTemplateColumns: '28px minmax(160px, 1.4fr) minmax(120px, 1fr) auto auto auto',
+  // --- Stap 3: veld-tabel ---------------------------------------------------
+  // Eén header-rij met kolomtitels i.p.v. per rij herhaalde labels; compacte rijen zodat
+  // lange veldenlijsten scanbaar blijven. Horizontaal scrollbaar op smalle schermen.
+  sectionHeaderRow: {
+    display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('10px'),
-    ...shorthands.padding('8px', '10px'),
-    ...shorthands.borderRadius('6px'),
-    backgroundColor: tokens.colorNeutralBackground1,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    flexWrap: 'wrap',
   },
-  fieldRowDisabled: { opacity: 0.55 },
-  fieldMeta: { display: 'flex', flexDirection: 'column' },
+  grow: { flexGrow: 1 },
+  fieldTableWrap: {
+    ...shorthands.overflow('auto'),
+    ...shorthands.borderRadius('8px'),
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  fieldTable: { minWidth: '720px', display: 'flex', flexDirection: 'column' },
+  fieldScroll: { maxHeight: '460px', ...shorthands.overflow('hidden', 'auto') },
+  fieldGrid: {
+    display: 'grid',
+    gridTemplateColumns: '36px minmax(180px, 2fr) 124px minmax(170px, 1.5fr) 74px 56px 68px',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    ...shorthands.padding('7px', '12px'),
+  },
+  fieldHeader: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+  },
+  colCenter: { display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center' },
+  fieldRowLine: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
+    ':hover': { backgroundColor: tokens.colorNeutralBackground1Hover },
+  },
+  fieldRowDim: { backgroundColor: tokens.colorNeutralBackground2 },
+  fieldMeta: { display: 'flex', flexDirection: 'column', ...shorthands.gap('1px'), minWidth: 0 },
+  fieldName: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    ...shorthands.overflow('hidden'),
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fieldLabelStatic: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase300,
+    ...shorthands.overflow('hidden'),
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Voorbeeldwaarden als kleine, goed leesbare chips (meerdere per veld).
+  sampleChips: { display: 'flex', flexWrap: 'wrap', ...shorthands.gap('4px'), minWidth: 0 },
+  sampleChip: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase100,
+    lineHeight: '16px',
+    ...shorthands.padding('1px', '6px'),
+    ...shorthands.borderRadius('4px'),
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground2,
+    border: `1px solid ${tokens.colorNeutralStroke3}`,
+    maxWidth: '100%',
+    ...shorthands.overflow('hidden'),
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  sampleEmpty: { color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase100, fontStyle: 'italic' },
   summaryGrid: { display: 'flex', flexDirection: 'column', ...shorthands.gap('6px') },
   summaryRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'center', flexWrap: 'wrap' },
   summaryLabel: { color: tokens.colorNeutralForeground3, minWidth: '190px', fontSize: tokens.fontSizeBase200 },
-  // Gedempte voorbeeldwaarde per veld (stap 3). Bewust inline i.p.v. Tooltip
-  // (zie fluentui-valkuilen.mdc: geen Tooltip in herhaalde lijstrijen).
-  sample: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-    fontStyle: 'italic',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    maxWidth: '100%',
-  },
   // AI-assistent-paneel (accent-achtergrond zodat het opvalt als hulpmiddel).
   assistPanel: {
     backgroundColor: tokens.colorBrandBackground2,
@@ -215,8 +266,11 @@ function fieldRowFromDiscovered(f, suggestedKeys) {
     dataType: f.dataType || 'text',
     scope: f.scope,
     nullable: f.nullable,
-    // korte voorbeeldwaarde uit echte data, of null → niets tonen.
-    sample: f.sample ?? null,
+    // korte voorbeeldwaarden uit echte data (tot enkele distinct). Nieuwe backend levert `samples`;
+    // val faalt-veilig terug op het oude enkelvoudige `sample`, of een lege lijst.
+    samples: Array.isArray(f.samples)
+      ? f.samples
+      : (f.sample != null && String(f.sample).trim() !== '' ? [f.sample] : []),
     // alreadyCurated → curated (al opgeslagen); AI-suggestie → curated (voorgevinkt).
     curated,
     isDefaultVisible: curated,
@@ -572,6 +626,15 @@ export default function TableBuilder() {
   const updateField = useCallback((scope, fieldName, patch) => {
     const setter = scope === 'master' ? setMasterFields : setDetailFields;
     setter((prev) => prev.map((r) => (r.field === fieldName ? { ...r, ...patch } : r)));
+    setFeedback('');
+  }, []);
+
+  // Bulk cureren via de "selecteer alles"-checkbox in de tabelkop. Werkt op de doorgegeven
+  // (gefilterde) veldnamen zodat een actieve zoekopdracht de selectie respecteert.
+  const bulkCurate = useCallback((scope, fieldNames, curated) => {
+    const names = new Set(fieldNames);
+    const setter = scope === 'master' ? setMasterFields : setDetailFields;
+    setter((prev) => prev.map((r) => (names.has(r.field) ? { ...r, curated } : r)));
     setFeedback('');
   }, []);
 
@@ -1028,7 +1091,8 @@ export default function TableBuilder() {
               </Button>
             </div>
             <Text className={styles.hint} block>
-              Vink de velden aan die je wilt tonen. Reeds gecureerde velden zijn voorgevinkt.
+              Vink de velden aan die je wilt tonen. Reeds gecureerde velden zijn voorgevinkt. De kolom
+              <strong> Voorbeelden</strong> toont echte waarden uit de bron zodat je het veld herkent.
             </Text>
           </div>
 
@@ -1040,6 +1104,7 @@ export default function TableBuilder() {
             search={masterSearch}
             onSearch={setMasterSearch}
             onUpdate={updateField}
+            onBulkCurate={bulkCurate}
           />
           <FieldSection
             styles={styles}
@@ -1049,6 +1114,7 @@ export default function TableBuilder() {
             search={detailSearch}
             onSearch={setDetailSearch}
             onUpdate={updateField}
+            onBulkCurate={bulkCurate}
           />
 
           <div className={styles.actions}>
@@ -1269,8 +1335,9 @@ export default function TableBuilder() {
   );
 }
 
-// Sub-component: één scope-sectie (master of detail) met zoekfilter en rijen.
-function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate }) {
+// Sub-component: één scope-sectie (master of detail) als compacte tabel met sticky header-rij,
+// "selecteer alles", een teller en meerdere voorbeeldwaarden per veld.
+function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate, onBulkCurate }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
@@ -1279,10 +1346,20 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate }
     );
   }, [rows, search]);
 
+  const curatedCount = useMemo(() => rows.filter((r) => r.curated).length, [rows]);
+  const allChecked = filtered.length > 0 && filtered.every((r) => r.curated);
+  const someChecked = filtered.some((r) => r.curated);
+  const headerChecked = allChecked ? true : someChecked ? 'mixed' : false;
+  const toggleAll = () => onBulkCurate(scope, filtered.map((r) => r.field), !allChecked);
+
   return (
     <div className={styles.section}>
-      <div className={styles.spread}>
+      <div className={styles.sectionHeaderRow}>
         <Text weight="semibold" className={styles.sectionTitle}>{title}</Text>
+        <Badge appearance="tint" color={curatedCount ? 'brand' : 'informative'}>
+          {curatedCount}/{rows.length} gecureerd
+        </Badge>
+        <span className={styles.grow} />
         <Input
           contentBefore={<Search24Regular />}
           value={search}
@@ -1291,68 +1368,118 @@ function FieldSection({ styles, title, scope, rows, search, onSearch, onUpdate }
           aria-label={`Zoek in ${title}`}
         />
       </div>
+
       {rows.length === 0 ? (
         <div className={styles.empty}>Geen velden in deze scope.</div>
-      ) : filtered.length === 0 ? (
-        <div className={styles.empty}>Geen resultaten voor "{search}".</div>
       ) : (
-        <div className={styles.list}>
-          {filtered.map((r) => (
-            <div
-              key={r.field}
-              className={[styles.fieldRow, !r.curated ? styles.fieldRowDisabled : ''].filter(Boolean).join(' ')}
-              title={r.field}
-            >
-              <Checkbox
-                checked={r.curated}
-                onChange={(_, d) => onUpdate(scope, r.field, { curated: !!d.checked })}
-                aria-label={`Cureer ${r.field}`}
-              />
-              <div className={styles.fieldMeta}>
-                <Input
-                  value={r.label}
-                  onChange={(_, d) => onUpdate(scope, r.field, { label: d.value })}
-                  aria-label={`Label voor ${r.field}`}
-                  disabled={!r.curated}
+        <div className={styles.fieldTableWrap}>
+          <div className={styles.fieldTable}>
+            {/* Header-rij: kolomtitels één keer i.p.v. per rij. */}
+            <div className={[styles.fieldGrid, styles.fieldHeader].join(' ')} role="row">
+              <span className={styles.colCenter}>
+                <Checkbox
+                  checked={headerChecked}
+                  onChange={toggleAll}
+                  disabled={filtered.length === 0}
+                  aria-label={`Alle ${title} selecteren`}
                 />
-                <span className={styles.mono}>{r.field}</span>
-                {r.sample != null && String(r.sample).trim() !== '' && (
-                  <span className={styles.sample} title={String(r.sample)}>
-                    bv. {truncateSample(r.sample)}
-                  </span>
-                )}
-              </div>
-              <Dropdown
-                value={DATA_TYPE_LABELS[r.dataType]}
-                selectedOptions={[r.dataType]}
-                onOptionSelect={(_, d) => onUpdate(scope, r.field, { dataType: d.optionValue })}
-                disabled={!r.curated}
-                aria-label={`Type voor ${r.field}`}
-              >
-                {DATA_TYPES.map((t) => (
-                  <Option key={t.value} value={t.value}>{t.label}</Option>
-                ))}
-              </Dropdown>
-              <Checkbox
-                label="Zichtbaar"
-                checked={r.isDefaultVisible}
-                disabled={!r.curated}
-                onChange={(_, d) => onUpdate(scope, r.field, { isDefaultVisible: !!d.checked })}
-              />
-              <Checkbox
-                label="Filterbaar"
-                checked={r.filterable}
-                disabled={!r.curated}
-                onChange={(_, d) => onUpdate(scope, r.field, { filterable: !!d.checked })}
-              />
-              <Checkbox
-                label="Sorteerbaar"
-                checked={r.sortable}
-                disabled={!r.curated}
-                onChange={(_, d) => onUpdate(scope, r.field, { sortable: !!d.checked })}
-              />
+              </span>
+              <span>Veld</span>
+              <span>Type</span>
+              <span>Voorbeelden</span>
+              <span className={styles.colCenter}>Zichtbaar</span>
+              <span className={styles.colCenter}>Filter</span>
+              <span className={styles.colCenter}>Sorteer</span>
             </div>
-          ))}
+
+            <div className={styles.fieldScroll}>
+              {filtered.length === 0 ? (
+                <div className={styles.empty}>Geen resultaten voor "{search}".</div>
+              ) : (
+                filtered.map((r) => (
+                  <div
+                    key={r.field}
+                    className={[styles.fieldGrid, styles.fieldRowLine, !r.curated ? styles.fieldRowDim : '']
+                      .filter(Boolean).join(' ')}
+                    role="row"
+                  >
+                    <span className={styles.colCenter}>
+                      <Checkbox
+                        checked={r.curated}
+                        onChange={(_, d) => onUpdate(scope, r.field, { curated: !!d.checked })}
+                        aria-label={`Cureer ${r.field}`}
+                      />
+                    </span>
+
+                    <div className={styles.fieldMeta} title={r.field}>
+                      {r.curated ? (
+                        <Input
+                          appearance="underline"
+                          size="small"
+                          value={r.label}
+                          onChange={(_, d) => onUpdate(scope, r.field, { label: d.value })}
+                          aria-label={`Label voor ${r.field}`}
+                        />
+                      ) : (
+                        <span className={styles.fieldLabelStatic}>{r.label}</span>
+                      )}
+                      <span className={styles.fieldName}>{r.field}</span>
+                    </div>
+
+                    <Dropdown
+                      size="small"
+                      value={DATA_TYPE_LABELS[r.dataType]}
+                      selectedOptions={[r.dataType]}
+                      onOptionSelect={(_, d) => onUpdate(scope, r.field, { dataType: d.optionValue })}
+                      disabled={!r.curated}
+                      aria-label={`Type voor ${r.field}`}
+                    >
+                      {DATA_TYPES.map((t) => (
+                        <Option key={t.value} value={t.value}>{t.label}</Option>
+                      ))}
+                    </Dropdown>
+
+                    <div className={styles.sampleChips}>
+                      {r.samples && r.samples.length > 0 ? (
+                        r.samples.map((s, i) => (
+                          <span key={i} className={styles.sampleChip} title={String(s)}>
+                            {truncateSample(s, 22)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className={styles.sampleEmpty}>geen data</span>
+                      )}
+                    </div>
+
+                    <span className={styles.colCenter}>
+                      <Checkbox
+                        checked={r.isDefaultVisible}
+                        disabled={!r.curated}
+                        onChange={(_, d) => onUpdate(scope, r.field, { isDefaultVisible: !!d.checked })}
+                        aria-label={`Zichtbaar: ${r.field}`}
+                      />
+                    </span>
+                    <span className={styles.colCenter}>
+                      <Checkbox
+                        checked={r.filterable}
+                        disabled={!r.curated}
+                        onChange={(_, d) => onUpdate(scope, r.field, { filterable: !!d.checked })}
+                        aria-label={`Filterbaar: ${r.field}`}
+                      />
+                    </span>
+                    <span className={styles.colCenter}>
+                      <Checkbox
+                        checked={r.sortable}
+                        disabled={!r.curated}
+                        onChange={(_, d) => onUpdate(scope, r.field, { sortable: !!d.checked })}
+                        aria-label={`Sorteerbaar: ${r.field}`}
+                      />
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

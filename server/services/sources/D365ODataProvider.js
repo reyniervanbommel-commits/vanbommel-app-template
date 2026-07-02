@@ -29,6 +29,9 @@ const DEFAULT_METADATA_TIMEOUT_MS = 20000;
 const SAMPLE_TOP = 3;
 const SAMPLE_TIMEOUT_MS = 6000;
 const SAMPLE_MAX_LEN = 60;
+// Aantal distinct voorbeeldwaarden dat we per veld tonen in de picker. Uit dezelfde SAMPLE_TOP-rijen,
+// dus geen extra fetch: één voorbeeld gaf te weinig gevoel voor de data, meerdere maakt het type duidelijk.
+const SAMPLE_MAX_PER_FIELD = 3;
 
 // In-memory $metadata-cache (per baseUrl). Voorkomt dat elke discover-call het volledige document ophaalt.
 const _metadataCache = new Map(); // baseUrl -> { xml, expiresAt }
@@ -134,9 +137,10 @@ async function fetchMetadataXml() {
 }
 
 // Haal ~SAMPLE_TOP rijen op uit een entiteit (optioneel met detail-expand) en bouw een sample-map:
-//   { 'master|<Field>': <sample>, 'detail|<Field>': <sample> }
-// Neemt per veld de EERSTE niet-lege waarde over de opgehaalde rijen. Faalt-veilig: elke fout of
-// timeout -> lege map (discovery valt dan terug op sample:null). Vaste kleine $top; geen paging.
+//   { 'master|<Field>': [<sample>, ...], 'detail|<Field>': [<sample>, ...] }
+// Verzamelt per veld tot SAMPLE_MAX_PER_FIELD distinct niet-lege waarden over de opgehaalde rijen.
+// Faalt-veilig: elke fout of timeout -> lege map (discovery valt dan terug op een lege lijst). Vaste
+// kleine $top; geen paging.
 async function fetchFieldSamples({ masterEntity, navName }) {
   const samples = new Map();
   let baseUrl;
@@ -190,15 +194,18 @@ async function fetchSampleRows(url) {
   }
 }
 
-// Vul per (scope, field) de eerste niet-lege sample in de map.
+// Verzamel per (scope, field) tot SAMPLE_MAX_PER_FIELD distinct niet-lege samples in de map (arrays).
 function collectRowSamples(row, scope, samples) {
   if (!row || typeof row !== 'object') return;
   for (const [field, value] of Object.entries(row)) {
     if (field.startsWith('@') || field.startsWith('#')) continue; // OData-annotaties overslaan.
     const key = scope + '|' + field;
-    if (samples.has(key)) continue;
     const norm = normalizeSample(value);
-    if (norm !== null) samples.set(key, norm);
+    if (norm === null) continue;
+    let list = samples.get(key);
+    if (!list) { list = []; samples.set(key, list); }
+    // Alleen distinct waarden, en niet meer dan het maximum per veld.
+    if (list.length < SAMPLE_MAX_PER_FIELD && !list.includes(norm)) list.push(norm);
   }
 }
 
@@ -366,8 +373,9 @@ class D365ODataProvider extends SourceProvider {
   /**
    * Ontdek master- + detailvelden via $metadata. De master-entiteit komt uit sourceEntity; de
    * detail-entiteit uit relation.detailSourceEntity (nav-property op de master).
-   * Elk veld krijgt een `sample`: een representatieve niet-lege waarde uit echte data (lichte $top-fetch).
-   * Sampling is faalt-veilig: mislukt/leeg -> sample:null; discovery crasht er nooit door.
+   * Elk veld krijgt `samples`: tot enkele representatieve niet-lege waarden uit echte data (lichte
+   * $top-fetch), plus `sample` (de eerste, voor achterwaartse compatibiliteit). Sampling is faalt-veilig:
+   * mislukt/leeg -> samples:[] / sample:null; discovery crasht er nooit door.
    */
   async discoverFields({ sourceEntity, relation } = {}) {
     const masterEntity = entitySetName(sourceEntity);
@@ -404,17 +412,23 @@ class D365ODataProvider extends SourceProvider {
     // Voorbeelddata per veld (faalt-veilig). De expand voor detail-samples werkt alleen bij een echte
     // nav-property; anders krijgen detail-velden sample:null.
     const samples = await fetchFieldSamples({ masterEntity, navName });
-    return fields.map((f) => ({ ...f, sample: samples.get(`${f.scope}|${f.field}`) ?? null }));
+    return fields.map((f) => {
+      const list = samples.get(`${f.scope}|${f.field}`) || [];
+      return { ...f, samples: list, sample: list[0] ?? null };
+    });
   }
 
   /**
-   * Haal rijen op. Fase B: voor de PO-entiteit hergebruiken we de bestaande fetchPurchaseOrders en
-   * produceren exact de records-vorm die de oude purchaseOrdersFetch-adapter maakte (PO-pariteit).
-   * De generieke $select/$expand-bouwer volgt in een latere fase.
+   * Haal rijen op. De PurchaseOrderHeaders-entiteit houdt het bestaande, verrijkte pad
+   * (fetchPurchaseOrders, incl. vendorName-verrijking) voor PO-pariteit. Elke andere entiteit gebruikt
+   * de GENERIEKE fetch (#141): $select uit de gecureerde velden, $expand uit de relatie, $filter uit het
+   * standaardfilter, natuurlijke sleutel uit key_fields — records gekeyd op col.key (zodat de projectie
+   * en generieke curatie aansluiten).
    */
-  async fetch({ table } = {}) {
+  async fetch({ table, columns, relation } = {}) {
     if (!table) throw Object.assign(new Error('Geen tabel opgegeven voor fetch'), { status: 400 });
-    return purchaseOrdersFetch(table);
+    if (/PurchaseOrderHeaders/i.test(table.sourceEntity || '')) return purchaseOrdersFetch(table);
+    return genericFetch({ table, columns, relation: relation || table.relation });
   }
 
   /**
@@ -456,6 +470,99 @@ function toNumberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+// ---------------------------------------------------------------------------
+// Generieke OData-fetch (#141): werkt voor ELKE D365-entiteit. Bouwt $select uit de gecureerde bronvelden,
+// $expand uit de relatie, $filter uit het standaardfilter, natuurlijke sleutel uit key_fields. Records
+// worden gekeyd op col.key (uit row[col.sourceField]) zodat de projectie in TableDataService én de
+// generieke curatie exact aansluiten. Paging via @odata.nextLink tot maxRows.
+// ---------------------------------------------------------------------------
+function uniqStrings(arr) { return [...new Set((arr || []).filter(Boolean))]; }
+
+async function fetchAllRows(startUrl, max) {
+  const rows = [];
+  let next = startUrl;
+  let guard = 0;
+  while (next && rows.length < max && guard < 200) {
+    guard += 1;
+    const controller = new AbortController();
+    const handle = setTimeout(() => controller.abort(), 60000);
+    let payload;
+    try {
+      const res = await fetch(next, { headers: await buildHeaders(), signal: controller.signal });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        const err = new Error(`D365-bron antwoordde met status ${res.status}`);
+        err.status = res.status >= 400 && res.status < 500 ? 400 : 502;
+        logger.warn('Generieke fetch: bron-fout', { status: res.status, bodyPreview: body.slice(0, 300) });
+        throw err;
+      }
+      payload = await res.json();
+    } finally {
+      clearTimeout(handle);
+    }
+    for (const r of (Array.isArray(payload.value) ? payload.value : [])) {
+      if (rows.length >= max) break;
+      rows.push(r);
+    }
+    next = payload['@odata.nextLink'] || null; // D365 geeft een absolute nextLink met behoud van de query.
+  }
+  return rows;
+}
+
+async function genericFetch({ table, columns, relation }) {
+  const baseUrl = (await getBaseUrl()).replace(/\/+$/, '');
+  const entity = entitySetName(table.sourceEntity);
+  if (!entity) throw Object.assign(new Error('Geen bron-entiteit voor fetch'), { status: 400 });
+
+  const masterCols = ((columns && columns.master) || []).filter((c) => c.source === 'source' && c.sourceField);
+  const detailCols = ((columns && columns.detail) || []).filter((c) => c.source === 'source' && c.sourceField);
+  const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
+  const navName = relation && relation.detailSourceEntity && relation.kind !== 'none' ? relation.detailSourceEntity : null;
+  const detailKeyFields = relation && Array.isArray(relation.detailKeyFields) ? relation.detailKeyFields : [];
+
+  // Partitie = een company-achtig sleutelveld (dataAreaId); record = de overige sleutelvelden.
+  const partitionField = keyFields.find((f) => /dataarea|company|legalentity/i.test(f)) || 'dataAreaId';
+  const recordFields = keyFields.filter((f) => f !== partitionField);
+
+  // Let op: NIET ModifiedDateTime hardcoderen in $select — veel (regel-)entiteiten hebben dat veld niet,
+  // wat een 400 geeft. modifiedAt is dus best-effort (alleen als de bron het veld toevallig meelevert).
+  const masterSelect = uniqStrings([partitionField, 'dataAreaId', ...recordFields, ...masterCols.map((c) => c.sourceField)]);
+  const url = new URL(baseUrl + '/data/' + entity);
+  url.searchParams.set('cross-company', 'true');
+  if (masterSelect.length) url.searchParams.set('$select', masterSelect.join(','));
+  if (navName) {
+    const detailSelect = uniqStrings([...detailKeyFields, ...detailCols.map((c) => c.sourceField)]);
+    url.searchParams.set('$expand', detailSelect.length ? `${navName}($select=${detailSelect.join(',')})` : navName);
+  }
+  const filter = String(table.defaultFilter || '').trim();
+  if (filter) url.searchParams.set('$filter', filter);
+  const maxRows = Number.isFinite(table.maxRows) && table.maxRows > 0 ? table.maxRows : 2000;
+  url.searchParams.set('$top', String(Math.min(maxRows, 500)));
+
+  const rows = await fetchAllRows(url.toString(), maxRows);
+  const detailKeyField = detailKeyFields[0] || null;
+
+  const records = [];
+  for (const row of rows) {
+    const partitionKey = String(row[partitionField] ?? row.dataAreaId ?? '').trim().slice(0, 32);
+    const recordKey = (recordFields.length ? recordFields : keyFields)
+      .map((f) => row[f]).filter((v) => v !== undefined && v !== null && v !== '').join('|').slice(0, 128);
+    if (!recordKey) continue;
+    const master = {};
+    for (const c of masterCols) master[c.key] = row[c.sourceField] ?? null;
+    const detailArr = navName && Array.isArray(row[navName]) ? row[navName] : [];
+    const details = detailArr.map((line, idx) => {
+      let dk = idx;
+      if (detailKeyField) { const n = Number.parseInt(line[detailKeyField], 10); if (Number.isFinite(n)) dk = n; }
+      const values = {};
+      for (const c of detailCols) values[c.key] = line[c.sourceField] ?? null;
+      return { detailKey: dk, values };
+    });
+    records.push({ partitionKey, recordKey, modifiedAt: row.ModifiedDateTime || null, master, details });
+  }
+  return { records, total: records.length, truncated: rows.length >= maxRows };
 }
 
 async function purchaseOrdersFetch(table) {
