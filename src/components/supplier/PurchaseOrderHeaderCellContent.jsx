@@ -1,0 +1,114 @@
+import React, { memo, useCallback } from 'react';
+import { Badge, makeStyles, tokens } from '@fluentui/react-components';
+import EditableCell from './EditableCell';
+import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
+import { formatCellValue } from '../../utils/purchaseOrderFormat';
+
+const useStyles = makeStyles({
+  removedText: {
+    textDecorationLine: 'line-through',
+    color: tokens.colorNeutralForeground3,
+  },
+  removedBadge: {
+    marginLeft: '6px',
+  },
+  rowBadge: {
+    marginLeft: '6px',
+  },
+});
+
+function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect }) {
+  const styles = useStyles();
+  const key = column.key;
+  const rawValue = order.values?.[key];
+
+  const handleSave = useCallback((value) => {
+    onSaveValue({
+      columnId: column.id,
+      columnKey: key,
+      dataAreaId: order.dataAreaId,
+      orderNumber: order.orderNumber,
+      lineNumber: null,
+      value,
+    });
+  }, [column.id, key, onSaveValue, order.dataAreaId, order.orderNumber]);
+
+  const handleCorrect = useCallback(({ value, basedOnValue }) => {
+    onCorrect({
+      columnId: column.id,
+      columnKey: key,
+      dataAreaId: order.dataAreaId,
+      orderNumber: order.orderNumber,
+      lineNumber: null,
+      value,
+      basedOnValue,
+    });
+  }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
+
+  if (column.source === 'custom') {
+    return (
+      <EditableCell
+        dataType={column.dataType}
+        value={rawValue}
+        options={column.options}
+        ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+        cellKeys={{
+          columnId: column.id,
+          dataAreaId: order.dataAreaId,
+          orderNumber: order.orderNumber,
+          lineNumber: null,
+        }}
+        onSave={handleSave}
+      />
+    );
+  }
+
+  if (column.source === 'd365' && column.writableToD365 && onCorrect) {
+    return (
+      <PurchaseOrderWriteBackCell
+        column={column}
+        value={rawValue}
+        cellKeys={{
+          columnId: column.id,
+          dataAreaId: order.dataAreaId,
+          orderNumber: order.orderNumber,
+          lineNumber: null,
+        }}
+        onCorrect={handleCorrect}
+      />
+    );
+  }
+
+  const display = formatCellValue(rawValue, column.dataType);
+
+  if (isFirst && order.removedInD365) {
+    return (
+      <span>
+        <span className={styles.removedText}>{display}</span>
+        <Badge className={styles.removedBadge} color="danger" appearance="tint" size="small">
+          verwijderd in D365
+        </Badge>
+      </span>
+    );
+  }
+
+  if (isFirst && (order.isNew || order.isChanged)) {
+    return (
+      <span>
+        {display}
+        <Badge
+          className={styles.rowBadge}
+          color={order.isNew ? 'success' : 'warning'}
+          appearance="tint"
+          size="small"
+        >
+          {order.isNew ? 'nieuw' : 'gewijzigd'}
+        </Badge>
+      </span>
+    );
+  }
+
+  return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
+}
+
+export default memo(PurchaseOrderHeaderCellContent);

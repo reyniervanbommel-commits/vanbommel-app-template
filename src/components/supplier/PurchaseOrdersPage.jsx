@@ -10,7 +10,9 @@ import { ArrowClockwiseRegular, AddRegular, CheckmarkRegular } from '@fluentui/r
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
+import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
+import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
@@ -54,11 +56,14 @@ const useStyles = makeStyles({
   tableRegion: {
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
     display: 'flex',
+    overflow: 'hidden',
     '& > *': {
       flex: 1,
       minHeight: 0,
-      overflowY: 'auto',
+      minWidth: 0,
+      overflow: 'auto',
       scrollbarGutter: 'stable',
     },
   },
@@ -68,6 +73,11 @@ export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
   const [addColumnOpen, setAddColumnOpen] = useState(false);
+  const {
+    progress: refreshProgress,
+    startProgress,
+    finishProgress,
+  } = usePurchaseOrderRefreshProgress();
 
   const {
     orders,
@@ -96,6 +106,14 @@ export default function PurchaseOrdersPage() {
   const isAdmin = user?.role === 'admin';
 
   const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
+  const handleRefresh = useCallback(async () => {
+    startProgress();
+    try {
+      await refresh();
+    } finally {
+      await finishProgress();
+    }
+  }, [finishProgress, refresh, startProgress]);
 
   const relativeSynced = formatSyncedAt(syncedAt);
 
@@ -154,12 +172,14 @@ export default function PurchaseOrdersPage() {
         <Button
           appearance="primary"
           icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
-          onClick={refresh}
+          onClick={handleRefresh}
           disabled={refreshing}
         >
           {refreshing ? 'Vernieuwen...' : 'Vernieuwen'}
         </Button>
       </div>
+
+      {refreshing ? <PurchaseOrderRefreshProgress progress={refreshProgress} /> : null}
 
       {error ? <div className={styles.error}>{error}</div> : null}
 

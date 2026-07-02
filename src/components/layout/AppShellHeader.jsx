@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Avatar,
   Button,
@@ -29,15 +29,15 @@ const useStyles = makeStyles({
     zIndex: 1000,
   },
   headerLeft: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
-  brand: { display: 'flex', alignItems: 'center', ...shorthands.gap('10px') },
-  logo: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    objectFit: 'cover',
-    flexShrink: 0,
-  },
+  headerCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 },
   headerRight: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
+  userMenuAnchor: { position: 'relative' },
+  avatarButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+  },
   menuBackdrop: { position: 'fixed', inset: 0, zIndex: 2999 },
   menu: {
     position: 'absolute',
@@ -85,40 +85,44 @@ export default function AppShellHeader({
   onLogout,
 }) {
   const styles = useStyles();
-  const avatarName = user?.display_name || user?.email || 'Gebruiker';
+  const avatarName = user?.display_name || user?.email || 'User';
+
+  const handleAdminClick = useCallback(() => {
+    onNavigateAdmin();
+    onCloseUserMenu();
+  }, [onCloseUserMenu, onNavigateAdmin]);
 
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
         <Button
-          appearance={sidebarOpen ? 'primary' : 'subtle'}
+          appearance="subtle"
           icon={<Navigation24Regular />}
           onClick={onToggleSidebar}
-          aria-label="Zijbalk openen of sluiten"
+          aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}
         />
-        <div className={styles.brand}>
-          <img src="/logo-circle.png" alt={APP_DISPLAY_NAME + ' logo'} className={styles.logo} />
-          <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
-            {APP_DISPLAY_NAME}
-          </Text>
-        </div>
+        <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
+          {APP_DISPLAY_NAME}
+        </Text>
       </div>
+
+      <div className={styles.headerCenter} />
 
       <div className={styles.headerRight}>
         <Button
           appearance="subtle"
           icon={isDarkMode ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />}
           onClick={onToggleTheme}
-          aria-label={isDarkMode ? 'Licht thema' : 'Donker thema'}
+          aria-label={isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'}
         />
 
         {user && (
-          <div style={{ position: 'relative' }}>
+          <div className={styles.userMenuAnchor}>
             <button
               type="button"
               onClick={onToggleUserMenu}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              aria-label="Gebruikersmenu"
+              className={styles.avatarButton}
+              aria-label="User menu"
             >
               <Avatar name={avatarName} size={36} color="colorful" />
             </button>
@@ -140,7 +144,7 @@ export default function AppShellHeader({
                         appearance="subtle"
                         icon={<Person24Regular />}
                         className={styles.menuButton}
-                        onClick={() => { onNavigateAdmin(); onCloseUserMenu(); }}
+                        onClick={handleAdminClick}
                       >
                         Admin
                       </Button>
@@ -150,7 +154,7 @@ export default function AppShellHeader({
                       className={styles.menuButton}
                       onClick={onLogout}
                     >
-                      Uitloggen
+                      Log out
                     </Button>
                   </div>
                 </div>

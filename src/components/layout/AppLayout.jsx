@@ -4,16 +4,17 @@ import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import { layout as appLayoutTokens } from '../../styles/brandTokens';
+import AppNavItem from './AppNavItem';
 import AppShellHeader from './AppShellHeader';
-import SidebarNavItem from '../shared/SidebarNavItem';
 
-const RAIL_WIDTH = 48;
-const PANEL_WIDTH = 260;
-const HEADER_HEIGHT = '57px';
+const RAIL_WIDTH = appLayoutTokens.railWidth;
+const PANEL_WIDTH = appLayoutTokens.panelWidth;
+const HEADER_HEIGHT = `${appLayoutTokens.headerHeight}px`;
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', minHeight: '100vh' },
-  body: { flex: 1, display: 'flex', position: 'relative' },
+  root: { display: 'flex', flexDirection: 'column', height: '100vh', minHeight: '100vh' },
+  body: { flex: 1, display: 'flex', position: 'relative', minHeight: 0 },
   rail: {
     width: `${RAIL_WIDTH}px`,
     position: 'fixed',
@@ -24,13 +25,16 @@ const useStyles = makeStyles({
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'stretch',
+    alignItems: 'center',
     paddingTop: '8px',
+    ...shorthands.gap('4px'),
     zIndex: 1500,
     overflowX: 'visible',
   },
   railItem: {
     position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
     '&:hover > [data-tooltip]': { opacity: 1, visibility: 'visible', transitionDelay: '0.7s' },
   },
   railTooltip: {
@@ -63,8 +67,8 @@ const useStyles = makeStyles({
     height: `calc(100vh - ${HEADER_HEIGHT})`,
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    paddingTop: '8px',
-    paddingBottom: '8px',
+    ...shorthands.padding('12px'),
+    ...shorthands.gap('4px'),
     display: 'flex',
     flexDirection: 'column',
     boxShadow: tokens.shadow16,
@@ -74,16 +78,33 @@ const useStyles = makeStyles({
     transitionDuration: '140ms',
     transitionTimingFunction: 'ease-in-out',
   },
-  panelClosed: { transform: 'translateX(-8px)', opacity: 0, pointerEvents: 'none' },
-  panelOpen: { transform: 'translateX(0)', opacity: 1, pointerEvents: 'auto' },
   panelBackdrop: { position: 'fixed', inset: 0, zIndex: 1700, backgroundColor: 'transparent' },
+  navButton: {
+    justifyContent: 'flex-start',
+    width: '100%',
+  },
+  divider: {
+    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
+    marginTop: '8px',
+    marginBottom: '8px',
+    width: '100%',
+  },
+  dividerCompact: {
+    width: '80%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
   main: {
     flex: 1,
+    minHeight: 0,
     minWidth: 0,
     marginLeft: `${RAIL_WIDTH}px`,
-    ...shorthands.padding('28px', '32px'),
+    ...shorthands.padding('24px'),
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
+    '@media (max-width: 768px)': {
+      ...shorthands.padding('12px'),
+    },
   },
 });
 
@@ -99,7 +120,10 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Purchase orders', icon: Table24Regular, path: '/' },
-      ...(isAdminLike ? [{ id: 'admin', label: 'Gebruikersbeheer', icon: Person24Regular, path: '/admin' }] : []),
+      ...(isAdminLike ? [
+        { type: 'divider' },
+        { id: 'admin', label: 'Admin', icon: Person24Regular, path: '/admin' },
+      ] : []),
     ],
     [isAdminLike]
   );
@@ -109,62 +133,82 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
     [navigate]
   );
 
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen((value) => !value);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  const handleToggleUserMenu = useCallback(() => {
+    setUserMenuOpen((value) => !value);
+  }, []);
+
+  const handleCloseUserMenu = useCallback(() => {
+    setUserMenuOpen(false);
+  }, []);
+
   const handleLogout = useCallback(async () => {
     await logout();
     setUserMenuOpen(false);
     navigate('/login');
   }, [logout, navigate]);
 
+  const handleNavigateAdmin = useCallback(() => {
+    handleNavigate('/admin');
+  }, [handleNavigate]);
+
   return (
     <div className={styles.root}>
       <AppShellHeader
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onToggleSidebar={handleToggleSidebar}
         isDarkMode={isDarkMode}
         onToggleTheme={onToggleTheme}
         user={user}
         userMenuOpen={userMenuOpen}
-        onToggleUserMenu={() => setUserMenuOpen((v) => !v)}
-        onCloseUserMenu={() => setUserMenuOpen(false)}
+        onToggleUserMenu={handleToggleUserMenu}
+        onCloseUserMenu={handleCloseUserMenu}
         canAccessAdmin={isAdminLike}
-        onNavigateAdmin={() => handleNavigate('/admin')}
+        onNavigateAdmin={handleNavigateAdmin}
         onLogout={handleLogout}
       />
 
       <div className={styles.body}>
-        <aside className={styles.rail}>
-          {navItems.map((item) => (
-            <div key={item.id} className={styles.railItem}>
-              <SidebarNavItem
-                icon={item.icon}
-                label={item.label}
-                active={location.pathname === item.path}
-                onClick={() => handleNavigate(item.path)}
+        {!sidebarOpen && (
+          <aside className={styles.rail} aria-label="Primary navigation">
+            {navItems.map((item, index) => (
+              <AppNavItem
+                key={item.id || `divider-${index}`}
+                item={item}
                 compact
+                active={location.pathname === item.path}
+                styles={styles}
+                onNavigate={handleNavigate}
               />
-              <span data-tooltip className={styles.railTooltip}>{item.label}</span>
-            </div>
-          ))}
-        </aside>
-
-        {sidebarOpen && (
-          <div className={styles.panelBackdrop} onClick={() => setSidebarOpen(false)} />
+            ))}
+          </aside>
         )}
 
-        <aside className={sidebarOpen
-          ? `${styles.panel} ${styles.panelOpen}`
-          : `${styles.panel} ${styles.panelClosed}`}
-        >
-          {navItems.map((item) => (
-            <SidebarNavItem
-              key={item.id}
-              icon={item.icon}
-              label={item.label}
-              active={location.pathname === item.path}
-              onClick={() => handleNavigate(item.path)}
-            />
-          ))}
-        </aside>
+        {sidebarOpen && (
+          <div className={styles.panelBackdrop} onClick={handleCloseSidebar} />
+        )}
+
+        {sidebarOpen && (
+          <aside className={styles.panel} aria-label="Primary navigation">
+            {navItems.map((item, index) => (
+              <AppNavItem
+                key={item.id || `divider-${index}`}
+                item={item}
+                compact={false}
+                active={location.pathname === item.path}
+                styles={styles}
+                onNavigate={handleNavigate}
+              />
+            ))}
+          </aside>
+        )}
 
         <main className={styles.main}>{children}</main>
       </div>
