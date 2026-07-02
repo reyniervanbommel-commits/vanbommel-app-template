@@ -18,8 +18,9 @@ const useStyles = makeStyles({
   page: {
     display: 'flex',
     flexDirection: 'column',
-    minHeight: '100%',
+    height: '100%',
     minWidth: 0,
+    boxSizing: 'border-box',
     paddingTop: '24px',
     paddingBottom: '24px',
     paddingLeft: '24px',
