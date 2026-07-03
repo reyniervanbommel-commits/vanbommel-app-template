@@ -14,7 +14,7 @@ const useStyles = makeStyles({
   subHeaderCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('6px', '8px'),
+    ...shorthands.padding('4px', '8px'),
     fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
@@ -25,7 +25,7 @@ const useStyles = makeStyles({
   subCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('6px', '8px'),
+    ...shorthands.padding('4px', '8px'),
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
   },

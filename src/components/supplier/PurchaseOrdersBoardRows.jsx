@@ -14,7 +14,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('8px'),
-    ...shorthands.padding('8px', '12px'),
+    ...shorthands.padding('6px', '12px'),
     backgroundColor: 'transparent',
     border: 'none',
     textAlign: 'left',
@@ -38,14 +38,14 @@ const useStyles = makeStyles({
   controlCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('4px'),
+    ...shorthands.padding('2px'),
     textAlign: 'center',
     verticalAlign: 'middle',
   },
   itemCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('8px', '10px'),
+    ...shorthands.padding('5px', '10px'),
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     whiteSpace: 'nowrap',
@@ -59,7 +59,7 @@ const useStyles = makeStyles({
   },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('8px', '8px', '12px', '46px'),
+    ...shorthands.padding('6px', '8px', '8px', '46px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
 });
