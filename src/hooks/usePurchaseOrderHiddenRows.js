@@ -6,6 +6,7 @@ import { apiRequest } from '../utils/api';
 // de aanroeper het overzicht kan herladen.
 export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
   const [hiddenRows, setHiddenRows] = useState([]);
+  const [columns, setColumns] = useState([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -15,10 +16,12 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
     try {
       const data = await apiRequest('/purchase-orders/rows/hidden-in-filter');
       setHiddenRows(Array.isArray(data?.rows) ? data.rows : []);
+      setColumns(Array.isArray(data?.columns) ? data.columns : []);
       setCount(Number(data?.count) || 0);
     } catch {
       // Stil falen: dit is een informatief signaal, geen kritieke flow.
       setHiddenRows([]);
+      setColumns([]);
       setCount(0);
     } finally {
       setLoading(false);
@@ -50,6 +53,7 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
 
   return {
     hiddenRows,
+    columns,
     count,
     loading,
     restoring,

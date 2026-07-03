@@ -1185,26 +1185,75 @@ async function excludeRows(rows, userId) {
 // ---------------------------------------------------------------------------
 async function listHiddenInFilterRows() {
   const pool = await getPool();
-  const result = await pool.request().query(`
-    SELECT h.data_area_id, h.order_number, h.vendor_account, h.vendor_name,
-           h.status, h.currency_code, h.requested_delivery_date, e.excluded_at
+
+  // Header-kolommen die admin voor de verwijder-popup heeft aangezet (los van is_active).
+  // De popup toont orders (headers), dus alleen header-niveau kolommen zijn relevant.
+  const headerCols = (await listColumns({ level: 'header', includeInactive: true }))
+    .filter((col) => col.visibleAtDelete);
+  const needsRaw = headerCols.some(
+    (col) => col.source === 'd365' && col.d365Field && !HEADER_FIELD_BY_KEY[col.key]
+  );
+
+  const headersResult = await pool.request().query(`
+    SELECT h.data_area_id, h.order_number, h.vendor_account, h.vendor_name, h.status,
+           h.currency_code, h.requested_delivery_date, h.created_date_time${needsRaw ? ', h.raw_json' : ''},
+           e.excluded_at
     FROM dbo.po_row_exclusions e
     INNER JOIN dbo.po_cache_headers h
       ON h.data_area_id = e.data_area_id AND h.order_number = e.order_number
     WHERE h.removed_in_d365 = 0
     ORDER BY h.order_number
   `);
-  const rows = result.recordset.map((row) => ({
-    dataAreaId: row.data_area_id,
-    orderNumber: row.order_number,
-    vendorAccount: row.vendor_account,
-    vendorName: row.vendor_name,
-    status: row.status,
-    currencyCode: row.currency_code,
-    requestedDeliveryDate: normalizeOut(row.requested_delivery_date),
-    excludedAt: normalizeOut(row.excluded_at),
-  }));
-  return { count: rows.length, rows };
+
+  // Custom-waarden op header-niveau voor de zichtbare eigen kolommen.
+  const customByOrder = new Map(); // dataAreaId|orderNumber -> { colKey: value }
+  if (headerCols.some((col) => col.source === 'custom')) {
+    const customResult = await pool.request()
+      .input('headerLine', sql.Int, HEADER_LEVEL_LINE)
+      .query(`
+        SELECT c.[key], c.data_type, cv.data_area_id, cv.order_number,
+               cv.value_text, cv.value_number, cv.value_date
+        FROM dbo.po_custom_values cv
+        INNER JOIN dbo.po_columns c ON c.id = cv.column_id
+        WHERE cv.line_number = @headerLine AND c.[level] = 'header' AND c.visible_at_delete = 1
+      `);
+    for (const row of customResult.recordset) {
+      const cellKey = `${row.data_area_id}|${row.order_number}`;
+      let value = null;
+      if (row.data_type === 'number') value = row.value_number !== null ? Number(row.value_number) : null;
+      else if (row.data_type === 'date') value = row.value_date ? new Date(row.value_date).toISOString() : null;
+      else if (row.data_type === 'boolean') value = row.value_number === null ? null : Boolean(row.value_number);
+      else value = row.value_text;
+      if (!customByOrder.has(cellKey)) customByOrder.set(cellKey, {});
+      customByOrder.get(cellKey)[row.key] = value;
+    }
+  }
+
+  const columns = headerCols.map((col) => ({ key: col.key, label: col.label, dataType: col.dataType }));
+
+  const rows = headersResult.recordset.map((h) => {
+    const raw = needsRaw ? parseRawJson(h.raw_json) : {};
+    const custom = customByOrder.get(`${h.data_area_id}|${h.order_number}`) || {};
+    const values = {};
+    for (const col of headerCols) {
+      if (col.source === 'custom') {
+        values[col.key] = col.key in custom ? custom[col.key] : null;
+      } else {
+        const field = HEADER_FIELD_BY_KEY[col.key];
+        if (field) values[col.key] = normalizeOut(h[field]);
+        else if (col.d365Field) values[col.key] = normalizeOut(raw[col.d365Field]);
+        else values[col.key] = null;
+      }
+    }
+    return {
+      dataAreaId: h.data_area_id,
+      orderNumber: h.order_number,
+      excludedAt: normalizeOut(h.excluded_at),
+      values,
+    };
+  });
+
+  return { count: rows.length, columns, rows };
 }
 
 // includeRows — "terugzetten": verwijder de exclusion zodat de rij weer in het overzicht komt.

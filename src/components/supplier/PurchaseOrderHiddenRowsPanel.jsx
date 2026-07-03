@@ -6,6 +6,12 @@ import {
   PopoverSurface,
   PopoverTrigger,
   Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
   makeStyles,
   shorthands,
   tokens,
@@ -20,8 +26,8 @@ const useStyles = makeStyles({
   },
   surface: {
     ...shorthands.padding('0'),
-    minWidth: '360px',
-    maxWidth: '460px',
+    minWidth: '420px',
+    maxWidth: '760px',
   },
   header: {
     display: 'flex',
@@ -35,27 +41,32 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground2,
   },
-  list: {
-    maxHeight: '320px',
+  tableWrap: {
+    maxHeight: '340px',
     overflowY: 'auto',
+    overflowX: 'auto',
   },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shorthands.gap('12px'),
-    ...shorthands.padding('8px', '14px'),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke3),
-  },
-  rowInfo: { minWidth: 0 },
-  orderNumber: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase300 },
-  rowMeta: {
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
+  headerCell: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+    backgroundColor: tokens.colorNeutralBackground2,
     whiteSpace: 'nowrap',
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  cell: {
+    whiteSpace: 'nowrap',
+    fontSize: tokens.fontSizeBase200,
+    maxWidth: '220px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
+  orderCell: {
+    whiteSpace: 'nowrap',
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase300,
+  },
+  actionCell: { whiteSpace: 'nowrap', textAlign: 'right' },
   empty: {
     ...shorthands.padding('16px', '14px'),
     color: tokens.colorNeutralForeground3,
@@ -63,9 +74,19 @@ const useStyles = makeStyles({
   },
 });
 
-// Toont hoeveel verwijderde (verborgen) orders nog binnen de harde D365-filter vallen,
-// met de mogelijkheid om ze per stuk of allemaal terug te zetten in het overzicht.
-function PurchaseOrderHiddenRowsPanel({ hiddenRows, count, loading, restoring, onRestore }) {
+// Formatteert een celwaarde uit de hidden-rows API voor weergave.
+function formatValue(value, dataType) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (dataType === 'date' && typeof value === 'string' && value.length >= 10) return value.slice(0, 10);
+  if (typeof value === 'boolean') return value ? 'Ja' : 'Nee';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+// Toont hoeveel verwijderde (verborgen) orders nog binnen de harde D365-filter vallen, in een
+// tabel met de kolommen die admin op de Data model-pagina heeft aangezet (visible at delete),
+// met de mogelijkheid om orders per stuk of allemaal terug te zetten in het overzicht.
+function PurchaseOrderHiddenRowsPanel({ hiddenRows, columns = [], count, loading, restoring, onRestore }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
 
@@ -102,31 +123,51 @@ function PurchaseOrderHiddenRowsPanel({ hiddenRows, count, loading, restoring, o
             Alles terugzetten
           </Button>
         </div>
-        <div className={styles.list}>
+        <div className={styles.tableWrap}>
           {loading ? (
             <div className={styles.empty}>Laden...</div>
           ) : hiddenRows.length === 0 ? (
             <div className={styles.empty}>Geen verborgen rijen.</div>
           ) : (
-            hiddenRows.map((row) => (
-              <div key={`${row.dataAreaId}|${row.orderNumber}`} className={styles.row}>
-                <div className={styles.rowInfo}>
-                  <div className={styles.orderNumber}>{row.orderNumber}</div>
-                  <div className={styles.rowMeta}>
-                    {[row.vendorName, row.status].filter(Boolean).join(' · ') || '—'}
-                  </div>
-                </div>
-                <Button
-                  appearance="secondary"
-                  size="small"
-                  icon={<ArrowResetRegular />}
-                  onClick={() => handleRestoreOne(row)}
-                  disabled={restoring}
-                >
-                  Terugzetten
-                </Button>
-              </div>
-            ))
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell className={styles.headerCell}>Order</TableHeaderCell>
+                  {columns.map((column) => (
+                    <TableHeaderCell key={column.key} className={styles.headerCell}>
+                      {column.label}
+                    </TableHeaderCell>
+                  ))}
+                  <TableHeaderCell className={styles.headerCell} />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {hiddenRows.map((row) => (
+                  <TableRow key={`${row.dataAreaId}|${row.orderNumber}`}>
+                    <TableCell className={styles.orderCell}>{row.orderNumber}</TableCell>
+                    {columns.map((column) => {
+                      const text = formatValue(row.values?.[column.key], column.dataType);
+                      return (
+                        <TableCell key={column.key} className={styles.cell} title={text}>
+                          {text}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className={styles.actionCell}>
+                      <Button
+                        appearance="secondary"
+                        size="small"
+                        icon={<ArrowResetRegular />}
+                        onClick={() => handleRestoreOne(row)}
+                        disabled={restoring}
+                      >
+                        Terugzetten
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
       </PopoverSurface>

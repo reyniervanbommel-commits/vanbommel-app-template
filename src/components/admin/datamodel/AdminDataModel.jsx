@@ -33,7 +33,9 @@ export default function AdminDataModel() {
     togglingKey,
     syncNow,
     toggleVisibility,
+    toggleVisibleAtDelete,
     toggleWriteback,
+    deleteColumn,
   } = useDataModelAdmin();
 
   if (loading) return <Spinner label="Loading data model..." />;
@@ -59,7 +61,9 @@ export default function AdminDataModel() {
         relation={relation}
         togglingKey={togglingKey}
         onToggleVisibility={toggleVisibility}
+        onToggleVisibleAtDelete={toggleVisibleAtDelete}
         onToggleWriteback={toggleWriteback}
+        onDeleteColumn={deleteColumn}
       />
     </div>
   );

@@ -130,12 +130,12 @@ router.patch('/columns/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/purchase-orders/columns/:id — soft-delete (waarden blijven behouden).
+// DELETE /api/purchase-orders/columns/:id — hard-delete (kolom + gerelateerde SQL-data).
 router.delete('/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
-    const result = await columnsService.deactivateColumn(columnId, req.user.id);
+    const result = await columnsService.deleteColumn(columnId, req.user);
     return res.json(result);
   } catch (err) {
     return next(err);
@@ -344,6 +344,19 @@ router.patch('/columns/:id/visibility', requireAnyRole([ROLES.ADMIN]), async (re
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
     const column = await columnsService.setColumnVisibility(columnId, req.body?.visible, req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/purchase-orders/columns/:id/visible-at-delete — admin: toon/verberg een kolom in de
+// "verborgen orders die nog in de D365-filter vallen"-popup (los van de tabelzichtbaarheid).
+router.patch('/columns/:id/visible-at-delete', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setColumnVisibleAtDelete(columnId, req.body?.visible, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);

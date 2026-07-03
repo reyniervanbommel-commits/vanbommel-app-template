@@ -114,7 +114,7 @@ function getDraftFromFilter(column, filter) {
   };
 }
 
-function hasActiveFilter(column, filter) {
+export function isColumnFilterActive(column, filter) {
   if (!filter) return false;
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
@@ -141,6 +141,7 @@ function PurchaseOrderColumnFilterMenu({
   onClearGrouping,
   onSetGroupingColor,
   onAddColumnRightOf,
+  onRemoveColumn,
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
@@ -152,9 +153,10 @@ function PurchaseOrderColumnFilterMenu({
   const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
-  const filterActive = hasActiveFilter(column, filter);
+  const filterActive = isColumnFilterActive(column, filter);
   const writable = !!column.writableToD365;
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
+  const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
 
   useEffect(() => {
     if (open) {
@@ -177,6 +179,20 @@ function PurchaseOrderColumnFilterMenu({
     setActiveSubmenu('none');
     setOpen(false);
   }, [column, onAddColumnRightOf]);
+
+  const handleRemoveColumn = useCallback(async () => {
+    if (!canRemoveColumn) return;
+    const shouldDelete = window.confirm(
+      `Delete column "${column.label}"? This permanently removes the column and all related values from SQL.`
+    );
+    if (!shouldDelete) return;
+    try {
+      await onRemoveColumn(column.id);
+      setOpen(false);
+    } catch (err) {
+      window.alert(err?.message || 'Deleting the column failed.');
+    }
+  }, [canRemoveColumn, column.id, column.label, onRemoveColumn]);
 
   const setSortAsc = useCallback(() => {
     onSetSortDirection(column.key, 'asc');
@@ -292,6 +308,19 @@ function PurchaseOrderColumnFilterMenu({
             >
               <span>+ Kolom rechts toevoegen</span>
               <span aria-hidden>›</span>
+            </Button>
+          </>
+        ) : null}
+        {canRemoveColumn ? (
+          <>
+            <div className={styles.divider} />
+            <Button
+              className={styles.sortButton}
+              appearance="subtle"
+              size="small"
+              onClick={handleRemoveColumn}
+            >
+              Delete column
             </Button>
           </>
         ) : null}

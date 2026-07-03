@@ -3,7 +3,7 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
-import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
@@ -249,7 +249,9 @@ function PurchaseOrdersBoardTable({
               someSelected={Boolean(selection?.someSelected)}
               onToggleAll={selection?.onToggleAll}
             />
-            {columns.map((column) => (
+            {columns.map((column) => {
+              const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
+              return (
               <ResizableTableHeaderCell
                 key={column.key}
                 columnKey={column.key}
@@ -270,6 +272,7 @@ function PurchaseOrdersBoardTable({
                       showActionsMenu={false}
                       autoEdit={editingColumnKey === column.key}
                       onEditingDone={onEditingDone}
+                      showFilterIndicator={hasActiveFilter}
                     />
                   </div>
                   <PurchaseOrderColumnFilterMenu
@@ -289,10 +292,12 @@ function PurchaseOrdersBoardTable({
                     onClearGrouping={clearGrouping}
                     onSetGroupingColor={setGroupingBarColor}
                     onAddColumnRightOf={onAddColumnRightOf}
+                    onRemoveColumn={onRemoveColumn}
                   />
                 </div>
               </ResizableTableHeaderCell>
-            ))}
+              );
+            })}
           </tr>
         </thead>
         <PurchaseOrdersBoardRows

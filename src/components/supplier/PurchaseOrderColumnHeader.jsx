@@ -3,7 +3,7 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { EditRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
+import { EditRegular, FilterRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
@@ -11,12 +11,23 @@ const useStyles = makeStyles({
   d365LabelWrap: { display: 'inline-flex', alignItems: 'center', lineHeight: 1.2, ...shorthands.gap('4px') },
   writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
   customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  filterIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
-export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback, showActionsMenu = true, autoEdit = false, onEditingDone }) {
+export default function PurchaseOrderColumnHeader({
+  column,
+  onRename,
+  onRemove,
+  isAdmin,
+  onToggleWriteback,
+  showActionsMenu = true,
+  autoEdit = false,
+  onEditingDone,
+  showFilterIndicator = false,
+}) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
@@ -109,6 +120,11 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
           </Tooltip>
         ) : null}
         <span>{column.label}</span>
+        {showFilterIndicator ? (
+          <Tooltip content="Filter active" relationship="label">
+            <FilterRegular className={styles.filterIcon} />
+          </Tooltip>
+        ) : null}
       </span>
     );
     if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
@@ -135,17 +151,17 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
     );
   }
 
-  if (!showActionsMenu) {
-    return (
-      <div className={styles.header}>
-        <span className={styles.labelWrap}><EditRegular className={styles.customIcon} title="Eigen kolom" />{column.label}</span>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.header}>
-      <span className={styles.labelWrap}><EditRegular className={styles.customIcon} title="Eigen kolom" />{column.label}</span>
+      <span className={styles.labelWrap}>
+        <EditRegular className={styles.customIcon} title="Eigen kolom" />
+        {column.label}
+        {showFilterIndicator ? (
+          <Tooltip content="Filter active" relationship="label">
+            <FilterRegular className={styles.filterIcon} />
+          </Tooltip>
+        ) : null}
+      </span>
       {columnOptionsMenu}
 
       <Dialog open={renameOpen} onOpenChange={(_, data) => !busy && setRenameOpen(data.open)}>
@@ -170,7 +186,7 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
           <DialogBody>
             <DialogTitle>Kolom verwijderen</DialogTitle>
             <DialogContent>
-              Kolom &quot;{column.label}&quot; verwijderen? De ingevoerde waarden blijven bewaard en de kolom kan later opnieuw worden toegevoegd.
+              Delete column &quot;{column.label}&quot;? This permanently removes the column and all related values from SQL. This action cannot be undone.
               {error ? <div className={styles.error}>{error}</div> : null}
             </DialogContent>
             <DialogActions>

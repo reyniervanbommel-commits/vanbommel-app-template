@@ -7,7 +7,7 @@ import { apiRequest } from '../utils/api';
  * kolom-zichtbaarheid en write-back.
  *
  * Output: { entities, relation, connection, columns, cache, loading, error,
- *           togglingKey, reload, toggleVisibility, toggleWriteback }
+ *           togglingKey, reload, toggleVisibility, toggleWriteback, deleteColumn }
  */
 export function useDataModelAdmin() {
   const [data, setData] = useState(null);
@@ -42,6 +42,15 @@ export function useDataModelAdmin() {
     });
   }, []);
 
+  const removeColumnFromState = useCallback((column) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const level = column.level;
+      const list = (prev.columns?.[level] || []).filter((c) => c.id !== column.id);
+      return { ...prev, columns: { ...prev.columns, [level]: list } };
+    });
+  }, []);
+
   const toggleVisibility = useCallback(async (column) => {
     setTogglingKey(`vis-${column.id}`);
     setError('');
@@ -49,6 +58,22 @@ export function useDataModelAdmin() {
       const result = await apiRequest(`/purchase-orders/columns/${column.id}/visibility`, {
         method: 'PATCH',
         body: { visible: !column.isActive },
+      });
+      applyColumnUpdate(result.column);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [applyColumnUpdate]);
+
+  const toggleVisibleAtDelete = useCallback(async (column) => {
+    setTogglingKey(`vad-${column.id}`);
+    setError('');
+    try {
+      const result = await apiRequest(`/purchase-orders/columns/${column.id}/visible-at-delete`, {
+        method: 'PATCH',
+        body: { visible: !column.visibleAtDelete },
       });
       applyColumnUpdate(result.column);
     } catch (err) {
@@ -73,6 +98,22 @@ export function useDataModelAdmin() {
       setTogglingKey(null);
     }
   }, [applyColumnUpdate]);
+
+  const deleteColumn = useCallback(async (column) => {
+    if (!column?.id || column.source !== 'custom') return;
+    setTogglingKey(`del-${column.id}`);
+    setError('');
+    try {
+      await apiRequest(`/purchase-orders/columns/${column.id}`, {
+        method: 'DELETE',
+      });
+      removeColumnFromState(column);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [removeColumnFromState]);
 
   const syncNow = useCallback(async () => {
     setError('');
@@ -99,6 +140,8 @@ export function useDataModelAdmin() {
     reload,
     syncNow,
     toggleVisibility,
+    toggleVisibleAtDelete,
     toggleWriteback,
-  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleWriteback]);
+    deleteColumn,
+  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, deleteColumn]);
 }

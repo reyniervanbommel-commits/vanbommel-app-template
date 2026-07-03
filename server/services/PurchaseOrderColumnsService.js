@@ -75,6 +75,8 @@ function mapColumnRow(row) {
     writableToD365: Boolean(row.writable_to_d365),
     writeMechanism: row.write_mechanism || null,
     isActive: Boolean(row.is_active),
+    // Zichtbaar in de "verborgen orders in D365-filter"-popup (los van is_active).
+    visibleAtDelete: Boolean(row.visible_at_delete),
     sortOrder: Number(row.sort_order),
     // Mag write-back hierop aangezet worden? (false voor sleutel/boekings-/systeemvelden en custom)
     writeBackAllowed: isWriteBackAllowed({ source: row.source, d365Field: row.d365_field || null, level: row.level, key: row.key }),
@@ -110,7 +112,7 @@ async function listColumns({ level = null, includeInactive = false } = {}) {
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const result = await request.query(`
     SELECT id, [key], label, source, [level], data_type, options, d365_field,
-           writable_to_d365, write_mechanism, is_active, sort_order
+           writable_to_d365, write_mechanism, is_active, sort_order, visible_at_delete
     FROM dbo.po_columns
     ${where}
     ORDER BY [level], sort_order, label
@@ -125,11 +127,31 @@ async function getColumnById(columnId) {
     .input('id', sql.BigInt, columnId)
     .query(`
       SELECT id, [key], label, source, [level], data_type, options, d365_field,
-             writable_to_d365, write_mechanism, is_active, sort_order
+             writable_to_d365, write_mechanism, is_active, sort_order, visible_at_delete
       FROM dbo.po_columns
       WHERE id = @id
     `);
   return result.recordset.length ? mapColumnRow(result.recordset[0]) : null;
+}
+
+async function getColumnMetaById(columnId) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .query(`
+      SELECT id, source, [level], [key], created_by
+      FROM dbo.po_columns
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    id: Number(row.id),
+    source: row.source,
+    level: row.level,
+    key: row.key,
+    createdBy: row.created_by === null || row.created_by === undefined ? null : Number(row.created_by),
+  };
 }
 
 async function uniqueKeyForLevel(pool, level, desiredKey) {
@@ -184,7 +206,7 @@ async function createColumn({ label, level, dataType, options = null }, userId) 
         ([key], label, source, [level], data_type, options, writable_to_d365, is_active, sort_order, created_by, updated_by)
       OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
              INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
-             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
       VALUES
         (@key, @label, 'custom', @level, @dataType, @options, 0, 1,
          (SELECT ISNULL(MAX(sort_order), 0) + 10 FROM dbo.po_columns WHERE [level] = @level),
@@ -218,7 +240,7 @@ async function renameColumn(columnId, label, userId) {
       SET label = @label, updated_by = @userId, updated_at = SYSUTCDATETIME()
       OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
              INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
-             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
       WHERE id = @id
     `);
 
@@ -228,10 +250,10 @@ async function renameColumn(columnId, label, userId) {
   return mapColumnRow(result.recordset[0]);
 }
 
-// Soft-delete: alleen eigen kolommen. D365-velden blijven altijd bestaan (read-only referentie).
-async function deactivateColumn(columnId, userId) {
-  const pool = await getPool();
-  const existing = await getColumnById(columnId);
+// Hard-delete: alleen eigen kolommen. Verwijdert de kolom en alle gerelateerde SQL-data.
+// Toegestaan voor admins en voor de gebruiker die de kolom heeft aangemaakt.
+async function deleteColumn(columnId, actor) {
+  const existing = await getColumnMetaById(columnId);
   if (!existing) {
     throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   }
@@ -239,16 +261,55 @@ async function deactivateColumn(columnId, userId) {
     throw Object.assign(new Error('D365-kolommen kunnen niet verwijderd worden'), { status: 400 });
   }
 
-  await pool.request()
-    .input('id', sql.BigInt, columnId)
-    .input('userId', sql.Int, userId || null)
-    .query(`
-      UPDATE dbo.po_columns
-      SET is_active = 0, updated_by = @userId, updated_at = SYSUTCDATETIME()
-      WHERE id = @id
-    `);
+  const actorId = Number(actor?.id);
+  const isAdmin = String(actor?.role || '').toLowerCase() === 'admin';
+  const isOwner = Number.isFinite(actorId) && existing.createdBy !== null && actorId === existing.createdBy;
+  if (!isAdmin && !isOwner) {
+    throw Object.assign(
+      new Error('Je mag alleen je eigen custom kolommen verwijderen (of laat een admin dit doen).'),
+      { status: 403 }
+    );
+  }
 
-  return { id: columnId, isActive: false };
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    const historyResult = await new sql.Request(tx)
+      .input('id', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.po_cell_history WHERE column_id = @id');
+    const correctionsResult = await new sql.Request(tx)
+      .input('id', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.po_field_corrections WHERE column_id = @id');
+    const valuesResult = await new sql.Request(tx)
+      .input('id', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.po_custom_values WHERE column_id = @id');
+    const columnResult = await new sql.Request(tx)
+      .input('id', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.po_columns WHERE id = @id AND source = \'custom\'');
+
+    if (!columnResult.rowsAffected?.[0]) {
+      throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+    }
+
+    await tx.commit();
+    return {
+      id: columnId,
+      deleted: true,
+      removed: {
+        historyRows: historyResult.rowsAffected?.[0] || 0,
+        correctionRows: correctionsResult.rowsAffected?.[0] || 0,
+        valueRows: valuesResult.rowsAffected?.[0] || 0,
+      },
+    };
+  } catch (err) {
+    try {
+      await tx.rollback();
+    } catch {
+      // no-op
+    }
+    throw err;
+  }
 }
 
 // Zichtbaarheid (admin-only): toon/verberg een kolom in het PO-scherm via is_active.
@@ -273,7 +334,36 @@ async function setColumnVisibility(columnId, visible, userId) {
       SET is_active = @active, updated_by = @userId, updated_at = SYSUTCDATETIME()
       OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
              INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
-             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  return mapColumnRow(result.recordset[0]);
+}
+
+// Zichtbaar-bij-verwijderen (admin-only): toon de kolom in de "verborgen orders in
+// D365-filter"-popup. Los van is_active. Werkt op elke kolom (D365 + eigen), elk niveau
+// (de popup toont alleen header-kolommen, maar het vlag mag ook op line-kolommen).
+async function setColumnVisibleAtDelete(columnId, visible, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  const on = visible === true || visible === 'true' || visible === 1 || visible === '1';
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('flag', sql.Bit, on ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.po_columns
+      SET visible_at_delete = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
+             INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
       WHERE id = @id
     `);
   if (!result.recordset.length) {
@@ -309,7 +399,7 @@ async function setWriteBackConfig(columnId, { writable, mechanism }) {
       SET writable_to_d365 = @writable, write_mechanism = @mechanism, updated_at = SYSUTCDATETIME()
       OUTPUT INSERTED.id, INSERTED.[key], INSERTED.label, INSERTED.source, INSERTED.[level],
              INSERTED.data_type, INSERTED.options, INSERTED.d365_field, INSERTED.writable_to_d365,
-             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order
+             INSERTED.write_mechanism, INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
       WHERE id = @id
     `);
   if (!result.recordset.length) {
@@ -407,10 +497,12 @@ module.exports = {
   isHideAllowed,
   listColumns,
   getColumnById,
+  getColumnMetaById,
   createColumn,
   renameColumn,
-  deactivateColumn,
+  deleteColumn,
   setColumnVisibility,
+  setColumnVisibleAtDelete,
   setWriteBackConfig,
   syncD365ColumnsFromCatalog,
   slugify,

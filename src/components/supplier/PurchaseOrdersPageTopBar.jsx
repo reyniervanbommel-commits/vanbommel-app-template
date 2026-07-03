@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { AddRegular, CheckmarkRegular } from '@fluentui/react-icons';
+import { CheckmarkRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
@@ -18,6 +18,12 @@ const useStyles = makeStyles({
     marginBottom: '16px',
   },
   titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+  viewRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
   tableName: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -45,7 +51,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
-  toolbarSpacer: { flexGrow: 1 },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
 });
 
@@ -55,7 +60,6 @@ export default function PurchaseOrdersPageTopBar({
   activityState,
   bulkState,
   hiddenRowsState,
-  onOpenAddColumn,
   refreshState,
   error,
 }) {
@@ -100,23 +104,40 @@ export default function PurchaseOrdersPageTopBar({
       <div className={styles.header}>
         <div className={styles.titleWrap}>
           <div className={styles.tableName}>Purchase Orders</div>
-          <PurchaseOrderSavedViewsControl
-            titleMode
-            views={savedViews.views}
-            activeViewId={activeViewId}
-            canManageGlobal={isStaff}
-            saving={savedViews.saving}
-            onApplyView={applyViewState}
-            onResetView={handleResetView}
-            onSaveAsNew={handleSaveAsNew}
-            onUpdateActive={handleUpdateActive}
-            onRenameView={handleRenameView}
-            onSetDefault={handleSetDefault}
-            onDeleteView={handleDeleteView}
-          />
+          <div className={styles.viewRow}>
+            <PurchaseOrderSavedViewsControl
+              titleMode
+              views={savedViews.views}
+              activeViewId={activeViewId}
+              canManageGlobal={isStaff}
+              saving={savedViews.saving}
+              onApplyView={applyViewState}
+              onResetView={handleResetView}
+              onSaveAsNew={handleSaveAsNew}
+              onUpdateActive={handleUpdateActive}
+              onRenameView={handleRenameView}
+              onSetDefault={handleSetDefault}
+              onDeleteView={handleDeleteView}
+            />
+            <PurchaseOrderRefreshProgress
+              progress={refreshProgress}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+            />
+          </div>
         </div>
 
         <div className={styles.headerRight}>
+          {hiddenRowsState ? (
+            <PurchaseOrderHiddenRowsPanel
+              hiddenRows={hiddenRowsState.hiddenRows}
+              columns={hiddenRowsState.columns}
+              count={hiddenRowsState.count}
+              loading={hiddenRowsState.loading}
+              restoring={hiddenRowsState.restoring}
+              onRestore={hiddenRowsState.restoreRows}
+            />
+          ) : null}
           <div className={styles.freshness}>
             {!hasCache ? (
               <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
@@ -156,31 +177,6 @@ export default function PurchaseOrdersPageTopBar({
           selectedCount={selectedCount}
           onDelete={onDeleteSelected}
           onClear={onClearSelection}
-        />
-
-        {hiddenRowsState ? (
-          <PurchaseOrderHiddenRowsPanel
-            hiddenRows={hiddenRowsState.hiddenRows}
-            count={hiddenRowsState.count}
-            loading={hiddenRowsState.loading}
-            restoring={hiddenRowsState.restoring}
-            onRestore={hiddenRowsState.restoreRows}
-          />
-        ) : null}
-
-        <div className={styles.toolbarSpacer} />
-
-        <Button
-          appearance="secondary"
-          icon={<AddRegular />}
-          onClick={onOpenAddColumn}
-        >
-          Kolom toevoegen
-        </Button>
-        <PurchaseOrderRefreshProgress
-          progress={refreshProgress}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
         />
       </div>
 

@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import {
   Badge,
+  Button,
   Switch,
   TableCell,
   TableRow,
@@ -26,6 +27,7 @@ const useStyles = makeStyles({
   hiddenRow: { opacity: 0.55 },
   relationRow: { backgroundColor: 'rgba(255, 179, 0, 0.09)' },
   cellCenter: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px') },
+  deleteButton: { minWidth: '92px' },
 });
 
 export default function DataPreviewColumnConfigRow({
@@ -35,13 +37,26 @@ export default function DataPreviewColumnConfigRow({
   isRelationField,
   togglingKey,
   onToggleVisibility,
+  onToggleVisibleAtDelete,
   onToggleWriteback,
+  onDeleteColumn,
 }) {
   const styles = useStyles();
   const handleVisibility = useCallback(() => onToggleVisibility(column), [onToggleVisibility, column]);
+  const handleVisibleAtDelete = useCallback(() => onToggleVisibleAtDelete(column), [onToggleVisibleAtDelete, column]);
   const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
+  const handleDelete = useCallback(() => {
+    if (column.source !== 'custom') return;
+    const ok = window.confirm(
+      `Delete custom column "${column.label}"? This permanently removes the column and all related values from SQL.`
+    );
+    if (!ok) return;
+    onDeleteColumn(column);
+  }, [onDeleteColumn, column]);
   const visibilityBusy = togglingKey === `vis-${column.id}`;
+  const visibleAtDeleteBusy = togglingKey === `vad-${column.id}`;
   const writebackBusy = togglingKey === `wb-${column.id}`;
+  const deletingBusy = togglingKey === `del-${column.id}`;
   const rowClassName = isRelationField
     ? `${column.isActive ? '' : styles.hiddenRow} ${styles.relationRow}`.trim()
     : (column.isActive ? undefined : styles.hiddenRow);
@@ -87,6 +102,14 @@ export default function DataPreviewColumnConfigRow({
         )}
       </TableCell>
       <TableCell className={styles.valueCell}>
+        <Switch
+          checked={column.visibleAtDelete}
+          disabled={visibleAtDeleteBusy}
+          onChange={handleVisibleAtDelete}
+          aria-label={`Show column ${column.label} in the delete popup`}
+        />
+      </TableCell>
+      <TableCell className={styles.valueCell}>
         {column.writeBackAllowed ? (
           <span className={styles.cellCenter}>
             <Switch
@@ -112,6 +135,21 @@ export default function DataPreviewColumnConfigRow({
           >
             <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
           </Tooltip>
+        )}
+      </TableCell>
+      <TableCell className={styles.valueCell}>
+        {column.source === 'custom' ? (
+          <Button
+            className={styles.deleteButton}
+            appearance="secondary"
+            size="small"
+            disabled={deletingBusy}
+            onClick={handleDelete}
+          >
+            {deletingBusy ? 'Deleting...' : 'Delete'}
+          </Button>
+        ) : (
+          <Text size={200} className={styles.muted}>—</Text>
         )}
       </TableCell>
     </TableRow>

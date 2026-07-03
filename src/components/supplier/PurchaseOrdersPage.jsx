@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
-import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
@@ -46,7 +45,6 @@ const useStyles = makeStyles({
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const [addColumnOpen, setAddColumnOpen] = useState(false);
   const {
     progress: refreshProgress,
     startProgress,
@@ -68,7 +66,6 @@ export default function PurchaseOrdersPage() {
     reload,
     deleteRows,
     saveValue,
-    addColumn,
     addHeaderColumnAfter,
     renameColumn,
     removeColumn,
@@ -135,7 +132,6 @@ export default function PurchaseOrdersPage() {
     if (created?.key) setEditingColumnKey(created.key);
   }, [addHeaderColumnAfter]);
 
-  const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
   const handleRefresh = useCallback(async () => {
     startProgress();
     try {
@@ -183,12 +179,12 @@ export default function PurchaseOrdersPage() {
         }}
         hiddenRowsState={{
           hiddenRows: hiddenRows.hiddenRows,
+          columns: hiddenRows.columns,
           count: hiddenRows.count,
           loading: hiddenRows.loading,
           restoring: hiddenRows.restoring,
           restoreRows: hiddenRows.restoreRows,
         }}
-        onOpenAddColumn={handleOpenAddColumn}
         refreshState={{
           refreshing,
           refreshProgress,
@@ -240,11 +236,6 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
-      <PurchaseOrderAddColumnDialog
-        open={addColumnOpen}
-        onOpenChange={setAddColumnOpen}
-        onAdd={addColumn}
-      />
     </div>
   );
 }

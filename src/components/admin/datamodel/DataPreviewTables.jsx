@@ -99,7 +99,9 @@ function EntityConfigTable({
   relationFields,
   togglingKey,
   onToggleVisibility,
+  onToggleVisibleAtDelete,
   onToggleWriteback,
+  onDeleteColumn,
 }) {
   const styles = useStyles();
   const visibleCount = columns.filter((item) => item.isActive).length;
@@ -141,7 +143,9 @@ function EntityConfigTable({
               <TableHeaderCell className={styles.headerCell}>Type</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Sample value</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Visible in table</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Visible at delete</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Write-back to D365</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Delete custom column</TableHeaderCell>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -158,13 +162,15 @@ function EntityConfigTable({
                   isRelationField={isRelationField}
                   togglingKey={togglingKey}
                   onToggleVisibility={onToggleVisibility}
+                  onToggleVisibleAtDelete={onToggleVisibleAtDelete}
                   onToggleWriteback={onToggleWriteback}
+                  onDeleteColumn={onDeleteColumn}
                 />
               );
             })}
             {!filteredColumns.length ? (
               <TableRow>
-                <TableCell className={styles.valueCell} colSpan={7}>No columns match the active filter</TableCell>
+                <TableCell className={styles.valueCell} colSpan={9}>No columns match the active filter</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
@@ -183,7 +189,9 @@ function DataPreviewTables({
   relation,
   togglingKey,
   onToggleVisibility,
+  onToggleVisibleAtDelete,
   onToggleWriteback,
+  onDeleteColumn,
 }) {
   const relationFields = useMemo(
     () => new Set((relation?.onFields || []).map((field) => String(field).toLowerCase())),
@@ -200,7 +208,9 @@ function DataPreviewTables({
         relationFields={relationFields}
         togglingKey={togglingKey}
         onToggleVisibility={onToggleVisibility}
+        onToggleVisibleAtDelete={onToggleVisibleAtDelete}
         onToggleWriteback={onToggleWriteback}
+        onDeleteColumn={onDeleteColumn}
       />
       <EntityConfigTable
         title="Purchase Order Line columns"
@@ -210,7 +220,9 @@ function DataPreviewTables({
         relationFields={relationFields}
         togglingKey={togglingKey}
         onToggleVisibility={onToggleVisibility}
+        onToggleVisibleAtDelete={onToggleVisibleAtDelete}
         onToggleWriteback={onToggleWriteback}
+        onDeleteColumn={onDeleteColumn}
       />
     </>
   );

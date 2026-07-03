@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { Button, ProgressBar, Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
+import { Button, Spinner, makeStyles } from '@fluentui/react-components';
 import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -8,16 +8,6 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '12px',
     minHeight: '32px',
-  },
-  progressWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    minWidth: '320px',
-  },
-  progressText: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
   },
 });
 
@@ -50,16 +40,6 @@ function buildRefreshCounters(progress) {
 function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh }) {
   const styles = useStyles();
   const counters = useMemo(() => buildRefreshCounters(progress), [progress]);
-  const fetchProgressValue = useMemo(() => {
-    const totalToFetch = Number(progress?.totalToFetch);
-    if (!Number.isFinite(totalToFetch) || totalToFetch <= 0) return undefined;
-    return Math.min((Number(progress?.fetched) || 0) / totalToFetch, 1);
-  }, [progress]);
-  const saveProgressValue = useMemo(() => {
-    const totalToSave = Number(progress?.totalToSave);
-    if (!Number.isFinite(totalToSave) || totalToSave <= 0) return undefined;
-    return Math.min((Number(progress?.saved) || 0) / totalToSave, 1);
-  }, [progress]);
 
   return (
     <div className={styles.root}>
@@ -70,17 +50,9 @@ function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh }) {
         disabled={refreshing}
       >
         {refreshing
-          ? `Ophalen ${counters.fetchCounter} | Vastleggen ${counters.saveCounter}`
-          : 'Vernieuwen'}
+          ? `D365F&O ${counters.fetchCounter} | Save ${counters.saveCounter}`
+          : 'D365F&O'}
       </Button>
-      {refreshing ? (
-        <div className={styles.progressWrap} aria-live="polite">
-          <Text className={styles.progressText}>Ophalen: {counters.fetchCounter}</Text>
-          <ProgressBar value={fetchProgressValue} />
-          <Text className={styles.progressText}>Vastleggen: {counters.saveCounter}</Text>
-          <ProgressBar value={saveProgressValue} />
-        </div>
-      ) : null}
     </div>
   );
 }
