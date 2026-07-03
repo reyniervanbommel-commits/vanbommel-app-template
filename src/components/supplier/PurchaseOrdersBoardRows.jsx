@@ -14,7 +14,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('8px'),
-    ...shorthands.padding('6px', '12px'),
+    ...shorthands.padding('3px', '12px'),
     backgroundColor: 'transparent',
     border: 'none',
     textAlign: 'left',
@@ -38,14 +38,20 @@ const useStyles = makeStyles({
   controlCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px'),
+    ...shorthands.padding('1px'),
     textAlign: 'center',
     verticalAlign: 'middle',
+  },
+  compactToggleButton: {
+    minWidth: '22px',
+    height: '22px',
+    minHeight: '22px',
+    ...shorthands.padding('0'),
   },
   itemCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('5px', '10px'),
+    ...shorthands.padding('2px', '10px'),
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     whiteSpace: 'nowrap',
@@ -59,7 +65,7 @@ const useStyles = makeStyles({
   },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('6px', '8px', '8px', '46px'),
+    ...shorthands.padding('3px', '8px', '5px', '46px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
 });
@@ -119,6 +125,7 @@ function PurchaseOrdersBoardRows({
                         <Button
                           size="small"
                           appearance="subtle"
+                          className={styles.compactToggleButton}
                           data-rowid={rowId}
                           onClick={onToggleOrder}
                         >

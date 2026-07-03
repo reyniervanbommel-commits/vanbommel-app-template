@@ -19,18 +19,18 @@ const useStyles = makeStyles({
   cell: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('6px'),
-    minWidth: '120px',
+    ...shorthands.gap('4px'),
+    minWidth: '104px',
   },
   control: {
-    minWidth: '110px',
+    minWidth: '96px',
   },
   dateInput: {
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
     borderRadius: tokens.borderRadiusMedium,
-    ...shorthands.padding('4px', '8px'),
+    ...shorthands.padding('3px', '6px'),
     fontFamily: tokens.fontFamilyBase,
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase200,
     backgroundColor: tokens.colorNeutralBackground1,
     color: tokens.colorNeutralForeground1,
   },
@@ -120,6 +120,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Dropdown
         className={styles.control}
+        size="small"
         aria-label={ariaLabel}
         value={selectedText}
         selectedOptions={selectedText ? [selectedText] : []}
@@ -150,6 +151,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Input
         className={styles.control}
+        size="small"
         type="number"
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
@@ -162,6 +164,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Input
         className={styles.control}
+        size="small"
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
         onChange={(_, data) => setLocalValue(data.value)}
