@@ -78,3 +78,29 @@ describe('TableDataService.applyLookups (fk_join-verrijking)', () => {
     expect(values.vendorOrgName).toBe('Negende Generatie Beheer BV');
   });
 });
+
+describe('TableDataService.applyLookups (partitie-loze excel-lookup #AB:162)', () => {
+  // Excel-dataset: byKey op alléén record_key (geen partition-prefix), lookup partitie-onafhankelijk.
+  const excelLookup = {
+    sourceScope: 'detail',
+    sourceField: 'itemNumber',
+    fieldEntries: [['artikelKleur', 'kleur']],
+    partitionless: true,
+    byKey: new Map([['ART-1', { kleur: 'Zwart' }]]),
+  };
+
+  it('matcht op record_key ongeacht de partition', () => {
+    const a = { itemNumber: 'ART-1' };
+    applyLookups(a, 'whsl', [excelLookup], 'detail');
+    expect(a.artikelKleur).toBe('Zwart');
+    const b = { itemNumber: 'ART-1' };
+    applyLookups(b, 'een-andere-company', [excelLookup], 'detail');
+    expect(b.artikelKleur).toBe('Zwart');
+  });
+
+  it('geeft null bij een onbekende sleutel', () => {
+    const values = { itemNumber: 'ART-9' };
+    applyLookups(values, 'whsl', [excelLookup], 'detail');
+    expect(values.artikelKleur).toBeNull();
+  });
+});

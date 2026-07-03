@@ -1,5 +1,17 @@
 export const devTestItems = [
   {
+    id: 'feature-162',
+    title: 'Feature #162 - Excel-koppeling naar hoofdtabel (via de tb_*-laag)',
+    checks: [
+      'Data model-pagina heeft een tab "Externe koppelingen" met een 4-staps wizard (Uploaden → Sleutels → Kolommen → Publiceren)',
+      'Een Excel/CSV uploaden toont de gedetecteerde kolommen met type en voorbeeldwaarden',
+      'Bij het koppelen kies je hoofdtabel, scope (kop/regel), hoofdtabel-sleutelveld en dataset-sleutelveld',
+      'Valideren toont de match-rate; dubbele sleutelwaarden in de dataset blokkeren publiceren (badge "Dubbele sleutels")',
+      'Na publiceren verschijnen de gekozen Excel-kolommen als read-only kolommen op de hoofdtabel (/api/data/purchase-orders)',
+      'Een bestaande koppeling kan verwijderd worden; een dataset opnieuw uploaden vervangt de data maar behoudt de koppeling',
+    ],
+  },
+  {
     id: 'story-161',
     title: 'Story #161 - Vendors & Items als entiteiten op de Data model-pagina (tb_*-laag)',
     checks: [

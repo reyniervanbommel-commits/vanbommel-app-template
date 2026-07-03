@@ -12,10 +12,13 @@ import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
 import DataModelDiagram from './DataModelDiagram';
 import GenericEntityDataModel from './GenericEntityDataModel';
+import ExcelLinkWizard from './ExcelLinkWizard';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 import { apiRequest } from '../../../utils/api';
 
 const PO_TABLE_KEY = 'purchase-orders';
+// Aparte tab-value voor de "Externe koppelingen"-wizard (Excel -> hoofdtabel, #AB:166).
+const EXCEL_LINKS_KEY = 'excel-links';
 
 const useStyles = makeStyles({
   root: { width: '100%', maxWidth: 'none', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
@@ -74,9 +77,12 @@ export default function AdminDataModel() {
 
       <TabList selectedValue={selectedKey} onTabSelect={(_, d) => setSelectedKey(d.value)}>
         {tables.map((t) => <Tab key={t.key} value={t.key}>{t.label}</Tab>)}
+        <Tab value={EXCEL_LINKS_KEY}>Externe koppelingen</Tab>
       </TabList>
 
-      {selectedKey === PO_TABLE_KEY ? (
+      {selectedKey === EXCEL_LINKS_KEY ? (
+        <ExcelLinkWizard />
+      ) : selectedKey === PO_TABLE_KEY ? (
         po.loading ? (
           <Spinner label="Inkooporders laden..." />
         ) : (
