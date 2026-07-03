@@ -80,7 +80,6 @@ const ODATA_KEYS = [
   'D365_ODATA_CLIENT_ID',
   'D365_ODATA_CLIENT_SECRET',
   // Cache-sync scope/versheid (Fase 1, B2)
-  'PO_SYNC_FILTER',
   // Gestructureerde sync-filterregels (JSON) — gecompileerd naar $filter (zie odataSyncFilter.js)
   'PO_SYNC_RULES',
   'PO_SYNC_MAX_ORDERS',

@@ -75,6 +75,7 @@ function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
   expandedOrders,
+  headersOnly,
   columns,
   lineColumns,
   colCount,
@@ -105,7 +106,7 @@ function PurchaseOrdersBoardRows({
                 </button>
               </td>
             </tr>
-            {!isCollapsed && group.entries.map(({ order, rowId }) => {
+            {!isCollapsed && !headersOnly && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];

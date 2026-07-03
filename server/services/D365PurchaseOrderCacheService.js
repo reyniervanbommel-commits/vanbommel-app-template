@@ -899,7 +899,7 @@ async function correctField({ columnId, dataAreaId, orderNumber, lineNumber, val
   try {
     await writeBackField({
       level: column.level, dataAreaId: area, orderNumber: order, lineNumber: resolvedLine,
-      d365Field: column.d365Field, newValue, basedOnValue,
+      d365Field: column.d365Field, newValue, basedOnValue, dataType: column.dataType,
     });
   } catch (err) {
     await pool.request()

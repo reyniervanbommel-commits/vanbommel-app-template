@@ -1,4 +1,4 @@
-const PURCHASE_ORDERS_VIEW_CACHE_TTL_MS = 30 * 1000;
+const PURCHASE_ORDERS_VIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 
 let purchaseOrdersViewCache = null;
 

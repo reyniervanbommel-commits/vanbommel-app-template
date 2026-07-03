@@ -10,11 +10,12 @@ import {
 import DataModelDiagram from './DataModelDiagram';
 import EntityColumnsTable from './EntityColumnsTable';
 import SyncFilterBuilder from './SyncFilterBuilder';
+import DataPreviewTables from './DataPreviewTables';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 import { formatSyncedAt } from '../../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
-  root: { maxWidth: '960px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
+  root: { width: '100%', maxWidth: 'none', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
   intro: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   section: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -43,9 +44,12 @@ export default function AdminDataModel() {
     columns,
     cache,
     syncFilter,
+    filterCatalog,
+    previewTables,
     loading,
     error,
     togglingKey,
+    syncNow,
     toggleVisibility,
     toggleWriteback,
   } = useDataModelAdmin();
@@ -97,7 +101,9 @@ export default function AdminDataModel() {
         ) : null}
       </div>
 
-      <SyncFilterBuilder headerColumns={columns.header} syncFilter={syncFilter} />
+      <SyncFilterBuilder filterCatalog={filterCatalog} syncFilter={syncFilter} onSyncNow={syncNow} />
+
+      <DataPreviewTables previewTables={previewTables} />
 
       <EntityColumnsTable
         title="Header columns"

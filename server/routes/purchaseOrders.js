@@ -8,6 +8,7 @@ const express = require('express');
 const cacheService = require('../services/D365PurchaseOrderCacheService');
 const columnsService = require('../services/PurchaseOrderColumnsService');
 const settingsService = require('../services/SettingsService');
+const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
@@ -17,6 +18,24 @@ const router = express.Router();
 function toColumnId(raw) {
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+async function validateSyncRulesAgainstCatalog(rules) {
+  const filterMeta = await cacheService.getFilterFieldCatalogAndPreview();
+  const allowedFields = new Set([
+    ...filterMeta.catalog.header.map((f) => `header|${f.field}`),
+    ...filterMeta.catalog.line.map((f) => `line|${f.field}`),
+  ]);
+  if (!allowedFields.size && rules.length) {
+    throw Object.assign(new Error('Nog geen filtervelden met data beschikbaar. Voer eerst een sync uit.'), { status: 400 });
+  }
+  for (const rule of rules) {
+    const level = String(rule?.level || 'header');
+    const field = String(rule?.field || '');
+    if (!allowedFields.has(`${level}|${field}`)) {
+      throw Object.assign(new Error(`Onbekend of leeg veld in cache: ${level}.${field || '(leeg)'}`), { status: 400 });
+    }
+  }
 }
 
 // GET /api/purchase-orders?autoRefresh=1
@@ -59,6 +78,15 @@ router.post('/refresh', async (req, res, next) => {
     const summary = await cacheService.refresh();
     const data = await cacheService.read({ userId: req.user.id });
     return res.json({ ...data, refresh: summary, refreshed: true });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/purchase-orders/refresh/progress — voortgang van de lopende/laatste D365-refresh.
+router.get('/refresh/progress', async (_req, res, next) => {
+  try {
+    return res.json({ progress: cacheService.getRefreshProgress() });
   } catch (err) {
     return next(err);
   }
@@ -155,14 +183,14 @@ router.get('/history', async (req, res, next) => {
 // de app haalt PurchaseOrderHeadersV2 op met $expand=PurchaseOrderLines (zie D365ODataService).
 router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
   try {
-    const [baseUrl, headerPath, company, columns, stats, rulesJson, rawFilter] = await Promise.all([
+    const [baseUrl, headerPath, company, columns, stats, rulesJson, filterMeta] = await Promise.all([
       settingsService.getAsync('D365_ODATA_BASE_URL', ''),
       settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', '/data/PurchaseOrderHeadersV2'),
       settingsService.getAsync('D365_ODATA_COMPANY', ''),
       columnsService.listColumns({ includeInactive: true }),
       cacheService.getCacheStats().catch(() => null),
       settingsService.getAsync('PO_SYNC_RULES', ''),
-      settingsService.getAsync('PO_SYNC_FILTER', ''),
+      cacheService.getFilterFieldCatalogAndPreview().catch(() => ({ catalog: { header: [], line: [] }, preview: null })),
     ]);
 
     const syncRules = parseSyncRules(rulesJson);
@@ -212,10 +240,23 @@ router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) =
       syncFilter: {
         rules: syncRules,
         compiled: compiledFilter,
-        rawFilter: rawFilter.trim(),
         operators: OPERATORS,
         maxRules: MAX_RULES,
+        templates: [
+          {
+            id: 'open_orders',
+            label: 'Open orders',
+            rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Backorder' }],
+          },
+          {
+            id: 'received_orders',
+            label: 'Received orders',
+            rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Received' }],
+          },
+        ],
       },
+      filterCatalog: filterMeta.catalog,
+      previewTables: filterMeta.preview,
     });
   } catch (err) {
     return next(err);
@@ -229,18 +270,32 @@ router.put('/sync-filters', requireAnyRole([ROLES.ADMIN]), async (req, res, next
   try {
     const rules = Array.isArray(req.body?.rules) ? req.body.rules : [];
 
-    // Alleen velden toestaan die als D365 header-kolom bekend zijn in de registry.
-    const headerColumns = await columnsService.listColumns({ level: 'header', includeInactive: true });
-    const allowedFields = new Set(headerColumns.filter((c) => c.source === 'd365' && c.d365Field).map((c) => c.d365Field));
-    for (const rule of rules) {
-      if (!allowedFields.has(String(rule?.field || ''))) {
-        return res.status(400).json({ error: `Onbekend D365-veld: ${rule?.field || '(leeg)'}` });
-      }
-    }
+    await validateSyncRulesAgainstCatalog(rules);
 
     const compiled = compileSyncRules(rules); // gooit 400 bij ongeldige regels
     await settingsService.set('PO_SYNC_RULES', JSON.stringify(rules), req.user.id);
     return res.json({ rules, compiled });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/purchase-orders/sync-filters/count — admin: tel hoeveel header-rijen de filter matcht in D365.
+// Gebruikt dezelfde filterregels als de sync; ideaal om de impact te zien vóór je ververst.
+router.post('/sync-filters/count', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
+  try {
+    const rules = Array.isArray(req.body?.rules) ? req.body.rules : [];
+    await validateSyncRulesAgainstCatalog(rules);
+    const compiled = compileSyncRules(rules);
+    const result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: 1,
+      skip: 0,
+      fetchAll: false,
+      extraFilter: compiled,
+      maxItems: 1,
+    });
+    return res.json({ total: Number(result.total) || 0, compiled });
   } catch (err) {
     return next(err);
   }

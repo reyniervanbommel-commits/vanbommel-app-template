@@ -70,14 +70,16 @@ export function usePurchaseOrdersPage() {
     setCachedPurchaseOrdersView(data);
   }, []);
 
-  const loadPurchaseOrders = useCallback(async ({ skipLoading = false } = {}) => {
+  const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
     if (!skipLoading) {
       setLoading(true);
     }
     setError('');
     try {
-      const data = await apiRequest('/purchase-orders?autoRefresh=1');
+      const endpoint = autoRefresh ? '/purchase-orders?autoRefresh=1' : '/purchase-orders';
+      const data = await apiRequest(endpoint);
       applyData(data);
+      return data;
     } catch (err) {
       setError(err.message);
       if (!skipLoading) {
@@ -85,6 +87,7 @@ export function usePurchaseOrdersPage() {
         setHeaderColumns([]);
         setLineColumns([]);
       }
+      return null;
     } finally {
       if (!skipLoading) {
         setLoading(false);
@@ -108,6 +111,7 @@ export function usePurchaseOrdersPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     const cachedData = getCachedPurchaseOrdersView();
     const hasCachedData = Boolean(cachedData);
 
@@ -116,8 +120,33 @@ export function usePurchaseOrdersPage() {
       setLoading(false);
     }
 
-    loadPurchaseOrders({ skipLoading: hasCachedData });
+    const bootstrap = async () => {
+      const data = await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
+      if (!active || !data?.stale) {
+        return;
+      }
+      setRefreshing(true);
+      setError('');
+      try {
+        const refreshedData = await apiRequest('/purchase-orders/refresh', { method: 'POST' });
+        if (active) {
+          applyData(refreshedData);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message);
+        }
+      } finally {
+        if (active) {
+          setRefreshing(false);
+        }
+      }
+    };
+    bootstrap();
     loadBoardSettings();
+    return () => {
+      active = false;
+    };
   }, [applyData, loadPurchaseOrders, loadBoardSettings]);
 
   // Forceert een D365-refresh server-side en herlaadt de hele state.

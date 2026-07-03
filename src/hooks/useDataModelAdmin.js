@@ -74,6 +74,16 @@ export function useDataModelAdmin() {
     }
   }, [applyColumnUpdate]);
 
+  const syncNow = useCallback(async () => {
+    setError('');
+    try {
+      await apiRequest('/purchase-orders/refresh', { method: 'POST' });
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [reload]);
+
   return useMemo(() => ({
     entities: data?.entities || [],
     relation: data?.relation || null,
@@ -81,11 +91,14 @@ export function useDataModelAdmin() {
     columns: data?.columns || { header: [], line: [] },
     cache: data?.cache || null,
     syncFilter: data?.syncFilter || null,
+    filterCatalog: data?.filterCatalog || { header: [], line: [] },
+    previewTables: data?.previewTables || null,
     loading,
     error,
     togglingKey,
     reload,
+    syncNow,
     toggleVisibility,
     toggleWriteback,
-  }), [data, loading, error, togglingKey, reload, toggleVisibility, toggleWriteback]);
+  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleWriteback]);
 }

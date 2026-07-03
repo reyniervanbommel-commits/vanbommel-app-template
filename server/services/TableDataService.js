@@ -15,6 +15,7 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns } = require('./TableRegistryService');
+const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 
@@ -24,10 +25,15 @@ const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waa
 // ---------------------------------------------------------------------------
 async function purchaseOrdersFetch(table) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const extraFilter = (await settingsService.getAsync('PO_SYNC_FILTER', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
   const parsedMax = Number.parseInt(rawMax, 10);
   const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+  let extraFilter = '';
+  try {
+    extraFilter = compileSyncRules(parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', '')));
+  } catch (err) {
+    logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
+  }
 
   const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
   const items = Array.isArray(result.items) ? result.items : [];

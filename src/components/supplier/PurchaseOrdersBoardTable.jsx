@@ -2,6 +2,9 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
+import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
+import PurchaseOrderTableFilterRow from './PurchaseOrderTableFilterRow';
+import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -21,6 +24,9 @@ const useStyles = makeStyles({
   },
   headerCell: {
     backgroundColor: tokens.colorNeutralBackground2,
+    position: 'sticky',
+    top: 0,
+    zIndex: 2,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('10px', '12px'),
@@ -28,10 +34,6 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'nowrap',
-  },
-  controlHeaderCell: {
-    width: '44px',
-    textAlign: 'center',
   },
   empty: {
     ...shorthands.padding('16px'),
@@ -47,16 +49,31 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
+  const [headersOnly, setHeadersOnly] = useState(false);
+  const {
+    processedItems,
+    sortState,
+    filterByColumn,
+    activeFilterCount,
+    hasActiveSort,
+    setFilterOperator,
+    setFilterValue,
+    setFilterSecondaryValue,
+    clearColumnFilter,
+    clearAllFilters,
+    toggleSort,
+    clearSort,
+  } = usePurchaseOrderTableView({ items, columns });
 
   const rows = useMemo(
     () =>
-      items.map((order, index) => ({
+      processedItems.map((order, index) => ({
         order,
         rowId: order?.orderNumber
           ? `${order.dataAreaId || ''}-${order.orderNumber}-${index}`
           : 'row-' + String(index),
       })),
-    [items]
+    [processedItems]
   );
 
   // AANNAME: groepering op status-kolomwaarde (uit order.values.status indien
@@ -72,6 +89,28 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
     });
     return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
   }, [rows]);
+
+  const allGroupsCollapsed = useMemo(
+    () =>
+      groupedRows.length > 0 &&
+      groupedRows.every((group) => !!collapsedGroups[group.groupName]),
+    [collapsedGroups, groupedRows]
+  );
+
+  const allOrderRowsWithLines = useMemo(
+    () =>
+      rows
+        .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
+        .map(({ rowId }) => rowId),
+    [rows]
+  );
+
+  const allSubgroupsCollapsed = useMemo(
+    () =>
+      allOrderRowsWithLines.length > 0 &&
+      allOrderRowsWithLines.every((rowId) => !expandedOrders[rowId]),
+    [allOrderRowsWithLines, expandedOrders]
+  );
 
   useEffect(() => {
     setExpandedOrders((prev) => {
@@ -99,6 +138,33 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
     if (!rowId) return;
     setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
   }, []);
+
+  const handleToggleAllGroups = useCallback(() => {
+    setCollapsedGroups((prev) => {
+      const shouldCollapseAll = !groupedRows.every((group) => !!prev[group.groupName]);
+      const next = { ...prev };
+      groupedRows.forEach((group) => {
+        next[group.groupName] = shouldCollapseAll;
+      });
+      return next;
+    });
+  }, [groupedRows]);
+
+  const handleToggleAllSubgroups = useCallback(() => {
+    setExpandedOrders((prev) => {
+      const next = { ...prev };
+      const shouldExpandAll = allSubgroupsCollapsed;
+      allOrderRowsWithLines.forEach((rowId) => {
+        next[rowId] = shouldExpandAll;
+      });
+      return next;
+    });
+  }, [allOrderRowsWithLines, allSubgroupsCollapsed]);
+
+  const handleToggleHeadersOnly = useCallback(() => {
+    setHeadersOnly((prev) => !prev);
+  }, []);
+
   const tableActions = useMemo(
     () => ({
       onToggleGroup: handleToggleGroup,
@@ -122,6 +188,9 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
   }
+  if (!processedItems.length) {
+    return <div className={styles.empty}>No rows match the active filters</div>;
+  }
 
   const colCount = columns.length + 1;
 
@@ -130,7 +199,14 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
       <table className={styles.table}>
         <thead>
           <tr>
-            <th className={`${styles.headerCell} ${styles.controlHeaderCell}`} aria-label="Row controls" />
+            <PurchaseOrdersTableControls
+              allGroupsCollapsed={allGroupsCollapsed}
+              allSubgroupsCollapsed={allSubgroupsCollapsed}
+              headersOnly={headersOnly}
+              onToggleAllGroups={handleToggleAllGroups}
+              onToggleAllSubgroups={handleToggleAllSubgroups}
+              onToggleHeadersOnly={handleToggleHeadersOnly}
+            />
             {columns.map((column) => (
               <th key={column.key} className={styles.headerCell}>
                 <PurchaseOrderColumnHeader
@@ -143,11 +219,26 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
               </th>
             ))}
           </tr>
+          <PurchaseOrderTableFilterRow
+            columns={columns}
+            filterByColumn={filterByColumn}
+            sortState={sortState}
+            activeFilterCount={activeFilterCount}
+            hasActiveSort={hasActiveSort}
+            onToggleSort={toggleSort}
+            onSetOperator={setFilterOperator}
+            onSetValue={setFilterValue}
+            onSetSecondaryValue={setFilterSecondaryValue}
+            onClearFilter={clearColumnFilter}
+            onClearAllFilters={clearAllFilters}
+            onClearSort={clearSort}
+          />
         </thead>
         <PurchaseOrdersBoardRows
           groupedRows={groupedRows}
           collapsedGroups={collapsedGroups}
           expandedOrders={expandedOrders}
+          headersOnly={headersOnly}
           columns={columns}
           lineColumns={lineColumns}
           colCount={colCount}

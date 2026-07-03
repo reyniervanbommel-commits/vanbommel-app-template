@@ -57,7 +57,6 @@ const EMPTY_FORM = {
   D365_ODATA_TENANT_ID: '',
   D365_ODATA_CLIENT_ID: '',
   D365_ODATA_CLIENT_SECRET: '',
-  PO_SYNC_FILTER: '',
   PO_SYNC_MAX_ORDERS: '',
   PO_CACHE_STALE_MINUTES: '',
 };
@@ -93,7 +92,6 @@ export default function AdminODataSettings() {
         D365_ODATA_TENANT_ID: s.D365_ODATA_TENANT_ID || '',
         D365_ODATA_CLIENT_ID: s.D365_ODATA_CLIENT_ID || '',
         D365_ODATA_CLIENT_SECRET: '',
-        PO_SYNC_FILTER: s.PO_SYNC_FILTER || '',
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
       });
@@ -147,34 +145,21 @@ export default function AdminODataSettings() {
         <strong>Data model</strong> tab.
       </Text>
 
-      {/* Statusoverzicht: wat haalt de app op en hoe authenticeert het */}
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Huidige status</Text>
+        <Text weight="semibold" className={styles.sectionTitle}>Current status</Text>
         <div className={styles.statusGrid}>
           <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Authenticatie</span>
+            <span className={styles.statusLabel}>Authentication</span>
             <Badge appearance="tint" color={auth.color}>{auth.label}</Badge>
           </div>
           <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Wordt opgehaald uit</span>
-            <span className={styles.mono}>{derived.entityUrl || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Bedrijfscode (company)</span>
+            <span className={styles.statusLabel}>Company</span>
             <span className={styles.mono}>{form.D365_ODATA_COMPANY || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>OAuth-scope</span>
-            <span className={styles.mono}>{derived.scope || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Token-endpoint</span>
-            <span className={styles.mono}>{derived.tokenEndpoint || '—'}</span>
           </div>
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Client secret</span>
             <Badge appearance="tint" color={secretSet.clientSecret ? 'success' : 'danger'}>
-              {secretSet.clientSecret ? 'Ingesteld' : 'Ontbreekt'}
+              {secretSet.clientSecret ? 'Configured' : 'Missing'}
             </Badge>
           </div>
         </div>
@@ -227,12 +212,8 @@ export default function AdminODataSettings() {
       <div className={styles.section}>
         <Text weight="semibold" className={styles.sectionTitle}>Cache-synchronisatie</Text>
         <Text className={styles.hint} block>
-          Bepaalt welke purchase orders in de SQL-cache worden gesynchroniseerd. Zonder scope-filter
-          zou de volledige dataset (~19.913 orders) worden opgehaald en vastlopen.
+          Controls cache limits and freshness. Purchase order filters are managed on the Data model tab.
         </Text>
-        <Field label="Scope-filter (ruwe OData $filter)" hint="Bijv. PurchaseOrderStatus ne Microsoft.Dynamics.DataEntities.PurchStatus'Canceled'">
-          <Input placeholder="(leeg = alles, tot de cap)" value={form.PO_SYNC_FILTER} onChange={handleChange('PO_SYNC_FILTER')} />
-        </Field>
         <Field label="Max. aantal orders per sync (cap)">
           <Input type="number" placeholder="2000" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
         </Field>

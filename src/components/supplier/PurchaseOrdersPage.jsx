@@ -25,6 +25,8 @@ const useStyles = makeStyles({
     boxSizing: 'border-box',
     paddingTop: '24px',
     paddingBottom: '24px',
+  },
+  contentInset: {
     paddingLeft: '24px',
     paddingRight: '24px',
   },
@@ -119,77 +121,87 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <div className={styles.titleWrap}>
-          <div className={styles.title}>Purchase Orders</div>
-          <div className={styles.subtitle}>
-            Total: {total}
+      <div className={styles.contentInset}>
+        <div className={styles.header}>
+          <div className={styles.titleWrap}>
+            <div className={styles.title}>Purchase Orders</div>
+            <div className={styles.subtitle}>
+              Total: {total}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className={styles.toolbar}>
-        <div className={styles.freshness}>
-          {!hasCache ? (
-            <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
-          ) : (
-            <>
-              <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
-              {stale ? (
-                <Badge color="warning" appearance="tint">Verouderd</Badge>
-              ) : (
-                <Badge color="success" appearance="tint">Actueel</Badge>
-              )}
-            </>
-          )}
-        </div>
-
-        {(newCount > 0 || changedCount > 0) ? (
+        <div className={styles.toolbar}>
           <div className={styles.freshness}>
-            {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
-            {changedCount > 0 ? <Badge color="warning" appearance="filled">{changedCount} gewijzigd</Badge> : null}
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<CheckmarkRegular />}
-              onClick={markViewed}
-              disabled={markingViewed}
-            >
-              {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
-            </Button>
+            {!hasCache ? (
+              <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+            ) : (
+              <>
+                <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
+                {stale ? (
+                  <Badge color="warning" appearance="tint">Verouderd</Badge>
+                ) : (
+                  <Badge color="success" appearance="tint">Actueel</Badge>
+                )}
+              </>
+            )}
           </div>
-        ) : null}
 
-        <div className={styles.toolbarSpacer} />
+          {(newCount > 0 || changedCount > 0) ? (
+            <div className={styles.freshness}>
+              {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
+              {changedCount > 0 ? <Badge color="warning" appearance="filled">{changedCount} gewijzigd</Badge> : null}
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<CheckmarkRegular />}
+                onClick={markViewed}
+                disabled={markingViewed}
+              >
+                {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
+              </Button>
+            </div>
+          ) : null}
 
-        <Button
-          appearance="secondary"
-          icon={<AddRegular />}
-          onClick={handleOpenAddColumn}
-        >
-          Kolom toevoegen
-        </Button>
-        <Button
-          appearance="primary"
-          icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          {refreshing ? 'Vernieuwen...' : 'Vernieuwen'}
-        </Button>
+          <div className={styles.toolbarSpacer} />
+
+          <Button
+            appearance="secondary"
+            icon={<AddRegular />}
+            onClick={handleOpenAddColumn}
+          >
+            Kolom toevoegen
+          </Button>
+          <Button
+            appearance="primary"
+            icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Vernieuwen...' : 'Vernieuwen'}
+          </Button>
+        </div>
+
+        {refreshing ? <PurchaseOrderRefreshProgress progress={refreshProgress} /> : null}
+
+        {error ? <div className={styles.error}>{error}</div> : null}
       </div>
-
-      {refreshing ? <PurchaseOrderRefreshProgress progress={refreshProgress} /> : null}
-
-      {error ? <div className={styles.error}>{error}</div> : null}
 
       {loading ? (
-        <Spinner label="Purchase orders laden..." />
+        <div className={styles.contentInset}>
+          <Spinner label="Loading purchase orders from SQL cache..." />
+        </div>
+      ) : refreshing && orders.length === 0 ? (
+        <div className={styles.contentInset}>
+          <Spinner label="Loading purchase orders from D365..." />
+        </div>
       ) : orders.length === 0 ? (
-        <EmptyState
-          title="Geen purchase orders gevonden"
-          description="Vernieuw de gegevens of controleer de D365-synchronisatie."
-        />
+        <div className={styles.contentInset}>
+          <EmptyState
+            title="Geen purchase orders gevonden"
+            description="Vernieuw de gegevens of controleer de D365-synchronisatie."
+          />
+        </div>
       ) : (
         <div className={styles.tableRegion}>
           <PurchaseOrdersBoardTable

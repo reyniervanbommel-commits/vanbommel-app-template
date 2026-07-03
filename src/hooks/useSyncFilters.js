@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
 // Enum-metadata voor D365-velden die geen vrije tekst zijn. De Status-kolom gebruikt
@@ -12,17 +12,39 @@ export const ENUM_FIELDS = {
 
 // Lichtgewicht client-preview van wat de server compileert (zie server/utils/odataSyncFilter.js).
 function previewRule(rule) {
-  const { field, operator, value, valueType, enumType } = rule;
+  const { level, field, operator, value, valueType, enumType } = rule;
   if (!field || !operator || value === '' || value === null || value === undefined) return null;
-  if (valueType === 'enum') return `${field} ${operator} Microsoft.Dynamics.DataEntities.${enumType}'${value}'`;
-  if (valueType === 'number') return `${field} ${operator} ${value}`;
+  const fieldRef = level === 'line' ? `l/${field}` : field;
+  if (valueType === 'enum') {
+    const expr = `${fieldRef} ${operator} Microsoft.Dynamics.DataEntities.${enumType}'${value}'`;
+    return level === 'line' ? `PurchaseOrderLines/any(l: ${expr})` : expr;
+  }
+  if (valueType === 'number') {
+    const expr = `${fieldRef} ${operator} ${value}`;
+    return level === 'line' ? `PurchaseOrderLines/any(l: ${expr})` : expr;
+  }
   if (valueType === 'date') {
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : `${field} ${operator} ${parsed.toISOString()}`;
+    if (Number.isNaN(parsed.getTime())) return null;
+    const expr = `${fieldRef} ${operator} ${parsed.toISOString()}`;
+    return level === 'line' ? `PurchaseOrderLines/any(l: ${expr})` : expr;
   }
   const escaped = String(value).replace(/'/g, "''");
-  if (operator === 'contains') return `contains(${field},'${escaped}')`;
-  return `${field} ${operator} '${escaped}'`;
+  let expr;
+  if (operator === 'contains') expr = `contains(${fieldRef},'${escaped}')`;
+  else if (operator === 'notcontains') expr = `not contains(${fieldRef},'${escaped}')`;
+  else if (operator === 'startswith') expr = `startswith(${fieldRef},'${escaped}')`;
+  else if (operator === 'notstartswith') expr = `not startswith(${fieldRef},'${escaped}')`;
+  else if (operator === 'oneof') {
+    const parts = String(value).split(',').map((v) => v.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const serializePart = (v) => {
+      if (valueType === 'enum') return `Microsoft.Dynamics.DataEntities.${enumType}'${v}'`;
+      return `'${v.replace(/'/g, "''")}'`;
+    };
+    expr = `(${parts.map((v) => `${fieldRef} eq ${serializePart(v)}`).join(' or ')})`;
+  } else expr = `${fieldRef} ${operator} '${escaped}'`;
+  return level === 'line' ? `PurchaseOrderLines/any(l: ${expr})` : expr;
 }
 
 // Bepaalt het waardetype van een regel op basis van de gekozen kolom.
@@ -45,9 +67,16 @@ export function useSyncFilters(initialRules) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [savedAt, setSavedAt] = useState(null);
+  const [queryCount, setQueryCount] = useState(null);
+  const [countLoading, setCountLoading] = useState(false);
+  const [countError, setCountError] = useState('');
+
+  useEffect(() => {
+    setRules(Array.isArray(initialRules) ? initialRules : []);
+  }, [initialRules]);
 
   const addRule = useCallback((defaults) => {
-    setRules((prev) => [...prev, { field: '', operator: 'eq', value: '', valueType: 'text', ...defaults }]);
+    setRules((prev) => [...prev, { level: 'header', field: '', operator: 'eq', value: '', valueType: 'text', ...defaults }]);
     setSavedAt(null);
   }, []);
 
@@ -61,6 +90,37 @@ export function useSyncFilters(initialRules) {
     setSavedAt(null);
   }, []);
 
+  const applyRules = useCallback((nextRules) => {
+    setRules(Array.isArray(nextRules) ? nextRules : []);
+    setSavedAt(null);
+  }, []);
+
+  const resetRules = useCallback(() => {
+    setRules([]);
+    setSavedAt(null);
+    setQueryCount(null);
+    setCountError('');
+  }, []);
+
+  const countRows = useCallback(async (overrideRules) => {
+    const rulesToCount = Array.isArray(overrideRules) ? overrideRules : rules;
+    setCountLoading(true);
+    setCountError('');
+    try {
+      const data = await apiRequest('/purchase-orders/sync-filters/count', {
+        method: 'POST',
+        body: { rules: rulesToCount },
+      });
+      setQueryCount(Number(data?.total) || 0);
+      return Number(data?.total) || 0;
+    } catch (err) {
+      setCountError(err.message);
+      return null;
+    } finally {
+      setCountLoading(false);
+    }
+  }, [rules]);
+
   const preview = useMemo(
     () => rules.map(previewRule).filter(Boolean).join(' and '),
     [rules]
@@ -72,12 +132,13 @@ export function useSyncFilters(initialRules) {
     try {
       await apiRequest('/purchase-orders/sync-filters', { method: 'PUT', body: { rules } });
       setSavedAt(new Date());
+      await countRows(rules);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
-  }, [rules]);
+  }, [rules, countRows]);
 
   return useMemo(() => ({
     rules,
@@ -85,9 +146,15 @@ export function useSyncFilters(initialRules) {
     addRule,
     updateRule,
     removeRule,
+    applyRules,
+    resetRules,
+    countRows,
     save,
     saving,
     error,
     savedAt,
-  }), [rules, preview, addRule, updateRule, removeRule, save, saving, error, savedAt]);
+    queryCount,
+    countLoading,
+    countError,
+  }), [rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows, save, saving, error, savedAt, queryCount, countLoading, countError]);
 }

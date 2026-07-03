@@ -240,6 +240,41 @@ function buildEntityKeyUrl(baseUrl, entityPath, keyParts) {
   return baseUrl + normalizedPath + '(' + keyStr + ')';
 }
 
+function normalizeComparableValue(value, { dateOnly = false } = {}) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'boolean') return `bool:${value ? '1' : '0'}`;
+  if (typeof value === 'number') return Number.isFinite(value) ? `num:${value}` : 'num:NaN';
+
+  const str = String(value).trim();
+  if (!str) return '';
+
+  const isoLike = str.match(
+    /^(\d{4}-\d{2}-\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/
+  );
+  if (isoLike) {
+    const datePart = isoLike[1];
+    if (dateOnly) return `date:${datePart}`;
+    const hh = isoLike[2];
+    if (!hh) return `date:${datePart}`;
+    const mm = isoLike[3];
+    const ss = isoLike[4] || '00';
+    return `datetime:${datePart}T${hh}:${mm}:${ss}`;
+  }
+
+  if (/^-?\d+(?:\.\d+)?$/.test(str)) {
+    const num = Number(str);
+    if (Number.isFinite(num)) return `num:${num}`;
+  }
+
+  return `text:${str}`;
+}
+
+function valuesEqualForConcurrency(currentValue, basedOnValue, dataType) {
+  const dateOnly = String(dataType || '').toLowerCase() === 'date';
+  return normalizeComparableValue(currentValue, { dateOnly })
+    === normalizeComparableValue(basedOnValue, { dateOnly });
+}
+
 /**
  * Schrijft één veld terug naar D365 met optimistic concurrency:
  *  1) GET de entiteit → huidige waarde + @odata.etag.
@@ -247,7 +282,7 @@ function buildEntityKeyUrl(baseUrl, entityPath, keyParts) {
  *  3) PATCH met If-Match (etag of '*'); 412 → conflict.
  * Alleen het PATCH-pad (vrij veld). Boekingsacties (bound Actions) vallen buiten deze fase.
  */
-async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365Field, newValue, basedOnValue }) {
+async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365Field, newValue, basedOnValue, dataType }) {
   if (!d365Field) {
     const err = new Error('Geen D365-veld opgegeven'); err.status = 400; throw err;
   }
@@ -273,8 +308,7 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
   const etag = current['@odata.etag'] || getRes.headers.get('ETag') || null;
 
   // 2) concurrency-check op de waarde die de gebruiker zag
-  const norm = (v) => (v === null || v === undefined ? '' : String(v));
-  if (norm(current[d365Field]) !== norm(basedOnValue)) {
+  if (!valuesEqualForConcurrency(current[d365Field], basedOnValue, dataType)) {
     const e = new Error('De waarde is in D365 gewijzigd sinds u las. Ververs eerst en probeer opnieuw.');
     e.status = 409; throw e;
   }
@@ -378,8 +412,29 @@ function resolveNextLink(nextLink, baseUrl) {
   }
 }
 
-async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, fetchAll, extraFilter = '', maxItems = MAX_PURCHASE_ORDER_ITEMS }) {
-  let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter });
+function buildManualNextPageUrl(currentUrl, pageSize, effectiveMax, fetchedCount, totalCount) {
+  if (!pageSize || totalCount === null || fetchedCount >= Math.min(totalCount, effectiveMax)) {
+    return null;
+  }
+  const url = new URL(currentUrl);
+  const currentSkip = Number.parseInt(url.searchParams.get('$skip') || '0', 10) || 0;
+  const currentTop = Number.parseInt(url.searchParams.get('$top') || String(pageSize), 10) || pageSize;
+  const remaining = Math.min(totalCount, effectiveMax) - fetchedCount;
+  url.searchParams.set('$skip', String(currentSkip + pageSize));
+  url.searchParams.set('$top', String(Math.min(currentTop, remaining)));
+  return url.toString();
+}
+
+async function fetchPurchaseOrderRecords({
+  supplierAccount,
+  top,
+  skip,
+  timeout,
+  fetchAll,
+  extraFilter = '',
+  maxItems = MAX_PURCHASE_ORDER_ITEMS,
+  onProgress,
+}) {
   const records = [];
   let total = null;
   let pagesFetched = 0;
@@ -389,11 +444,15 @@ async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, 
   const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
     ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
     : MAX_PURCHASE_ORDER_ITEMS;
+  const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
+  let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top: initialTop, skip, extraFilter });
 
   while (currentUrl) {
     const payload = await fetchODataJson(currentUrl, timeout);
     const pageRecords = Array.isArray(payload.value) ? payload.value : [];
-    records.push(...pageRecords);
+    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+    const recordsToAdd = pageRecords.slice(0, remaining);
+    records.push(...recordsToAdd);
     pagesFetched += 1;
 
     if (total === null) {
@@ -403,17 +462,45 @@ async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, 
       }
     }
 
-    const nextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+    const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+    const manualNextLink = fetchAll && !serverNextLink
+      ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
+      : null;
+    const nextLink = serverNextLink || manualNextLink;
+    const hitItemCap = fetchAll
+      && records.length >= effectiveMax
+      && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
+
+    if (typeof onProgress === 'function') {
+      onProgress({
+        fetched: records.length,
+        totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+        sourceTotal: total,
+        pagesFetched,
+        truncated: hitItemCap,
+      });
+    }
+
     if (!fetchAll || !nextLink) {
       currentUrl = null;
-      hasMore = Boolean(nextLink);
+      hasMore = Boolean(nextLink) || hitItemCap;
+      truncated = hitItemCap;
       break;
     }
 
-    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || records.length >= effectiveMax) {
+    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
       currentUrl = null;
       hasMore = true;
       truncated = true;
+      if (typeof onProgress === 'function') {
+        onProgress({
+          fetched: records.length,
+          totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+          sourceTotal: total,
+          pagesFetched,
+          truncated: true,
+        });
+      }
       break;
     }
 
@@ -430,7 +517,15 @@ async function fetchPurchaseOrderRecords({ supplierAccount, top, skip, timeout, 
   };
 }
 
-async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0, fetchAll = false, extraFilter = '', maxItems }) {
+async function fetchPurchaseOrders({
+  supplierAccount,
+  top = 50,
+  skip = 0,
+  fetchAll = false,
+  extraFilter = '',
+  maxItems,
+  onProgress,
+}) {
   const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
@@ -449,6 +544,7 @@ async function fetchPurchaseOrders({ supplierAccount, top = 50, skip = 0, fetchA
     fetchAll,
     extraFilter,
     maxItems,
+    onProgress,
   });
   const vendorAccounts = Array.from(new Set(
     records
