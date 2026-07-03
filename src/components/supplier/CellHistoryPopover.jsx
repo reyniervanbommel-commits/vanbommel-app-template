@@ -8,7 +8,6 @@ import {
   Spinner,
   Tooltip,
   makeStyles,
-  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
@@ -17,22 +16,10 @@ import { apiRequest } from '../../utils/api';
 
 const useStyles = makeStyles({
   wrapper: {
-    position: 'relative',
     display: 'inline-flex',
     alignItems: 'center',
+    ...shorthands.gap('4px'),
     maxWidth: '100%',
-  },
-  hoverTarget: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    maxWidth: '100%',
-  },
-  triggerSlot: {
-    position: 'absolute',
-    top: '50%',
-    right: '2px',
-    transform: 'translateY(-50%)',
-    zIndex: 1,
   },
   trigger: {
     minWidth: '24px',
@@ -44,14 +31,7 @@ const useStyles = makeStyles({
     transitionDuration: '120ms',
     transitionTimingFunction: 'ease',
   },
-  triggerVisible: {
-    opacity: 1,
-    pointerEvents: 'auto',
-  },
-  triggerHidden: {
-    opacity: 0,
-    pointerEvents: 'none',
-  },
+  content: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%' },
   surface: {
     maxWidth: '340px',
     maxHeight: '360px',
@@ -158,15 +138,18 @@ function HistoryEntry({ entry, dataType, styles }) {
 }
 
 /**
- * Toont bij hover op de cel een klokje; klik op dat klokje opent de
- * cel-geschiedenis (audit trail) met wie/wat/wanneer. Laadt lazy bij openen.
+ * Toont een klokje vóór de celwaarde wanneer er historie bestaat.
+ * Klik op dat klokje opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
  */
-export default function CellHistoryPopover({ cellKeys, dataType, children }) {
+export default function CellHistoryPopover({ cellKeys, dataType, children, hasHistory = false }) {
   const styles = useStyles();
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
-  const [hovered, setHovered] = useState(false);
+
+  if (!hasHistory) {
+    return children;
+  }
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -193,37 +176,19 @@ export default function CellHistoryPopover({ cellKeys, dataType, children }) {
     if (data.open) load();
   }, [load]);
 
-  const onMouseEnter = useCallback(() => {
-    setHovered(true);
-  }, []);
-
-  const onMouseLeave = useCallback(() => {
-    setHovered(false);
-  }, []);
-
-  const showTrigger = hovered;
-  const triggerClassName = mergeClasses(
-    styles.trigger,
-    showTrigger ? styles.triggerVisible : styles.triggerHidden
-  );
-
   return (
     <Popover withArrow size="small" onOpenChange={onOpenChange}>
-      <div className={styles.wrapper} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-        <span className={styles.hoverTarget}>
-          {children}
-        </span>
-        <span className={styles.triggerSlot}>
-          <PopoverTrigger disableButtonEnhancement>
-            <Button
-              appearance="subtle"
-              size="small"
-              className={triggerClassName}
-              icon={<History20Regular />}
-              aria-label="Geschiedenis tonen"
-            />
-          </PopoverTrigger>
-        </span>
+      <div className={styles.wrapper}>
+        <PopoverTrigger disableButtonEnhancement>
+          <Button
+            appearance="subtle"
+            size="small"
+            className={styles.trigger}
+            icon={<History20Regular />}
+            aria-label="Geschiedenis tonen"
+          />
+        </PopoverTrigger>
+        <span className={styles.content}>{children}</span>
       </div>
       <PopoverSurface className={styles.surface}>
         <div className={styles.title}>Geschiedenis</div>

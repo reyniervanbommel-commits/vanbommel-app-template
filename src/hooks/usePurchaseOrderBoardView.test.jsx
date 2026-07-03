@@ -82,4 +82,38 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
 
     expect(result.current.groupingColumnKey).toBe('');
   });
+
+  it('maakt geen fallback-groep op de eerste kolom als status ontbreekt', () => {
+    const COLUMNS_WITHOUT_STATUS = [
+      { key: 'orderNumber', dataType: 'text', label: 'Order' },
+      { key: 'vendorName', dataType: 'text', label: 'Vendor' },
+    ];
+    const { result } = renderHook(() =>
+      usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS_WITHOUT_STATUS })
+    );
+
+    expect(result.current.groupingColumnKey).toBe('');
+    expect(result.current.groupedRows).toHaveLength(1);
+    expect(result.current.groupedRows[0].groupName).toBe('All rows');
+  });
+
+  it('houdt grouping uit na clearGrouping bij kolomwijzigingen', () => {
+    const { result, rerender } = renderHook(
+      ({ columns }) => usePurchaseOrderGrouping({ rows: ROWS, columns }),
+      { initialProps: { columns: COLUMNS } }
+    );
+
+    act(() => {
+      result.current.clearGrouping();
+    });
+    expect(result.current.groupingColumnKey).toBe('');
+
+    rerender({
+      columns: [
+        ...COLUMNS,
+        { key: 'vendorName', dataType: 'text', label: 'Vendor' },
+      ],
+    });
+    expect(result.current.groupingColumnKey).toBe('');
+  });
 });

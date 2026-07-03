@@ -119,6 +119,9 @@ function PurchaseOrdersBoardRows({
   groupingColor,
   tableActions,
   cellActions,
+  lineTotalColumns,
+  linkedLineTotalByHeaderKey,
+  linkedLineValueByHeaderKey,
   selection,
 }) {
   const styles = useStyles();
@@ -225,6 +228,8 @@ function PurchaseOrdersBoardRows({
                           isFirst={columnIndex === 0}
                           onSaveValue={cellActions.onSaveValue}
                           onCorrect={cellActions.onCorrect}
+                          linkedLineTotalMap={linkedLineTotalByHeaderKey}
+                          linkedLineValueMap={linkedLineValueByHeaderKey}
                         />
                       </td>
                     ))}
@@ -247,6 +252,10 @@ function PurchaseOrdersBoardRows({
                           columnWidths={lineColumnWidths}
                           onSaveColumnWidth={onSaveLineColumnWidth}
                           reorderBusy={cellActions.reorderingColumns}
+                          summedLineColumnKeys={lineTotalColumns}
+                          onSetLineColumnTotal={cellActions.onSetLineColumnTotal}
+                          onPushLineTotalToHeader={cellActions.onPushLineTotalToHeader}
+                          onPushLineValuesToHeader={cellActions.onPushLineValuesToHeader}
                         />
                       </td>
                     </tr>

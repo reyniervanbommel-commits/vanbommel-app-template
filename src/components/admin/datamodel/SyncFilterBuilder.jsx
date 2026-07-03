@@ -54,6 +54,11 @@ function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
   const enumMeta = rule.field ? ENUM_FIELDS[rule.field] : null;
   const operators = operatorsForType(rule.valueType);
   const selectedOperator = operators.includes(rule.operator) ? rule.operator : operators[0];
+  const availableFieldCount = rule.availableFieldCount || 0;
+  const hasAvailableFields = availableFieldCount > 0;
+  const pickerDisabledReason = hasAvailableFields
+    ? ''
+    : 'No fields with sampled values for this level yet. Run Sync now first.';
 
   return (
     <div className={styles.ruleRow}>
@@ -67,7 +72,12 @@ function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
         <Option value="line" text="Subitems (Lines)">Subitems (Lines)</Option>
       </Dropdown>
 
-      <Button appearance="secondary" onClick={() => onOpenPicker(index)}>
+      <Button
+        appearance="secondary"
+        onClick={() => onOpenPicker(index, rule.level || 'header')}
+        disabled={!hasAvailableFields}
+        title={pickerDisabledReason}
+      >
         {rule.field ? 'Change field' : 'Choose field'}
       </Button>
       <Badge className={styles.fieldBadge} appearance="outline" color={rule.field ? 'brand' : 'subtle'}>
@@ -114,7 +124,7 @@ function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
 
 function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
   const styles = useStyles();
-  const [pickerState, setPickerState] = useState({ open: false, index: null });
+  const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
   const {
     rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
     save, saving, error, savedAt, queryCount, countLoading, countError,
@@ -123,10 +133,20 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
 
-  const openPicker = useCallback((index) => setPickerState({ open: true, index }), []);
-  const closePicker = useCallback(() => setPickerState({ open: false, index: null }), []);
-  const pickerLevel = (rules[pickerState.index]?.level || 'header');
-  const pickerFields = pickerLevel === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || []);
+  const fieldsForLevel = useCallback(
+    (level) => (level === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || [])),
+    [filterCatalog]
+  );
+  const openPicker = useCallback(
+    (index, level) => {
+      const safeLevel = level === 'line' ? 'line' : 'header';
+      setPickerState({ open: true, index, level: safeLevel });
+    },
+    []
+  );
+  const closePicker = useCallback(() => setPickerState({ open: false, index: null, level: null }), []);
+  const pickerLevel = pickerState.level || 'header';
+  const pickerFields = fieldsForLevel(pickerLevel);
 
   const handlePickField = useCallback((field, operator) => {
     if (pickerState.index === null) return;
@@ -188,7 +208,10 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
       {rules.map((rule, index) => (
         <RuleRow
           key={index}
-          rule={rule}
+          rule={{
+            ...rule,
+            availableFieldCount: fieldsForLevel(rule.level || 'header').length,
+          }}
           index={index}
           onUpdate={updateRule}
           onRemove={removeRule}

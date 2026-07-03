@@ -5,7 +5,7 @@ const DEFAULT_GROUPING_COLOR = '#f4e6ed';
 function getDefaultGroupingColumnKey(columns) {
   if (!Array.isArray(columns) || columns.length === 0) return '';
   const statusColumn = columns.find((column) => column.key === 'status');
-  return statusColumn?.key || columns[0].key;
+  return statusColumn?.key || '';
 }
 
 function normalizeGroupLabel(value) {
@@ -31,6 +31,9 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
 
   useEffect(() => {
     setGroupingColumnKey((current) => {
+      if (current === '') {
+        return '';
+      }
       if (current && safeColumns.some((column) => column.key === current)) {
         return current;
       }

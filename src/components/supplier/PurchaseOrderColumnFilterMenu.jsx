@@ -142,6 +142,10 @@ function PurchaseOrderColumnFilterMenu({
   onSetGroupingColor,
   onAddColumnRightOf,
   onRemoveColumn,
+  isLineColumnSummed = false,
+  onToggleLineColumnSum,
+  onPushLineTotalToHeader,
+  onPushLineValuesToHeader,
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
@@ -157,6 +161,11 @@ function PurchaseOrderColumnFilterMenu({
   const writable = !!column.writableToD365;
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
   const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
+  const isLineColumn = column.level === 'line';
+  const isLineNumberColumn = column.level === 'line' && column.dataType === 'number';
+  const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
+  const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
+  const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
 
   useEffect(() => {
     if (open) {
@@ -243,6 +252,21 @@ function PurchaseOrderColumnFilterMenu({
   const handleToggleWriteback = useCallback(() => {
     if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
   }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
+  const handleToggleLineTotal = useCallback(() => {
+    if (!canToggleLineTotal) return;
+    onToggleLineColumnSum(column.key, !isLineColumnSummed);
+    setOpen(false);
+  }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum]);
+  const handlePushLineTotalToHeader = useCallback(() => {
+    if (!canPushLineTotalToHeader) return;
+    onPushLineTotalToHeader(column);
+    setOpen(false);
+  }, [canPushLineTotalToHeader, column, onPushLineTotalToHeader]);
+  const handlePushLineValuesToHeader = useCallback(() => {
+    if (!canPushLineValuesToHeader) return;
+    onPushLineValuesToHeader(column);
+    setOpen(false);
+  }, [canPushLineValuesToHeader, column, onPushLineValuesToHeader]);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -321,6 +345,30 @@ function PurchaseOrderColumnFilterMenu({
               onClick={handleRemoveColumn}
             >
               Delete column
+            </Button>
+          </>
+        ) : null}
+        {canToggleLineTotal ? (
+          <>
+            <div className={styles.divider} />
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleLineTotal}>
+              {isLineColumnSummed ? 'Disable total row sum' : 'Enable total row sum'}
+            </Button>
+          </>
+        ) : null}
+        {canPushLineTotalToHeader ? (
+          <>
+            <div className={styles.divider} />
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineTotalToHeader}>
+              Push total to header column
+            </Button>
+          </>
+        ) : null}
+        {canPushLineValuesToHeader ? (
+          <>
+            <div className={styles.divider} />
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>
+              Push values to header column
             </Button>
           </>
         ) : null}

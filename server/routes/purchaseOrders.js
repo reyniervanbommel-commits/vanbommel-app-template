@@ -10,6 +10,7 @@ const columnsService = require('../services/PurchaseOrderColumnsService');
 const settingsService = require('../services/SettingsService');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { buildAllowedSyncFilterFields, normalizeLevel } = require('../utils/syncFilterCatalog');
 const { requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 
@@ -21,17 +22,17 @@ function toColumnId(raw) {
 }
 
 async function validateSyncRulesAgainstCatalog(rules) {
-  const filterMeta = await cacheService.getFilterFieldCatalogAndPreview();
-  const allowedFields = new Set([
-    ...filterMeta.catalog.header.map((f) => `header|${f.field}`),
-    ...filterMeta.catalog.line.map((f) => `line|${f.field}`),
+  const [filterMeta, columns] = await Promise.all([
+    cacheService.getFilterFieldCatalogAndPreview(),
+    columnsService.listColumns({ includeInactive: true }),
   ]);
+  const allowedFields = buildAllowedSyncFilterFields(filterMeta, columns);
   if (!allowedFields.size && rules.length) {
     throw Object.assign(new Error('Nog geen filtervelden met data beschikbaar. Voer eerst een sync uit.'), { status: 400 });
   }
   for (const rule of rules) {
-    const level = String(rule?.level || 'header');
-    const field = String(rule?.field || '');
+    const level = normalizeLevel(rule?.level) || 'header';
+    const field = String(rule?.field || '').trim();
     if (!allowedFields.has(`${level}|${field}`)) {
       throw Object.assign(new Error(`Onbekend of leeg veld in cache: ${level}.${field || '(leeg)'}`), { status: 400 });
     }

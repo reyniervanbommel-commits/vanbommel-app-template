@@ -76,6 +76,12 @@ function PurchaseOrdersBoardTable({
   onSaveHeaderColumnWidth,
   onSaveLineColumnWidth,
   onAddColumnRightOf,
+  onSetLineColumnTotal,
+  onPushLineTotalToHeader,
+  onPushLineValuesToHeader,
+  lineTotalColumns = [],
+  lineTotalHeaderLinks = [],
+  lineValueHeaderLinks = [],
   editingColumnKey,
   onEditingDone,
   reorderingColumns = false,
@@ -220,8 +226,48 @@ function PurchaseOrdersBoardTable({
       onToggleWriteback,
       onReorderLineColumn,
       reorderingColumns,
+      lineTotalColumns,
+      onSetLineColumnTotal,
+      onPushLineTotalToHeader,
+      onPushLineValuesToHeader,
     }),
-    [onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback, onReorderLineColumn, reorderingColumns]
+    [
+      onSaveValue,
+      onRenameColumn,
+      onRemoveColumn,
+      onCorrect,
+      isAdmin,
+      onToggleWriteback,
+      onReorderLineColumn,
+      reorderingColumns,
+      lineTotalColumns,
+      onSetLineColumnTotal,
+      onPushLineTotalToHeader,
+      onPushLineValuesToHeader,
+    ]
+  );
+
+  const linkedLineTotalByHeaderKey = useMemo(
+    () => (Array.isArray(lineTotalHeaderLinks)
+      ? lineTotalHeaderLinks.reduce((acc, link) => {
+        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
+        acc[link.headerColumnKey] = link.lineColumnKey;
+        return acc;
+      }, {})
+      : {}),
+    [lineTotalHeaderLinks]
+  );
+  const linkedLineValueByHeaderKey = useMemo(
+    () => (Array.isArray(lineValueHeaderLinks)
+      ? lineValueHeaderLinks.reduce((acc, link) => {
+        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
+        const lineColumn = lineColumns.find((column) => column.key === link.lineColumnKey);
+        if (!lineColumn) return acc;
+        acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
+        return acc;
+      }, {})
+      : {}),
+    [lineValueHeaderLinks, lineColumns]
   );
 
   if (!items.length) {
@@ -273,6 +319,7 @@ function PurchaseOrdersBoardTable({
                       autoEdit={editingColumnKey === column.key}
                       onEditingDone={onEditingDone}
                       showFilterIndicator={hasActiveFilter}
+                      showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
                     />
                   </div>
                   <PurchaseOrderColumnFilterMenu
@@ -316,6 +363,9 @@ function PurchaseOrdersBoardTable({
           groupingColor={groupingColor}
           tableActions={tableActions}
           cellActions={cellActions}
+          lineTotalColumns={lineTotalColumns}
+          linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
+          linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
           selection={selection}
         />
       </table>

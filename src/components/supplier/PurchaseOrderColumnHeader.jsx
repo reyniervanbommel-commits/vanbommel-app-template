@@ -3,7 +3,7 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { EditRegular, FilterRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
+import { EditRegular, FilterRegular, LinkRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
@@ -12,6 +12,8 @@ const useStyles = makeStyles({
   writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
   customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   filterIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  sumIcon: { color: tokens.colorNeutralForeground2, fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
+  connectionIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
@@ -27,6 +29,8 @@ export default function PurchaseOrderColumnHeader({
   autoEdit = false,
   onEditingDone,
   showFilterIndicator = false,
+  showSumIndicator = false,
+  showConnectionIndicator = false,
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
@@ -125,6 +129,16 @@ export default function PurchaseOrderColumnHeader({
             <FilterRegular className={styles.filterIcon} />
           </Tooltip>
         ) : null}
+        {showSumIndicator ? (
+          <Tooltip content="Column sum enabled" relationship="label">
+            <span className={styles.sumIcon} aria-hidden>∑</span>
+          </Tooltip>
+        ) : null}
+        {showConnectionIndicator ? (
+          <Tooltip content="Linked line total" relationship="label">
+            <LinkRegular className={styles.connectionIcon} />
+          </Tooltip>
+        ) : null}
       </span>
     );
     if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
@@ -159,6 +173,16 @@ export default function PurchaseOrderColumnHeader({
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
             <FilterRegular className={styles.filterIcon} />
+          </Tooltip>
+        ) : null}
+        {showSumIndicator ? (
+          <Tooltip content="Column sum enabled" relationship="label">
+            <span className={styles.sumIcon} aria-hidden>∑</span>
+          </Tooltip>
+        ) : null}
+        {showConnectionIndicator ? (
+          <Tooltip content="Linked line total" relationship="label">
+            <LinkRegular className={styles.connectionIcon} />
           </Tooltip>
         ) : null}
       </span>

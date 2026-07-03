@@ -60,6 +60,42 @@ function normalizeColumnWidthMap(value) {
   }, {});
 }
 
+function normalizeColumnKey(value) {
+  return String(value || '').trim().slice(0, 64);
+}
+
+function normalizeLineTotalLinks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.slice(0, MAX_COLUMNS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
+function normalizeLineValueLinks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.slice(0, MAX_COLUMNS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
 function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
@@ -68,6 +104,9 @@ function normalizeBoardSettings(rawSettings) {
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
     headerColumnWidths: normalizeColumnWidthMap(input.headerColumnWidths),
     lineColumnWidths: normalizeColumnWidthMap(input.lineColumnWidths),
+    lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
+    lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
+    lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
   };
 }
 
@@ -112,6 +151,9 @@ function normalizeViewState(rawState) {
       lineColumnOrder: normalizeStringArray(columns.lineColumnOrder),
       headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
       lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
+      lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
+      lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
+      lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
     },
     table: {
       filterByColumn: normalizedFilters,

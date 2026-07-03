@@ -7,8 +7,8 @@ const MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 1000;
 
 // AANNAME: De nieuwe SQL-backed API levert alle data (orders + dynamische kolommen)
-// in één GET-call onder /purchase-orders (NIET onder /supplier). De lazy refresh
-// gebeurt server-side via ?autoRefresh=1. Zie het API-contract in story #132.
+// in één GET-call onder /purchase-orders (NIET onder /supplier). De tabelpagina
+// leest bij openen altijd uit SQL-cache; D365-refresh is expliciet handmatig.
 
 function normalizeVisibleColumns(rawKeys, defaultKeys) {
   if (!Array.isArray(rawKeys) || !rawKeys.length) {
@@ -53,6 +53,37 @@ function normalizeColumnWidths(rawWidths, allowedKeys) {
     acc[key] = clamped;
     return acc;
   }, {});
+}
+
+function normalizeSelectedColumns(rawKeys, allowedKeys) {
+  if (!Array.isArray(rawKeys) || !rawKeys.length) return [];
+  const allowed = Array.isArray(allowedKeys) && allowedKeys.length ? new Set(allowedKeys) : null;
+  const unique = Array.from(new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean)));
+  return allowed ? unique.filter((key) => allowed.has(key)) : unique;
+}
+
+function normalizeLineTotalLinks(rawLinks, allowedLineKeys, allowedHeaderKeys) {
+  if (!Array.isArray(rawLinks) || !rawLinks.length) return [];
+  const allowedLineSet = Array.isArray(allowedLineKeys) && allowedLineKeys.length
+    ? new Set(allowedLineKeys)
+    : null;
+  const allowedHeaderSet = Array.isArray(allowedHeaderKeys) && allowedHeaderKeys.length
+    ? new Set(allowedHeaderKeys)
+    : null;
+  const seen = new Set();
+  return rawLinks.reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = String(entry.lineColumnKey || '').trim();
+    const headerColumnKey = String(entry.headerColumnKey || '').trim();
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    if (allowedLineSet && !allowedLineSet.has(lineColumnKey)) return acc;
+    if (allowedHeaderSet && !allowedHeaderSet.has(headerColumnKey)) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
 }
 
 function moveColumnKey(rawOrder, defaultKeys, sourceKey, targetKey, position = 'before', movableKeys = defaultKeys) {
@@ -108,6 +139,9 @@ export function usePurchaseOrdersPage() {
   const [lineColumnOrder, setLineColumnOrder] = useState([]);
   const [headerColumnWidths, setHeaderColumnWidths] = useState({});
   const [lineColumnWidths, setLineColumnWidths] = useState({});
+  const [lineTotalColumns, setLineTotalColumns] = useState([]);
+  const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState([]);
+  const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState([]);
   const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(false);
   const [savingColumns, setSavingColumns] = useState(false);
   // Onthoudt een net-aangemaakte kolom die nog rechts van zijn bron gezet moet worden.
@@ -166,6 +200,9 @@ export function usePurchaseOrdersPage() {
       setLineColumnOrder(Array.isArray(settings?.lineColumnOrder) ? settings.lineColumnOrder : []);
       setHeaderColumnWidths(normalizeColumnWidths(settings?.headerColumnWidths));
       setLineColumnWidths(normalizeColumnWidths(settings?.lineColumnWidths));
+      setLineTotalColumns(Array.isArray(settings?.lineTotalColumns) ? settings.lineTotalColumns : []);
+      setLineTotalHeaderLinks(Array.isArray(settings?.lineTotalHeaderLinks) ? settings.lineTotalHeaderLinks : []);
+      setLineValueHeaderLinks(Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : []);
     } catch {
       // Board-settings zijn optioneel; bij afwezigheid blijven alle kolommen zichtbaar.
       setVisibleColumnKeys([]);
@@ -173,6 +210,9 @@ export function usePurchaseOrdersPage() {
       setLineColumnOrder([]);
       setHeaderColumnWidths({});
       setLineColumnWidths({});
+      setLineTotalColumns([]);
+      setLineTotalHeaderLinks([]);
+      setLineValueHeaderLinks([]);
     } finally {
       setBoardSettingsLoaded(true);
     }
@@ -189,26 +229,8 @@ export function usePurchaseOrdersPage() {
     }
 
     const bootstrap = async () => {
-      const data = await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
-      if (!active || !data?.stale) {
-        return;
-      }
-      setRefreshing(true);
-      setError('');
-      try {
-        const refreshedData = await apiRequest('/purchase-orders/refresh', { method: 'POST' });
-        if (active) {
-          applyData(refreshedData);
-        }
-      } catch (err) {
-        if (active) {
-          setError(err.message);
-        }
-      } finally {
-        if (active) {
-          setRefreshing(false);
-        }
-      }
+      if (!active) return;
+      await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
     };
     bootstrap();
     loadBoardSettings();
@@ -361,7 +383,7 @@ export function usePurchaseOrdersPage() {
 
   const addColumn = useCallback(async ({ label, level, dataType, options }) => {
     const body = { label, level, dataType };
-    if (dataType === 'select' && Array.isArray(options)) {
+    if (options !== undefined) {
       body.options = options;
     }
     const res = await apiRequest('/purchase-orders/columns', { method: 'POST', body });
@@ -439,6 +461,19 @@ export function usePurchaseOrdersPage() {
       .map((key) => byKey.get(key));
   }, [lineColumns, lineColumnOrder, defaultLineKeys]);
 
+  const effectiveLineTotalColumns = useMemo(
+    () => normalizeSelectedColumns(lineTotalColumns, defaultLineKeys),
+    [lineTotalColumns, defaultLineKeys]
+  );
+  const effectiveLineTotalHeaderLinks = useMemo(
+    () => normalizeLineTotalLinks(lineTotalHeaderLinks, defaultLineKeys, defaultHeaderKeys),
+    [lineTotalHeaderLinks, defaultLineKeys, defaultHeaderKeys]
+  );
+  const effectiveLineValueHeaderLinks = useMemo(
+    () => normalizeLineTotalLinks(lineValueHeaderLinks, defaultLineKeys, defaultHeaderKeys),
+    [lineValueHeaderLinks, defaultLineKeys, defaultHeaderKeys]
+  );
+
   const effectiveHeaderColumnWidths = useMemo(
     () => normalizeColumnWidths(headerColumnWidths, defaultHeaderKeys),
     [headerColumnWidths, defaultHeaderKeys]
@@ -454,18 +489,33 @@ export function usePurchaseOrdersPage() {
     nextLineOrder = lineColumnOrder,
     nextHeaderWidths = headerColumnWidths,
     nextLineWidths = lineColumnWidths,
+    nextLineTotalColumns = lineTotalColumns,
+    nextLineTotalHeaderLinks = lineTotalHeaderLinks,
+    nextLineValueHeaderLinks = lineValueHeaderLinks,
   } = {}) => {
     const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
     const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
     const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
     const normalizedHeaderWidths = normalizeColumnWidths(nextHeaderWidths, defaultHeaderKeys);
     const normalizedLineWidths = normalizeColumnWidths(nextLineWidths, defaultLineKeys);
+    const normalizedLineTotalColumns = normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys);
+    const normalizedLineTotalHeaderLinks = normalizeLineTotalLinks(
+      nextLineTotalHeaderLinks,
+      defaultLineKeys
+    );
+    const normalizedLineValueHeaderLinks = normalizeLineTotalLinks(
+      nextLineValueHeaderLinks,
+      defaultLineKeys
+    );
 
     setVisibleColumnKeys(normalizedVisible);
     setColumnOrder(normalizedHeaderOrder);
     setLineColumnOrder(normalizedLineOrder);
     setHeaderColumnWidths(normalizedHeaderWidths);
     setLineColumnWidths(normalizedLineWidths);
+    setLineTotalColumns(normalizedLineTotalColumns);
+    setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
+    setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
     setSavingColumns(true);
     try {
       await apiRequest('/supplier/board-settings/' + BOARD_KEY, {
@@ -477,13 +527,16 @@ export function usePurchaseOrdersPage() {
             lineColumnOrder: normalizedLineOrder,
             headerColumnWidths: normalizedHeaderWidths,
             lineColumnWidths: normalizedLineWidths,
+            lineTotalColumns: normalizedLineTotalColumns,
+            lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
+            lineValueHeaderLinks: normalizedLineValueHeaderLinks,
           },
         },
       });
     } finally {
       setSavingColumns(false);
     }
-  }, [visibleColumnKeys, columnOrder, lineColumnOrder, headerColumnWidths, lineColumnWidths, defaultHeaderKeys, defaultLineKeys]);
+  }, [visibleColumnKeys, columnOrder, lineColumnOrder, headerColumnWidths, lineColumnWidths, lineTotalColumns, lineTotalHeaderLinks, lineValueHeaderLinks, defaultHeaderKeys, defaultLineKeys]);
 
   const saveVisibleColumns = useCallback(async (nextVisibleKeys) => {
     await persistBoardSettings({ nextVisibleKeys });
@@ -496,6 +549,9 @@ export function usePurchaseOrdersPage() {
     lineColumnOrder: normalizeColumnOrder(lineColumnOrder, defaultLineKeys),
     headerColumnWidths: effectiveHeaderColumnWidths,
     lineColumnWidths: effectiveLineColumnWidths,
+    lineTotalColumns: effectiveLineTotalColumns,
+    lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
+    lineValueHeaderLinks: effectiveLineValueHeaderLinks,
   }), [
     effectiveVisibleKeys,
     columnOrder,
@@ -504,6 +560,9 @@ export function usePurchaseOrdersPage() {
     defaultLineKeys,
     effectiveHeaderColumnWidths,
     effectiveLineColumnWidths,
+    effectiveLineTotalColumns,
+    effectiveLineTotalHeaderLinks,
+    effectiveLineValueHeaderLinks,
   ]);
 
   // Pas een opgeslagen kolomlayout toe (alleen in-memory; niet persistent in
@@ -524,6 +583,15 @@ export function usePurchaseOrdersPage() {
     }
     if (layout.lineColumnWidths && typeof layout.lineColumnWidths === 'object') {
       setLineColumnWidths(normalizeColumnWidths(layout.lineColumnWidths, defaultLineKeys));
+    }
+    if (Array.isArray(layout.lineTotalColumns)) {
+      setLineTotalColumns(normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys));
+    }
+    if (Array.isArray(layout.lineTotalHeaderLinks)) {
+      setLineTotalHeaderLinks(normalizeLineTotalLinks(layout.lineTotalHeaderLinks, defaultLineKeys));
+    }
+    if (Array.isArray(layout.lineValueHeaderLinks)) {
+      setLineValueHeaderLinks(normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys));
     }
   }, [defaultHeaderKeys, defaultLineKeys]);
 
@@ -561,6 +629,37 @@ export function usePurchaseOrdersPage() {
     await persistBoardSettings({ nextLineOrder: nextOrder });
   }, [lineColumnOrder, defaultLineKeys, persistBoardSettings]);
 
+  const setLineColumnTotal = useCallback(async (columnKey, enabled) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    const nextSet = new Set(effectiveLineTotalColumns);
+    if (enabled) nextSet.add(key);
+    else nextSet.delete(key);
+    await persistBoardSettings({ nextLineTotalColumns: Array.from(nextSet) });
+  }, [effectiveLineTotalColumns, persistBoardSettings]);
+
+  const addLineTotalHeaderLink = useCallback(async ({ lineColumnKey, headerColumnKey }) => {
+    const lineKey = String(lineColumnKey || '').trim();
+    const headerKey = String(headerColumnKey || '').trim();
+    if (!lineKey || !headerKey) return;
+    const nextLinks = normalizeLineTotalLinks(
+      [...lineTotalHeaderLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
+      defaultLineKeys
+    );
+    await persistBoardSettings({ nextLineTotalHeaderLinks: nextLinks });
+  }, [lineTotalHeaderLinks, defaultLineKeys, persistBoardSettings]);
+
+  const addLineValueHeaderLink = useCallback(async ({ lineColumnKey, headerColumnKey }) => {
+    const lineKey = String(lineColumnKey || '').trim();
+    const headerKey = String(headerColumnKey || '').trim();
+    if (!lineKey || !headerKey) return;
+    const nextLinks = normalizeLineTotalLinks(
+      [...lineValueHeaderLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
+      defaultLineKeys
+    );
+    await persistBoardSettings({ nextLineValueHeaderLinks: nextLinks });
+  }, [lineValueHeaderLinks, defaultLineKeys, persistBoardSettings]);
+
   // Verplaats een net-aangemaakte kolom naar rechts van zijn bron zodra beide keys
   // in de (herladen) kolomdefinities bestaan.
   useEffect(() => {
@@ -591,6 +690,9 @@ export function usePurchaseOrdersPage() {
     visibleColumnKeys: effectiveVisibleKeys,
     headerColumnWidths: effectiveHeaderColumnWidths,
     lineColumnWidths: effectiveLineColumnWidths,
+    lineTotalColumns: effectiveLineTotalColumns,
+    lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
+    lineValueHeaderLinks: effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
     reload,
@@ -606,6 +708,9 @@ export function usePurchaseOrdersPage() {
     saveVisibleColumns,
     reorderHeaderColumn,
     reorderLineColumn,
+    setLineColumnTotal,
+    addLineTotalHeaderLink,
+    addLineValueHeaderLink,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
     exportColumnLayout,
@@ -629,6 +734,9 @@ export function usePurchaseOrdersPage() {
     effectiveVisibleKeys,
     effectiveHeaderColumnWidths,
     effectiveLineColumnWidths,
+    effectiveLineTotalColumns,
+    effectiveLineTotalHeaderLinks,
+    effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
     reload,
@@ -644,6 +752,9 @@ export function usePurchaseOrdersPage() {
     saveVisibleColumns,
     reorderHeaderColumn,
     reorderLineColumn,
+    setLineColumnTotal,
+    addLineTotalHeaderLink,
+    addLineValueHeaderLink,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
     exportColumnLayout,

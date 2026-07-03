@@ -189,6 +189,11 @@ async function createColumn({ label, level, dataType, options = null }, userId) 
       throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
     }
     optionsJson = JSON.stringify(list);
+  } else if (options !== null && options !== undefined) {
+    if (typeof options !== 'object' || Array.isArray(options)) {
+      throw Object.assign(new Error('Kolom-opties moeten een object zijn'), { status: 400 });
+    }
+    optionsJson = JSON.stringify(options);
   }
 
   const pool = await getPool();

@@ -102,6 +102,7 @@ const useStyles = makeStyles({
     ...shorthands.padding('24px'),
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
+    overflowX: 'hidden',
     '@media (max-width: 768px)': {
       ...shorthands.padding('12px'),
     },

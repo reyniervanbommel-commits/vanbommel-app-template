@@ -617,16 +617,17 @@ async function read({ includeRemoved = false, userId = null } = {}) {
 
   // Verborgen rijen (removed_in_d365 óf handmatig uitgesloten) blijven standaard weg.
   // includeRemoved (admin/debug) toont ze alsnog. Exclusions = "SQL-only verwijderen" (#AB:130).
+  const headerVisibilityWhere = includeRemoved ? '' : `WHERE removed_in_d365 = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM dbo.po_row_exclusions e
+        WHERE e.data_area_id = h.data_area_id AND e.order_number = h.order_number
+      )`;
   const headersResult = await pool.request().query(`
     SELECT data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
            requested_delivery_date, created_date_time, d365_modified_at, removed_in_d365${needsDynamicHeaderLookup ? ', raw_json' : ''},
            first_seen_at, content_changed_at
     FROM dbo.po_cache_headers h
-    ${includeRemoved ? '' : `WHERE removed_in_d365 = 0
-      AND NOT EXISTS (
-        SELECT 1 FROM dbo.po_row_exclusions e
-        WHERE e.data_area_id = h.data_area_id AND e.order_number = h.order_number
-      )`}
+    ${headerVisibilityWhere}
     ORDER BY order_number
   `);
 
@@ -644,6 +645,26 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     INNER JOIN dbo.po_columns c ON c.id = cv.column_id
     WHERE c.is_active = 1
   `);
+
+  const historyPresenceResult = await pool.request().query(`
+    SELECT DISTINCT hx.column_id, hx.data_area_id, hx.order_number, hx.line_number
+    FROM (
+      SELECT column_id, data_area_id, order_number, line_number FROM dbo.po_cell_history
+      UNION ALL
+      SELECT column_id, data_area_id, order_number, line_number FROM dbo.po_field_corrections
+    ) hx
+    INNER JOIN dbo.po_columns c ON c.id = hx.column_id AND c.is_active = 1
+    INNER JOIN dbo.po_cache_headers h
+      ON h.data_area_id = hx.data_area_id
+      AND h.order_number = hx.order_number
+    ${headerVisibilityWhere}
+  `);
+
+  const historyCellSet = new Set(
+    historyPresenceResult.recordset.map(
+      (row) => `${row.column_id}|${row.data_area_id}|${row.order_number}|${row.line_number}`
+    )
+  );
 
   // Index custom-waarden op order/line.
   const customByCell = new Map(); // key: dataAreaId|orderNumber|lineNumber -> { colKey: value }
@@ -708,6 +729,17 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     return values;
   }
 
+  function historyByColumnId(columns, dataAreaId, orderNumber, lineNumber) {
+    const result = {};
+    for (const col of columns) {
+      const key = `${col.id}|${dataAreaId}|${orderNumber}|${lineNumber}`;
+      if (historyCellSet.has(key)) {
+        result[col.id] = true;
+      }
+    }
+    return result;
+  }
+
   let newCount = 0;
   let changedCount = 0;
   const orders = headersResult.recordset.map((h) => {
@@ -716,6 +748,7 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     const lines = (linesByOrder.get(orderKey) || []).map((ln) => ({
       lineNumber: ln.line_number,
       values: lineValues(ln, needsDynamicLineLookup ? parseRawJson(ln.raw_json) : null),
+      historyByColumnId: historyByColumnId(lineCols, ln.data_area_id, ln.order_number, ln.line_number),
     }));
 
     // Nieuw/gewijzigd t.o.v. het laatste bezoek van deze gebruiker. Eerste bezoek
@@ -734,6 +767,7 @@ async function read({ includeRemoved = false, userId = null } = {}) {
       isNew,
       isChanged,
       values: headerValues(h, headerRawJson),
+      historyByColumnId: historyByColumnId(headerCols, h.data_area_id, h.order_number, HEADER_LEVEL_LINE),
       lines,
       lineCount: lines.length,
     };

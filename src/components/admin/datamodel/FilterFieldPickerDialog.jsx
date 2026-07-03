@@ -35,6 +35,10 @@ const useStyles = makeStyles({
   },
   opCell: { minWidth: '210px' },
   fieldCell: { minWidth: '220px' },
+  emptyState: {
+    color: tokens.colorNeutralForeground3,
+    ...shorthands.padding('8px', '12px'),
+  },
 });
 
 export const OPERATOR_LABELS = {
@@ -127,6 +131,15 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
                       </TableRow>
                     );
                   })}
+                  {!sortedFields.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Text className={styles.emptyState}>
+                          No filterable fields with sampled values for {levelTitle}. Run Sync now or switch level.
+                        </Text>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </div>

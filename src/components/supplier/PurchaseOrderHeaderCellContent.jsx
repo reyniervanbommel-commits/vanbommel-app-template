@@ -3,6 +3,7 @@ import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
 
 const useStyles = makeStyles({
   removedText: {
@@ -17,10 +18,12 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect }) {
+function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
+  const linkedLineTotalColumnKey = linkedLineTotalMap?.[key] || '';
+  const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
 
   const handleSave = useCallback((value) => {
     onSaveValue({
@@ -45,13 +48,14 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
-  if (column.source === 'custom') {
+  if (column.source === 'custom' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (
       <EditableCell
         dataType={column.dataType}
         value={rawValue}
         options={column.options}
         ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
         cellKeys={{
           columnId: column.id,
           dataAreaId: order.dataAreaId,
@@ -68,6 +72,7 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
       <PurchaseOrderWriteBackCell
         column={column}
         value={rawValue}
+        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
         cellKeys={{
           columnId: column.id,
           dataAreaId: order.dataAreaId,
@@ -79,7 +84,11 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     );
   }
 
-  const display = formatCellValue(rawValue, column.dataType);
+  const display = linkedLineTotalColumnKey
+    ? formatCellValue(calculateLineColumnSum(order.lines, linkedLineTotalColumnKey), column.dataType)
+    : linkedLineValueMeta
+      ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
+      : formatCellValue(rawValue, column.dataType);
 
   if (isFirst && order.removedInD365) {
     return (

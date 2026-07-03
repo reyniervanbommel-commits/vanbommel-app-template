@@ -36,7 +36,7 @@ const useStyles = makeStyles({
       flex: 1,
       minHeight: 0,
       minWidth: 0,
-      overflow: 'auto',
+      overflow: 'hidden',
       scrollbarGutter: 'stable',
     },
   },
@@ -79,8 +79,14 @@ export default function PurchaseOrdersPage() {
     reorderLineColumn,
     headerColumnWidths,
     lineColumnWidths,
+    lineTotalColumns,
+    lineTotalHeaderLinks,
+    lineValueHeaderLinks,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
+    setLineColumnTotal,
+    addLineTotalHeaderLink,
+    addLineValueHeaderLink,
     savingColumns,
     exportColumnLayout,
     applyColumnLayout,
@@ -130,6 +136,52 @@ export default function PurchaseOrdersPage() {
     });
     if (created?.key) setEditingColumnKey(created.key);
   }, [addHeaderColumnAfter]);
+  const handlePushLineTotalToHeader = useCallback(async (lineColumn) => {
+    const lineColumnKey = String(lineColumn?.key || '').trim();
+    if (!lineColumnKey) return;
+    const activeLink = lineTotalHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
+    if (activeLink?.headerColumnKey) {
+      setEditingColumnKey(activeLink.headerColumnKey);
+      return;
+    }
+    const sameKeyHeader = visibleHeaderColumns.find((column) => column.key === lineColumnKey);
+    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
+    const afterKey = sameKeyHeader?.key || fallbackHeader?.key || '';
+    const created = await addHeaderColumnAfter(afterKey, {
+      label: `${lineColumn.label} Total`,
+      dataType: 'number',
+    });
+    if (!created?.key) return;
+    await addLineTotalHeaderLink({ lineColumnKey, headerColumnKey: created.key });
+    if (!lineTotalColumns.includes(lineColumnKey)) {
+      await setLineColumnTotal(lineColumnKey, true);
+    }
+    setEditingColumnKey(created.key);
+  }, [
+    lineTotalHeaderLinks,
+    visibleHeaderColumns,
+    addHeaderColumnAfter,
+    addLineTotalHeaderLink,
+    lineTotalColumns,
+    setLineColumnTotal,
+  ]);
+  const handlePushLineValuesToHeader = useCallback(async (lineColumn) => {
+    const lineColumnKey = String(lineColumn?.key || '').trim();
+    if (!lineColumnKey) return;
+    const activeLink = lineValueHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
+    if (activeLink?.headerColumnKey) {
+      setEditingColumnKey(activeLink.headerColumnKey);
+      return;
+    }
+    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
+    const created = await addHeaderColumnAfter(fallbackHeader?.key || '', {
+      label: `${lineColumn.label} Values`,
+      dataType: 'text',
+    });
+    if (!created?.key) return;
+    await addLineValueHeaderLink({ lineColumnKey, headerColumnKey: created.key });
+    setEditingColumnKey(created.key);
+  }, [lineValueHeaderLinks, visibleHeaderColumns, addHeaderColumnAfter, addLineValueHeaderLink]);
 
   const handleRefresh = useCallback(async () => {
     startProgress();
@@ -227,6 +279,12 @@ export default function PurchaseOrdersPage() {
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
             onAddColumnRightOf={handleAddColumnRightOf}
+            onSetLineColumnTotal={setLineColumnTotal}
+            onPushLineTotalToHeader={handlePushLineTotalToHeader}
+            onPushLineValuesToHeader={handlePushLineValuesToHeader}
+            lineTotalColumns={lineTotalColumns}
+            lineTotalHeaderLinks={lineTotalHeaderLinks}
+            lineValueHeaderLinks={lineValueHeaderLinks}
             editingColumnKey={editingColumnKey}
             onEditingDone={handleEditingDone}
             reorderingColumns={savingColumns}

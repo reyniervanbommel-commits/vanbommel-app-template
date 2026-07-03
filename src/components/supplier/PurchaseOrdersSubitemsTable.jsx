@@ -3,9 +3,11 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 
@@ -89,6 +91,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  totalsCell: { ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1), ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2), ...shorthands.padding('4px', '8px'), fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold, backgroundColor: tokens.colorNeutralBackground2 },
 });
 
 export default function PurchaseOrdersSubitemsTable({
@@ -106,6 +109,10 @@ export default function PurchaseOrdersSubitemsTable({
   columnWidths = {},
   onSaveColumnWidth,
   reorderBusy = false,
+  summedLineColumnKeys = [],
+  onSetLineColumnTotal,
+  onPushLineTotalToHeader,
+  onPushLineValuesToHeader,
 }) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
@@ -123,14 +130,14 @@ export default function PurchaseOrdersSubitemsTable({
   const groupingColumnKey = '';
   const groupingColor = '';
   const noop = useCallback(() => {}, []);
-  const visibleLines = useMemo(
-    () => (Array.isArray(processedLines) ? processedLines : []),
-    [processedLines]
-  );
+  const visibleLines = useMemo(() => (Array.isArray(processedLines) ? processedLines : []), [processedLines]);
+  const summedColumnsSet = useMemo(() => new Set(summedLineColumnKeys), [summedLineColumnKeys]);
+  const summedValuesByColumn = useMemo(() => lineColumns.reduce((acc, column) => {
+    if (summedColumnsSet.has(column.key)) acc[column.key] = calculateLineColumnSum(visibleLines, column.key);
+    return acc;
+  }, {}), [lineColumns, summedColumnsSet, visibleLines]);
 
-  if (!lineColumns.length) {
-    return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
-  }
+  if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
 
   return (
     <table className={styles.subTable}>
@@ -163,6 +170,7 @@ export default function PurchaseOrdersSubitemsTable({
                     onToggleWriteback={onToggleWriteback}
                     showActionsMenu={false}
                     showFilterIndicator={hasActiveFilter}
+                    showSumIndicator={summedColumnsSet.has(column.key)}
                   />
                 </div>
                 <PurchaseOrderColumnFilterMenu
@@ -182,6 +190,10 @@ export default function PurchaseOrdersSubitemsTable({
                   onClearGrouping={noop}
                   onSetGroupingColor={noop}
                   onRemoveColumn={onRemoveColumn}
+                  isLineColumnSummed={summedColumnsSet.has(column.key)}
+                  onToggleLineColumnSum={onSetLineColumnTotal}
+                  onPushLineTotalToHeader={onPushLineTotalToHeader}
+                  onPushLineValuesToHeader={onPushLineValuesToHeader}
                 />
               </div>
             </ResizableTableHeaderCell>
@@ -206,6 +218,7 @@ export default function PurchaseOrdersSubitemsTable({
                       value={rawValue}
                       options={column.options}
                       ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
+                      hasHistory={Boolean(line.historyByColumnId?.[column.id])}
                       cellKeys={{
                         columnId: column.id,
                         dataAreaId: order.dataAreaId,
@@ -232,6 +245,7 @@ export default function PurchaseOrdersSubitemsTable({
                     <PurchaseOrderWriteBackCell
                       column={column}
                       value={rawValue}
+                      hasHistory={Boolean(line.historyByColumnId?.[column.id])}
                       cellKeys={{
                         columnId: column.id,
                         dataAreaId: order.dataAreaId,
@@ -269,6 +283,15 @@ export default function PurchaseOrdersSubitemsTable({
           </tr>
         ) : null}
       </tbody>
+      {summedColumnsSet.size ? (
+        <PurchaseOrderLineTotalsRow
+          rowId={rowId}
+          lineColumns={lineColumns}
+          summedColumnsSet={summedColumnsSet}
+          summedValuesByColumn={summedValuesByColumn}
+          totalsCellClassName={styles.totalsCell}
+        />
+      ) : null}
     </table>
   );
 }
