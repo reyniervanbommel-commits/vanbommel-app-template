@@ -1,21 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Button,
-  Dropdown,
-  Input,
-  Option,
-  Popover,
-  PopoverSurface,
-  PopoverTrigger,
-  Text,
-  makeStyles,
-  shorthands,
-  tokens,
-} from '@fluentui/react-components';
-import {
-  DATE_FILTER_OPERATORS,
-  TEXT_FILTER_OPERATORS,
-} from '../../hooks/usePurchaseOrderTableView';
+import { Button, Dropdown, Input, Option, Popover, PopoverSurface, PopoverTrigger, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
 
 const useStyles = makeStyles({
@@ -116,6 +101,7 @@ function PurchaseOrderColumnFilterMenu({
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
+  const [showCategoryBar, setShowCategoryBar] = useState(false);
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
   const isGroupingColumn = groupingColumnKey === column.key;
@@ -134,6 +120,7 @@ function PurchaseOrderColumnFilterMenu({
 
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
+    if (!data.open) setShowCategoryBar(false);
   }, []);
 
   const setSortAsc = useCallback(() => {
@@ -185,6 +172,7 @@ function PurchaseOrderColumnFilterMenu({
   const handleToggleWriteback = useCallback(() => {
     if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
   }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
+  const toggleCategoryBar = useCallback(() => setShowCategoryBar((prev) => !prev), []);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -201,6 +189,8 @@ function PurchaseOrderColumnFilterMenu({
         </Button>
       </PopoverTrigger>
       <PopoverSurface className={styles.surface}>
+        <Text className={styles.fieldTitle}>{column.label}</Text>
+        <div className={styles.divider} />
         <div className={styles.sortActions}>
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>
             Sort A to Z
@@ -212,24 +202,33 @@ function PurchaseOrderColumnFilterMenu({
             Clear sort
           </Button>
         </div>
-
         <div className={styles.divider} />
-
-        <PurchaseOrderColumnGroupingSection
-          column={column}
-          isGroupingColumn={isGroupingColumn}
-          groupingColor={groupingColor}
-          onSetGroupingColumn={onSetGroupingColumn}
-          onClearGrouping={onClearGrouping}
-          onSetGroupingColor={onSetGroupingColor}
-        />
-
-        {canToggleWriteback ? (<><div className={styles.divider} /><Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>{writable ? 'Write-back uitzetten' : 'Write-back toestaan'}</Button></>) : null}
-
+        <Button className={styles.sortButton} appearance="subtle" size="small" onClick={toggleCategoryBar}>
+          {showCategoryBar ? 'Category bar (hide)' : 'Category bar (show)'}
+        </Button>
+        {showCategoryBar ? (
+          <PurchaseOrderColumnGroupingSection
+            column={column}
+            isGroupingColumn={isGroupingColumn}
+            groupingColor={groupingColor}
+            onSetGroupingColumn={onSetGroupingColumn}
+            onClearGrouping={onClearGrouping}
+            onSetGroupingColor={onSetGroupingColor}
+          />
+        ) : null}
+        {canToggleWriteback ? (
+          <>
+            <div className={styles.divider} />
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
+                {writable ? 'Sync uitzetten' : 'Sync aanzetten'}
+              </span>
+            </Button>
+          </>
+        ) : null}
         <div className={styles.divider} />
-
-        <Text className={styles.fieldTitle}>{column.label}</Text>
-
+        <Text className={styles.fieldTitle}>Filter</Text>
         <div className={styles.filterRow}>
           <Dropdown
             selectedOptions={[draft.operator]}
@@ -242,18 +241,15 @@ function PurchaseOrderColumnFilterMenu({
               </Option>
             ))}
           </Dropdown>
-
           {isDate && draft.operator === 'between' ? (
             <>
               <Input type="date" value={draft.value} onChange={handleValueChange} />
               <Input type="date" value={draft.secondaryValue} onChange={handleSecondaryValueChange} />
             </>
           ) : null}
-
           {isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
             <Input type="date" value={draft.value} onChange={handleValueChange} />
           ) : null}
-
           {isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
             <Input
               type="number"
@@ -263,11 +259,9 @@ function PurchaseOrderColumnFilterMenu({
               placeholder="Amount"
             />
           ) : null}
-
           {isDate && draft.operator === 'nextWeek' ? (
             <Text className={styles.hint}>Matches records in the next calendar week.</Text>
           ) : null}
-
           {!isDate ? (
             <Input
               value={draft.value}
@@ -275,7 +269,6 @@ function PurchaseOrderColumnFilterMenu({
               placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'}
             />
           ) : null}
-
           <div className={styles.actionRow}>
             <Button size="small" appearance="primary" onClick={handleApply}>
               Apply

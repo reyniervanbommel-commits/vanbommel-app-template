@@ -51,6 +51,7 @@ const useStyles = makeStyles({
     ...shorthands.gap('6px'),
   },
   headerCellLabel: {
+    flexGrow: 1,
     minWidth: 0,
   },
   empty: {
@@ -248,6 +249,7 @@ function PurchaseOrdersBoardTable({
                       onToggleWriteback={onToggleWriteback}
                       onMoveColumn={onReorderHeaderColumn}
                       reorderBusy={reorderingColumns}
+                      showActionsMenu={false}
                     />
                   </div>
                   <PurchaseOrderColumnFilterMenu

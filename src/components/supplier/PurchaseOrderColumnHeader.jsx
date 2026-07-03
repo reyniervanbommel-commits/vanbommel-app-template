@@ -3,24 +3,24 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { CloudRegular, EditRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
+import { EditRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  header: { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
+  header: { position: 'relative', width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
   labelWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
-  d365LabelWrap: { position: 'relative', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 },
-  writeBackCloud: { position: 'absolute', top: '-8px', right: '-10px', color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase400 },
+  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', lineHeight: 1.2, ...shorthands.gap('4px') },
+  writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
   customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
-  draggableHeader: { cursor: 'grab', transitionProperty: 'transform, opacity, box-shadow, background-color', transitionDuration: '150ms', transitionTimingFunction: 'ease' },
-  draggingHeader: { cursor: 'grabbing', opacity: 0.78, transform: 'scale(1.015)', boxShadow: `0 10px 24px ${tokens.colorNeutralShadowAmbient}` },
-  dropBefore: { '::before': { content: '""', position: 'absolute', left: '-1px', top: '4px', bottom: '4px', width: '3px', borderRadius: '3px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 2px ${tokens.colorBrandBackground2}`, zIndex: 2 } },
-  dropAfter: { '::after': { content: '""', position: 'absolute', right: '-1px', top: '4px', bottom: '4px', width: '3px', borderRadius: '3px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 2px ${tokens.colorBrandBackground2}`, zIndex: 2 } },
+  draggableHeader: { cursor: 'grab', borderRadius: '6px', transitionProperty: 'transform, opacity, box-shadow, background-color', transitionDuration: '150ms', transitionTimingFunction: 'ease' },
+  draggingHeader: { cursor: 'grabbing', opacity: 0.52, transform: 'translateY(-4px) scale(1.02)', backgroundColor: tokens.colorBrandBackground2, boxShadow: `0 12px 28px ${tokens.colorNeutralShadowAmbient}` },
+  dropBefore: { '::before': { content: '""', position: 'absolute', left: '-3px', top: '-10px', bottom: '-10px', width: '4px', borderRadius: '999px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 3px ${tokens.colorBrandBackground2}`, zIndex: 5 } },
+  dropAfter: { '::after': { content: '""', position: 'absolute', right: '-3px', top: '-10px', bottom: '-10px', width: '4px', borderRadius: '999px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 3px ${tokens.colorBrandBackground2}`, zIndex: 5 } },
   lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
-export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback, onMoveColumn, reorderBusy = false }) {
+export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback, onMoveColumn, reorderBusy = false, showActionsMenu = true }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
@@ -101,8 +101,8 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
     const labelWithWriteBack = (
       <span className={styles.d365LabelWrap}>
         {writable ? (
-          <Tooltip content="Write-back enabled" relationship="label">
-            <CloudRegular className={styles.writeBackCloud} />
+          <Tooltip content="D365 sync ingeschakeld" relationship="label">
+            <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
           </Tooltip>
         ) : null}
         <span>{column.label}</span>
@@ -111,6 +111,9 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
     if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={headerClassName} {...dragProps}>{labelWithWriteBack}</div>;
     if (column.writeBackAllowed === false) {
       return <div className={headerClassName} {...dragProps}><span className={styles.labelWrap}>{column.label}<Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
+    }
+    if (!showActionsMenu) {
+      return <div className={headerClassName} {...dragProps}>{labelWithWriteBack}</div>;
     }
     return (
       <div className={headerClassName} {...dragProps}>
@@ -125,6 +128,14 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
             </MenuList>
           </MenuPopover>
         </Menu>
+      </div>
+    );
+  }
+
+  if (!showActionsMenu) {
+    return (
+      <div className={headerClassName} {...dragProps}>
+        <span className={styles.labelWrap}><EditRegular className={styles.customIcon} title="Eigen kolom" />{column.label}</span>
       </div>
     );
   }
