@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Input, Spinner, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import { CloudArrowUpRegular, ErrorCircleRegular } from '@fluentui/react-icons';
+import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
 
 const useStyles = makeStyles({
   cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: '120px' },
-  // Write-back-veld: subtiel onderscheiden (merk-icoon) van read-only D365-cellen.
-  input: { minWidth: '100px' },
-  wbIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  input: {
+    minWidth: '100px',
+    color: tokens.colorBrandForeground1,
+    '> input': {
+      color: tokens.colorBrandForeground1,
+    },
+  },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase300, whiteSpace: 'nowrap' },
   errIcon: { color: tokens.colorPaletteRedForeground1 },
 });
@@ -60,19 +64,33 @@ export default function PurchaseOrderWriteBackCell({ column, value, onCorrect, c
 
   return (
     <span className={styles.cell}>
-      <Tooltip content="Terugschrijven naar D365 bij wijzigen" relationship="label">
-        <CloudArrowUpRegular className={styles.wbIcon} />
-      </Tooltip>
-      <Input
-        className={styles.input}
-        size="small"
-        type={column.dataType === 'number' ? 'number' : (column.dataType === 'date' ? 'date' : 'text')}
-        value={local}
-        aria-label={`${column.label} (terugschrijven naar D365)`}
-        onChange={(_, data) => setLocal(data.value)}
-        onBlur={commit}
-        onKeyDown={onKeyDown}
-      />
+      {cellKeys ? (
+        <CellHistoryPopover cellKeys={cellKeys} dataType={column.dataType}>
+          <Input
+            className={styles.input}
+            appearance="filled-lighter"
+            size="small"
+            type={column.dataType === 'number' ? 'number' : (column.dataType === 'date' ? 'date' : 'text')}
+            value={local}
+            aria-label={`${column.label} (terugschrijven naar D365)`}
+            onChange={(_, data) => setLocal(data.value)}
+            onBlur={commit}
+            onKeyDown={onKeyDown}
+          />
+        </CellHistoryPopover>
+      ) : (
+        <Input
+          className={styles.input}
+          appearance="filled-lighter"
+          size="small"
+          type={column.dataType === 'number' ? 'number' : (column.dataType === 'date' ? 'date' : 'text')}
+          value={local}
+          aria-label={`${column.label} (terugschrijven naar D365)`}
+          onChange={(_, data) => setLocal(data.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+        />
+      )}
       {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Terugschrijven" /> : null}
       {status === 'saved' ? <span className={styles.saved}>✓</span> : null}
       {status === 'error' ? (
@@ -80,7 +98,6 @@ export default function PurchaseOrderWriteBackCell({ column, value, onCorrect, c
           <ErrorCircleRegular className={styles.errIcon} />
         </Tooltip>
       ) : null}
-      {cellKeys ? <CellHistoryPopover cellKeys={cellKeys} dataType={column.dataType} /> : null}
     </span>
   );
 }

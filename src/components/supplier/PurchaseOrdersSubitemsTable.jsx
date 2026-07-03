@@ -3,6 +3,7 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
+import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -21,6 +22,14 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     whiteSpace: 'nowrap',
     textAlign: 'left',
+    ':hover [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    ':focus-within [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
   },
   subCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
@@ -36,7 +45,22 @@ const useStyles = makeStyles({
   },
 });
 
-export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, columns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
+export default function PurchaseOrdersSubitemsTable({
+  rowId,
+  order,
+  lines,
+  columns,
+  onSaveValue,
+  onRenameColumn,
+  onRemoveColumn,
+  onCorrect,
+  isAdmin,
+  onToggleWriteback,
+  onReorderColumn,
+  columnWidths = {},
+  onSaveColumnWidth,
+  reorderBusy = false,
+}) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
 
@@ -49,15 +73,23 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
       <thead>
         <tr>
           {lineColumns.map((column) => (
-            <th key={column.key} className={styles.subHeaderCell}>
+            <ResizableTableHeaderCell
+              key={column.key}
+              columnKey={column.key}
+              width={columnWidths[column.key]}
+              className={styles.subHeaderCell}
+              onResizeEnd={onSaveColumnWidth}
+            >
               <PurchaseOrderColumnHeader
                 column={column}
                 onRename={onRenameColumn}
                 onRemove={onRemoveColumn}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
+                onMoveColumn={onReorderColumn}
+                reorderBusy={reorderBusy}
               />
-            </th>
+            </ResizableTableHeaderCell>
           ))}
         </tr>
       </thead>
@@ -66,9 +98,13 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
           <tr key={`${rowId}-line-${line.lineNumber ?? index}`}>
             {lineColumns.map((column) => {
               const rawValue = line.values?.[column.key];
+              const width = Number(columnWidths[column.key]);
+              const cellStyle = Number.isFinite(width)
+                ? { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` }
+                : undefined;
               if (column.source === 'custom') {
                 return (
-                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell}>
+                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
                     <EditableCell
                       dataType={column.dataType}
                       value={rawValue}
@@ -96,7 +132,7 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
               }
               if (column.source === 'd365' && column.writableToD365 && onCorrect) {
                 return (
-                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell}>
+                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
                     <PurchaseOrderWriteBackCell
                       column={column}
                       value={rawValue}
@@ -122,7 +158,7 @@ export default function PurchaseOrdersSubitemsTable({ rowId, order, lines, colum
                 );
               }
               return (
-                <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell}>
+                <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
                   {formatCellValue(rawValue, column.dataType)}
                 </td>
               );

@@ -15,12 +15,41 @@ import { History20Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 
 const useStyles = makeStyles({
+  wrapper: {
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    maxWidth: '100%',
+  },
+  hoverTarget: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    maxWidth: '100%',
+  },
+  triggerSlot: {
+    position: 'absolute',
+    top: '50%',
+    right: '2px',
+    transform: 'translateY(-50%)',
+    zIndex: 1,
+  },
   trigger: {
     minWidth: '24px',
     width: '24px',
     height: '24px',
     ...shorthands.padding('0'),
     color: tokens.colorNeutralForeground3,
+    transitionProperty: 'opacity',
+    transitionDuration: '120ms',
+    transitionTimingFunction: 'ease',
+  },
+  triggerVisible: {
+    opacity: 1,
+    pointerEvents: 'auto',
+  },
+  triggerHidden: {
+    opacity: 0,
+    pointerEvents: 'none',
   },
   surface: {
     maxWidth: '340px',
@@ -128,14 +157,16 @@ function HistoryEntry({ entry, dataType, styles }) {
 }
 
 /**
- * Klok-icoon dat een popover opent met de cel-geschiedenis (audit trail):
- * wie/wat/wanneer per cel, inclusief D365-veldcorrecties. Laadt lazy bij openen.
+ * Toont bij hover op de cel een klokje; klik op dat klokje opent de
+ * cel-geschiedenis (audit trail) met wie/wat/wanneer. Laadt lazy bij openen.
  */
-export default function CellHistoryPopover({ cellKeys, dataType }) {
+export default function CellHistoryPopover({ cellKeys, dataType, children }) {
   const styles = useStyles();
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
+  const [hovered, setHovered] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -159,22 +190,41 @@ export default function CellHistoryPopover({ cellKeys, dataType }) {
   }, [cellKeys]);
 
   const onOpenChange = useCallback((_, data) => {
+    setOpen(data.open);
     if (data.open) load();
   }, [load]);
 
+  const onMouseEnter = useCallback(() => {
+    setHovered(true);
+  }, []);
+
+  const onMouseLeave = useCallback(() => {
+    setHovered(false);
+  }, []);
+
+  const showTrigger = hovered || open;
+  const triggerClassName = showTrigger
+    ? `${styles.trigger} ${styles.triggerVisible}`
+    : `${styles.trigger} ${styles.triggerHidden}`;
+
   return (
-    <Popover withArrow trapFocus size="small" onOpenChange={onOpenChange}>
-      <PopoverTrigger disableButtonEnhancement>
-        <Tooltip content="Geschiedenis" relationship="label">
-          <Button
-            appearance="subtle"
-            size="small"
-            className={styles.trigger}
-            icon={<History20Regular />}
-            aria-label="Geschiedenis tonen"
-          />
-        </Tooltip>
-      </PopoverTrigger>
+    <Popover withArrow size="small" onOpenChange={onOpenChange}>
+      <div className={styles.wrapper} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+        <span className={styles.hoverTarget}>
+          {children}
+        </span>
+        <span className={styles.triggerSlot}>
+          <PopoverTrigger disableButtonEnhancement>
+            <Button
+              appearance="subtle"
+              size="small"
+              className={triggerClassName}
+              icon={<History20Regular />}
+              aria-label="Geschiedenis tonen"
+            />
+          </PopoverTrigger>
+        </span>
+      </div>
       <PopoverSurface className={styles.surface}>
         <div className={styles.title}>Geschiedenis</div>
         {status === 'loading' ? <Spinner size="tiny" label="Laden…" /> : null}

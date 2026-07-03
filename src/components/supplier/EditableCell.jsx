@@ -24,15 +24,26 @@ const useStyles = makeStyles({
   },
   control: {
     minWidth: '96px',
+    color: tokens.colorBrandForeground1,
+    '> input': {
+      color: tokens.colorBrandForeground1,
+    },
+    '> button': {
+      color: tokens.colorBrandForeground1,
+    },
   },
   dateInput: {
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-    borderRadius: tokens.borderRadiusMedium,
-    ...shorthands.padding('3px', '6px'),
+    ...shorthands.border('none'),
+    borderRadius: tokens.borderRadiusNone,
+    ...shorthands.padding('3px', '2px'),
     fontFamily: tokens.fontFamilyBase,
     fontSize: tokens.fontSizeBase200,
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: tokens.colorNeutralForeground1,
+    backgroundColor: 'transparent',
+    color: tokens.colorBrandForeground1,
+    outlineStyle: 'none',
+    ':focus': {
+      outlineStyle: 'none',
+    },
   },
   status: {
     fontSize: tokens.fontSizeBase200,
@@ -120,6 +131,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Dropdown
         className={styles.control}
+        appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}
         value={selectedText}
@@ -151,6 +163,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Input
         className={styles.control}
+        appearance="filled-lighter"
         size="small"
         type="number"
         aria-label={ariaLabel}
@@ -164,6 +177,7 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Input
         className={styles.control}
+        appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
@@ -175,9 +189,12 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
 
   return (
     <div className={styles.cell}>
-      {control}
+      {cellKeys ? (
+        <CellHistoryPopover cellKeys={cellKeys} dataType={dataType}>
+          {control}
+        </CellHistoryPopover>
+      ) : control}
       {renderStatus()}
-      {cellKeys ? <CellHistoryPopover cellKeys={cellKeys} dataType={dataType} /> : null}
     </div>
   );
 }

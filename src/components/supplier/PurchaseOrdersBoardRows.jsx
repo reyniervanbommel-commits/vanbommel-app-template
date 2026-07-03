@@ -77,14 +77,26 @@ function getOrderRowClassName(order, styles) {
   return styles.itemRow;
 }
 
+function getColumnCellStyle(columnWidths, columnKey) {
+  const width = Number(columnWidths?.[columnKey]);
+  if (!Number.isFinite(width)) return undefined;
+  return { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` };
+}
+
 function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
   expandedOrders,
-  headersOnly,
+  showBoardHeaders,
+  showGroupHeaders,
   columns,
   lineColumns,
+  headerColumnWidths,
+  lineColumnWidths,
+  onSaveLineColumnWidth,
   colCount,
+  groupingColumnLabel,
+  groupingColor,
   tableActions,
   cellActions,
 }) {
@@ -94,25 +106,27 @@ function PurchaseOrdersBoardRows({
   return (
     <tbody>
       {groupedRows.map((group) => {
-        const isCollapsed = !!collapsedGroups[group.groupName];
+        const isCollapsed = showGroupHeaders ? !!collapsedGroups[group.groupName] : false;
         return (
           <React.Fragment key={group.groupName}>
-            <tr>
-              <td colSpan={colCount} className={styles.groupRowCell}>
-                <button
-                  type="button"
-                  className={styles.groupButton}
-                  data-group={group.groupName}
-                  onClick={onToggleGroup}
-                >
-                  <span>{isCollapsed ? '+' : '-'}</span>
-                  <span className={styles.groupDot}>●</span>
-                  <span>{group.groupName}</span>
-                  <span>({group.entries.length})</span>
-                </button>
-              </td>
-            </tr>
-            {!isCollapsed && !headersOnly && group.entries.map(({ order, rowId }) => {
+            {showGroupHeaders ? (
+              <tr>
+                <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupingColor }}>
+                  <button
+                    type="button"
+                    className={styles.groupButton}
+                    data-group={group.groupName}
+                    onClick={onToggleGroup}
+                  >
+                    <span>{isCollapsed ? '+' : '-'}</span>
+                    <span className={styles.groupDot}>●</span>
+                    <span>{`${groupingColumnLabel}: ${group.groupName}`}</span>
+                    <span>({group.entries.length})</span>
+                  </button>
+                </td>
+              </tr>
+            ) : null}
+            {showBoardHeaders && !isCollapsed && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];
@@ -134,7 +148,11 @@ function PurchaseOrdersBoardRows({
                       ) : null}
                     </td>
                     {columns.map((column, columnIndex) => (
-                      <td key={`${rowId}-${column.key}`} className={styles.itemCell}>
+                      <td
+                        key={`${rowId}-${column.key}`}
+                        className={styles.itemCell}
+                        style={getColumnCellStyle(headerColumnWidths, column.key)}
+                      >
                         <PurchaseOrderHeaderCellContent
                           order={order}
                           column={column}
@@ -159,6 +177,10 @@ function PurchaseOrdersBoardRows({
                           onCorrect={cellActions.onCorrect}
                           isAdmin={cellActions.isAdmin}
                           onToggleWriteback={cellActions.onToggleWriteback}
+                          onReorderColumn={cellActions.onReorderLineColumn}
+                          columnWidths={lineColumnWidths}
+                          onSaveColumnWidth={onSaveLineColumnWidth}
+                          reorderBusy={cellActions.reorderingColumns}
                         />
                       </td>
                     </tr>

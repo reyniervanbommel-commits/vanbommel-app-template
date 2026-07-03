@@ -3,8 +3,9 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
-import PurchaseOrderTableFilterRow from './PurchaseOrderTableFilterRow';
-import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
+import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -34,6 +35,23 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'nowrap',
+    ':hover [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    ':focus-within [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+  },
+  headerCellContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('6px'),
+  },
+  headerCellLabel: {
+    minWidth: 0,
   },
   empty: {
     ...shorthands.padding('16px'),
@@ -45,57 +63,53 @@ const useStyles = makeStyles({
 // AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
 // krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
 
-function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
+function PurchaseOrdersBoardTable({
+  items,
+  columns,
+  lineColumns,
+  boardView,
+  onSaveValue,
+  onRenameColumn,
+  onRemoveColumn,
+  onCorrect,
+  isAdmin,
+  onToggleWriteback,
+  onReorderHeaderColumn,
+  onReorderLineColumn,
+  headerColumnWidths = {},
+  lineColumnWidths = {},
+  onSaveHeaderColumnWidth,
+  onSaveLineColumnWidth,
+  reorderingColumns = false,
+}) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
-  const [headersOnly, setHeadersOnly] = useState(false);
+  const [showBoardHeaders, setShowBoardHeaders] = useState(true);
+  const [showGroupHeaders, setShowGroupHeaders] = useState(true);
+  const fallbackBoardView = usePurchaseOrderBoardView({ items, columns });
+  const resolvedBoardView = boardView || fallbackBoardView;
+
+  // Filter/sort/grouping-state wordt op page-niveau beheerd (usePurchaseOrderBoardView)
+  // zodat saved views deze samen met de kolomlayout kunnen serialiseren.
   const {
     processedItems,
+    rows,
     sortState,
     filterByColumn,
-    activeFilterCount,
-    hasActiveSort,
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
-    clearAllFilters,
-    toggleSort,
-    clearSort,
-  } = usePurchaseOrderTableView({ items, columns });
-
-  const rows = useMemo(
-    () =>
-      processedItems.map((order, index) => ({
-        order,
-        rowId: order?.orderNumber
-          ? `${order.dataAreaId || ''}-${order.orderNumber}-${index}`
-          : 'row-' + String(index),
-      })),
-    [processedItems]
-  );
-
-  // AANNAME: groepering op status-kolomwaarde (uit order.values.status indien
-  // aanwezig); valt terug op 'Zonder status'.
-  const groupedRows = useMemo(() => {
-    const byGroup = new Map();
-    rows.forEach((entry) => {
-      const groupKey = entry.order.values?.status || 'Zonder status';
-      if (!byGroup.has(groupKey)) {
-        byGroup.set(groupKey, []);
-      }
-      byGroup.get(groupKey).push(entry);
-    });
-    return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
-  }, [rows]);
-
-  const allGroupsCollapsed = useMemo(
-    () =>
-      groupedRows.length > 0 &&
-      groupedRows.every((group) => !!collapsedGroups[group.groupName]),
-    [collapsedGroups, groupedRows]
-  );
+    setSortDirection,
+    groupedRows,
+    groupingColumnKey,
+    groupingColumnLabel,
+    groupingColor,
+    setGroupingColumn,
+    clearGrouping,
+    setGroupingBarColor,
+  } = resolvedBoardView;
 
   const allOrderRowsWithLines = useMemo(
     () =>
@@ -103,13 +117,6 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
         .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
         .map(({ rowId }) => rowId),
     [rows]
-  );
-
-  const allSubgroupsCollapsed = useMemo(
-    () =>
-      allOrderRowsWithLines.length > 0 &&
-      allOrderRowsWithLines.every((rowId) => !expandedOrders[rowId]),
-    [allOrderRowsWithLines, expandedOrders]
   );
 
   useEffect(() => {
@@ -127,6 +134,10 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
     });
   }, [rows]);
 
+  useEffect(() => {
+    setCollapsedGroups({});
+  }, [groupingColumnKey]);
+
   const handleToggleGroup = useCallback((event) => {
     const groupName = event.currentTarget.dataset.group || '';
     if (!groupName) return;
@@ -139,30 +150,41 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
     setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
   }, []);
 
-  const handleToggleAllGroups = useCallback(() => {
+  const handleSetAllBoardsExpanded = useCallback((shouldExpand) => {
     setCollapsedGroups((prev) => {
-      const shouldCollapseAll = !groupedRows.every((group) => !!prev[group.groupName]);
       const next = { ...prev };
       groupedRows.forEach((group) => {
-        next[group.groupName] = shouldCollapseAll;
+        next[group.groupName] = !shouldExpand;
       });
       return next;
     });
   }, [groupedRows]);
 
-  const handleToggleAllSubgroups = useCallback(() => {
+  const handleSetAllGroupsExpanded = useCallback((shouldExpand) => {
     setExpandedOrders((prev) => {
       const next = { ...prev };
-      const shouldExpandAll = allSubgroupsCollapsed;
       allOrderRowsWithLines.forEach((rowId) => {
-        next[rowId] = shouldExpandAll;
+        next[rowId] = shouldExpand;
       });
       return next;
     });
-  }, [allOrderRowsWithLines, allSubgroupsCollapsed]);
+  }, [allOrderRowsWithLines]);
 
-  const handleToggleHeadersOnly = useCallback(() => {
-    setHeadersOnly((prev) => !prev);
+  const handleSetExpansion = useCallback((scope, shouldExpand) => {
+    if (scope === 'all' || scope === 'boards') {
+      handleSetAllBoardsExpanded(shouldExpand);
+    }
+    if (scope === 'all' || scope === 'groups') {
+      handleSetAllGroupsExpanded(shouldExpand);
+    }
+  }, [handleSetAllBoardsExpanded, handleSetAllGroupsExpanded]);
+
+  const handleToggleBoardHeaders = useCallback(() => {
+    setShowBoardHeaders((prev) => !prev);
+  }, []);
+
+  const handleToggleGroupHeaders = useCallback(() => {
+    setShowGroupHeaders((prev) => !prev);
   }, []);
 
   const tableActions = useMemo(
@@ -181,8 +203,10 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
       onCorrect,
       isAdmin,
       onToggleWriteback,
+      onReorderLineColumn,
+      reorderingColumns,
     }),
-    [onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback]
+    [onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback, onReorderLineColumn, reorderingColumns]
   );
 
   if (!items.length) {
@@ -200,48 +224,68 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
         <thead>
           <tr>
             <PurchaseOrdersTableControls
-              allGroupsCollapsed={allGroupsCollapsed}
-              allSubgroupsCollapsed={allSubgroupsCollapsed}
-              headersOnly={headersOnly}
-              onToggleAllGroups={handleToggleAllGroups}
-              onToggleAllSubgroups={handleToggleAllSubgroups}
-              onToggleHeadersOnly={handleToggleHeadersOnly}
+              showBoardHeaders={showBoardHeaders}
+              showGroupHeaders={showGroupHeaders}
+              onSetExpansion={handleSetExpansion}
+              onToggleBoardHeaders={handleToggleBoardHeaders}
+              onToggleGroupHeaders={handleToggleGroupHeaders}
             />
             {columns.map((column) => (
-              <th key={column.key} className={styles.headerCell}>
-                <PurchaseOrderColumnHeader
-                  column={column}
-                  onRename={onRenameColumn}
-                  onRemove={onRemoveColumn}
-                  isAdmin={isAdmin}
-                  onToggleWriteback={onToggleWriteback}
-                />
-              </th>
+              <ResizableTableHeaderCell
+                key={column.key}
+                columnKey={column.key}
+                width={headerColumnWidths[column.key]}
+                className={styles.headerCell}
+                onResizeEnd={onSaveHeaderColumnWidth}
+              >
+                <div className={styles.headerCellContent}>
+                  <div className={styles.headerCellLabel}>
+                    <PurchaseOrderColumnHeader
+                      column={column}
+                      onRename={onRenameColumn}
+                      onRemove={onRemoveColumn}
+                      isAdmin={isAdmin}
+                      onToggleWriteback={onToggleWriteback}
+                      onMoveColumn={onReorderHeaderColumn}
+                      reorderBusy={reorderingColumns}
+                    />
+                  </div>
+                  <PurchaseOrderColumnFilterMenu
+                    column={column}
+                    filter={filterByColumn[column.key]}
+                    sortState={sortState}
+                    groupingColumnKey={groupingColumnKey}
+                    groupingColor={groupingColor}
+                    isAdmin={isAdmin}
+                    onToggleWriteback={onToggleWriteback}
+                    onSetSortDirection={setSortDirection}
+                    onSetOperator={setFilterOperator}
+                    onSetValue={setFilterValue}
+                    onSetSecondaryValue={setFilterSecondaryValue}
+                    onClearFilter={clearColumnFilter}
+                    onSetGroupingColumn={setGroupingColumn}
+                    onClearGrouping={clearGrouping}
+                    onSetGroupingColor={setGroupingBarColor}
+                  />
+                </div>
+              </ResizableTableHeaderCell>
             ))}
           </tr>
-          <PurchaseOrderTableFilterRow
-            columns={columns}
-            filterByColumn={filterByColumn}
-            sortState={sortState}
-            activeFilterCount={activeFilterCount}
-            hasActiveSort={hasActiveSort}
-            onToggleSort={toggleSort}
-            onSetOperator={setFilterOperator}
-            onSetValue={setFilterValue}
-            onSetSecondaryValue={setFilterSecondaryValue}
-            onClearFilter={clearColumnFilter}
-            onClearAllFilters={clearAllFilters}
-            onClearSort={clearSort}
-          />
         </thead>
         <PurchaseOrdersBoardRows
           groupedRows={groupedRows}
           collapsedGroups={collapsedGroups}
           expandedOrders={expandedOrders}
-          headersOnly={headersOnly}
+          showBoardHeaders={showBoardHeaders}
+          showGroupHeaders={showGroupHeaders}
           columns={columns}
           lineColumns={lineColumns}
+          headerColumnWidths={headerColumnWidths}
+          lineColumnWidths={lineColumnWidths}
+          onSaveLineColumnWidth={onSaveLineColumnWidth}
           colCount={colCount}
+          groupingColumnLabel={groupingColumnLabel}
+          groupingColor={groupingColor}
           tableActions={tableActions}
           cellActions={cellActions}
         />

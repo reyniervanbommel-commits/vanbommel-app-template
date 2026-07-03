@@ -12,10 +12,37 @@ const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
 const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
+function normalizeOrderLines(lines) {
+  const uniqueLines = new Map();
+  let duplicateLineNumbers = 0;
+  let invalidLineNumbers = 0;
+
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const normalizedLineNumber = toNumberOrNull(line && line.lineNumber);
+    if (normalizedLineNumber === null) {
+      invalidLineNumbers += 1;
+      continue;
+    }
+    if (uniqueLines.has(normalizedLineNumber)) {
+      duplicateLineNumbers += 1;
+    }
+    uniqueLines.set(normalizedLineNumber, {
+      ...(line || {}),
+      lineNumber: normalizedLineNumber,
+    });
+  }
+
+  return {
+    lines: Array.from(uniqueLines.values()),
+    duplicateLineNumbers,
+    invalidLineNumbers,
+  };
+}
+
 // Content-hash van een order (header + compacte regel-samenvatting). Wijzigt de hash tussen
 // twee syncs, dan is de order "gewijzigd" (#133). ModifiedDateTime is niet beschikbaar in D365.
-function computeOrderHash(order) {
-  const lines = Array.isArray(order.lines) ? order.lines : [];
+function computeOrderHash(order, normalizedLines = null) {
+  const lines = normalizedLines || normalizeOrderLines(order.lines).lines;
   const lineDigest = lines
     .map((l) => [l.lineNumber, l.itemNumber, l.quantity, l.unit, l.lineAmount, l.description].join('~'))
     .sort()
@@ -404,8 +431,20 @@ async function refresh() {
     const modifiedAt = toDateOrNull(raw.ModifiedDateTime);
     if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
 
-    const lines = Array.isArray(order.lines) ? order.lines : [];
-    const contentHash = computeOrderHash(order);
+    const {
+      lines,
+      duplicateLineNumbers,
+      invalidLineNumbers,
+    } = normalizeOrderLines(order.lines);
+    const contentHash = computeOrderHash(order, lines);
+    if (duplicateLineNumbers > 0 || invalidLineNumbers > 0) {
+      logger.warn('PO-regels genormaliseerd vóór cache-opslag', {
+        dataAreaId,
+        orderNumber,
+        duplicates: duplicateLineNumbers,
+        invalid: invalidLineNumbers,
+      });
+    }
 
     // Header + regels per order atomair: voorkomt een header zonder regels als de
     // refresh halverwege faalt (delete + insert van regels mag niet half slagen).

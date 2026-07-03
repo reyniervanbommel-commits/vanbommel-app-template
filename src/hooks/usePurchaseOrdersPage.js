@@ -3,6 +3,8 @@ import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 
 const BOARD_KEY = 'purchase-orders';
+const MIN_COLUMN_WIDTH = 80;
+const MAX_COLUMN_WIDTH = 1000;
 
 // AANNAME: De nieuwe SQL-backed API levert alle data (orders + dynamische kolommen)
 // in één GET-call onder /purchase-orders (NIET onder /supplier). De lazy refresh
@@ -25,6 +27,57 @@ function normalizeColumnOrder(rawKeys, defaultKeys) {
   const filtered = Array.from(new Set(rawKeys.filter((key) => allowed.has(key))));
   const missing = defaultKeys.filter((key) => !filtered.includes(key));
   return [...filtered, ...missing];
+}
+
+function arraysEqual(left, right) {
+  if (left === right) return true;
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function normalizeColumnWidths(rawWidths, allowedKeys) {
+  if (!rawWidths || typeof rawWidths !== 'object' || Array.isArray(rawWidths)) {
+    return {};
+  }
+  const allowed = Array.isArray(allowedKeys) && allowedKeys.length
+    ? new Set(allowedKeys)
+    : null;
+  return Object.entries(rawWidths).reduce((acc, [rawKey, rawWidth]) => {
+    const key = String(rawKey || '').trim();
+    if (!key) return acc;
+    if (allowed && !allowed.has(key)) return acc;
+    const width = Number(rawWidth);
+    if (!Number.isFinite(width)) return acc;
+    const clamped = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(width)));
+    acc[key] = clamped;
+    return acc;
+  }, {});
+}
+
+function moveColumnKey(rawOrder, defaultKeys, sourceKey, targetKey, position = 'before', movableKeys = defaultKeys) {
+  const order = normalizeColumnOrder(rawOrder, defaultKeys);
+  const allowedSet = new Set(Array.isArray(movableKeys) && movableKeys.length ? movableKeys : defaultKeys);
+  const movableOrder = order.filter((key) => allowedSet.has(key));
+  const sourceIndex = movableOrder.indexOf(sourceKey);
+  const targetIndex = movableOrder.indexOf(targetKey);
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return order;
+
+  const nextMovableOrder = [...movableOrder];
+  const [movedKey] = nextMovableOrder.splice(sourceIndex, 1);
+  const normalizedPosition = position === 'after' ? 'after' : 'before';
+  const nextTargetIndex = nextMovableOrder.indexOf(targetKey);
+  if (nextTargetIndex === -1) return order;
+  const insertAt = normalizedPosition === 'after' ? nextTargetIndex + 1 : nextTargetIndex;
+  nextMovableOrder.splice(insertAt, 0, movedKey);
+
+  let movableIndex = 0;
+  return order.map((key) => {
+    if (!allowedSet.has(key)) return key;
+    const replacement = nextMovableOrder[movableIndex];
+    movableIndex += 1;
+    return replacement;
+  });
 }
 
 /**
@@ -52,6 +105,9 @@ export function usePurchaseOrdersPage() {
   // Board-settings t.b.v. zichtbaarheid/volgorde van header-kolommen (op key-basis).
   const [visibleColumnKeys, setVisibleColumnKeys] = useState([]);
   const [columnOrder, setColumnOrder] = useState([]);
+  const [lineColumnOrder, setLineColumnOrder] = useState([]);
+  const [headerColumnWidths, setHeaderColumnWidths] = useState({});
+  const [lineColumnWidths, setLineColumnWidths] = useState({});
   const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(false);
   const [savingColumns, setSavingColumns] = useState(false);
 
@@ -101,10 +157,16 @@ export function usePurchaseOrdersPage() {
       const settings = data?.settings || null;
       setVisibleColumnKeys(Array.isArray(settings?.visibleColumns) ? settings.visibleColumns : []);
       setColumnOrder(Array.isArray(settings?.columnOrder) ? settings.columnOrder : []);
+      setLineColumnOrder(Array.isArray(settings?.lineColumnOrder) ? settings.lineColumnOrder : []);
+      setHeaderColumnWidths(normalizeColumnWidths(settings?.headerColumnWidths));
+      setLineColumnWidths(normalizeColumnWidths(settings?.lineColumnWidths));
     } catch {
       // Board-settings zijn optioneel; bij afwezigheid blijven alle kolommen zichtbaar.
       setVisibleColumnKeys([]);
       setColumnOrder([]);
+      setLineColumnOrder([]);
+      setHeaderColumnWidths({});
+      setLineColumnWidths({});
     } finally {
       setBoardSettingsLoaded(true);
     }
@@ -317,26 +379,145 @@ export function usePurchaseOrdersPage() {
       .map((key) => byKey.get(key));
   }, [headerColumns, columnOrder, defaultHeaderKeys, effectiveVisibleKeys]);
 
-  const saveVisibleColumns = useCallback(async (nextVisibleKeys) => {
-    const normalized = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
-    const normalizedOrder = normalizeColumnOrder(columnOrder, defaultHeaderKeys);
-    setVisibleColumnKeys(normalized);
-    setColumnOrder(normalizedOrder);
+  const defaultLineKeys = useMemo(
+    () => lineColumns.map((column) => column.key),
+    [lineColumns]
+  );
+
+  const orderedLineColumns = useMemo(() => {
+    const byKey = new Map(lineColumns.map((column) => [column.key, column]));
+    const order = normalizeColumnOrder(lineColumnOrder, defaultLineKeys);
+    return order
+      .filter((key) => byKey.has(key))
+      .map((key) => byKey.get(key));
+  }, [lineColumns, lineColumnOrder, defaultLineKeys]);
+
+  const effectiveHeaderColumnWidths = useMemo(
+    () => normalizeColumnWidths(headerColumnWidths, defaultHeaderKeys),
+    [headerColumnWidths, defaultHeaderKeys]
+  );
+  const effectiveLineColumnWidths = useMemo(
+    () => normalizeColumnWidths(lineColumnWidths, defaultLineKeys),
+    [lineColumnWidths, defaultLineKeys]
+  );
+
+  const persistBoardSettings = useCallback(async ({
+    nextVisibleKeys = visibleColumnKeys,
+    nextHeaderOrder = columnOrder,
+    nextLineOrder = lineColumnOrder,
+    nextHeaderWidths = headerColumnWidths,
+    nextLineWidths = lineColumnWidths,
+  } = {}) => {
+    const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
+    const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
+    const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
+    const normalizedHeaderWidths = normalizeColumnWidths(nextHeaderWidths, defaultHeaderKeys);
+    const normalizedLineWidths = normalizeColumnWidths(nextLineWidths, defaultLineKeys);
+
+    setVisibleColumnKeys(normalizedVisible);
+    setColumnOrder(normalizedHeaderOrder);
+    setLineColumnOrder(normalizedLineOrder);
+    setHeaderColumnWidths(normalizedHeaderWidths);
+    setLineColumnWidths(normalizedLineWidths);
     setSavingColumns(true);
     try {
       await apiRequest('/supplier/board-settings/' + BOARD_KEY, {
         method: 'PATCH',
-        body: { settings: { visibleColumns: normalized, columnOrder: normalizedOrder } },
+        body: {
+          settings: {
+            visibleColumns: normalizedVisible,
+            columnOrder: normalizedHeaderOrder,
+            lineColumnOrder: normalizedLineOrder,
+            headerColumnWidths: normalizedHeaderWidths,
+            lineColumnWidths: normalizedLineWidths,
+          },
+        },
       });
     } finally {
       setSavingColumns(false);
     }
-  }, [columnOrder, defaultHeaderKeys]);
+  }, [visibleColumnKeys, columnOrder, lineColumnOrder, headerColumnWidths, lineColumnWidths, defaultHeaderKeys, defaultLineKeys]);
+
+  const saveVisibleColumns = useCallback(async (nextVisibleKeys) => {
+    await persistBoardSettings({ nextVisibleKeys });
+  }, [persistBoardSettings]);
+
+  // Serialiseer de huidige kolomlayout (zichtbaarheid/volgorde) voor een saved view.
+  const exportColumnLayout = useCallback(() => ({
+    visibleColumns: effectiveVisibleKeys,
+    columnOrder: normalizeColumnOrder(columnOrder, defaultHeaderKeys),
+    lineColumnOrder: normalizeColumnOrder(lineColumnOrder, defaultLineKeys),
+    headerColumnWidths: effectiveHeaderColumnWidths,
+    lineColumnWidths: effectiveLineColumnWidths,
+  }), [
+    effectiveVisibleKeys,
+    columnOrder,
+    defaultHeaderKeys,
+    lineColumnOrder,
+    defaultLineKeys,
+    effectiveHeaderColumnWidths,
+    effectiveLineColumnWidths,
+  ]);
+
+  // Pas een opgeslagen kolomlayout toe (alleen in-memory; niet persistent in
+  // board-settings). Onbekende keys worden genegeerd, nieuwe kolommen sluiten aan.
+  const applyColumnLayout = useCallback((layout) => {
+    if (!layout || typeof layout !== 'object') return;
+    if (Array.isArray(layout.visibleColumns)) {
+      setVisibleColumnKeys(normalizeVisibleColumns(layout.visibleColumns, defaultHeaderKeys));
+    }
+    if (Array.isArray(layout.columnOrder)) {
+      setColumnOrder(normalizeColumnOrder(layout.columnOrder, defaultHeaderKeys));
+    }
+    if (Array.isArray(layout.lineColumnOrder)) {
+      setLineColumnOrder(normalizeColumnOrder(layout.lineColumnOrder, defaultLineKeys));
+    }
+    if (layout.headerColumnWidths && typeof layout.headerColumnWidths === 'object') {
+      setHeaderColumnWidths(normalizeColumnWidths(layout.headerColumnWidths, defaultHeaderKeys));
+    }
+    if (layout.lineColumnWidths && typeof layout.lineColumnWidths === 'object') {
+      setLineColumnWidths(normalizeColumnWidths(layout.lineColumnWidths, defaultLineKeys));
+    }
+  }, [defaultHeaderKeys, defaultLineKeys]);
+
+  const saveHeaderColumnWidth = useCallback(async (columnKey, width) => {
+    if (!columnKey) return;
+    const nextHeaderWidths = normalizeColumnWidths(
+      { ...effectiveHeaderColumnWidths, [columnKey]: width },
+      defaultHeaderKeys
+    );
+    await persistBoardSettings({ nextHeaderWidths });
+  }, [effectiveHeaderColumnWidths, defaultHeaderKeys, persistBoardSettings]);
+
+  const saveLineColumnWidth = useCallback(async (columnKey, width) => {
+    if (!columnKey) return;
+    const nextLineWidths = normalizeColumnWidths(
+      { ...effectiveLineColumnWidths, [columnKey]: width },
+      defaultLineKeys
+    );
+    await persistBoardSettings({ nextLineWidths });
+  }, [effectiveLineColumnWidths, defaultLineKeys, persistBoardSettings]);
+
+  const reorderHeaderColumn = useCallback(async (sourceKey, targetKey, position = 'before') => {
+    if (!sourceKey || !targetKey) return;
+    const currentOrder = normalizeColumnOrder(columnOrder, defaultHeaderKeys);
+    const nextOrder = moveColumnKey(currentOrder, defaultHeaderKeys, sourceKey, targetKey, position, effectiveVisibleKeys);
+    if (arraysEqual(currentOrder, nextOrder)) return;
+    await persistBoardSettings({ nextHeaderOrder: nextOrder });
+  }, [columnOrder, defaultHeaderKeys, effectiveVisibleKeys, persistBoardSettings]);
+
+  const reorderLineColumn = useCallback(async (sourceKey, targetKey, position = 'before') => {
+    if (!sourceKey || !targetKey) return;
+    const currentOrder = normalizeColumnOrder(lineColumnOrder, defaultLineKeys);
+    const nextOrder = moveColumnKey(currentOrder, defaultLineKeys, sourceKey, targetKey, position);
+    if (arraysEqual(currentOrder, nextOrder)) return;
+    await persistBoardSettings({ nextLineOrder: nextOrder });
+  }, [lineColumnOrder, defaultLineKeys, persistBoardSettings]);
 
   return useMemo(() => ({
     orders,
     headerColumns,
-    lineColumns,
+    lineColumns: orderedLineColumns,
     // Header-kolommen met board-settings (zichtbaarheid/volgorde) toegepast.
     visibleHeaderColumns: orderedHeaderColumns,
     syncedAt,
@@ -351,6 +532,8 @@ export function usePurchaseOrdersPage() {
     markingViewed,
     error,
     visibleColumnKeys: effectiveVisibleKeys,
+    headerColumnWidths: effectiveHeaderColumnWidths,
+    lineColumnWidths: effectiveLineColumnWidths,
     savingColumns,
     refresh,
     markViewed,
@@ -361,10 +544,16 @@ export function usePurchaseOrdersPage() {
     renameColumn,
     removeColumn,
     saveVisibleColumns,
+    reorderHeaderColumn,
+    reorderLineColumn,
+    saveHeaderColumnWidth,
+    saveLineColumnWidth,
+    exportColumnLayout,
+    applyColumnLayout,
   }), [
     orders,
     headerColumns,
-    lineColumns,
+    orderedLineColumns,
     orderedHeaderColumns,
     syncedAt,
     stale,
@@ -378,6 +567,8 @@ export function usePurchaseOrdersPage() {
     markingViewed,
     error,
     effectiveVisibleKeys,
+    effectiveHeaderColumnWidths,
+    effectiveLineColumnWidths,
     savingColumns,
     refresh,
     markViewed,
@@ -388,5 +579,11 @@ export function usePurchaseOrdersPage() {
     renameColumn,
     removeColumn,
     saveVisibleColumns,
+    reorderHeaderColumn,
+    reorderLineColumn,
+    saveHeaderColumnWidth,
+    saveLineColumnWidth,
+    exportColumnLayout,
+    applyColumnLayout,
   ]);
 }

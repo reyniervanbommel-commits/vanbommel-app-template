@@ -254,6 +254,47 @@ export function usePurchaseOrderTableView({ items, columns }) {
     setSortState({ columnKey: '', direction: SORT_DIRECTIONS.none });
   }, []);
 
+  const setSortDirection = useCallback((columnKey, direction) => {
+    const normalizedDirection = direction === SORT_DIRECTIONS.asc || direction === SORT_DIRECTIONS.desc
+      ? direction
+      : SORT_DIRECTIONS.none;
+    if (!columnKey || normalizedDirection === SORT_DIRECTIONS.none) {
+      setSortState({ columnKey: '', direction: SORT_DIRECTIONS.none });
+      return;
+    }
+    setSortState({ columnKey, direction: normalizedDirection });
+  }, []);
+
+  // Serialiseer de huidige filter/sort-state voor opslag in een saved view.
+  const exportState = useCallback(() => ({
+    filterByColumn,
+    sortState,
+  }), [filterByColumn, sortState]);
+
+  // Pas een opgeslagen filter/sort-state in één keer toe. Onbekende kolom-keys
+  // (bijv. verwijderde/hernoemde D365-kolommen) worden genegeerd.
+  const applyState = useCallback((state) => {
+    const rawFilters = state?.filterByColumn && typeof state.filterByColumn === 'object'
+      ? state.filterByColumn
+      : {};
+    const nextFilters = {};
+    Object.entries(rawFilters).forEach(([key, filter]) => {
+      const column = columnByKey.get(key);
+      if (!column || !filter) return;
+      nextFilters[key] = resolveFilterModel(column, filter);
+    });
+    setFilterByColumn(nextFilters);
+
+    const rawSort = state?.sortState && typeof state.sortState === 'object' ? state.sortState : {};
+    const validSortColumn = rawSort.columnKey && columnByKey.has(rawSort.columnKey);
+    const validDirection = rawSort.direction === SORT_DIRECTIONS.asc || rawSort.direction === SORT_DIRECTIONS.desc;
+    if (validSortColumn && validDirection) {
+      setSortState({ columnKey: rawSort.columnKey, direction: rawSort.direction });
+    } else {
+      setSortState({ columnKey: '', direction: SORT_DIRECTIONS.none });
+    }
+  }, [columnByKey]);
+
   const processedItems = useMemo(() => {
     const activeFilters = columns
       .map((column) => [column, resolveFilterModel(column, filterByColumn[column.key])])
@@ -308,6 +349,9 @@ export function usePurchaseOrderTableView({ items, columns }) {
     clearAllFilters,
     toggleSort,
     clearSort,
+    setSortDirection,
+    exportState,
+    applyState,
   }), [
     processedItems,
     sortState,
@@ -320,5 +364,8 @@ export function usePurchaseOrderTableView({ items, columns }) {
     clearAllFilters,
     toggleSort,
     clearSort,
+    setSortDirection,
+    exportState,
+    applyState,
   ]);
 }

@@ -142,7 +142,7 @@ export default function AdminODataSettings() {
         Settings are loaded from and saved to SQL table <strong>dbo.{dbSource}</strong>.
         Secrets (client secret) are never returned to this page; leave the field empty to keep
         the existing value. Which tables and columns are fetched is managed on the{' '}
-        <strong>Data model</strong> tab.
+        <strong>Data model</strong> tab. The path below configures headers; lines are linked automatically.
       </Text>
 
       <div className={styles.section}>
@@ -174,13 +174,17 @@ export default function AdminODataSettings() {
             onChange={handleChange('D365_ODATA_BASE_URL')}
           />
         </Field>
-        <Field label="Purchase Orders pad (entiteit)">
+        <Field label="Purchase order headers path (entity)">
           <Input
             placeholder="/data/PurchaseOrderHeadersV2"
             value={form.D365_ODATA_PURCHASE_ORDERS_PATH}
             onChange={handleChange('D365_ODATA_PURCHASE_ORDERS_PATH')}
           />
         </Field>
+        <Text className={styles.hint} block>
+          Lines are loaded from the related entity via <span className={styles.mono}>$expand=PurchaseOrderLines</span>.
+          Line-level write-back targets <span className={styles.mono}>/data/PurchaseOrderLinesV2</span>.
+        </Text>
         <Field label="Bedrijfscode (company)">
           <Input placeholder="WHSL" value={form.D365_ODATA_COMPANY} onChange={handleChange('D365_ODATA_COMPANY')} />
         </Field>

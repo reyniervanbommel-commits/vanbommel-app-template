@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -11,10 +11,15 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
+import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
+import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
+import { usePurchaseOrderSavedViews } from '../../hooks/usePurchaseOrderSavedViews';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
+
+const BOARD_KEY = 'purchase-orders';
 
 const useStyles = makeStyles({
   page: {
@@ -103,9 +108,87 @@ export default function PurchaseOrdersPage() {
     markingViewed,
     correctField,
     toggleWriteback,
+    reorderHeaderColumn,
+    reorderLineColumn,
+    headerColumnWidths,
+    lineColumnWidths,
+    saveHeaderColumnWidth,
+    saveLineColumnWidth,
+    savingColumns,
+    exportColumnLayout,
+    applyColumnLayout,
   } = usePurchaseOrdersPage();
 
   const isAdmin = user?.role === 'admin';
+  const isStaff = user?.role === 'admin' || user?.role === 'employee';
+
+  // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
+  // kolomlayout kunnen serialiseren en terugzetten.
+  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns });
+  const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
+  const [activeViewId, setActiveViewId] = useState(null);
+  const autoAppliedRef = useRef(false);
+
+  // Bouw de volledige view-state: kolomlayout (uit board-settings) + filter/sort/grouping.
+  const buildCurrentViewState = useCallback(() => ({
+    columns: exportColumnLayout(),
+    table: boardView.exportFilterSortGrouping(),
+  }), [exportColumnLayout, boardView]);
+
+  // Pas een opgeslagen view volledig toe en markeer hem als actief.
+  const applyViewState = useCallback((view) => {
+    const state = view?.viewState || {};
+    applyColumnLayout(state.columns);
+    boardView.applyFilterSortGrouping(state.table);
+    setActiveViewId(view?.id ?? null);
+  }, [applyColumnLayout, boardView]);
+
+  const handleResetView = useCallback(() => {
+    boardView.clearAllFilters();
+    boardView.clearSort();
+    boardView.clearGrouping();
+    setActiveViewId(null);
+  }, [boardView]);
+
+  const handleSaveAsNew = useCallback(async ({ name, scope, isDefault }) => {
+    const created = await savedViews.createView({
+      name,
+      scope,
+      viewState: buildCurrentViewState(),
+      isDefault,
+    });
+    if (created?.id) setActiveViewId(created.id);
+  }, [savedViews, buildCurrentViewState]);
+
+  const handleUpdateActive = useCallback(async (view) => {
+    await savedViews.updateView(view.id, { viewState: buildCurrentViewState() });
+  }, [savedViews, buildCurrentViewState]);
+
+  const handleRenameView = useCallback(async (view, name) => {
+    await savedViews.updateView(view.id, { name });
+  }, [savedViews]);
+
+  const handleSetDefault = useCallback(async (view) => {
+    await savedViews.updateView(view.id, { isDefault: true });
+  }, [savedViews]);
+
+  const handleDeleteView = useCallback(async (view) => {
+    await savedViews.deleteView(view.id);
+    if (view.id === activeViewId) setActiveViewId(null);
+  }, [savedViews, activeViewId]);
+
+  // Pas eenmalig de default-view toe zodra views + orders geladen zijn (persoonlijk > globaal).
+  useEffect(() => {
+    if (autoAppliedRef.current) return;
+    if (savedViews.loading || loading || !orders.length) return;
+    autoAppliedRef.current = true;
+    const personalDefault = savedViews.views.find((view) => view.scope === 'personal' && view.isDefault);
+    const globalDefault = savedViews.views.find((view) => view.scope === 'global' && view.isDefault);
+    const defaultView = personalDefault || globalDefault;
+    if (defaultView) {
+      applyViewState(defaultView);
+    }
+  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState]);
 
   const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
   const handleRefresh = useCallback(async () => {
@@ -165,6 +248,20 @@ export default function PurchaseOrdersPage() {
 
           <div className={styles.toolbarSpacer} />
 
+          <PurchaseOrderSavedViewsControl
+            views={savedViews.views}
+            activeViewId={activeViewId}
+            canManageGlobal={isStaff}
+            saving={savedViews.saving}
+            onApplyView={applyViewState}
+            onResetView={handleResetView}
+            onSaveAsNew={handleSaveAsNew}
+            onUpdateActive={handleUpdateActive}
+            onRenameView={handleRenameView}
+            onSetDefault={handleSetDefault}
+            onDeleteView={handleDeleteView}
+          />
+
           <Button
             appearance="secondary"
             icon={<AddRegular />}
@@ -208,12 +305,20 @@ export default function PurchaseOrdersPage() {
             columns={visibleHeaderColumns}
             lineColumns={lineColumns}
             items={orders}
+            boardView={boardView}
             onSaveValue={saveValue}
             onRenameColumn={renameColumn}
             onRemoveColumn={removeColumn}
             onCorrect={correctField}
             isAdmin={isAdmin}
             onToggleWriteback={toggleWriteback}
+            onReorderHeaderColumn={reorderHeaderColumn}
+            onReorderLineColumn={reorderLineColumn}
+            headerColumnWidths={headerColumnWidths}
+            lineColumnWidths={lineColumnWidths}
+            onSaveHeaderColumnWidth={saveHeaderColumnWidth}
+            onSaveLineColumnWidth={saveLineColumnWidth}
+            reorderingColumns={savingColumns}
           />
         </div>
       )}

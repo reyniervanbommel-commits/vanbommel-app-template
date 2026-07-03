@@ -40,8 +40,9 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.12",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.0.0",
+    "@types/node": "^24.0.12",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "eslint": "^9.9.0",
