@@ -366,6 +366,9 @@ async function fetchODataJson(url, timeout) {
   return response.json();
 }
 
+// Live per-refresh vendor-verrijking van de PO-fetch. TODO(cutover #AB:161): dit overlapt nu met de
+// generieke fk_join-lookup PO->vendors (tb_relations, TableDataService.applyLookups). Zodra de PO-UI op de
+// generieke tb_*-laag draait, kan deze live lookup + de vendorName-projectie uit de PO-adapter verdwijnen.
 async function fetchVendorsByAccounts(vendorAccounts, timeout) {
   if (!vendorAccounts.length) return {};
 

@@ -19,4 +19,10 @@ describe('D365ODataProvider.normalizeEntityPath', () => {
     expect(() => normalizeEntityPath('')).toThrow();
     expect(() => normalizeEntityPath(null)).toThrow();
   });
+
+  it('weigert path-traversal en ongeldige tekens', () => {
+    expect(() => normalizeEntityPath('/data/../admin')).toThrow();
+    expect(() => normalizeEntityPath('VendorsV2?$top=1')).toThrow();
+    expect(() => normalizeEntityPath('Vendors V2')).toThrow();
+  });
 });

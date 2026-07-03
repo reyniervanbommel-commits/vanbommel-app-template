@@ -15,10 +15,16 @@ const DEFAULT_PAGE_SIZE = 500;
 const DEFAULT_TIMEOUT_MS = 20000;
 
 // '/data/VendorsV2' blijft; 'VendorsV2' wordt '/data/VendorsV2'.
+// sourceEntity is admin-config (tb_tables), maar we valideren defensief: alleen letters/cijfers/_/'/'.
+// Zo kan een waarde met '../', spaties of query-tekens het pad nooit buiten de D365 base-URL verleggen.
 function normalizeEntityPath(sourceEntity) {
   const s = String(sourceEntity || '').trim();
   if (!s) throw Object.assign(new Error('tb_tables.source_entity ontbreekt'), { status: 500 });
-  return s.startsWith('/') ? s : `/data/${s}`;
+  const path = s.startsWith('/') ? s : `/data/${s}`;
+  if (!/^\/[A-Za-z0-9_/]+$/.test(path)) {
+    throw Object.assign(new Error(`Ongeldige source_entity '${sourceEntity}'`), { status: 500 });
+  }
+  return path;
 }
 
 function resolveNext(nextLink, baseUrl) {

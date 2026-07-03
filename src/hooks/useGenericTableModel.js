@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
 /**
@@ -14,6 +14,9 @@ export function useGenericTableModel(tableKey) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  // Voorkomt state-writes na unmount / na een tab-wissel (last-write-wins race bij snel wisselen).
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const load = useCallback(async ({ auto = true } = {}) => {
     if (!tableKey) return;
@@ -21,12 +24,13 @@ export function useGenericTableModel(tableKey) {
     try {
       const query = auto ? '?autoRefresh=1' : '';
       const result = await apiRequest(`/data/${encodeURIComponent(tableKey)}${query}`);
+      if (!mountedRef.current) return;
       setData(result);
       if (result.refreshError) setError(result.refreshError);
     } catch (err) {
-      setError(err.message);
+      if (mountedRef.current) setError(err.message || 'Laden mislukt');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [tableKey]);
 
@@ -41,11 +45,11 @@ export function useGenericTableModel(tableKey) {
     setError('');
     try {
       const result = await apiRequest(`/data/${encodeURIComponent(tableKey)}/refresh`, { method: 'POST' });
-      setData(result);
+      if (mountedRef.current) setData(result);
     } catch (err) {
-      setError(err.message);
+      if (mountedRef.current) setError(err.message || 'Verversen mislukt');
     } finally {
-      setRefreshing(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, [tableKey]);
 

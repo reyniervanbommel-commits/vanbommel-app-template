@@ -296,12 +296,16 @@ async function loadLookupEnrichment(table) {
     const targetColumns = await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false });
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
 
+    // v1: de match loopt tegen de doel-record_key (targetKeyField valt daar per definitie mee samen in de
+    // seed). TODO(perf #AB:161): dit laadt de volledige doel-cache (tot max_rows) in geheugen per read();
+    // bij grote vendor/item-sets cachen met korte TTL of de join naar SQL (JSON_VALUE) verplaatsen.
     const cacheRes = await pool.request()
       .input('tableId', sql.BigInt, targetTable.id)
       .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
               WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`);
     const byKey = new Map();
-    for (const r of cacheRes.recordset) byKey.set(`${r.partition_key}|${r.record_key}`, parseJson(r.data_json));
+    // partition case-insensitief (dataAreaId kan als 'whsl' of via de company-fallback als 'WHSL' binnenkomen).
+    for (const r of cacheRes.recordset) byKey.set(`${String(r.partition_key).toLowerCase()}|${r.record_key}`, parseJson(r.data_json));
 
     const fieldEntries = Object.entries(lk.fields); // [afgeleide-kolom-key, doel-kolom-key]
     const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
@@ -339,7 +343,7 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
     if (lk.sourceScope !== scope) continue;
     const fkVal = valueBag[lk.sourceField];
     const hasFk = fkVal !== null && fkVal !== undefined && fkVal !== '';
-    const targetData = hasFk ? lk.byKey.get(`${partitionKey}|${String(fkVal).trim()}`) : null;
+    const targetData = hasFk ? lk.byKey.get(`${String(partitionKey).toLowerCase()}|${String(fkVal).trim()}`) : null;
     for (const [derivedKey, targetColKey] of lk.fieldEntries) {
       valueBag[derivedKey] = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
     }

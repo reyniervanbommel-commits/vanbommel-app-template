@@ -32,15 +32,22 @@ export default function AdminDataModel() {
   const po = useDataModelAdmin();
 
   const [overview, setOverview] = useState(null);
+  const [overviewError, setOverviewError] = useState('');
   const [selectedKey, setSelectedKey] = useState(PO_TABLE_KEY);
 
   useEffect(() => {
     let active = true;
     apiRequest('/data')
       .then((result) => { if (active) setOverview(result); })
-      .catch(() => { if (active) setOverview({ tables: [], edges: [] }); });
+      .catch((err) => {
+        if (!active) return;
+        setOverview({ tables: [], edges: [] });
+        setOverviewError(err.message || 'Model-overzicht laden mislukt');
+      });
     return () => { active = false; };
   }, []);
+
+  const overviewEdges = useMemo(() => (Array.isArray(overview?.edges) ? overview.edges : []), [overview]);
 
   // Tabs: altijd minstens Inkooporders; overige tabellen komen uit het model-overzicht.
   const tables = useMemo(() => {
@@ -50,8 +57,6 @@ export default function AdminDataModel() {
   }, [overview]);
 
   const poRelation = useMemo(() => (po.relation ? { onFields: po.relation.onFields } : null), [po.relation]);
-
-  if (po.loading) return <Spinner label="Data model laden..." />;
 
   return (
     <div className={styles.root}>
@@ -64,28 +69,33 @@ export default function AdminDataModel() {
         </Text>
       </div>
 
-      {overview ? <DataModelDiagram tables={tables} edges={overview.edges || []} /> : null}
+      {overviewError ? <Text className={styles.error} block>{overviewError}</Text> : null}
+      {overview ? <DataModelDiagram tables={tables} edges={overviewEdges} /> : null}
 
       <TabList selectedValue={selectedKey} onTabSelect={(_, d) => setSelectedKey(d.value)}>
         {tables.map((t) => <Tab key={t.key} value={t.key}>{t.label}</Tab>)}
       </TabList>
 
       {selectedKey === PO_TABLE_KEY ? (
-        <>
-          {po.error ? <Text className={styles.error} block>{po.error}</Text> : null}
-          <SyncFilterBuilder filterCatalog={po.filterCatalog} syncFilter={po.syncFilter} onSyncNow={po.syncNow} />
-          <DataPreviewTables
-            previewTables={po.previewTables}
-            columns={po.columns}
-            relation={poRelation}
-            togglingKey={po.togglingKey}
-            onToggleVisibility={po.toggleVisibility}
-            onToggleVisibleAtDelete={po.toggleVisibleAtDelete}
-            onToggleWriteback={po.toggleWriteback}
-            onSetColumnToggleState={po.setColumnToggleState}
-            onDeleteColumn={po.deleteColumn}
-          />
-        </>
+        po.loading ? (
+          <Spinner label="Inkooporders laden..." />
+        ) : (
+          <>
+            {po.error ? <Text className={styles.error} block>{po.error}</Text> : null}
+            <SyncFilterBuilder filterCatalog={po.filterCatalog} syncFilter={po.syncFilter} onSyncNow={po.syncNow} />
+            <DataPreviewTables
+              previewTables={po.previewTables}
+              columns={po.columns}
+              relation={poRelation}
+              togglingKey={po.togglingKey}
+              onToggleVisibility={po.toggleVisibility}
+              onToggleVisibleAtDelete={po.toggleVisibleAtDelete}
+              onToggleWriteback={po.toggleWriteback}
+              onSetColumnToggleState={po.setColumnToggleState}
+              onDeleteColumn={po.deleteColumn}
+            />
+          </>
+        )
       ) : (
         <GenericEntityDataModel key={selectedKey} tableKey={selectedKey} />
       )}
