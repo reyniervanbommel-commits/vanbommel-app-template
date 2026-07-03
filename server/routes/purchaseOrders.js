@@ -172,6 +172,29 @@ router.post('/rows/exclude', async (req, res, next) => {
   }
 });
 
+// GET /api/purchase-orders/rows/hidden-in-filter — verborgen rijen die nog binnen de harde
+// D365-filter vallen (verwijderd, maar D365 levert ze bij de laatste sync nog steeds op).
+router.get('/rows/hidden-in-filter', async (_req, res, next) => {
+  try {
+    const result = await cacheService.listHiddenInFilterRows();
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/purchase-orders/rows/include — "terugzetten": hef de exclusion op zodat de rijen
+// weer in het overzicht verschijnen. Body: { rows: [{ dataAreaId, orderNumber }, ...] }.
+router.post('/rows/include', async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const result = await cacheService.includeRows(rows);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/purchase-orders/history — cel-geschiedenis (audit trail) van één cel.
 // Verenigt eigen-kolom-edits (po_cell_history) met D365-correcties (po_field_corrections).
 router.get('/history', async (req, res, next) => {

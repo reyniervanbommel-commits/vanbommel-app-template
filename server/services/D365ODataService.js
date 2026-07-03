@@ -446,20 +446,34 @@ async function fetchPurchaseOrderRecords({
     : MAX_PURCHASE_ORDER_ITEMS;
   const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
   let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top: initialTop, skip, extraFilter });
+  const emitProgress = (isTruncated = false) => {
+    if (typeof onProgress !== 'function') return;
+    onProgress({
+      fetched: records.length,
+      totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+      sourceTotal: total,
+      pagesFetched,
+      truncated: isTruncated,
+    });
+  };
 
   while (currentUrl) {
     const payload = await fetchODataJson(currentUrl, timeout);
     const pageRecords = Array.isArray(payload.value) ? payload.value : [];
-    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
-    const recordsToAdd = pageRecords.slice(0, remaining);
-    records.push(...recordsToAdd);
-    pagesFetched += 1;
-
     if (total === null) {
       const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
       if (Number.isFinite(parsedTotal)) {
         total = parsedTotal;
       }
+    }
+    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+    const recordsToAdd = pageRecords.slice(0, remaining);
+    pagesFetched += 1;
+
+    for (const record of recordsToAdd) {
+      records.push(record);
+      // Update the shared progress counter per fetched row.
+      emitProgress(false);
     }
 
     const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
@@ -470,16 +484,7 @@ async function fetchPurchaseOrderRecords({
     const hitItemCap = fetchAll
       && records.length >= effectiveMax
       && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
-
-    if (typeof onProgress === 'function') {
-      onProgress({
-        fetched: records.length,
-        totalToFetch: total === null ? null : Math.min(total, effectiveMax),
-        sourceTotal: total,
-        pagesFetched,
-        truncated: hitItemCap,
-      });
-    }
+    emitProgress(hitItemCap);
 
     if (!fetchAll || !nextLink) {
       currentUrl = null;
@@ -492,15 +497,7 @@ async function fetchPurchaseOrderRecords({
       currentUrl = null;
       hasMore = true;
       truncated = true;
-      if (typeof onProgress === 'function') {
-        onProgress({
-          fetched: records.length,
-          totalToFetch: total === null ? null : Math.min(total, effectiveMax),
-          sourceTotal: total,
-          pagesFetched,
-          truncated: true,
-        });
-      }
+      emitProgress(true);
       break;
     }
 

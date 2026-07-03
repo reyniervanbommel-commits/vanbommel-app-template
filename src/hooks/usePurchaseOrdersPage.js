@@ -153,6 +153,10 @@ export function usePurchaseOrdersPage() {
     }
   }, [applyData]);
 
+  // Lichte her-lees uit de SQL-cache (geen D365-refresh), bv. nadat een verborgen rij
+  // is teruggezet zodat hij weer in het overzicht verschijnt.
+  const reload = useCallback(() => loadPurchaseOrders({ skipLoading: true }), [loadPurchaseOrders]);
+
   const loadBoardSettings = useCallback(async () => {
     try {
       const data = await apiRequest('/supplier/board-settings/' + BOARD_KEY);
@@ -589,6 +593,7 @@ export function usePurchaseOrdersPage() {
     lineColumnWidths: effectiveLineColumnWidths,
     savingColumns,
     refresh,
+    reload,
     markViewed,
     deleteRows,
     saveValue,
@@ -626,6 +631,7 @@ export function usePurchaseOrdersPage() {
     effectiveLineColumnWidths,
     savingColumns,
     refresh,
+    reload,
     markViewed,
     deleteRows,
     saveValue,

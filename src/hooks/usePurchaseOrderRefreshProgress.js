@@ -43,7 +43,13 @@ export function usePurchaseOrderRefreshProgress() {
   }, [loadProgress, polling]);
 
   const startProgress = useCallback(() => {
-    setProgress({ status: 'fetching', fetched: 0, totalToFetch: null });
+    setProgress({
+      status: 'fetching',
+      fetched: 0,
+      totalToFetch: null,
+      saved: 0,
+      totalToSave: null,
+    });
     setPolling(true);
   }, []);
 

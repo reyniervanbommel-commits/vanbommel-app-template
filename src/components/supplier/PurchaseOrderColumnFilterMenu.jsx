@@ -10,22 +10,54 @@ const useStyles = makeStyles({
     height: '22px',
     ...shorthands.padding('0'),
     color: tokens.colorNeutralForeground3,
-    opacity: 0,
-    pointerEvents: 'none',
-    transitionProperty: 'opacity',
-    transitionDuration: '120ms',
+    cursor: 'pointer',
+    flexShrink: 0,
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
   },
   triggerActive: {
     color: tokens.colorBrandForeground1,
   },
   surface: {
-    width: '280px',
-    maxWidth: '280px',
-    ...shorthands.padding('8px'),
+    ...shorthands.padding('0'),
+    width: 'auto',
+    maxWidth: 'none',
     boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  mainPane: {
+    width: '280px',
+    minWidth: '280px',
+    boxSizing: 'border-box',
+    ...shorthands.padding('8px'),
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('8px'),
+  },
+  subPane: {
+    width: '210px',
+    minWidth: '210px',
+    boxSizing: 'border-box',
+    ...shorthands.padding('8px'),
+    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
+    backgroundColor: tokens.colorNeutralBackground2,
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('4px'),
+  },
+  subPaneTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: '4px',
+  },
+  submenuButton: {
+    justifyContent: 'space-between',
+  },
+  submenuButtonActive: {
+    backgroundColor: tokens.colorNeutralBackground1Selected,
   },
   sortActions: {
     display: 'flex',
@@ -112,8 +144,8 @@ function PurchaseOrderColumnFilterMenu({
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
-  const [showCategoryBar, setShowCategoryBar] = useState(false);
-  const [showAddTypes, setShowAddTypes] = useState(false);
+  // Zijpaneel-submenu: 'none' | 'group' (categorie/groeperen) | 'add' (kolom rechts toevoegen).
+  const [activeSubmenu, setActiveSubmenu] = useState('none');
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
   const isGroupingColumn = groupingColumnKey === column.key;
@@ -132,16 +164,17 @@ function PurchaseOrderColumnFilterMenu({
 
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
-    if (!data.open) {
-      setShowCategoryBar(false);
-      setShowAddTypes(false);
-    }
+    if (!data.open) setActiveSubmenu('none');
+  }, []);
+
+  const toggleSubmenu = useCallback((name) => {
+    setActiveSubmenu((prev) => (prev === name ? 'none' : name));
   }, []);
 
   const canAddColumn = typeof onAddColumnRightOf === 'function';
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
-    setShowAddTypes(false);
+    setActiveSubmenu('none');
     setOpen(false);
   }, [column, onAddColumnRightOf]);
 
@@ -194,7 +227,6 @@ function PurchaseOrderColumnFilterMenu({
   const handleToggleWriteback = useCallback(() => {
     if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
   }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
-  const toggleCategoryBar = useCallback(() => setShowCategoryBar((prev) => !prev), []);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -204,13 +236,17 @@ function PurchaseOrderColumnFilterMenu({
           className={triggerClassName}
           appearance="subtle"
           size="small"
-          aria-label={`Sort and filter for ${column.label}`}
+          aria-label={`Sorteren, filteren en kolom toevoegen voor ${column.label}`}
           data-column-menu-trigger="true"
+          draggable={false}
+          onDragStart={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.stopPropagation()}
         >
           ...
         </Button>
       </PopoverTrigger>
       <PopoverSurface className={styles.surface}>
+        <div className={styles.mainPane}>
         <Text className={styles.fieldTitle}>{column.label}</Text>
         <div className={styles.divider} />
         <div className={styles.sortActions}>
@@ -225,19 +261,15 @@ function PurchaseOrderColumnFilterMenu({
           </Button>
         </div>
         <div className={styles.divider} />
-        <Button className={styles.sortButton} appearance="subtle" size="small" onClick={toggleCategoryBar}>
-          {showCategoryBar ? 'Category bar (hide)' : 'Category bar (show)'}
+        <Button
+          className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
+          appearance="subtle"
+          size="small"
+          onClick={() => toggleSubmenu('group')}
+        >
+          <span>Categorie / groeperen</span>
+          <span aria-hidden>›</span>
         </Button>
-        {showCategoryBar ? (
-          <PurchaseOrderColumnGroupingSection
-            column={column}
-            isGroupingColumn={isGroupingColumn}
-            groupingColor={groupingColor}
-            onSetGroupingColumn={onSetGroupingColumn}
-            onClearGrouping={onClearGrouping}
-            onSetGroupingColor={onSetGroupingColor}
-          />
-        ) : null}
         {canToggleWriteback ? (
           <>
             <div className={styles.divider} />
@@ -252,24 +284,15 @@ function PurchaseOrderColumnFilterMenu({
         {canAddColumn ? (
           <>
             <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={() => setShowAddTypes((prev) => !prev)}>
-              + Kolom rechts toevoegen
+            <Button
+              className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'add' ? styles.submenuButtonActive : ''}`}
+              appearance="subtle"
+              size="small"
+              onClick={() => toggleSubmenu('add')}
+            >
+              <span>+ Kolom rechts toevoegen</span>
+              <span aria-hidden>›</span>
             </Button>
-            {showAddTypes ? (
-              <div className={styles.sortActions}>
-                {NEW_COLUMN_TYPES.map((type) => (
-                  <Button
-                    key={type.key}
-                    className={styles.sortButton}
-                    appearance="subtle"
-                    size="small"
-                    onClick={() => handleAddType(type)}
-                  >
-                    {type.label}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
           </>
         ) : null}
         <div className={styles.divider} />
@@ -323,6 +346,38 @@ function PurchaseOrderColumnFilterMenu({
             </Button>
           </div>
         </div>
+        </div>
+
+        {activeSubmenu === 'add' ? (
+          <div className={styles.subPane}>
+            <Text className={styles.subPaneTitle}>Kolomtype</Text>
+            {NEW_COLUMN_TYPES.map((type) => (
+              <Button
+                key={type.key}
+                className={styles.sortButton}
+                appearance="subtle"
+                size="small"
+                onClick={() => handleAddType(type)}
+              >
+                {type.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+
+        {activeSubmenu === 'group' ? (
+          <div className={styles.subPane}>
+            <Text className={styles.subPaneTitle}>Categorie / groeperen</Text>
+            <PurchaseOrderColumnGroupingSection
+              column={column}
+              isGroupingColumn={isGroupingColumn}
+              groupingColor={groupingColor}
+              onSetGroupingColumn={onSetGroupingColumn}
+              onClearGrouping={onClearGrouping}
+              onSetGroupingColor={onSetGroupingColor}
+            />
+          </div>
+        ) : null}
       </PopoverSurface>
     </Popover>
   );

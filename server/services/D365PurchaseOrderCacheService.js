@@ -65,6 +65,8 @@ const EMPTY_REFRESH_PROGRESS = {
   status: 'idle',
   fetched: 0,
   totalToFetch: null,
+  saved: 0,
+  totalToSave: null,
   sourceTotal: null,
   maxItems: null,
   pagesFetched: 0,
@@ -421,6 +423,8 @@ async function refresh() {
       status: 'saving',
       fetched: items.length,
       totalToFetch: refreshProgress.totalToFetch ?? Math.min(result.total || items.length, maxItems),
+      saved: 0,
+      totalToSave: items.length,
       sourceTotal: refreshProgress.sourceTotal ?? result.total ?? null,
       truncated: Boolean(result.truncated),
     });
@@ -431,6 +435,7 @@ async function refresh() {
     }
     const pool = await getPool();
     let watermark = null;
+    let saved = 0;
 
     for (const order of items) {
     const raw = order.raw || {};
@@ -528,6 +533,16 @@ async function refresh() {
       }
 
       await tx.commit();
+      saved += 1;
+      updateRefreshProgress({
+        status: 'saving',
+        fetched: items.length,
+        totalToFetch: refreshProgress.totalToFetch ?? Math.min(result.total || items.length, maxItems),
+        saved,
+        totalToSave: items.length,
+        sourceTotal: refreshProgress.sourceTotal ?? result.total ?? null,
+        truncated: Boolean(result.truncated),
+      });
     } catch (err) {
       await tx.rollback();
       throw err;
@@ -557,6 +572,8 @@ async function refresh() {
       status: 'done',
       fetched: items.length,
       totalToFetch: refreshProgress.totalToFetch ?? items.length,
+      saved: items.length,
+      totalToSave: items.length,
       sourceTotal: refreshProgress.sourceTotal ?? result.total ?? null,
       truncated: Boolean(result.truncated),
       finishedAt: new Date().toISOString(),
@@ -1160,6 +1177,69 @@ async function excludeRows(rows, userId) {
   return { excluded: normalized.length };
 }
 
+// ---------------------------------------------------------------------------
+// Reconciliatie: verborgen rijen die na de laatste sync nóg door de harde D365-filter
+// zijn opgehaald (#AB:130). Zo'n rij heeft een exclusion én removed_in_d365 = 0 (de sync
+// raakte hem, dus hij matcht de filter). Buiten-filter gevallen exclusions (removed_in_d365 = 1)
+// vallen hier bewust buiten: die horen volgens de filter niet meer thuis, dus geen signaal.
+// ---------------------------------------------------------------------------
+async function listHiddenInFilterRows() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT h.data_area_id, h.order_number, h.vendor_account, h.vendor_name,
+           h.status, h.currency_code, h.requested_delivery_date, e.excluded_at
+    FROM dbo.po_row_exclusions e
+    INNER JOIN dbo.po_cache_headers h
+      ON h.data_area_id = e.data_area_id AND h.order_number = e.order_number
+    WHERE h.removed_in_d365 = 0
+    ORDER BY h.order_number
+  `);
+  const rows = result.recordset.map((row) => ({
+    dataAreaId: row.data_area_id,
+    orderNumber: row.order_number,
+    vendorAccount: row.vendor_account,
+    vendorName: row.vendor_name,
+    status: row.status,
+    currencyCode: row.currency_code,
+    requestedDeliveryDate: normalizeOut(row.requested_delivery_date),
+    excludedAt: normalizeOut(row.excluded_at),
+  }));
+  return { count: rows.length, rows };
+}
+
+// includeRows — "terugzetten": verwijder de exclusion zodat de rij weer in het overzicht komt.
+async function includeRows(rows) {
+  const normalized = normalizeExclusionRows(rows);
+  if (!normalized.length) {
+    throw Object.assign(new Error('Geen geldige rijen om terug te zetten'), { status: 400 });
+  }
+  if (normalized.length > MAX_EXCLUSION_BATCH) {
+    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+  }
+
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { dataAreaId, orderNumber } of normalized) {
+      await new sql.Request(tx)
+        .input('area', sql.NVarChar(16), dataAreaId)
+        .input('order', sql.NVarChar(64), orderNumber)
+        .query(`
+          DELETE FROM dbo.po_row_exclusions
+          WHERE data_area_id = @area AND order_number = @order
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  invalidateReadCache();
+  return { included: normalized.length };
+}
+
 module.exports = {
   refresh,
   read,
@@ -1176,6 +1256,8 @@ module.exports = {
   getLastViewedAt,
   markViewed,
   excludeRows,
+  includeRows,
+  listHiddenInFilterRows,
   normalizeExclusionRows,
   computeOrderHash,
 };

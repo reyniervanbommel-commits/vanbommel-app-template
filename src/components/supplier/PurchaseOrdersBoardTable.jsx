@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
@@ -82,10 +82,27 @@ function PurchaseOrdersBoardTable({
   selection,
 }) {
   const styles = useStyles();
+  const wrapperRef = useRef(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
   const [showBoardHeaders, setShowBoardHeaders] = useState(true);
   const [showGroupHeaders, setShowGroupHeaders] = useState(true);
+
+  // Scroll gericht naar een net-aangemaakte kolom zodra hij op zijn definitieve plek
+  // staat (na het async herladen + verplaatsen). De debounce zorgt dat alleen de
+  // laatste positie telt, zodat de tabel niet eerst naar het eind springt.
+  useEffect(() => {
+    if (!editingColumnKey) return undefined;
+    const timer = setTimeout(() => {
+      const container = wrapperRef.current;
+      if (!container) return;
+      const cell = container.querySelector(`[data-col-key="${editingColumnKey}"]`);
+      if (cell && typeof cell.scrollIntoView === 'function') {
+        cell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }, 240);
+    return () => clearTimeout(timer);
+  }, [editingColumnKey, columns]);
   const fallbackBoardView = usePurchaseOrderBoardView({ items, columns });
   const resolvedBoardView = boardView || fallbackBoardView;
   const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
@@ -217,7 +234,7 @@ function PurchaseOrdersBoardTable({
   const colCount = columns.length + 1;
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapper} ref={wrapperRef}>
       <table className={styles.table}>
         <thead>
           <tr>
@@ -236,6 +253,7 @@ function PurchaseOrdersBoardTable({
               <ResizableTableHeaderCell
                 key={column.key}
                 columnKey={column.key}
+                data-col-key={column.key}
                 width={headerColumnWidths[column.key]}
                 className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
                 onResizeEnd={onSaveHeaderColumnWidth}

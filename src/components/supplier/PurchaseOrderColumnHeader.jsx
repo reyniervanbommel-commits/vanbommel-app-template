@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
@@ -29,9 +29,19 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
   // Inline hernoemen direct na "Kolom rechts toevoegen" (Monday-stijl): typ de naam
   // in de header, Enter/blur bevestigt, Escape laat de standaardnaam staan.
   const [inlineValue, setInlineValue] = useState(column.label);
+  const inlineInputRef = useRef(null);
   useEffect(() => {
     if (autoEdit) setInlineValue(column.label);
   }, [autoEdit, column.label]);
+
+  // Focus het veld zónder de tabel te scrollen (preventScroll). Het gericht scrollen
+  // naar de nieuwe kolom gebeurt in de board-tabel, ná het verplaatsen.
+  useEffect(() => {
+    if (autoEdit && inlineInputRef.current) {
+      inlineInputRef.current.focus({ preventScroll: true });
+      inlineInputRef.current.select();
+    }
+  }, [autoEdit]);
 
   const commitInline = useCallback(async () => {
     const trimmed = inlineValue.trim();
@@ -65,9 +75,11 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
           size="small"
           value={inlineValue}
           onChange={(_, data) => setInlineValue(data.value)}
-          input={{ autoFocus: true, onFocus: (event) => event.target.select() }}
+          input={{ ref: inlineInputRef }}
           onBlur={commitInline}
           onKeyDown={handleInlineKey}
+          onMouseDown={(event) => event.stopPropagation()}
+          draggable={false}
           aria-label="Kolomnaam"
         />
       </div>

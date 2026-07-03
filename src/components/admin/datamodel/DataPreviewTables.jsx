@@ -1,7 +1,7 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   Badge,
-  Switch,
+  Input,
   Table,
   TableBody,
   TableCell,
@@ -9,12 +9,11 @@ import {
   TableHeaderCell,
   TableRow,
   Text,
-  Tooltip,
   makeStyles,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ArrowUploadRegular, LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
+import DataPreviewColumnConfigRow from './DataPreviewColumnConfigRow';
 
 const useStyles = makeStyles({
   section: {
@@ -54,9 +53,7 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     ...shorthands.padding('6px', '12px'),
   },
-  hiddenRow: { opacity: 0.55 },
-  relationRow: { backgroundColor: 'rgba(255, 179, 0, 0.09)' },
-  cellCenter: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px') },
+  filterInput: { maxWidth: '420px' },
 });
 
 const DATA_TYPE_LABELS = {
@@ -71,6 +68,11 @@ function display(value) {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+function matchesText(value, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return true;
+  return String(value || '').toLowerCase().includes(q);
 }
 
 function createSampleByField(preview) {
@@ -89,97 +91,6 @@ function createSampleByField(preview) {
   }, {});
 }
 
-function ColumnConfigRow({
-  column,
-  sampleValue,
-  isRelationField,
-  togglingKey,
-  onToggleVisibility,
-  onToggleWriteback,
-}) {
-  const styles = useStyles();
-  const handleVisibility = useCallback(() => onToggleVisibility(column), [onToggleVisibility, column]);
-  const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
-  const visibilityBusy = togglingKey === `vis-${column.id}`;
-  const writebackBusy = togglingKey === `wb-${column.id}`;
-  const rowClassName = isRelationField
-    ? `${column.isActive ? '' : styles.hiddenRow} ${styles.relationRow}`.trim()
-    : (column.isActive ? undefined : styles.hiddenRow);
-
-  return (
-    <TableRow className={rowClassName}>
-      <TableCell className={styles.valueCell}>
-        {isRelationField ? (
-          <Badge appearance="filled" color="warning" icon={<LinkRegular />}>
-            Header-Line link key
-          </Badge>
-        ) : (
-          <Text size={200} className={styles.muted}>—</Text>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        <Text weight="semibold">{column.label}</Text>
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.source === 'd365' ? (
-          <span className={styles.mono}>{column.d365Field || '(derived)'}</span>
-        ) : (
-          <Badge appearance="tint" color="informative" size="small">Custom column</Badge>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>{DATA_TYPE_LABELS[column.dataType] || column.dataType}</TableCell>
-      <TableCell className={styles.valueCell} title={sampleValue}>
-        {sampleValue}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.hideAllowed ? (
-          <Switch
-            checked={column.isActive}
-            disabled={visibilityBusy}
-            onChange={handleVisibility}
-            aria-label={`Show or hide column ${column.label}`}
-          />
-        ) : (
-          <Tooltip content="Key column: cannot be hidden" relationship="label">
-            <span className={styles.cellCenter}>
-              <LockClosedRegular fontSize={14} />
-              <Text size={200}>Always visible</Text>
-            </span>
-          </Tooltip>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.writeBackAllowed ? (
-          <span className={styles.cellCenter}>
-            <Switch
-              checked={column.writableToD365}
-              disabled={writebackBusy}
-              onChange={handleWriteback}
-              aria-label={`Write-back to D365 for ${column.label}`}
-            />
-            {column.writableToD365 ? (
-              <Badge appearance="tint" color="success" size="small" icon={<ArrowUploadRegular />}>
-                Enabled
-              </Badge>
-            ) : (
-              <Badge appearance="tint" color="informative" size="small">Available</Badge>
-            )}
-          </span>
-        ) : (
-          <Tooltip
-            content={column.source === 'custom'
-              ? 'Custom columns only exist in this app and are never written to D365'
-              : 'Key or system field: write-back is not allowed'}
-            relationship="label"
-          >
-            <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-          </Tooltip>
-        )}
-      </TableCell>
-    </TableRow>
-  );
-}
-
 function EntityConfigTable({
   title,
   entityName,
@@ -194,6 +105,15 @@ function EntityConfigTable({
   const visibleCount = columns.filter((item) => item.isActive).length;
   const sampledRows = preview?.sampledRows || 0;
   const sampleByField = useMemo(() => createSampleByField(preview), [preview]);
+  const [columnFilter, setColumnFilter] = useState('');
+  const handleColumnFilter = useCallback((_, data) => setColumnFilter(data.value), []);
+  const filteredColumns = useMemo(() => columns.filter((column) => {
+    const sampleValue = sampleByField[column.d365Field] || sampleByField[column.label] || '—';
+    return matchesText(column.label, columnFilter)
+      || matchesText(column.d365Field, columnFilter)
+      || matchesText(DATA_TYPE_LABELS[column.dataType] || column.dataType, columnFilter)
+      || matchesText(sampleValue, columnFilter);
+  }), [columns, sampleByField, columnFilter]);
 
   return (
     <div className={styles.section}>
@@ -205,6 +125,12 @@ function EntityConfigTable({
       <Text className={styles.muted}>
         Sample values are taken from the latest synced rows ({sampledRows.toLocaleString('nl-NL')} sampled).
       </Text>
+      <Input
+        className={styles.filterInput}
+        value={columnFilter}
+        onChange={handleColumnFilter}
+        placeholder="Filter columns (name, D365 field, type, sample value)"
+      />
       <div className={styles.tableWrap}>
         <Table size="small" className={styles.table}>
           <TableHeader>
@@ -219,14 +145,15 @@ function EntityConfigTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {columns.map((column) => {
+            {filteredColumns.map((column) => {
               const fieldKey = String(column.d365Field || '').toLowerCase();
               const isRelationField = relationFields.has(fieldKey);
               const sampleValue = sampleByField[column.d365Field] || sampleByField[column.label] || '—';
               return (
-                <ColumnConfigRow
+                <DataPreviewColumnConfigRow
                   key={column.id}
                   column={column}
+                  typeLabel={DATA_TYPE_LABELS[column.dataType] || column.dataType}
                   sampleValue={sampleValue}
                   isRelationField={isRelationField}
                   togglingKey={togglingKey}
@@ -235,6 +162,11 @@ function EntityConfigTable({
                 />
               );
             })}
+            {!filteredColumns.length ? (
+              <TableRow>
+                <TableCell className={styles.valueCell} colSpan={7}>No columns match the active filter</TableCell>
+              </TableRow>
+            ) : null}
           </TableBody>
         </Table>
       </div>
@@ -245,9 +177,6 @@ function EntityConfigTable({
   );
 }
 
-/**
- * Gecombineerde tabel per entiteit: sampledata + kolomkeuzes (zichtbaarheid + write-back).
- */
 function DataPreviewTables({
   previewTables,
   columns,
