@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
@@ -136,7 +136,9 @@ export default function PurchaseOrdersSubitemsTable({
     <table className={styles.subTable}>
       <thead>
         <tr>
-          {lineColumns.map((column) => (
+          {lineColumns.map((column) => {
+            const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
+            return (
             <ResizableTableHeaderCell
               key={column.key}
               columnKey={column.key}
@@ -160,6 +162,7 @@ export default function PurchaseOrdersSubitemsTable({
                     isAdmin={isAdmin}
                     onToggleWriteback={onToggleWriteback}
                     showActionsMenu={false}
+                    showFilterIndicator={hasActiveFilter}
                   />
                 </div>
                 <PurchaseOrderColumnFilterMenu
@@ -178,10 +181,12 @@ export default function PurchaseOrdersSubitemsTable({
                   onSetGroupingColumn={noop}
                   onClearGrouping={noop}
                   onSetGroupingColor={noop}
+                  onRemoveColumn={onRemoveColumn}
                 />
               </div>
             </ResizableTableHeaderCell>
-          ))}
+            );
+          })}
         </tr>
       </thead>
       <tbody>

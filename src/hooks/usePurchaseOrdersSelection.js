@@ -4,19 +4,19 @@ import { usePurchaseOrderRowSelection, rowSelectionKey } from './usePurchaseOrde
 /**
  * Beheert tabelselectie en bulk-delete voor purchase orders.
  */
-export function usePurchaseOrdersSelection({ orders, deleteRows }) {
+export function usePurchaseOrdersSelection({ orders, visibleOrders = orders, deleteRows }) {
   const selection = usePurchaseOrderRowSelection();
 
-  const allOrderKeys = useMemo(
-    () => orders.map((order) => rowSelectionKey(order.dataAreaId, order.orderNumber)),
-    [orders]
+  const visibleOrderKeys = useMemo(
+    () => visibleOrders.map((order) => rowSelectionKey(order.dataAreaId, order.orderNumber)),
+    [visibleOrders]
   );
-  const allSelected = allOrderKeys.length > 0 && allOrderKeys.every((key) => selection.isSelected(key));
-  const someSelected = !allSelected && allOrderKeys.some((key) => selection.isSelected(key));
+  const allSelected = visibleOrderKeys.length > 0 && visibleOrderKeys.every((key) => selection.isSelected(key));
+  const someSelected = !allSelected && visibleOrderKeys.some((key) => selection.isSelected(key));
 
   const handleToggleAll = useCallback(() => {
-    selection.setMany(allOrderKeys, !allSelected);
-  }, [selection, allOrderKeys, allSelected]);
+    selection.setMany(visibleOrderKeys, !allSelected);
+  }, [selection, visibleOrderKeys, allSelected]);
 
   const handleDeleteSelected = useCallback(async () => {
     const rows = orders
@@ -31,10 +31,11 @@ export function usePurchaseOrdersSelection({ orders, deleteRows }) {
     enabled: true,
     isSelected: selection.isSelected,
     toggle: selection.toggle,
+    setMany: selection.setMany,
     allSelected,
     someSelected,
     onToggleAll: handleToggleAll,
-  }), [selection.isSelected, selection.toggle, allSelected, someSelected, handleToggleAll]);
+  }), [selection.isSelected, selection.toggle, selection.setMany, allSelected, someSelected, handleToggleAll]);
 
   return useMemo(() => ({
     selection,

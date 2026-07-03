@@ -8,6 +8,7 @@ import {
   Spinner,
   Tooltip,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
@@ -166,7 +167,6 @@ export default function CellHistoryPopover({ cellKeys, dataType, children }) {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
   const [hovered, setHovered] = useState(false);
-  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -190,7 +190,6 @@ export default function CellHistoryPopover({ cellKeys, dataType, children }) {
   }, [cellKeys]);
 
   const onOpenChange = useCallback((_, data) => {
-    setOpen(data.open);
     if (data.open) load();
   }, [load]);
 
@@ -202,10 +201,11 @@ export default function CellHistoryPopover({ cellKeys, dataType, children }) {
     setHovered(false);
   }, []);
 
-  const showTrigger = hovered || open;
-  const triggerClassName = showTrigger
-    ? `${styles.trigger} ${styles.triggerVisible}`
-    : `${styles.trigger} ${styles.triggerHidden}`;
+  const showTrigger = hovered;
+  const triggerClassName = mergeClasses(
+    styles.trigger,
+    showTrigger ? styles.triggerVisible : styles.triggerHidden
+  );
 
   return (
     <Popover withArrow size="small" onOpenChange={onOpenChange}>

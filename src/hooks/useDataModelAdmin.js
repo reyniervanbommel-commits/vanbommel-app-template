@@ -7,7 +7,8 @@ import { apiRequest } from '../utils/api';
  * kolom-zichtbaarheid en write-back.
  *
  * Output: { entities, relation, connection, columns, cache, loading, error,
- *           togglingKey, reload, toggleVisibility, toggleWriteback, deleteColumn }
+ *           togglingKey, reload, toggleVisibility, toggleWriteback,
+ *           setColumnToggleState, deleteColumn }
  */
 export function useDataModelAdmin() {
   const [data, setData] = useState(null);
@@ -39,6 +40,30 @@ export function useDataModelAdmin() {
       const level = column.level;
       const list = (prev.columns?.[level] || []).map((c) => (c.id === column.id ? column : c));
       return { ...prev, columns: { ...prev.columns, [level]: list } };
+    });
+  }, []);
+
+  const applyColumnUpdates = useCallback((updatedColumns) => {
+    if (!Array.isArray(updatedColumns) || !updatedColumns.length) return;
+    setData((prev) => {
+      if (!prev) return prev;
+      const updatesByLevel = updatedColumns.reduce((acc, column) => {
+        if (!column?.id || !column?.level) return acc;
+        const levelUpdates = acc.get(column.level) || new Map();
+        levelUpdates.set(column.id, column);
+        acc.set(column.level, levelUpdates);
+        return acc;
+      }, new Map());
+      if (!updatesByLevel.size) return prev;
+
+      const nextColumns = { ...prev.columns };
+      updatesByLevel.forEach((levelUpdates, level) => {
+        nextColumns[level] = (prev.columns?.[level] || []).map((column) => (
+          levelUpdates.get(column.id) || column
+        ));
+      });
+
+      return { ...prev, columns: nextColumns };
     });
   }, []);
 
@@ -99,6 +124,70 @@ export function useDataModelAdmin() {
     }
   }, [applyColumnUpdate]);
 
+  const setColumnToggleState = useCallback(async ({ columns: scopedColumns = [], toggleType, enabled }) => {
+    if (!Array.isArray(scopedColumns) || !toggleType) return;
+    const shouldEnable = Boolean(enabled);
+
+    const eligibleColumns = scopedColumns.filter((column) => {
+      if (toggleType === 'visibility') return column.hideAllowed && column.isActive !== shouldEnable;
+      if (toggleType === 'visibleAtDelete') return column.visibleAtDelete !== shouldEnable;
+      if (toggleType === 'writeback') return column.writeBackAllowed && column.writableToD365 !== shouldEnable;
+      return false;
+    });
+
+    if (!eligibleColumns.length) return;
+
+    setTogglingKey(`bulk-${toggleType}-${shouldEnable ? 'on' : 'off'}`);
+    setError('');
+    try {
+      const updates = await Promise.allSettled(eligibleColumns.map(async (column) => {
+        if (toggleType === 'visibility') {
+          const result = await apiRequest(`/purchase-orders/columns/${column.id}/visibility`, {
+            method: 'PATCH',
+            body: { visible: shouldEnable },
+          });
+          return result.column;
+        }
+        if (toggleType === 'visibleAtDelete') {
+          const result = await apiRequest(`/purchase-orders/columns/${column.id}/visible-at-delete`, {
+            method: 'PATCH',
+            body: { visible: shouldEnable },
+          });
+          return result.column;
+        }
+        const result = await apiRequest(`/purchase-orders/columns/${column.id}/writeback`, {
+          method: 'PATCH',
+          body: { writable: shouldEnable, mechanism: 'patch' },
+        });
+        return result.column;
+      }));
+
+      const successfulUpdates = [];
+      let failedCount = 0;
+      let firstErrorMessage = '';
+      updates.forEach((entry) => {
+        if (entry.status === 'fulfilled' && entry.value) {
+          successfulUpdates.push(entry.value);
+          return;
+        }
+        failedCount += 1;
+        if (!firstErrorMessage) firstErrorMessage = entry.reason?.message || 'Unknown error';
+      });
+
+      if (successfulUpdates.length) {
+        applyColumnUpdates(successfulUpdates);
+      }
+      if (failedCount) {
+        const label = failedCount === 1 ? 'column' : 'columns';
+        setError(`Bulk update failed for ${failedCount} ${label}. ${firstErrorMessage}`);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [applyColumnUpdates]);
+
   const deleteColumn = useCallback(async (column) => {
     if (!column?.id || column.source !== 'custom') return;
     setTogglingKey(`del-${column.id}`);
@@ -142,6 +231,7 @@ export function useDataModelAdmin() {
     toggleVisibility,
     toggleVisibleAtDelete,
     toggleWriteback,
+    setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, setColumnToggleState, deleteColumn]);
 }

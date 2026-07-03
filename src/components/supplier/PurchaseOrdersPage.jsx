@@ -89,18 +89,17 @@ export default function PurchaseOrdersPage() {
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
 
+  // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
+  // kolomlayout kunnen serialiseren en terugzetten.
+  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns });
   const {
     selection,
     tableSelection,
     handleDeleteSelected,
-  } = usePurchaseOrdersSelection({ orders, deleteRows });
+  } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
 
   // Verborgen rijen die nog binnen de harde D365-filter vallen (zien + terugzetten).
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
-
-  // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
-  // kolomlayout kunnen serialiseren en terugzetten.
-  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns });
   const {
     savedViews,
     activeViewId,

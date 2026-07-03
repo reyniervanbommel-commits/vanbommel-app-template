@@ -35,6 +35,7 @@ export default function AdminDataModel() {
     toggleVisibility,
     toggleVisibleAtDelete,
     toggleWriteback,
+    setColumnToggleState,
     deleteColumn,
   } = useDataModelAdmin();
 
@@ -63,6 +64,7 @@ export default function AdminDataModel() {
         onToggleVisibility={toggleVisibility}
         onToggleVisibleAtDelete={toggleVisibleAtDelete}
         onToggleWriteback={toggleWriteback}
+        onSetColumnToggleState={setColumnToggleState}
         onDeleteColumn={deleteColumn}
       />
     </div>

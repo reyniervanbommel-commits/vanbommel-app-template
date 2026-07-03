@@ -57,6 +57,7 @@ export default function DataPreviewColumnConfigRow({
   const visibleAtDeleteBusy = togglingKey === `vad-${column.id}`;
   const writebackBusy = togglingKey === `wb-${column.id}`;
   const deletingBusy = togglingKey === `del-${column.id}`;
+  const bulkBusy = typeof togglingKey === 'string' && togglingKey.startsWith('bulk-');
   const rowClassName = isRelationField
     ? `${column.isActive ? '' : styles.hiddenRow} ${styles.relationRow}`.trim()
     : (column.isActive ? undefined : styles.hiddenRow);
@@ -88,7 +89,7 @@ export default function DataPreviewColumnConfigRow({
         {column.hideAllowed ? (
           <Switch
             checked={column.isActive}
-            disabled={visibilityBusy}
+            disabled={visibilityBusy || bulkBusy}
             onChange={handleVisibility}
             aria-label={`Show or hide column ${column.label}`}
           />
@@ -104,7 +105,7 @@ export default function DataPreviewColumnConfigRow({
       <TableCell className={styles.valueCell}>
         <Switch
           checked={column.visibleAtDelete}
-          disabled={visibleAtDeleteBusy}
+          disabled={visibleAtDeleteBusy || bulkBusy}
           onChange={handleVisibleAtDelete}
           aria-label={`Show column ${column.label} in the delete popup`}
         />
@@ -114,7 +115,7 @@ export default function DataPreviewColumnConfigRow({
           <span className={styles.cellCenter}>
             <Switch
               checked={column.writableToD365}
-              disabled={writebackBusy}
+              disabled={writebackBusy || bulkBusy}
               onChange={handleWriteback}
               aria-label={`Write-back to D365 for ${column.label}`}
             />
@@ -143,7 +144,7 @@ export default function DataPreviewColumnConfigRow({
             className={styles.deleteButton}
             appearance="secondary"
             size="small"
-            disabled={deletingBusy}
+            disabled={deletingBusy || bulkBusy}
             onClick={handleDelete}
           >
             {deletingBusy ? 'Deleting...' : 'Delete'}

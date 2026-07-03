@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
@@ -11,7 +11,7 @@ const useStyles = makeStyles({
     ...shorthands.padding('0'),
   },
   groupButton: {
-    width: '100%',
+    flex: 1,
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('8px'),
@@ -27,6 +27,16 @@ const useStyles = makeStyles({
     color: '#c02f64',
     fontSize: '12px',
     lineHeight: '12px',
+  },
+  groupRowInner: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('6px'),
+    width: '100%',
+  },
+  groupCheckbox: {
+    ...shorthands.padding('0'),
+    marginLeft: '8px',
   },
   itemRow: {
     ':hover': {
@@ -114,27 +124,60 @@ function PurchaseOrdersBoardRows({
   const styles = useStyles();
   const { onToggleGroup, onToggleOrder } = tableActions;
   const selectionEnabled = Boolean(selection?.enabled);
+  const handleGroupSelection = useCallback((keys, shouldSelect) => {
+    if (!selectionEnabled || !Array.isArray(keys) || !keys.length) return;
+    if (typeof selection?.setMany === 'function') {
+      selection.setMany(keys, shouldSelect);
+      return;
+    }
+    keys.forEach((key) => {
+      const currentlySelected = selection?.isSelected?.(key);
+      if (shouldSelect ? !currentlySelected : currentlySelected) {
+        selection?.toggle?.(key);
+      }
+    });
+  }, [selection, selectionEnabled]);
 
   return (
     <tbody>
       {groupedRows.map((group) => {
         const isCollapsed = showGroupHeaders ? !!collapsedGroups[group.groupName] : false;
+        const groupSelectionKeys = group.entries
+          .map(({ order }) => rowSelectionKey(order.dataAreaId, order.orderNumber))
+          .filter(Boolean);
+        const groupAllSelected = selectionEnabled
+          && groupSelectionKeys.length > 0
+          && groupSelectionKeys.every((key) => selection.isSelected(key));
+        const groupSomeSelected = selectionEnabled
+          && !groupAllSelected
+          && groupSelectionKeys.some((key) => selection.isSelected(key));
         return (
           <React.Fragment key={group.groupName}>
             {showGroupHeaders ? (
               <tr>
                 <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupingColor }}>
-                  <button
-                    type="button"
-                    className={styles.groupButton}
-                    data-group={group.groupName}
-                    onClick={onToggleGroup}
-                  >
-                    <span>{isCollapsed ? '+' : '-'}</span>
-                    <span className={styles.groupDot}>●</span>
-                    <span>{`${groupingColumnLabel}: ${group.groupName}`}</span>
-                    <span>({group.entries.length})</span>
-                  </button>
+                  <div className={styles.groupRowInner}>
+                    {selectionEnabled ? (
+                      <Checkbox
+                        className={styles.groupCheckbox}
+                        checked={groupAllSelected ? true : (groupSomeSelected ? 'mixed' : false)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(_, data) => handleGroupSelection(groupSelectionKeys, data.checked === true)}
+                        aria-label={`Select all rows in category ${group.groupName}`}
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.groupButton}
+                      data-group={group.groupName}
+                      onClick={onToggleGroup}
+                    >
+                      <span>{isCollapsed ? '+' : '-'}</span>
+                      <span className={styles.groupDot}>●</span>
+                      <span>{`${groupingColumnLabel}: ${group.groupName}`}</span>
+                      <span>({group.entries.length})</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : null}
