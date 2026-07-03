@@ -159,6 +159,19 @@ router.put('/values', async (req, res, next) => {
   }
 });
 
+// POST /api/purchase-orders/rows/exclude — bulk "verwijderen" van rijen uit het overzicht.
+// Zet een persistente exclusion (SQL-only): geen D365-mutatie, en de rij komt niet terug bij
+// een volgende synchronisatie. Body: { rows: [{ dataAreaId, orderNumber }, ...] }.
+router.post('/rows/exclude', async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const result = await cacheService.excludeRows(rows, req.user.id);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/purchase-orders/history — cel-geschiedenis (audit trail) van één cel.
 // Verenigt eigen-kolom-edits (po_cell_history) met D365-correcties (po_field_corrections).
 router.get('/history', async (req, res, next) => {
@@ -183,15 +196,16 @@ router.get('/history', async (req, res, next) => {
 // de app haalt PurchaseOrderHeadersV2 op met $expand=PurchaseOrderLines (zie D365ODataService).
 router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) => {
   try {
-    const [baseUrl, headerPath, company, columns, stats, rulesJson, filterMeta] = await Promise.all([
+    const [baseUrl, headerPath, company, stats, rulesJson, filterMeta] = await Promise.all([
       settingsService.getAsync('D365_ODATA_BASE_URL', ''),
       settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', '/data/PurchaseOrderHeadersV2'),
       settingsService.getAsync('D365_ODATA_COMPANY', ''),
-      columnsService.listColumns({ includeInactive: true }),
       cacheService.getCacheStats().catch(() => null),
       settingsService.getAsync('PO_SYNC_RULES', ''),
       cacheService.getFilterFieldCatalogAndPreview().catch(() => ({ catalog: { header: [], line: [] }, preview: null })),
     ]);
+    await columnsService.syncD365ColumnsFromCatalog(filterMeta.catalog, req.user?.id || null);
+    const columns = await columnsService.listColumns({ includeInactive: true });
 
     const syncRules = parseSyncRules(rulesJson);
     let compiledFilter = '';

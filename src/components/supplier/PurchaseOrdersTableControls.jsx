@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import {
   Button,
+  Checkbox,
   Menu,
   MenuItem,
   MenuList,
@@ -20,9 +21,9 @@ const useStyles = makeStyles({
     position: 'sticky',
     top: 0,
     zIndex: 2,
-    width: '34px',
-    minWidth: '34px',
-    maxWidth: '34px',
+    width: '58px',
+    minWidth: '58px',
+    maxWidth: '58px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),
@@ -34,6 +35,10 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    ...shorthands.gap('2px'),
+  },
+  selectAll: {
+    ...shorthands.padding('0'),
   },
   button: {
     minWidth: '22px',
@@ -49,12 +54,25 @@ function PurchaseOrdersTableControls({
   onSetExpansion,
   onToggleBoardHeaders,
   onToggleGroupHeaders,
+  selectionEnabled = false,
+  allSelected = false,
+  someSelected = false,
+  onToggleAll,
 }) {
   const styles = useStyles();
 
   return (
     <th className={styles.controlHeaderCell} aria-label="Table display controls">
       <div className={styles.toolbar}>
+        {selectionEnabled ? (
+          <Checkbox
+            className={styles.selectAll}
+            checked={allSelected ? true : (someSelected ? 'mixed' : false)}
+            onChange={onToggleAll}
+            aria-label="Selecteer alle rijen"
+            title="Selecteer alle rijen"
+          />
+        ) : null}
         <Menu positioning="below-start">
           <MenuTrigger disableButtonEnhancement>
             <Button

@@ -6,6 +6,7 @@ import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
+import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -35,15 +36,11 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'nowrap',
-    ':hover [data-column-menu-trigger="true"]': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
-    ':focus-within [data-column-menu-trigger="true"]': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
   },
+  dragDropCell: { cursor: 'grab' },
+  dragSourceCell: { opacity: 0.6 },
+  dropBeforeCell: { '::before': { content: '""', position: 'absolute', left: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
+  dropAfterCell: { '::after': { content: '""', position: 'absolute', right: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
   headerCellContent: {
     display: 'flex',
     alignItems: 'center',
@@ -60,9 +57,6 @@ const useStyles = makeStyles({
     textAlign: 'center',
   },
 });
-
-// AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
-// krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
 
 function PurchaseOrdersBoardTable({
   items,
@@ -81,7 +75,11 @@ function PurchaseOrdersBoardTable({
   lineColumnWidths = {},
   onSaveHeaderColumnWidth,
   onSaveLineColumnWidth,
+  onAddColumnRightOf,
+  editingColumnKey,
+  onEditingDone,
   reorderingColumns = false,
+  selection,
 }) {
   const styles = useStyles();
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -90,9 +88,8 @@ function PurchaseOrdersBoardTable({
   const [showGroupHeaders, setShowGroupHeaders] = useState(true);
   const fallbackBoardView = usePurchaseOrderBoardView({ items, columns });
   const resolvedBoardView = boardView || fallbackBoardView;
+  const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
 
-  // Filter/sort/grouping-state wordt op page-niveau beheerd (usePurchaseOrderBoardView)
-  // zodat saved views deze samen met de kolomlayout kunnen serialiseren.
   const {
     processedItems,
     rows,
@@ -230,14 +227,19 @@ function PurchaseOrdersBoardTable({
               onSetExpansion={handleSetExpansion}
               onToggleBoardHeaders={handleToggleBoardHeaders}
               onToggleGroupHeaders={handleToggleGroupHeaders}
+              selectionEnabled={Boolean(selection?.enabled)}
+              allSelected={Boolean(selection?.allSelected)}
+              someSelected={Boolean(selection?.someSelected)}
+              onToggleAll={selection?.onToggleAll}
             />
             {columns.map((column) => (
               <ResizableTableHeaderCell
                 key={column.key}
                 columnKey={column.key}
                 width={headerColumnWidths[column.key]}
-                className={styles.headerCell}
+                className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
                 onResizeEnd={onSaveHeaderColumnWidth}
+                {...headerColumnDrag.getCellDragProps(column.key)}
               >
                 <div className={styles.headerCellContent}>
                   <div className={styles.headerCellLabel}>
@@ -247,9 +249,9 @@ function PurchaseOrdersBoardTable({
                       onRemove={onRemoveColumn}
                       isAdmin={isAdmin}
                       onToggleWriteback={onToggleWriteback}
-                      onMoveColumn={onReorderHeaderColumn}
-                      reorderBusy={reorderingColumns}
                       showActionsMenu={false}
+                      autoEdit={editingColumnKey === column.key}
+                      onEditingDone={onEditingDone}
                     />
                   </div>
                   <PurchaseOrderColumnFilterMenu
@@ -268,6 +270,7 @@ function PurchaseOrdersBoardTable({
                     onSetGroupingColumn={setGroupingColumn}
                     onClearGrouping={clearGrouping}
                     onSetGroupingColor={setGroupingBarColor}
+                    onAddColumnRightOf={onAddColumnRightOf}
                   />
                 </div>
               </ResizableTableHeaderCell>
@@ -290,6 +293,7 @@ function PurchaseOrdersBoardTable({
           groupingColor={groupingColor}
           tableActions={tableActions}
           cellActions={cellActions}
+          selection={selection}
         />
       </table>
     </div>

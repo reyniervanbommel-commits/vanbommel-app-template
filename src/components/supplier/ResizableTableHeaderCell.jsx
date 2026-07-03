@@ -47,6 +47,7 @@ export default function ResizableTableHeaderCell({
   maxWidth = MAX_COLUMN_WIDTH,
   onResizeEnd,
   children,
+  ...cellProps
 }) {
   const styles = useStyles();
   const cellRef = useRef(null);
@@ -128,6 +129,7 @@ export default function ResizableTableHeaderCell({
       ref={cellRef}
       className={combineClassNames(styles.cell, className)}
       style={resolvedWidth ? { width: `${resolvedWidth}px`, minWidth: `${minWidth}px` } : { minWidth: `${minWidth}px` }}
+      {...cellProps}
     >
       <div className={styles.content}>
         {children}

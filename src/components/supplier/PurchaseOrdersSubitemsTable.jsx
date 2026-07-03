@@ -5,6 +5,7 @@ import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 
 const useStyles = makeStyles({
   subTable: {
@@ -13,6 +14,7 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
   },
   subHeaderCell: {
+    position: 'relative',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
@@ -29,6 +31,32 @@ const useStyles = makeStyles({
     ':focus-within [data-column-menu-trigger="true"]': {
       opacity: 1,
       pointerEvents: 'auto',
+    },
+  },
+  dragDropCell: { cursor: 'grab' },
+  dragSourceCell: { opacity: 0.6 },
+  dropBeforeCell: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      left: '-2px',
+      top: '-1px',
+      bottom: '-1px',
+      width: '4px',
+      backgroundColor: tokens.colorStrokeFocus2,
+      zIndex: 6,
+    },
+  },
+  dropAfterCell: {
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      right: '-2px',
+      top: '-1px',
+      bottom: '-1px',
+      width: '4px',
+      backgroundColor: tokens.colorStrokeFocus2,
+      zIndex: 6,
     },
   },
   subCell: {
@@ -63,6 +91,7 @@ export default function PurchaseOrdersSubitemsTable({
 }) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
+  const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
 
   if (!lineColumns.length) {
     return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
@@ -77,8 +106,15 @@ export default function PurchaseOrdersSubitemsTable({
               key={column.key}
               columnKey={column.key}
               width={columnWidths[column.key]}
-              className={styles.subHeaderCell}
+              className={[
+                styles.subHeaderCell,
+                lineColumnDrag.canDrag ? styles.dragDropCell : '',
+                lineColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '',
+                lineColumnDrag.dropTargetKey === column.key && lineColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '',
+                lineColumnDrag.dropTargetKey === column.key && lineColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : '',
+              ].filter(Boolean).join(' ')}
               onResizeEnd={onSaveColumnWidth}
+              {...lineColumnDrag.getCellDragProps(column.key)}
             >
               <PurchaseOrderColumnHeader
                 column={column}
@@ -86,8 +122,6 @@ export default function PurchaseOrdersSubitemsTable({
                 onRemove={onRemoveColumn}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
-                onMoveColumn={onReorderColumn}
-                reorderBusy={reorderBusy}
               />
             </ResizableTableHeaderCell>
           ))}

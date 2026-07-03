@@ -165,6 +165,16 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseRawJson(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
 async function getStaleThresholdMinutes() {
   const raw = await settingsService.getAsync('PO_CACHE_STALE_MINUTES', String(DEFAULT_STALE_MINUTES));
   const parsed = Number.parseInt(raw, 10);
@@ -578,22 +588,34 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     listColumns({ level: 'header', includeInactive: false }),
     listColumns({ level: 'line', includeInactive: false }),
   ]);
+  const needsDynamicHeaderLookup = headerCols.some(
+    (col) => col.source === 'd365' && col.d365Field && !HEADER_FIELD_BY_KEY[col.key]
+  );
+  const needsDynamicLineLookup = lineCols.some(
+    (col) => col.source === 'd365' && col.d365Field && !LINE_FIELD_BY_KEY[col.key]
+  );
 
   const lastViewedAt = await getLastViewedAt(userId);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
 
+  // Verborgen rijen (removed_in_d365 óf handmatig uitgesloten) blijven standaard weg.
+  // includeRemoved (admin/debug) toont ze alsnog. Exclusions = "SQL-only verwijderen" (#AB:130).
   const headersResult = await pool.request().query(`
     SELECT data_area_id, order_number, vendor_account, vendor_name, status, currency_code,
-           requested_delivery_date, created_date_time, d365_modified_at, removed_in_d365,
+           requested_delivery_date, created_date_time, d365_modified_at, removed_in_d365${needsDynamicHeaderLookup ? ', raw_json' : ''},
            first_seen_at, content_changed_at
-    FROM dbo.po_cache_headers
-    ${includeRemoved ? '' : 'WHERE removed_in_d365 = 0'}
+    FROM dbo.po_cache_headers h
+    ${includeRemoved ? '' : `WHERE removed_in_d365 = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM dbo.po_row_exclusions e
+        WHERE e.data_area_id = h.data_area_id AND e.order_number = h.order_number
+      )`}
     ORDER BY order_number
   `);
 
   const linesResult = await pool.request().query(`
     SELECT data_area_id, order_number, line_number, item_number, description, quantity, unit,
-           line_amount, currency_code, requested_delivery_date
+           line_amount, currency_code, requested_delivery_date${needsDynamicLineLookup ? ', raw_json' : ''}
     FROM dbo.po_cache_lines
     ORDER BY order_number, line_number
   `);
@@ -627,12 +649,18 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     linesByOrder.get(orderKey).push(ln);
   }
 
-  function headerValues(h) {
+  function headerValues(h, rawJson) {
     const values = {};
     for (const col of headerCols) {
       if (col.source === 'd365') {
         const field = HEADER_FIELD_BY_KEY[col.key];
-        values[col.key] = field ? normalizeOut(h[field]) : null;
+        if (field) {
+          values[col.key] = normalizeOut(h[field]);
+        } else if (col.d365Field && Object.prototype.hasOwnProperty.call(rawJson || {}, col.d365Field)) {
+          values[col.key] = normalizeOut(rawJson[col.d365Field]);
+        } else {
+          values[col.key] = null;
+        }
       }
     }
     const custom = customByCell.get(`${h.data_area_id}|${h.order_number}|${HEADER_LEVEL_LINE}`) || {};
@@ -642,12 +670,18 @@ async function read({ includeRemoved = false, userId = null } = {}) {
     return values;
   }
 
-  function lineValues(ln) {
+  function lineValues(ln, rawJson) {
     const values = {};
     for (const col of lineCols) {
       if (col.source === 'd365') {
         const field = LINE_FIELD_BY_KEY[col.key];
-        values[col.key] = field ? normalizeOut(ln[field]) : null;
+        if (field) {
+          values[col.key] = normalizeOut(ln[field]);
+        } else if (col.d365Field && Object.prototype.hasOwnProperty.call(rawJson || {}, col.d365Field)) {
+          values[col.key] = normalizeOut(rawJson[col.d365Field]);
+        } else {
+          values[col.key] = null;
+        }
       }
     }
     const custom = customByCell.get(`${ln.data_area_id}|${ln.order_number}|${ln.line_number}`) || {};
@@ -661,9 +695,10 @@ async function read({ includeRemoved = false, userId = null } = {}) {
   let changedCount = 0;
   const orders = headersResult.recordset.map((h) => {
     const orderKey = `${h.data_area_id}|${h.order_number}`;
+    const headerRawJson = needsDynamicHeaderLookup ? parseRawJson(h.raw_json) : null;
     const lines = (linesByOrder.get(orderKey) || []).map((ln) => ({
       lineNumber: ln.line_number,
-      values: lineValues(ln),
+      values: lineValues(ln, needsDynamicLineLookup ? parseRawJson(ln.raw_json) : null),
     }));
 
     // Nieuw/gewijzigd t.o.v. het laatste bezoek van deze gebruiker. Eerste bezoek
@@ -681,7 +716,7 @@ async function read({ includeRemoved = false, userId = null } = {}) {
       removedInD365: Boolean(h.removed_in_d365),
       isNew,
       isChanged,
-      values: headerValues(h),
+      values: headerValues(h, headerRawJson),
       lines,
       lineCount: lines.length,
     };
@@ -1061,6 +1096,70 @@ async function getCellHistory({ columnId, dataAreaId, orderNumber, lineNumber })
   return result.recordset.map(formatHistoryRow);
 }
 
+// ---------------------------------------------------------------------------
+// excludeRows — "SQL-only verwijderen": markeer rijen als persistente exclusion (#AB:130)
+// Geen D365-mutatie, geen harde DELETE. read() filtert excluded rijen weg; een refresh
+// laat de cache-data staan zodat de rij later desgewenst weer opgenomen kan worden.
+// ---------------------------------------------------------------------------
+
+// Pure validatie/normalisatie (los testbaar, zonder DB): trimt, filtert ongeldige/te-lange
+// sleutels en ontdubbelt op (dataAreaId, orderNumber).
+function normalizeExclusionRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const seen = new Set();
+  const out = [];
+  for (const row of list) {
+    const area = String(row?.dataAreaId || '').trim();
+    const order = String(row?.orderNumber || '').trim();
+    if (!area || !order) continue;
+    if (area.length > 16 || order.length > 64) continue;
+    const key = `${area}|${order}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ dataAreaId: area, orderNumber: order });
+  }
+  return out;
+}
+
+const MAX_EXCLUSION_BATCH = 2000;
+
+async function excludeRows(rows, userId) {
+  const normalized = normalizeExclusionRows(rows);
+  if (!normalized.length) {
+    throw Object.assign(new Error('Geen geldige rijen om te verwijderen'), { status: 400 });
+  }
+  if (normalized.length > MAX_EXCLUSION_BATCH) {
+    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+  }
+
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { dataAreaId, orderNumber } of normalized) {
+      await new sql.Request(tx)
+        .input('area', sql.NVarChar(16), dataAreaId)
+        .input('order', sql.NVarChar(64), orderNumber)
+        .input('by', sql.Int, userId || null)
+        .query(`
+          MERGE dbo.po_row_exclusions AS target
+          USING (SELECT @area AS data_area_id, @order AS order_number) AS src
+            ON target.data_area_id = src.data_area_id AND target.order_number = src.order_number
+          WHEN NOT MATCHED THEN
+            INSERT (data_area_id, order_number, reason, excluded_by)
+            VALUES (@area, @order, 'manual_delete', @by);
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  invalidateReadCache();
+  return { excluded: normalized.length };
+}
+
 module.exports = {
   refresh,
   read,
@@ -1076,5 +1175,7 @@ module.exports = {
   getRefreshProgress,
   getLastViewedAt,
   markViewed,
+  excludeRows,
+  normalizeExclusionRows,
   computeOrderHash,
 };

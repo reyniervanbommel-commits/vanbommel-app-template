@@ -110,6 +110,8 @@ export function usePurchaseOrdersPage() {
   const [lineColumnWidths, setLineColumnWidths] = useState({});
   const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(false);
   const [savingColumns, setSavingColumns] = useState(false);
+  // Onthoudt een net-aangemaakte kolom die nog rechts van zijn bron gezet moet worden.
+  const [pendingInsertAfter, setPendingInsertAfter] = useState(null);
 
   // Schrijft de response-body (van GET of POST refresh) weg in de losse state.
   const applyData = useCallback((data) => {
@@ -240,6 +242,35 @@ export function usePurchaseOrdersPage() {
     }
   }, [applyData]);
 
+  // Bulk "verwijderen": verberg de geselecteerde rijen (SQL-only exclusion, geen D365-mutatie).
+  // Optimistic: rijen verdwijnen direct; bij een API-fout wordt de vorige lijst teruggezet.
+  const deleteRows = useCallback(async (rows) => {
+    const targets = (Array.isArray(rows) ? rows : []).filter(
+      (row) => row && row.dataAreaId && row.orderNumber
+    );
+    if (!targets.length) return;
+    const keySet = new Set(targets.map((row) => `${row.dataAreaId}|${row.orderNumber}`));
+
+    let previousOrders = null;
+    setOrders((prev) => {
+      previousOrders = prev;
+      return prev.filter((order) => !keySet.has(`${order.dataAreaId}|${order.orderNumber}`));
+    });
+    setTotal((prev) => Math.max(0, prev - keySet.size));
+
+    try {
+      await apiRequest('/purchase-orders/rows/exclude', {
+        method: 'POST',
+        body: { rows: targets },
+      });
+    } catch (err) {
+      if (previousOrders) setOrders(previousOrders);
+      setTotal((prev) => prev + keySet.size);
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
   // Optimistic update van één cel; bij fout wordt de oude waarde teruggezet.
   const saveValue = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value }) => {
     const isLine = lineNumber !== null && lineNumber !== undefined;
@@ -329,9 +360,21 @@ export function usePurchaseOrdersPage() {
     if (dataType === 'select' && Array.isArray(options)) {
       body.options = options;
     }
-    await apiRequest('/purchase-orders/columns', { method: 'POST', body });
+    const res = await apiRequest('/purchase-orders/columns', { method: 'POST', body });
     await reloadColumns();
+    return res?.column || null;
   }, [reloadColumns]);
+
+  // Monday-stijl: voeg een header-kolom toe direct rechts van een bestaande kolom.
+  // De nieuwe kolom wordt aangemaakt (achteraan), waarna een effect hem naar de juiste
+  // plek verplaatst zodra hij in de kolomdefinities verschijnt (async na reload).
+  const addHeaderColumnAfter = useCallback(async (afterKey, { label, dataType, options }) => {
+    const created = await addColumn({ label, level: 'header', dataType, options });
+    if (created?.key && afterKey) {
+      setPendingInsertAfter({ newKey: created.key, afterKey });
+    }
+    return created;
+  }, [addColumn]);
 
   const renameColumn = useCallback(async (id, label) => {
     await apiRequest('/purchase-orders/columns/' + id, { method: 'PATCH', body: { label } });
@@ -514,6 +557,16 @@ export function usePurchaseOrdersPage() {
     await persistBoardSettings({ nextLineOrder: nextOrder });
   }, [lineColumnOrder, defaultLineKeys, persistBoardSettings]);
 
+  // Verplaats een net-aangemaakte kolom naar rechts van zijn bron zodra beide keys
+  // in de (herladen) kolomdefinities bestaan.
+  useEffect(() => {
+    if (!pendingInsertAfter) return;
+    const { newKey, afterKey } = pendingInsertAfter;
+    if (!defaultHeaderKeys.includes(newKey) || !defaultHeaderKeys.includes(afterKey)) return;
+    setPendingInsertAfter(null);
+    reorderHeaderColumn(newKey, afterKey, 'after');
+  }, [pendingInsertAfter, defaultHeaderKeys, reorderHeaderColumn]);
+
   return useMemo(() => ({
     orders,
     headerColumns,
@@ -537,10 +590,12 @@ export function usePurchaseOrdersPage() {
     savingColumns,
     refresh,
     markViewed,
+    deleteRows,
     saveValue,
     correctField,
     toggleWriteback,
     addColumn,
+    addHeaderColumnAfter,
     renameColumn,
     removeColumn,
     saveVisibleColumns,
@@ -572,10 +627,12 @@ export function usePurchaseOrdersPage() {
     savingColumns,
     refresh,
     markViewed,
+    deleteRows,
     saveValue,
     correctField,
     toggleWriteback,
     addColumn,
+    addHeaderColumnAfter,
     renameColumn,
     removeColumn,
     saveVisibleColumns,

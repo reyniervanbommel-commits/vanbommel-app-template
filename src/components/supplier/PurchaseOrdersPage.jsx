@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -12,7 +12,9 @@ import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrderAddColumnDialog from './PurchaseOrderAddColumnDialog';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
+import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
+import { usePurchaseOrderRowSelection, rowSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderSavedViews } from '../../hooks/usePurchaseOrderSavedViews';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
@@ -41,9 +43,20 @@ const useStyles = makeStyles({
     alignItems: 'center',
     marginBottom: '16px',
   },
-  titleWrap: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  title: { fontSize: '24px', fontWeight: 600 },
-  subtitle: { color: tokens.colorNeutralForeground3 },
+  titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+  tableName: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
+    lineHeight: '1',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexShrink: 0,
+  },
+  subtitle: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
@@ -98,8 +111,10 @@ export default function PurchaseOrdersPage() {
     refreshing,
     error,
     refresh,
+    deleteRows,
     saveValue,
     addColumn,
+    addHeaderColumnAfter,
     renameColumn,
     removeColumn,
     newCount,
@@ -121,6 +136,37 @@ export default function PurchaseOrdersPage() {
 
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
+
+  // Rij-selectie voor bulk verwijderen (SQL-only exclusion). Sleutel = dataAreaId|orderNumber.
+  const selection = usePurchaseOrderRowSelection();
+  const allOrderKeys = useMemo(
+    () => orders.map((order) => rowSelectionKey(order.dataAreaId, order.orderNumber)),
+    [orders]
+  );
+  const allSelected = allOrderKeys.length > 0 && allOrderKeys.every((key) => selection.isSelected(key));
+  const someSelected = !allSelected && allOrderKeys.some((key) => selection.isSelected(key));
+
+  const handleToggleAll = useCallback(() => {
+    selection.setMany(allOrderKeys, !allSelected);
+  }, [selection, allOrderKeys, allSelected]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    const rows = orders
+      .filter((order) => selection.isSelected(rowSelectionKey(order.dataAreaId, order.orderNumber)))
+      .map((order) => ({ dataAreaId: order.dataAreaId, orderNumber: order.orderNumber }));
+    if (!rows.length) return;
+    await deleteRows(rows);
+    selection.clear();
+  }, [orders, selection, deleteRows]);
+
+  const tableSelection = useMemo(() => ({
+    enabled: true,
+    isSelected: selection.isSelected,
+    toggle: selection.toggle,
+    allSelected,
+    someSelected,
+    onToggleAll: handleToggleAll,
+  }), [selection.isSelected, selection.toggle, allSelected, someSelected, handleToggleAll]);
 
   // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
   // kolomlayout kunnen serialiseren en terugzetten.
@@ -190,6 +236,19 @@ export default function PurchaseOrdersPage() {
     }
   }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState]);
 
+  // Monday-stijl kolom toevoegen vanuit het per-kolom menu: maak de kolom rechts van
+  // de bron aan en zet zijn header direct in inline-hernoem-modus.
+  const [editingColumnKey, setEditingColumnKey] = useState('');
+  const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
+  const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
+    const created = await addHeaderColumnAfter(sourceColumn.key, {
+      label: typeDef.label,
+      dataType: typeDef.dataType,
+      options: typeDef.options,
+    });
+    if (created?.key) setEditingColumnKey(created.key);
+  }, [addHeaderColumnAfter]);
+
   const handleOpenAddColumn = useCallback(() => setAddColumnOpen(true), []);
   const handleRefresh = useCallback(async () => {
     startProgress();
@@ -207,29 +266,43 @@ export default function PurchaseOrdersPage() {
       <div className={styles.contentInset}>
         <div className={styles.header}>
           <div className={styles.titleWrap}>
-            <div className={styles.title}>Purchase Orders</div>
-            <div className={styles.subtitle}>
-              Total: {total}
+            <div className={styles.tableName}>Purchase Orders</div>
+            <PurchaseOrderSavedViewsControl
+              titleMode
+              views={savedViews.views}
+              activeViewId={activeViewId}
+              canManageGlobal={isStaff}
+              saving={savedViews.saving}
+              onApplyView={applyViewState}
+              onResetView={handleResetView}
+              onSaveAsNew={handleSaveAsNew}
+              onUpdateActive={handleUpdateActive}
+              onRenameView={handleRenameView}
+              onSetDefault={handleSetDefault}
+              onDeleteView={handleDeleteView}
+            />
+          </div>
+
+          <div className={styles.headerRight}>
+            <div className={styles.freshness}>
+              {!hasCache ? (
+                <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+              ) : (
+                <>
+                  <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
+                  {stale ? (
+                    <Badge color="warning" appearance="tint">Verouderd</Badge>
+                  ) : (
+                    <Badge color="success" appearance="tint">Actueel</Badge>
+                  )}
+                </>
+              )}
             </div>
+            <div className={styles.subtitle}>Totaal: {total}</div>
           </div>
         </div>
 
         <div className={styles.toolbar}>
-          <div className={styles.freshness}>
-            {!hasCache ? (
-              <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
-            ) : (
-              <>
-                <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
-                {stale ? (
-                  <Badge color="warning" appearance="tint">Verouderd</Badge>
-                ) : (
-                  <Badge color="success" appearance="tint">Actueel</Badge>
-                )}
-              </>
-            )}
-          </div>
-
           {(newCount > 0 || changedCount > 0) ? (
             <div className={styles.freshness}>
               {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
@@ -246,21 +319,13 @@ export default function PurchaseOrdersPage() {
             </div>
           ) : null}
 
-          <div className={styles.toolbarSpacer} />
-
-          <PurchaseOrderSavedViewsControl
-            views={savedViews.views}
-            activeViewId={activeViewId}
-            canManageGlobal={isStaff}
-            saving={savedViews.saving}
-            onApplyView={applyViewState}
-            onResetView={handleResetView}
-            onSaveAsNew={handleSaveAsNew}
-            onUpdateActive={handleUpdateActive}
-            onRenameView={handleRenameView}
-            onSetDefault={handleSetDefault}
-            onDeleteView={handleDeleteView}
+          <PurchaseOrderBulkActionsBar
+            selectedCount={selection.selectedCount}
+            onDelete={handleDeleteSelected}
+            onClear={selection.clear}
           />
+
+          <div className={styles.toolbarSpacer} />
 
           <Button
             appearance="secondary"
@@ -318,7 +383,11 @@ export default function PurchaseOrdersPage() {
             lineColumnWidths={lineColumnWidths}
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
+            onAddColumnRightOf={handleAddColumnRightOf}
+            editingColumnKey={editingColumnKey}
+            onEditingDone={handleEditingDone}
             reorderingColumns={savingColumns}
+            selection={tableSelection}
           />
         </div>
       )}

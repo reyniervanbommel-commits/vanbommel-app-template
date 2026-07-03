@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
@@ -6,33 +6,45 @@ import {
 import { EditRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  header: { position: 'relative', width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
+  header: { width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
   labelWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   d365LabelWrap: { display: 'inline-flex', alignItems: 'center', lineHeight: 1.2, ...shorthands.gap('4px') },
   writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
   customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
-  draggableHeader: { cursor: 'grab', borderRadius: '6px', transitionProperty: 'transform, opacity, box-shadow, background-color', transitionDuration: '150ms', transitionTimingFunction: 'ease' },
-  draggingHeader: { cursor: 'grabbing', opacity: 0.52, transform: 'translateY(-4px) scale(1.02)', backgroundColor: tokens.colorBrandBackground2, boxShadow: `0 12px 28px ${tokens.colorNeutralShadowAmbient}` },
-  dropBefore: { '::before': { content: '""', position: 'absolute', left: '-3px', top: '-10px', bottom: '-10px', width: '4px', borderRadius: '999px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 3px ${tokens.colorBrandBackground2}`, zIndex: 5 } },
-  dropAfter: { '::after': { content: '""', position: 'absolute', right: '-3px', top: '-10px', bottom: '-10px', width: '4px', borderRadius: '999px', backgroundColor: tokens.colorBrandStroke1, boxShadow: `0 0 0 3px ${tokens.colorBrandBackground2}`, zIndex: 5 } },
   lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
-export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback, onMoveColumn, reorderBusy = false, showActionsMenu = true }) {
+export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback, showActionsMenu = true, autoEdit = false, onEditingDone }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
-  const canDrag = typeof onMoveColumn === 'function' && !reorderBusy;
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [dragOver, setDragOver] = useState(false);
-  const [dropPosition, setDropPosition] = useState('before');
-  const [isDragging, setIsDragging] = useState(false);
+
+  // Inline hernoemen direct na "Kolom rechts toevoegen" (Monday-stijl): typ de naam
+  // in de header, Enter/blur bevestigt, Escape laat de standaardnaam staan.
+  const [inlineValue, setInlineValue] = useState(column.label);
+  useEffect(() => {
+    if (autoEdit) setInlineValue(column.label);
+  }, [autoEdit, column.label]);
+
+  const commitInline = useCallback(async () => {
+    const trimmed = inlineValue.trim();
+    if (trimmed && trimmed !== column.label) {
+      try { await onRename(column.id, trimmed); } catch { /* naam blijft ongewijzigd */ }
+    }
+    if (onEditingDone) onEditingDone();
+  }, [inlineValue, column.label, column.id, onRename, onEditingDone]);
+
+  const handleInlineKey = useCallback((event) => {
+    if (event.key === 'Enter') { event.preventDefault(); commitInline(); }
+    else if (event.key === 'Escape') { if (onEditingDone) onEditingDone(); }
+  }, [commitInline, onEditingDone]);
 
   const openRename = useCallback(() => { setLabel(column.label); setError(''); setRenameOpen(true); }, [column.label]);
   const submitRename = useCallback(async () => {
@@ -46,43 +58,22 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Verwijderen mislukt.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
 
-  const handleDragStart = useCallback((event) => {
-    if (!canDrag) return;
-    setIsDragging(true);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', column.key);
-  }, [canDrag, column.key]);
-  const handleDragOver = useCallback((event) => {
-    if (!canDrag) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    const rect = event.currentTarget.getBoundingClientRect();
-    const nextDropPosition = (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
-    if (!dragOver) setDragOver(true);
-    if (dropPosition !== nextDropPosition) setDropPosition(nextDropPosition);
-  }, [canDrag, dragOver, dropPosition]);
-  const resetDragTarget = useCallback(() => {
-    if (dragOver) setDragOver(false);
-    if (dropPosition !== 'before') setDropPosition('before');
-  }, [dragOver, dropPosition]);
-  const handleDragLeave = useCallback(() => resetDragTarget(), [resetDragTarget]);
-  const handleDragEnd = useCallback(() => {
-    if (isDragging) setIsDragging(false);
-    resetDragTarget();
-  }, [isDragging, resetDragTarget]);
-  const handleDrop = useCallback(async (event) => {
-    if (!canDrag || !onMoveColumn) return;
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const dropAt = (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
-    const sourceKey = String(event.dataTransfer.getData('text/plain') || '');
-    resetDragTarget();
-    if (!sourceKey || sourceKey === column.key) return;
-    await onMoveColumn(sourceKey, column.key, dropAt);
-  }, [canDrag, onMoveColumn, column.key, resetDragTarget]);
+  if (autoEdit) {
+    return (
+      <div className={styles.header}>
+        <Input
+          size="small"
+          value={inlineValue}
+          onChange={(_, data) => setInlineValue(data.value)}
+          input={{ autoFocus: true, onFocus: (event) => event.target.select() }}
+          onBlur={commitInline}
+          onKeyDown={handleInlineKey}
+          aria-label="Kolomnaam"
+        />
+      </div>
+    );
+  }
 
-  const headerClassName = [styles.header, canDrag ? styles.draggableHeader : '', isDragging ? styles.draggingHeader : '', dragOver && dropPosition === 'before' ? styles.dropBefore : '', dragOver && dropPosition === 'after' ? styles.dropAfter : ''].filter(Boolean).join(' ');
-  const dragProps = { draggable: canDrag, onDragStart: handleDragStart, onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDragEnd: handleDragEnd, onDrop: handleDrop };
   const columnOptionsMenu = (
     <Menu>
       <MenuTrigger disableButtonEnhancement>
@@ -108,15 +99,15 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
         <span>{column.label}</span>
       </span>
     );
-    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={headerClassName} {...dragProps}>{labelWithWriteBack}</div>;
+    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
     if (column.writeBackAllowed === false) {
-      return <div className={headerClassName} {...dragProps}><span className={styles.labelWrap}>{column.label}<Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
+      return <div className={styles.header}><span className={styles.labelWrap}>{column.label}<Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
     }
     if (!showActionsMenu) {
-      return <div className={headerClassName} {...dragProps}>{labelWithWriteBack}</div>;
+      return <div className={styles.header}>{labelWithWriteBack}</div>;
     }
     return (
-      <div className={headerClassName} {...dragProps}>
+      <div className={styles.header}>
         {labelWithWriteBack}
         <Menu>
           <MenuTrigger disableButtonEnhancement>
@@ -134,14 +125,14 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
 
   if (!showActionsMenu) {
     return (
-      <div className={headerClassName} {...dragProps}>
+      <div className={styles.header}>
         <span className={styles.labelWrap}><EditRegular className={styles.customIcon} title="Eigen kolom" />{column.label}</span>
       </div>
     );
   }
 
   return (
-    <div className={headerClassName} {...dragProps}>
+    <div className={styles.header}>
       <span className={styles.labelWrap}><EditRegular className={styles.customIcon} title="Eigen kolom" />{column.label}</span>
       {columnOptionsMenu}
 

@@ -56,6 +56,16 @@ const useStyles = makeStyles({
   },
 });
 
+// Monday-stijl kolomtypes voor "Kolom rechts toevoegen". label = standaardnaam
+// (direct inline te hernoemen); dataType mapt op de backend-datatypes.
+const NEW_COLUMN_TYPES = [
+  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
+  { key: 'text', label: 'Tekst', dataType: 'text' },
+  { key: 'number', label: 'Nummers', dataType: 'number' },
+  { key: 'date', label: 'Datum', dataType: 'date' },
+  { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
+];
+
 function isDateColumn(column) {
   return column?.dataType === 'date';
 }
@@ -98,10 +108,12 @@ function PurchaseOrderColumnFilterMenu({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
+  onAddColumnRightOf,
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [showCategoryBar, setShowCategoryBar] = useState(false);
+  const [showAddTypes, setShowAddTypes] = useState(false);
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
   const isGroupingColumn = groupingColumnKey === column.key;
@@ -120,8 +132,18 @@ function PurchaseOrderColumnFilterMenu({
 
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
-    if (!data.open) setShowCategoryBar(false);
+    if (!data.open) {
+      setShowCategoryBar(false);
+      setShowAddTypes(false);
+    }
   }, []);
+
+  const canAddColumn = typeof onAddColumnRightOf === 'function';
+  const handleAddType = useCallback((typeDef) => {
+    onAddColumnRightOf(column, typeDef);
+    setShowAddTypes(false);
+    setOpen(false);
+  }, [column, onAddColumnRightOf]);
 
   const setSortAsc = useCallback(() => {
     onSetSortDirection(column.key, 'asc');
@@ -225,6 +247,29 @@ function PurchaseOrderColumnFilterMenu({
                 {writable ? 'Sync uitzetten' : 'Sync aanzetten'}
               </span>
             </Button>
+          </>
+        ) : null}
+        {canAddColumn ? (
+          <>
+            <div className={styles.divider} />
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={() => setShowAddTypes((prev) => !prev)}>
+              + Kolom rechts toevoegen
+            </Button>
+            {showAddTypes ? (
+              <div className={styles.sortActions}>
+                {NEW_COLUMN_TYPES.map((type) => (
+                  <Button
+                    key={type.key}
+                    className={styles.sortButton}
+                    appearance="subtle"
+                    size="small"
+                    onClick={() => handleAddType(type)}
+                  >
+                    {type.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </>
         ) : null}
         <div className={styles.divider} />

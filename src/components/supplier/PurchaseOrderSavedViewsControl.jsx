@@ -39,6 +39,30 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  // D365-stijl: grote viewnaam als paginatitel, zonder rand.
+  titleTrigger: {
+    maxWidth: '420px',
+    minWidth: 0,
+    height: 'auto',
+    ...shorthands.padding('0'),
+    ...shorthands.border('none'),
+    justifyContent: 'flex-start',
+    ...shorthands.gap('4px'),
+    color: tokens.colorNeutralForeground1,
+    backgroundColor: 'transparent',
+  },
+  titleName: {
+    fontSize: tokens.fontSizeHero700,
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: '1.1',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  titleChevron: {
+    fontSize: '20px',
+    flexShrink: 0,
+  },
   form: {
     display: 'flex',
     flexDirection: 'column',
@@ -156,6 +180,7 @@ export default function PurchaseOrderSavedViewsControl({
   activeViewId,
   canManageGlobal,
   saving,
+  titleMode = false,
   onApplyView,
   onResetView,
   onSaveAsNew,
@@ -188,22 +213,33 @@ export default function PurchaseOrderSavedViewsControl({
     await onRenameView(activeView, name);
   }, [activeView, onRenameView]);
 
-  const triggerLabel = activeView ? activeView.name : NO_VIEW_LABEL;
+  const triggerLabel = activeView ? activeView.name : (titleMode ? 'Alle orders' : NO_VIEW_LABEL);
 
   return (
     <>
       <Menu positioning="below-start">
         <MenuTrigger disableButtonEnhancement>
-          <Button
-            appearance="secondary"
-            icon={<EyeRegular />}
-            iconPosition="before"
-            className={styles.trigger}
-            disabled={saving}
-          >
-            <span className={styles.triggerLabel}>{triggerLabel}</span>
-            <ChevronDownRegular />
-          </Button>
+          {titleMode ? (
+            <Button
+              appearance="subtle"
+              className={styles.titleTrigger}
+              disabled={saving}
+            >
+              <span className={styles.titleName}>{triggerLabel}</span>
+              <ChevronDownRegular className={styles.titleChevron} />
+            </Button>
+          ) : (
+            <Button
+              appearance="secondary"
+              icon={<EyeRegular />}
+              iconPosition="before"
+              className={styles.trigger}
+              disabled={saving}
+            >
+              <span className={styles.triggerLabel}>{triggerLabel}</span>
+              <ChevronDownRegular />
+            </Button>
+          )}
         </MenuTrigger>
         <MenuPopover>
           <MenuList>

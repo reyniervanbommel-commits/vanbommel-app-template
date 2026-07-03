@@ -29,6 +29,22 @@ const NON_HIDEABLE_KEYS = {
   line: ['lineNumber'],
 };
 
+function toColumnDataType(valueType) {
+  if (valueType === 'number') return 'number';
+  if (valueType === 'date') return 'date';
+  return 'text';
+}
+
+function toColumnLabel(rawLabel, fallbackField) {
+  const label = String(rawLabel || '').trim();
+  if (label) return label.slice(0, MAX_LABEL_LENGTH);
+  return String(fallbackField || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+    .slice(0, MAX_LABEL_LENGTH);
+}
+
 function isWriteBackAllowed(col) {
   if (col.source !== 'd365' || !col.d365Field) return false;
   return !(NON_WRITABLE_KEYS[col.level] || []).includes(col.key);
@@ -302,6 +318,85 @@ async function setWriteBackConfig(columnId, { writable, mechanism }) {
   return mapColumnRow(result.recordset[0]);
 }
 
+// Upsert ontbrekende D365-velden op basis van de actuele filtercatalogus (cache-gedreven).
+// Zo hoeft de datamodel-pagina niet op een vaste seedlijst te vertrouwen.
+async function syncD365ColumnsFromCatalog(catalog, userId = null) {
+  const discovered = [];
+  for (const level of LEVELS) {
+    const fields = Array.isArray(catalog?.[level]) ? catalog[level] : [];
+    for (const fieldMeta of fields) {
+      const field = String(fieldMeta?.field || '').trim();
+      if (!field) continue;
+      discovered.push({
+        level,
+        field,
+        label: toColumnLabel(fieldMeta?.label, field),
+        dataType: toColumnDataType(fieldMeta?.valueType),
+      });
+    }
+  }
+  if (!discovered.length) return { inserted: 0 };
+
+  const pool = await getPool();
+  const [existingResult, maxSortResult] = await Promise.all([
+    pool.request().query(`
+      SELECT [level], d365_field
+      FROM dbo.po_columns
+      WHERE source = 'd365' AND d365_field IS NOT NULL
+    `),
+    pool.request().query(`
+      SELECT [level], ISNULL(MAX(sort_order), 0) AS max_sort
+      FROM dbo.po_columns
+      GROUP BY [level]
+    `),
+  ]);
+
+  const existing = new Set(
+    existingResult.recordset.map((row) => `${row.level}|${String(row.d365_field || '').toLowerCase()}`)
+  );
+  const nextSortByLevel = new Map(LEVELS.map((level) => [level, 0]));
+  for (const row of maxSortResult.recordset) {
+    nextSortByLevel.set(row.level, Number(row.max_sort) || 0);
+  }
+
+  let inserted = 0;
+  for (const item of discovered) {
+    const signature = `${item.level}|${item.field.toLowerCase()}`;
+    if (existing.has(signature)) continue;
+
+    const key = await uniqueKeyForLevel(pool, item.level, slugify(item.field));
+    const nextSort = (nextSortByLevel.get(item.level) || 0) + 10;
+    nextSortByLevel.set(item.level, nextSort);
+
+    const insertResult = await pool.request()
+      .input('key', sql.NVarChar(64), key)
+      .input('label', sql.NVarChar(128), item.label)
+      .input('level', sql.NVarChar(16), item.level)
+      .input('dataType', sql.NVarChar(16), item.dataType)
+      .input('d365Field', sql.NVarChar(128), item.field)
+      .input('sortOrder', sql.Int, nextSort)
+      .input('userId', sql.Int, userId || null)
+      .query(`
+        INSERT INTO dbo.po_columns
+          ([key], label, source, [level], data_type, d365_field, writable_to_d365, is_active, sort_order, created_by, updated_by)
+        SELECT
+          @key, @label, 'd365', @level, @dataType, @d365Field, 0, 1, @sortOrder, @userId, @userId
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM dbo.po_columns
+          WHERE source = 'd365' AND [level] = @level AND LOWER(d365_field) = LOWER(@d365Field)
+        )
+      `);
+
+    if ((insertResult.rowsAffected && insertResult.rowsAffected[0]) > 0) {
+      existing.add(signature);
+      inserted += 1;
+    }
+  }
+
+  return { inserted };
+}
+
 module.exports = {
   LEVELS,
   DATA_TYPES,
@@ -317,5 +412,6 @@ module.exports = {
   deactivateColumn,
   setColumnVisibility,
   setWriteBackConfig,
+  syncD365ColumnsFromCatalog,
   slugify,
 };

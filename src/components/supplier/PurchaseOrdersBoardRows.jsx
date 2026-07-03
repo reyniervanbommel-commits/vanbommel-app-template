@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
-import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
+import { rowSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 
 const useStyles = makeStyles({
   groupRowCell: {
@@ -41,6 +42,15 @@ const useStyles = makeStyles({
     ...shorthands.padding('1px'),
     textAlign: 'center',
     verticalAlign: 'middle',
+  },
+  controlCellInner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    ...shorthands.gap('2px'),
+  },
+  rowCheckbox: {
+    ...shorthands.padding('0'),
   },
   compactToggleButton: {
     minWidth: '22px',
@@ -99,9 +109,11 @@ function PurchaseOrdersBoardRows({
   groupingColor,
   tableActions,
   cellActions,
+  selection,
 }) {
   const styles = useStyles();
   const { onToggleGroup, onToggleOrder } = tableActions;
+  const selectionEnabled = Boolean(selection?.enabled);
 
   return (
     <tbody>
@@ -130,22 +142,33 @@ function PurchaseOrdersBoardRows({
               const lines = Array.isArray(order.lines) ? order.lines : [];
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];
+              const selectionKey = rowSelectionKey(order.dataAreaId, order.orderNumber);
 
               return (
                 <React.Fragment key={rowId}>
                   <tr className={getOrderRowClassName(order, styles)}>
                     <td className={styles.controlCell}>
-                      {hasLines ? (
-                        <Button
-                          size="small"
-                          appearance="subtle"
-                          className={styles.compactToggleButton}
-                          data-rowid={rowId}
-                          onClick={onToggleOrder}
-                        >
-                          {isExpanded ? '-' : '+'}
-                        </Button>
-                      ) : null}
+                      <div className={styles.controlCellInner}>
+                        {selectionEnabled ? (
+                          <Checkbox
+                            className={styles.rowCheckbox}
+                            checked={selection.isSelected(selectionKey)}
+                            onChange={() => selection.toggle(selectionKey)}
+                            aria-label={`Selecteer order ${order.orderNumber}`}
+                          />
+                        ) : null}
+                        {hasLines ? (
+                          <Button
+                            size="small"
+                            appearance="subtle"
+                            className={styles.compactToggleButton}
+                            data-rowid={rowId}
+                            onClick={onToggleOrder}
+                          >
+                            {isExpanded ? '-' : '+'}
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                     {columns.map((column, columnIndex) => (
                       <td
