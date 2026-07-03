@@ -140,7 +140,8 @@ export default function StepPublish({
             <>
               <Text className={styles.muted} block>
                 Publiceren is geblokkeerd zolang de dataset dubbele sleutelwaarden bevat.
-                Voorbeelden: {(validation.duplicates?.examples || []).join(', ') || '—'}
+                Voorbeelden: {(validation.duplicates?.examples || [])
+                  .map((e) => `${e.value} (${e.count}×)`).join(', ') || '—'}
               </Text>
             </>
           ) : null}

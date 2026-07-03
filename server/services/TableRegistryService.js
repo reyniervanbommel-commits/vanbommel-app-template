@@ -128,12 +128,16 @@ function safeJson(raw) {
 // (fk_join-edges) voor het ER-diagram en de entiteit-kiezer.
 async function getModelOverview() {
   const pool = await getPool();
+  // Excel-datasets (#AB:162) zijn lookup-doelen, geen zelfstandige board-entiteiten: ze horen niet als
+  // losse node in de entiteit-kiezer/ER-nodes (ze hebben geen key_fields en zouden read() laten falen).
+  // Ze blijven wél zichtbaar als doel van een lookup-edge hieronder.
   const tablesRes = await pool.request().query(`
     SELECT t.id, t.[key], t.label, t.description, t.source_entity, t.key_fields, t.sort_order,
            d.relation_kind AS detail_kind, d.detail_source_entity
     FROM dbo.tb_tables t
+    INNER JOIN dbo.tb_sources s ON s.id = t.source_id
     LEFT JOIN dbo.tb_relations d ON d.table_id = t.id AND d.relation_role = 'detail'
-    WHERE t.is_active = 1
+    WHERE t.is_active = 1 AND s.[key] <> 'excel'
     ORDER BY t.sort_order, t.label
   `);
   const edgesRes = await pool.request().query(`

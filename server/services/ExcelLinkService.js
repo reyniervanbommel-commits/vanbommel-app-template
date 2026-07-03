@@ -54,7 +54,11 @@ function isBlank(v) { return v === null || v === undefined || v === ''; }
 function detectType(values) {
   const sample = values.filter((v) => !isBlank(v)).slice(0, SAMPLE_LIMIT);
   if (!sample.length) return 'text';
-  const allNumber = sample.every((v) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v.replace(',', '.')))));
+  // Identifiers met een leidende nul (bv. artikelnr "00123") NIET als getal classificeren: Number()
+  // wist de nul en breekt de sleutel-match. Zulke kolommen blijven tekst (record_key = ruwe waarde).
+  const hasLeadingZeroId = sample.some((v) => typeof v === 'string' && /^0\d/.test(v.trim()));
+  const allNumber = !hasLeadingZeroId
+    && sample.every((v) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v.replace(',', '.')))));
   if (allNumber) return 'number';
   const allDate = sample.every((v) => v instanceof Date || (typeof v === 'string' && !Number.isNaN(Date.parse(v))));
   if (allDate && sample.some((v) => v instanceof Date)) return 'date';
@@ -76,6 +80,10 @@ function normalizeCell(value, dataType) {
 // Beveiliging: eerste sheet, waarden (geen formules), harde rij/kolom-caps.
 // ---------------------------------------------------------------------------
 function parseWorkbook(buffer) {
+  // Beveiliging (#AB:162): xlsx@0.18.5 (npm) kent CVE-2023-30533 (prototype pollution) + CVE-2024-22363
+  // (ReDoS); een npm-fix is er niet (alleen via de SheetJS-CDN). Bewuste risico-acceptatie: upload is
+  // admin-only (requireRole ADMIN), formules staan uit (cellFormula:false), en er gelden harde grootte-/
+  // rij-/kolom-caps. Kolom-keys worden gestript (deriveColumnKey) zodat __proto__ niet als property landt.
   let wb;
   try {
     wb = XLSX.read(buffer, { type: 'buffer', cellDates: true, cellFormula: false, cellHTML: false, dense: false });
@@ -147,8 +155,15 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
       .input('key', sql.NVarChar(64), tableKey)
       .query(`SELECT id FROM dbo.tb_tables WHERE [key] = @key`);
     let tableId;
+    // Bij een her-upload: bestaat er al een gepubliceerde koppeling naar deze dataset? Dan herbouwen we
+    // record_key op de gekoppelde sleutelkolom, zodat de bestaande fk_join blíjft matchen (AC #162: her-upload
+    // behoudt de koppeling). Zonder dit zou record_key terugvallen op synthetische indices en de join stil breken.
+    let linkedKeyField = null;
     if (existing.recordset.length) {
       tableId = Number(existing.recordset[0].id);
+      const linkRes = await new sql.Request(tx).input('k', sql.NVarChar(64), tableKey)
+        .query(`SELECT TOP 1 target_key_field FROM dbo.tb_relations WHERE relation_role = 'lookup' AND target_table_key = @k AND target_key_field IS NOT NULL`);
+      linkedKeyField = linkRes.recordset[0]?.target_key_field || null;
       // Vervang de vorige snapshot volledig: cache + kolommen weg (custom-values bestaan niet op excel-tabellen).
       await new sql.Request(tx).input('t', sql.BigInt, tableId).query(`DELETE FROM dbo.tb_cache WHERE table_id = @t`);
       await new sql.Request(tx).input('t', sql.BigInt, tableId).query(`DELETE FROM dbo.tb_columns WHERE table_id = @t`);
@@ -184,19 +199,33 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
           VALUES (@tableId, 'master', @key, @label, 'source', @key, @dataType, 0, 1, 1, 1, 1, @sortOrder)`);
     }
 
-    // tb_cache (scope master). record_key = synthetische rij-index bij upload; bij publish herschreven
-    // naar de gekozen sleutelwaarde. partition_key = sentinel (partitie-loos).
+    // tb_cache (scope master). record_key = synthetische rij-index bij een verse upload; bij een her-upload
+    // van een al-gekoppelde dataset direct op de sleutelwaarde (linkedKeyField) zodat de join blijft matchen.
+    // partition_key = sentinel (partitie-loos).
     const syncedAt = new Date();
+    const seenKeys = new Set();
+    let droppedForKey = 0;
     for (let i = 0; i < rows.length; i += 1) {
+      let recordKey = String(i + 1);
+      if (linkedKeyField) {
+        const raw = rows[i][linkedKeyField];
+        if (raw === null || raw === undefined || raw === '') { droppedForKey += 1; continue; }
+        recordKey = String(raw).trim().slice(0, 128);
+        if (seenKeys.has(recordKey)) { droppedForKey += 1; continue; } // dubbele sleutel in de nieuwe upload -> overslaan
+        seenKeys.add(recordKey);
+      }
       await new sql.Request(tx)
         .input('tableId', sql.BigInt, tableId)
         .input('partitionKey', sql.NVarChar(32), PARTITION_SENTINEL)
-        .input('recordKey', sql.NVarChar(128), String(i + 1))
+        .input('recordKey', sql.NVarChar(128), recordKey)
         .input('dataJson', sql.NVarChar(sql.MAX), JSON.stringify(rows[i]))
         .input('syncedAt', sql.DateTime2, syncedAt)
         .query(`
           INSERT INTO dbo.tb_cache (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
           VALUES (@tableId, 'master', @partitionKey, @recordKey, ${MASTER_DETAIL_KEY}, @dataJson, @syncedAt, @syncedAt, 0)`);
+    }
+    if (linkedKeyField && droppedForKey > 0) {
+      logger.warn('Her-upload: rijen overgeslagen wegens lege/dubbele gekoppelde sleutel', { tableKey, linkedKeyField, droppedForKey });
     }
 
     // tb_sync_state zodat een eventuele /api/data-preview hasCache=true toont (read gebruikt dit niet voor de join).

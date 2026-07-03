@@ -81,4 +81,16 @@ describe('ExcelLinkService.parseWorkbook', () => {
     const { columns } = parseWorkbook(buf);
     expect(columns[0].dataType).toBe('text');
   });
+
+  it('behandelt identifiers met leidende nul als text (behoudt de sleutelwaarde)', () => {
+    // Artikelnummers als "00123" mogen niet naar 123 gecoerct worden (sleutel-match #AB:162).
+    const buf = toBuffer([
+      ['Artikelnr'],
+      ['00123'],
+      ['00456'],
+    ]);
+    const { columns, rows } = parseWorkbook(buf);
+    expect(columns[0].dataType).toBe('text');
+    expect(rows[0][columns[0].key]).toBe('00123');
+  });
 });
