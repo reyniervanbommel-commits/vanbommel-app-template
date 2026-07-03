@@ -5,11 +5,11 @@ const MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 1000;
 
 const useStyles = makeStyles({
-  cell: {
-    position: 'relative',
-  },
+  cell: {},
   content: {
     minWidth: 0,
+    position: 'relative',
+    height: '100%',
   },
   resizeHandle: {
     position: 'absolute',
@@ -129,14 +129,16 @@ export default function ResizableTableHeaderCell({
       className={combineClassNames(styles.cell, className)}
       style={resolvedWidth ? { width: `${resolvedWidth}px`, minWidth: `${minWidth}px` } : { minWidth: `${minWidth}px` }}
     >
-      <div className={styles.content}>{children}</div>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={`Resize ${columnKey} column`}
-        className={combineClassNames(styles.resizeHandle, dragging ? styles.resizeHandleDragging : '')}
-        onMouseDown={handleResizeMouseDown}
-      />
+      <div className={styles.content}>
+        {children}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Resize ${columnKey} column`}
+          className={combineClassNames(styles.resizeHandle, dragging ? styles.resizeHandleDragging : '')}
+          onMouseDown={handleResizeMouseDown}
+        />
+      </div>
     </th>
   );
 }
