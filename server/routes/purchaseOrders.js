@@ -228,7 +228,6 @@ router.get('/datamodel', requireAnyRole([ROLES.ADMIN]), async (req, res, next) =
       settingsService.getAsync('PO_SYNC_RULES', ''),
       cacheService.getFilterFieldCatalogAndPreview().catch(() => ({ catalog: { header: [], line: [] }, preview: null })),
     ]);
-    await columnsService.syncD365ColumnsFromCatalog(filterMeta.catalog, req.user?.id || null);
     const columns = await columnsService.listColumns({ includeInactive: true });
 
     const syncRules = parseSyncRules(rulesJson);

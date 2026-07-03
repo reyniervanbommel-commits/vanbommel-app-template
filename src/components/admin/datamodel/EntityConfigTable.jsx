@@ -148,7 +148,7 @@ export default function EntityConfigTable({
   );
   const handleExport = useCallback(() => {
     const previewRows = preview?.rows || [];
-    const exampleRow = getExampleRowValues(previewRows, exportD365Fields);
+    const exampleRow = getExampleRowValues(previewRows, exportD365Fields, sampleByField);
     const rowValues = exportD365Fields.map((field) => toExcelCellValue(exampleRow[field]));
     onExportExcel({
       sheetName: exportSheetName,
@@ -156,7 +156,7 @@ export default function EntityConfigTable({
       columnNames: exportColumnNames,
       rowValues,
     });
-  }, [preview, exportD365Fields, exportColumnNames, onExportExcel, exportSheetName, exportFileName]);
+  }, [preview, exportD365Fields, sampleByField, exportColumnNames, onExportExcel, exportSheetName, exportFileName]);
   const hasRunningToggle = Boolean(togglingKey);
   const bulkToggleActions = useMemo(() => BULK_TOGGLE_CONFIG.map((config) => {
     const eligibleColumns = filteredColumns.filter(config.isEligible);

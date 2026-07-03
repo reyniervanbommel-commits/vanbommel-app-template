@@ -45,7 +45,7 @@ export function toExcelCellValue(value) {
   return String(value);
 }
 
-export function getExampleRowValues(previewRows, d365Fields) {
+export function getExampleRowValues(previewRows, d365Fields, sampleByField = {}) {
   for (let i = 0; i < previewRows.length; i += 1) {
     const rowValues = previewRows[i]?.values || {};
     const hasAnyValue = d365Fields.some((field) => (
@@ -53,13 +53,22 @@ export function getExampleRowValues(previewRows, d365Fields) {
     ));
     if (hasAnyValue) return rowValues;
   }
-  return previewRows[0]?.values || {};
+  if (previewRows[0]?.values) return previewRows[0].values;
+  const fallback = {};
+  for (const field of d365Fields) {
+    fallback[field] = sampleByField[field] || '';
+  }
+  return fallback;
 }
 
 export function createSampleByField(preview) {
+  if (preview?.sampleByField && typeof preview.sampleByField === 'object') {
+    return preview.sampleByField;
+  }
   const previewColumns = preview?.columns || [];
   const previewRows = preview?.rows || [];
-  return previewColumns.reduce((lookup, field) => {
+  const lookup = {};
+  for (const field of previewColumns) {
     let bestValue = '—';
     for (let i = 0; i < previewRows.length; i += 1) {
       const candidate = previewRows[i]?.values?.[field];
@@ -68,6 +77,7 @@ export function createSampleByField(preview) {
         break;
       }
     }
-    return { ...lookup, [field]: bestValue };
-  }, {});
+    lookup[field] = bestValue;
+  }
+  return lookup;
 }

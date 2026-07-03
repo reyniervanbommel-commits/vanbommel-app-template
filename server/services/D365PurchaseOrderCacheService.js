@@ -9,7 +9,7 @@ const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
-const { listColumns, getColumnById } = require('./PurchaseOrderColumnsService');
+const { listColumns, getColumnById, syncD365ColumnsFromCatalog } = require('./PurchaseOrderColumnsService');
 const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
 function normalizeOrderLines(lines) {
@@ -79,6 +79,10 @@ const EMPTY_REFRESH_PROGRESS = {
 let refreshProgress = { ...EMPTY_REFRESH_PROGRESS };
 const READ_CACHE_TTL_MS = 30 * 1000;
 const readCacheByScope = new Map();
+const FILTER_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+const FILTER_CATALOG_HEADER_SAMPLE_LIMIT = 250;
+const FILTER_CATALOG_LINE_SAMPLE_LIMIT = 500;
+let filterCatalogCacheEntry = null;
 
 function getReadCacheKey({ includeRemoved = false, userId = null } = {}) {
   return `${includeRemoved ? 1 : 0}|${userId ? Number(userId) : 0}`;
@@ -101,6 +105,26 @@ function setCachedReadPayload(scope, payload) {
     payload,
     expiresAt: Date.now() + READ_CACHE_TTL_MS,
   });
+}
+
+function getCachedFilterCatalogPayload() {
+  if (!filterCatalogCacheEntry) return null;
+  if (filterCatalogCacheEntry.expiresAt <= Date.now()) {
+    filterCatalogCacheEntry = null;
+    return null;
+  }
+  return filterCatalogCacheEntry.payload;
+}
+
+function setCachedFilterCatalogPayload(payload) {
+  filterCatalogCacheEntry = {
+    payload,
+    expiresAt: Date.now() + FILTER_CATALOG_CACHE_TTL_MS,
+  };
+}
+
+function invalidateFilterCatalogCache() {
+  filterCatalogCacheEntry = null;
 }
 
 function invalidateReadCache({ userId = null } = {}) {
@@ -286,76 +310,79 @@ function buildFieldCatalog(level, rows, d365LabelByField) {
     });
 }
 
-function buildPreviewRows(rows, fields, keyBuilder, maxRows) {
-  return rows.slice(0, maxRows).map((raw, idx) => ({
-    id: keyBuilder(raw, idx),
-    values: Object.fromEntries(fields.map((field) => [field, hasMeaningfulValue(raw[field]) ? raw[field] : null])),
-  }));
+function buildSampleByField(catalogRows) {
+  const sampleByField = {};
+  for (const entry of catalogRows) {
+    sampleByField[entry.field] = entry.sampleValues[0] || '—';
+  }
+  return sampleByField;
 }
 
-// Catalogus met filterbare velden + voorbeeldtabellen voor admin-UI.
-// Alleen velden met daadwerkelijke data in de cache worden teruggegeven.
-async function getFilterFieldCatalogAndPreview() {
-  const pool = await getPool();
-  const [headersResult, linesResult, columns] = await Promise.all([
-    pool.request().query(`
-      SELECT TOP 1000 order_number, raw_json
-      FROM dbo.po_cache_headers
-      WHERE removed_in_d365 = 0 AND raw_json IS NOT NULL
-      ORDER BY synced_at DESC
-    `),
-    pool.request().query(`
-      SELECT TOP 2000 order_number, line_number, raw_json
-      FROM dbo.po_cache_lines
-      WHERE raw_json IS NOT NULL
-      ORDER BY synced_at DESC
-    `),
-    listColumns({ includeInactive: true }),
-  ]);
+function toCatalogValueType(column) {
+  if (column.d365Field === 'PurchaseOrderStatus') return 'enum';
+  if (column.dataType === 'number') return 'number';
+  if (column.dataType === 'date') return 'date';
+  return 'text';
+}
 
-  const headerRows = headersResult.recordset.map((row) => {
-    try { return JSON.parse(row.raw_json); } catch { return {}; }
-  });
-  const lineRows = linesResult.recordset.map((row) => {
-    try { return JSON.parse(row.raw_json); } catch { return {}; }
-  });
+function buildCatalogFromColumns(columns, level) {
+  return columns
+    .filter((column) => column.level === level && column.source === 'd365' && column.d365Field)
+    .map((column) => ({
+      level,
+      field: column.d365Field,
+      label: column.label || column.d365Field,
+      valueType: toCatalogValueType(column),
+      nonEmptyCount: 0,
+      fillRatio: 0,
+      sampleValues: [],
+    }))
+    .sort((a, b) => a.field.localeCompare(b.field));
+}
 
-  const headerLabels = new Map(
-    columns
-      .filter((c) => c.level === 'header' && c.source === 'd365' && c.d365Field)
-      .map((c) => [c.d365Field, c.label])
-  );
-  const lineLabels = new Map(
-    columns
-      .filter((c) => c.level === 'line' && c.source === 'd365' && c.d365Field)
-      .map((c) => [c.d365Field, c.label])
-  );
-
-  const headerCatalog = buildFieldCatalog('header', headerRows, headerLabels);
-  const lineCatalog = buildFieldCatalog('line', lineRows, lineLabels);
-
-  const headerFields = headerCatalog.map((c) => c.field);
-  const lineFields = lineCatalog.map((c) => c.field);
-  const headerPreviewRows = buildPreviewRows(
-    headerRows,
-    headerFields,
-    (raw, idx) => `${raw.PurchaseOrderNumber || raw.PurchId || idx}`,
-    120
-  );
-  const linePreviewRows = buildPreviewRows(
-    lineRows,
-    lineFields,
-    (raw, idx) => `${raw.PurchaseOrderNumber || 'po'}-${raw.LineNumber || idx}`,
-    200
-  );
-
+function createFilterCatalogPayload({
+  headerCatalog = [],
+  lineCatalog = [],
+  headerSampledRows = 0,
+  lineSampledRows = 0,
+} = {}) {
   return {
     catalog: { header: headerCatalog, line: lineCatalog },
     preview: {
-      header: { columns: headerFields, rows: headerPreviewRows, sampledRows: headerRows.length },
-      line: { columns: lineFields, rows: linePreviewRows, sampledRows: lineRows.length },
+      header: {
+        columns: [],
+        rows: [],
+        sampledRows: headerSampledRows,
+        sampleByField: buildSampleByField(headerCatalog),
+      },
+      line: {
+        columns: [],
+        rows: [],
+        sampledRows: lineSampledRows,
+        sampleByField: buildSampleByField(lineCatalog),
+      },
     },
   };
+}
+
+// Catalogus voor sync-filters en datamodel-preview.
+// Fast-path: bouw uit kolomregistry (po_columns) zodat de datamodelpagina direct laadt.
+// Tijdens refresh verrijken we deze cache met sampledata uit de bronpayload.
+async function getFilterFieldCatalogAndPreview() {
+  const cachedPayload = getCachedFilterCatalogPayload();
+  if (cachedPayload) {
+    return cachedPayload;
+  }
+
+  const columns = await listColumns({ includeInactive: true });
+  const payload = createFilterCatalogPayload({
+    headerCatalog: buildCatalogFromColumns(columns, 'header'),
+    lineCatalog: buildCatalogFromColumns(columns, 'line'),
+    headerSampledRows: 0,
+    lineSampledRows: 0,
+  });
+  setCachedFilterCatalogPayload(payload);
+  return payload;
 }
 
 async function isStale() {
@@ -436,6 +463,8 @@ async function refresh() {
     const pool = await getPool();
     let watermark = null;
     let saved = 0;
+    const sampledHeaderRows = [];
+    const sampledLineRows = [];
 
     for (const order of items) {
     const raw = order.raw || {};
@@ -452,6 +481,13 @@ async function refresh() {
       invalidLineNumbers,
     } = normalizeOrderLines(order.lines);
     const contentHash = computeOrderHash(order, lines);
+    if (sampledHeaderRows.length < FILTER_CATALOG_HEADER_SAMPLE_LIMIT) {
+      sampledHeaderRows.push(raw);
+    }
+    for (const line of lines) {
+      if (sampledLineRows.length >= FILTER_CATALOG_LINE_SAMPLE_LIMIT) break;
+      sampledLineRows.push(line.raw || line);
+    }
     if (duplicateLineNumbers > 0 || invalidLineNumbers > 0) {
       logger.warn('PO-regels genormaliseerd vóór cache-opslag', {
         dataAreaId,
@@ -565,6 +601,35 @@ async function refresh() {
         SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
         WHERE id = 1
       `);
+
+    // Houd de filtercatalogus in memory up-to-date op basis van de zojuist opgehaalde brondata.
+    // Hierdoor blijft /datamodel snel en hoeven we geen zware raw_json-samples uit SQL te trekken.
+    try {
+      const allColumns = await listColumns({ includeInactive: true });
+      const headerLabels = new Map(
+        allColumns
+          .filter((column) => column.level === 'header' && column.source === 'd365' && column.d365Field)
+          .map((column) => [column.d365Field, column.label])
+      );
+      const lineLabels = new Map(
+        allColumns
+          .filter((column) => column.level === 'line' && column.source === 'd365' && column.d365Field)
+          .map((column) => [column.d365Field, column.label])
+      );
+      const headerCatalog = buildFieldCatalog('header', sampledHeaderRows, headerLabels);
+      const lineCatalog = buildFieldCatalog('line', sampledLineRows, lineLabels);
+
+      await syncD365ColumnsFromCatalog({ header: headerCatalog, line: lineCatalog }, null);
+      setCachedFilterCatalogPayload(createFilterCatalogPayload({
+        headerCatalog,
+        lineCatalog,
+        headerSampledRows: sampledHeaderRows.length,
+        lineSampledRows: sampledLineRows.length,
+      }));
+    } catch (catalogErr) {
+      invalidateFilterCatalogCache();
+      logger.warn('Filtercatalogus na refresh opbouwen mislukt', { error: catalogErr.message });
+    }
 
     logger.info('PO-cache ververst', { orders: items.length, truncated: result.truncated });
     invalidateReadCache();
@@ -1343,4 +1408,5 @@ module.exports = {
   listHiddenInFilterRows,
   normalizeExclusionRows,
   computeOrderHash,
+  invalidateFilterCatalogCache,
 };
