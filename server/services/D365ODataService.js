@@ -588,5 +588,9 @@ module.exports = {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  // Low-level OData-primitieven, herbruikt door de generieke D365ODataProvider (#AB:161/#139).
+  getBaseUrl,
+  buildHeaders,
+  fetchODataJson,
   __resetOAuthTokenCache,
 };

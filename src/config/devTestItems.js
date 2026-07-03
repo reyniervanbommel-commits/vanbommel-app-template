@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-161',
+    title: 'Story #161 - Vendors & Items als entiteiten op de Data model-pagina (tb_*-laag)',
+    checks: [
+      'Data model-pagina toont bovenaan een ER-overzicht met Inkooporders, Leveranciers en Artikelen + de relaties (PO n:1 Leverancier, regel n:1 Artikel)',
+      'Entiteit-kiezer (tabs) schakelt tussen Inkooporders (bestaande weergave), Leveranciers en Artikelen',
+      'Tab Leveranciers toont de VendorsV2-kolommen met voorbeeldwaarden en een werkende "Sync nu"-knop',
+      'Tab Artikelen toont de ReleasedProductsV2-kolommen (o.a. Artikelnaam = SearchName) met voorbeeldwaarden',
+      'Op de generieke inkooporder-data (/api/data/purchase-orders) verschijnt de leveranciersnaam op de kop en de artikelnaam op de regel als read-only lookup-kolom',
+    ],
+  },
+  {
     id: 'story-134',
     title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
     checks: [

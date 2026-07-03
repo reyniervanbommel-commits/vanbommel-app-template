@@ -16,6 +16,15 @@ function toColumnId(raw) {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+// GET /api/data — model-overzicht: alle actieve tabellen + lookup-edges (entiteit-kiezer + ER-diagram).
+router.get('/', async (req, res, next) => {
+  try {
+    return res.json(await registry.getModelOverview());
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {

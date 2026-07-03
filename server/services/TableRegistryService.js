@@ -61,7 +61,7 @@ async function getTableByKey(tableKey) {
              r.detail_source_entity, r.relation_kind, r.detail_key_fields, r.join_keys_json
       FROM dbo.tb_tables t
       INNER JOIN dbo.tb_sources s ON s.id = t.source_id
-      LEFT JOIN dbo.tb_relations r ON r.table_id = t.id
+      LEFT JOIN dbo.tb_relations r ON r.table_id = t.id AND r.relation_role = 'detail'
       WHERE t.[key] = @key
     `);
   const row = result.recordset[0];
@@ -96,12 +96,69 @@ async function getTableByKey(tableKey) {
   };
 }
 
+// Lookup-relaties (fk_join) van een tabel naar andere tb_tables — voor read-only verrijking (#AB:161).
+// Losstaand van de master-detail-relatie (relation_role='detail') die getTableByKey teruggeeft.
+async function getLookups(tableId) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
+      FROM dbo.tb_relations
+      WHERE table_id = @tableId AND relation_role = 'lookup'
+    `);
+  return result.recordset.map((r) => ({
+    sourceScope: r.source_scope || 'master',
+    sourceField: r.source_field || null,
+    targetTableKey: r.target_table_key || null,
+    targetKeyField: r.target_key_field || null,
+    fields: r.lookup_fields_json ? safeJson(r.lookup_fields_json) : {},
+  })).filter((l) => l.sourceField && l.targetTableKey && Object.keys(l.fields).length > 0);
+}
+
 function safeJson(raw) {
   try {
     return JSON.parse(raw);
   } catch {
     return {};
   }
+}
+
+// Model-overzicht voor de admin Data model-pagina (#AB:161): alle actieve tabellen + lookup-relaties
+// (fk_join-edges) voor het ER-diagram en de entiteit-kiezer.
+async function getModelOverview() {
+  const pool = await getPool();
+  const tablesRes = await pool.request().query(`
+    SELECT t.id, t.[key], t.label, t.description, t.source_entity, t.key_fields, t.sort_order,
+           d.relation_kind AS detail_kind, d.detail_source_entity
+    FROM dbo.tb_tables t
+    LEFT JOIN dbo.tb_relations d ON d.table_id = t.id AND d.relation_role = 'detail'
+    WHERE t.is_active = 1
+    ORDER BY t.sort_order, t.label
+  `);
+  const edgesRes = await pool.request().query(`
+    SELECT tt.[key] AS from_key, r.target_table_key AS to_key, r.source_scope, r.source_field
+    FROM dbo.tb_relations r
+    INNER JOIN dbo.tb_tables tt ON tt.id = r.table_id
+    WHERE r.relation_role = 'lookup'
+  `);
+  const tables = tablesRes.recordset.map((r) => ({
+    key: r.key,
+    label: r.label,
+    description: r.description || null,
+    sourceEntity: r.source_entity,
+    keyFields: r.key_fields ? r.key_fields.split(',').map((f) => f.trim()).filter(Boolean) : [],
+    hasDetail: Boolean(r.detail_kind && r.detail_kind !== 'none'),
+    detailEntity: r.detail_source_entity || null,
+  }));
+  const edges = edgesRes.recordset.map((r) => ({
+    from: r.from_key,
+    to: r.to_key,
+    cardinality: 'n:1',
+    sourceScope: r.source_scope || 'master',
+    on: r.source_field || null,
+  }));
+  return { tables, edges };
 }
 
 async function listColumns({ tableId, scope = null, includeInactive = false }) {
@@ -136,5 +193,7 @@ module.exports = {
   getTableByKey,
   listColumns,
   getColumnById,
+  getLookups,
+  getModelOverview,
   mapColumnRow,
 };
