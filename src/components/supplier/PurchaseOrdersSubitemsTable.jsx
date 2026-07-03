@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
+import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
+import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 
 const useStyles = makeStyles({
   subTable: {
@@ -32,6 +34,16 @@ const useStyles = makeStyles({
       opacity: 1,
       pointerEvents: 'auto',
     },
+  },
+  headerCellContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('6px'),
+  },
+  headerCellLabel: {
+    flexGrow: 1,
+    minWidth: 0,
   },
   dragDropCell: { cursor: 'grab' },
   dragSourceCell: { opacity: 0.6 },
@@ -71,6 +83,12 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  noRowsCell: {
+    ...shorthands.padding('8px'),
+    textAlign: 'center',
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 export default function PurchaseOrdersSubitemsTable({
@@ -92,6 +110,23 @@ export default function PurchaseOrdersSubitemsTable({
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
   const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
+  const {
+    processedItems: processedLines,
+    filterByColumn,
+    sortState,
+    setFilterOperator,
+    setFilterValue,
+    setFilterSecondaryValue,
+    clearColumnFilter,
+    setSortDirection,
+  } = usePurchaseOrderTableView({ items: lines, columns: lineColumns });
+  const groupingColumnKey = '';
+  const groupingColor = '';
+  const noop = useCallback(() => {}, []);
+  const visibleLines = useMemo(
+    () => (Array.isArray(processedLines) ? processedLines : []),
+    [processedLines]
+  );
 
   if (!lineColumns.length) {
     return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
@@ -116,19 +151,41 @@ export default function PurchaseOrdersSubitemsTable({
               onResizeEnd={onSaveColumnWidth}
               {...lineColumnDrag.getCellDragProps(column.key)}
             >
-              <PurchaseOrderColumnHeader
-                column={column}
-                onRename={onRenameColumn}
-                onRemove={onRemoveColumn}
-                isAdmin={isAdmin}
-                onToggleWriteback={onToggleWriteback}
-              />
+              <div className={styles.headerCellContent}>
+                <div className={styles.headerCellLabel}>
+                  <PurchaseOrderColumnHeader
+                    column={column}
+                    onRename={onRenameColumn}
+                    onRemove={onRemoveColumn}
+                    isAdmin={isAdmin}
+                    onToggleWriteback={onToggleWriteback}
+                    showActionsMenu={false}
+                  />
+                </div>
+                <PurchaseOrderColumnFilterMenu
+                  column={column}
+                  filter={filterByColumn[column.key]}
+                  sortState={sortState}
+                  groupingColumnKey={groupingColumnKey}
+                  groupingColor={groupingColor}
+                  isAdmin={isAdmin}
+                  onToggleWriteback={onToggleWriteback}
+                  onSetSortDirection={setSortDirection}
+                  onSetOperator={setFilterOperator}
+                  onSetValue={setFilterValue}
+                  onSetSecondaryValue={setFilterSecondaryValue}
+                  onClearFilter={clearColumnFilter}
+                  onSetGroupingColumn={noop}
+                  onClearGrouping={noop}
+                  onSetGroupingColor={noop}
+                />
+              </div>
             </ResizableTableHeaderCell>
           ))}
         </tr>
       </thead>
       <tbody>
-        {lines.map((line, index) => (
+        {visibleLines.map((line, index) => (
           <tr key={`${rowId}-line-${line.lineNumber ?? index}`}>
             {lineColumns.map((column) => {
               const rawValue = line.values?.[column.key];
@@ -199,6 +256,13 @@ export default function PurchaseOrdersSubitemsTable({
             })}
           </tr>
         ))}
+        {!visibleLines.length ? (
+          <tr>
+            <td className={styles.noRowsCell} colSpan={lineColumns.length}>
+              No lines match the active filters
+            </td>
+          </tr>
+        ) : null}
       </tbody>
     </table>
   );
