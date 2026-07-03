@@ -39,13 +39,16 @@ function mapColumnRow(row) {
     filterable: Boolean(row.filterable),
     sortable: Boolean(row.sortable),
     isActive: Boolean(row.is_active),
+    // Los van is_active: zichtbaar in de "verborgen orders in D365-filter"-popup (#AB:170).
+    visibleAtDelete: Boolean(row.visible_at_delete),
     sortOrder: Number(row.sort_order),
   };
 }
 
 const COLUMN_SELECT = `
   SELECT id, table_id, scope, [key], label, source, source_field, data_type, options_json,
-         writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order
+         writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order,
+         visible_at_delete
   FROM dbo.tb_columns
 `;
 

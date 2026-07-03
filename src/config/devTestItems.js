@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-170',
+    title: 'Story #170 - tb_* kolom-toggles (board-cutover Fase 1)',
+    checks: [
+      'PATCH /api/data/:tableKey/columns/:id/visibility zet een kolom op zichtbaar/verborgen (is_active); verborgen kolommen komen niet meer terug in GET /api/data/:tableKey',
+      'PATCH /api/data/:tableKey/columns/:id/writeback zet writable + mechanisme; een ongeldig mechanisme geeft 400',
+      'PATCH /api/data/:tableKey/columns/:id/visible-at-delete zet de vlag los van is_active (migratie 017 voegde tb_columns.visible_at_delete toe)',
+      'De kolomrespons bevat nu visibleAtDelete; write-back-config blijft behouden na een refresh',
+      'Backend-only pariteitsstap: nog geen UI-wijziging op het bord (dat volgt in de cutover, Fase 7)',
+    ],
+  },
+  {
     id: 'story-134',
     title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
     checks: [
