@@ -41,17 +41,17 @@ isProject: false
 - **Lookup-verrijking van PO**: vendor-naam als read-only kolom op de PO-header, item-omschrijving op de PO-line. Cache-gedreven, geen extra D365-call per rij.
 - Buiten scope: schrijf-terug op Vendors/Items zelf; meerdere detail-niveaus; een aparte browse-pagina buiten de admin-datamodel-tab.
 
-## Koppeling (bevestigd tegen de code)
-De app doet de vendor-join nu al ad-hoc bij het ophalen ([D365ODataService.js:369-401](server/services/D365ODataService.js#L369-L401), `fetchVendorsByAccounts` op `/data/VendorsV2`). De generieke `fk_join` formaliseert dat en breidt het uit met Items.
+## Koppeling (geverifieerd tegen de code én D365 `$metadata`)
+De app doet de vendor-join nu al ad-hoc bij het ophalen ([D365ODataService.js:369-401](server/services/D365ODataService.js#L369-L401), `fetchVendorsByAccounts` op `/data/VendorsV2`). De generieke `fk_join` formaliseert dat en breidt het uit met Items. Sleutels bevestigd op D365 ACC (`vanbommel-acc.sandbox`, company WHSL): `VendorV2` key = `dataAreaId, VendorAccountNumber`; `ReleasedProductV2` key = `dataAreaId, ItemNumber`.
 
 | Relatie | Van (bron-veld) | Naar (doel-key) | Partition | Verrijkingsveld |
 |---------|-----------------|-----------------|-----------|-----------------|
-| PO → Vendor (n:1) | header `OrderVendorAccountNumber` | Vendor `VendorAccountNumber` | `dataAreaId` | `VendorOrganizationName` |
-| PO-line → Item (n:1) | line `ItemNumber` | Item `ItemNumber` | `dataAreaId` | `ProductName` (te bevestigen) |
+| PO → Vendor (n:1) | header `OrderVendorAccountNumber` | Vendor `VendorAccountNumber` | `dataAreaId` | `VendorOrganizationName` ✓ |
+| PO-line → Item (n:1) | line `ItemNumber` | Item `ItemNumber` | `dataAreaId` | `SearchName` (fallback `ProductSearchName`) |
 
 ## Beslissingen en aannames
-- **Vendor-entiteit = `VendorsV2`** (niet V3). De werkende code gebruikt V2 met velden `VendorAccountNumber`/`VendorOrganizationName` ([D365ODataService.js:173-183](server/services/D365ODataService.js#L173-L183)). Als V3 gewenst is, is dat een expliciete keuze met veld-mapping-controle.
-- **Item-entiteit = `ReleasedProductsV2`**, key `dataAreaId,ItemNumber`. Omschrijvingsveld (`ProductName` vs `SearchName`) verifiëren tegen `$metadata` vóór het seeden van de kolommen.
+- **Vendor-entiteit = `VendorsV2`** (EntityType `VendorV2`; akkoord van gebruiker, niet V3). Bevestigd: velden `VendorAccountNumber`/`VendorOrganizationName` bestaan ([D365ODataService.js:173-183](server/services/D365ODataService.js#L173-L183)).
+- **Item-entiteit = `ReleasedProductsV2`** (EntityType `ReleasedProductV2`), key `dataAreaId,ItemNumber` (geverifieerd). ⚠️ **`ProductName` bestaat NIET** op deze entiteit — het effectieve naamveld is **`SearchName`** (of `ProductSearchName`). De PO-line heeft daarnaast al een eigen `description`-veld uit `PurchaseOrderLines`; de item-verrijking voegt de master-itemnaam toe.
 - **`tb_relations` moet meerdere relaties per tabel toestaan.** Nu blokkeert `UQ_tb_relations_table` ([011_tb_metamodel.sql:147](scripts/db/migrations/011_tb_metamodel.sql#L147)) dat: PO krijgt er straks drie (`expand`→lines, `fk_join`→vendors, `fk_join`→items). Migratie 015 vervangt de unieke constraint en vult `join_keys_json` op de fk_join-rijen.
 - **Verrijkingskolommen zijn read-only afgeleid**, niet als `tb_columns` met eigen waarde-opslag — ze komen puur uit de gejoinde cache.
 
@@ -88,6 +88,6 @@ De app doet de vendor-join nu al ad-hoc bij het ophalen ([D365ODataService.js:36
 - Versie verhogen in [src/config/version.js](src/config/version.js).
 
 ## Risico's / aandachtspunten
-- Item-omschrijvingsveld en exacte `ReleasedProductsV2`-key verifiëren tegen `$metadata` vóór seeden.
+- ✓ Geverifieerd tegen `$metadata` (2026-07-03): sleutels bevestigd; item-naam = `SearchName` (geen `ProductName`).
 - `tb_relations`-constraint verwijderen is een schema-wijziging; migratie idempotent + non-destructief houden.
 - Twee extra syncs verhogen D365-load; hergebruik `cache_mode='auto'` + `stale_minutes` en overweeg vendors/items minder vaak te verversen dan PO.

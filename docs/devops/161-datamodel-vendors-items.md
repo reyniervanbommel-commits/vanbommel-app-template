@@ -44,7 +44,7 @@
 | Relatie | Van (bron-veld) | Naar (doel-key) | Partition | Verrijkingsveld |
 |---------|-----------------|-----------------|-----------|-----------------|
 | PO → Vendor (n:1) | header `OrderVendorAccountNumber` | Vendor `VendorAccountNumber` | `dataAreaId` | `VendorOrganizationName` |
-| PO-line → Item (n:1) | line `ItemNumber` | Item `ItemNumber` | `dataAreaId` | `ProductName` (te bevestigen tegen `$metadata`) |
+| PO-line → Item (n:1) | line `ItemNumber` | Item `ItemNumber` | `dataAreaId` | `SearchName` (fallback `ProductSearchName`) — `ProductName` bestaat NIET |
 
 ---
 
@@ -61,8 +61,8 @@
 
 ## Beslissingen / aandachtspunten
 
-- **Vendor-entiteit = `VendorsV2`** (niet V3): de werkende code gebruikt V2 met `VendorAccountNumber`/`VendorOrganizationName`.
-- **Item-omschrijvingsveld** (`ProductName` vs `SearchName`) en exacte `ReleasedProductsV2`-key verifiëren tegen `$metadata` vóór seeden.
+- **Vendor-entiteit = `VendorsV2`** (EntityType `VendorV2`, akkoord gebruiker): velden `VendorAccountNumber`/`VendorOrganizationName` bevestigd. Key = `dataAreaId, VendorAccountNumber` ✓.
+- **Item-entiteit = `ReleasedProductsV2`** (EntityType `ReleasedProductV2`): key = `dataAreaId, ItemNumber` ✓ (geverifieerd tegen `$metadata` 2026-07-03). ⚠️ `ProductName` bestaat NIET; item-naam = **`SearchName`** (fallback `ProductSearchName`).
 - `tb_relations` `UQ_tb_relations_table` (1 relatie per tabel) moet vervangen worden om PO zijn 3 relaties te geven.
 - Twee extra syncs verhogen D365-load: `cache_mode='auto'` + ruimere `stale_minutes` voor vendors/items.
 
