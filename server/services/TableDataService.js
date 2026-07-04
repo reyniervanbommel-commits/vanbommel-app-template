@@ -14,7 +14,7 @@ const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders } = require('./D365ODataService');
-const { getPool, getTableByKey, listColumns } = require('./TableRegistryService');
+const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
@@ -261,6 +261,88 @@ async function refresh(tableKey) {
 }
 
 // ---------------------------------------------------------------------------
+// fk_join lookup-verrijking (fundament voor de Excel-koppeling #AB:162; overgenomen uit #161):
+// read-only afgeleide kolommen uit de cache van een andere tabel. Cache-gedreven, geen bron-call per rij.
+// Excel-doeltabellen (provider 'excel') matchen partitie-loos (een Excel kent geen dataAreaId).
+// ---------------------------------------------------------------------------
+async function loadLookupEnrichment(table) {
+  const lookups = await getLookups(table.id);
+  if (!lookups.length) return { lookups: [], masterCols: [], detailCols: [] };
+
+  const pool = await getPool();
+  const enriched = [];
+  const masterCols = [];
+  const detailCols = [];
+
+  for (const lk of lookups) {
+    let targetTable;
+    try {
+      targetTable = await getTableByKey(lk.targetTableKey);
+    } catch {
+      continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
+    }
+    const targetColumns = await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false });
+    const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+
+    const partitionless = targetTable.source && targetTable.source.providerType === 'excel';
+
+    const cacheRes = await pool.request()
+      .input('tableId', sql.BigInt, targetTable.id)
+      .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
+              WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`);
+    const byKey = new Map();
+    for (const r of cacheRes.recordset) {
+      const mapKey = partitionless ? String(r.record_key) : `${String(r.partition_key).toLowerCase()}|${r.record_key}`;
+      byKey.set(mapKey, parseJson(r.data_json));
+    }
+
+    const fieldEntries = Object.entries(lk.fields); // [afgeleide-kolom-key, doel-kolom-key]
+    const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
+      const tc = targetColByKey.get(targetColKey);
+      return {
+        id: null,
+        tableId: table.id,
+        scope: lk.sourceScope,
+        key: derivedKey,
+        label: tc ? `${tc.label} (${targetTable.label})` : derivedKey,
+        source: 'lookup',
+        sourceField: null,
+        dataType: tc ? tc.dataType : 'text',
+        options: null,
+        writable: false,
+        writeMechanism: null,
+        isDefaultVisible: true,
+        filterable: false,
+        sortable: true,
+        isActive: true,
+        sortOrder: 9000,
+        lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
+      };
+    });
+    if (lk.sourceScope === 'detail') detailCols.push(...synthetic);
+    else masterCols.push(...synthetic);
+    enriched.push({ ...lk, byKey, fieldEntries, partitionless });
+  }
+
+  return { lookups: enriched, masterCols, detailCols };
+}
+
+function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
+  for (const lk of enrichedLookups) {
+    if (lk.sourceScope !== scope) continue;
+    const fkVal = valueBag[lk.sourceField];
+    const hasFk = fkVal !== null && fkVal !== undefined && fkVal !== '';
+    const lookupKey = lk.partitionless
+      ? String(fkVal).trim()
+      : `${String(partitionKey).toLowerCase()}|${String(fkVal).trim()}`;
+    const targetData = hasFk ? lk.byKey.get(lookupKey) : null;
+    for (const [derivedKey, targetColKey] of lk.fieldEntries) {
+      valueBag[derivedKey] = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
 async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
@@ -331,6 +413,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     return values;
   }
 
+  const enrichment = await loadLookupEnrichment(table);
+
   let newCount = 0;
   let changedCount = 0;
   const rows = mastersResult.recordset.map((m) => {
@@ -339,7 +423,9 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
-      return { detailKey: d.detail_key, values: valuesFor(detailCols, parseJson(d.data_json), detailCustom) };
+      const detailValues = valuesFor(detailCols, parseJson(d.data_json), detailCustom);
+      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail');
+      return { detailKey: d.detail_key, values: detailValues };
     });
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
@@ -349,13 +435,16 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     if (isNew) newCount += 1;
     else if (isChanged) changedCount += 1;
 
+    const masterValues = valuesFor(masterCols, masterJson, masterCustom);
+    applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+
     return {
       partitionKey: m.partition_key,
       recordKey: m.record_key,
       removedAtSource: Boolean(m.removed_at_source),
       isNew,
       isChanged,
-      values: valuesFor(masterCols, masterJson, masterCustom),
+      values: masterValues,
       details,
       detailCount: details.length,
     };
@@ -373,7 +462,12 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     stale,
     hasCache: Boolean(lastFullSyncAt),
     staleThresholdMinutes,
-    meta: { columns: { master: masterCols, detail: detailCols } },
+    meta: {
+      columns: {
+        master: [...masterCols, ...enrichment.masterCols],
+        detail: [...detailCols, ...enrichment.detailCols],
+      },
+    },
     rows,
     total: rows.length,
     lastViewedAt: lastViewedAt ? new Date(lastViewedAt).toISOString() : null,
@@ -498,5 +592,6 @@ module.exports = {
   getLastViewedAt,
   markViewed,
   computeContentHash,
+  applyLookups,
   FETCH_ADAPTERS,
 };

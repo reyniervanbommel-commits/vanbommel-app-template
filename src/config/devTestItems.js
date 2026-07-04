@@ -1,5 +1,17 @@
 export const devTestItems = [
   {
+    id: 'feature-162',
+    title: 'Feature #162 - Excel-koppeling naar hoofdtabel (standalone op develop)',
+    checks: [
+      'Data model-pagina heeft een tab "Externe koppelingen" met een 4-staps wizard (Uploaden → Sleutels → Kolommen → Publiceren)',
+      'Een Excel/CSV uploaden toont de gedetecteerde kolommen met type en voorbeeldwaarden',
+      'Bij het koppelen kies je hoofdtabel, scope (kop/regel), hoofdtabel-sleutelveld en dataset-sleutelveld',
+      'Valideren toont de match-rate; dubbele sleutelwaarden in de dataset blokkeren publiceren (badge "Dubbele sleutels")',
+      'Na publiceren verschijnen de gekozen Excel-kolommen als read-only kolommen op de hoofdtabel (/api/data/purchase-orders)',
+      'Een dataset opnieuw uploaden vervangt de data maar behoudt de koppeling; een koppeling kan verwijderd worden',
+    ],
+  },
+  {
     id: 'story-134',
     title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
     checks: [
