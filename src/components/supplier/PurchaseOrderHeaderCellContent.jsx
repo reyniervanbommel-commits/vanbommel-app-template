@@ -4,6 +4,7 @@ import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
+import { resolveImageUrl } from '../../utils/imageColumnUrl';
 
 const useStyles = makeStyles({
   removedText: {
@@ -15,6 +16,13 @@ const useStyles = makeStyles({
   },
   rowBadge: {
     marginLeft: '6px',
+  },
+  image: {
+    height: '30px',
+    maxWidth: '100%',
+    objectFit: 'contain',
+    display: 'block',
+    borderRadius: tokens.borderRadiusSmall,
   },
 });
 
@@ -47,6 +55,27 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
       basedOnValue,
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
+
+  // Image-kolommen zijn read-only en afgeleid: de URL wordt uit een andere kolom
+  // opgebouwd (resolveImageUrl). Geen EditableCell, geen opgeslagen waarde.
+  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+    const url = resolveImageUrl(column, order.values);
+    if (!url) {
+      // Geen bronwaarde of onvolledige/onveilige config: niets renderen.
+      return null;
+    }
+    return (
+      <img
+        className={styles.image}
+        src={url}
+        alt={`${column.label} voor order ${order.orderNumber}`}
+        loading="lazy"
+        draggable={false}
+        // Verberg de img bij een kapotte URL zodat er geen gebroken-afbeelding-icoon verschijnt.
+        onError={(event) => { event.currentTarget.style.display = 'none'; }}
+      />
+    );
+  }
 
   if (column.source === 'custom' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (

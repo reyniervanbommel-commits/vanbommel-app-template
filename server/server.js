@@ -34,7 +34,17 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // Image-kolommen laden plaatjes van externe https-hosts (user-gestuurde URL-template).
+      // Bewuste keuze: https: breed toestaan i.p.v. host-whitelist (hosts zijn niet vooraf bekend);
+      // afbeeldingen voeren geen code uit, dus dit is een laag risico t.o.v. script-src.
+      'img-src': ["'self'", 'data:', 'https:'],
+    },
+  },
+}));
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())

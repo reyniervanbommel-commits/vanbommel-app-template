@@ -1,7 +1,10 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Dropdown, Input, Option, Popover, PopoverSurface, PopoverTrigger, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import React, { memo, useCallback, useState } from 'react';
+import { Button, Popover, PopoverSurface, PopoverTrigger, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
+import PurchaseOrderColumnFilterSection from './PurchaseOrderColumnFilterSection';
+import PurchaseOrderColumnMenuActions from './PurchaseOrderColumnMenuActions';
+import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 
 const useStyles = makeStyles({
   trigger: {
@@ -53,65 +56,16 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: '4px',
   },
-  submenuButton: {
-    justifyContent: 'space-between',
-  },
-  submenuButtonActive: {
-    backgroundColor: tokens.colorNeutralBackground1Selected,
-  },
-  sortActions: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('4px'),
-  },
-  sortButton: {
-    justifyContent: 'flex-start',
-  },
   divider: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
   fieldTitle: {
     fontWeight: tokens.fontWeightSemibold,
   },
-  filterRow: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('6px'),
-  },
-  actionRow: {
-    display: 'flex',
-    ...shorthands.gap('6px'),
-  },
-  hint: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-  },
 });
-
-// Monday-stijl kolomtypes voor "Kolom rechts toevoegen". label = standaardnaam
-// (direct inline te hernoemen); dataType mapt op de backend-datatypes.
-const NEW_COLUMN_TYPES = [
-  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
-  { key: 'text', label: 'Tekst', dataType: 'text' },
-  { key: 'number', label: 'Nummers', dataType: 'number' },
-  { key: 'date', label: 'Datum', dataType: 'date' },
-  { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
-];
 
 function isDateColumn(column) {
   return column?.dataType === 'date';
-}
-
-function getDefaultOperator(column) {
-  return isDateColumn(column) ? 'before' : 'contains';
-}
-
-function getDraftFromFilter(column, filter) {
-  return {
-    operator: filter?.operator || getDefaultOperator(column),
-    value: filter?.value || '',
-    secondaryValue: filter?.secondaryValue || '',
-  };
 }
 
 export function isColumnFilterActive(column, filter) {
@@ -131,6 +85,7 @@ function PurchaseOrderColumnFilterMenu({
   groupingColumnKey,
   groupingColor,
   isAdmin,
+  availableColumns = [],
   onToggleWriteback,
   onSetSortDirection,
   onSetOperator,
@@ -151,27 +106,14 @@ function PurchaseOrderColumnFilterMenu({
   const [open, setOpen] = useState(false);
   // Zijpaneel-submenu: 'none' | 'group' (categorie/groeperen) | 'add' (kolom rechts toevoegen).
   const [activeSubmenu, setActiveSubmenu] = useState('none');
-  const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
+  // Image-kolommen zijn afgeleid en hebben geen opgeslagen waarde: filteren is zinloos.
+  const isImage = column?.dataType === 'image';
   const isGroupingColumn = groupingColumnKey === column.key;
   const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
-  const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
   const filterActive = isColumnFilterActive(column, filter);
-  const writable = !!column.writableToD365;
-  const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
-  const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
-  const isLineColumn = column.level === 'line';
-  const isLineNumberColumn = column.level === 'line' && column.dataType === 'number';
-  const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
-  const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
-  const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
-
-  useEffect(() => {
-    if (open) {
-      setDraft(getDraftFromFilter(column, filter));
-    }
-  }, [open, column, filter]);
+  const canAddColumn = typeof onAddColumnRightOf === 'function';
 
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
@@ -182,91 +124,16 @@ function PurchaseOrderColumnFilterMenu({
     setActiveSubmenu((prev) => (prev === name ? 'none' : name));
   }, []);
 
-  const canAddColumn = typeof onAddColumnRightOf === 'function';
+  const closePopover = useCallback(() => setOpen(false), []);
+
+  // Voegt de gekozen kolom rechts toe en sluit het menu (zelfde afsluitgedrag voor
+  // alle types, inclusief de image-config die via de sub-pane binnenkomt).
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
     setActiveSubmenu('none');
     setOpen(false);
   }, [column, onAddColumnRightOf]);
 
-  const handleRemoveColumn = useCallback(async () => {
-    if (!canRemoveColumn) return;
-    const shouldDelete = window.confirm(
-      `Delete column "${column.label}"? This permanently removes the column and all related values from SQL.`
-    );
-    if (!shouldDelete) return;
-    try {
-      await onRemoveColumn(column.id);
-      setOpen(false);
-    } catch (err) {
-      window.alert(err?.message || 'Deleting the column failed.');
-    }
-  }, [canRemoveColumn, column.id, column.label, onRemoveColumn]);
-
-  const setSortAsc = useCallback(() => {
-    onSetSortDirection(column.key, 'asc');
-    setOpen(false);
-  }, [column.key, onSetSortDirection]);
-
-  const setSortDesc = useCallback(() => {
-    onSetSortDirection(column.key, 'desc');
-    setOpen(false);
-  }, [column.key, onSetSortDirection]);
-
-  const clearSort = useCallback(() => {
-    onSetSortDirection('', 'none');
-    setOpen(false);
-  }, [onSetSortDirection]);
-
-  const handleOperatorSelect = useCallback((_, data) => {
-    if (!data.optionValue) return;
-    setDraft((prev) => ({ ...prev, operator: data.optionValue }));
-  }, []);
-
-  const handleValueChange = useCallback((event) => {
-    const nextValue = event.target.value;
-    setDraft((prev) => ({ ...prev, value: nextValue }));
-  }, []);
-
-  const handleSecondaryValueChange = useCallback((event) => {
-    const nextValue = event.target.value;
-    setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
-  }, []);
-
-  const handleApply = useCallback(() => {
-    onSetOperator(column.key, draft.operator);
-    onSetValue(column.key, draft.value);
-    if (isDate && draft.operator === 'between') {
-      onSetSecondaryValue(column.key, draft.secondaryValue);
-    } else {
-      onSetSecondaryValue(column.key, '');
-    }
-    setOpen(false);
-  }, [column.key, draft, isDate, onSetOperator, onSetSecondaryValue, onSetValue]);
-
-  const handleClearFilter = useCallback(() => {
-    onClearFilter(column.key);
-    setOpen(false);
-  }, [column.key, onClearFilter]);
-
-  const handleToggleWriteback = useCallback(() => {
-    if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
-  }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
-  const handleToggleLineTotal = useCallback(() => {
-    if (!canToggleLineTotal) return;
-    onToggleLineColumnSum(column.key, !isLineColumnSummed);
-    setOpen(false);
-  }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum]);
-  const handlePushLineTotalToHeader = useCallback(() => {
-    if (!canPushLineTotalToHeader) return;
-    onPushLineTotalToHeader(column);
-    setOpen(false);
-  }, [canPushLineTotalToHeader, column, onPushLineTotalToHeader]);
-  const handlePushLineValuesToHeader = useCallback(() => {
-    if (!canPushLineValuesToHeader) return;
-    onPushLineValuesToHeader(column);
-    setOpen(false);
-  }, [canPushLineValuesToHeader, column, onPushLineValuesToHeader]);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -287,158 +154,48 @@ function PurchaseOrderColumnFilterMenu({
       </PopoverTrigger>
       <PopoverSurface className={styles.surface}>
         <div className={styles.mainPane}>
-        <Text className={styles.fieldTitle}>{column.label}</Text>
-        <div className={styles.divider} />
-        <div className={styles.sortActions}>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>
-            Sort A to Z
-          </Button>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortDesc}>
-            Sort Z to A
-          </Button>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={clearSort}>
-            Clear sort
-          </Button>
-        </div>
-        <div className={styles.divider} />
-        <Button
-          className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
-          appearance="subtle"
-          size="small"
-          onClick={() => toggleSubmenu('group')}
-        >
-          <span>Categorie / groeperen</span>
-          <span aria-hidden>›</span>
-        </Button>
-        {canToggleWriteback ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
-                {writable ? 'Sync uitzetten' : 'Sync aanzetten'}
-              </span>
-            </Button>
-          </>
-        ) : null}
-        {canAddColumn ? (
-          <>
-            <div className={styles.divider} />
-            <Button
-              className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'add' ? styles.submenuButtonActive : ''}`}
-              appearance="subtle"
-              size="small"
-              onClick={() => toggleSubmenu('add')}
-            >
-              <span>+ Kolom rechts toevoegen</span>
-              <span aria-hidden>›</span>
-            </Button>
-          </>
-        ) : null}
-        {canRemoveColumn ? (
-          <>
-            <div className={styles.divider} />
-            <Button
-              className={styles.sortButton}
-              appearance="subtle"
-              size="small"
-              onClick={handleRemoveColumn}
-            >
-              Delete column
-            </Button>
-          </>
-        ) : null}
-        {canToggleLineTotal ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleLineTotal}>
-              {isLineColumnSummed ? 'Disable total row sum' : 'Enable total row sum'}
-            </Button>
-          </>
-        ) : null}
-        {canPushLineTotalToHeader ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineTotalToHeader}>
-              Push total to header column
-            </Button>
-          </>
-        ) : null}
-        {canPushLineValuesToHeader ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>
-              Push values to header column
-            </Button>
-          </>
-        ) : null}
-        <div className={styles.divider} />
-        <Text className={styles.fieldTitle}>Filter</Text>
-        <div className={styles.filterRow}>
-          <Dropdown
-            selectedOptions={[draft.operator]}
-            value={operatorLabels[draft.operator]}
-            onOptionSelect={handleOperatorSelect}
-          >
-            {operatorEntries.map(([key, label]) => (
-              <Option key={key} value={key} text={label}>
-                {label}
-              </Option>
-            ))}
-          </Dropdown>
-          {isDate && draft.operator === 'between' ? (
+          <Text className={styles.fieldTitle}>{column.label}</Text>
+          <div className={styles.divider} />
+          <PurchaseOrderColumnMenuActions
+            column={column}
+            isAdmin={isAdmin}
+            activeSubmenu={activeSubmenu}
+            onToggleSubmenu={toggleSubmenu}
+            onClose={closePopover}
+            canAddColumn={canAddColumn}
+            isLineColumnSummed={isLineColumnSummed}
+            onSetSortDirection={onSetSortDirection}
+            onToggleWriteback={onToggleWriteback}
+            onRemoveColumn={onRemoveColumn}
+            onToggleLineColumnSum={onToggleLineColumnSum}
+            onPushLineTotalToHeader={onPushLineTotalToHeader}
+            onPushLineValuesToHeader={onPushLineValuesToHeader}
+          />
+          {isImage ? null : (
             <>
-              <Input type="date" value={draft.value} onChange={handleValueChange} />
-              <Input type="date" value={draft.secondaryValue} onChange={handleSecondaryValueChange} />
+              <div className={styles.divider} />
+              <PurchaseOrderColumnFilterSection
+                column={column}
+                filter={filter}
+                isDate={isDate}
+                operatorLabels={operatorLabels}
+                onSetOperator={onSetOperator}
+                onSetValue={onSetValue}
+                onSetSecondaryValue={onSetSecondaryValue}
+                onClearFilter={onClearFilter}
+                onClose={closePopover}
+              />
             </>
-          ) : null}
-          {isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
-            <Input type="date" value={draft.value} onChange={handleValueChange} />
-          ) : null}
-          {isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
-            <Input
-              type="number"
-              min={1}
-              value={draft.value}
-              onChange={handleValueChange}
-              placeholder="Amount"
-            />
-          ) : null}
-          {isDate && draft.operator === 'nextWeek' ? (
-            <Text className={styles.hint}>Matches records in the next calendar week.</Text>
-          ) : null}
-          {!isDate ? (
-            <Input
-              value={draft.value}
-              onChange={handleValueChange}
-              placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'}
-            />
-          ) : null}
-          <div className={styles.actionRow}>
-            <Button size="small" appearance="primary" onClick={handleApply}>
-              Apply
-            </Button>
-            <Button size="small" appearance="secondary" onClick={handleClearFilter}>
-              Clear
-            </Button>
-          </div>
-        </div>
+          )}
         </div>
 
         {activeSubmenu === 'add' ? (
           <div className={styles.subPane}>
-            <Text className={styles.subPaneTitle}>Kolomtype</Text>
-            {NEW_COLUMN_TYPES.map((type) => (
-              <Button
-                key={type.key}
-                className={styles.sortButton}
-                appearance="subtle"
-                size="small"
-                onClick={() => handleAddType(type)}
-              >
-                {type.label}
-              </Button>
-            ))}
+            <PurchaseOrderAddColumnPane
+              column={column}
+              availableColumns={availableColumns}
+              onConfirm={handleAddType}
+            />
           </div>
         ) : null}
 

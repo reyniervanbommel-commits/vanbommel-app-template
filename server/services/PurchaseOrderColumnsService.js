@@ -7,7 +7,7 @@
 const sql = require('mssql');
 
 const LEVELS = ['header', 'line'];
-const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select'];
+const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'image'];
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
 
@@ -168,6 +168,92 @@ async function uniqueKeyForLevel(pool, level, desiredKey) {
   throw Object.assign(new Error('Kon geen unieke kolomsleutel bepalen'), { status: 409 });
 }
 
+// Toegestane transform-types voor image-kolommen, met per-type veldschema.
+// Transforms bewerken de bronwaarde (sourceColumnKey) voordat die in {xxx} van de
+// urlTemplate wordt gesubstitueerd (bv. spaties verwijderen, prefix strippen).
+function badRequest(message) {
+  return Object.assign(new Error(message), { status: 400 });
+}
+
+function validateImageTransform(item, index) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw badRequest(`Transform #${index + 1} moet een object zijn`);
+  }
+  const type = item.type;
+  switch (type) {
+    case 'trim':
+      return { type: 'trim' };
+    case 'remove':
+      if (typeof item.value !== 'string' || item.value.length === 0) {
+        throw badRequest(`Transform 'remove' vereist een niet-lege string 'value'`);
+      }
+      return { type: 'remove', value: item.value };
+    case 'replace':
+      if (typeof item.from !== 'string' || item.from.length === 0) {
+        throw badRequest(`Transform 'replace' vereist een niet-lege string 'from'`);
+      }
+      if (typeof item.to !== 'string') {
+        throw badRequest(`Transform 'replace' vereist een string 'to'`);
+      }
+      return { type: 'replace', from: item.from, to: item.to };
+    case 'substring': {
+      if (!Number.isInteger(item.start) || item.start < 0) {
+        throw badRequest(`Transform 'substring' vereist een geheel getal 'start' >= 0`);
+      }
+      const normalized = { type: 'substring', start: item.start };
+      if (item.end !== undefined && item.end !== null) {
+        if (!Number.isInteger(item.end)) {
+          throw badRequest(`Transform 'substring' veld 'end' moet een geheel getal zijn`);
+        }
+        normalized.end = item.end;
+      }
+      return normalized;
+    }
+    default:
+      throw badRequest(`Onbekend transform-type: ${String(type)}`);
+  }
+}
+
+// Valideert en normaliseert de options van een image-kolom. Geëxporteerd zodat tests
+// hem direct kunnen aanroepen. Gooit een fout met status 400 bij elke overtreding.
+function validateImageOptions(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw badRequest('Image-opties moeten een object zijn');
+  }
+
+  const { urlTemplate, sourceColumnKey, transforms } = options;
+
+  if (typeof urlTemplate !== 'string' || urlTemplate.trim().length === 0) {
+    throw badRequest('urlTemplate is verplicht');
+  }
+  const template = urlTemplate.trim();
+  // Alleen http/https toestaan: weiger javascript:, data:, relatieve paden e.d.
+  if (!/^https?:\/\//i.test(template)) {
+    throw badRequest('urlTemplate moet beginnen met http:// of https://');
+  }
+  if (!template.includes('{xxx}')) {
+    throw badRequest('urlTemplate moet de placeholder {xxx} bevatten');
+  }
+
+  if (typeof sourceColumnKey !== 'string' || sourceColumnKey.trim().length === 0) {
+    throw badRequest('sourceColumnKey is verplicht');
+  }
+
+  let normalizedTransforms = [];
+  if (transforms !== undefined && transforms !== null) {
+    if (!Array.isArray(transforms)) {
+      throw badRequest('transforms moet een array zijn');
+    }
+    normalizedTransforms = transforms.map(validateImageTransform);
+  }
+
+  return {
+    urlTemplate: template,
+    sourceColumnKey: sourceColumnKey.trim(),
+    transforms: normalizedTransforms,
+  };
+}
+
 async function createColumn({ label, level, dataType, options = null }, userId) {
   const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
   if (!cleanLabel) {
@@ -189,14 +275,38 @@ async function createColumn({ label, level, dataType, options = null }, userId) 
       throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
     }
     optionsJson = JSON.stringify(list);
-  } else if (options !== null && options !== undefined) {
+  }
+
+  const pool = await getPool();
+
+  if (dataType === 'image') {
+    // Image-kolommen hebben een eigen streng gevalideerd options-pad (niet de generieke object-branch).
+    const validated = validateImageOptions(options);
+    // Image-kolommen zijn header-only: de bron-kolom moet een bestaande header-kolom zijn.
+    if (level !== 'header') {
+      throw Object.assign(new Error('Image-kolommen zijn alleen op header-niveau toegestaan'), { status: 400 });
+    }
+    const sourceCheck = await pool.request()
+      .input('sourceColumnKey', sql.NVarChar(64), validated.sourceColumnKey)
+      .query(`
+        SELECT 1
+        FROM dbo.po_columns
+        WHERE [level] = 'header' AND [key] = @sourceColumnKey
+      `);
+    if (!sourceCheck.recordset.length) {
+      throw Object.assign(
+        new Error('sourceColumnKey verwijst niet naar een bestaande header-kolom'),
+        { status: 400 }
+      );
+    }
+    optionsJson = JSON.stringify(validated);
+  } else if (dataType !== 'select' && options !== null && options !== undefined) {
     if (typeof options !== 'object' || Array.isArray(options)) {
       throw Object.assign(new Error('Kolom-opties moeten een object zijn'), { status: 400 });
     }
     optionsJson = JSON.stringify(options);
   }
 
-  const pool = await getPool();
   const key = await uniqueKeyForLevel(pool, level, slugify(cleanLabel));
 
   const result = await pool.request()
@@ -511,4 +621,5 @@ module.exports = {
   setWriteBackConfig,
   syncD365ColumnsFromCatalog,
   slugify,
+  validateImageOptions,
 };

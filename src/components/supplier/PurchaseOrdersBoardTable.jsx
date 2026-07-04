@@ -324,6 +324,7 @@ function PurchaseOrdersBoardTable({
                   </div>
                   <PurchaseOrderColumnFilterMenu
                     column={column}
+                    availableColumns={columns}
                     filter={filterByColumn[column.key]}
                     sortState={sortState}
                     groupingColumnKey={groupingColumnKey}

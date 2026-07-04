@@ -320,6 +320,11 @@ export function usePurchaseOrderTableView({ items, columns }) {
     if (!sortColumn) {
       return filtered;
     }
+    // Image-kolommen hebben geen opgeslagen waarde (afgeleide URL); sorteren is
+    // zinloos en zou alleen op lege waarden neerkomen. Sla het over.
+    if (sortColumn.dataType === 'image') {
+      return filtered;
+    }
 
     const sorted = [...filtered].sort((leftOrder, rightOrder) => {
       const leftValue = leftOrder?.values?.[sortColumn.key];

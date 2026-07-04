@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'feature-178',
+    title: 'Feature #178 - Plaatje-kolom in main tabel (read-only image-kolom)',
+    checks: [
+      'Headermenu "+ Kolom rechts toevoegen" toont het type "Plaatje"',
+      'Config-stap laat een URL-template met {xxx}, een header-bronkolom en basistransformaties (trim/remove/replace/substring) instellen',
+      'Ongeldige config wordt geblokkeerd: template zonder {xxx} of zonder http(s):// en ontbrekende bronkolom geven een inline foutmelding',
+      'Na toevoegen verschijnt de kolom read-only en toont per rij de afbeelding op basis van {xxx}-vervanging',
+      'Sorteren en filteren zijn uitgeschakeld voor een plaatje-kolom; een kapotte URL toont geen gebroken-afbeelding-icoon',
+    ],
+  },
+  {
     id: 'story-134',
     title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
     checks: [
