@@ -1,5 +1,17 @@
 export const devTestItems = [
   {
+    id: 'story-176',
+    title: 'Story #176 - Board-cutover Fase 7: PO-board leest uit tb_* (achter vlag)',
+    checks: [
+      'Het Purchase Orders-board toont dezelfde orders/regels als voorheen, nu gelezen uit /api/data/purchase-orders',
+      'De gepubliceerde Excel-koppeling verschijnt als read-only kolom(men) op het board',
+      '#161-lookups (leveranciersnaam op de kop, artikelnaam op de regel) verschijnen eveneens op het board',
+      'Eigen kolommen toevoegen/hernoemen/verwijderen en celwaarden bewerken werkt via de tb_*-laag',
+      'Rijen verbergen / write-back / write-back-toggle geven een nette melding "nog niet beschikbaar" (volgt in Fase 1-3)',
+      'Met VITE_BOARD_TB_SOURCE=false valt het board terug op de oude po_*-bron',
+    ],
+  },
+  {
     id: 'feature-162',
     title: 'Feature #162 - Excel-koppeling naar hoofdtabel (standalone op develop)',
     checks: [

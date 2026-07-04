@@ -1,10 +1,47 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
+import { BOARD_TB_SOURCE } from '../config/featureFlags';
 
 const BOARD_KEY = 'purchase-orders';
 const MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 1000;
+
+// Board-cutover Fase 7 (#AB:176): endpoints + response-shape-mapping tussen de generieke tb_*-laag
+// (/api/data/purchase-orders) en de po_*-vorm die de board-componenten verwachten. Achter BOARD_TB_SOURCE.
+const DATA_BASE = '/data/purchase-orders';
+const PO_BASE = '/purchase-orders';
+const boardBase = () => (BOARD_TB_SOURCE ? DATA_BASE : PO_BASE);
+
+// tb_*-read → board-shape: rows→orders, meta.columns.master|detail→columns.header|line,
+// partitionKey→dataAreaId, recordKey→orderNumber, detailKey→lineNumber, details→lines,
+// detailCount→lineCount, removedAtSource→removedInD365. Overige velden passeren ongewijzigd.
+function mapTbResponseToBoard(data) {
+  if (!data || typeof data !== 'object') return data;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const master = Array.isArray(data?.meta?.columns?.master) ? data.meta.columns.master : [];
+  const detail = Array.isArray(data?.meta?.columns?.detail) ? data.meta.columns.detail : [];
+  return {
+    ...data,
+    orders: rows.map((r) => ({
+      dataAreaId: r.partitionKey,
+      orderNumber: r.recordKey,
+      values: r.values || {},
+      isNew: Boolean(r.isNew),
+      isChanged: Boolean(r.isChanged),
+      removedInD365: Boolean(r.removedAtSource),
+      lineCount: Number(r.detailCount) || 0,
+      lines: (Array.isArray(r.details) ? r.details : []).map((d) => ({
+        lineNumber: d.detailKey,
+        values: d.values || {},
+      })),
+    })),
+    columns: { header: master, line: detail },
+  };
+}
+
+// tb_*-kolommen leveren scope master|detail; de board-hook denkt in header|line.
+const scopeForLevel = (level) => (level === 'line' ? 'detail' : 'master');
 
 // AANNAME: De nieuwe SQL-backed API levert alle data (orders + dynamische kolommen)
 // in één GET-call onder /purchase-orders (NIET onder /supplier). De tabelpagina
@@ -168,8 +205,10 @@ export function usePurchaseOrdersPage() {
     }
     setError('');
     try {
-      const endpoint = autoRefresh ? '/purchase-orders?autoRefresh=1' : '/purchase-orders';
-      const data = await apiRequest(endpoint);
+      const base = boardBase();
+      const endpoint = autoRefresh ? `${base}?autoRefresh=1` : base;
+      const raw = await apiRequest(endpoint);
+      const data = BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw;
       applyData(data);
       return data;
     } catch (err) {
@@ -244,8 +283,8 @@ export function usePurchaseOrdersPage() {
     setRefreshing(true);
     setError('');
     try {
-      const data = await apiRequest('/purchase-orders/refresh', { method: 'POST' });
-      applyData(data);
+      const raw = await apiRequest(`${boardBase()}/refresh`, { method: 'POST' });
+      applyData(BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -258,9 +297,9 @@ export function usePurchaseOrdersPage() {
     setMarkingViewed(true);
     setError('');
     try {
-      await apiRequest('/purchase-orders/viewed', { method: 'POST' });
-      const data = await apiRequest('/purchase-orders');
-      applyData(data);
+      await apiRequest(`${boardBase()}/viewed`, { method: 'POST' });
+      const raw = await apiRequest(boardBase());
+      applyData(BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -271,6 +310,10 @@ export function usePurchaseOrdersPage() {
   // Bulk "verwijderen": verberg de geselecteerde rijen (SQL-only exclusion, geen D365-mutatie).
   // Optimistic: rijen verdwijnen direct; bij een API-fout wordt de vorige lijst teruggezet.
   const deleteRows = useCallback(async (rows) => {
+    // Fase 7 (#AB:176): row-exclusions zijn nog niet mee-gecutoverd (Fase 2 #171 op tb_*).
+    if (BOARD_TB_SOURCE) {
+      throw new Error('Rijen verbergen is nog niet beschikbaar op het nieuwe board (volgt in Fase 2).');
+    }
     const targets = (Array.isArray(rows) ? rows : []).filter(
       (row) => row && row.dataAreaId && row.orderNumber
     );
@@ -324,16 +367,23 @@ export function usePurchaseOrdersPage() {
     });
 
     try {
-      await apiRequest('/purchase-orders/values', {
-        method: 'PUT',
-        body: {
-          columnId,
-          dataAreaId,
-          orderNumber,
-          lineNumber: isLine ? lineNumber : null,
-          value,
-        },
-      });
+      if (BOARD_TB_SOURCE) {
+        await apiRequest(`${DATA_BASE}/value`, {
+          method: 'PUT',
+          body: {
+            columnId,
+            partitionKey: dataAreaId,
+            recordKey: orderNumber,
+            detailKey: isLine ? lineNumber : null,
+            value,
+          },
+        });
+      } else {
+        await apiRequest('/purchase-orders/values', {
+          method: 'PUT',
+          body: { columnId, dataAreaId, orderNumber, lineNumber: isLine ? lineNumber : null, value },
+        });
+      }
     } catch (err) {
       // Rollback bij fout.
       if (previousOrders) setOrders(previousOrders);
@@ -343,6 +393,10 @@ export function usePurchaseOrdersPage() {
 
   // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
+    // Fase 7 (#AB:176): write-back naar D365 is nog niet mee-gecutoverd (Fase 3 #172 op tb_*).
+    if (BOARD_TB_SOURCE) {
+      throw new Error('Terugschrijven naar D365 is nog niet beschikbaar op het nieuwe board (volgt in Fase 3).');
+    }
     const isLine = lineNumber !== null && lineNumber !== undefined;
     let previousOrders = null;
     setOrders((prev) => {
@@ -373,20 +427,27 @@ export function usePurchaseOrdersPage() {
 
   // Herlaadt alleen de kolomdefinities (na toevoegen/hernoemen/verwijderen).
   const reloadColumns = useCallback(async () => {
-    const [headerData, lineData] = await Promise.all([
-      apiRequest('/purchase-orders/columns?level=header'),
-      apiRequest('/purchase-orders/columns?level=line'),
-    ]);
+    const [headerData, lineData] = BOARD_TB_SOURCE
+      ? await Promise.all([
+          apiRequest(`${DATA_BASE}/columns?scope=master`),
+          apiRequest(`${DATA_BASE}/columns?scope=detail`),
+        ])
+      : await Promise.all([
+          apiRequest('/purchase-orders/columns?level=header'),
+          apiRequest('/purchase-orders/columns?level=line'),
+        ]);
     setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns : []);
     setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns : []);
   }, []);
 
   const addColumn = useCallback(async ({ label, level, dataType, options }) => {
-    const body = { label, level, dataType };
+    const body = BOARD_TB_SOURCE
+      ? { scope: scopeForLevel(level), label, dataType }
+      : { label, level, dataType };
     if (options !== undefined) {
       body.options = options;
     }
-    const res = await apiRequest('/purchase-orders/columns', { method: 'POST', body });
+    const res = await apiRequest(`${boardBase()}/columns`, { method: 'POST', body });
     await reloadColumns();
     return res?.column || null;
   }, [reloadColumns]);
@@ -403,12 +464,16 @@ export function usePurchaseOrdersPage() {
   }, [addColumn]);
 
   const renameColumn = useCallback(async (id, label) => {
-    await apiRequest('/purchase-orders/columns/' + id, { method: 'PATCH', body: { label } });
+    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body: { label } });
     await reloadColumns();
   }, [reloadColumns]);
 
   // Admin: zet write-back aan/uit op een D365-kolom (#134).
   const toggleWriteback = useCallback(async (columnId, writable) => {
+    // Fase 7 (#AB:176): write-back-toggle hoort bij Fase 1/3 op tb_*; nog niet mee-gecutoverd.
+    if (BOARD_TB_SOURCE) {
+      throw new Error('Write-back instellen is nog niet beschikbaar op het nieuwe board (volgt in Fase 1/3).');
+    }
     await apiRequest('/purchase-orders/columns/' + columnId + '/writeback', {
       method: 'PATCH',
       body: { writable, mechanism: 'patch' },
@@ -417,7 +482,7 @@ export function usePurchaseOrdersPage() {
   }, [reloadColumns]);
 
   const removeColumn = useCallback(async (id) => {
-    await apiRequest('/purchase-orders/columns/' + id, { method: 'DELETE' });
+    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'DELETE' });
     await reloadColumns();
   }, [reloadColumns]);
 
