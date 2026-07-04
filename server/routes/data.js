@@ -130,4 +130,37 @@ router.put('/:tableKey/value', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/rows/exclude — bulk "verwijderen" (persistente exclusion). #AB:171
+router.post('/:tableKey/rows/exclude', async (req, res, next) => {
+  try {
+    const result = await dataService.excludeRows(
+      { tableKey: req.params.tableKey, rows: req.body?.rows },
+      req.user.id,
+    );
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/rows/hidden-in-filter — verborgen rijen die nog binnen de bron-scope vallen. #AB:171
+router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
+  try {
+    const result = await dataService.listHiddenInFilterRows(req.params.tableKey);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/rows/include — "terugzetten": hef de exclusion op. #AB:171
+router.post('/:tableKey/rows/include', async (req, res, next) => {
+  try {
+    const result = await dataService.includeRows({ tableKey: req.params.tableKey, rows: req.body?.rows });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 module.exports = router;

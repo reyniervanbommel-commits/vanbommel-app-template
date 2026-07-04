@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-171',
+    title: 'Story #171 - tb_* row-exclusions (board-cutover Fase 2)',
+    checks: [
+      'POST /api/data/:tableKey/rows/exclude verbergt masterrijen persistent (tb_row_exclusions); ze verdwijnen uit GET /api/data/:tableKey',
+      'Een refresh haalt een verborgen rij wel opnieuw op, maar read() blijft hem filteren zolang de exclusion bestaat',
+      'GET /api/data/:tableKey/rows/hidden-in-filter toont verborgen rijen die nog binnen de bron-scope vallen (removed_at_source=0), met de visibleAtDelete-kolommen',
+      'POST /api/data/:tableKey/rows/include zet rijen terug (exclusion verwijderd)',
+      'Ongeldige/dubbele/te lange sleutels worden geweerd; max 500 rijen per call',
+    ],
+  },
+  {
     id: 'story-134',
     title: 'Story #134 - D365 write-back (veldcorrecties terug naar D365, Fase 3)',
     checks: [

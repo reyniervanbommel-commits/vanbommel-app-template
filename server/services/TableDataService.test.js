@@ -1,6 +1,6 @@
 'use strict';
 
-const { computeContentHash } = require('./TableDataService');
+const { computeContentHash, normalizeExclusionRows } = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
   const masterJson = JSON.stringify({ vendorAccount: 'Q000104', status: 'Open' });
@@ -28,5 +28,33 @@ describe('TableDataService.computeContentHash', () => {
 
   it('werkt zonder details', () => {
     expect(typeof computeContentHash(masterJson, [])).toBe('string');
+  });
+});
+
+describe('TableDataService.normalizeExclusionRows', () => {
+  it('trimt en behoudt geldige rijen', () => {
+    expect(normalizeExclusionRows([{ partitionKey: ' whsl ', recordKey: ' PO-1 ' }]))
+      .toEqual([{ partitionKey: 'whsl', recordKey: 'PO-1' }]);
+  });
+
+  it('weert rijen zonder partitie of record', () => {
+    expect(normalizeExclusionRows([{ partitionKey: 'whsl' }, { recordKey: 'PO-1' }, {}])).toEqual([]);
+  });
+
+  it('dedupliceert dubbele (partitie, record)', () => {
+    const out = normalizeExclusionRows([
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-2' },
+    ]);
+    expect(out).toEqual([
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-2' },
+    ]);
+  });
+
+  it('weert te lange sleutels en niet-arrays', () => {
+    expect(normalizeExclusionRows([{ partitionKey: 'x'.repeat(33), recordKey: 'PO-1' }])).toEqual([]);
+    expect(normalizeExclusionRows(null)).toEqual([]);
   });
 });
