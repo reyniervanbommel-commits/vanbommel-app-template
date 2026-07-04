@@ -66,6 +66,9 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     }
     return (
       <img
+        // key op de URL: bij een nieuwe bronwaarde/URL mount React een vers <img> zodat een
+        // eerdere onError-verberging (display:none) niet blijft plakken op een geldige nieuwe src.
+        key={url}
         className={styles.image}
         src={url}
         alt={`${column.label} voor order ${order.orderNumber}`}

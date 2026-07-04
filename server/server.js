@@ -39,8 +39,11 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       // Image-kolommen laden plaatjes van externe https-hosts (user-gestuurde URL-template).
-      // Bewuste keuze: https: breed toestaan i.p.v. host-whitelist (hosts zijn niet vooraf bekend);
-      // afbeeldingen voeren geen code uit, dus dit is een laag risico t.o.v. script-src.
+      // Bewuste keuze: https: breed toestaan i.p.v. host-whitelist (hosts zijn niet vooraf bekend).
+      // script-src/default-src blijven via useDefaults op 'self' (geen XSS-verzwakking).
+      // Aanvaard RESTRISICO: een image-template kan celwaarden via de request-URL naar een externe
+      // host sturen (exfiltratie-beacon). Kolombeheer is beperkt tot admin/employee; een host-
+      // allowlist of admin-only create is een mogelijke aanscherping (zie ADR image-kolom).
       'img-src': ["'self'", 'data:', 'https:'],
     },
   },

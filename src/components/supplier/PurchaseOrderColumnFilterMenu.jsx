@@ -192,7 +192,6 @@ function PurchaseOrderColumnFilterMenu({
         {activeSubmenu === 'add' ? (
           <div className={styles.subPane}>
             <PurchaseOrderAddColumnPane
-              column={column}
               availableColumns={availableColumns}
               onConfirm={handleAddType}
             />

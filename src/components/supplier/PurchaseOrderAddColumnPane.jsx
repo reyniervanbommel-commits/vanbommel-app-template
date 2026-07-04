@@ -109,7 +109,7 @@ function normalizeTransform(draft, index) {
 // een tweede stap met de image-configuratie (urlTemplate, bron-kolom, transforms).
 // Bij bevestigen roept hij onConfirm(typeDef) aan; de parent doet het toevoegen +
 // popover sluiten (zelfde afsluitgedrag als de andere types).
-function PurchaseOrderAddColumnPane({ column, availableColumns = [], onConfirm }) {
+function PurchaseOrderAddColumnPane({ availableColumns = [], onConfirm }) {
   const styles = useStyles();
   const [step, setStep] = useState('types');
   const [urlTemplate, setUrlTemplate] = useState('');

@@ -41,7 +41,8 @@ function PurchaseOrderColumnMenuActions({
   onPushLineValuesToHeader,
 }) {
   const styles = useStyles();
-  // Image-kolommen hebben geen opgeslagen waarde en zijn afgeleid: sorteren is zinloos.
+  // Image-kolommen hebben geen opgeslagen waarde en zijn afgeleid: sorteren, filteren
+  // én groeperen zijn zinloos en worden voor dit type verborgen.
   const isImageColumn = column.dataType === 'image';
   const writable = !!column.writableToD365;
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
@@ -118,15 +119,17 @@ function PurchaseOrderColumnMenuActions({
           <div className={styles.divider} />
         </>
       )}
-      <Button
-        className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
-        appearance="subtle"
-        size="small"
-        onClick={() => onToggleSubmenu('group')}
-      >
-        <span>Categorie / groeperen</span>
-        <span aria-hidden>›</span>
-      </Button>
+      {isImageColumn ? null : (
+        <Button
+          className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
+          appearance="subtle"
+          size="small"
+          onClick={() => onToggleSubmenu('group')}
+        >
+          <span>Categorie / groeperen</span>
+          <span aria-hidden>›</span>
+        </Button>
+      )}
       {canToggleWriteback ? (
         <>
           <div className={styles.divider} />
