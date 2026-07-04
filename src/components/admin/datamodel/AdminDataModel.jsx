@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Spinner,
+  Tab,
+  TabList,
   Text,
   makeStyles,
   shorthands,
@@ -8,6 +10,7 @@ import {
 } from '@fluentui/react-components';
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
+import ExcelLinkWizard from './ExcelLinkWizard';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 
 const useStyles = makeStyles({
@@ -17,56 +20,52 @@ const useStyles = makeStyles({
 });
 
 /**
- * Admin tab "Data model": beheert kolomzichtbaarheid en write-back voor
- * Purchase Order headers + lines in gecombineerde tabellen met sampledata.
+ * Admin tab "Data model": kolomzichtbaarheid + write-back voor Purchase Orders, plus een tab
+ * "Externe koppelingen" om een Excel als read-only verrijking aan een hoofdtabel te koppelen (#AB:162).
  */
 export default function AdminDataModel() {
   const styles = useStyles();
-  const {
-    relation,
-    columns,
-    syncFilter,
-    filterCatalog,
-    previewTables,
-    loading,
-    error,
-    togglingKey,
-    syncNow,
-    toggleVisibility,
-    toggleVisibleAtDelete,
-    toggleWriteback,
-    setColumnToggleState,
-    deleteColumn,
-  } = useDataModelAdmin();
-
-  if (loading) return <Spinner label="Loading data model..." />;
+  const [selectedTab, setSelectedTab] = useState('purchase-orders');
+  const po = useDataModelAdmin();
 
   return (
     <div className={styles.root}>
       <div>
         <Text size={600} weight="semibold" block>Data model</Text>
         <Text className={styles.intro} block>
-          Manage the Purchase Order Header and Line fields in one place. Admins can choose which
-          columns are visible on the table page, enable write-back where allowed, and see sample
-          values from the latest synced dataset.
+          Beheer welke Purchase Order-velden zichtbaar zijn en schakel write-back in waar toegestaan.
+          Via "Externe koppelingen" koppel je een Excel-bestand als read-only kolommen aan een hoofdtabel.
         </Text>
       </div>
 
-      {error ? <Text className={styles.error} block>{error}</Text> : null}
+      <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)}>
+        <Tab value="purchase-orders">Inkooporders</Tab>
+        <Tab value="excel-links">Externe koppelingen</Tab>
+      </TabList>
 
-      <SyncFilterBuilder filterCatalog={filterCatalog} syncFilter={syncFilter} onSyncNow={syncNow} />
-
-      <DataPreviewTables
-        previewTables={previewTables}
-        columns={columns}
-        relation={relation}
-        togglingKey={togglingKey}
-        onToggleVisibility={toggleVisibility}
-        onToggleVisibleAtDelete={toggleVisibleAtDelete}
-        onToggleWriteback={toggleWriteback}
-        onSetColumnToggleState={setColumnToggleState}
-        onDeleteColumn={deleteColumn}
-      />
+      {selectedTab === 'purchase-orders' ? (
+        po.loading ? (
+          <Spinner label="Data model laden..." />
+        ) : (
+          <>
+            {po.error ? <Text className={styles.error} block>{po.error}</Text> : null}
+            <SyncFilterBuilder filterCatalog={po.filterCatalog} syncFilter={po.syncFilter} onSyncNow={po.syncNow} />
+            <DataPreviewTables
+              previewTables={po.previewTables}
+              columns={po.columns}
+              relation={po.relation}
+              togglingKey={po.togglingKey}
+              onToggleVisibility={po.toggleVisibility}
+              onToggleVisibleAtDelete={po.toggleVisibleAtDelete}
+              onToggleWriteback={po.toggleWriteback}
+              onSetColumnToggleState={po.setColumnToggleState}
+              onDeleteColumn={po.deleteColumn}
+            />
+          </>
+        )
+      ) : (
+        <ExcelLinkWizard />
+      )}
     </div>
   );
 }

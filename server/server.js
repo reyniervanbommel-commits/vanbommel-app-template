@@ -14,7 +14,8 @@ const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
 const purchaseOrdersRouter = require('./routes/purchaseOrders');
 const dataRouter = require('./routes/data');
-const { requireSession, requireAnyRole } = require('./middleware/auth');
+const dataLinksRouter = require('./routes/dataLinks');
+const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
@@ -87,6 +88,8 @@ app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.E
 app.use('/api/purchase-orders', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), purchaseOrdersRouter);
 // Generieke Table Builder-data-API (#AB:152, Fase A) — staat naast /api/purchase-orders (strangler-fig).
 app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
+// Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
+app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

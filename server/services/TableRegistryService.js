@@ -129,6 +129,26 @@ async function getColumnById(columnId) {
   return result.recordset.length ? mapColumnRow(result.recordset[0]) : null;
 }
 
+// fk_join lookup-relaties van een tabel (relation_role='lookup'). Minimaal fk_join-fundament voor de
+// Excel-koppeling (#AB:162); identiek aan #161's getLookups zodat een latere merge triviaal blijft.
+async function getLookups(tableId) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
+      FROM dbo.tb_relations
+      WHERE table_id = @tableId AND relation_role = 'lookup'
+    `);
+  return result.recordset.map((r) => ({
+    sourceScope: r.source_scope || 'master',
+    sourceField: r.source_field || null,
+    targetTableKey: r.target_table_key || null,
+    targetKeyField: r.target_key_field || null,
+    fields: r.lookup_fields_json ? safeJson(r.lookup_fields_json) : {},
+  })).filter((l) => l.sourceField && l.targetTableKey && Object.keys(l.fields).length > 0);
+}
+
 module.exports = {
   SCOPES,
   DATA_TYPES,
@@ -136,5 +156,6 @@ module.exports = {
   getTableByKey,
   listColumns,
   getColumnById,
+  getLookups,
   mapColumnRow,
 };
