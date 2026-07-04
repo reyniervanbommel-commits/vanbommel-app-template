@@ -10,7 +10,6 @@ import {
 } from '@fluentui/react-components';
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
-import DataModelDiagram from './DataModelDiagram';
 import GenericEntityDataModel from './GenericEntityDataModel';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 import { apiRequest } from '../../../utils/api';
@@ -24,7 +23,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * Admin tab "Data model": ER-overzicht + entiteit-kiezer. Inkooporders draaien op de bestaande
+ * Admin tab "Data model": entiteit-kiezer per tabel. Inkooporders draaien op de bestaande
  * po_*-laag (kolomzichtbaarheid + write-back); Leveranciers/Artikelen op de generieke tb_*-laag (#AB:161).
  */
 export default function AdminDataModel() {
@@ -47,8 +46,6 @@ export default function AdminDataModel() {
     return () => { active = false; };
   }, []);
 
-  const overviewEdges = useMemo(() => (Array.isArray(overview?.edges) ? overview.edges : []), [overview]);
-
   // Tabs: altijd minstens Inkooporders; overige tabellen komen uit het model-overzicht.
   const tables = useMemo(() => {
     const fromApi = Array.isArray(overview?.tables) ? overview.tables : [];
@@ -70,7 +67,6 @@ export default function AdminDataModel() {
       </div>
 
       {overviewError ? <Text className={styles.error} block>{overviewError}</Text> : null}
-      {overview ? <DataModelDiagram tables={tables} edges={overviewEdges} /> : null}
 
       <TabList selectedValue={selectedKey} onTabSelect={(_, d) => setSelectedKey(d.value)}>
         {tables.map((t) => <Tab key={t.key} value={t.key}>{t.label}</Tab>)}
