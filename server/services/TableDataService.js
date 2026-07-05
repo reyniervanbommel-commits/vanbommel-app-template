@@ -1005,14 +1005,9 @@ async function getDataModel(tableKey) {
     lastSyncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
   };
 
-  // D365-filtercatalogus + preview: hergebruik de PO-helper (zelfde D365-entiteit). Faalt zacht.
-  let filterMeta = { catalog: { header: [], line: [] }, preview: null };
-  try {
-    const cacheService = require('./D365PurchaseOrderCacheService');
-    if (typeof cacheService.getFilterFieldCatalogAndPreview === 'function') {
-      filterMeta = await cacheService.getFilterFieldCatalogAndPreview();
-    }
-  } catch { /* catalogus optioneel */ }
+  // D365-filtercatalogus uit de admin-gemapte kolommen (generiek; geen po_-afhankelijkheid meer).
+  const { buildFilterCatalogPayload } = require('../utils/tbSyncFilterCatalog');
+  const filterMeta = buildFilterCatalogPayload([...headerCols, ...lineCols]);
 
   const syncRules = parseSyncRules(rulesJson);
   let compiledFilter = '';

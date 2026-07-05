@@ -13,10 +13,9 @@ export function usePurchaseOrderRefreshProgress() {
   const [progress, setProgress] = useState(null);
   const [polling, setPolling] = useState(false);
 
-  const loadProgress = useCallback(async () => {
-    const data = await apiRequest('/purchase-orders/refresh/progress');
-    setProgress(data?.progress || null);
-  }, []);
+  // Board-cutover Fase 8 (#AB:177): het po_-refresh/progress-endpoint is vervallen; de tb_*-refresh is
+  // synchroon (geen server-side voortgang). We laten de startProgress-schatting staan i.p.v. te pollen.
+  const loadProgress = useCallback(async () => {}, []);
 
   useEffect(() => {
     if (!polling) return undefined;

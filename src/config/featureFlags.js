@@ -3,9 +3,8 @@
 // zodat de fk_join lookup-verrijking (o.a. de Excel-koppeling #162 en vendor/item-lookups #161) op het
 // board verschijnt. Achter een vlag zoals het cutover-plan voorschrijft.
 //
-// Overridebaar via env (VITE_BOARD_TB_SOURCE=false om terug te vallen op po_*). Default AAN: bewuste
-// keuze (2026-07-04) om de cutover op DEV te tonen inclusief de fk_join-verrijking. LET OP: Fases 3-6
-// (write-back/cel-historie/sync-filters/refresh-progress) hebben nog GEEN pariteit op tb_*; die acties
-// tonen op het board een nette "nog niet beschikbaar"-melding. Zet VITE_BOARD_TB_SOURCE=false voor PROD
-// tot die pariteit rond is (#172-#175).
-export const BOARD_TB_SOURCE = (import.meta.env.VITE_BOARD_TB_SOURCE ?? 'true') !== 'false';
+// Board-cutover afgerond (Fase 8, #AB:177): de po_*-laag is verwijderd; het board draait permanent op
+// tb_*. De vlag blijft als constante `true` staan zodat bestaande imports/branches blijven werken (de
+// dode po_-branches in de hooks zijn cosmetisch en mogen in een latere opschoning weg). Terugvallen op
+// po_* kan niet meer — die code bestaat niet meer.
+export const BOARD_TB_SOURCE = true;
