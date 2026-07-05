@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
-const { fetchPurchaseOrders } = require('./D365ODataService');
+const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
 
@@ -704,10 +704,119 @@ async function listHiddenInFilterRows(tableKey) {
   return { count: rows.length, columns, rows };
 }
 
+// ---------------------------------------------------------------------------
+// correctField — write-back van een bron-veld naar D365 (#AB:172, board-cutover Fase 3).
+// Generalisatie van de po_*-write-back: valideert de tb_kolom (writable + mechanisme 'patch' + source_field),
+// legt een tb_field_corrections-audit vast (pending -> applied/failed), en schrijft terug via de bestaande
+// D365-writeBackField (met etag/concurrency-check). Bij succes wordt de tb_cache best-effort bijgewerkt.
+// LET OP: writeBackField is nog PO-entiteit-gebonden (PurchaseOrderHeaders/Lines). Voor de purchase-orders-
+// tabel klopt de mapping 1-op-1 (partitionKey=dataAreaId, recordKey=orderNumber, detailKey=lineNumber).
+// TODO(#177): generieke PATCH via de SourceProvider zodra andere schrijfbare tabellen nodig zijn.
+async function correctField({ tableKey, columnId, partitionKey, recordKey, detailKey, value, basedOnValue }, userId) {
+  const table = await getTableByKey(tableKey);
+  const { getColumnById } = require('./TableRegistryService');
+  const column = await getColumnById(columnId);
+  if (!column || !column.isActive || column.tableId !== table.id) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
+    throw Object.assign(new Error('Deze kolom is niet ingesteld voor write-back naar D365'), { status: 400 });
+  }
+
+  const part = String(partitionKey || '').trim();
+  const record = String(recordKey || '').trim();
+  if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
+
+  const level = column.scope === 'detail' ? 'line' : 'header';
+  let resolvedDetail = MASTER_DETAIL_KEY;
+  if (column.scope === 'detail') {
+    const dk = toNumberOrNull(detailKey);
+    if (dk === null) throw Object.assign(new Error('detailKey is verplicht voor een regel-kolom'), { status: 400 });
+    resolvedDetail = dk;
+  }
+
+  let newValue;
+  if (column.dataType === 'number') newValue = toNumberOrNull(value);
+  else if (column.dataType === 'date') { const d = toDateOrNull(value); newValue = d ? d.toISOString() : null; }
+  else if (column.dataType === 'boolean') newValue = value === true || value === 'true' || value === 1 || value === '1';
+  else newValue = value === null || value === undefined ? null : String(value);
+
+  const pool = await getPool();
+  // 1) Audit: pending
+  const ins = await pool.request()
+    .input('columnId', sql.BigInt, columnId)
+    .input('tableId', sql.BigInt, table.id)
+    .input('scope', sql.NVarChar(16), column.scope)
+    .input('partitionKey', sql.NVarChar(32), part)
+    .input('recordKey', sql.NVarChar(128), record)
+    .input('detailKey', sql.Int, resolvedDetail)
+    .input('sourceField', sql.NVarChar(128), column.sourceField)
+    .input('old', sql.NVarChar(sql.MAX), basedOnValue === null || basedOnValue === undefined ? null : String(basedOnValue))
+    .input('new', sql.NVarChar(sql.MAX), newValue === null || newValue === undefined ? null : String(newValue))
+    .input('by', sql.Int, userId || null)
+    .query(`
+      INSERT INTO dbo.tb_field_corrections
+        (column_id, table_id, scope, partition_key, record_key, detail_key, source_field, old_value, new_value, status, created_by)
+      OUTPUT INSERTED.id
+      VALUES (@columnId, @tableId, @scope, @partitionKey, @recordKey, @detailKey, @sourceField, @old, @new, 'pending', @by);
+    `);
+  const correctionId = ins.recordset[0].id;
+
+  // 2) Terugschrijven naar D365 (etag + concurrency-check zit in writeBackField).
+  try {
+    await writeBackField({
+      level, dataAreaId: part, orderNumber: record, lineNumber: resolvedDetail,
+      d365Field: column.sourceField, newValue, basedOnValue, dataType: column.dataType,
+    });
+  } catch (err) {
+    await pool.request()
+      .input('id', sql.BigInt, correctionId)
+      .input('err', sql.NVarChar(sql.MAX), err.message || 'Onbekende fout')
+      .query("UPDATE dbo.tb_field_corrections SET status = 'failed', error = @err WHERE id = @id");
+    throw err;
+  }
+
+  // 3) Applied + tb_cache best-effort bijwerken (data_json op kolom-key; volgende refresh corrigeert hoe dan ook).
+  await pool.request()
+    .input('id', sql.BigInt, correctionId)
+    .query("UPDATE dbo.tb_field_corrections SET status = 'applied', applied_at = SYSUTCDATETIME() WHERE id = @id");
+
+  try {
+    const cacheRow = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('scope', sql.NVarChar(16), column.scope)
+      .input('partitionKey', sql.NVarChar(32), part)
+      .input('recordKey', sql.NVarChar(128), record)
+      .input('detailKey', sql.Int, resolvedDetail)
+      .query(`SELECT data_json FROM dbo.tb_cache
+              WHERE table_id = @tableId AND scope = @scope AND partition_key = @partitionKey
+                AND record_key = @recordKey AND detail_key = @detailKey`);
+    if (cacheRow.recordset.length) {
+      const json = parseJson(cacheRow.recordset[0].data_json);
+      json[column.key] = newValue;
+      await pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('scope', sql.NVarChar(16), column.scope)
+        .input('partitionKey', sql.NVarChar(32), part)
+        .input('recordKey', sql.NVarChar(128), record)
+        .input('detailKey', sql.Int, resolvedDetail)
+        .input('dataJson', sql.NVarChar(sql.MAX), JSON.stringify(json))
+        .query(`UPDATE dbo.tb_cache SET data_json = @dataJson
+                WHERE table_id = @tableId AND scope = @scope AND partition_key = @partitionKey
+                  AND record_key = @recordKey AND detail_key = @detailKey`);
+    }
+  } catch (err) {
+    logger.warn('tb_cache bijwerken na write-back mislukt (niet-kritiek)', { error: err.message });
+  }
+
+  return { success: true, columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: newValue };
+}
+
 module.exports = {
   refresh,
   read,
   saveCustomValue,
+  correctField,
   getSyncState,
   isStale,
   getLastViewedAt,

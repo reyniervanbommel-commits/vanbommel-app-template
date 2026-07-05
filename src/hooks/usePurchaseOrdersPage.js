@@ -391,10 +391,7 @@ export function usePurchaseOrdersPage() {
 
   // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
-    // Fase 7 (#AB:176): write-back naar D365 is nog niet mee-gecutoverd (Fase 3 #172 op tb_*).
-    if (BOARD_TB_SOURCE) {
-      throw new Error('Terugschrijven naar D365 is nog niet beschikbaar op het nieuwe board (volgt in Fase 3).');
-    }
+    // Fase 3 (#AB:172): write-back naar D365 op tb_*. De guard uit #176 is vervangen door de echte call.
     const isLine = lineNumber !== null && lineNumber !== undefined;
     let previousOrders = null;
     setOrders((prev) => {
@@ -413,10 +410,17 @@ export function usePurchaseOrdersPage() {
       });
     });
     try {
-      await apiRequest('/purchase-orders/correct', {
-        method: 'POST',
-        body: { columnId, dataAreaId, orderNumber, lineNumber: isLine ? lineNumber : null, value, basedOnValue },
-      });
+      if (BOARD_TB_SOURCE) {
+        await apiRequest(`${DATA_BASE}/correct`, {
+          method: 'POST',
+          body: { columnId, partitionKey: dataAreaId, recordKey: orderNumber, detailKey: isLine ? lineNumber : null, value, basedOnValue },
+        });
+      } else {
+        await apiRequest('/purchase-orders/correct', {
+          method: 'POST',
+          body: { columnId, dataAreaId, orderNumber, lineNumber: isLine ? lineNumber : null, value, basedOnValue },
+        });
+      }
     } catch (err) {
       if (previousOrders) setOrders(previousOrders);
       throw err;

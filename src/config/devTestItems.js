@@ -1,5 +1,16 @@
 export const devTestItems = [
   {
+    id: 'story-172',
+    title: 'Story #172 - tb_* write-back naar D365 (board-cutover Fase 3)',
+    checks: [
+      'Op een write-back-kolom verschijnt het correctie-icoon; corrigeren schrijft terug naar D365 (geen "nog niet beschikbaar"-melding meer)',
+      'Na bevestigen wordt de waarde in D365 bijgewerkt en de tb_cache + het board bijgewerkt',
+      'Bij een conflict (waarde intussen in D365 gewijzigd) volgt een nette 409-melding, geen overschrijving',
+      'De correctie wordt vastgelegd in tb_field_corrections (pending → applied/failed)',
+      'Alleen kolommen met write-back aan (mechanisme patch) + een source_field zijn corrigeerbaar; overige geven 400',
+    ],
+  },
+  {
     id: 'story-176',
     title: 'Story #176 - Board-cutover Fase 7: PO-board leest uit tb_* (achter vlag)',
     checks: [

@@ -170,6 +170,22 @@ router.put('/:tableKey/value', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/correct — D365-veldcorrectie terugschrijven (write-back). #AB:172
+router.post('/:tableKey/correct', async (req, res, next) => {
+  try {
+    const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const result = await dataService.correctField(
+      { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
+      req.user.id,
+    );
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // POST /api/data/:tableKey/rows/exclude — bulk "verwijderen" (persistente exclusion). #AB:171
 router.post('/:tableKey/rows/exclude', async (req, res, next) => {
   try {
