@@ -114,6 +114,46 @@ router.delete('/:tableKey/columns/:id', async (req, res, next) => {
   }
 });
 
+// PATCH /api/data/:tableKey/columns/:id/visibility — kolom tonen/verbergen op het bord (is_active). #AB:170
+router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setColumnVisibility(columnId, Boolean(req.body?.visible), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id/visible-at-delete — zichtbaar in de verborgen-orders-popup. #AB:170
+router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setVisibleAtDelete(columnId, Boolean(req.body?.visible), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
+router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setWriteBackConfig(
+      columnId,
+      { writable: req.body?.writable, mechanism: req.body?.mechanism },
+      req.user.id,
+    );
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PUT /api/data/:tableKey/value — app-native kolomwaarde opslaan (instant).
 router.put('/:tableKey/value', async (req, res, next) => {
   try {

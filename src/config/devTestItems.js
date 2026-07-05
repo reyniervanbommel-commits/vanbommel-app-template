@@ -7,8 +7,17 @@ export const devTestItems = [
       'De gepubliceerde Excel-koppeling verschijnt als read-only kolom(men) op het board',
       '#161-lookups (leveranciersnaam op de kop, artikelnaam op de regel) verschijnen eveneens op het board',
       'Eigen kolommen toevoegen/hernoemen/verwijderen en celwaarden bewerken werkt via de tb_*-laag',
-      'Rijen verbergen / write-back / write-back-toggle geven een nette melding "nog niet beschikbaar" (volgt in Fase 1-3)',
       'Met VITE_BOARD_TB_SOURCE=false valt het board terug op de oude po_*-bron',
+    ],
+  },
+  {
+    id: 'story-170',
+    title: 'Story #170 - tb_* kolom-toggles (board-cutover Fase 1)',
+    checks: [
+      'Write-back-toggle op een kolomkop werkt weer op het board (geen "nog niet beschikbaar"-melding meer)',
+      'Een kolom zichtbaar/verborgen zetten werkt via de tb_*-laag (is_active)',
+      'PATCH /api/data/:tableKey/columns/:id/visible-at-delete zet de vlag los van is_active (migratie voegde tb_columns.visible_at_delete toe)',
+      'De kolomrespons bevat visibleAtDelete; write-back-config blijft behouden na een refresh',
     ],
   },
   {

@@ -39,8 +39,21 @@ const COLUMN_OUTPUT = `
   OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label, INSERTED.source,
          INSERTED.source_field, INSERTED.data_type, INSERTED.options_json, INSERTED.writable,
          INSERTED.write_mechanism, INSERTED.is_default_visible, INSERTED.filterable, INSERTED.sortable,
-         INSERTED.is_active, INSERTED.sort_order
+         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
 `;
+
+const WRITE_MECHANISMS = ['patch', 'action', 'sql'];
+
+// Pure validatie/normalisatie van write-back-config (#AB:170). writable=false => mechanism altijd null.
+function resolveWriteback({ writable, mechanism }) {
+  const writableBit = writable === true || writable === 'true' || writable === 1 || writable === '1' ? 1 : 0;
+  if (!writableBit) return { writable: 0, mechanism: null };
+  const mech = mechanism == null || mechanism === '' ? 'patch' : String(mechanism);
+  if (!WRITE_MECHANISMS.includes(mech)) {
+    throw Object.assign(new Error(`Ongeldig write-mechanisme '${mech}' (patch, action of sql)`), { status: 400 });
+  }
+  return { writable: 1, mechanism: mech };
+}
 
 async function createColumn({ tableKey, scope, label, dataType, options = null }, userId) {
   const table = await getTableByKey(tableKey);
@@ -118,11 +131,75 @@ async function deactivateColumn(columnId, userId) {
   return { id: columnId, isActive: false };
 }
 
+// Zichtbaarheid op het bord (admin): toggelt is_active. Werkt op elke kolom (bron + eigen).
+// Pariteit met po_* setColumnVisibility; read()/listColumns tonen alleen is_active=1 kolommen.
+async function setColumnVisibility(columnId, visible, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('active', sql.Bit, visible ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET is_active = @active, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
+// Zichtbaar in de "verborgen orders in D365-filter"-popup (Fase 2). Los van is_active. Elke kolom.
+async function setVisibleAtDelete(columnId, flag, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('flag', sql.Bit, flag ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET visible_at_delete = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
+// Write-back-config (admin): welke kolommen naar de bron terugschrijfbaar zijn en via welk mechanisme.
+async function setWriteBackConfig(columnId, config, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  const { writable, mechanism } = resolveWriteback(config || {});
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('writable', sql.Bit, writable)
+    .input('mechanism', sql.NVarChar(16), mechanism)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET writable = @writable, write_mechanism = @mechanism, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
 module.exports = {
   SCOPES,
   DATA_TYPES,
   slugify,
+  resolveWriteback,
   createColumn,
   renameColumn,
   deactivateColumn,
+  setColumnVisibility,
+  setVisibleAtDelete,
+  setWriteBackConfig,
 };

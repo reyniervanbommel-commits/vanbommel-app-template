@@ -470,11 +470,8 @@ export function usePurchaseOrdersPage() {
 
   // Admin: zet write-back aan/uit op een D365-kolom (#134).
   const toggleWriteback = useCallback(async (columnId, writable) => {
-    // Fase 7 (#AB:176): write-back-toggle hoort bij Fase 1/3 op tb_*; nog niet mee-gecutoverd.
-    if (BOARD_TB_SOURCE) {
-      throw new Error('Write-back instellen is nog niet beschikbaar op het nieuwe board (volgt in Fase 1/3).');
-    }
-    await apiRequest('/purchase-orders/columns/' + columnId + '/writeback', {
+    // Fase 1 (#AB:170) leverde de tb_*-writeback-config; de guard uit #176 is vervangen door de echte call.
+    await apiRequest(`${boardBase()}/columns/${columnId}/writeback`, {
       method: 'PATCH',
       body: { writable, mechanism: 'patch' },
     });
