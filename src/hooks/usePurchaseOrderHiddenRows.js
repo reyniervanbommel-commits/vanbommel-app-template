@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../utils/api';
+import { BOARD_TB_SOURCE } from '../config/featureFlags';
+
+// Board-cutover (#AB:171/#176): endpoints achter BOARD_TB_SOURCE. De tb_*-laag levert verborgen rijen
+// met partitionKey/recordKey; we mappen ze naar de board-vorm (dataAreaId/orderNumber) zodat de UI
+// en restoreRows ongewijzigd blijven.
+const HIDDEN_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
 
 // Haalt de verborgen (verwijderde) rijen op die nog binnen de harde D365-filter vallen,
 // en biedt "terugzetten" (include) aan. Na terugzetten wordt onRestored aangeroepen zodat
@@ -14,10 +20,15 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiRequest('/purchase-orders/rows/hidden-in-filter');
-      setHiddenRows(Array.isArray(data?.rows) ? data.rows : []);
+      const data = await apiRequest(`${HIDDEN_BASE}/rows/hidden-in-filter`);
+      const rawRows = Array.isArray(data?.rows) ? data.rows : [];
+      // tb_*-rijen hebben partitionKey/recordKey; naar de board-vorm mappen (dataAreaId/orderNumber).
+      const mapped = BOARD_TB_SOURCE
+        ? rawRows.map((r) => ({ ...r, dataAreaId: r.partitionKey, orderNumber: r.recordKey }))
+        : rawRows;
+      setHiddenRows(mapped);
       setColumns(Array.isArray(data?.columns) ? data.columns : []);
-      setCount(Number(data?.count) || 0);
+      setCount(Number(data?.count) || mapped.length);
     } catch {
       // Stil falen: dit is een informatief signaal, geen kritieke flow.
       setHiddenRows([]);
@@ -40,10 +51,11 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
     if (!targets.length) return;
     setRestoring(true);
     try {
-      await apiRequest('/purchase-orders/rows/include', {
-        method: 'POST',
-        body: { rows: targets },
-      });
+      // tb_*-include verwacht {partitionKey, recordKey}; po_* de order-vorm.
+      const body = BOARD_TB_SOURCE
+        ? { rows: targets.map((t) => ({ partitionKey: t.dataAreaId, recordKey: t.orderNumber })) }
+        : { rows: targets };
+      await apiRequest(`${HIDDEN_BASE}/rows/include`, { method: 'POST', body });
       await reload();
       if (onRestored) await onRestored();
     } finally {

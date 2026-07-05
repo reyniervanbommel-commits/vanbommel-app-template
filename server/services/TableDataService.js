@@ -359,11 +359,15 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const mastersResult = await pool.request()
     .input('tableId', sql.BigInt, table.id)
     .query(`
-      SELECT partition_key, record_key, data_json, source_modified_at, removed_at_source, first_seen_at, content_changed_at
-      FROM dbo.tb_cache
-      WHERE table_id = @tableId AND scope = 'master'
-      ${includeRemoved ? '' : 'AND removed_at_source = 0'}
-      ORDER BY record_key
+      SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
+      FROM dbo.tb_cache c
+      WHERE c.table_id = @tableId AND c.scope = 'master'
+      ${includeRemoved ? '' : `AND c.removed_at_source = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.tb_row_exclusions ex
+          WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+        )`}
+      ORDER BY c.record_key
     `);
 
   const detailsResult = await pool.request()
@@ -583,6 +587,123 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   return { columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: empty ? null : value };
 }
 
+// ---------------------------------------------------------------------------
+// Row-exclusions (#AB:171): "SQL-only verwijderen" van masterrijen. Verwijderen = een persistente
+// exclusion (geen harde delete), zodat een refresh de rij wel opnieuw ophaalt maar read() hem eruit
+// filtert zolang de exclusion bestaat. Generalisatie van po_row_exclusions (master-niveau, per tabel).
+// ---------------------------------------------------------------------------
+const MAX_EXCLUSION_BATCH = 500;
+
+// Pure normalisatie: accepteert [{partitionKey, recordKey}], trimt en dedupliceert, weert ongeldige.
+function normalizeExclusionRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const partitionKey = String(row?.partitionKey ?? '').trim();
+    const recordKey = String(row?.recordKey ?? '').trim();
+    if (!partitionKey || !recordKey) continue;
+    if (partitionKey.length > 32 || recordKey.length > 128) continue;
+    const dedupKey = `${partitionKey}|${recordKey}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    out.push({ partitionKey, recordKey });
+  }
+  return out;
+}
+
+async function excludeRows({ tableKey, rows }, userId) {
+  const table = await getTableByKey(tableKey);
+  const normalized = normalizeExclusionRows(rows);
+  if (!normalized.length) throw Object.assign(new Error('Geen geldige rijen om te verwijderen'), { status: 400 });
+  if (normalized.length > MAX_EXCLUSION_BATCH) {
+    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+  }
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { partitionKey, recordKey } of normalized) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .input('by', sql.Int, userId || null)
+        .query(`
+          MERGE dbo.tb_row_exclusions AS target
+          USING (SELECT @tableId AS table_id, @partitionKey AS partition_key, @recordKey AS record_key) AS src
+            ON target.table_id = src.table_id AND target.partition_key = src.partition_key AND target.record_key = src.record_key
+          WHEN NOT MATCHED THEN
+            INSERT (table_id, partition_key, record_key, reason, excluded_by)
+            VALUES (@tableId, @partitionKey, @recordKey, 'manual_delete', @by);
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+  return { excluded: normalized.length };
+}
+
+async function includeRows({ tableKey, rows }) {
+  const table = await getTableByKey(tableKey);
+  const normalized = normalizeExclusionRows(rows);
+  if (!normalized.length) throw Object.assign(new Error('Geen geldige rijen om terug te zetten'), { status: 400 });
+  if (normalized.length > MAX_EXCLUSION_BATCH) {
+    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+  }
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { partitionKey, recordKey } of normalized) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .query(`DELETE FROM dbo.tb_row_exclusions
+                WHERE table_id = @tableId AND partition_key = @partitionKey AND record_key = @recordKey`);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+  return { included: normalized.length };
+}
+
+// Verborgen rijen die na de laatste sync nóg door de bron-scope zijn opgehaald (removed_at_source=0):
+// die matchen de filter dus nog, maar zijn handmatig verborgen — signaal om terug te zetten. Toont de
+// masterkolommen die admin voor de verwijder-popup zichtbaar zette (visibleAtDelete).
+async function listHiddenInFilterRows(tableKey) {
+  const table = await getTableByKey(tableKey);
+  const pool = await getPool();
+  const masterCols = (await listColumns({ tableId: table.id, scope: 'master', includeInactive: true }))
+    .filter((col) => col.visibleAtDelete);
+
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .query(`
+      SELECT c.partition_key, c.record_key, c.data_json, ex.excluded_at
+      FROM dbo.tb_row_exclusions ex
+      INNER JOIN dbo.tb_cache c
+        ON c.table_id = ex.table_id AND c.scope = 'master'
+       AND c.partition_key = ex.partition_key AND c.record_key = ex.record_key
+      WHERE ex.table_id = @tableId AND c.removed_at_source = 0
+      ORDER BY c.record_key
+    `);
+
+  const columns = masterCols.map((col) => ({ key: col.key, label: col.label, dataType: col.dataType }));
+  const rows = result.recordset.map((r) => {
+    const json = parseJson(r.data_json);
+    const values = {};
+    for (const col of masterCols) values[col.key] = col.key in json ? json[col.key] : null;
+    return { partitionKey: r.partition_key, recordKey: r.record_key, excludedAt: normalizeOut(r.excluded_at), values };
+  });
+  return { count: rows.length, columns, rows };
+}
+
 module.exports = {
   refresh,
   read,
@@ -593,5 +714,9 @@ module.exports = {
   markViewed,
   computeContentHash,
   applyLookups,
+  normalizeExclusionRows,
+  excludeRows,
+  includeRows,
+  listHiddenInFilterRows,
   FETCH_ADAPTERS,
 };

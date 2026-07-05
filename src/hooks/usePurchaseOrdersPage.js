@@ -310,10 +310,7 @@ export function usePurchaseOrdersPage() {
   // Bulk "verwijderen": verberg de geselecteerde rijen (SQL-only exclusion, geen D365-mutatie).
   // Optimistic: rijen verdwijnen direct; bij een API-fout wordt de vorige lijst teruggezet.
   const deleteRows = useCallback(async (rows) => {
-    // Fase 7 (#AB:176): row-exclusions zijn nog niet mee-gecutoverd (Fase 2 #171 op tb_*).
-    if (BOARD_TB_SOURCE) {
-      throw new Error('Rijen verbergen is nog niet beschikbaar op het nieuwe board (volgt in Fase 2).');
-    }
+    // Fase 2 (#AB:171): row-exclusions op tb_*. De guard uit #176 is vervangen door de echte call.
     const targets = (Array.isArray(rows) ? rows : []).filter(
       (row) => row && row.dataAreaId && row.orderNumber
     );
@@ -328,10 +325,11 @@ export function usePurchaseOrdersPage() {
     setTotal((prev) => Math.max(0, prev - keySet.size));
 
     try {
-      await apiRequest('/purchase-orders/rows/exclude', {
-        method: 'POST',
-        body: { rows: targets },
-      });
+      // tb_*-exclude verwacht {partitionKey, recordKey}; po_* verwacht de order-vorm.
+      const body = BOARD_TB_SOURCE
+        ? { rows: targets.map((r) => ({ partitionKey: r.dataAreaId, recordKey: r.orderNumber })) }
+        : { rows: targets };
+      await apiRequest(`${boardBase()}/rows/exclude`, { method: 'POST', body });
     } catch (err) {
       if (previousOrders) setOrders(previousOrders);
       setTotal((prev) => prev + keySet.size);

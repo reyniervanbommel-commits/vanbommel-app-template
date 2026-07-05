@@ -27,6 +27,9 @@ function mapColumnRow(row) {
     id: Number(row.id),
     tableId: Number(row.table_id),
     scope: row.scope,
+    // UI-compat: PO-board componenten verwachten level=header|line.
+    // tb_columns gebruikt scope=master|detail; map dat hier één-op-één.
+    level: row.scope === 'detail' ? 'line' : 'header',
     key: row.key,
     label: row.label,
     source: row.source,

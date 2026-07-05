@@ -21,6 +21,17 @@ export const devTestItems = [
     ],
   },
   {
+    id: 'story-171',
+    title: 'Story #171 - tb_* row-exclusions (board-cutover Fase 2)',
+    checks: [
+      'Rijen verbergen op het board werkt weer (geen "nog niet beschikbaar"-melding meer); ze verdwijnen persistent',
+      'Een refresh haalt een verborgen rij wel opnieuw op, maar read() blijft hem filteren zolang de exclusion bestaat',
+      'De verborgen-orders-popup toont verborgen rijen die nog binnen de bron-scope vallen, met de visibleAtDelete-kolommen',
+      'Een verborgen rij terugzetten laat hem weer op het board verschijnen',
+      'Ongeldige/dubbele/te lange sleutels worden geweerd; max 500 rijen per call',
+    ],
+  },
+  {
     id: 'feature-162',
     title: 'Feature #162 - Excel-koppeling naar hoofdtabel (standalone op develop)',
     checks: [

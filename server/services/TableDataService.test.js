@@ -1,6 +1,6 @@
 'use strict';
 
-const { computeContentHash, applyLookups } = require('./TableDataService');
+const { computeContentHash, applyLookups, normalizeExclusionRows } = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
   const masterJson = JSON.stringify({ vendorAccount: 'Q000104', status: 'Open' });
@@ -74,5 +74,33 @@ describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
     const v = { itemNumber: 'ART-9' };
     applyLookups(v, 'whsl', [excelLookup], 'detail');
     expect(v.artikelKleur).toBeNull();
+  });
+});
+
+describe('TableDataService.normalizeExclusionRows', () => {
+  it('trimt en behoudt geldige rijen', () => {
+    expect(normalizeExclusionRows([{ partitionKey: ' whsl ', recordKey: ' PO-1 ' }]))
+      .toEqual([{ partitionKey: 'whsl', recordKey: 'PO-1' }]);
+  });
+
+  it('weert rijen zonder partitie of record', () => {
+    expect(normalizeExclusionRows([{ partitionKey: 'whsl' }, { recordKey: 'PO-1' }, {}])).toEqual([]);
+  });
+
+  it('dedupliceert dubbele (partitie, record)', () => {
+    const out = normalizeExclusionRows([
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-2' },
+    ]);
+    expect(out).toEqual([
+      { partitionKey: 'whsl', recordKey: 'PO-1' },
+      { partitionKey: 'whsl', recordKey: 'PO-2' },
+    ]);
+  });
+
+  it('weert te lange sleutels en niet-arrays', () => {
+    expect(normalizeExclusionRows([{ partitionKey: 'x'.repeat(33), recordKey: 'PO-1' }])).toEqual([]);
+    expect(normalizeExclusionRows(null)).toEqual([]);
   });
 });
