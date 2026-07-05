@@ -1,5 +1,15 @@
 export const devTestItems = [
   {
+    id: 'story-173',
+    title: 'Story #173 - tb_* cel-geschiedenis (board-cutover Fase 4)',
+    checks: [
+      'Een cel met historie toont een geschiedenis-indicator; klikken opent de tijdlijn (geen fout meer op het tb_*-board)',
+      'Eigen-kolom-wijzigingen (insert/update/clear) verschijnen in de tijdlijn met oude/nieuwe waarde en gebruiker',
+      'D365-write-back-correcties verschijnen in dezelfde tijdlijn (met status pending/applied/failed)',
+      'De tijdlijn staat chronologisch, nieuwste eerst; werkt op zowel kop- als regelniveau',
+    ],
+  },
+  {
     id: 'story-172',
     title: 'Story #172 - tb_* write-back naar D365 (board-cutover Fase 3)',
     checks: [

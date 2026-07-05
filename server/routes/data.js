@@ -170,6 +170,24 @@ router.put('/:tableKey/value', async (req, res, next) => {
   }
 });
 
+// GET /api/data/:tableKey/history?columnId=&partitionKey=&recordKey=&detailKey= — cel-geschiedenis. #AB:173
+router.get('/:tableKey/history', async (req, res, next) => {
+  try {
+    const id = toColumnId(req.query.columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const history = await dataService.getCellHistory({
+      tableKey: req.params.tableKey,
+      columnId: id,
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+      detailKey: req.query.detailKey,
+    });
+    return res.json({ history });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // POST /api/data/:tableKey/correct — D365-veldcorrectie terugschrijven (write-back). #AB:172
 router.post('/:tableKey/correct', async (req, res, next) => {
   try {

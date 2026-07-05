@@ -558,7 +558,9 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   }
 
   const pool = await getPool();
-  await pool.request()
+  // Waarde opslaan (primair) + de oude/nieuwe waarde opvangen in een table-variable. OUTPUT ... INTO mag
+  // niet rechtstreeks naar tb_cell_history (FK/CHECK-doel verboden); we schrijven de historie daarna weg.
+  const result = await pool.request()
     .input('columnId', sql.BigInt, columnId)
     .input('tableId', sql.BigInt, table.id)
     .input('scope', sql.NVarChar(16), column.scope)
@@ -571,6 +573,11 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
     .input('valueBool', sql.Bit, valueBool)
     .input('userId', sql.Int, userId || null)
     .query(`
+      DECLARE @changes TABLE (
+        action NVARCHAR(16),
+        old_value_text NVARCHAR(MAX), old_value_number DECIMAL(38,10), old_value_date DATETIME2, old_value_bool BIT,
+        new_value_text NVARCHAR(MAX), new_value_number DECIMAL(38,10), new_value_date DATETIME2, new_value_bool BIT
+      );
       MERGE dbo.tb_custom_values AS target
       USING (SELECT @columnId AS column_id, @partitionKey AS partition_key,
                     @recordKey AS record_key, @detailKey AS detail_key) AS src
@@ -581,8 +588,54 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
         updated_by = @userId, updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT
         (column_id, table_id, scope, partition_key, record_key, detail_key, value_text, value_number, value_date, value_bool, updated_by)
-        VALUES (@columnId, @tableId, @scope, @partitionKey, @recordKey, @detailKey, @valueText, @valueNumber, @valueDate, @valueBool, @userId);
+        VALUES (@columnId, @tableId, @scope, @partitionKey, @recordKey, @detailKey, @valueText, @valueNumber, @valueDate, @valueBool, @userId)
+      OUTPUT
+        CASE
+          WHEN $action = 'INSERT' THEN 'insert'
+          WHEN @valueText IS NULL AND @valueNumber IS NULL AND @valueDate IS NULL AND @valueBool IS NULL THEN 'clear'
+          ELSE 'update'
+        END,
+        deleted.value_text, deleted.value_number, deleted.value_date, deleted.value_bool,
+        inserted.value_text, inserted.value_number, inserted.value_date, inserted.value_bool
+      INTO @changes (action, old_value_text, old_value_number, old_value_date, old_value_bool,
+                     new_value_text, new_value_number, new_value_date, new_value_bool);
+      SELECT action, old_value_text, old_value_number, old_value_date, old_value_bool,
+             new_value_text, new_value_number, new_value_date, new_value_bool FROM @changes;
     `);
+
+  // Cel-geschiedenis best-effort wegschrijven; een fout hier mag de (al opgeslagen) waarde niet laten mislukken.
+  const change = result.recordset && result.recordset[0];
+  if (change) {
+    try {
+      await pool.request()
+        .input('columnId', sql.BigInt, columnId)
+        .input('tableId', sql.BigInt, table.id)
+        .input('scope', sql.NVarChar(16), column.scope)
+        .input('partitionKey', sql.NVarChar(32), part)
+        .input('recordKey', sql.NVarChar(128), record)
+        .input('detailKey', sql.Int, resolvedDetail)
+        .input('action', sql.NVarChar(16), change.action)
+        .input('oldText', sql.NVarChar(sql.MAX), change.old_value_text)
+        .input('oldNumber', sql.Decimal(38, 10), change.old_value_number)
+        .input('oldDate', sql.DateTime2, change.old_value_date)
+        .input('oldBool', sql.Bit, change.old_value_bool)
+        .input('newText', sql.NVarChar(sql.MAX), change.new_value_text)
+        .input('newNumber', sql.Decimal(38, 10), change.new_value_number)
+        .input('newDate', sql.DateTime2, change.new_value_date)
+        .input('newBool', sql.Bit, change.new_value_bool)
+        .input('userId', sql.Int, userId || null)
+        .query(`
+          INSERT INTO dbo.tb_cell_history
+            (column_id, table_id, scope, partition_key, record_key, detail_key, action,
+             old_value_text, old_value_number, old_value_date, old_value_bool,
+             new_value_text, new_value_number, new_value_date, new_value_bool, changed_by)
+          VALUES (@columnId, @tableId, @scope, @partitionKey, @recordKey, @detailKey, @action,
+             @oldText, @oldNumber, @oldDate, @oldBool, @newText, @newNumber, @newDate, @newBool, @userId);
+        `);
+    } catch (histErr) {
+      logger.warn('tb-cel-geschiedenis wegschrijven mislukt (waarde zelf is opgeslagen)', { error: histErr.message });
+    }
+  }
 
   return { columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: empty ? null : value };
 }
@@ -812,11 +865,88 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   return { success: true, columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: newValue };
 }
 
+// ---------------------------------------------------------------------------
+// Cel-geschiedenis (#AB:173, cutover Fase 4): verenigde per-cel tijdlijn van eigen-kolom-edits
+// (tb_cell_history) + D365-veldcorrecties (tb_field_corrections). Generalisatie van po_ getCellHistory.
+// ---------------------------------------------------------------------------
+function pickTypedValue({ text, number, date, bool }) {
+  if (number !== null && number !== undefined) return Number(number);
+  if (date !== null && date !== undefined) return date instanceof Date ? date.toISOString() : date;
+  if (bool !== null && bool !== undefined) return Boolean(bool);
+  return text === undefined ? null : text;
+}
+
+function formatHistoryRow(row) {
+  return {
+    source: row.source,                       // 'custom' | 'writeback'
+    action: row.action,                       // 'insert' | 'update' | 'clear' | 'correct'
+    at: row.at instanceof Date ? row.at.toISOString() : row.at,
+    oldValue: pickTypedValue({ text: row.old_value_text, number: row.old_value_number, date: row.old_value_date, bool: row.old_value_bool }),
+    newValue: pickTypedValue({ text: row.new_value_text, number: row.new_value_number, date: row.new_value_date, bool: row.new_value_bool }),
+    status: row.status || null,               // alleen write-back (pending/applied/failed)
+    reason: row.change_reason || null,
+    user: (row.user_name || row.user_email)
+      ? { name: row.user_name || null, email: row.user_email || null }
+      : null,
+  };
+}
+
+async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, detailKey }) {
+  const table = await getTableByKey(tableKey);
+  const { getColumnById } = require('./TableRegistryService');
+  const column = await getColumnById(columnId);
+  if (!column || !column.isActive || column.tableId !== table.id) {
+    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  }
+  const part = String(partitionKey || '').trim();
+  const record = String(recordKey || '').trim();
+  if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
+  if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+
+  let resolvedDetail = MASTER_DETAIL_KEY;
+  if (column.scope === 'detail') {
+    const dk = toNumberOrNull(detailKey);
+    if (dk === null) throw Object.assign(new Error('detailKey is verplicht voor een regel-kolom'), { status: 400 });
+    resolvedDetail = dk;
+  }
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('columnId', sql.BigInt, columnId)
+    .input('partitionKey', sql.NVarChar(32), part)
+    .input('recordKey', sql.NVarChar(128), record)
+    .input('detailKey', sql.Int, resolvedDetail)
+    .query(`
+      SELECT 'custom' AS source, h.action, h.changed_at AS at,
+             h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
+             h.new_value_text, h.new_value_number, h.new_value_date, h.new_value_bool,
+             CAST(NULL AS NVARCHAR(16)) AS status, h.change_reason,
+             u.email AS user_email, u.display_name AS user_name
+      FROM dbo.tb_cell_history h
+      LEFT JOIN dbo.users u ON u.id = h.changed_by
+      WHERE h.column_id = @columnId AND h.partition_key = @partitionKey
+        AND h.record_key = @recordKey AND h.detail_key = @detailKey
+      UNION ALL
+      SELECT 'writeback' AS source, 'correct' AS action, c.created_at AS at,
+             c.old_value AS old_value_text, CAST(NULL AS DECIMAL(38,10)) AS old_value_number, CAST(NULL AS DATETIME2) AS old_value_date, CAST(NULL AS BIT) AS old_value_bool,
+             c.new_value AS new_value_text, CAST(NULL AS DECIMAL(38,10)) AS new_value_number, CAST(NULL AS DATETIME2) AS new_value_date, CAST(NULL AS BIT) AS new_value_bool,
+             c.status, CAST(NULL AS NVARCHAR(512)) AS change_reason,
+             u2.email AS user_email, u2.display_name AS user_name
+      FROM dbo.tb_field_corrections c
+      LEFT JOIN dbo.users u2 ON u2.id = c.created_by
+      WHERE c.column_id = @columnId AND c.partition_key = @partitionKey
+        AND c.record_key = @recordKey AND c.detail_key = @detailKey
+      ORDER BY at DESC;
+    `);
+  return result.recordset.map(formatHistoryRow);
+}
+
 module.exports = {
   refresh,
   read,
   saveCustomValue,
   correctField,
+  getCellHistory,
   getSyncState,
   isStale,
   getLastViewedAt,

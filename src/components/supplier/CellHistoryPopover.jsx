@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-components';
 import { History20Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
+import { BOARD_TB_SOURCE } from '../../config/featureFlags';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -155,15 +156,22 @@ export default function CellHistoryPopover({ cellKeys, dataType, children, hasHi
     setStatus('loading');
     setError('');
     try {
-      const params = new URLSearchParams({
-        columnId: String(cellKeys.columnId),
-        dataAreaId: cellKeys.dataAreaId ?? '',
-        orderNumber: cellKeys.orderNumber ?? '',
-      });
-      if (cellKeys.lineNumber !== null && cellKeys.lineNumber !== undefined) {
-        params.set('lineNumber', String(cellKeys.lineNumber));
+      // Board-cutover Fase 4 (#AB:173): tb_*-history gebruikt partitionKey/recordKey/detailKey.
+      const params = new URLSearchParams({ columnId: String(cellKeys.columnId) });
+      const hasLine = cellKeys.lineNumber !== null && cellKeys.lineNumber !== undefined;
+      let endpoint;
+      if (BOARD_TB_SOURCE) {
+        params.set('partitionKey', cellKeys.dataAreaId ?? '');
+        params.set('recordKey', cellKeys.orderNumber ?? '');
+        if (hasLine) params.set('detailKey', String(cellKeys.lineNumber));
+        endpoint = '/data/purchase-orders/history?' + params.toString();
+      } else {
+        params.set('dataAreaId', cellKeys.dataAreaId ?? '');
+        params.set('orderNumber', cellKeys.orderNumber ?? '');
+        if (hasLine) params.set('lineNumber', String(cellKeys.lineNumber));
+        endpoint = '/purchase-orders/history?' + params.toString();
       }
-      const data = await apiRequest('/purchase-orders/history?' + params.toString());
+      const data = await apiRequest(endpoint);
       setHistory(Array.isArray(data?.history) ? data.history : []);
       setStatus('ready');
     } catch (err) {
