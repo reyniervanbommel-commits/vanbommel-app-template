@@ -15,7 +15,7 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
-const { compileSyncRules, parseSyncRules } = require('../utils/odataSyncFilter');
+const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 
@@ -941,12 +941,129 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
   return result.recordset.map(formatHistoryRow);
 }
 
+// ---------------------------------------------------------------------------
+// getDataModel (#AB:174/#175, cutover Fase 5/6): admin-datamodel-payload op de tb_*-laag — entiteiten,
+// relatie, kolommen (incl. verborgen, gemapt naar de admin-vorm), cache-stats en sync-filter. Vervangt
+// het po_*-specifieke /datamodel zodat de admin-pagina generiek wordt. De D365-filtercatalogus wordt
+// (voorlopig) hergebruikt uit de PO-cacheservice; in Fase 8 verhuist die mee naar de generieke laag.
+const SYNC_TEMPLATES = [
+  { id: 'open_orders', label: 'Open orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Backorder' }] },
+  { id: 'received_orders', label: 'Received orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Received' }] },
+];
+
+// tb_-kolom -> admin-vorm die DataPreviewTables/useDataModelAdmin verwacht (level i.p.v. scope, d365 i.p.v. source).
+function toAdminColumn(col) {
+  return {
+    id: col.id,
+    key: col.key,
+    label: col.label,
+    level: col.scope === 'detail' ? 'line' : 'header',
+    scope: col.scope,
+    source: col.source === 'source' ? 'd365' : col.source, // admin-UI kent 'd365' | 'custom'
+    dataType: col.dataType,
+    options: col.options,
+    d365Field: col.sourceField || null,
+    writableToD365: Boolean(col.writable),
+    writeMechanism: col.writeMechanism || null,
+    isActive: Boolean(col.isActive),
+    isDefaultVisible: Boolean(col.isDefaultVisible),
+    visibleAtDelete: Boolean(col.visibleAtDelete),
+    filterable: Boolean(col.filterable),
+    sortable: Boolean(col.sortable),
+    sortOrder: col.sortOrder,
+  };
+}
+
+async function getDataModel(tableKey) {
+  const table = await getTableByKey(tableKey);
+  const pool = await getPool();
+  const [masterCols, detailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+  ]);
+  // lookup-kolommen zijn afgeleid/read-only en horen niet in de admin-config.
+  const headerCols = masterCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
+  const lineCols = detailCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
+
+  const hasDetail = Boolean(table.relation && table.relation.kind && table.relation.kind !== 'none');
+
+  const [baseUrl, company, rulesJson] = await Promise.all([
+    settingsService.getAsync('D365_ODATA_BASE_URL', ''),
+    settingsService.getAsync('D365_ODATA_COMPANY', ''),
+    settingsService.getAsync('PO_SYNC_RULES', ''),
+  ]);
+
+  // Cache-stats uit tb_cache + tb_sync_state.
+  const statsRes = await pool.request().input('t', sql.BigInt, table.id).query(`
+    SELECT
+      (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'master' AND removed_at_source = 0) AS master_rows,
+      (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'detail') AS detail_rows`);
+  const { lastFullSyncAt } = await getSyncState(table.id);
+  const cache = {
+    masterRows: Number(statsRes.recordset[0]?.master_rows) || 0,
+    detailRows: Number(statsRes.recordset[0]?.detail_rows) || 0,
+    lastSyncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
+  };
+
+  // D365-filtercatalogus + preview: hergebruik de PO-helper (zelfde D365-entiteit). Faalt zacht.
+  let filterMeta = { catalog: { header: [], line: [] }, preview: null };
+  try {
+    const cacheService = require('./D365PurchaseOrderCacheService');
+    if (typeof cacheService.getFilterFieldCatalogAndPreview === 'function') {
+      filterMeta = await cacheService.getFilterFieldCatalogAndPreview();
+    }
+  } catch { /* catalogus optioneel */ }
+
+  const syncRules = parseSyncRules(rulesJson);
+  let compiledFilter = '';
+  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+
+  return {
+    entities: [
+      { id: 'header', name: table.sourceEntity, title: `${table.label} (kop)`, path: table.sourceEntity, keys: table.keyFields, cacheTable: 'tb_cache' },
+      ...(hasDetail ? [{ id: 'line', name: table.relation.detailSourceEntity || 'lines', title: `${table.label} (regels)`, expandedVia: table.relation.detailSourceEntity || null, keys: [...table.keyFields, 'LineNumber'], cacheTable: 'tb_cache' }] : []),
+    ],
+    relation: hasDetail ? {
+      from: 'header', to: 'line', cardinality: '1:n', onFields: table.keyFields,
+      description: 'Eén kop heeft meerdere regels (via $expand).',
+    } : null,
+    connection: { baseUrl: baseUrl.trim() || null, company: company.trim() || null },
+    columns: { header: headerCols, line: lineCols },
+    cache,
+    syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: SYNC_TEMPLATES },
+    filterCatalog: filterMeta.catalog,
+    previewTables: filterMeta.preview,
+  };
+}
+
+// Sync-filter-regels per tabel opslaan. v1: gedeelde PO_SYNC_RULES-setting (de tb_-sync leest die al);
+// TODO(#174): per tabel in tb_tables.default_filter_json zodra meerdere schrijfbare bronnen nodig zijn.
+async function saveSyncFilters(tableKey, rules) {
+  await getTableByKey(tableKey); // valideer bestaan
+  const list = Array.isArray(rules) ? rules : [];
+  const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
+  await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+  return { rules: list, compiled };
+}
+
+// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen). Hergebruikt de PO-fetch;
+// PO-specifiek tot de generieke provider-count er is (#177).
+async function countSyncFilter(tableKey, rules) {
+  await getTableByKey(tableKey);
+  const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
+  const result = await fetchPurchaseOrders({ supplierAccount: null, top: 1, skip: 0, fetchAll: false, extraFilter: compiled, maxItems: 1 });
+  return { total: Number(result.total) || 0, compiled };
+}
+
 module.exports = {
   refresh,
   read,
   saveCustomValue,
   correctField,
   getCellHistory,
+  getDataModel,
+  saveSyncFilters,
+  countSyncFilter,
   getSyncState,
   isStale,
   getLastViewedAt,

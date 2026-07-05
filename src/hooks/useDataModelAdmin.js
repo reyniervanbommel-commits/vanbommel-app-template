@@ -1,5 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
+import { BOARD_TB_SOURCE } from '../config/featureFlags';
+
+// Board-cutover Fase 5/6 (#AB:174/#175): de admin-datamodel-pagina draait onder BOARD_TB_SOURCE op de
+// generieke tb_*-laag (/api/data/purchase-orders/...). De tb_-kolomrespons wordt naar de admin-vorm
+// (level/d365) gemapt zoals de po_-endpoints die leverden; het /datamodel-endpoint levert dat al gemapt.
+const ADMIN_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
+function mapAdminColumn(col) {
+  if (!col || !BOARD_TB_SOURCE) return col;
+  if (col.level) return col; // al in admin-vorm
+  return {
+    ...col,
+    level: col.scope === 'detail' ? 'line' : 'header',
+    source: col.source === 'source' ? 'd365' : col.source,
+    d365Field: col.sourceField ?? col.d365Field ?? null,
+    writableToD365: Boolean(col.writable ?? col.writableToD365),
+  };
+}
 
 /**
  * Admin-datamodel voor het PO-scherm: laadt entiteiten, relatie, kolommen
@@ -20,7 +37,7 @@ export function useDataModelAdmin() {
   const reload = useCallback(async () => {
     setError('');
     try {
-      const result = await apiRequest('/purchase-orders/datamodel');
+      const result = await apiRequest(`${ADMIN_BASE}/datamodel`);
       setData(result);
     } catch (err) {
       setError(err.message);
@@ -80,11 +97,11 @@ export function useDataModelAdmin() {
     setTogglingKey(`vis-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`/purchase-orders/columns/${column.id}/visibility`, {
+      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visibility`, {
         method: 'PATCH',
         body: { visible: !column.isActive },
       });
-      applyColumnUpdate(result.column);
+      applyColumnUpdate(mapAdminColumn(result.column));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -96,11 +113,11 @@ export function useDataModelAdmin() {
     setTogglingKey(`vad-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`/purchase-orders/columns/${column.id}/visible-at-delete`, {
+      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visible-at-delete`, {
         method: 'PATCH',
         body: { visible: !column.visibleAtDelete },
       });
-      applyColumnUpdate(result.column);
+      applyColumnUpdate(mapAdminColumn(result.column));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -112,11 +129,11 @@ export function useDataModelAdmin() {
     setTogglingKey(`wb-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`/purchase-orders/columns/${column.id}/writeback`, {
+      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/writeback`, {
         method: 'PATCH',
         body: { writable: !column.writableToD365, mechanism: 'patch' },
       });
-      applyColumnUpdate(result.column);
+      applyColumnUpdate(mapAdminColumn(result.column));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -142,24 +159,24 @@ export function useDataModelAdmin() {
     try {
       const updates = await Promise.allSettled(eligibleColumns.map(async (column) => {
         if (toggleType === 'visibility') {
-          const result = await apiRequest(`/purchase-orders/columns/${column.id}/visibility`, {
+          const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visibility`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
           });
-          return result.column;
+          return mapAdminColumn(result.column);
         }
         if (toggleType === 'visibleAtDelete') {
-          const result = await apiRequest(`/purchase-orders/columns/${column.id}/visible-at-delete`, {
+          const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visible-at-delete`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
           });
-          return result.column;
+          return mapAdminColumn(result.column);
         }
-        const result = await apiRequest(`/purchase-orders/columns/${column.id}/writeback`, {
+        const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/writeback`, {
           method: 'PATCH',
           body: { writable: shouldEnable, mechanism: 'patch' },
         });
-        return result.column;
+        return mapAdminColumn(result.column);
       }));
 
       const successfulUpdates = [];
@@ -193,7 +210,7 @@ export function useDataModelAdmin() {
     setTogglingKey(`del-${column.id}`);
     setError('');
     try {
-      await apiRequest(`/purchase-orders/columns/${column.id}`, {
+      await apiRequest(`${ADMIN_BASE}/columns/${column.id}`, {
         method: 'DELETE',
       });
       removeColumnFromState(column);
@@ -207,7 +224,7 @@ export function useDataModelAdmin() {
   const syncNow = useCallback(async () => {
     setError('');
     try {
-      await apiRequest('/purchase-orders/refresh', { method: 'POST' });
+      await apiRequest(`${ADMIN_BASE}/refresh`, { method: 'POST' });
       await reload();
     } catch (err) {
       setError(err.message);

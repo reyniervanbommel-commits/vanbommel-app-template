@@ -8,6 +8,8 @@ const express = require('express');
 const dataService = require('../services/TableDataService');
 const columnsService = require('../services/TableColumnsService');
 const registry = require('../services/TableRegistryService');
+const { requireRole } = require('../middleware/auth');
+const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -165,6 +167,33 @@ router.put('/:tableKey/value', async (req, res, next) => {
       req.user.id,
     );
     return res.json({ success: true, ...saved });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/datamodel — admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
+router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.getDataModel(req.params.tableKey));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
+router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
+router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
   } catch (err) {
     return next(err);
   }

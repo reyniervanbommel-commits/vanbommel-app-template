@@ -1,5 +1,15 @@
 export const devTestItems = [
   {
+    id: 'story-174-175',
+    title: 'Story #174/#175 - admin Data model op tb_* (board-cutover Fase 5/6)',
+    checks: [
+      'De admin "Data model"-pagina laadt entiteiten/kolommen/cache-stats via /api/data/purchase-orders/datamodel (tb_*)',
+      'Kolom zichtbaar/verbergen, write-back-toggle en "zichtbaar bij verwijderen" werken vanuit de admin-pagina op tb_*',
+      'Sync-filterregels opslaan + de match-telling werken via de tb_*-endpoints',
+      'Eigen kolom verwijderen werkt; lookup-kolommen verschijnen niet in de admin-config',
+    ],
+  },
+  {
     id: 'story-173',
     title: 'Story #173 - tb_* cel-geschiedenis (board-cutover Fase 4)',
     checks: [

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
+import { BOARD_TB_SOURCE } from '../config/featureFlags';
+
+// Board-cutover Fase 5 (#AB:174): sync-filter-endpoints via de generieke tb_*-laag onder BOARD_TB_SOURCE.
+const SYNC_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
 
 // Enum-metadata voor D365-velden die geen vrije tekst zijn. De Status-kolom gebruikt
 // de PurchStatus-enum; OData vereist daarvoor de notatie EnumType'Member'.
@@ -107,7 +111,7 @@ export function useSyncFilters(initialRules) {
     setCountLoading(true);
     setCountError('');
     try {
-      const data = await apiRequest('/purchase-orders/sync-filters/count', {
+      const data = await apiRequest(`${SYNC_BASE}/sync-filters/count`, {
         method: 'POST',
         body: { rules: rulesToCount },
       });
@@ -130,7 +134,7 @@ export function useSyncFilters(initialRules) {
     setSaving(true);
     setError('');
     try {
-      await apiRequest('/purchase-orders/sync-filters', { method: 'PUT', body: { rules } });
+      await apiRequest(`${SYNC_BASE}/sync-filters`, { method: 'PUT', body: { rules } });
       setSavedAt(new Date());
       await countRows(rules);
     } catch (err) {
