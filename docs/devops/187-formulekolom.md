@@ -1,7 +1,7 @@
 # Formulekolom in rechterkolom (v1) (DevOps)
 
 **Doel:** Een read-only formulekolom die via "kolom rechts toevoegen" wordt aangemaakt en per orderrij server-side wordt berekend met NL Excel-achtige syntax (ALS + operatoren).
-**Work item:** [Feature #187](https://dev.azure.com/reyniervanbommel0745/Vendor-App/_workitems/edit/187) (child stories #188–#193)
+**Work item:** [Feature #187](https://dev.azure.com/reyniervanbommel0745/Vendor-App/_workitems/edit/187) (child stories #188–#194)
 **Plan (lokaal, buiten repo):** `~/.cursor/plans/dev_formulekolom-rechts_942a5fca.plan.md`
 **Tags:** table-builder; formule; kolommen; backend; frontend
 
@@ -24,7 +24,8 @@
 5. Handmatig bewerken van een formulekolomwaarde is geblokkeerd (`saveCustomValue` weigert).
 6. Een ongeldige formule (syntaxfout of onbekende/formule/detail-referentie) kan niet worden opgeslagen; de dialog toont de reden.
 7. Een gewone kolom kan niet worden verwijderd zolang een formule ernaar verwijst; de melding noemt de gebruikende formulekolom.
-8. Bestaande kolomtypes en boardfunctionaliteit blijven werken.
+8. In de formule-dialog stel je opmaakregels (operator, waarde, kleur uit palet) + doel (rij/cel) in; de uitkomst kleurt rij of cel volgens de eerste matchende regel. Max één kolom mag de rij kleuren; een tweede rij-doel wordt geweigerd.
+9. Bestaande kolomtypes en boardfunctionaliteit blijven werken.
 
 ---
 
@@ -38,6 +39,7 @@
 - Syntax: `ALS(...;...;...)`, operatoren `+ - * / > < >= <= = <>`, kolomref `(key)`, `;`-scheider, **punt-decimaal**, string-literals `'...'`.
 - Functieset v1: **alleen `ALS` + operatoren**.
 - Reken-/foutregels: lege operand = 0; `datum ± getal = datum`, `datum − datum = getal (dagen)`; echte fout → lege cel + tooltip-reden.
+- **Voorwaardelijke opmaak:** per formulekolom regels `{operator, waarde, kleur}` (eerste match wint), doel rij of cel, kleuren uit het bestaande grouping-palet. Max één kolom met rij-doel per tabel. Opslag in `formula_format_json`; `read()` levert `row.rowColor` + `row.cellColors`.
 
 ---
 
@@ -77,13 +79,21 @@
 1. Verwijderen van een gerefereerde kolom geeft een 4xx met leesbare melding.
 
 ### Story E: Frontend formule-dialog
-**Beschrijving:** Aparte formule-dialog met resultaattype-keuze, formule-tekstvak en kolom-picker die `(key)` invoegt; inline save-time validatiefouten; hergebruikt voor bewerken. Gekoppeld aan de `+ Kolom rechts toevoegen`-flow.
+**Beschrijving:** Aparte formule-dialog met resultaattype-keuze, formule-tekstvak en kolom-picker die `(key)` invoegt; inline save-time validatiefouten; hergebruikt voor bewerken. Bevat ook de opmaak-sectie (Story G). Gekoppeld aan de `+ Kolom rechts toevoegen`-flow.
 **Acceptatiecriteria:**
 1. Dialog maakt en bewerkt een formulekolom; picker voegt refs in.
 2. Nieuwe kolom landt rechts van de bronkolom.
 
+### Story G: Voorwaardelijke opmaak (regels → kleur)
+**Beschrijving:** Per formulekolom regels `{operator, waarde, kleur}` (eerste match wint), doel rij/cel, kleuren uit het grouping-palet. Opslag in `formula_format_json`; `read()` toetst de regels en levert `row.rowColor` + `row.cellColors`. Conflictregel: max één rij-doel per tabel (bij opslaan afgedwongen). Rendering van rij-/celkleur in het board met bepaalde precedentie t.o.v. grouping/nieuw-gewijzigd.
+**Acceptatiecriteria:**
+1. Regels instelbaar in de formule-dialog met doelkeuze en palet-kleuren.
+2. Uitkomst kleurt rij of cel volgens de eerste matchende regel.
+3. Tweede rij-doel wordt bij opslaan geweigerd met melding.
+4. Errored/niet-matchende uitkomst geeft geen kleur en verstoort nieuw/gewijzigd-accenten niet.
+
 ### Story F: Tests + versie
-**Beschrijving:** Unit tests engine (geldig, syntaxfout, onbekende kolom, deling-door-nul→leeg, lege operand=0, datum-rekenen, vier resultaattypes), read-only, dependency-guard, save-time validatie. Semver patch in `src/config/version.js`; componenten < 300 regels.
+**Beschrijving:** Unit tests engine (geldig, syntaxfout, onbekende kolom, deling-door-nul→leeg, lege operand=0, datum-rekenen, vier resultaattypes), opmaakregels (eerste match / geen match / errored → geen kleur; tweede rij-doel geweigerd), read-only, dependency-guard, save-time validatie. Semver patch in `src/config/version.js`; componenten < 300 regels.
 **Acceptatiecriteria:**
 1. Tests groen via `npm test`.
 2. Versie verhoogd; geen component > 300 regels.
