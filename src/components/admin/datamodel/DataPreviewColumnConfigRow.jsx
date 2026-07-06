@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import {
   Badge,
   Button,
+  mergeClasses,
   Switch,
   TableCell,
   TableRow,
@@ -58,9 +59,10 @@ export default function DataPreviewColumnConfigRow({
   const writebackBusy = togglingKey === `wb-${column.id}`;
   const deletingBusy = togglingKey === `del-${column.id}`;
   const bulkBusy = typeof togglingKey === 'string' && togglingKey.startsWith('bulk-');
-  const rowClassName = isRelationField
-    ? `${column.isActive ? '' : styles.hiddenRow} ${styles.relationRow}`.trim()
-    : (column.isActive ? undefined : styles.hiddenRow);
+  const rowClassName = mergeClasses(
+    !column.isActive && styles.hiddenRow,
+    isRelationField && styles.relationRow,
+  );
 
   return (
     <TableRow className={rowClassName}>
