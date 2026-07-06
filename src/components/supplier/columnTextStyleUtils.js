@@ -13,11 +13,14 @@ function buildTextStyle(textStyle) {
   };
 }
 
-export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey) {
+export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey, backgroundColor = '') {
   const width = Number(columnWidths?.[columnKey]);
   const resolvedTextStyle = buildTextStyle(columnTextStyles?.[columnKey]);
+  const resolvedBackgroundColor = /^#[0-9a-fA-F]{6}$/.test(String(backgroundColor || ''))
+    ? String(backgroundColor).toLowerCase()
+    : '';
   const hasWidth = Number.isFinite(width);
-  if (!hasWidth && !resolvedTextStyle) return undefined;
+  if (!hasWidth && !resolvedTextStyle && !resolvedBackgroundColor) return undefined;
   return {
     ...(hasWidth
       ? {
@@ -26,6 +29,7 @@ export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey) {
         maxWidth: `${Math.round(width)}px`,
       }
       : {}),
+    ...(resolvedBackgroundColor ? { backgroundColor: resolvedBackgroundColor } : {}),
     ...(resolvedTextStyle || {}),
   };
 }

@@ -105,12 +105,40 @@ router.get('/:tableKey/columns', async (req, res, next) => {
 // POST /api/data/:tableKey/columns — app-native kolom toevoegen.
 router.post('/:tableKey/columns', async (req, res, next) => {
   try {
-    const { scope, label, dataType, options } = req.body || {};
+    const { scope, label, dataType, options, formulaExpr } = req.body || {};
     const column = await columnsService.createColumn(
-      { tableKey: req.params.tableKey, scope, label, dataType, options },
+      { tableKey: req.params.tableKey, scope, label, dataType, options, formulaExpr },
       req.user.id,
     );
     return res.status(201).json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/columns/validate-formula — valideer formule + refs zonder opslaan.
+router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey(req.params.tableKey);
+    const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
+    const resultType = String(req.body?.dataType || 'number').trim() || 'number';
+    const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
+    if (!normalized.expression) {
+      return res.status(400).json({ error: 'Formule is verplicht' });
+    }
+    const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+    columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    columnsService.validateFormulaResultTypeCompatibility(
+      normalized.expression,
+      normalized.references,
+      masterColumns,
+      resultType
+    );
+    return res.json({
+      valid: true,
+      normalizedExpression: normalized.expression,
+      references: normalized.references,
+    });
   } catch (err) {
     return next(err);
   }
@@ -121,7 +149,21 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
-    const column = await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+    const hasFormulaPayload = req.body && (
+      Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
+      || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
+    );
+    const column = hasFormulaPayload
+      ? await columnsService.updateFormulaColumn(
+        columnId,
+        {
+          label: req.body?.label,
+          dataType: req.body?.dataType,
+          formulaExpr: req.body?.formulaExpr,
+        },
+        req.user.id,
+      )
+      : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);

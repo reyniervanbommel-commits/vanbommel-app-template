@@ -14,6 +14,8 @@ export function FilterMenuMainPane({
   canAddColumn,
   canRenameColumn,
   handleRenameColumn,
+  canEditFormulaColumn,
+  handleEditFormulaColumn,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -98,6 +100,12 @@ export function FilterMenuMainPane({
       {canRenameColumn ? (
         <>
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRenameColumn}>Rename column</Button>
+          <div className={styles.divider} />
+        </>
+      ) : null}
+      {canEditFormulaColumn ? (
+        <>
+          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditFormulaColumn}>Formulekolom bewerken</Button>
           <div className={styles.divider} />
         </>
       ) : null}

@@ -80,6 +80,7 @@ function PurchaseOrdersBoardTable({
   headerColumnWidths = {},
   lineColumnWidths = {},
   headerColumnTextStyles = {},
+  headerColumnFormatRules = {},
   lineColumnTextStyles = {},
   onSaveHeaderColumnWidth,
   onSaveLineColumnWidth,
@@ -266,6 +267,7 @@ function PurchaseOrdersBoardTable({
           headerColumnWidths={headerColumnWidths}
           lineColumnWidths={lineColumnWidths}
           headerColumnTextStyles={headerColumnTextStyles}
+          headerColumnFormatRules={headerColumnFormatRules}
           lineColumnTextStyles={lineColumnTextStyles}
           onSaveLineColumnWidth={onSaveLineColumnWidth}
           colCount={colCount}

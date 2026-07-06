@@ -16,12 +16,19 @@ const useStyles = makeStyles({
   rowBadge: {
     marginLeft: '6px',
   },
+  formulaError: {
+    color: tokens.colorPaletteRedForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
 });
 
 function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
+  const formulaExpr = String(column?.formulaExpr || '').trim();
+  const isFormulaColumn = Boolean(formulaExpr);
+  const formulaError = isFormulaColumn ? String(order?.formulaErrors?.[key] || '') : '';
   const linkedLineTotalColumnKey = linkedLineTotalMap?.[key] || '';
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
 
@@ -48,7 +55,7 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
-  if (column.source === 'custom' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+  if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (
       <EditableCell
         dataType={column.dataType}
@@ -89,11 +96,18 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     : linkedLineValueMeta
       ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
       : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
+  const displayNode = isFormulaColumn
+    ? (
+      <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
+        {formulaError ? 'Formulefout' : display}
+      </span>
+    )
+    : display;
 
   if (isFirst && order.removedInD365) {
     return (
       <span>
-        <span className={styles.removedText}>{display}</span>
+        <span className={styles.removedText}>{displayNode}</span>
         <Badge className={styles.removedBadge} color="danger" appearance="tint" size="small">
           verwijderd in D365
         </Badge>
@@ -104,7 +118,7 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
   if (isFirst && (order.isNew || order.isChanged)) {
     return (
       <span>
-        {display}
+        {displayNode}
         <Badge
           className={styles.rowBadge}
           color={order.isNew ? 'success' : 'warning'}
@@ -117,7 +131,7 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     );
   }
 
-  return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
+  return order.removedInD365 ? <span className={styles.removedText}>{displayNode}</span> : displayNode;
 }
 
 export default memo(PurchaseOrderHeaderCellContent);

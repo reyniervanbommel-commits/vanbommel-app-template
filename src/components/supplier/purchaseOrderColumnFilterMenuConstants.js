@@ -4,6 +4,7 @@ export const NEW_COLUMN_TYPES = [
   { key: 'number', label: 'Nummers', dataType: 'number' },
   { key: 'date', label: 'Datum', dataType: 'date' },
   { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
+  { key: 'formula', label: 'Formule', dataType: 'number' },
 ];
 
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;

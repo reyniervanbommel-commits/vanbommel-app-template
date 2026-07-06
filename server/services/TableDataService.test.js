@@ -1,6 +1,16 @@
 'use strict';
 
-const { computeContentHash, applyLookups, normalizeExclusionRows } = require('./TableDataService');
+const {
+  computeContentHash,
+  applyLookups,
+  normalizeExclusionRows,
+  compileMasterFormulaColumns,
+  applyFormulaColumnsToRowValues,
+  resolveSourceColumnValue,
+  calculateLinkedLineTotal,
+  applyRuntimeLinkedHeaderValues,
+  assertCustomColumnWritable,
+} = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
   const masterJson = JSON.stringify({ vendorAccount: 'Q000104', status: 'Open' });
@@ -102,5 +112,104 @@ describe('TableDataService.normalizeExclusionRows', () => {
   it('weert te lange sleutels en niet-arrays', () => {
     expect(normalizeExclusionRows([{ partitionKey: 'x'.repeat(33), recordKey: 'PO-1' }])).toEqual([]);
     expect(normalizeExclusionRows(null)).toEqual([]);
+  });
+});
+
+describe('TableDataService.formule-evaluatie in read-flow', () => {
+  it('compileert formulekolommen en evalueert per rij', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'delta', dataType: 'number', formulaExpr: '(inkoop)-(budget)' },
+    ]);
+    const values = { inkoop: 12, budget: 7 };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.delta).toBe(5);
+    expect(errors).toEqual({});
+  });
+
+  it('rapporteert formulefouten zonder crash', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'ratio', dataType: 'number', formulaExpr: '(a)/(b)' },
+    ]);
+    const values = { a: 10, b: 0 };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.ratio).toBeNull();
+    expect(errors.ratio).toContain('Deling door nul');
+  });
+
+  it('evalueert referenties hoofdletter-onafhankelijk', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'statusCheck', dataType: 'text', formulaExpr: "ALS((requesteddeliverydate)<(confirmeddeliverydate);'kleiner';'groter')" },
+    ]);
+    const values = {
+      requestedDeliveryDate: '2026-07-01',
+      confirmedDeliveryDate: '2026-07-05',
+    };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.statusCheck).toBe('kleiner');
+    expect(errors).toEqual({});
+  });
+});
+
+describe('TableDataService.assertCustomColumnWritable', () => {
+  it('weigert formulekolommen voor handmatige save', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      formulaExpr: '(a)+(b)',
+    })).toThrow(/read-only/i);
+  });
+
+  it('accepteert gewone custom kolommen', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      formulaExpr: null,
+    })).not.toThrow();
+  });
+});
+
+describe('TableDataService.resolveSourceColumnValue', () => {
+  it('gebruikt sourceField wanneer key anders is', () => {
+    const sourceJson = { RequestedDeliveryDate: '2026-07-12' };
+    const value = resolveSourceColumnValue(sourceJson, {
+      key: 'requestedDeliveryDate',
+      sourceField: 'RequestedDeliveryDate',
+    });
+    expect(value).toBe('2026-07-12');
+  });
+
+  it('valt terug op key wanneer sourceField ontbreekt', () => {
+    const sourceJson = { requestedDeliveryDate: '2026-07-12' };
+    const value = resolveSourceColumnValue(sourceJson, {
+      key: 'requestedDeliveryDate',
+      sourceField: null,
+    });
+    expect(value).toBe('2026-07-12');
+  });
+});
+
+describe('TableDataService runtime linked header values', () => {
+  it('berekent line total link en zet headerwaarde', () => {
+    const masterValues = { aantal_total_2: null };
+    const details = [
+      { values: { quantity: 2 } },
+      { values: { quantity: '3' } },
+      { values: { quantity: null } },
+    ];
+    applyRuntimeLinkedHeaderValues(masterValues, details, {
+      lineTotalHeaderLinks: [{ lineColumnKey: 'quantity', headerColumnKey: 'aantal_total_2' }],
+      lineValueHeaderLinks: [],
+    });
+    expect(masterValues.aantal_total_2).toBe(5);
+  });
+
+  it('calculateLinkedLineTotal telt robuust numerieke waarden', () => {
+    const total = calculateLinkedLineTotal(
+      [
+        { values: { quantity: '1,5' } },
+        { values: { quantity: '2.5' } },
+        { values: { quantity: 'x' } },
+      ],
+      'quantity'
+    );
+    expect(total).toBe(4);
   });
 });

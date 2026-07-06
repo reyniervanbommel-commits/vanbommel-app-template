@@ -16,12 +16,14 @@ const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 const MAX_KEY_LENGTH = 64;
 const FIELD_DISCOVERY_SAMPLE_LIMIT = 800;
 const DATA_MODEL_PREVIEW_ROW_LIMIT = 60;
+const MAX_BOARD_LINKS = 80;
 // Aantal masterrecords per save-batch. De save schrijft per chunk set-based weg (bulk copy naar een
 // staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
 // aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
@@ -810,6 +812,189 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
   }
 }
 
+function isFormulaColumn(column) {
+  return Boolean(String(column?.formulaExpr || '').trim());
+}
+
+function assertCustomColumnWritable(column) {
+  if (!column || column.source !== 'custom') {
+    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
+  }
+  if (isFormulaColumn(column)) {
+    throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
+  }
+}
+
+function compileMasterFormulaColumns(masterColumns) {
+  return (Array.isArray(masterColumns) ? masterColumns : [])
+    .filter((column) => isFormulaColumn(column))
+    .map((column) => {
+      try {
+        return {
+          column,
+          compiled: compileFormula(column.formulaExpr),
+          compileError: null,
+        };
+      } catch (err) {
+        return {
+          column,
+          compiled: null,
+          compileError: `Ongeldige formule: ${err?.message || 'Onbekende fout'}`,
+        };
+      }
+    });
+}
+
+function withCaseInsensitiveKeys(values) {
+  const normalized = { ...(values || {}) };
+  for (const [key, value] of Object.entries(values || {})) {
+    const lowerKey = String(key || '').toLowerCase();
+    if (lowerKey && !Object.prototype.hasOwnProperty.call(normalized, lowerKey)) {
+      normalized[lowerKey] = value;
+    }
+  }
+  return normalized;
+}
+
+function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
+  const formulaErrors = {};
+  const evaluationValues = withCaseInsensitiveKeys(masterValues);
+  for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
+    const formulaKey = item?.column?.key;
+    if (!formulaKey) continue;
+    if (item.compileError) {
+      masterValues[formulaKey] = null;
+      evaluationValues[formulaKey] = null;
+      evaluationValues[String(formulaKey).toLowerCase()] = null;
+      formulaErrors[formulaKey] = item.compileError;
+      continue;
+    }
+    const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
+    masterValues[formulaKey] = result.value;
+    evaluationValues[formulaKey] = result.value;
+    evaluationValues[String(formulaKey).toLowerCase()] = result.value;
+    if (result.error) formulaErrors[formulaKey] = result.error;
+  }
+  return formulaErrors;
+}
+
+function resolveSourceColumnValue(sourceJson, column) {
+  const safeSource = sourceJson && typeof sourceJson === 'object' ? sourceJson : {};
+  const sourceFieldKey = String(column?.sourceField || '').trim();
+  if (sourceFieldKey && Object.prototype.hasOwnProperty.call(safeSource, sourceFieldKey)) {
+    return safeSource[sourceFieldKey];
+  }
+  const columnKey = String(column?.key || '').trim();
+  if (columnKey && Object.prototype.hasOwnProperty.call(safeSource, columnKey)) {
+    return safeSource[columnKey];
+  }
+  return null;
+}
+
+function normalizeBoardColumnKey(value) {
+  return String(value || '').trim().slice(0, 64);
+}
+
+function normalizeRuntimeLinkArray(value) {
+  const entries = Array.isArray(value)
+    ? value
+    : (value && typeof value === 'object' ? [value] : []);
+  const seen = new Set();
+  return entries.slice(0, MAX_BOARD_LINKS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeBoardColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeBoardColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
+async function loadUserRuntimeHeaderLinks(pool, userId, boardKey) {
+  if (!pool || !userId || !boardKey) {
+    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
+  }
+  const result = await pool.request()
+    .input('userId', sql.Int, userId)
+    .input('boardKey', sql.NVarChar(64), boardKey)
+    .query(`
+      SELECT settings_json
+      FROM dbo.user_board_settings WITH (NOLOCK)
+      WHERE user_id = @userId AND board_key = @boardKey
+    `);
+  if (!result.recordset.length) {
+    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
+  }
+  let parsed = {};
+  try {
+    parsed = JSON.parse(result.recordset[0].settings_json || '{}');
+  } catch {
+    parsed = {};
+  }
+  return {
+    lineTotalHeaderLinks: normalizeRuntimeLinkArray(parsed.lineTotalHeaderLinks),
+    lineValueHeaderLinks: normalizeRuntimeLinkArray(parsed.lineValueHeaderLinks),
+  };
+}
+
+function toLineNumeric(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function calculateLinkedLineTotal(details, lineColumnKey) {
+  if (!Array.isArray(details) || !lineColumnKey) return 0;
+  return details.reduce((total, detail) => {
+    const numeric = toLineNumeric(detail?.values?.[lineColumnKey]);
+    return numeric === null ? total : total + numeric;
+  }, 0);
+}
+
+function calculateLinkedLineValues(details, lineColumnKey) {
+  if (!Array.isArray(details) || !lineColumnKey) return '-';
+  const seen = new Set();
+  const list = [];
+  for (const detail of details) {
+    const raw = detail?.values?.[lineColumnKey];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const text = String(raw).trim();
+    if (!text || text === '-') continue;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    list.push(text);
+  }
+  if (!list.length) return '-';
+  return list.length === 1 ? list[0] : list.join(', ');
+}
+
+function applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks) {
+  if (!masterValues || typeof masterValues !== 'object') return;
+  const totalLinks = Array.isArray(runtimeLinks?.lineTotalHeaderLinks) ? runtimeLinks.lineTotalHeaderLinks : [];
+  const valueLinks = Array.isArray(runtimeLinks?.lineValueHeaderLinks) ? runtimeLinks.lineValueHeaderLinks : [];
+
+  for (const link of totalLinks) {
+    const headerColumnKey = normalizeBoardColumnKey(link?.headerColumnKey);
+    const lineColumnKey = normalizeBoardColumnKey(link?.lineColumnKey);
+    if (!headerColumnKey || !lineColumnKey) continue;
+    masterValues[headerColumnKey] = calculateLinkedLineTotal(details, lineColumnKey);
+  }
+  for (const link of valueLinks) {
+    const headerColumnKey = normalizeBoardColumnKey(link?.headerColumnKey);
+    const lineColumnKey = normalizeBoardColumnKey(link?.lineColumnKey);
+    if (!headerColumnKey || !lineColumnKey) continue;
+    masterValues[headerColumnKey] = calculateLinkedLineValues(details, lineColumnKey);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
@@ -820,6 +1005,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
   ]));
+  const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  const runtimeLinks = await loadUserRuntimeHeaderLinks(pool, userId, table.key);
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -884,7 +1071,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   function valuesFor(cols, sourceJson, custom) {
     const values = {};
     for (const col of cols) {
-      if (col.source === 'source') values[col.key] = col.key in sourceJson ? sourceJson[col.key] : null;
+      if (isFormulaColumn(col)) values[col.key] = null;
+      else if (col.source === 'source') values[col.key] = resolveSourceColumnValue(sourceJson, col);
       else values[col.key] = custom && col.key in custom ? custom[col.key] : null;
     }
     return values;
@@ -914,6 +1102,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
+    const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
     return {
       partitionKey: m.partition_key,
@@ -922,6 +1112,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       isNew,
       isChanged,
       values: masterValues,
+      formulaErrors,
       details,
       detailCount: details.length,
     };
@@ -993,9 +1184,7 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   if (!column || !column.isActive || column.tableId !== table.id) {
     throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   }
-  if (column.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
-  }
+  assertCustomColumnWritable(column);
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
@@ -1669,6 +1858,13 @@ module.exports = {
   markViewed,
   computeContentHash,
   applyLookups,
+  isFormulaColumn,
+  assertCustomColumnWritable,
+  compileMasterFormulaColumns,
+  applyFormulaColumnsToRowValues,
+  resolveSourceColumnValue,
+  calculateLinkedLineTotal,
+  applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,
   includeRows,

@@ -18,6 +18,7 @@ const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -88,6 +89,45 @@ function normalizeColumnKey(value) {
   return String(value || '').trim().slice(0, 64);
 }
 
+function normalizeFormatRule(rule) {
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return null;
+  const op = FORMAT_RULE_OPERATORS.has(rule.op) ? rule.op : '=';
+  const color = HEX_COLOR_PATTERN.test(String(rule.color || '')) ? String(rule.color).toLowerCase() : '';
+  if (!color) return null;
+  const valueRef = normalizeColumnKey(rule.valueRef);
+  if (valueRef) return { op, valueRef, color };
+  const rawValue = rule.value;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return { op, value: rawValue, color };
+  if (typeof rawValue === 'boolean') return { op, value: rawValue, color };
+  const value = String(rawValue ?? '').trim().slice(0, 200);
+  if (!value) return null;
+  return { op, value, color };
+}
+
+function normalizeColumnFormatRuleSet(ruleSet) {
+  if (!ruleSet || typeof ruleSet !== 'object' || Array.isArray(ruleSet)) return null;
+  const target = ruleSet.target === 'row' ? 'row' : 'cell';
+  const rules = (Array.isArray(ruleSet.rules) ? ruleSet.rules : [])
+    .map(normalizeFormatRule)
+    .filter(Boolean)
+    .slice(0, 20);
+  if (!rules.length) return null;
+  return { target, rules };
+}
+
+function normalizeColumnFormatRuleMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).slice(0, MAX_COLUMNS);
+  return entries.reduce((acc, [rawKey, rawRuleSet]) => {
+    const key = normalizeColumnKey(rawKey);
+    if (!key) return acc;
+    const normalizedRuleSet = normalizeColumnFormatRuleSet(rawRuleSet);
+    if (!normalizedRuleSet) return acc;
+    acc[key] = normalizedRuleSet;
+    return acc;
+  }, {});
+}
+
 function normalizeLineTotalLinks(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -129,6 +169,7 @@ function normalizeBoardSettings(rawSettings) {
     headerColumnWidths: normalizeColumnWidthMap(input.headerColumnWidths),
     lineColumnWidths: normalizeColumnWidthMap(input.lineColumnWidths),
     headerColumnTextStyles: normalizeColumnTextStyleMap(input.headerColumnTextStyles),
+    headerColumnFormatRules: normalizeColumnFormatRuleMap(input.headerColumnFormatRules),
     lineColumnTextStyles: normalizeColumnTextStyleMap(input.lineColumnTextStyles),
     lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
     lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
@@ -177,6 +218,7 @@ function normalizeViewState(rawState) {
       headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
       lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
       headerColumnTextStyles: normalizeColumnTextStyleMap(columns.headerColumnTextStyles),
+      headerColumnFormatRules: normalizeColumnFormatRuleMap(columns.headerColumnFormatRules),
       lineColumnTextStyles: normalizeColumnTextStyleMap(columns.lineColumnTextStyles),
       lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
       lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),

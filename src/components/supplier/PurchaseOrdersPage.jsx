@@ -3,12 +3,15 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
+import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
 import { usePurchaseOrderSavedViewState } from '../../hooks/usePurchaseOrderSavedViewState';
 import { usePurchaseOrdersSelection } from '../../hooks/usePurchaseOrdersSelection';
 import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRows';
+import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
+import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
@@ -65,6 +68,7 @@ export default function PurchaseOrdersPage() {
     deleteRows,
     saveValue,
     addHeaderColumnAfter,
+    updateFormulaColumn,
     renameColumn,
     removeColumn,
     newCount,
@@ -78,6 +82,7 @@ export default function PurchaseOrdersPage() {
     headerColumnWidths,
     lineColumnWidths,
     headerColumnTextStyles,
+    headerColumnFormatRules,
     lineColumnTextStyles,
     lineTotalColumns,
     lineTotalHeaderLinks,
@@ -85,6 +90,7 @@ export default function PurchaseOrdersPage() {
     saveHeaderColumnWidth,
     saveLineColumnWidth,
     saveHeaderColumnTextStyle,
+    saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
     setLineColumnTotal,
     addLineTotalHeaderLink,
@@ -117,60 +123,44 @@ export default function PurchaseOrdersPage() {
   });
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
+  const {
+    formulaDialogState,
+    closeFormulaDialog,
+    handleFormulaTypeSelection,
+    formulaReferenceColumns,
+    submitFormulaColumn,
+  } = usePurchaseOrderFormulaDialogState({
+    visibleHeaderColumns,
+    addHeaderColumnAfter,
+    updateFormulaColumn,
+    headerColumnFormatRules,
+    saveHeaderColumnFormatRules,
+    setEditingColumnKey,
+  });
+
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
+    if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
+      return;
+    }
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter]);
-  const handlePushLineTotalToHeader = useCallback(async (lineColumn) => {
-    const lineColumnKey = String(lineColumn?.key || '').trim();
-    if (!lineColumnKey) return;
-    const activeLink = lineTotalHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
-    if (activeLink?.headerColumnKey) {
-      setEditingColumnKey(activeLink.headerColumnKey);
-      return;
-    }
-    const sameKeyHeader = visibleHeaderColumns.find((column) => column.key === lineColumnKey);
-    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
-    const afterKey = sameKeyHeader?.key || fallbackHeader?.key || '';
-    const created = await addHeaderColumnAfter(afterKey, {
-      label: `${lineColumn.label} Total`,
-      dataType: 'number',
-    });
-    if (!created?.key) return;
-    await addLineTotalHeaderLink({ lineColumnKey, headerColumnKey: created.key });
-    if (!lineTotalColumns.includes(lineColumnKey)) {
-      await setLineColumnTotal(lineColumnKey, true);
-    }
-    setEditingColumnKey(created.key);
-  }, [
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection]);
+
+  const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
+    lineValueHeaderLinks,
     visibleHeaderColumns,
+    lineTotalColumns,
     addHeaderColumnAfter,
     addLineTotalHeaderLink,
-    lineTotalColumns,
+    addLineValueHeaderLink,
     setLineColumnTotal,
-  ]);
-  const handlePushLineValuesToHeader = useCallback(async (lineColumn) => {
-    const lineColumnKey = String(lineColumn?.key || '').trim();
-    if (!lineColumnKey) return;
-    const activeLink = lineValueHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
-    if (activeLink?.headerColumnKey) {
-      setEditingColumnKey(activeLink.headerColumnKey);
-      return;
-    }
-    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
-    const created = await addHeaderColumnAfter(fallbackHeader?.key || '', {
-      label: `${lineColumn.label} Values`,
-      dataType: 'text',
-    });
-    if (!created?.key) return;
-    await addLineValueHeaderLink({ lineColumnKey, headerColumnKey: created.key });
-    setEditingColumnKey(created.key);
-  }, [lineValueHeaderLinks, visibleHeaderColumns, addHeaderColumnAfter, addLineValueHeaderLink]);
+    setEditingColumnKey,
+  });
 
   const handleRefresh = useCallback(async () => {
     startProgress();
@@ -273,6 +263,7 @@ export default function PurchaseOrdersPage() {
             headerColumnWidths={headerColumnWidths}
             lineColumnWidths={lineColumnWidths}
             headerColumnTextStyles={headerColumnTextStyles}
+            headerColumnFormatRules={headerColumnFormatRules}
             lineColumnTextStyles={lineColumnTextStyles}
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
@@ -292,6 +283,14 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
+      <PurchaseOrderFormulaColumnDialog
+        open={formulaDialogState.open}
+        onOpenChange={(open) => !open && closeFormulaDialog()}
+        onSubmit={submitFormulaColumn}
+        sourceColumn={formulaDialogState.sourceColumn}
+        availableColumns={formulaReferenceColumns}
+        initialValue={formulaDialogState.editingColumn}
+      />
     </div>
   );
 }
