@@ -79,6 +79,8 @@ const useStyles = makeStyles({
     ...shorthands.padding('2px', '8px'),
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   empty: {
     ...shorthands.padding('8px'),
@@ -208,7 +210,7 @@ export default function PurchaseOrdersSubitemsTable({
               const rawValue = line.values?.[column.key];
               const width = Number(columnWidths[column.key]);
               const cellStyle = Number.isFinite(width)
-                ? { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` }
+                ? { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px`, maxWidth: `${Math.round(width)}px` }
                 : undefined;
               if (column.source === 'custom') {
                 return (

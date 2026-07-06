@@ -6,9 +6,10 @@ import {
 import { EditRegular, FilterRegular, LinkRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  header: { width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
-  labelWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
-  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', lineHeight: 1.2, ...shorthands.gap('4px') },
+  header: { width: '100%', minWidth: 0, minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
+  labelWrap: { display: 'flex', alignItems: 'center', minWidth: 0, ...shorthands.gap('4px') },
+  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, lineHeight: 1.2, ...shorthands.gap('4px') },
+  labelText: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
   customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
   filterIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
@@ -123,7 +124,7 @@ export default function PurchaseOrderColumnHeader({
             <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
           </Tooltip>
         ) : null}
-        <span>{column.label}</span>
+        <span className={styles.labelText}>{column.label}</span>
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
             <FilterRegular className={styles.filterIcon} />
@@ -169,7 +170,7 @@ export default function PurchaseOrderColumnHeader({
     <div className={styles.header}>
       <span className={styles.labelWrap}>
         <EditRegular className={styles.customIcon} title="Eigen kolom" />
-        {column.label}
+        <span className={styles.labelText}>{column.label}</span>
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
             <FilterRegular className={styles.filterIcon} />

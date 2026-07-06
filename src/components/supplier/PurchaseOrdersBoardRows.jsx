@@ -75,6 +75,8 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     verticalAlign: 'middle',
   },
   newRow: {
@@ -100,7 +102,7 @@ function getOrderRowClassName(order, styles) {
 function getColumnCellStyle(columnWidths, columnKey) {
   const width = Number(columnWidths?.[columnKey]);
   if (!Number.isFinite(width)) return undefined;
-  return { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` };
+  return { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px`, maxWidth: `${Math.round(width)}px` };
 }
 
 function PurchaseOrdersBoardRows({

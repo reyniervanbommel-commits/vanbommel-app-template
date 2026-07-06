@@ -4,9 +4,10 @@ import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
 
 const useStyles = makeStyles({
-  cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: '120px' },
+  cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: 0, width: '100%' },
   input: {
-    minWidth: '100px',
+    minWidth: 0,
+    width: '100%',
     color: tokens.colorBrandForeground1,
     '> input': {
       color: tokens.colorBrandForeground1,

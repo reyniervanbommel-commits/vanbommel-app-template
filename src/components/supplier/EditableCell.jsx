@@ -16,10 +16,12 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('4px'),
-    minWidth: '104px',
+    minWidth: 0,
+    width: '100%',
   },
   control: {
-    minWidth: '96px',
+    minWidth: 0,
+    width: '100%',
     color: tokens.colorBrandForeground1,
     '> input': {
       color: tokens.colorBrandForeground1,
