@@ -92,6 +92,27 @@ router.post('/:tableKey/columns', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/columns/validate-formula — valideer formule + refs zonder opslaan.
+router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey(req.params.tableKey);
+    const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
+    const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
+    if (!normalized.expression) {
+      return res.status(400).json({ error: 'Formule is verplicht' });
+    }
+    const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+    columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    return res.json({
+      valid: true,
+      normalizedExpression: normalized.expression,
+      references: normalized.references,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PATCH /api/data/:tableKey/columns/:id — app-native kolom hernoemen.
 router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {

@@ -23,6 +23,7 @@ import {
   FORMAT_RULE_OPERATORS,
   normalizeColumnFormatRuleSet,
 } from './columnFormatRuleUtils';
+import { usePurchaseOrderFormulaValidation } from '../../hooks/usePurchaseOrderFormulaValidation';
 
 const FORMULA_RESULT_TYPES = [
   { value: 'number', label: 'Getal' },
@@ -57,6 +58,15 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  validateRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
+  validText: {
+    color: tokens.colorPaletteGreenForeground1,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 export default function PurchaseOrderFormulaColumnDialog({
@@ -76,6 +86,7 @@ export default function PurchaseOrderFormulaColumnDialog({
   const [formatRules, setFormatRules] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { formulaValidation, validateFormula, resetFormulaValidation } = usePurchaseOrderFormulaValidation();
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +105,8 @@ export default function PurchaseOrderFormulaColumnDialog({
     })));
     setSaving(false);
     setError('');
-  }, [open, initialValue, initialFormatRuleSet]);
+    resetFormulaValidation();
+  }, [open, initialValue, initialFormatRuleSet, resetFormulaValidation]);
 
   const dialogTitle = initialValue ? 'Formulekolom bewerken' : 'Formulekolom toevoegen';
   const sourceLabel = String(sourceColumn?.label || '').trim();
@@ -141,6 +153,14 @@ export default function PurchaseOrderFormulaColumnDialog({
       setError('Geef een formule op.');
       return;
     }
+    const validation = await validateFormula({
+      formulaExpr: cleanFormula,
+      ownColumnKey: initialValue?.key,
+    });
+    if (!validation.valid) {
+      setError('Formule controle mislukt. Pas de formule aan met de tip.');
+      return;
+    }
     const normalizedFormatRuleSet = normalizeColumnFormatRuleSet({
       target: formatTarget,
       rules: formatRules.map((rule) => ({
@@ -155,7 +175,7 @@ export default function PurchaseOrderFormulaColumnDialog({
       await onSubmit({
         label: cleanLabel,
         dataType: resultType,
-        formulaExpr: cleanFormula,
+        formulaExpr: validation.normalizedExpression || cleanFormula,
         formatRuleSet: normalizedFormatRuleSet,
       });
       onOpenChange(false);
@@ -164,7 +184,7 @@ export default function PurchaseOrderFormulaColumnDialog({
     } finally {
       setSaving(false);
     }
-  }, [label, formulaExpr, formatRules, formatTarget, onOpenChange, onSubmit, resultType]);
+  }, [label, formulaExpr, formatRules, formatTarget, initialValue?.key, onOpenChange, onSubmit, resultType, validateFormula]);
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
@@ -202,10 +222,26 @@ export default function PurchaseOrderFormulaColumnDialog({
               <Field label="Formule" required hint="Voorbeeld: ALS((a)>(b);'Fout';(a)+(b))">
                 <Textarea
                   value={formulaExpr}
-                  onChange={(_, data) => setFormulaExpr(data.value)}
+                  onChange={(_, data) => {
+                    setFormulaExpr(data.value);
+                    resetFormulaValidation();
+                  }}
                   resize="vertical"
                   rows={4}
                 />
+                <div className={styles.validateRow}>
+                  <Button
+                    size="small"
+                    appearance="secondary"
+                    onClick={() => validateFormula({ formulaExpr, ownColumnKey: initialValue?.key })}
+                    disabled={saving || formulaValidation.status === 'checking'}
+                  >
+                    {formulaValidation.status === 'checking' ? 'Controleren...' : 'Check formule'}
+                  </Button>
+                  {formulaValidation.status === 'valid' ? (
+                    <Text className={styles.validText}>{formulaValidation.message}</Text>
+                  ) : null}
+                </div>
               </Field>
 
               <div className={styles.pickerWrap}>
@@ -234,9 +270,10 @@ export default function PurchaseOrderFormulaColumnDialog({
                 removeFormatRule={removeFormatRule}
               />
 
-              {error ? (
-                <Field validationState="error" validationMessage={error} />
-              ) : null}
+              {formulaValidation.status === 'invalid'
+                ? <Field validationState="error" validationMessage={`${formulaValidation.message}${formulaValidation.tip ? ` Tip: ${formulaValidation.tip}` : ''}`} />
+                : null}
+              {error ? <Field validationState="error" validationMessage={error} /> : null}
             </div>
           </DialogContent>
           <DialogActions>
