@@ -103,11 +103,16 @@ const useStyles = makeStyles({
 export default function DevFeatureChecklist() {
   const styles = useStyles();
   const [isOpen, setIsOpen] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const { items, checkedIds, completedCount, totalCount, allCompleted, toggleChecked, resetChecked } =
     useDevFeatureChecklist();
   const versionLabel = APP_VERSION || 'v0.0.0';
 
   const checkedIdSet = useMemo(() => new Set(checkedIds), [checkedIds]);
+  const visibleItems = useMemo(
+    () => (showCompleted ? items : items.filter((item) => !checkedIdSet.has(item.id))),
+    [checkedIdSet, items, showCompleted],
+  );
 
   const handleToggleOpen = useCallback(() => {
     setIsOpen((current) => !current);
@@ -116,6 +121,13 @@ export default function DevFeatureChecklist() {
   const handleClose = useCallback(() => {
     setIsOpen(false);
   }, []);
+
+  const handleToggleShowCompleted = useCallback(
+    (_event, data) => {
+      setShowCompleted(Boolean(data.checked));
+    },
+    [],
+  );
 
   const handleCheckboxChange = useCallback(
     (event) => {
@@ -156,8 +168,12 @@ export default function DevFeatureChecklist() {
           <div className={styles.panelBody}>
             {items.length === 0 ? (
               <Text className={styles.emptyState}>No test items configured for this build.</Text>
+            ) : visibleItems.length === 0 ? (
+              <Text className={styles.emptyState}>
+                All open test items are completed. Enable &quot;Show completed&quot; to review them.
+              </Text>
             ) : (
-              items.map((item) => (
+              visibleItems.map((item) => (
                 <div key={item.id} className={styles.item}>
                   <Checkbox
                     data-feature-id={item.id}
@@ -175,14 +191,21 @@ export default function DevFeatureChecklist() {
           </div>
 
           <div className={styles.panelFooter}>
-            <Text className={styles.progressText}>
-              {allCompleted && totalCount > 0 ? 'All test items completed' : `${progressLabel} completed`}
-            </Text>
-            {completedCount > 0 ? (
-              <Button appearance="subtle" size="small" onClick={resetChecked}>
-                Reset
-              </Button>
-            ) : null}
+            <Checkbox
+              label="Show completed"
+              checked={showCompleted}
+              onChange={handleToggleShowCompleted}
+            />
+            <div>
+              <Text className={styles.progressText}>
+                {allCompleted && totalCount > 0 ? 'All test items completed' : `${progressLabel} completed`}
+              </Text>
+              {completedCount > 0 ? (
+                <Button appearance="subtle" size="small" onClick={resetChecked}>
+                  Reset
+                </Button>
+              ) : null}
+            </div>
           </div>
         </aside>
       ) : null}
