@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { CheckmarkRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular, CheckmarkRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
+import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -52,6 +53,13 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
+  errorWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+    marginBottom: '16px',
+  },
 });
 
 export default function PurchaseOrdersPageTopBar({
@@ -64,6 +72,7 @@ export default function PurchaseOrdersPageTopBar({
   error,
 }) {
   const styles = useStyles();
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const {
     savedViews,
     activeViewId,
@@ -98,6 +107,19 @@ export default function PurchaseOrdersPageTopBar({
     refreshProgress,
     onRefresh,
   } = refreshState;
+  const hasError = Boolean(error);
+
+  useEffect(() => {
+    if (hasError) setErrorDialogOpen(true);
+  }, [hasError]);
+
+  const openErrorDialog = useCallback(() => {
+    setErrorDialogOpen(true);
+  }, []);
+
+  const closeErrorDialog = useCallback((open) => {
+    setErrorDialogOpen(Boolean(open));
+  }, []);
 
   return (
     <div className={styles.contentInset}>
@@ -180,7 +202,32 @@ export default function PurchaseOrdersPageTopBar({
         />
       </div>
 
-      {error ? <div className={styles.error}>{error}</div> : null}
+      {error ? (
+        <>
+          <div className={styles.errorWrap}>
+            <div className={styles.error}>{error}</div>
+            <Button
+              appearance="secondary"
+              size="small"
+              icon={<ArrowClockwiseRegular />}
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh data'}
+            </Button>
+            <Button appearance="subtle" size="small" onClick={openErrorDialog}>
+              What went wrong?
+            </Button>
+          </div>
+          <PurchaseOrderErrorDialog
+            error={error}
+            open={errorDialogOpen}
+            onOpenChange={closeErrorDialog}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

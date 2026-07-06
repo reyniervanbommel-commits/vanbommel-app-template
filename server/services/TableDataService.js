@@ -18,6 +18,9 @@ const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegi
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
+const MAX_KEY_LENGTH = 64;
+const FIELD_DISCOVERY_SAMPLE_LIMIT = 800;
+const DATA_MODEL_PREVIEW_ROW_LIMIT = 60;
 
 // ---------------------------------------------------------------------------
 // Fetch-adapters: vertalen een bron naar generieke records {partitionKey, recordKey, master, details}.
@@ -44,6 +47,7 @@ async function purchaseOrdersFetch(table) {
       partitionKey: String(raw.dataAreaId || company || '').trim(),
       recordKey: String(order.orderNumber || raw.PurchaseOrderNumber || '').trim(),
       modifiedAt: raw.ModifiedDateTime || null,
+      masterRaw: raw,
       master: {
         orderNumber: order.orderNumber,
         vendorAccount: order.vendorAccount,
@@ -55,6 +59,7 @@ async function purchaseOrdersFetch(table) {
       },
       details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({
         detailKey: toNumberOrNull(line.lineNumber),
+        raw: line.raw || {},
         values: {
           lineNumber: line.lineNumber,
           itemNumber: line.itemNumber,
@@ -102,12 +107,143 @@ function normalizeOut(value) {
 }
 function projectJson(source, sourceColumns) {
   const json = {};
-  for (const col of sourceColumns) json[col.key] = normalizeOut(source ? source[col.key] : null);
+  for (const col of sourceColumns) {
+    const directValue = source ? source[col.key] : null;
+    const fallbackValue = directValue === undefined && col.sourceField ? source?.[col.sourceField] : undefined;
+    json[col.key] = normalizeOut(fallbackValue === undefined ? directValue : fallbackValue);
+  }
   return JSON.stringify(json);
 }
 function parseJson(raw) {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toColumnLabelFromField(field) {
+  return String(field || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+    .slice(0, 128);
+}
+
+function slugifyColumnKey(label) {
+  const base = String(label || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MAX_KEY_LENGTH);
+  return base || 'kolom';
+}
+
+function inferSourceDataType(value) {
+  if (value instanceof Date) return 'date';
+  if (typeof value === 'number' && Number.isFinite(value)) return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  return 'text';
+}
+
+function shouldDiscoverSourceField(field, value) {
+  const normalizedField = String(field || '').trim();
+  if (!normalizedField || normalizedField.startsWith('@')) return false;
+  if (Array.isArray(value) || isPlainObject(value)) return false;
+  return true;
+}
+
+function nextUniqueKey(baseKey, existingKeys) {
+  let candidate = String(baseKey || '').slice(0, MAX_KEY_LENGTH) || 'kolom';
+  if (!existingKeys.has(candidate.toLowerCase())) return candidate;
+  for (let i = 2; i < 1000; i += 1) {
+    const withSuffix = `${baseKey}_${i}`.slice(0, MAX_KEY_LENGTH);
+    if (!existingKeys.has(withSuffix.toLowerCase())) return withSuffix;
+  }
+  throw new Error(`Kon geen unieke key bepalen voor '${baseKey}'`);
+}
+
+function collectDiscoveredFields(records, level) {
+  const discovered = new Map();
+  const list = Array.isArray(records) ? records.slice(0, FIELD_DISCOVERY_SAMPLE_LIMIT) : [];
+  for (const record of list) {
+    const rawObjects = level === 'line'
+      ? (Array.isArray(record.details) ? record.details.map((detail) => detail?.raw).filter(isPlainObject) : [])
+      : (isPlainObject(record.masterRaw) ? [record.masterRaw] : []);
+    for (const raw of rawObjects) {
+      Object.entries(raw).forEach(([field, value]) => {
+        if (!shouldDiscoverSourceField(field, value)) return;
+        const normalizedField = String(field).trim();
+        if (!discovered.has(normalizedField)) {
+          discovered.set(normalizedField, {
+            field: normalizedField,
+            label: toColumnLabelFromField(normalizedField) || normalizedField,
+            dataType: 'text',
+          });
+        }
+        const current = discovered.get(normalizedField);
+        const inferredType = inferSourceDataType(value);
+        if (current.dataType === 'text' && inferredType !== 'text') current.dataType = inferredType;
+      });
+    }
+  }
+  return [...discovered.values()].sort((a, b) => a.field.localeCompare(b.field));
+}
+
+async function syncSourceColumnsFromRecords(table, records) {
+  if (!Array.isArray(records) || !records.length) return { headerInserted: 0, lineInserted: 0 };
+  const pool = await getPool();
+
+  async function insertMissingForScope(scope, discoveredFields) {
+    if (!discoveredFields.length) return 0;
+    const existingColumns = await listColumns({ tableId: table.id, scope, includeInactive: true });
+    const existingSourceFields = new Set(
+      existingColumns
+        .filter((col) => col.source === 'source' && col.sourceField)
+        .map((col) => String(col.sourceField).toLowerCase())
+    );
+    const existingKeys = new Set(existingColumns.map((col) => String(col.key || '').toLowerCase()));
+    let nextSortOrder = existingColumns.reduce((maxSort, col) => Math.max(maxSort, Number(col.sortOrder) || 0), 0);
+    let inserted = 0;
+
+    for (const fieldMeta of discoveredFields) {
+      if (existingSourceFields.has(fieldMeta.field.toLowerCase())) continue;
+      const baseKey = slugifyColumnKey(fieldMeta.field);
+      const key = nextUniqueKey(baseKey, existingKeys);
+      existingKeys.add(key.toLowerCase());
+      existingSourceFields.add(fieldMeta.field.toLowerCase());
+      nextSortOrder += 10;
+
+      await pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('scope', sql.NVarChar(16), scope)
+        .input('key', sql.NVarChar(64), key)
+        .input('label', sql.NVarChar(128), fieldMeta.label)
+        .input('sourceField', sql.NVarChar(128), fieldMeta.field)
+        .input('dataType', sql.NVarChar(16), fieldMeta.dataType)
+        .input('sortOrder', sql.Int, nextSortOrder)
+        .query(`
+          INSERT INTO dbo.tb_columns
+            (table_id, scope, [key], label, source, source_field, data_type, writable, write_mechanism,
+             is_default_visible, filterable, sortable, is_active, sort_order)
+          VALUES
+            (@tableId, @scope, @key, @label, 'source', @sourceField, @dataType, 0, NULL, 1, 1, 1, 1, @sortOrder)
+        `);
+      inserted += 1;
+    }
+    return inserted;
+  }
+
+  const headerFields = collectDiscoveredFields(records, 'header');
+  const lineFields = collectDiscoveredFields(records, 'line');
+  const [headerInserted, lineInserted] = await Promise.all([
+    insertMissingForScope('master', headerFields),
+    insertMissingForScope('detail', lineFields),
+  ]);
+  return { headerInserted, lineInserted };
 }
 
 // Content-hash over de geprojecteerde master- + detail-JSON (bron-neutraal; nieuw/gewijzigd-detectie).
@@ -149,14 +285,28 @@ async function refresh(tableKey) {
   const adapter = getFetchAdapter(table);
   const refreshStart = new Date();
 
+  const { records, total, truncated } = await adapter(table);
+  try {
+    const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
+    if (headerInserted || lineInserted) {
+      logger.info('tb_columns uitgebreid met ontdekte bronvelden', {
+        tableKey,
+        headerInserted,
+        lineInserted,
+      });
+    }
+  } catch (discoveryErr) {
+    logger.warn('Bronveld-discovery voor tb_columns mislukt; refresh gaat door', {
+      tableKey,
+      error: discoveryErr.message,
+    });
+  }
   const [masterCols, detailCols] = await Promise.all([
-    listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
-    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
   ]);
   const masterSource = masterCols.filter((c) => c.source === 'source');
   const detailSource = detailCols.filter((c) => c.source === 'source');
-
-  const { records, total, truncated } = await adapter(table);
   if (truncated) {
     logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
       tableKey, opgehaald: records.length, totaalInBron: total,
@@ -171,8 +321,12 @@ async function refresh(tableKey) {
     const modifiedAt = toDateOrNull(rec.modifiedAt);
     if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
 
-    const masterJson = projectJson(rec.master, masterSource);
-    const detailJsons = rec.details.map((d) => projectJson(d.values, detailSource));
+    const masterValues = isPlainObject(rec.masterRaw) ? { ...rec.masterRaw, ...rec.master } : rec.master;
+    const masterJson = projectJson(masterValues, masterSource);
+    const detailJsons = rec.details.map((d) => {
+      const detailValues = isPlainObject(d.raw) ? { ...d.raw, ...d.values } : d.values;
+      return projectJson(detailValues, detailSource);
+    });
     const contentHash = computeContentHash(masterJson, detailJsons);
 
     const tx = new sql.Transaction(pool);
@@ -289,6 +443,7 @@ async function loadLookupEnrichment(table) {
     const cacheRes = await pool.request()
       .input('tableId', sql.BigInt, targetTable.id)
       .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
+              WITH (NOLOCK)
               WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`);
     const byKey = new Map();
     for (const r of cacheRes.recordset) {
@@ -360,11 +515,11 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     .input('tableId', sql.BigInt, table.id)
     .query(`
       SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
-      FROM dbo.tb_cache c
+      FROM dbo.tb_cache c WITH (NOLOCK)
       WHERE c.table_id = @tableId AND c.scope = 'master'
       ${includeRemoved ? '' : `AND c.removed_at_source = 0
         AND NOT EXISTS (
-          SELECT 1 FROM dbo.tb_row_exclusions ex
+          SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
           WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
         )`}
       ORDER BY c.record_key
@@ -374,7 +529,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     .input('tableId', sql.BigInt, table.id)
     .query(`
       SELECT partition_key, record_key, detail_key, data_json
-      FROM dbo.tb_cache
+      FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId AND scope = 'detail'
       ORDER BY record_key, detail_key
     `);
@@ -384,8 +539,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     .query(`
       SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
              cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
-      FROM dbo.tb_custom_values cv
-      INNER JOIN dbo.tb_columns c ON c.id = cv.column_id
+      FROM dbo.tb_custom_values cv WITH (NOLOCK)
+      INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
       WHERE cv.table_id = @tableId AND c.is_active = 1
     `);
 
@@ -974,6 +1129,81 @@ function toAdminColumn(col) {
   };
 }
 
+function normalizePreviewSampleValue(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function buildPreviewTableFromCacheRows(columns, cacheRows) {
+  const d365Columns = (Array.isArray(columns) ? columns : []).filter(
+    (column) => column.source === 'd365' && column.d365Field
+  );
+  const d365Fields = [...new Set(d365Columns.map((column) => String(column.d365Field)))];
+  const rows = (Array.isArray(cacheRows) ? cacheRows : []).map((cacheRow) => {
+    const source = parseJson(cacheRow?.data_json);
+    const values = {};
+    for (const column of d365Columns) {
+      const preferred = Object.prototype.hasOwnProperty.call(source, column.key)
+        ? source[column.key]
+        : source[column.d365Field];
+      values[column.d365Field] = preferred === undefined ? null : preferred;
+    }
+    return { values };
+  });
+
+  const sampleByField = {};
+  for (const field of d365Fields) {
+    sampleByField[field] = '—';
+    for (let i = 0; i < rows.length; i += 1) {
+      const candidate = rows[i]?.values?.[field];
+      if (candidate === null || candidate === undefined || candidate === '') continue;
+      sampleByField[field] = normalizePreviewSampleValue(candidate);
+      break;
+    }
+  }
+
+  return {
+    columns: d365Fields,
+    rows,
+    sampledRows: rows.length,
+    sampleByField,
+  };
+}
+
+function getMissingPreviewFields(columns, sampleByField) {
+  const fields = [...new Set(
+    (Array.isArray(columns) ? columns : [])
+      .filter((column) => column.source === 'd365' && column.d365Field)
+      .map((column) => String(column.d365Field))
+  )];
+  return fields.filter((field) => {
+    const current = sampleByField?.[field];
+    return !current || current === '—';
+  });
+}
+
+function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
+  if (!previewTable || !Array.isArray(fields) || !fields.length || !Array.isArray(rawRows) || !rawRows.length) {
+    return previewTable;
+  }
+  const nextSampleByField = { ...(previewTable.sampleByField || {}) };
+  for (const field of fields) {
+    if (nextSampleByField[field] && nextSampleByField[field] !== '—') continue;
+    for (let i = 0; i < rawRows.length; i += 1) {
+      const candidate = rawRows[i]?.[field];
+      if (candidate === null || candidate === undefined || candidate === '') continue;
+      nextSampleByField[field] = normalizePreviewSampleValue(candidate);
+      break;
+    }
+    if (!nextSampleByField[field]) nextSampleByField[field] = '—';
+  }
+  return {
+    ...previewTable,
+    sampleByField: nextSampleByField,
+  };
+}
+
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -987,11 +1217,37 @@ async function getDataModel(tableKey) {
 
   const hasDetail = Boolean(table.relation && table.relation.kind && table.relation.kind !== 'none');
 
+  const [headerPreviewRowsRes, linePreviewRowsRes] = await Promise.all([
+    pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
+      .query(`
+        SELECT TOP (@rowLimit) data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0
+        ORDER BY synced_at DESC, record_key ASC
+      `),
+    hasDetail
+      ? pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
+        .query(`
+          SELECT TOP (@rowLimit) data_json
+          FROM dbo.tb_cache WITH (NOLOCK)
+          WHERE table_id = @tableId AND scope = 'detail'
+          ORDER BY synced_at DESC, record_key ASC, detail_key ASC
+        `)
+      : Promise.resolve({ recordset: [] }),
+  ]);
+
   const [baseUrl, company, rulesJson] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
     settingsService.getAsync('PO_SYNC_RULES', ''),
   ]);
+  const syncRules = parseSyncRules(rulesJson);
+  let compiledFilter = '';
+  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
 
   // Cache-stats uit tb_cache + tb_sync_state.
   const statsRes = await pool.request().input('t', sql.BigInt, table.id).query(`
@@ -1008,10 +1264,37 @@ async function getDataModel(tableKey) {
   // D365-filtercatalogus uit de admin-gemapte kolommen (generiek; geen po_-afhankelijkheid meer).
   const { buildFilterCatalogPayload } = require('../utils/tbSyncFilterCatalog');
   const filterMeta = buildFilterCatalogPayload([...headerCols, ...lineCols]);
-
-  const syncRules = parseSyncRules(rulesJson);
-  let compiledFilter = '';
-  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+  let previewTables = {
+    header: buildPreviewTableFromCacheRows(headerCols, headerPreviewRowsRes.recordset),
+    line: buildPreviewTableFromCacheRows(lineCols, linePreviewRowsRes.recordset),
+  };
+  const missingHeaderFields = getMissingPreviewFields(headerCols, previewTables.header.sampleByField);
+  const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
+  if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
+    try {
+      const fallbackSample = await fetchPurchaseOrders({
+        supplierAccount: null,
+        top: DATA_MODEL_PREVIEW_ROW_LIMIT,
+        skip: 0,
+        fetchAll: false,
+        extraFilter: compiledFilter,
+        maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
+      });
+      const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
+      const lineRawRows = (fallbackSample.items || []).flatMap((item) => (
+        Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
+      ));
+      previewTables = {
+        header: fillMissingSamplesFromRawRows(previewTables.header, missingHeaderFields, headerRawRows),
+        line: fillMissingSamplesFromRawRows(previewTables.line, missingLineFields, lineRawRows),
+      };
+    } catch (err) {
+      logger.warn('Fallback sample preview uit D365 mislukt; cache-samples blijven leidend', {
+        tableKey,
+        error: err.message,
+      });
+    }
+  }
 
   return {
     entities: [
@@ -1027,7 +1310,7 @@ async function getDataModel(tableKey) {
     cache,
     syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: SYNC_TEMPLATES },
     filterCatalog: filterMeta.catalog,
-    previewTables: filterMeta.preview,
+    previewTables,
   };
 }
 
