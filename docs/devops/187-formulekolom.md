@@ -24,8 +24,9 @@
 5. Handmatig bewerken van een formulekolomwaarde is geblokkeerd (`saveCustomValue` weigert).
 6. Een ongeldige formule (syntaxfout of onbekende/formule/detail-referentie) kan niet worden opgeslagen; de dialog toont de reden.
 7. Een gewone kolom kan niet worden verwijderd zolang een formule ernaar verwijst; de melding noemt de gebruikende formulekolom.
-8. In de formule-dialog stel je opmaakregels (operator, waarde, kleur uit palet) + doel (rij/cel) in; de uitkomst kleurt rij of cel volgens de eerste matchende regel. Max één kolom mag de rij kleuren; een tweede rij-doel wordt geweigerd.
-9. Bestaande kolomtypes en boardfunctionaliteit blijven werken.
+8. In de formule-dialog stel je opmaakregels (operator, vergelijkwaarde als vaste waarde óf kolomref, kleur uit palet) + doel (rij/cel) in; de uitkomst kleurt rij of cel volgens de eerste matchende regel. Max één kolom mag de rij kleuren; een tweede rij-doel wordt geweigerd.
+9. Precedentie: 'verwijderd in D365' > voorwaardelijke opmaak > nieuw/gewijzigd (die als zij-accent zichtbaar blijven).
+10. Bestaande kolomtypes en boardfunctionaliteit blijven werken.
 
 ---
 
@@ -39,7 +40,8 @@
 - Syntax: `ALS(...;...;...)`, operatoren `+ - * / > < >= <= = <>`, kolomref `(key)`, `;`-scheider, **punt-decimaal**, string-literals `'...'`.
 - Functieset v1: **alleen `ALS` + operatoren**.
 - Reken-/foutregels: lege operand = 0; `datum ± getal = datum`, `datum − datum = getal (dagen)`; echte fout → lege cel + tooltip-reden.
-- **Voorwaardelijke opmaak:** per formulekolom regels `{operator, waarde, kleur}` (eerste match wint), doel rij of cel, kleuren uit het bestaande grouping-palet. Max één kolom met rij-doel per tabel. Opslag in `formula_format_json`; `read()` levert `row.rowColor` + `row.cellColors`.
+- **Voorwaardelijke opmaak:** per formulekolom gestructureerde regels `{operator, value|valueRef, kleur}` (eerste match wint), doel rij of cel, kleuren uit het bestaande grouping-palet. Vergelijkwaarde mag een vaste waarde óf een kolomreferentie zijn (valt onder validatie + dependency-guard). Max één kolom met rij-doel per tabel. Opslag in `formula_format_json`; `read()` levert `row.rowColor` + `row.cellColors`.
+- **Precedentie rij-accenten:** grouping-kleur staat op de groeps-kopregel (geen conflict). Op een datarij: 'verwijderd in D365' > voorwaardelijke opmaak > nieuw/gewijzigd (die van rij-achtergrond naar een zij-accent/rand-badge verhuizen).
 
 ---
 
@@ -74,9 +76,9 @@
 2. `saveCustomValue` op een formulekolom geeft 400.
 
 ### Story D: Dependency-guard bij verwijderen
-**Beschrijving:** `deactivateColumn` blokkeert verwijderen wanneer een actieve formule naar de kolom-key verwijst; melding noemt de gebruikende formulekolom.
+**Beschrijving:** `deactivateColumn` blokkeert verwijderen wanneer een actieve formule naar de kolom-key verwijst — zowel via de formule-expressie als via een opmaak-`valueRef`; melding noemt de gebruikende formulekolom.
 **Acceptatiecriteria:**
-1. Verwijderen van een gerefereerde kolom geeft een 4xx met leesbare melding.
+1. Verwijderen van een via formule óf opmaak-`valueRef` gerefereerde kolom geeft een 4xx met leesbare melding.
 
 ### Story E: Frontend formule-dialog
 **Beschrijving:** Aparte formule-dialog met resultaattype-keuze, formule-tekstvak en kolom-picker die `(key)` invoegt; inline save-time validatiefouten; hergebruikt voor bewerken. Bevat ook de opmaak-sectie (Story G). Gekoppeld aan de `+ Kolom rechts toevoegen`-flow.
@@ -85,12 +87,13 @@
 2. Nieuwe kolom landt rechts van de bronkolom.
 
 ### Story G: Voorwaardelijke opmaak (regels → kleur)
-**Beschrijving:** Per formulekolom regels `{operator, waarde, kleur}` (eerste match wint), doel rij/cel, kleuren uit het grouping-palet. Opslag in `formula_format_json`; `read()` toetst de regels en levert `row.rowColor` + `row.cellColors`. Conflictregel: max één rij-doel per tabel (bij opslaan afgedwongen). Rendering van rij-/celkleur in het board met bepaalde precedentie t.o.v. grouping/nieuw-gewijzigd.
+**Beschrijving:** Per formulekolom gestructureerde regels `{operator, value|valueRef, kleur}` (eerste match wint), doel rij/cel, kleuren uit het grouping-palet. Vergelijkwaarde is een vaste waarde óf kolomreferentie (per rij geresolved; meegenomen in save-time validatie en dependency-guard). Opslag in `formula_format_json`; `read()` toetst de regels en levert `row.rowColor` + `row.cellColors`. Conflictregel: max één rij-doel per tabel. Rendering met vastgelegde precedentie: verwijderd > opmaak > nieuw/gewijzigd (laatste wordt zij-accent); refactor van `getOrderRowClassName` in PurchaseOrdersBoardRows.jsx.
 **Acceptatiecriteria:**
-1. Regels instelbaar in de formule-dialog met doelkeuze en palet-kleuren.
-2. Uitkomst kleurt rij of cel volgens de eerste matchende regel.
+1. Regels instelbaar in de formule-dialog met doelkeuze, palet-kleuren en vergelijkwaarde als vaste waarde óf kolomref.
+2. Uitkomst kleurt rij of cel volgens de eerste matchende regel; `valueRef` wordt per rij geresolved.
 3. Tweede rij-doel wordt bij opslaan geweigerd met melding.
-4. Errored/niet-matchende uitkomst geeft geen kleur en verstoort nieuw/gewijzigd-accenten niet.
+4. Precedentie klopt: verwijderd houdt voorrang, opmaak wint van nieuw/gewijzigd, nieuw/gewijzigd blijft als zij-accent zichtbaar.
+5. Errored/niet-matchende uitkomst geeft geen kleur.
 
 ### Story F: Tests + versie
 **Beschrijving:** Unit tests engine (geldig, syntaxfout, onbekende kolom, deling-door-nul→leeg, lege operand=0, datum-rekenen, vier resultaattypes), opmaakregels (eerste match / geen match / errored → geen kleur; tweede rij-doel geweigerd), read-only, dependency-guard, save-time validatie. Semver patch in `src/config/version.js`; componenten < 300 regels.
