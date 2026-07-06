@@ -6,15 +6,57 @@ import { BOARD_TB_SOURCE } from '../config/featureFlags';
 // generieke tb_*-laag (/api/data/purchase-orders/...). De tb_-kolomrespons wordt naar de admin-vorm
 // (level/d365) gemapt zoals de po_-endpoints die leverden; het /datamodel-endpoint levert dat al gemapt.
 const ADMIN_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
+const NON_WRITABLE_KEYS = {
+  header: new Set(['orderNumber', 'status', 'createdDateTime']),
+  line: new Set(['lineNumber']),
+};
+const NON_HIDEABLE_KEYS = {
+  header: new Set(['orderNumber']),
+  line: new Set(['lineNumber']),
+};
+
+function normalizeLevel(col) {
+  if (col.level === 'line' || col.level === 'header') return col.level;
+  return col.scope === 'detail' ? 'line' : 'header';
+}
+
+function resolveWriteBackAllowed(column) {
+  if (typeof column.writeBackAllowed === 'boolean') return column.writeBackAllowed;
+  if (column.source !== 'd365' || !column.d365Field) return false;
+  return !(NON_WRITABLE_KEYS[column.level] || new Set()).has(column.key);
+}
+
+function resolveHideAllowed(column) {
+  if (typeof column.hideAllowed === 'boolean') return column.hideAllowed;
+  return !(NON_HIDEABLE_KEYS[column.level] || new Set()).has(column.key);
+}
+
 function mapAdminColumn(col) {
   if (!col || !BOARD_TB_SOURCE) return col;
-  if (col.level) return col; // al in admin-vorm
-  return {
+  const source = col.source === 'source' ? 'd365' : col.source;
+  const level = normalizeLevel(col);
+  const mappedColumn = {
     ...col,
-    level: col.scope === 'detail' ? 'line' : 'header',
-    source: col.source === 'source' ? 'd365' : col.source,
+    level,
+    source,
     d365Field: col.sourceField ?? col.d365Field ?? null,
     writableToD365: Boolean(col.writable ?? col.writableToD365),
+  };
+  return {
+    ...mappedColumn,
+    writeBackAllowed: resolveWriteBackAllowed(mappedColumn),
+    hideAllowed: resolveHideAllowed(mappedColumn),
+  };
+}
+
+function mapDataModelPayload(payload) {
+  if (!payload || !BOARD_TB_SOURCE) return payload;
+  return {
+    ...payload,
+    columns: {
+      header: Array.isArray(payload.columns?.header) ? payload.columns.header.map(mapAdminColumn) : [],
+      line: Array.isArray(payload.columns?.line) ? payload.columns.line.map(mapAdminColumn) : [],
+    },
   };
 }
 
@@ -38,7 +80,7 @@ export function useDataModelAdmin() {
     setError('');
     try {
       const result = await apiRequest(`${ADMIN_BASE}/datamodel`);
-      setData(result);
+      setData(mapDataModelPayload(result));
     } catch (err) {
       setError(err.message);
     } finally {

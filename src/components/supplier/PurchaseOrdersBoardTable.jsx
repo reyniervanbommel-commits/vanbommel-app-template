@@ -1,11 +1,9 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
-import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
-import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
-import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
+import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 
 const useStyles = makeStyles({
@@ -36,6 +34,14 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'nowrap',
+    ':hover [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    ':focus-within [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
   },
   dragDropCell: { cursor: 'grab' },
   dragSourceCell: { opacity: 0.6 },
@@ -73,8 +79,12 @@ function PurchaseOrdersBoardTable({
   onReorderLineColumn,
   headerColumnWidths = {},
   lineColumnWidths = {},
+  headerColumnTextStyles = {},
+  lineColumnTextStyles = {},
   onSaveHeaderColumnWidth,
   onSaveLineColumnWidth,
+  onSaveHeaderColumnTextStyle,
+  onSaveLineColumnTextStyle,
   onAddColumnRightOf,
   onSetLineColumnTotal,
   onPushLineTotalToHeader,
@@ -89,10 +99,6 @@ function PurchaseOrdersBoardTable({
 }) {
   const styles = useStyles();
   const wrapperRef = useRef(null);
-  const [collapsedGroups, setCollapsedGroups] = useState({});
-  const [expandedOrders, setExpandedOrders] = useState({});
-  const [showBoardHeaders, setShowBoardHeaders] = useState(true);
-  const [showGroupHeaders, setShowGroupHeaders] = useState(true);
 
   // Scroll gericht naar een net-aangemaakte kolom zodra hij op zijn definitieve plek
   // staat (na het async herladen + verplaatsen). De debounce zorgt dat alleen de
@@ -132,89 +138,16 @@ function PurchaseOrdersBoardTable({
     setGroupingBarColor,
   } = resolvedBoardView;
 
-  const allOrderRowsWithLines = useMemo(
-    () =>
-      rows
-        .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
-        .map(({ rowId }) => rowId),
-    [rows]
-  );
-
-  useEffect(() => {
-    setExpandedOrders((prev) => {
-      const next = { ...prev };
-      rows.forEach(({ rowId, order }) => {
-        if (typeof next[rowId] === 'undefined') {
-          next[rowId] = false;
-        }
-      });
-      Object.keys(next).forEach((rowId) => {
-        if (!rows.some((row) => row.rowId === rowId)) delete next[rowId];
-      });
-      return next;
-    });
-  }, [rows]);
-
-  useEffect(() => {
-    setCollapsedGroups({});
-  }, [groupingColumnKey]);
-
-  const handleToggleGroup = useCallback((event) => {
-    const groupName = event.currentTarget.dataset.group || '';
-    if (!groupName) return;
-    setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
-  }, []);
-
-  const handleToggleOrder = useCallback((event) => {
-    const rowId = event.currentTarget.dataset.rowid || '';
-    if (!rowId) return;
-    setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
-  }, []);
-
-  const handleSetAllBoardsExpanded = useCallback((shouldExpand) => {
-    setCollapsedGroups((prev) => {
-      const next = { ...prev };
-      groupedRows.forEach((group) => {
-        next[group.groupName] = !shouldExpand;
-      });
-      return next;
-    });
-  }, [groupedRows]);
-
-  const handleSetAllGroupsExpanded = useCallback((shouldExpand) => {
-    setExpandedOrders((prev) => {
-      const next = { ...prev };
-      allOrderRowsWithLines.forEach((rowId) => {
-        next[rowId] = shouldExpand;
-      });
-      return next;
-    });
-  }, [allOrderRowsWithLines]);
-
-  const handleSetExpansion = useCallback((scope, shouldExpand) => {
-    if (scope === 'all' || scope === 'boards') {
-      handleSetAllBoardsExpanded(shouldExpand);
-    }
-    if (scope === 'all' || scope === 'groups') {
-      handleSetAllGroupsExpanded(shouldExpand);
-    }
-  }, [handleSetAllBoardsExpanded, handleSetAllGroupsExpanded]);
-
-  const handleToggleBoardHeaders = useCallback(() => {
-    setShowBoardHeaders((prev) => !prev);
-  }, []);
-
-  const handleToggleGroupHeaders = useCallback(() => {
-    setShowGroupHeaders((prev) => !prev);
-  }, []);
-
-  const tableActions = useMemo(
-    () => ({
-      onToggleGroup: handleToggleGroup,
-      onToggleOrder: handleToggleOrder,
-    }),
-    [handleToggleGroup, handleToggleOrder]
-  );
+  const {
+    collapsedGroups,
+    expandedOrders,
+    showBoardHeaders,
+    showGroupHeaders,
+    handleSetExpansion,
+    handleToggleBoardHeaders,
+    handleToggleGroupHeaders,
+    tableActions,
+  } = usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey });
 
   const cellActions = useMemo(
     () => ({
@@ -225,6 +158,7 @@ function PurchaseOrdersBoardTable({
       isAdmin,
       onToggleWriteback,
       onReorderLineColumn,
+      onSaveLineColumnTextStyle,
       reorderingColumns,
       lineTotalColumns,
       onSetLineColumnTotal,
@@ -239,6 +173,7 @@ function PurchaseOrdersBoardTable({
       isAdmin,
       onToggleWriteback,
       onReorderLineColumn,
+      onSaveLineColumnTextStyle,
       reorderingColumns,
       lineTotalColumns,
       onSetLineColumnTotal,
@@ -283,69 +218,42 @@ function PurchaseOrdersBoardTable({
     <div className={styles.wrapper} ref={wrapperRef}>
       <table className={styles.table}>
         <thead>
-          <tr>
-            <PurchaseOrdersTableControls
-              showBoardHeaders={showBoardHeaders}
-              showGroupHeaders={showGroupHeaders}
-              onSetExpansion={handleSetExpansion}
-              onToggleBoardHeaders={handleToggleBoardHeaders}
-              onToggleGroupHeaders={handleToggleGroupHeaders}
-              selectionEnabled={Boolean(selection?.enabled)}
-              allSelected={Boolean(selection?.allSelected)}
-              someSelected={Boolean(selection?.someSelected)}
-              onToggleAll={selection?.onToggleAll}
-            />
-            {columns.map((column) => {
-              const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
-              return (
-              <ResizableTableHeaderCell
-                key={column.key}
-                columnKey={column.key}
-                data-col-key={column.key}
-                width={headerColumnWidths[column.key]}
-                className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
-                onResizeEnd={onSaveHeaderColumnWidth}
-                {...headerColumnDrag.getCellDragProps(column.key)}
-              >
-                <div className={styles.headerCellContent}>
-                  <div className={styles.headerCellLabel}>
-                    <PurchaseOrderColumnHeader
-                      column={column}
-                      onRename={onRenameColumn}
-                      onRemove={onRemoveColumn}
-                      isAdmin={isAdmin}
-                      onToggleWriteback={onToggleWriteback}
-                      showActionsMenu={false}
-                      autoEdit={editingColumnKey === column.key}
-                      onEditingDone={onEditingDone}
-                      showFilterIndicator={hasActiveFilter}
-                      showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
-                    />
-                  </div>
-                  <PurchaseOrderColumnFilterMenu
-                    column={column}
-                    filter={filterByColumn[column.key]}
-                    sortState={sortState}
-                    groupingColumnKey={groupingColumnKey}
-                    groupingColor={groupingColor}
-                    isAdmin={isAdmin}
-                    onToggleWriteback={onToggleWriteback}
-                    onSetSortDirection={setSortDirection}
-                    onSetOperator={setFilterOperator}
-                    onSetValue={setFilterValue}
-                    onSetSecondaryValue={setFilterSecondaryValue}
-                    onClearFilter={clearColumnFilter}
-                    onSetGroupingColumn={setGroupingColumn}
-                    onClearGrouping={clearGrouping}
-                    onSetGroupingColor={setGroupingBarColor}
-                    onAddColumnRightOf={onAddColumnRightOf}
-                    onRemoveColumn={onRemoveColumn}
-                  />
-                </div>
-              </ResizableTableHeaderCell>
-              );
-            })}
-          </tr>
+          <PurchaseOrdersBoardHeaderRow
+            styles={styles}
+            selection={selection}
+            showBoardHeaders={showBoardHeaders}
+            showGroupHeaders={showGroupHeaders}
+            onSetExpansion={handleSetExpansion}
+            onToggleBoardHeaders={handleToggleBoardHeaders}
+            onToggleGroupHeaders={handleToggleGroupHeaders}
+            columns={columns}
+            headerColumnDrag={headerColumnDrag}
+            headerColumnWidths={headerColumnWidths}
+            onSaveHeaderColumnWidth={onSaveHeaderColumnWidth}
+            onRenameColumn={onRenameColumn}
+            onRemoveColumn={onRemoveColumn}
+            isAdmin={isAdmin}
+            onToggleWriteback={onToggleWriteback}
+            editingColumnKey={editingColumnKey}
+            onEditingDone={onEditingDone}
+            linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
+            linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+            filterByColumn={filterByColumn}
+            sortState={sortState}
+            groupingColumnKey={groupingColumnKey}
+            groupingColor={groupingColor}
+            setSortDirection={setSortDirection}
+            setFilterOperator={setFilterOperator}
+            setFilterValue={setFilterValue}
+            setFilterSecondaryValue={setFilterSecondaryValue}
+            clearColumnFilter={clearColumnFilter}
+            setGroupingColumn={setGroupingColumn}
+            clearGrouping={clearGrouping}
+            setGroupingBarColor={setGroupingBarColor}
+            onAddColumnRightOf={onAddColumnRightOf}
+            headerColumnTextStyles={headerColumnTextStyles}
+            onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}
+          />
         </thead>
         <PurchaseOrdersBoardRows
           groupedRows={groupedRows}
@@ -357,6 +265,8 @@ function PurchaseOrdersBoardTable({
           lineColumns={lineColumns}
           headerColumnWidths={headerColumnWidths}
           lineColumnWidths={lineColumnWidths}
+          headerColumnTextStyles={headerColumnTextStyles}
+          lineColumnTextStyles={lineColumnTextStyles}
           onSaveLineColumnWidth={onSaveLineColumnWidth}
           colCount={colCount}
           groupingColumnLabel={groupingColumnLabel}

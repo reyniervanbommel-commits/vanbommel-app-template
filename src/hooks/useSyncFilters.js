@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { BOARD_TB_SOURCE } from '../config/featureFlags';
 
-// Board-cutover Fase 5 (#AB:174): sync-filter-endpoints via de generieke tb_*-laag onder BOARD_TB_SOURCE.
-const SYNC_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
+// Sync-filter-endpoints op de generieke tb_*-laag (po_* is verwijderd, #AB:177).
+const SYNC_BASE = '/data/purchase-orders';
 
 // Enum-metadata voor D365-velden die geen vrije tekst zijn. De Status-kolom gebruikt
 // de PurchStatus-enum; OData vereist daarvoor de notatie EnumType'Member'.
