@@ -6,6 +6,9 @@ const {
   normalizeExclusionRows,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
+  resolveSourceColumnValue,
+  calculateLinkedLineTotal,
+  applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
 } = require('./TableDataService');
 
@@ -160,5 +163,53 @@ describe('TableDataService.assertCustomColumnWritable', () => {
       source: 'custom',
       formulaExpr: null,
     })).not.toThrow();
+  });
+});
+
+describe('TableDataService.resolveSourceColumnValue', () => {
+  it('gebruikt sourceField wanneer key anders is', () => {
+    const sourceJson = { RequestedDeliveryDate: '2026-07-12' };
+    const value = resolveSourceColumnValue(sourceJson, {
+      key: 'requestedDeliveryDate',
+      sourceField: 'RequestedDeliveryDate',
+    });
+    expect(value).toBe('2026-07-12');
+  });
+
+  it('valt terug op key wanneer sourceField ontbreekt', () => {
+    const sourceJson = { requestedDeliveryDate: '2026-07-12' };
+    const value = resolveSourceColumnValue(sourceJson, {
+      key: 'requestedDeliveryDate',
+      sourceField: null,
+    });
+    expect(value).toBe('2026-07-12');
+  });
+});
+
+describe('TableDataService runtime linked header values', () => {
+  it('berekent line total link en zet headerwaarde', () => {
+    const masterValues = { aantal_total_2: null };
+    const details = [
+      { values: { quantity: 2 } },
+      { values: { quantity: '3' } },
+      { values: { quantity: null } },
+    ];
+    applyRuntimeLinkedHeaderValues(masterValues, details, {
+      lineTotalHeaderLinks: [{ lineColumnKey: 'quantity', headerColumnKey: 'aantal_total_2' }],
+      lineValueHeaderLinks: [],
+    });
+    expect(masterValues.aantal_total_2).toBe(5);
+  });
+
+  it('calculateLinkedLineTotal telt robuust numerieke waarden', () => {
+    const total = calculateLinkedLineTotal(
+      [
+        { values: { quantity: '1,5' } },
+        { values: { quantity: '2.5' } },
+        { values: { quantity: 'x' } },
+      ],
+      'quantity'
+    );
+    expect(total).toBe(4);
   });
 });
