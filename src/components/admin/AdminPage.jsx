@@ -5,11 +5,13 @@ import {
   Table24Regular,
   CloudLink24Regular,
   Mail24Regular,
+  Flowchart24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
 import UserAnalytics from './UserAnalytics';
 import AdminODataSettings from './AdminODataSettings';
+import { AdminDataModel } from './datamodel';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 
 const useStyles = makeStyles({
@@ -39,6 +41,7 @@ export default function AdminPage() {
   const handleTabUsers = useCallback(() => setAdminTab('users'), []);
   const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
   const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
+  const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
 
   return (
@@ -63,6 +66,12 @@ export default function AdminPage() {
           onClick={handleTabOdata}
         />
         <SidebarNavItem
+          icon={Flowchart24Regular}
+          label="Data model"
+          active={adminTab === 'datamodel'}
+          onClick={handleTabDataModel}
+        />
+        <SidebarNavItem
           icon={Mail24Regular}
           label="Mail template"
           active={adminTab === 'mail-template'}
@@ -74,6 +83,7 @@ export default function AdminPage() {
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}
         {adminTab === 'odata' && <AdminODataSettings />}
+        {adminTab === 'datamodel' && <AdminDataModel />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
       </div>
     </div>

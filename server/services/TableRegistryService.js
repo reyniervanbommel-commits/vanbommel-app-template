@@ -27,6 +27,9 @@ function mapColumnRow(row) {
     id: Number(row.id),
     tableId: Number(row.table_id),
     scope: row.scope,
+    // UI-compat: PO-board componenten verwachten level=header|line.
+    // tb_columns gebruikt scope=master|detail; map dat hier één-op-één.
+    level: row.scope === 'detail' ? 'line' : 'header',
     key: row.key,
     label: row.label,
     source: row.source,
@@ -39,13 +42,16 @@ function mapColumnRow(row) {
     filterable: Boolean(row.filterable),
     sortable: Boolean(row.sortable),
     isActive: Boolean(row.is_active),
+    // Los van is_active: zichtbaar in de "verborgen orders in D365-filter"-popup (#AB:170).
+    visibleAtDelete: Boolean(row.visible_at_delete),
     sortOrder: Number(row.sort_order),
   };
 }
 
 const COLUMN_SELECT = `
   SELECT id, table_id, scope, [key], label, source, source_field, data_type, options_json,
-         writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order
+         writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order,
+         visible_at_delete
   FROM dbo.tb_columns
 `;
 
@@ -129,6 +135,26 @@ async function getColumnById(columnId) {
   return result.recordset.length ? mapColumnRow(result.recordset[0]) : null;
 }
 
+// fk_join lookup-relaties van een tabel (relation_role='lookup'). Minimaal fk_join-fundament voor de
+// Excel-koppeling (#AB:162); identiek aan #161's getLookups zodat een latere merge triviaal blijft.
+async function getLookups(tableId) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
+      FROM dbo.tb_relations
+      WHERE table_id = @tableId AND relation_role = 'lookup'
+    `);
+  return result.recordset.map((r) => ({
+    sourceScope: r.source_scope || 'master',
+    sourceField: r.source_field || null,
+    targetTableKey: r.target_table_key || null,
+    targetKeyField: r.target_key_field || null,
+    fields: r.lookup_fields_json ? safeJson(r.lookup_fields_json) : {},
+  })).filter((l) => l.sourceField && l.targetTableKey && Object.keys(l.fields).length > 0);
+}
+
 module.exports = {
   SCOPES,
   DATA_TYPES,
@@ -136,5 +162,6 @@ module.exports = {
   getTableByKey,
   listColumns,
   getColumnById,
+  getLookups,
   mapColumnRow,
 };

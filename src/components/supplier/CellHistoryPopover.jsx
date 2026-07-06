@@ -13,15 +13,26 @@ import {
 } from '@fluentui/react-components';
 import { History20Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
+import { BOARD_TB_SOURCE } from '../../config/featureFlags';
 
 const useStyles = makeStyles({
+  wrapper: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
+    maxWidth: '100%',
+  },
   trigger: {
     minWidth: '24px',
     width: '24px',
     height: '24px',
     ...shorthands.padding('0'),
     color: tokens.colorNeutralForeground3,
+    transitionProperty: 'opacity',
+    transitionDuration: '120ms',
+    transitionTimingFunction: 'ease',
   },
+  content: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%' },
   surface: {
     maxWidth: '340px',
     maxHeight: '360px',
@@ -128,28 +139,39 @@ function HistoryEntry({ entry, dataType, styles }) {
 }
 
 /**
- * Klok-icoon dat een popover opent met de cel-geschiedenis (audit trail):
- * wie/wat/wanneer per cel, inclusief D365-veldcorrecties. Laadt lazy bij openen.
+ * Toont een klokje vóór de celwaarde wanneer er historie bestaat.
+ * Klik op dat klokje opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
  */
-export default function CellHistoryPopover({ cellKeys, dataType }) {
+export default function CellHistoryPopover({ cellKeys, dataType, children, hasHistory = false }) {
   const styles = useStyles();
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
 
+  if (!hasHistory) {
+    return children;
+  }
+
   const load = useCallback(async () => {
     setStatus('loading');
     setError('');
     try {
-      const params = new URLSearchParams({
-        columnId: String(cellKeys.columnId),
-        dataAreaId: cellKeys.dataAreaId ?? '',
-        orderNumber: cellKeys.orderNumber ?? '',
-      });
-      if (cellKeys.lineNumber !== null && cellKeys.lineNumber !== undefined) {
-        params.set('lineNumber', String(cellKeys.lineNumber));
+      // Board-cutover Fase 4 (#AB:173): tb_*-history gebruikt partitionKey/recordKey/detailKey.
+      const params = new URLSearchParams({ columnId: String(cellKeys.columnId) });
+      const hasLine = cellKeys.lineNumber !== null && cellKeys.lineNumber !== undefined;
+      let endpoint;
+      if (BOARD_TB_SOURCE) {
+        params.set('partitionKey', cellKeys.dataAreaId ?? '');
+        params.set('recordKey', cellKeys.orderNumber ?? '');
+        if (hasLine) params.set('detailKey', String(cellKeys.lineNumber));
+        endpoint = '/data/purchase-orders/history?' + params.toString();
+      } else {
+        params.set('dataAreaId', cellKeys.dataAreaId ?? '');
+        params.set('orderNumber', cellKeys.orderNumber ?? '');
+        if (hasLine) params.set('lineNumber', String(cellKeys.lineNumber));
+        endpoint = '/purchase-orders/history?' + params.toString();
       }
-      const data = await apiRequest('/purchase-orders/history?' + params.toString());
+      const data = await apiRequest(endpoint);
       setHistory(Array.isArray(data?.history) ? data.history : []);
       setStatus('ready');
     } catch (err) {
@@ -163,9 +185,9 @@ export default function CellHistoryPopover({ cellKeys, dataType }) {
   }, [load]);
 
   return (
-    <Popover withArrow trapFocus size="small" onOpenChange={onOpenChange}>
-      <PopoverTrigger disableButtonEnhancement>
-        <Tooltip content="Geschiedenis" relationship="label">
+    <Popover withArrow size="small" onOpenChange={onOpenChange}>
+      <div className={styles.wrapper}>
+        <PopoverTrigger disableButtonEnhancement>
           <Button
             appearance="subtle"
             size="small"
@@ -173,8 +195,9 @@ export default function CellHistoryPopover({ cellKeys, dataType }) {
             icon={<History20Regular />}
             aria-label="Geschiedenis tonen"
           />
-        </Tooltip>
-      </PopoverTrigger>
+        </PopoverTrigger>
+        <span className={styles.content}>{children}</span>
+      </div>
       <PopoverSurface className={styles.surface}>
         <div className={styles.title}>Geschiedenis</div>
         {status === 'loading' ? <Spinner size="tiny" label="Laden…" /> : null}

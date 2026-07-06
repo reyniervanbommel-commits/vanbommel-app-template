@@ -6,12 +6,11 @@ import {
   Input,
   Spinner,
   Text,
-  Textarea,
   makeStyles,
   tokens,
   shorthands,
 } from '@fluentui/react-components';
-import { Eye24Regular, EyeOff24Regular, Save24Regular } from '@fluentui/react-icons';
+import { Save24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import ODataInfoDialog from './ODataInfoDialog';
 
@@ -38,8 +37,6 @@ const useStyles = makeStyles({
   statusRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'center', flexWrap: 'wrap' },
   statusLabel: { color: tokens.colorNeutralForeground3, minWidth: '170px', fontSize: tokens.fontSizeBase200 },
   mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200, wordBreak: 'break-all' },
-  row: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'flex-start' },
-  tokenField: { flex: 1 },
   feedback: { color: tokens.colorPaletteGreenForeground1 },
   error: { color: tokens.colorPaletteRedForeground1 },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
@@ -60,10 +57,8 @@ const EMPTY_FORM = {
   D365_ODATA_TENANT_ID: '',
   D365_ODATA_CLIENT_ID: '',
   D365_ODATA_CLIENT_SECRET: '',
-  PO_SYNC_FILTER: '',
   PO_SYNC_MAX_ORDERS: '',
   PO_CACHE_STALE_MINUTES: '',
-  D365_ODATA_BEARER_TOKEN: '',
 };
 
 export default function AdminODataSettings() {
@@ -71,9 +66,8 @@ export default function AdminODataSettings() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [derived, setDerived] = useState({});
-  const [secretSet, setSecretSet] = useState({ clientSecret: false, bearer: false });
+  const [secretSet, setSecretSet] = useState({ clientSecret: false });
   const [dbSource, setDbSource] = useState('');
-  const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -89,7 +83,6 @@ export default function AdminODataSettings() {
       setDerived(data.derived || {});
       setSecretSet({
         clientSecret: !!s.D365_ODATA_CLIENT_SECRET_SET,
-        bearer: !!s.D365_ODATA_BEARER_TOKEN_SET,
       });
       setForm({
         D365_ODATA_BASE_URL: s.D365_ODATA_BASE_URL || '',
@@ -99,10 +92,8 @@ export default function AdminODataSettings() {
         D365_ODATA_TENANT_ID: s.D365_ODATA_TENANT_ID || '',
         D365_ODATA_CLIENT_ID: s.D365_ODATA_CLIENT_ID || '',
         D365_ODATA_CLIENT_SECRET: '',
-        PO_SYNC_FILTER: s.PO_SYNC_FILTER || '',
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
-        D365_ODATA_BEARER_TOKEN: '',
       });
     } catch (err) {
       setError(err.message);
@@ -123,10 +114,9 @@ export default function AdminODataSettings() {
     setFeedback('');
     setError('');
     try {
-      // Lege secret/token niet meesturen → bestaande waarde blijft behouden.
+      // Lege secret niet meesturen → bestaande waarde blijft behouden.
       const payload = { ...form };
       if (!payload.D365_ODATA_CLIENT_SECRET) delete payload.D365_ODATA_CLIENT_SECRET;
-      if (!payload.D365_ODATA_BEARER_TOKEN) delete payload.D365_ODATA_BEARER_TOKEN;
       await apiRequest('/admin/settings/odata', { method: 'POST', body: payload });
       setFeedback('Instellingen opgeslagen in SQL (dbo.app_settings).');
       await loadSettings();
@@ -137,9 +127,7 @@ export default function AdminODataSettings() {
     }
   }, [form, loadSettings]);
 
-  const toggleShowToken = useCallback(() => setShowToken((v) => !v), []);
-
-  if (loading) return <Spinner label="Laden uit database..." />;
+  if (loading) return <Spinner label="Loading from database..." />;
 
   const auth = AUTH_LABELS[derived.authMethod] || AUTH_LABELS.none;
 
@@ -151,39 +139,27 @@ export default function AdminODataSettings() {
       </div>
 
       <Text className={styles.dbHint} block>
-        Instellingen worden geladen en opgeslagen in SQL-tabel <strong>dbo.{dbSource}</strong>.
-        Geheimen (client secret, bearer token) worden nooit teruggestuurd naar deze pagina; laat het veld
-        leeg om de bestaande waarde te behouden.
+        Settings are loaded from and saved to SQL table <strong>dbo.{dbSource}</strong>.
+        Secrets (client secret) are never returned to this page; leave the field empty to keep
+        the existing value. Which tables and columns are fetched is managed on the{' '}
+        <strong>Data model</strong> tab. The path below configures headers; lines are linked automatically.
       </Text>
 
-      {/* Statusoverzicht: wat haalt de app op en hoe authenticeert het */}
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Huidige status</Text>
+        <Text weight="semibold" className={styles.sectionTitle}>Current status</Text>
         <div className={styles.statusGrid}>
           <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Authenticatie</span>
+            <span className={styles.statusLabel}>Authentication</span>
             <Badge appearance="tint" color={auth.color}>{auth.label}</Badge>
           </div>
           <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Wordt opgehaald uit</span>
-            <span className={styles.mono}>{derived.entityUrl || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Bedrijfscode (company)</span>
+            <span className={styles.statusLabel}>Company</span>
             <span className={styles.mono}>{form.D365_ODATA_COMPANY || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>OAuth-scope</span>
-            <span className={styles.mono}>{derived.scope || '—'}</span>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Token-endpoint</span>
-            <span className={styles.mono}>{derived.tokenEndpoint || '—'}</span>
           </div>
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Client secret</span>
             <Badge appearance="tint" color={secretSet.clientSecret ? 'success' : 'danger'}>
-              {secretSet.clientSecret ? 'Ingesteld' : 'Ontbreekt'}
+              {secretSet.clientSecret ? 'Configured' : 'Missing'}
             </Badge>
           </div>
         </div>
@@ -198,13 +174,17 @@ export default function AdminODataSettings() {
             onChange={handleChange('D365_ODATA_BASE_URL')}
           />
         </Field>
-        <Field label="Purchase Orders pad (entiteit)">
+        <Field label="Purchase order headers path (entity)">
           <Input
             placeholder="/data/PurchaseOrderHeadersV2"
             value={form.D365_ODATA_PURCHASE_ORDERS_PATH}
             onChange={handleChange('D365_ODATA_PURCHASE_ORDERS_PATH')}
           />
         </Field>
+        <Text className={styles.hint} block>
+          Lines are loaded from the related entity via <span className={styles.mono}>$expand=PurchaseOrderLines</span>.
+          Line-level write-back targets <span className={styles.mono}>/data/PurchaseOrderLinesV2</span>.
+        </Text>
         <Field label="Bedrijfscode (company)">
           <Input placeholder="WHSL" value={form.D365_ODATA_COMPANY} onChange={handleChange('D365_ODATA_COMPANY')} />
         </Field>
@@ -236,56 +216,13 @@ export default function AdminODataSettings() {
       <div className={styles.section}>
         <Text weight="semibold" className={styles.sectionTitle}>Cache-synchronisatie</Text>
         <Text className={styles.hint} block>
-          Bepaalt welke purchase orders in de SQL-cache worden gesynchroniseerd. Zonder scope-filter
-          zou de volledige dataset (~19.913 orders) worden opgehaald en vastlopen.
+          Controls cache limits and freshness. Purchase order filters are managed on the Data model tab.
         </Text>
-        <Field label="Scope-filter (ruwe OData $filter)" hint="Bijv. PurchaseOrderStatus ne Microsoft.Dynamics.DataEntities.PurchStatus'Canceled'">
-          <Input placeholder="(leeg = alles, tot de cap)" value={form.PO_SYNC_FILTER} onChange={handleChange('PO_SYNC_FILTER')} />
-        </Field>
         <Field label="Max. aantal orders per sync (cap)">
           <Input type="number" placeholder="2000" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
         </Field>
         <Field label="Cache verouderd na (minuten)">
           <Input type="number" placeholder="15" value={form.PO_CACHE_STALE_MINUTES} onChange={handleChange('PO_CACHE_STALE_MINUTES')} />
-        </Field>
-      </div>
-
-      <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Legacy bearer token (fallback)</Text>
-        <Text className={styles.hint} block>
-          Alleen gebruikt als er géén client-credentials zijn ingesteld. Een handmatig token verloopt
-          na ~1 uur — gebruik bij voorkeur OAuth2 hierboven. Status:{' '}
-          <Badge appearance="tint" color={secretSet.bearer ? 'warning' : 'informative'}>
-            {secretSet.bearer ? 'Ingesteld' : 'Leeg'}
-          </Badge>
-        </Text>
-        <Field label="Bearer token">
-          <div className={styles.row}>
-            {showToken ? (
-              <Textarea
-                className={styles.tokenField}
-                placeholder="Bearer token (JWT)"
-                value={form.D365_ODATA_BEARER_TOKEN}
-                onChange={handleChange('D365_ODATA_BEARER_TOKEN')}
-                rows={5}
-                resize="vertical"
-              />
-            ) : (
-              <Input
-                className={styles.tokenField}
-                type="password"
-                placeholder={secretSet.bearer ? '•••••••• (ingesteld)' : 'Bearer token (JWT)'}
-                value={form.D365_ODATA_BEARER_TOKEN}
-                onChange={handleChange('D365_ODATA_BEARER_TOKEN')}
-              />
-            )}
-            <Button
-              appearance="subtle"
-              icon={showToken ? <EyeOff24Regular /> : <Eye24Regular />}
-              onClick={toggleShowToken}
-              title={showToken ? 'Verbergen' : 'Tonen'}
-            />
-          </div>
         </Field>
       </div>
 

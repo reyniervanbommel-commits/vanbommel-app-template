@@ -1,66 +1,37 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Badge,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Tooltip,
-  makeStyles,
-  shorthands,
-  tokens,
+  Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
+  Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { MoreVerticalRegular, EditRegular, LockClosedRegular } from '@fluentui/react-icons';
+import { EditRegular, FilterRegular, LinkRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('4px'),
-    justifyContent: 'space-between',
-  },
-  labelWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('4px'),
-  },
-  // Subtiel onderscheid: eigen (bewerkbare) kolommen krijgen een potlood-icoon.
-  customIcon: {
-    color: tokens.colorBrandForeground1,
-    fontSize: tokens.fontSizeBase200,
-  },
-  menuButton: {
-    minWidth: '20px',
-    width: '20px',
-    height: '20px',
-    ...shorthands.padding('0'),
-  },
-  rowBadge: {
-    marginLeft: '6px',
-  },
-  lockIcon: {
-    marginLeft: '6px',
-    color: tokens.colorNeutralForeground4,
-    fontSize: tokens.fontSizeBase200,
-  },
+  header: { width: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
+  labelWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
+  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', lineHeight: 1.2, ...shorthands.gap('4px') },
+  writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
+  customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  filterIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  sumIcon: { color: tokens.colorNeutralForeground2, fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
+  connectionIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
+  lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
+  error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
-/**
- * Kolomheader voor de PO-board en subitems. Toont het label; voor eigen (custom)
- * kolommen een menu met Hernoemen / Verwijderen (soft-delete, met bevestiging).
- * D365-kolommen tonen alleen het label (read-only referentie).
- */
-export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, isAdmin, onToggleWriteback }) {
+export default function PurchaseOrderColumnHeader({
+  column,
+  onRename,
+  onRemove,
+  isAdmin,
+  onToggleWriteback,
+  showActionsMenu = true,
+  autoEdit = false,
+  onEditingDone,
+  showFilterIndicator = false,
+  showSumIndicator = false,
+  showConnectionIndicator = false,
+}) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
@@ -70,74 +41,123 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const openRename = useCallback(() => {
-    setLabel(column.label);
-    setError('');
-    setRenameOpen(true);
-  }, [column.label]);
+  // Inline hernoemen direct na "Kolom rechts toevoegen" (Monday-stijl): typ de naam
+  // in de header, Enter/blur bevestigt, Escape laat de standaardnaam staan.
+  const [inlineValue, setInlineValue] = useState(column.label);
+  const inlineInputRef = useRef(null);
+  useEffect(() => {
+    if (autoEdit) setInlineValue(column.label);
+  }, [autoEdit, column.label]);
 
+  // Focus het veld zónder de tabel te scrollen (preventScroll). Het gericht scrollen
+  // naar de nieuwe kolom gebeurt in de board-tabel, ná het verplaatsen.
+  useEffect(() => {
+    if (autoEdit && inlineInputRef.current) {
+      inlineInputRef.current.focus({ preventScroll: true });
+      inlineInputRef.current.select();
+    }
+  }, [autoEdit]);
+
+  const commitInline = useCallback(async () => {
+    const trimmed = inlineValue.trim();
+    if (trimmed && trimmed !== column.label) {
+      try { await onRename(column.id, trimmed); } catch { /* naam blijft ongewijzigd */ }
+    }
+    if (onEditingDone) onEditingDone();
+  }, [inlineValue, column.label, column.id, onRename, onEditingDone]);
+
+  const handleInlineKey = useCallback((event) => {
+    if (event.key === 'Enter') { event.preventDefault(); commitInline(); }
+    else if (event.key === 'Escape') { if (onEditingDone) onEditingDone(); }
+  }, [commitInline, onEditingDone]);
+
+  const openRename = useCallback(() => { setLabel(column.label); setError(''); setRenameOpen(true); }, [column.label]);
   const submitRename = useCallback(async () => {
     const trimmed = label.trim();
-    if (!trimmed) {
-      setError('Geef een kolomnaam op.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      await onRename(column.id, trimmed);
-      setRenameOpen(false);
-    } catch (err) {
-      setError(err.message || 'Hernoemen mislukt.');
-    } finally {
-      setBusy(false);
-    }
+    if (!trimmed) return setError('Geef een kolomnaam op.');
+    setBusy(true); setError('');
+    try { await onRename(column.id, trimmed); setRenameOpen(false); } catch (err) { setError(err.message || 'Hernoemen mislukt.'); } finally { setBusy(false); }
   }, [label, onRename, column.id]);
-
   const submitRemove = useCallback(async () => {
-    setBusy(true);
-    setError('');
-    try {
-      await onRemove(column.id);
-      setConfirmOpen(false);
-    } catch (err) {
-      setError(err.message || 'Verwijderen mislukt.');
-    } finally {
-      setBusy(false);
-    }
+    setBusy(true); setError('');
+    try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Verwijderen mislukt.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
 
+  if (autoEdit) {
+    return (
+      <div className={styles.header}>
+        <Input
+          size="small"
+          value={inlineValue}
+          onChange={(_, data) => setInlineValue(data.value)}
+          input={{ ref: inlineInputRef }}
+          onBlur={commitInline}
+          onKeyDown={handleInlineKey}
+          onMouseDown={(event) => event.stopPropagation()}
+          draggable={false}
+          aria-label="Kolomnaam"
+        />
+      </div>
+    );
+  }
+
+  const columnOptionsMenu = (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Kolomopties voor ${column.label}`} />
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          <MenuItem onClick={openRename}>Hernoemen</MenuItem>
+          <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Verwijderen</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+
   if (!isCustom) {
-    // D365-kolom. Toon een write-back-badge indien aan; admin kan het via een menu togglen.
-    const badge = writable ? (
-      <Badge className={styles.rowBadge} color="brand" appearance="tint" size="small">write-back</Badge>
-    ) : null;
-    if (!isAdmin || !onToggleWriteback || !column.d365Field) {
-      return <span className={styles.labelWrap}>{column.label}{badge}</span>;
-    }
-    // Niet-terugschrijfbaar (sleutel/boekings-/systeemveld): markeren met een slot, geen toggle.
-    if (column.writeBackAllowed === false) {
-      return (
-        <span className={styles.labelWrap}>
-          {column.label}
-          <Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label">
-            <LockClosedRegular className={styles.lockIcon} />
+    const labelWithWriteBack = (
+      <span className={styles.d365LabelWrap}>
+        {writable ? (
+          <Tooltip content="D365 sync ingeschakeld" relationship="label">
+            <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
           </Tooltip>
-        </span>
-      );
+        ) : null}
+        <span>{column.label}</span>
+        {showFilterIndicator ? (
+          <Tooltip content="Filter active" relationship="label">
+            <FilterRegular className={styles.filterIcon} />
+          </Tooltip>
+        ) : null}
+        {showSumIndicator ? (
+          <Tooltip content="Column sum enabled" relationship="label">
+            <span className={styles.sumIcon} aria-hidden>∑</span>
+          </Tooltip>
+        ) : null}
+        {showConnectionIndicator ? (
+          <Tooltip content="Linked line total" relationship="label">
+            <LinkRegular className={styles.connectionIcon} />
+          </Tooltip>
+        ) : null}
+      </span>
+    );
+    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
+    if (column.writeBackAllowed === false) {
+      return <div className={styles.header}><span className={styles.labelWrap}>{column.label}<Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
+    }
+    if (!showActionsMenu) {
+      return <div className={styles.header}>{labelWithWriteBack}</div>;
     }
     return (
       <div className={styles.header}>
-        <span className={styles.labelWrap}>{column.label}{badge}</span>
+        {labelWithWriteBack}
         <Menu>
           <MenuTrigger disableButtonEnhancement>
             <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back-opties voor ${column.label}`} />
           </MenuTrigger>
           <MenuPopover>
             <MenuList>
-              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>
-                {writable ? 'Write-back uitzetten' : 'Write-back toestaan'}
-              </MenuItem>
+              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>{writable ? 'Write-back uitzetten' : 'Write-back toestaan'}</MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>
@@ -150,47 +170,36 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
       <span className={styles.labelWrap}>
         <EditRegular className={styles.customIcon} title="Eigen kolom" />
         {column.label}
+        {showFilterIndicator ? (
+          <Tooltip content="Filter active" relationship="label">
+            <FilterRegular className={styles.filterIcon} />
+          </Tooltip>
+        ) : null}
+        {showSumIndicator ? (
+          <Tooltip content="Column sum enabled" relationship="label">
+            <span className={styles.sumIcon} aria-hidden>∑</span>
+          </Tooltip>
+        ) : null}
+        {showConnectionIndicator ? (
+          <Tooltip content="Linked line total" relationship="label">
+            <LinkRegular className={styles.connectionIcon} />
+          </Tooltip>
+        ) : null}
       </span>
-
-      <Menu>
-        <MenuTrigger disableButtonEnhancement>
-          <Button
-            size="small"
-            appearance="subtle"
-            className={styles.menuButton}
-            icon={<MoreVerticalRegular />}
-            aria-label={`Kolomopties voor ${column.label}`}
-          />
-        </MenuTrigger>
-        <MenuPopover>
-          <MenuList>
-            <MenuItem onClick={openRename}>Hernoemen</MenuItem>
-            <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Verwijderen</MenuItem>
-          </MenuList>
-        </MenuPopover>
-      </Menu>
+      {columnOptionsMenu}
 
       <Dialog open={renameOpen} onOpenChange={(_, data) => !busy && setRenameOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
             <DialogTitle>Kolom hernoemen</DialogTitle>
             <DialogContent>
-              <Field
-                label="Naam"
-                required
-                validationState={error ? 'error' : 'none'}
-                validationMessage={error || undefined}
-              >
+              <Field label="Naam" required validationState={error ? 'error' : 'none'} validationMessage={error || undefined}>
                 <Input value={label} onChange={(_, data) => setLabel(data.value)} />
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button appearance="secondary" onClick={() => setRenameOpen(false)} disabled={busy}>
-                Annuleren
-              </Button>
-              <Button appearance="primary" onClick={submitRename} disabled={busy}>
-                {busy ? 'Opslaan...' : 'Opslaan'}
-              </Button>
+              <Button appearance="secondary" onClick={() => setRenameOpen(false)} disabled={busy}>Annuleren</Button>
+              <Button appearance="primary" onClick={submitRename} disabled={busy}>{busy ? 'Opslaan...' : 'Opslaan'}</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>
@@ -201,17 +210,12 @@ export default function PurchaseOrderColumnHeader({ column, onRename, onRemove, 
           <DialogBody>
             <DialogTitle>Kolom verwijderen</DialogTitle>
             <DialogContent>
-              Kolom &quot;{column.label}&quot; verwijderen? De ingevoerde waarden blijven bewaard en
-              de kolom kan later opnieuw worden toegevoegd.
-              {error ? <div style={{ color: tokens.colorPaletteRedForeground1, marginTop: '8px' }}>{error}</div> : null}
+              Delete column &quot;{column.label}&quot;? This permanently removes the column and all related values from SQL. This action cannot be undone.
+              {error ? <div className={styles.error}>{error}</div> : null}
             </DialogContent>
             <DialogActions>
-              <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={busy}>
-                Annuleren
-              </Button>
-              <Button appearance="primary" onClick={submitRemove} disabled={busy}>
-                {busy ? 'Verwijderen...' : 'Verwijderen'}
-              </Button>
+              <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={busy}>Annuleren</Button>
+              <Button appearance="primary" onClick={submitRemove} disabled={busy}>{busy ? 'Verwijderen...' : 'Verwijderen'}</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>

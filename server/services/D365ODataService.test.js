@@ -301,6 +301,66 @@ describe('D365ODataService', () => {
     expect(result.fetchedAll).toBe(false);
   });
 
+  it('kapt ook binnen de eerste D365-pagina af wanneer maxItems kleiner is dan $top', async () => {
+    const pageRecords = Array.from({ length: 50 }, (_, index) => ({
+      PurchaseOrderNumber: `PO-${String(index + 1).padStart(3, '0')}`,
+      OrderVendorAccountNumber: 'SUPP',
+    }));
+    global.fetch = vi.fn().mockImplementation(async (url) => {
+      const urlString = String(url);
+      if (urlString.includes('/data/VendorsV2')) {
+        return { ok: true, json: async () => ({ value: [] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          '@odata.count': 924,
+          value: pageRecords,
+        }),
+      };
+    });
+
+    const result = await fetchPurchaseOrders({ supplierAccount: null, top: 50, skip: 0, fetchAll: true, maxItems: 10 });
+
+    expect(result.items).toHaveLength(10);
+    expect(result.total).toBe(924);
+    expect(result.truncated).toBe(true);
+    expect(result.fetchedAll).toBe(false);
+  });
+
+  it('pagineert handmatig verder wanneer D365 wel count maar geen nextLink teruggeeft', async () => {
+    const calls = [];
+    global.fetch = vi.fn().mockImplementation(async (url) => {
+      const urlString = String(url);
+      calls.push(urlString);
+      if (urlString.includes('/data/VendorsV2')) {
+        return { ok: true, json: async () => ({ value: [] }) };
+      }
+      const parsed = new URL(urlString);
+      const skipValue = Number.parseInt(parsed.searchParams.get('$skip') || '0', 10);
+      return {
+        ok: true,
+        json: async () => ({
+          '@odata.count': 120,
+          value: Array.from({ length: 50 }, (_, index) => ({
+            PurchaseOrderNumber: `PO-${skipValue + index + 1}`,
+            OrderVendorAccountNumber: 'SUPP',
+          })),
+        }),
+      };
+    });
+
+    const result = await fetchPurchaseOrders({ supplierAccount: null, top: 50, skip: 0, fetchAll: true, maxItems: 100 });
+    const poCalls = calls.filter((url) => url.includes('/data/PurchaseOrderHeadersV2'));
+
+    expect(result.items).toHaveLength(100);
+    expect(result.total).toBe(120);
+    expect(result.truncated).toBe(true);
+    expect(result.fetchedAll).toBe(false);
+    expect(poCalls).toHaveLength(2);
+    expect(new URL(poCalls[1]).searchParams.get('$skip')).toBe('50');
+  });
+
   describe('writeBackField (#134)', () => {
     it('schrijft een veld terug met PATCH + If-Match bij ongewijzigde waarde', async () => {
       const calls = [];
@@ -323,6 +383,60 @@ describe('D365ODataService', () => {
       expect(JSON.parse(patch.body)).toEqual({ PurchaseOrderName: 'nieuw' });
       expect(patch.url).toContain("PurchaseOrderNumber='PO-1'");
       expect(patch.url).toContain('cross-company=true');
+    });
+
+    it('accepteert equivalente datumformats bij optimistic concurrency', async () => {
+      const calls = [];
+      global.fetch = vi.fn(async (url, options) => {
+        calls.push({ url: String(url), method: options.method, body: options.body });
+        if (options.method === 'GET') {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ RequestedDeliveryDate: '2024-04-12T12:00:00+00:00', '@odata.etag': 'W/"date-1"' }),
+          };
+        }
+        return { ok: true, status: 204, headers: { get: () => null }, text: async () => '' };
+      });
+
+      await expect(writeBackField({
+        level: 'header',
+        dataAreaId: 'WHSL',
+        orderNumber: 'PO-1',
+        d365Field: 'RequestedDeliveryDate',
+        dataType: 'date',
+        newValue: '2024-04-19',
+        basedOnValue: '2024-04-12T12:00:00.000Z',
+      })).resolves.toMatchObject({ ok: true });
+
+      const patch = calls.find((c) => c.method === 'PATCH');
+      expect(patch).toBeTruthy();
+      expect(JSON.parse(patch.body)).toEqual({ RequestedDeliveryDate: '2024-04-19' });
+    });
+
+    it('vergelijkt date-kolommen op kalenderdatum i.p.v. tijdcomponent', async () => {
+      global.fetch = vi.fn(async (_url, options) => {
+        if (options.method === 'GET') {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ RequestedDeliveryDate: '2024-04-19T12:00:00Z', '@odata.etag': 'W/"date-2"' }),
+          };
+        }
+        return { ok: true, status: 204, headers: { get: () => null }, text: async () => '' };
+      });
+
+      await expect(writeBackField({
+        level: 'header',
+        dataAreaId: 'WHSL',
+        orderNumber: 'PO-1',
+        d365Field: 'RequestedDeliveryDate',
+        dataType: 'date',
+        newValue: '2024-04-20',
+        basedOnValue: '2024-04-19',
+      })).resolves.toMatchObject({ ok: true });
     });
 
     it('weigert (409) als de huidige D365-waarde afwijkt van wat de gebruiker zag', async () => {

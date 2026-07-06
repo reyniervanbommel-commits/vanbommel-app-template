@@ -60,11 +60,12 @@ const FIELDS = [
     example: 'https://contoso.operations.dynamics.com',
   },
   {
-    name: 'Purchase Orders pad',
-    description: 'Het OData-pad naar de purchase order entiteit. Standaard is PurchaseOrderHeadersV2.',
+    name: 'Purchase Orders path (headers entity)',
+    description: 'This path points to the header entity. Order lines are loaded through the relation via $expand=PurchaseOrderLines.',
     where: [
       'Microsoft Learn: zoek op "PurchaseOrderHeadersV2 entity" voor de juiste entiteitnaam',
-      'Test in browser: {basis-URL}/data/PurchaseOrderHeadersV2?$top=1 (met geldig token)',
+      'Test in browser: {basis-URL}/data/PurchaseOrderHeadersV2?$top=1&$expand=PurchaseOrderLines (met geldig token)',
+      'Line write-back gebruikt de line-entiteit /data/PurchaseOrderLinesV2',
     ],
     example: '/data/PurchaseOrderHeadersV2',
   },

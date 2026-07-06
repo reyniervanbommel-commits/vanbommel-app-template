@@ -8,6 +8,8 @@ const express = require('express');
 const dataService = require('../services/TableDataService');
 const columnsService = require('../services/TableColumnsService');
 const registry = require('../services/TableRegistryService');
+const { requireRole } = require('../middleware/auth');
+const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -114,6 +116,46 @@ router.delete('/:tableKey/columns/:id', async (req, res, next) => {
   }
 });
 
+// PATCH /api/data/:tableKey/columns/:id/visibility — kolom tonen/verbergen op het bord (is_active). #AB:170
+router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setColumnVisibility(columnId, Boolean(req.body?.visible), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id/visible-at-delete — zichtbaar in de verborgen-orders-popup. #AB:170
+router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setVisibleAtDelete(columnId, Boolean(req.body?.visible), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
+router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const column = await columnsService.setWriteBackConfig(
+      columnId,
+      { writable: req.body?.writable, mechanism: req.body?.mechanism },
+      req.user.id,
+    );
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PUT /api/data/:tableKey/value — app-native kolomwaarde opslaan (instant).
 router.put('/:tableKey/value', async (req, res, next) => {
   try {
@@ -125,6 +167,100 @@ router.put('/:tableKey/value', async (req, res, next) => {
       req.user.id,
     );
     return res.json({ success: true, ...saved });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/datamodel — admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
+router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.getDataModel(req.params.tableKey));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
+router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
+router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/history?columnId=&partitionKey=&recordKey=&detailKey= — cel-geschiedenis. #AB:173
+router.get('/:tableKey/history', async (req, res, next) => {
+  try {
+    const id = toColumnId(req.query.columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const history = await dataService.getCellHistory({
+      tableKey: req.params.tableKey,
+      columnId: id,
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+      detailKey: req.query.detailKey,
+    });
+    return res.json({ history });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/correct — D365-veldcorrectie terugschrijven (write-back). #AB:172
+router.post('/:tableKey/correct', async (req, res, next) => {
+  try {
+    const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const result = await dataService.correctField(
+      { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
+      req.user.id,
+    );
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/rows/exclude — bulk "verwijderen" (persistente exclusion). #AB:171
+router.post('/:tableKey/rows/exclude', async (req, res, next) => {
+  try {
+    const result = await dataService.excludeRows(
+      { tableKey: req.params.tableKey, rows: req.body?.rows },
+      req.user.id,
+    );
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/rows/hidden-in-filter — verborgen rijen die nog binnen de bron-scope vallen. #AB:171
+router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
+  try {
+    const result = await dataService.listHiddenInFilterRows(req.params.tableKey);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/rows/include — "terugzetten": hef de exclusion op. #AB:171
+router.post('/:tableKey/rows/include', async (req, res, next) => {
+  try {
+    const result = await dataService.includeRows({ tableKey: req.params.tableKey, rows: req.body?.rows });
+    return res.json(result);
   } catch (err) {
     return next(err);
   }

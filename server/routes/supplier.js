@@ -47,12 +47,188 @@ function normalizeStringArray(value) {
   )).slice(0, MAX_COLUMNS);
 }
 
+function normalizeColumnWidthMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).slice(0, MAX_COLUMNS);
+  return entries.reduce((acc, [rawKey, rawWidth]) => {
+    const key = String(rawKey || '').trim().slice(0, 64);
+    const width = Number(rawWidth);
+    if (!key || !Number.isFinite(width)) return acc;
+    const clamped = Math.min(1000, Math.max(80, Math.round(width)));
+    acc[key] = clamped;
+    return acc;
+  }, {});
+}
+
+function normalizeColumnKey(value) {
+  return String(value || '').trim().slice(0, 64);
+}
+
+function normalizeLineTotalLinks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.slice(0, MAX_COLUMNS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
+function normalizeLineValueLinks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.slice(0, MAX_COLUMNS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
 function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
+    lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
+    headerColumnWidths: normalizeColumnWidthMap(input.headerColumnWidths),
+    lineColumnWidths: normalizeColumnWidthMap(input.lineColumnWidths),
+    lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
+    lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
+    lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
   };
+}
+
+// --- Saved views (opgeslagen filter/sort/grouping + kolomlayout per board) ---
+
+const VIEW_SCOPES = new Set(['personal', 'global']);
+const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
+const MAX_VIEW_NAME = 120;
+const MAX_VIEW_STATE_LENGTH = 100000;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+function normalizeViewName(value) {
+  return String(value === null || value === undefined ? '' : value).trim().slice(0, MAX_VIEW_NAME);
+}
+
+// Server valideert alleen structuur/operator-whitelist/lengte. Kolom-keys zijn dynamisch
+// (D365-metamodel) en worden client-side genormaliseerd bij toepassen van een view.
+function normalizeViewState(rawState) {
+  const input = rawState && typeof rawState === 'object' ? rawState : {};
+  const columns = input.columns && typeof input.columns === 'object' ? input.columns : {};
+  const table = input.table && typeof input.table === 'object' ? input.table : {};
+  const sortState = table.sortState && typeof table.sortState === 'object' ? table.sortState : {};
+  const grouping = table.grouping && typeof table.grouping === 'object' ? table.grouping : {};
+  const filterByColumn = table.filterByColumn && typeof table.filterByColumn === 'object' ? table.filterByColumn : {};
+
+  const normalizedFilters = {};
+  Object.keys(filterByColumn).slice(0, MAX_COLUMNS).forEach((rawKey) => {
+    const filter = filterByColumn[rawKey];
+    if (!filter || typeof filter !== 'object') return;
+    const key = String(rawKey).slice(0, 64);
+    normalizedFilters[key] = {
+      operator: String(filter.operator || '').slice(0, 32),
+      value: String(filter.value === null || filter.value === undefined ? '' : filter.value).slice(0, 200),
+      secondaryValue: String(filter.secondaryValue === null || filter.secondaryValue === undefined ? '' : filter.secondaryValue).slice(0, 200),
+    };
+  });
+
+  return {
+    columns: {
+      visibleColumns: normalizeStringArray(columns.visibleColumns),
+      columnOrder: normalizeStringArray(columns.columnOrder),
+      lineColumnOrder: normalizeStringArray(columns.lineColumnOrder),
+      headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
+      lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
+      lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
+      lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
+      lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
+    },
+    table: {
+      filterByColumn: normalizedFilters,
+      sortState: {
+        columnKey: String(sortState.columnKey || '').slice(0, 64),
+        direction: VIEW_SORT_DIRECTIONS.has(sortState.direction) ? sortState.direction : 'none',
+      },
+      grouping: {
+        columnKey: String(grouping.columnKey || '').slice(0, 64),
+        color: HEX_COLOR_PATTERN.test(String(grouping.color || '')) ? grouping.color : '',
+      },
+    },
+  };
+}
+
+function mapViewRow(row) {
+  let parsedState = {};
+  try {
+    parsedState = JSON.parse(row.view_state_json || '{}');
+  } catch {
+    parsedState = {};
+  }
+  return {
+    id: Number(row.id),
+    boardKey: row.board_key,
+    name: row.name,
+    scope: row.scope,
+    userId: row.user_id === null || row.user_id === undefined ? null : Number(row.user_id),
+    isDefault: Boolean(row.is_default),
+    viewState: normalizeViewState(parsedState),
+    updatedAt: row.updated_at,
+  };
+}
+
+function isUniqueViolation(err) {
+  const number = err && (err.number || (err.originalError && err.originalError.info && err.originalError.info.number));
+  return number === 2601 || number === 2627;
+}
+
+// Zet binnen een transactie de bestaande default van dezelfde scope terug op 0,
+// zodat er hooguit één default per (board, scope[, user]) overblijft.
+async function unsetDefaultView(transaction, boardKey, scope, userId) {
+  const request = new sql.Request(transaction);
+  request.input('boardKey', sql.NVarChar(64), boardKey);
+  if (scope === 'personal') {
+    request.input('userId', sql.Int, userId);
+    await request.query(`
+      UPDATE dbo.po_saved_views SET is_default = 0
+      WHERE board_key = @boardKey AND scope = 'personal' AND user_id = @userId AND is_default = 1
+    `);
+  } else {
+    await request.query(`
+      UPDATE dbo.po_saved_views SET is_default = 0
+      WHERE board_key = @boardKey AND scope = 'global' AND is_default = 1
+    `);
+  }
+}
+
+async function loadViewRow(pool, boardKey, viewId) {
+  const result = await pool.request()
+    .input('viewId', sql.BigInt, viewId)
+    .input('boardKey', sql.NVarChar(64), boardKey)
+    .query(`
+      SELECT id, board_key, name, scope, user_id, view_state_json, is_default, updated_at
+      FROM dbo.po_saved_views
+      WHERE id = @viewId AND board_key = @boardKey
+    `);
+  return result.recordset.length ? result.recordset[0] : null;
+}
+
+// True als de huidige gebruiker deze view mag bewerken/verwijderen:
+// personal → alleen de eigenaar, global → alleen staff (admin/employee).
+function canManageView(user, viewRow) {
+  if (viewRow.scope === 'global') return isStaffUser(user);
+  return Number(viewRow.user_id) === Number(user.id);
 }
 
 router.get('/board-settings/:boardKey', async (req, res, next) => {
@@ -114,6 +290,200 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
       `);
 
     return res.json({ success: true, boardKey, settings });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Lijst de views die voor deze gebruiker zichtbaar zijn: eigen personal-views + alle global-views.
+router.get('/board-views/:boardKey', async (req, res, next) => {
+  try {
+    const boardKey = String(req.params.boardKey || '').trim();
+    if (!BOARD_KEY_PATTERN.test(boardKey)) {
+      return res.status(400).json({ error: 'Ongeldige board key' });
+    }
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('userId', sql.Int, req.user.id)
+      .input('boardKey', sql.NVarChar(64), boardKey)
+      .query(`
+        SELECT id, board_key, name, scope, user_id, view_state_json, is_default, updated_at
+        FROM dbo.po_saved_views
+        WHERE board_key = @boardKey
+          AND (scope = 'global' OR (scope = 'personal' AND user_id = @userId))
+        ORDER BY scope, name
+      `);
+
+    return res.json({ boardKey, views: result.recordset.map(mapViewRow) });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Maak een nieuwe view. Global-views mogen alleen door staff (admin/employee) worden aangemaakt.
+router.post('/board-views/:boardKey', async (req, res, next) => {
+  try {
+    const boardKey = String(req.params.boardKey || '').trim();
+    if (!BOARD_KEY_PATTERN.test(boardKey)) {
+      return res.status(400).json({ error: 'Ongeldige board key' });
+    }
+
+    const name = normalizeViewName(req.body?.name);
+    if (!name) {
+      return res.status(400).json({ error: 'Naam is verplicht' });
+    }
+
+    const scope = String(req.body?.scope || 'personal');
+    if (!VIEW_SCOPES.has(scope)) {
+      return res.status(400).json({ error: 'Ongeldige scope' });
+    }
+    if (scope === 'global' && !isStaffUser(req.user)) {
+      return res.status(403).json({ error: 'Geen toegang — global views vereisen medewerker- of adminrol' });
+    }
+
+    const viewState = normalizeViewState(req.body?.viewState);
+    const viewStateJson = JSON.stringify(viewState);
+    if (viewStateJson.length > MAX_VIEW_STATE_LENGTH) {
+      return res.status(400).json({ error: 'View-state is te groot' });
+    }
+
+    const isDefault = req.body?.isDefault === true;
+    const userId = scope === 'personal' ? req.user.id : null;
+
+    const pool = await getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      if (isDefault) {
+        await unsetDefaultView(transaction, boardKey, scope, userId);
+      }
+      const insertResult = await new sql.Request(transaction)
+        .input('boardKey', sql.NVarChar(64), boardKey)
+        .input('name', sql.NVarChar(120), name)
+        .input('scope', sql.NVarChar(16), scope)
+        .input('userId', sql.Int, userId)
+        .input('viewStateJson', sql.NVarChar(sql.MAX), viewStateJson)
+        .input('isDefault', sql.Bit, isDefault)
+        .input('createdBy', sql.Int, req.user.id)
+        .query(`
+          INSERT INTO dbo.po_saved_views (board_key, name, scope, user_id, view_state_json, is_default, created_by)
+          OUTPUT INSERTED.id, INSERTED.board_key, INSERTED.name, INSERTED.scope, INSERTED.user_id,
+                 INSERTED.view_state_json, INSERTED.is_default, INSERTED.updated_at
+          VALUES (@boardKey, @name, @scope, @userId, @viewStateJson, @isDefault, @createdBy)
+        `);
+      await transaction.commit();
+      return res.status(201).json({ view: mapViewRow(insertResult.recordset[0]) });
+    } catch (err) {
+      await transaction.rollback();
+      if (isUniqueViolation(err)) {
+        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+      }
+      throw err;
+    }
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Werk een view bij: hernoemen, view-state overschrijven en/of default zetten.
+router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
+  try {
+    const boardKey = String(req.params.boardKey || '').trim();
+    if (!BOARD_KEY_PATTERN.test(boardKey)) {
+      return res.status(400).json({ error: 'Ongeldige board key' });
+    }
+    const viewId = Number(req.params.viewId);
+    if (!Number.isInteger(viewId) || viewId <= 0) {
+      return res.status(400).json({ error: 'Ongeldige view id' });
+    }
+
+    const pool = await getPool();
+    const existing = await loadViewRow(pool, boardKey, viewId);
+    if (!existing) {
+      return res.status(404).json({ error: 'View niet gevonden' });
+    }
+    if (!canManageView(req.user, existing)) {
+      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+    }
+
+    let nextName = existing.name;
+    if (req.body?.name !== undefined) {
+      nextName = normalizeViewName(req.body.name);
+      if (!nextName) {
+        return res.status(400).json({ error: 'Naam is verplicht' });
+      }
+    }
+
+    let nextViewStateJson = existing.view_state_json;
+    if (req.body?.viewState !== undefined) {
+      nextViewStateJson = JSON.stringify(normalizeViewState(req.body.viewState));
+      if (nextViewStateJson.length > MAX_VIEW_STATE_LENGTH) {
+        return res.status(400).json({ error: 'View-state is te groot' });
+      }
+    }
+
+    const nextIsDefault = req.body?.isDefault !== undefined
+      ? req.body.isDefault === true
+      : Boolean(existing.is_default);
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      if (nextIsDefault && !existing.is_default) {
+        await unsetDefaultView(transaction, boardKey, existing.scope, existing.user_id);
+      }
+      const updateResult = await new sql.Request(transaction)
+        .input('viewId', sql.BigInt, viewId)
+        .input('name', sql.NVarChar(120), nextName)
+        .input('viewStateJson', sql.NVarChar(sql.MAX), nextViewStateJson)
+        .input('isDefault', sql.Bit, nextIsDefault)
+        .query(`
+          UPDATE dbo.po_saved_views
+          SET name = @name, view_state_json = @viewStateJson, is_default = @isDefault, updated_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.id, INSERTED.board_key, INSERTED.name, INSERTED.scope, INSERTED.user_id,
+                 INSERTED.view_state_json, INSERTED.is_default, INSERTED.updated_at
+          WHERE id = @viewId
+        `);
+      await transaction.commit();
+      return res.json({ view: mapViewRow(updateResult.recordset[0]) });
+    } catch (err) {
+      await transaction.rollback();
+      if (isUniqueViolation(err)) {
+        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+      }
+      throw err;
+    }
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.delete('/board-views/:boardKey/:viewId', async (req, res, next) => {
+  try {
+    const boardKey = String(req.params.boardKey || '').trim();
+    if (!BOARD_KEY_PATTERN.test(boardKey)) {
+      return res.status(400).json({ error: 'Ongeldige board key' });
+    }
+    const viewId = Number(req.params.viewId);
+    if (!Number.isInteger(viewId) || viewId <= 0) {
+      return res.status(400).json({ error: 'Ongeldige view id' });
+    }
+
+    const pool = await getPool();
+    const existing = await loadViewRow(pool, boardKey, viewId);
+    if (!existing) {
+      return res.status(404).json({ error: 'View niet gevonden' });
+    }
+    if (!canManageView(req.user, existing)) {
+      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+    }
+
+    await pool.request()
+      .input('viewId', sql.BigInt, viewId)
+      .query('DELETE FROM dbo.po_saved_views WHERE id = @viewId');
+
+    return res.json({ success: true });
   } catch (err) {
     return next(err);
   }

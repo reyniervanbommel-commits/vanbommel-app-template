@@ -11,28 +11,31 @@ import {
 } from '@fluentui/react-components';
 import CellHistoryPopover from './CellHistoryPopover';
 
-// AANNAME: DatePicker is niet beschikbaar in @fluentui/react-components@9.54
-// (zit in een apart pakket). Per opdracht gebruiken we daarom een native
-// <input type="date"> met een makeStyles-classname.
-
 const useStyles = makeStyles({
   cell: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('6px'),
-    minWidth: '120px',
+    ...shorthands.gap('4px'),
+    minWidth: '104px',
   },
   control: {
-    minWidth: '110px',
+    minWidth: '96px',
+    color: tokens.colorBrandForeground1,
+    '> input': {
+      color: tokens.colorBrandForeground1,
+    },
+    '> button': {
+      color: tokens.colorBrandForeground1,
+    },
   },
-  dateInput: {
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-    borderRadius: tokens.borderRadiusMedium,
-    ...shorthands.padding('4px', '8px'),
-    fontFamily: tokens.fontFamilyBase,
-    fontSize: tokens.fontSizeBase300,
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: tokens.colorNeutralForeground1,
+  hiddenDatePicker: {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    opacity: 0,
+    pointerEvents: 'none',
+    ...shorthands.border('0'),
+    ...shorthands.padding('0'),
   },
   status: {
     fontSize: tokens.fontSizeBase200,
@@ -58,20 +61,39 @@ function toDateInputValue(value) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function normalizeDateValue(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  const directMatch = text.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (directMatch) return directMatch[1];
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+  return parsed.toISOString().slice(0, 10);
+}
+
 /**
  * Inline bewerkbare cel voor eigen (custom) kolommen. Rendert op basis van
  * dataType het juiste Fluent-control en slaat bij blur/change automatisch op
  * via onSave(value). Toont kort een opslaan-/fout-indicatie.
  */
-export default function EditableCell({ dataType, value, options, onSave, ariaLabel, cellKeys }) {
+export default function EditableCell({
+  dataType,
+  value,
+  options,
+  onSave,
+  ariaLabel,
+  cellKeys,
+  hasHistory = false,
+}) {
   const styles = useStyles();
-  const [localValue, setLocalValue] = useState(value);
+  const [localValue, setLocalValue] = useState(dataType === 'date' ? toDateInputValue(value) : value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const savedTimerRef = useRef(null);
+  const datePickerRef = useRef(null);
 
   useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    setLocalValue(dataType === 'date' ? toDateInputValue(value) : value);
+  }, [dataType, value]);
 
   // Ruim de "opgeslagen"-timer op bij unmount (voorkomt state-update op unmounted component).
   useEffect(() => () => {
@@ -79,8 +101,9 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
   }, []);
 
   const commit = useCallback(async (nextValue) => {
+    const baseValue = dataType === 'date' ? toDateInputValue(value) : value;
     // Niets opslaan als de waarde niet wijzigde.
-    if (nextValue === value) return;
+    if (nextValue === baseValue) return;
     setStatus('saving');
     try {
       await onSave(nextValue);
@@ -90,9 +113,17 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
       savedTimerRef.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch {
       setStatus('error');
-      setLocalValue(value); // herstel zichtbare waarde bij fout
+      setLocalValue(baseValue); // herstel zichtbare waarde bij fout
     }
-  }, [onSave, value]);
+  }, [dataType, onSave, value]);
+
+  const openDatePicker = useCallback(() => {
+    const picker = datePickerRef.current;
+    if (!picker) return;
+    if (typeof picker.showPicker === 'function') {
+      picker.showPicker();
+    }
+  }, []);
 
   const renderStatus = () => {
     if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Opslaan" />;
@@ -120,6 +151,8 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Dropdown
         className={styles.control}
+        appearance="filled-lighter"
+        size="small"
         aria-label={ariaLabel}
         value={selectedText}
         selectedOptions={selectedText ? [selectedText] : []}
@@ -137,19 +170,40 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     );
   } else if (dataType === 'date') {
     control = (
-      <input
-        type="date"
-        className={styles.dateInput}
-        aria-label={ariaLabel}
-        value={toDateInputValue(localValue)}
-        onChange={(event) => setLocalValue(event.target.value)}
-        onBlur={(event) => commit(event.target.value)}
-      />
+      <>
+        <Input
+          className={styles.control}
+          appearance="filled-lighter"
+          size="small"
+          type="text"
+          inputMode="numeric"
+          aria-label={ariaLabel}
+          value={localValue == null ? '' : String(localValue)}
+          onChange={(_, data) => setLocalValue(data.value)}
+          onBlur={() => commit(normalizeDateValue(localValue))}
+          onDoubleClick={openDatePicker}
+        />
+        <input
+          ref={datePickerRef}
+          type="date"
+          tabIndex={-1}
+          aria-hidden="true"
+          className={styles.hiddenDatePicker}
+          value={toDateInputValue(localValue)}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setLocalValue(nextValue);
+            commit(nextValue);
+          }}
+        />
+      </>
     );
   } else if (dataType === 'number') {
     control = (
       <Input
         className={styles.control}
+        appearance="filled-lighter"
+        size="small"
         type="number"
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
@@ -162,6 +216,8 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
     control = (
       <Input
         className={styles.control}
+        appearance="filled-lighter"
+        size="small"
         aria-label={ariaLabel}
         value={localValue == null ? '' : String(localValue)}
         onChange={(_, data) => setLocalValue(data.value)}
@@ -172,9 +228,12 @@ export default function EditableCell({ dataType, value, options, onSave, ariaLab
 
   return (
     <div className={styles.cell}>
-      {control}
+      {cellKeys ? (
+        <CellHistoryPopover cellKeys={cellKeys} dataType={dataType} hasHistory={hasHistory}>
+          {control}
+        </CellHistoryPopover>
+      ) : control}
       {renderStatus()}
-      {cellKeys ? <CellHistoryPopover cellKeys={cellKeys} dataType={dataType} /> : null}
     </div>
   );
 }

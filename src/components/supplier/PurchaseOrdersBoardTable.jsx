@@ -1,25 +1,34 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
-import EditableCell from './EditableCell';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
+import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
+import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
+import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 
 const useStyles = makeStyles({
   wrapper: {
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: '8px',
     backgroundColor: tokens.colorNeutralBackground1,
-    overflowX: 'auto',
+    height: '100%',
+    minHeight: 0,
+    overflow: 'auto',
+    overflowX: 'scroll',
+    scrollbarGutter: 'stable',
   },
   table: {
-    width: '100%',
+    width: 'max-content',
     borderCollapse: 'collapse',
-    minWidth: '980px',
+    minWidth: '100%',
   },
   headerCell: {
     backgroundColor: tokens.colorNeutralBackground2,
+    position: 'sticky',
+    top: 0,
+    zIndex: 2,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('10px', '12px'),
@@ -28,84 +37,19 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'nowrap',
   },
-  controlHeaderCell: {
-    width: '44px',
-    textAlign: 'center',
-  },
-  controlHeaderButton: {
-    minWidth: '28px',
-    width: '28px',
-    height: '28px',
-    ...shorthands.padding('0'),
-  },
-  groupRowCell: {
-    backgroundColor: '#f4e6ed',
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('0'),
-  },
-  groupButton: {
-    width: '100%',
+  dragDropCell: { cursor: 'grab' },
+  dragSourceCell: { opacity: 0.6 },
+  dropBeforeCell: { '::before': { content: '""', position: 'absolute', left: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
+  dropAfterCell: { '::after': { content: '""', position: 'absolute', right: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
+  headerCellContent: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('8px', '12px'),
-    backgroundColor: 'transparent',
-    border: 'none',
-    textAlign: 'left',
-    cursor: 'pointer',
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground1,
+    justifyContent: 'space-between',
+    ...shorthands.gap('6px'),
   },
-  groupDot: {
-    color: '#c02f64',
-    fontSize: '12px',
-    lineHeight: '12px',
-  },
-  itemRow: {
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-  },
-  removedRow: {
-    backgroundColor: tokens.colorNeutralBackgroundDisabled,
-  },
-  removedText: {
-    textDecorationLine: 'line-through',
-    color: tokens.colorNeutralForeground3,
-  },
-  controlCell: {
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('4px'),
-    textAlign: 'center',
-    verticalAlign: 'middle',
-  },
-  itemCell: {
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('8px', '10px'),
-    fontSize: tokens.fontSizeBase300,
-    color: tokens.colorNeutralForeground1,
-    whiteSpace: 'nowrap',
-    verticalAlign: 'middle',
-  },
-  removedBadge: {
-    marginLeft: '6px',
-  },
-  // Nieuw/gewijzigd sinds laatste bezoek (#133): subtiele linkerrand-markering.
-  newRow: {
-    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
-  },
-  changedRow: {
-    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
-  },
-  rowBadge: {
-    marginLeft: '6px',
-  },
-  subitemsContainer: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('8px', '8px', '12px', '46px'),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  headerCellLabel: {
+    flexGrow: 1,
+    minWidth: 0,
   },
   empty: {
     ...shorthands.padding('16px'),
@@ -114,58 +58,94 @@ const useStyles = makeStyles({
   },
 });
 
-// AANNAME: De eerste header-kolom (sortOrder) toont de order-identificatie en
-// krijgt naast de waarde een "verwijderd in D365"-badge wanneer removedInD365.
-
-function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, onRenameColumn, onRemoveColumn, onCorrect, isAdmin, onToggleWriteback }) {
+function PurchaseOrdersBoardTable({
+  items,
+  columns,
+  lineColumns,
+  boardView,
+  onSaveValue,
+  onRenameColumn,
+  onRemoveColumn,
+  onCorrect,
+  isAdmin,
+  onToggleWriteback,
+  onReorderHeaderColumn,
+  onReorderLineColumn,
+  headerColumnWidths = {},
+  lineColumnWidths = {},
+  onSaveHeaderColumnWidth,
+  onSaveLineColumnWidth,
+  onAddColumnRightOf,
+  onSetLineColumnTotal,
+  onPushLineTotalToHeader,
+  onPushLineValuesToHeader,
+  lineTotalColumns = [],
+  lineTotalHeaderLinks = [],
+  lineValueHeaderLinks = [],
+  editingColumnKey,
+  onEditingDone,
+  reorderingColumns = false,
+  selection,
+}) {
   const styles = useStyles();
+  const wrapperRef = useRef(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
-  const [headersOnly, setHeadersOnly] = useState(false);
+  const [showBoardHeaders, setShowBoardHeaders] = useState(true);
+  const [showGroupHeaders, setShowGroupHeaders] = useState(true);
 
-  const rows = useMemo(
-    () =>
-      items.map((order, index) => ({
-        order,
-        rowId: order?.orderNumber
-          ? `${order.dataAreaId || ''}-${order.orderNumber}-${index}`
-          : 'row-' + String(index),
-      })),
-    [items]
-  );
-
-  // AANNAME: groepering op status-kolomwaarde (uit order.values.status indien
-  // aanwezig); valt terug op 'Zonder status'.
-  const groupedRows = useMemo(() => {
-    const byGroup = new Map();
-    rows.forEach((entry) => {
-      const groupKey = entry.order.values?.status || 'Zonder status';
-      if (!byGroup.has(groupKey)) {
-        byGroup.set(groupKey, []);
+  // Scroll gericht naar een net-aangemaakte kolom zodra hij op zijn definitieve plek
+  // staat (na het async herladen + verplaatsen). De debounce zorgt dat alleen de
+  // laatste positie telt, zodat de tabel niet eerst naar het eind springt.
+  useEffect(() => {
+    if (!editingColumnKey) return undefined;
+    const timer = setTimeout(() => {
+      const container = wrapperRef.current;
+      if (!container) return;
+      const cell = container.querySelector(`[data-col-key="${editingColumnKey}"]`);
+      if (cell && typeof cell.scrollIntoView === 'function') {
+        cell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
-      byGroup.get(groupKey).push(entry);
-    });
-    return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
-  }, [rows]);
+    }, 240);
+    return () => clearTimeout(timer);
+  }, [editingColumnKey, columns]);
+  const fallbackBoardView = usePurchaseOrderBoardView({ items, columns });
+  const resolvedBoardView = boardView || fallbackBoardView;
+  const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
 
-  const allGroupsCollapsed = useMemo(
+  const {
+    processedItems,
+    rows,
+    sortState,
+    filterByColumn,
+    setFilterOperator,
+    setFilterValue,
+    setFilterSecondaryValue,
+    clearColumnFilter,
+    setSortDirection,
+    groupedRows,
+    groupingColumnKey,
+    groupingColumnLabel,
+    groupingColor,
+    setGroupingColumn,
+    clearGrouping,
+    setGroupingBarColor,
+  } = resolvedBoardView;
+
+  const allOrderRowsWithLines = useMemo(
     () =>
-      groupedRows.length > 0 &&
-      groupedRows.every((group) => !!collapsedGroups[group.groupName]),
-    [collapsedGroups, groupedRows]
+      rows
+        .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
+        .map(({ rowId }) => rowId),
+    [rows]
   );
-  const allOrderRowsWithLines = useMemo(() => rows
-    .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
-    .map(({ rowId }) => rowId), [rows]);
-  const allSubgroupsCollapsed = useMemo(() =>
-    allOrderRowsWithLines.length > 0 && allOrderRowsWithLines.every((rowId) => !expandedOrders[rowId]), [allOrderRowsWithLines, expandedOrders]);
 
   useEffect(() => {
     setExpandedOrders((prev) => {
       const next = { ...prev };
       rows.forEach(({ rowId, order }) => {
         if (typeof next[rowId] === 'undefined') {
-          next[rowId] = Array.isArray(order.lines) && order.lines.length > 0;
+          next[rowId] = false;
         }
       });
       Object.keys(next).forEach((rowId) => {
@@ -174,6 +154,10 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
       return next;
     });
   }, [rows]);
+
+  useEffect(() => {
+    setCollapsedGroups({});
+  }, [groupingColumnKey]);
 
   const handleToggleGroup = useCallback((event) => {
     const groupName = event.currentTarget.dataset.group || '';
@@ -186,245 +170,204 @@ function PurchaseOrdersBoardTable({ items, columns, lineColumns, onSaveValue, on
     if (!rowId) return;
     setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
   }, []);
-  const handleToggleAllGroups = useCallback(() => {
+
+  const handleSetAllBoardsExpanded = useCallback((shouldExpand) => {
     setCollapsedGroups((prev) => {
-      const shouldCollapseAll = !groupedRows.every((group) => !!prev[group.groupName]);
       const next = { ...prev };
       groupedRows.forEach((group) => {
-        next[group.groupName] = shouldCollapseAll;
+        next[group.groupName] = !shouldExpand;
       });
       return next;
     });
   }, [groupedRows]);
-  const handleToggleAllSubgroups = useCallback(() => {
+
+  const handleSetAllGroupsExpanded = useCallback((shouldExpand) => {
     setExpandedOrders((prev) => {
       const next = { ...prev };
-      const shouldExpandAll = allSubgroupsCollapsed;
       allOrderRowsWithLines.forEach((rowId) => {
-        next[rowId] = shouldExpandAll;
+        next[rowId] = shouldExpand;
       });
       return next;
     });
-  }, [allOrderRowsWithLines, allSubgroupsCollapsed]);
-  const handleToggleHeadersOnly = useCallback(() => {
-    setHeadersOnly((prev) => !prev);
+  }, [allOrderRowsWithLines]);
+
+  const handleSetExpansion = useCallback((scope, shouldExpand) => {
+    if (scope === 'all' || scope === 'boards') {
+      handleSetAllBoardsExpanded(shouldExpand);
+    }
+    if (scope === 'all' || scope === 'groups') {
+      handleSetAllGroupsExpanded(shouldExpand);
+    }
+  }, [handleSetAllBoardsExpanded, handleSetAllGroupsExpanded]);
+
+  const handleToggleBoardHeaders = useCallback(() => {
+    setShowBoardHeaders((prev) => !prev);
   }, []);
 
-  // Rendert één header-cel: custom kolommen zijn inline bewerkbaar.
-  const renderHeaderCell = useCallback((order, column, isFirst) => {
-    const key = column.key;
-    const rawValue = order.values?.[key];
+  const handleToggleGroupHeaders = useCallback(() => {
+    setShowGroupHeaders((prev) => !prev);
+  }, []);
 
-    if (column.source === 'custom') {
-      return (
-        <EditableCell
-          dataType={column.dataType}
-          value={rawValue}
-          options={column.options}
-          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
-          cellKeys={{
-            columnId: column.id,
-            dataAreaId: order.dataAreaId,
-            orderNumber: order.orderNumber,
-            lineNumber: null,
-          }}
-          onSave={(value) =>
-            onSaveValue({
-              columnId: column.id,
-              columnKey: key,
-              dataAreaId: order.dataAreaId,
-              orderNumber: order.orderNumber,
-              lineNumber: null,
-              value,
-            })
-          }
-        />
-      );
-    }
+  const tableActions = useMemo(
+    () => ({
+      onToggleGroup: handleToggleGroup,
+      onToggleOrder: handleToggleOrder,
+    }),
+    [handleToggleGroup, handleToggleOrder]
+  );
 
-    // D365-veld met write-back toegestaan (admin) → bewuste correctie-actie.
-    if (column.source === 'd365' && column.writableToD365 && onCorrect) {
-      return (
-        <PurchaseOrderWriteBackCell
-          column={column}
-          value={rawValue}
-          cellKeys={{
-            columnId: column.id,
-            dataAreaId: order.dataAreaId,
-            orderNumber: order.orderNumber,
-            lineNumber: null,
-          }}
-          onCorrect={({ value, basedOnValue }) =>
-            onCorrect({
-              columnId: column.id,
-              columnKey: key,
-              dataAreaId: order.dataAreaId,
-              orderNumber: order.orderNumber,
-              lineNumber: null,
-              value,
-              basedOnValue,
-            })
-          }
-        />
-      );
-    }
+  const cellActions = useMemo(
+    () => ({
+      onSaveValue,
+      onRenameColumn,
+      onRemoveColumn,
+      onCorrect,
+      isAdmin,
+      onToggleWriteback,
+      onReorderLineColumn,
+      reorderingColumns,
+      lineTotalColumns,
+      onSetLineColumnTotal,
+      onPushLineTotalToHeader,
+      onPushLineValuesToHeader,
+    }),
+    [
+      onSaveValue,
+      onRenameColumn,
+      onRemoveColumn,
+      onCorrect,
+      isAdmin,
+      onToggleWriteback,
+      onReorderLineColumn,
+      reorderingColumns,
+      lineTotalColumns,
+      onSetLineColumnTotal,
+      onPushLineTotalToHeader,
+      onPushLineValuesToHeader,
+    ]
+  );
 
-    const display = formatCellValue(rawValue, column.dataType);
-    if (isFirst && order.removedInD365) {
-      return (
-        <span>
-          <span className={styles.removedText}>{display}</span>
-          <Badge className={styles.removedBadge} color="danger" appearance="tint" size="small">
-            verwijderd in D365
-          </Badge>
-        </span>
-      );
-    }
-    if (isFirst && (order.isNew || order.isChanged)) {
-      return (
-        <span>
-          {display}
-          <Badge
-            className={styles.rowBadge}
-            color={order.isNew ? 'success' : 'warning'}
-            appearance="tint"
-            size="small"
-          >
-            {order.isNew ? 'nieuw' : 'gewijzigd'}
-          </Badge>
-        </span>
-      );
-    }
-    return order.removedInD365 ? <span className={styles.removedText}>{display}</span> : display;
-  }, [onSaveValue, onCorrect, styles.removedBadge, styles.removedText, styles.rowBadge]);
+  const linkedLineTotalByHeaderKey = useMemo(
+    () => (Array.isArray(lineTotalHeaderLinks)
+      ? lineTotalHeaderLinks.reduce((acc, link) => {
+        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
+        acc[link.headerColumnKey] = link.lineColumnKey;
+        return acc;
+      }, {})
+      : {}),
+    [lineTotalHeaderLinks]
+  );
+  const linkedLineValueByHeaderKey = useMemo(
+    () => (Array.isArray(lineValueHeaderLinks)
+      ? lineValueHeaderLinks.reduce((acc, link) => {
+        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
+        const lineColumn = lineColumns.find((column) => column.key === link.lineColumnKey);
+        if (!lineColumn) return acc;
+        acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
+        return acc;
+      }, {})
+      : {}),
+    [lineValueHeaderLinks, lineColumns]
+  );
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
+  }
+  if (!processedItems.length) {
+    return <div className={styles.empty}>No rows match the active filters</div>;
   }
 
   const colCount = columns.length + 1;
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapper} ref={wrapperRef}>
       <table className={styles.table}>
         <thead>
           <tr>
-            <th className={`${styles.headerCell} ${styles.controlHeaderCell}`}>
-              <Button
-                size="small"
-                appearance="subtle"
-                className={styles.controlHeaderButton}
-                onClick={handleToggleAllGroups}
-                title={allGroupsCollapsed ? 'Alles uitklappen' : 'Alles inklappen'}
-                aria-label={allGroupsCollapsed ? 'Alles uitklappen' : 'Alles inklappen'}
+            <PurchaseOrdersTableControls
+              showBoardHeaders={showBoardHeaders}
+              showGroupHeaders={showGroupHeaders}
+              onSetExpansion={handleSetExpansion}
+              onToggleBoardHeaders={handleToggleBoardHeaders}
+              onToggleGroupHeaders={handleToggleGroupHeaders}
+              selectionEnabled={Boolean(selection?.enabled)}
+              allSelected={Boolean(selection?.allSelected)}
+              someSelected={Boolean(selection?.someSelected)}
+              onToggleAll={selection?.onToggleAll}
+            />
+            {columns.map((column) => {
+              const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
+              return (
+              <ResizableTableHeaderCell
+                key={column.key}
+                columnKey={column.key}
+                data-col-key={column.key}
+                width={headerColumnWidths[column.key]}
+                className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
+                onResizeEnd={onSaveHeaderColumnWidth}
+                {...headerColumnDrag.getCellDragProps(column.key)}
               >
-                {allGroupsCollapsed ? '+' : '-'}
-              </Button>
-              <Button
-                size="small"
-                appearance="subtle"
-                className={styles.controlHeaderButton}
-                onClick={handleToggleAllSubgroups}
-                title={allSubgroupsCollapsed ? 'Alle subgroepen uitklappen' : 'Alle subgroepen inklappen'}
-                aria-label={allSubgroupsCollapsed ? 'Alle subgroepen uitklappen' : 'Alle subgroepen inklappen'}
-              >
-                {allSubgroupsCollapsed ? '++' : '--'}
-              </Button>
-              <Button
-                size="small"
-                appearance={headersOnly ? 'primary' : 'subtle'}
-                className={styles.controlHeaderButton}
-                onClick={handleToggleHeadersOnly}
-                title={headersOnly ? 'Normale weergave' : 'Alleen headers tonen'}
-                aria-label={headersOnly ? 'Normale weergave' : 'Alleen headers tonen'}
-              >
-                H
-              </Button>
-            </th>
-            {columns.map((column) => (
-              <th key={column.key} className={styles.headerCell}>
-                <PurchaseOrderColumnHeader
-                  column={column}
-                  onRename={onRenameColumn}
-                  onRemove={onRemoveColumn}
-                  isAdmin={isAdmin}
-                  onToggleWriteback={onToggleWriteback}
-                />
-              </th>
-            ))}
+                <div className={styles.headerCellContent}>
+                  <div className={styles.headerCellLabel}>
+                    <PurchaseOrderColumnHeader
+                      column={column}
+                      onRename={onRenameColumn}
+                      onRemove={onRemoveColumn}
+                      isAdmin={isAdmin}
+                      onToggleWriteback={onToggleWriteback}
+                      showActionsMenu={false}
+                      autoEdit={editingColumnKey === column.key}
+                      onEditingDone={onEditingDone}
+                      showFilterIndicator={hasActiveFilter}
+                      showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
+                    />
+                  </div>
+                  <PurchaseOrderColumnFilterMenu
+                    column={column}
+                    filter={filterByColumn[column.key]}
+                    sortState={sortState}
+                    groupingColumnKey={groupingColumnKey}
+                    groupingColor={groupingColor}
+                    isAdmin={isAdmin}
+                    onToggleWriteback={onToggleWriteback}
+                    onSetSortDirection={setSortDirection}
+                    onSetOperator={setFilterOperator}
+                    onSetValue={setFilterValue}
+                    onSetSecondaryValue={setFilterSecondaryValue}
+                    onClearFilter={clearColumnFilter}
+                    onSetGroupingColumn={setGroupingColumn}
+                    onClearGrouping={clearGrouping}
+                    onSetGroupingColor={setGroupingBarColor}
+                    onAddColumnRightOf={onAddColumnRightOf}
+                    onRemoveColumn={onRemoveColumn}
+                  />
+                </div>
+              </ResizableTableHeaderCell>
+              );
+            })}
           </tr>
         </thead>
-        <tbody>
-          {groupedRows.map((group) => {
-            const isCollapsed = !!collapsedGroups[group.groupName];
-            return (
-              <React.Fragment key={group.groupName}>
-                <tr>
-                  <td colSpan={colCount} className={styles.groupRowCell}>
-                    <button
-                      type="button"
-                      className={styles.groupButton}
-                      data-group={group.groupName}
-                      onClick={handleToggleGroup}
-                    >
-                      <span>{isCollapsed ? '+' : '-'}</span>
-                      <span className={styles.groupDot}>●</span>
-                      <span>{group.groupName}</span>
-                      <span>({group.entries.length})</span>
-                    </button>
-                  </td>
-                </tr>
-                {!isCollapsed && !headersOnly && group.entries.map(({ order, rowId }) => {
-                  const lines = Array.isArray(order.lines) ? order.lines : [];
-                  const hasLines = lines.length > 0;
-                  const isExpanded = !!expandedOrders[rowId];
-
-                  return (
-                    <React.Fragment key={rowId}>
-                      <tr className={`${styles.itemRow} ${order.removedInD365 ? styles.removedRow : (order.isNew ? styles.newRow : (order.isChanged ? styles.changedRow : ''))}`}>
-                        <td className={styles.controlCell}>
-                          {hasLines ? (
-                            <Button
-                              size="small"
-                              appearance="subtle"
-                              data-rowid={rowId}
-                              onClick={handleToggleOrder}
-                            >
-                              {isExpanded ? '-' : '+'}
-                            </Button>
-                          ) : null}
-                        </td>
-                        {columns.map((column, columnIndex) => (
-                          <td key={`${rowId}-${column.key}`} className={styles.itemCell}>
-                            {renderHeaderCell(order, column, columnIndex === 0)}
-                          </td>
-                        ))}
-                      </tr>
-                      {hasLines && isExpanded ? (
-                        <tr>
-                          <td colSpan={colCount} className={styles.subitemsContainer}>
-                            <PurchaseOrdersSubitemsTable
-                              rowId={rowId}
-                              order={order}
-                              lines={lines}
-                              columns={lineColumns}
-                              onSaveValue={onSaveValue}
-                              onRenameColumn={onRenameColumn}
-                              onRemoveColumn={onRemoveColumn}
-                              onCorrect={onCorrect}
-                              isAdmin={isAdmin}
-                              onToggleWriteback={onToggleWriteback}
-                            />
-                          </td>
-                        </tr>
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
+        <PurchaseOrdersBoardRows
+          groupedRows={groupedRows}
+          collapsedGroups={collapsedGroups}
+          expandedOrders={expandedOrders}
+          showBoardHeaders={showBoardHeaders}
+          showGroupHeaders={showGroupHeaders}
+          columns={columns}
+          lineColumns={lineColumns}
+          headerColumnWidths={headerColumnWidths}
+          lineColumnWidths={lineColumnWidths}
+          onSaveLineColumnWidth={onSaveLineColumnWidth}
+          colCount={colCount}
+          groupingColumnLabel={groupingColumnLabel}
+          groupingColor={groupingColor}
+          tableActions={tableActions}
+          cellActions={cellActions}
+          lineTotalColumns={lineTotalColumns}
+          linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
+          linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+          selection={selection}
+        />
       </table>
     </div>
   );
