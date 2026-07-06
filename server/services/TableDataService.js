@@ -22,6 +22,10 @@ const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waa
 const MAX_KEY_LENGTH = 64;
 const FIELD_DISCOVERY_SAMPLE_LIMIT = 800;
 const DATA_MODEL_PREVIEW_ROW_LIMIT = 60;
+// Aantal masterrecords per save-batch. De save schrijft per chunk set-based weg (bulk copy naar een
+// staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
+// aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
+const SAVE_CHUNK_SIZE = 500;
 const EMPTY_REFRESH_PROGRESS = Object.freeze({
   status: 'idle',
   fetched: 0,
@@ -37,6 +41,7 @@ const EMPTY_REFRESH_PROGRESS = Object.freeze({
   updatedAt: null,
 });
 const refreshProgressByTable = new Map();
+const refreshJobsByTable = new Map();
 
 function createRefreshProgressBase() {
   return { ...EMPTY_REFRESH_PROGRESS };
@@ -69,6 +74,49 @@ function getRefreshProgress(tableKey) {
   return { ...(refreshProgressByTable.get(key) || createRefreshProgressBase()) };
 }
 
+function isRefreshRunning(tableKey) {
+  const key = String(tableKey || '').trim();
+  if (!key) return false;
+  return refreshJobsByTable.has(key);
+}
+
+async function startRefresh(tableKey) {
+  const key = String(tableKey || '').trim();
+  if (!key) throw Object.assign(new Error('Ongeldige tabelkey'), { status: 400 });
+  if (refreshJobsByTable.has(key)) {
+    return {
+      started: false,
+      running: true,
+      progress: getRefreshProgress(key),
+    };
+  }
+  resetRefreshProgress(key, {
+    status: 'fetching',
+    fetched: 0,
+    totalToFetch: null,
+    saved: 0,
+    totalToSave: null,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    error: null,
+  });
+  const job = (async () => {
+    try {
+      await refresh(key);
+    } catch (err) {
+      logger.error('Achtergrond-refresh mislukt', { tableKey: key, error: err.message });
+    } finally {
+      refreshJobsByTable.delete(key);
+    }
+  })();
+  refreshJobsByTable.set(key, job);
+  return {
+    started: true,
+    running: true,
+    progress: getRefreshProgress(key),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fetch-adapters: vertalen een bron naar generieke records {partitionKey, recordKey, master, details}.
 // TODO (Fase B / #139): vervang door SourceProvider.fetch(), geresolved uit tb_sources.provider_type.
@@ -85,12 +133,30 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
 
+  // Kolom-projectie aan de bron ($select): haal alleen de geconfigureerde bron-velden op i.p.v. de volledige
+  // D365-entiteit. Kan uitgezet worden via D365_ODATA_SELECT_ENABLED=false (bv. om alle velden opnieuw te
+  // laten ontdekken). Actieve bron-kolommen bepalen de lijst; verplichte velden gaan altijd mee.
+  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
+    .trim().toLowerCase() !== 'false';
+  let selectFields = null;
+  let lineSelectFields = null;
+  if (selectEnabled) {
+    const [masterCols, detailCols] = await Promise.all([
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    ]);
+    selectFields = buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols);
+    lineSelectFields = buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols);
+  }
+
   const result = await fetchPurchaseOrders({
     supplierAccount: null,
     fetchAll: true,
     extraFilter,
     maxItems,
     onProgress,
+    selectFields,
+    lineSelectFields,
   });
   const items = Array.isArray(result.items) ? result.items : [];
 
@@ -127,6 +193,38 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
     };
   });
   return { records, total: result.total, truncated: Boolean(result.truncated) };
+}
+
+// Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
+// de interne mappers (mapPurchaseOrder/mapPurchaseOrderLine), de partitiesleutel (dataAreaId) en het
+// watermerk (ModifiedDateTime) nodig hebben. Zonder deze zou het beperken van de kolommen de sync breken.
+const REQUIRED_HEADER_D365_FIELDS = [
+  'dataAreaId', 'ModifiedDateTime',
+  'PurchaseOrderNumber', 'PurchId', 'PurchaseOrderId', 'RecId',
+  'OrderVendorAccountNumber', 'InvoiceVendorAccountNumber', 'VendorAccountNumber',
+  'PurchaseOrderName', 'VendorName', 'PurchaseOrderStatus', 'DocumentStatus',
+  'CurrencyCode', 'RequestedDeliveryDate', 'RequestedDeliveryDateTime',
+  'CreatedDateTime', 'AccountingDate',
+];
+const REQUIRED_LINE_D365_FIELDS = [
+  'PurchaseOrderNumber', 'LineNumber', 'ItemNumber', 'LineDescription',
+  'OrderedPurchaseQuantity', 'PurchaseUnitSymbol', 'LineAmount', 'CurrencyCode',
+  'RequestedDeliveryDate', 'RequestedReceiptDate',
+];
+
+// Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
+// Retourneert null wanneer er (nog) geen geconfigureerde bron-kolom is: dan geen $select, zodat een verse
+// tabel via de volledige respons kan bootstrappen (veld-discovery) en niets stilzwijgend wegvalt.
+function buildD365SelectFields(requiredFields, columns) {
+  const fields = new Set(requiredFields);
+  let hasConfigured = false;
+  for (const col of columns) {
+    if (col.source === 'source' && col.sourceField && !String(col.sourceField).startsWith('@')) {
+      fields.add(col.sourceField);
+      hasConfigured = true;
+    }
+  }
+  return hasConfigured ? [...fields] : null;
 }
 
 const FETCH_ADAPTERS = {
@@ -328,6 +426,156 @@ async function isStale(tableKey) {
 }
 
 // ---------------------------------------------------------------------------
+// persistRecordsChunk — schrijft één batch masterrecords (+ hun details) set-based weg naar tb_cache.
+// Aanpak: bulk-copy de geprojecteerde rijen naar twee staging-temptabellen op de transactie-connectie,
+// draai daarna één MERGE (master) en één DELETE + INSERT (details). Zo verdwijnt het N+1-patroon
+// (transactie + losse INSERT per order/regel) dat de refresh traag maakte.
+// ---------------------------------------------------------------------------
+async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource) {
+  const masterRows = [];
+  const detailRows = [];
+  let watermark = null;
+
+  for (const rec of chunk) {
+    if (!rec.partitionKey || !rec.recordKey) continue;
+    const modifiedAt = toDateOrNull(rec.modifiedAt);
+    if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
+
+    const masterValues = isPlainObject(rec.masterRaw) ? { ...rec.masterRaw, ...rec.master } : rec.master;
+    const masterJson = projectJson(masterValues, masterSource);
+    const detailJsons = rec.details.map((d) => {
+      const detailValues = isPlainObject(d.raw) ? { ...d.raw, ...d.values } : d.values;
+      return projectJson(detailValues, detailSource);
+    });
+    const contentHash = computeContentHash(masterJson, detailJsons);
+
+    masterRows.push({
+      partitionKey: rec.partitionKey,
+      recordKey: rec.recordKey,
+      dataJson: masterJson,
+      modifiedAt,
+      contentHash,
+    });
+    for (let i = 0; i < rec.details.length; i += 1) {
+      const detail = rec.details[i];
+      if (detail.detailKey === null || detail.detailKey === undefined) continue;
+      detailRows.push({
+        partitionKey: rec.partitionKey,
+        recordKey: rec.recordKey,
+        detailKey: detail.detailKey,
+        dataJson: detailJsons[i],
+      });
+    }
+  }
+
+  if (!masterRows.length) return { saved: 0, watermark };
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    // Staging-temptabellen aanmaken via .batch() (géén sp_executesql), zodat ze op de connectie blijven
+    // bestaan voor de bulk-copy en de daaropvolgende MERGE/INSERT binnen dezelfde transactie.
+    await new sql.Request(tx).batch(`
+      IF OBJECT_ID('tempdb..#stg_master') IS NOT NULL DROP TABLE #stg_master;
+      IF OBJECT_ID('tempdb..#stg_detail') IS NOT NULL DROP TABLE #stg_detail;
+      CREATE TABLE #stg_master (
+        partition_key NVARCHAR(32)  NOT NULL,
+        record_key    NVARCHAR(128) NOT NULL,
+        data_json     NVARCHAR(MAX) NOT NULL,
+        modified_at   DATETIME2     NULL,
+        content_hash  NVARCHAR(64)  NOT NULL
+      );
+      CREATE TABLE #stg_detail (
+        partition_key NVARCHAR(32)  NOT NULL,
+        record_key    NVARCHAR(128) NOT NULL,
+        detail_key    INT           NOT NULL,
+        data_json     NVARCHAR(MAX) NOT NULL
+      );
+    `);
+
+    const masterTable = new sql.Table('#stg_master');
+    masterTable.create = false;
+    masterTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+    masterTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+    masterTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+    masterTable.columns.add('modified_at', sql.DateTime2, { nullable: true });
+    masterTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
+    for (const r of masterRows) {
+      masterTable.rows.add(r.partitionKey, r.recordKey, r.dataJson, r.modifiedAt, r.contentHash);
+    }
+    await new sql.Request(tx).bulk(masterTable);
+
+    if (detailRows.length) {
+      const detailTable = new sql.Table('#stg_detail');
+      detailTable.create = false;
+      detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+      detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+      detailTable.columns.add('detail_key', sql.Int, { nullable: false });
+      detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+      for (const r of detailRows) {
+        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson);
+      }
+      await new sql.Request(tx).bulk(detailTable);
+    }
+
+    // Master: één set-based MERGE (nieuw/gewijzigd-detectie via content_hash blijft identiek).
+    await new sql.Request(tx)
+      .input('tableId', sql.BigInt, table.id)
+      .input('syncedAt', sql.DateTime2, refreshStart)
+      .query(`
+        MERGE dbo.tb_cache AS target
+        USING (SELECT @tableId AS table_id, partition_key, record_key, data_json, modified_at, content_hash
+               FROM #stg_master) AS src
+          ON target.table_id = src.table_id AND target.scope = 'master'
+             AND target.partition_key = src.partition_key AND target.record_key = src.record_key
+             AND target.detail_key = ${MASTER_DETAIL_KEY}
+        WHEN MATCHED THEN UPDATE SET
+          data_json = src.data_json, source_modified_at = src.modified_at, synced_at = @syncedAt, removed_at_source = 0,
+          content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> src.content_hash THEN @syncedAt ELSE target.content_changed_at END,
+          content_hash = src.content_hash
+        WHEN NOT MATCHED THEN INSERT
+          (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
+           synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
+          VALUES (@tableId, 'master', src.partition_key, src.record_key, ${MASTER_DETAIL_KEY}, src.data_json, src.modified_at,
+           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
+      `);
+
+    // Details: verwijder de bestaande regels van de records in deze chunk en herinsert set-based.
+    await new sql.Request(tx)
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        DELETE d FROM dbo.tb_cache d
+        INNER JOIN #stg_master m
+          ON d.partition_key = m.partition_key AND d.record_key = m.record_key
+        WHERE d.table_id = @tableId AND d.scope = 'detail';
+      `);
+
+    if (detailRows.length) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('syncedAt', sql.DateTime2, refreshStart)
+        .query(`
+          INSERT INTO dbo.tb_cache
+            (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
+          SELECT @tableId, 'detail', partition_key, record_key, detail_key, data_json, @syncedAt, @syncedAt, 0
+          FROM #stg_detail;
+        `);
+    }
+
+    await new sql.Request(tx).batch(`
+      IF OBJECT_ID('tempdb..#stg_master') IS NOT NULL DROP TABLE #stg_master;
+      IF OBJECT_ID('tempdb..#stg_detail') IS NOT NULL DROP TABLE #stg_detail;
+    `);
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  return { saved: masterRows.length, watermark };
+}
+
+// ---------------------------------------------------------------------------
 // refresh — volledige resync vanuit de bron naar tb_cache (master + detail, data_json)
 // ---------------------------------------------------------------------------
 async function refresh(tableKey) {
@@ -416,79 +664,13 @@ async function refresh(tableKey) {
     let watermark = null;
     let saved = 0;
 
-    for (const rec of records) {
-      if (!rec.partitionKey || !rec.recordKey) continue;
-      const modifiedAt = toDateOrNull(rec.modifiedAt);
-      if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
-
-      const masterValues = isPlainObject(rec.masterRaw) ? { ...rec.masterRaw, ...rec.master } : rec.master;
-      const masterJson = projectJson(masterValues, masterSource);
-      const detailJsons = rec.details.map((d) => {
-        const detailValues = isPlainObject(d.raw) ? { ...d.raw, ...d.values } : d.values;
-        return projectJson(detailValues, detailSource);
-      });
-      const contentHash = computeContentHash(masterJson, detailJsons);
-
-      const tx = new sql.Transaction(pool);
-      await tx.begin();
-      try {
-        await new sql.Request(tx)
-          .input('tableId', sql.BigInt, table.id)
-          .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-          .input('recordKey', sql.NVarChar(128), rec.recordKey)
-          .input('dataJson', sql.NVarChar(sql.MAX), masterJson)
-          .input('modifiedAt', sql.DateTime2, modifiedAt)
-          .input('syncedAt', sql.DateTime2, refreshStart)
-          .input('contentHash', sql.NVarChar(64), contentHash)
-          .query(`
-            MERGE dbo.tb_cache AS target
-            USING (SELECT @tableId AS table_id, 'master' AS scope, @partitionKey AS partition_key,
-                          @recordKey AS record_key, ${MASTER_DETAIL_KEY} AS detail_key) AS src
-              ON target.table_id = src.table_id AND target.scope = src.scope
-                 AND target.partition_key = src.partition_key AND target.record_key = src.record_key
-                 AND target.detail_key = src.detail_key
-            WHEN MATCHED THEN UPDATE SET
-              data_json = @dataJson, source_modified_at = @modifiedAt, synced_at = @syncedAt, removed_at_source = 0,
-              content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> @contentHash THEN @syncedAt ELSE target.content_changed_at END,
-              content_hash = @contentHash
-            WHEN NOT MATCHED THEN INSERT
-              (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
-               synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
-              VALUES (@tableId, 'master', @partitionKey, @recordKey, ${MASTER_DETAIL_KEY}, @dataJson, @modifiedAt,
-               @syncedAt, @syncedAt, 0, @contentHash, @syncedAt);
-          `);
-
-        await new sql.Request(tx)
-          .input('tableId', sql.BigInt, table.id)
-          .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-          .input('recordKey', sql.NVarChar(128), rec.recordKey)
-          .query(`DELETE FROM dbo.tb_cache
-                  WHERE table_id = @tableId AND scope = 'detail'
-                    AND partition_key = @partitionKey AND record_key = @recordKey`);
-
-        for (let i = 0; i < rec.details.length; i += 1) {
-          const detail = rec.details[i];
-          if (detail.detailKey === null || detail.detailKey === undefined) continue;
-          await new sql.Request(tx)
-            .input('tableId', sql.BigInt, table.id)
-            .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-            .input('recordKey', sql.NVarChar(128), rec.recordKey)
-            .input('detailKey', sql.Int, detail.detailKey)
-            .input('dataJson', sql.NVarChar(sql.MAX), detailJsons[i])
-            .input('syncedAt', sql.DateTime2, refreshStart)
-            .query(`
-              INSERT INTO dbo.tb_cache
-                (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
-              VALUES
-                (@tableId, 'detail', @partitionKey, @recordKey, @detailKey, @dataJson, @syncedAt, @syncedAt, 0);
-            `);
-        }
-        await tx.commit();
-      } catch (err) {
-        await tx.rollback();
-        throw err;
-      }
-      saved += 1;
+    const validRecords = records.filter((rec) => rec.partitionKey && rec.recordKey);
+    for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
+      const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
+      const { saved: chunkSaved, watermark: chunkWatermark } =
+        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource);
+      if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
+      saved += chunkSaved;
       updateRefreshProgress(tableKey, {
         status: 'saving',
         fetched: records.length,
@@ -1470,6 +1652,8 @@ async function countSyncFilter(tableKey, rules) {
 }
 
 module.exports = {
+  startRefresh,
+  isRefreshRunning,
   refresh,
   getRefreshProgress,
   read,

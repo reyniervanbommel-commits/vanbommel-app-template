@@ -52,11 +52,25 @@ router.post('/:tableKey/refresh', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
+router.post('/:tableKey/refresh/start', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const result = await dataService.startRefresh(tableKey);
+    return res.status(result.started ? 202 : 200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
 router.get('/:tableKey/refresh/progress', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    return res.json({ progress: dataService.getRefreshProgress(tableKey) });
+    return res.json({
+      running: dataService.isRefreshRunning(tableKey),
+      progress: dataService.getRefreshProgress(tableKey),
+    });
   } catch (err) {
     return next(err);
   }
