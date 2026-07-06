@@ -4,9 +4,10 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const sql = require('mssql');
 const { ROLES, isAllowedRole } = require('../constants/roles');
+const { getSqlPool } = require('../utils/sqlPool');
 
 function getPool() {
-  return sql.connect(process.env.SQL_CONNECTION_STRING);
+  return getSqlPool();
 }
 
 function normalizeEmail(email) {

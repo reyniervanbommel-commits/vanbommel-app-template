@@ -10,9 +10,10 @@ const { parsePaginationParams, buildPaginationMeta } = require('../utils/paginat
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
+const { getSqlPool } = require('../utils/sqlPool');
 
 function getPool() {
-  return sql.connect(process.env.SQL_CONNECTION_STRING);
+  return getSqlPool();
 }
 
 router.get('/users', async (req, res, next) => {

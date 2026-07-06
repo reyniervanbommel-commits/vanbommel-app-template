@@ -5,6 +5,7 @@ const sql = require('mssql');
 const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { ROLES } = require('../constants/roles');
+const { getSqlPool } = require('../utils/sqlPool');
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ const purchaseOrdersValidator = [
 const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -35,7 +37,7 @@ function isStaffUser(user) {
 }
 
 function getPool() {
-  return sql.connect(process.env.SQL_CONNECTION_STRING);
+  return getSqlPool();
 }
 
 function normalizeStringArray(value) {
@@ -56,6 +58,28 @@ function normalizeColumnWidthMap(value) {
     if (!key || !Number.isFinite(width)) return acc;
     const clamped = Math.min(1000, Math.max(80, Math.round(width)));
     acc[key] = clamped;
+    return acc;
+  }, {});
+}
+
+function normalizeColumnTextStyleMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).slice(0, MAX_COLUMNS);
+  return entries.reduce((acc, [rawKey, rawStyle]) => {
+    const key = normalizeColumnKey(rawKey);
+    if (!key || !rawStyle || typeof rawStyle !== 'object' || Array.isArray(rawStyle)) return acc;
+    const textColor = HEX_COLOR_PATTERN.test(String(rawStyle.textColor || ''))
+      ? String(rawStyle.textColor).toLowerCase()
+      : '';
+    const bold = rawStyle.bold === true;
+    const italic = rawStyle.italic === true;
+    const underline = rawStyle.underline === true;
+    if (!textColor && !bold && !italic && !underline) return acc;
+    acc[key] = {};
+    if (textColor) acc[key].textColor = textColor;
+    if (bold) acc[key].bold = true;
+    if (italic) acc[key].italic = true;
+    if (underline) acc[key].underline = true;
     return acc;
   }, {});
 }
@@ -104,6 +128,8 @@ function normalizeBoardSettings(rawSettings) {
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
     headerColumnWidths: normalizeColumnWidthMap(input.headerColumnWidths),
     lineColumnWidths: normalizeColumnWidthMap(input.lineColumnWidths),
+    headerColumnTextStyles: normalizeColumnTextStyleMap(input.headerColumnTextStyles),
+    lineColumnTextStyles: normalizeColumnTextStyleMap(input.lineColumnTextStyles),
     lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
     lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
     lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
@@ -116,7 +142,6 @@ const VIEW_SCOPES = new Set(['personal', 'global']);
 const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
 const MAX_VIEW_NAME = 120;
 const MAX_VIEW_STATE_LENGTH = 100000;
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 function normalizeViewName(value) {
   return String(value === null || value === undefined ? '' : value).trim().slice(0, MAX_VIEW_NAME);
@@ -151,6 +176,8 @@ function normalizeViewState(rawState) {
       lineColumnOrder: normalizeStringArray(columns.lineColumnOrder),
       headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
       lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
+      headerColumnTextStyles: normalizeColumnTextStyleMap(columns.headerColumnTextStyles),
+      lineColumnTextStyles: normalizeColumnTextStyleMap(columns.lineColumnTextStyles),
       lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
       lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
