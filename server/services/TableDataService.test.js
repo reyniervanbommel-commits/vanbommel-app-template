@@ -132,6 +132,19 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
     expect(values.ratio).toBeNull();
     expect(errors.ratio).toContain('Deling door nul');
   });
+
+  it('evalueert referenties hoofdletter-onafhankelijk', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'statusCheck', dataType: 'text', formulaExpr: "ALS((requesteddeliverydate)<(confirmeddeliverydate);'kleiner';'groter')" },
+    ]);
+    const values = {
+      requestedDeliveryDate: '2026-07-01',
+      confirmedDeliveryDate: '2026-07-05',
+    };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.statusCheck).toBe('kleiner');
+    expect(errors).toEqual({});
+  });
 });
 
 describe('TableDataService.assertCustomColumnWritable', () => {

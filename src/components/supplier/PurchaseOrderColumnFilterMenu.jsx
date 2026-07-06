@@ -87,11 +87,17 @@ function PurchaseOrderColumnFilterMenu({
   }, []);
 
   const canAddColumn = typeof onAddColumnRightOf === 'function';
+  const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
     setActiveSubmenu('none');
     setOpen(false);
   }, [column, onAddColumnRightOf]);
+  const handleEditFormulaColumn = useCallback(() => {
+    if (!canEditFormulaColumn) return;
+    onAddColumnRightOf(column, { key: 'formula-edit' });
+    setOpen(false);
+  }, [canEditFormulaColumn, column, onAddColumnRightOf]);
 
   const handleRenameColumn = useCallback(async () => {
     if (!canRenameColumn) return;
@@ -242,6 +248,8 @@ function PurchaseOrderColumnFilterMenu({
           canAddColumn={canAddColumn}
           canRenameColumn={canRenameColumn}
           handleRenameColumn={handleRenameColumn}
+          canEditFormulaColumn={canEditFormulaColumn}
+          handleEditFormulaColumn={handleEditFormulaColumn}
           canRemoveColumn={canRemoveColumn}
           handleRemoveColumn={handleRemoveColumn}
           canToggleLineTotal={canToggleLineTotal}

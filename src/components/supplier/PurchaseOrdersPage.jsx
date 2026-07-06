@@ -11,6 +11,7 @@ import { usePurchaseOrderSavedViewState } from '../../hooks/usePurchaseOrderSave
 import { usePurchaseOrdersSelection } from '../../hooks/usePurchaseOrdersSelection';
 import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRows';
 import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
+import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
@@ -127,21 +128,24 @@ export default function PurchaseOrdersPage() {
   });
 
   const [editingColumnKey, setEditingColumnKey] = useState('');
-  const [formulaDialogState, setFormulaDialogState] = useState({ open: false, sourceColumn: null, editingColumn: null });
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
-  const handleFormulaDialogOpen = useCallback((sourceColumn, editingColumn = null) => {
-    setFormulaDialogState({ open: true, sourceColumn, editingColumn });
-  }, []);
-  const handleFormulaDialogClose = useCallback(() => {
-    setFormulaDialogState({ open: false, sourceColumn: null, editingColumn: null });
-  }, []);
-  const formulaReferenceColumns = visibleHeaderColumns.filter(
-    (column) => !String(column?.formulaExpr || '').trim()
-  );
+  const {
+    formulaDialogState,
+    closeFormulaDialog,
+    handleFormulaTypeSelection,
+    formulaReferenceColumns,
+    submitFormulaColumn,
+  } = usePurchaseOrderFormulaDialogState({
+    visibleHeaderColumns,
+    addHeaderColumnAfter,
+    updateFormulaColumn,
+    headerColumnFormatRules,
+    saveHeaderColumnFormatRules,
+    setEditingColumnKey,
+  });
 
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
-    if (typeDef?.key === 'formula') {
-      handleFormulaDialogOpen(sourceColumn, null);
+    if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
       return;
     }
     const created = await addHeaderColumnAfter(sourceColumn.key, {
@@ -150,7 +154,7 @@ export default function PurchaseOrdersPage() {
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, handleFormulaDialogOpen]);
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection]);
 
   const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
@@ -163,28 +167,6 @@ export default function PurchaseOrdersPage() {
     setLineColumnTotal,
     setEditingColumnKey,
   });
-
-  const handleSubmitFormulaColumn = useCallback(async ({ label, dataType, formulaExpr, formatRuleSet }) => {
-    if (formulaDialogState.editingColumn?.id) {
-      await updateFormulaColumn(formulaDialogState.editingColumn.id, { label, dataType, formulaExpr });
-      setEditingColumnKey(formulaDialogState.editingColumn.key || '');
-      return;
-    }
-    const anchorKey = String(formulaDialogState.sourceColumn?.key || '').trim();
-    if (!anchorKey) return;
-    if (formatRuleSet?.target === 'row') {
-      const existingRowTarget = Object.entries(headerColumnFormatRules || {}).find(([, ruleSet]) => ruleSet?.target === 'row');
-      if (existingRowTarget) {
-        throw new Error('Er mag maximaal één kolom rij-opmaak gebruiken.');
-      }
-    }
-    const created = await addHeaderColumnAfter(anchorKey, { label, dataType, formulaExpr });
-    if (!created?.key) return;
-    if (formatRuleSet) {
-      await saveHeaderColumnFormatRules(created.key, formatRuleSet);
-    }
-    setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, formulaDialogState, headerColumnFormatRules, saveHeaderColumnFormatRules, updateFormulaColumn]);
 
   const handleRefresh = useCallback(async () => {
     startProgress();
@@ -302,8 +284,8 @@ export default function PurchaseOrdersPage() {
       )}
       <PurchaseOrderFormulaColumnDialog
         open={formulaDialogState.open}
-        onOpenChange={(open) => !open && handleFormulaDialogClose()}
-        onSubmit={handleSubmitFormulaColumn}
+        onOpenChange={(open) => !open && closeFormulaDialog()}
+        onSubmit={submitFormulaColumn}
         sourceColumn={formulaDialogState.sourceColumn}
         availableColumns={formulaReferenceColumns}
         initialValue={formulaDialogState.editingColumn}

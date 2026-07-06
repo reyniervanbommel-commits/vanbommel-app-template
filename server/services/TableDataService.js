@@ -531,18 +531,34 @@ function compileMasterFormulaColumns(masterColumns) {
     });
 }
 
+function withCaseInsensitiveKeys(values) {
+  const normalized = { ...(values || {}) };
+  for (const [key, value] of Object.entries(values || {})) {
+    const lowerKey = String(key || '').toLowerCase();
+    if (lowerKey && !Object.prototype.hasOwnProperty.call(normalized, lowerKey)) {
+      normalized[lowerKey] = value;
+    }
+  }
+  return normalized;
+}
+
 function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
   const formulaErrors = {};
+  const evaluationValues = withCaseInsensitiveKeys(masterValues);
   for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
     const formulaKey = item?.column?.key;
     if (!formulaKey) continue;
     if (item.compileError) {
       masterValues[formulaKey] = null;
+      evaluationValues[formulaKey] = null;
+      evaluationValues[String(formulaKey).toLowerCase()] = null;
       formulaErrors[formulaKey] = item.compileError;
       continue;
     }
-    const result = evaluateCompiledFormula(item.compiled, masterValues, { resultType: item.column.dataType });
+    const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
     masterValues[formulaKey] = result.value;
+    evaluationValues[formulaKey] = result.value;
+    evaluationValues[String(formulaKey).toLowerCase()] = result.value;
     if (result.error) formulaErrors[formulaKey] = result.error;
   }
   return formulaErrors;
