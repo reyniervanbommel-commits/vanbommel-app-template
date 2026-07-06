@@ -16,6 +16,7 @@ const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { time } = require('../utils/timing');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 const MAX_KEY_LENGTH = 64;
@@ -503,46 +504,51 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
 async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
-  const [masterCols, detailCols] = await Promise.all([
+  const [masterCols, detailCols] = await time('tb_read_cols', () => Promise.all([
     listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-  ]);
+  ]));
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
 
-  const mastersResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
-      FROM dbo.tb_cache c WITH (NOLOCK)
-      WHERE c.table_id = @tableId AND c.scope = 'master'
-      ${includeRemoved ? '' : `AND c.removed_at_source = 0
-        AND NOT EXISTS (
-          SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
-          WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
-        )`}
-      ORDER BY c.record_key
-    `);
+  // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
+  const { mastersResult, detailsResult, customResult } = await time('tb_read_sql', async () => {
+    const mastersRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
+        FROM dbo.tb_cache c WITH (NOLOCK)
+        WHERE c.table_id = @tableId AND c.scope = 'master'
+        ${includeRemoved ? '' : `AND c.removed_at_source = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
+            WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+          )`}
+        ORDER BY c.record_key
+      `);
 
-  const detailsResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT partition_key, record_key, detail_key, data_json
-      FROM dbo.tb_cache WITH (NOLOCK)
-      WHERE table_id = @tableId AND scope = 'detail'
-      ORDER BY record_key, detail_key
-    `);
+    const detailsRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT partition_key, record_key, detail_key, data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'detail'
+        ORDER BY record_key, detail_key
+      `);
 
-  const customResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
-             cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
-      FROM dbo.tb_custom_values cv WITH (NOLOCK)
-      INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
-      WHERE cv.table_id = @tableId AND c.is_active = 1
-    `);
+    const customRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
+               cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
+        FROM dbo.tb_custom_values cv WITH (NOLOCK)
+        INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
+        WHERE cv.table_id = @tableId AND c.is_active = 1
+      `);
+
+    return { mastersResult: mastersRes, detailsResult: detailsRes, customResult: customRes };
+  });
 
   const customByCell = new Map();
   for (const row of customResult.recordset) {

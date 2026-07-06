@@ -3,11 +3,14 @@
 require('dotenv').config({ override: true });
 const express = require('express');
 const path = require('path');
+const compression = require('compression');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
+const sql = require('mssql');
 const SqlSessionStore = require('./services/SqlSessionStore');
+const { runWithRequestTiming, buildServerTimingHeader } = require('./utils/timing');
 
 const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
@@ -35,6 +38,10 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
+
+// Gzip/brotli-compressie op alle responses. De frontend-bundle en de board-JSON-payloads
+// zijn tekstueel en comprimeren ~4x; dit verkort de laadtijd fors zonder verdere ingrepen.
+app.use(compression());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -81,6 +88,31 @@ app.use(session({
   },
 }));
 
+// Server-Timing-header: totale server-verwerkingstijd (+ benoemde sub-metingen via
+// utils/timing.time()) per request, zichtbaar in DevTools → Network → Timing. Webstandaard,
+// geen eigen UI nodig. Bewust NÁ express-session gemount zodat onze res.end-patch als eerste
+// draait (vóór de async session-save) en de header dus altijd gezet wordt vóór het flushen.
+// De request draait in een AsyncLocalStorage-timing-context zodat elk codeblok (ook diep in een
+// service) via time() zijn duur kan bijdragen.
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  runWithRequestTiming(() => {
+    const originalEnd = res.end;
+    res.end = function timedEnd(...args) {
+      if (!res.headersSent) {
+        const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+        try {
+          res.setHeader('Server-Timing', buildServerTimingHeader(durationMs));
+        } catch {
+          /* header al verstuurd — negeren */
+        }
+      }
+      return originalEnd.apply(this, args);
+    };
+    next();
+  });
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
@@ -94,7 +126,18 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.resolve(__dirname, '../dist');
 
-  app.use(express.static(distPath));
+  // Vite geeft assets een content-hash in de bestandsnaam (index-<hash>.js), dus die zijn
+  // veilig lang + immutable te cachen. index.html mag NIET gecachet worden, anders blijft de
+  // browser naar oude asset-hashes verwijzen na een deploy.
+  app.use(express.static(distPath, {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
@@ -106,7 +149,35 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(errorHandler);
 
+// Initialiseer de gedeelde MSSQL-pool één keer bij startup met expliciete pool-grootte.
+// Alle modules gebruiken sql.connect(<string>), en mssql's globale connect is "first-call-wins":
+// zodra deze pool bestaat, geeft elke latere sql.connect() dezelfde pool terug. Zonder deze init
+// wordt de pool met de standaard max=10 aangemaakt, wat onder gelijktijdige gebruikers knelt. We
+// hergebruiken mssql's eigen connection-string-parser zodat encrypt/trust/timeouts behouden blijven.
+async function initSqlPool() {
+  const connStr = process.env.SQL_CONNECTION_STRING;
+  if (!connStr) {
+    logger.warn('SQL_CONNECTION_STRING ontbreekt; pool-init overgeslagen');
+    return;
+  }
+  const config = sql.ConnectionPool.parseConnectionString(connStr);
+  config.pool = {
+    ...(config.pool || {}),
+    max: parseInt(process.env.SQL_POOL_MAX || '20', 10),
+    min: parseInt(process.env.SQL_POOL_MIN || '2', 10),
+    idleTimeoutMillis: parseInt(process.env.SQL_POOL_IDLE_MS || '30000', 10),
+  };
+  await sql.connect(config);
+  logger.info('MSSQL-pool geïnitialiseerd', { max: config.pool.max, min: config.pool.min });
+}
+
 const PORT = process.env.PORT || 3008;
-app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
+// Non-fataal: bij een DB-hapering tijdens boot loggen we en starten we alsnog; de modules
+// verbinden dan lazy bij de eerste query (met standaard pool-config als fallback).
+initSqlPool()
+  .catch((err) => logger.error('MSSQL-pool init faalde; val terug op lazy connect', { error: err && err.message ? err.message : String(err) }))
+  .finally(() => {
+    app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
+  });
 
 module.exports = app;
