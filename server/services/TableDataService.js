@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
-const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
+const { fetchPurchaseOrders, fetchEntityRecords, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
@@ -130,7 +130,7 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
   let extraFilter = '';
   try {
-    extraFilter = compileSyncRules(parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', '')));
+    extraFilter = await getTableSyncFilter(table);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
@@ -197,6 +197,16 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   return { records, total: result.total, truncated: Boolean(result.truncated) };
 }
 
+function parseDefaultFilterRules(defaultFilter) {
+  if (!defaultFilter) return [];
+  try {
+    const parsed = JSON.parse(defaultFilter);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
 // de interne mappers (mapPurchaseOrder/mapPurchaseOrderLine), de partitiesleutel (dataAreaId) en het
 // watermerk (ModifiedDateTime) nodig hebben. Zonder deze zou het beperken van de kolommen de sync breken.
@@ -221,6 +231,33 @@ const REQUIRED_LINE_D365_FIELDS = [
   'RequestedDeliveryDate',
 ];
 
+function normalizeD365FieldName(field) {
+  return String(field || '').trim();
+}
+
+function uniqueFieldList(fields) {
+  const list = new Set();
+  for (const field of fields) {
+    const normalized = normalizeD365FieldName(field);
+    if (normalized) list.add(normalized);
+  }
+  return [...list];
+}
+
+async function getTableSyncRules(table) {
+  if (table.key === 'purchase-orders') {
+    const fromSettings = parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+    if (fromSettings.length) return fromSettings;
+  }
+  return parseDefaultFilterRules(table.defaultFilter);
+}
+
+async function getTableSyncFilter(table) {
+  const rules = await getTableSyncRules(table);
+  if (!rules.length) return '';
+  return compileSyncRules(rules);
+}
+
 // Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
 // Retourneert ALTIJD een lijst (minimaal de verplichte sleutel-/watermerkvelden), zodat de board-sync
 // nooit de volledige bron-entiteit ophaalt. Veld-discovery loopt via het aparte discoverSourceFields-pad
@@ -235,8 +272,102 @@ function buildD365SelectFields(requiredFields, columns) {
   return [...fields];
 }
 
+function resolveRecordKeys(table, rawRecord, fallbackPartitionKey) {
+  const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
+  const firstKey = keyFields[0];
+  const secondKey = keyFields[1];
+  const firstValue = firstKey ? rawRecord?.[firstKey] : null;
+  const secondValue = secondKey ? rawRecord?.[secondKey] : null;
+
+  if (firstKey && /^dataareaid$/i.test(firstKey) && secondKey) {
+    return {
+      partitionKey: String(firstValue || fallbackPartitionKey || '').trim(),
+      recordKey: String(secondValue || '').trim(),
+    };
+  }
+
+  if (firstKey) {
+    return {
+      partitionKey: String(rawRecord?.dataAreaId || fallbackPartitionKey || '').trim(),
+      recordKey: String(firstValue || '').trim(),
+    };
+  }
+
+  return {
+    partitionKey: String(rawRecord?.dataAreaId || fallbackPartitionKey || '').trim(),
+    recordKey: String(rawRecord?.id || rawRecord?.RecId || '').trim(),
+  };
+}
+
+function requiredMasterFieldsFromTable(table) {
+  const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
+  return uniqueFieldList([
+    'dataAreaId',
+    'ModifiedDateTime',
+    ...keyFields,
+  ]);
+}
+
+async function genericMasterD365Fetch(table, { onProgress } = {}) {
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
+  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
+  const parsedMax = Number.parseInt(rawMax, 10);
+  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+
+  let extraFilter = '';
+  try {
+    extraFilter = await getTableSyncFilter(table);
+  } catch (err) {
+    logger.warn('Sync filter ongeldig; fetch draait zonder extra filter', { tableKey: table.key, error: err.message });
+  }
+
+  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
+    .trim().toLowerCase() !== 'false';
+  let selectFields = null;
+  if (selectEnabled) {
+    const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+    selectFields = buildD365SelectFields(requiredMasterFieldsFromTable(table), masterCols);
+  }
+
+  const result = await fetchEntityRecords({
+    sourceEntity: table.sourceEntity,
+    fetchAll: true,
+    top: Math.min(Number(table.maxRows) || 2000, 2000),
+    skip: 0,
+    extraFilter,
+    maxItems,
+    onProgress,
+    selectFields,
+  });
+
+  const records = (Array.isArray(result.items) ? result.items : []).map((raw) => {
+    const normalizedRaw = raw && typeof raw === 'object' ? raw : {};
+    const keys = resolveRecordKeys(table, normalizedRaw, company);
+    return {
+      partitionKey: keys.partitionKey,
+      recordKey: keys.recordKey,
+      modifiedAt: normalizedRaw.ModifiedDateTime || normalizedRaw.modifiedDateTime || null,
+      masterRaw: normalizedRaw,
+      master: {},
+      details: [],
+    };
+  });
+
+  return { records, total: result.total, truncated: Boolean(result.truncated) };
+}
+
+async function vendorsFetch(table, context = {}) {
+  return genericMasterD365Fetch(table, context);
+}
+
+async function itemsFetch(table, context = {}) {
+  return genericMasterD365Fetch(table, context);
+}
+
 const FETCH_ADAPTERS = {
   'purchase-orders': purchaseOrdersFetch,
+  vendors: vendorsFetch,
+  items: itemsFetch,
 };
 
 function getFetchAdapter(table) {
@@ -748,21 +879,33 @@ const FIELD_DISCOVERY_ROW_LIMIT = 5;
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
-  // Fase A: discovery is bron-specifiek (PO). In Fase B levert SourceProvider.discoverFields() dit generiek.
-  if (table.key !== 'purchase-orders') {
-    throw Object.assign(new Error(`Veld-discovery nog niet beschikbaar voor tabel '${table.key}'`), { status: 501 });
+  let records = [];
+  if (table.key === 'purchase-orders') {
+    const result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: FIELD_DISCOVERY_ROW_LIMIT,
+      skip: 0,
+      fetchAll: false,
+      maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+    });
+    records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
+      masterRaw: order.raw || {},
+      details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
+    }));
+  } else {
+    const sample = await fetchEntityRecords({
+      sourceEntity: table.sourceEntity,
+      top: FIELD_DISCOVERY_ROW_LIMIT,
+      skip: 0,
+      fetchAll: false,
+      maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+      selectFields: null,
+    });
+    records = (Array.isArray(sample.items) ? sample.items : []).map((raw) => ({
+      masterRaw: raw && typeof raw === 'object' ? raw : {},
+      details: [],
+    }));
   }
-  const result = await fetchPurchaseOrders({
-    supplierAccount: null,
-    top: FIELD_DISCOVERY_ROW_LIMIT,
-    skip: 0,
-    fetchAll: false,
-    maxItems: FIELD_DISCOVERY_ROW_LIMIT,
-  });
-  const records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
-    masterRaw: order.raw || {},
-    details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
-  }));
   const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
   logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
   return { headerInserted, lineInserted, sampledRows: records.length };
@@ -1647,10 +1790,14 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
 // relatie, kolommen (incl. verborgen, gemapt naar de admin-vorm), cache-stats en sync-filter. Vervangt
 // het po_*-specifieke /datamodel zodat de admin-pagina generiek wordt. De D365-filtercatalogus wordt
 // (voorlopig) hergebruikt uit de PO-cacheservice; in Fase 8 verhuist die mee naar de generieke laag.
-const SYNC_TEMPLATES = [
+const PURCHASE_ORDER_SYNC_TEMPLATES = [
   { id: 'open_orders', label: 'Open orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Backorder' }] },
   { id: 'received_orders', label: 'Received orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Received' }] },
 ];
+
+function syncTemplatesForTable(tableKey) {
+  return tableKey === 'purchase-orders' ? PURCHASE_ORDER_SYNC_TEMPLATES : [];
+}
 
 // tb_-kolom -> admin-vorm die DataPreviewTables/useDataModelAdmin verwacht (level i.p.v. scope, d365 i.p.v. source).
 function toAdminColumn(col) {
@@ -1786,12 +1933,11 @@ async function getDataModel(tableKey) {
       : Promise.resolve({ recordset: [] }),
   ]);
 
-  const [baseUrl, company, rulesJson] = await Promise.all([
+  const [baseUrl, company] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
-    settingsService.getAsync('PO_SYNC_RULES', ''),
   ]);
-  const syncRules = parseSyncRules(rulesJson);
+  const syncRules = await getTableSyncRules(table);
   let compiledFilter = '';
   try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
 
@@ -1842,6 +1988,25 @@ async function getDataModel(tableKey) {
     }
   }
 
+  const lookups = await getLookups(table.id);
+  const lookupEntities = await Promise.all(lookups.map(async (lookup) => {
+    let targetLabel = lookup.targetTableKey;
+    try {
+      const target = await getTableByKey(lookup.targetTableKey);
+      targetLabel = target.label;
+    } catch {
+      // Doeltabel ontbreekt/inactief; key blijft als label zichtbaar in het diagram.
+    }
+    return {
+      sourceScope: lookup.sourceScope,
+      sourceField: lookup.sourceField,
+      targetTableKey: lookup.targetTableKey,
+      targetTableLabel: targetLabel,
+      targetKeyField: lookup.targetKeyField,
+      fields: lookup.fields,
+    };
+  }));
+
   return {
     entities: [
       { id: 'header', name: table.sourceEntity, title: `${table.label} (kop)`, path: table.sourceEntity, keys: table.keyFields, cacheTable: 'tb_cache' },
@@ -1854,28 +2019,63 @@ async function getDataModel(tableKey) {
     connection: { baseUrl: baseUrl.trim() || null, company: company.trim() || null },
     columns: { header: headerCols, line: lineCols },
     cache,
-    syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: SYNC_TEMPLATES },
+    syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: syncTemplatesForTable(table.key) },
     filterCatalog: filterMeta.catalog,
     previewTables,
+    lookups: lookupEntities,
   };
 }
 
-// Sync-filter-regels per tabel opslaan. v1: gedeelde PO_SYNC_RULES-setting (de tb_-sync leest die al);
-// TODO(#174): per tabel in tb_tables.default_filter_json zodra meerdere schrijfbare bronnen nodig zijn.
+async function saveTableDefaultFilter(tableId, rules) {
+  const pool = await getPool();
+  await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('defaultFilterJson', sql.NVarChar(sql.MAX), JSON.stringify(rules))
+    .query(`
+      UPDATE dbo.tb_tables
+      SET default_filter_json = @defaultFilterJson,
+          updated_at = SYSUTCDATETIME()
+      WHERE id = @tableId
+    `);
+}
+
+// Sync-filter-regels per tabel opslaan.
 async function saveSyncFilters(tableKey, rules) {
-  await getTableByKey(tableKey); // valideer bestaan
+  const table = await getTableByKey(tableKey);
   const list = Array.isArray(rules) ? rules : [];
   const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
-  await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+  if (table.key === 'purchase-orders') {
+    await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+  }
+  await saveTableDefaultFilter(table.id, list);
   return { rules: list, compiled };
 }
 
-// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen). Hergebruikt de PO-fetch;
-// PO-specifiek tot de generieke provider-count er is (#177).
+// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen).
 async function countSyncFilter(tableKey, rules) {
-  await getTableByKey(tableKey);
+  const table = await getTableByKey(tableKey);
   const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
-  const result = await fetchPurchaseOrders({ supplierAccount: null, top: 1, skip: 0, fetchAll: false, extraFilter: compiled, maxItems: 1 });
+  let result;
+  if (table.key === 'purchase-orders') {
+    result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: 1,
+      skip: 0,
+      fetchAll: false,
+      extraFilter: compiled,
+      maxItems: 1,
+    });
+  } else {
+    result = await fetchEntityRecords({
+      sourceEntity: table.sourceEntity,
+      top: 1,
+      skip: 0,
+      fetchAll: false,
+      extraFilter: compiled,
+      maxItems: 1,
+      selectFields: null,
+    });
+  }
   return { total: Number(result.total) || 0, compiled };
 }
 

@@ -122,13 +122,13 @@ function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
   );
 }
 
-function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
   const {
     rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
     save, saving, error, savedAt, queryCount, countLoading, countError,
-  } = useSyncFilters(syncFilter?.rules);
+  } = useSyncFilters(syncFilter?.rules, tableKey);
 
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);

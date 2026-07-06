@@ -10,6 +10,7 @@ const {
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
+  FETCH_ADAPTERS,
 } = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
@@ -211,5 +212,13 @@ describe('TableDataService runtime linked header values', () => {
       'quantity'
     );
     expect(total).toBe(4);
+  });
+});
+
+describe('TableDataService fetch adapters (#195)', () => {
+  it('registreert adapters voor purchase-orders, vendors en items', () => {
+    expect(typeof FETCH_ADAPTERS['purchase-orders']).toBe('function');
+    expect(typeof FETCH_ADAPTERS.vendors).toBe('function');
+    expect(typeof FETCH_ADAPTERS.items).toBe('function');
   });
 });
