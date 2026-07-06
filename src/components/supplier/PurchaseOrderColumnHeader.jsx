@@ -144,7 +144,7 @@ export default function PurchaseOrderColumnHeader({
     );
     if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
     if (column.writeBackAllowed === false) {
-      return <div className={styles.header}><span className={styles.labelWrap}>{column.label}<Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
+      return <div className={styles.header}><span className={styles.labelWrap}><span className={styles.labelText}>{column.label}</span><Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
     }
     if (!showActionsMenu) {
       return <div className={styles.header}>{labelWithWriteBack}</div>;
@@ -187,7 +187,7 @@ export default function PurchaseOrderColumnHeader({
           </Tooltip>
         ) : null}
       </span>
-      {columnOptionsMenu}
+      {showActionsMenu ? columnOptionsMenu : null}
 
       <Dialog open={renameOpen} onOpenChange={(_, data) => !busy && setRenameOpen(data.open)}>
         <DialogSurface>

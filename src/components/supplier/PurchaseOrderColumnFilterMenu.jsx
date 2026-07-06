@@ -1,118 +1,15 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Dropdown, Input, Option, Popover, PopoverSurface, PopoverTrigger, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Button, Popover, PopoverSurface, PopoverTrigger } from '@fluentui/react-components';
 import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
-import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
-
-const useStyles = makeStyles({
-  trigger: {
-    minWidth: '22px',
-    width: '22px',
-    height: '22px',
-    ...shorthands.padding('0'),
-    color: tokens.colorNeutralForeground3,
-    cursor: 'pointer',
-    flexShrink: 0,
-    ':hover': {
-      color: tokens.colorBrandForeground1,
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-  },
-  triggerActive: {
-    color: tokens.colorBrandForeground1,
-  },
-  surface: {
-    ...shorthands.padding('0'),
-    width: 'auto',
-    maxWidth: 'none',
-    boxSizing: 'border-box',
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  mainPane: {
-    width: '280px',
-    minWidth: '280px',
-    boxSizing: 'border-box',
-    ...shorthands.padding('8px'),
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('8px'),
-  },
-  subPane: {
-    width: '210px',
-    minWidth: '210px',
-    boxSizing: 'border-box',
-    ...shorthands.padding('8px'),
-    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
-    backgroundColor: tokens.colorNeutralBackground2,
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('4px'),
-  },
-  subPaneTitle: {
-    fontWeight: tokens.fontWeightSemibold,
-    marginBottom: '4px',
-  },
-  submenuButton: {
-    justifyContent: 'space-between',
-  },
-  submenuButtonActive: {
-    backgroundColor: tokens.colorNeutralBackground1Selected,
-  },
-  sortActions: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('4px'),
-  },
-  sortButton: {
-    justifyContent: 'flex-start',
-  },
-  divider: {
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-  },
-  fieldTitle: {
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  filterRow: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('6px'),
-  },
-  actionRow: {
-    display: 'flex',
-    ...shorthands.gap('6px'),
-  },
-  hint: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-  },
-});
-
-// Monday-stijl kolomtypes voor "Kolom rechts toevoegen". label = standaardnaam
-// (direct inline te hernoemen); dataType mapt op de backend-datatypes.
-const NEW_COLUMN_TYPES = [
-  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
-  { key: 'text', label: 'Tekst', dataType: 'text' },
-  { key: 'number', label: 'Nummers', dataType: 'number' },
-  { key: 'date', label: 'Datum', dataType: 'date' },
-  { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
-];
-
-function isDateColumn(column) {
-  return column?.dataType === 'date';
-}
-
-function getDefaultOperator(column) {
-  return isDateColumn(column) ? 'before' : 'contains';
-}
-
-function getDraftFromFilter(column, filter) {
-  return {
-    operator: filter?.operator || getDefaultOperator(column),
-    value: filter?.value || '',
-    secondaryValue: filter?.secondaryValue || '',
-  };
-}
+import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilterMenuPanels';
+import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
+import {
+  HEX_COLOR_PATTERN,
+  NEW_COLUMN_TYPES,
+  getDraftFromFilter,
+  getTextStyleDraft,
+  isDateColumn,
+} from './purchaseOrderColumnFilterMenuConstants';
 
 export function isColumnFilterActive(column, filter) {
   if (!filter) return false;
@@ -141,17 +38,21 @@ function PurchaseOrderColumnFilterMenu({
   onClearGrouping,
   onSetGroupingColor,
   onAddColumnRightOf,
+  onRenameColumn,
   onRemoveColumn,
   isLineColumnSummed = false,
   onToggleLineColumnSum,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
+  columnTextStyle,
+  onSetColumnTextStyle,
 }) {
-  const styles = useStyles();
+  const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
   // Zijpaneel-submenu: 'none' | 'group' (categorie/groeperen) | 'add' (kolom rechts toevoegen).
   const [activeSubmenu, setActiveSubmenu] = useState('none');
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
+  const [textStyleDraft, setTextStyleDraft] = useState(() => getTextStyleDraft(columnTextStyle));
   const isDate = isDateColumn(column);
   const isGroupingColumn = groupingColumnKey === column.key;
   const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
@@ -160,18 +61,21 @@ function PurchaseOrderColumnFilterMenu({
   const filterActive = isColumnFilterActive(column, filter);
   const writable = !!column.writableToD365;
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
+  const canRenameColumn = Boolean(column.source === 'custom' && typeof onRenameColumn === 'function');
   const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
   const isLineColumn = column.level === 'line';
   const isLineNumberColumn = column.level === 'line' && column.dataType === 'number';
   const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
+  const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
 
   useEffect(() => {
     if (open) {
       setDraft(getDraftFromFilter(column, filter));
+      setTextStyleDraft(getTextStyleDraft(columnTextStyle));
     }
-  }, [open, column, filter]);
+  }, [open, column, filter, columnTextStyle]);
 
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
@@ -188,6 +92,20 @@ function PurchaseOrderColumnFilterMenu({
     setActiveSubmenu('none');
     setOpen(false);
   }, [column, onAddColumnRightOf]);
+
+  const handleRenameColumn = useCallback(async () => {
+    if (!canRenameColumn) return;
+    const nextLabel = window.prompt('Rename column', column.label);
+    if (nextLabel === null) return;
+    const trimmed = nextLabel.trim();
+    if (!trimmed || trimmed === column.label) return;
+    try {
+      await onRenameColumn(column.id, trimmed);
+      setOpen(false);
+    } catch (err) {
+      window.alert(err?.message || 'Renaming the column failed.');
+    }
+  }, [canRenameColumn, column.id, column.label, onRenameColumn]);
 
   const handleRemoveColumn = useCallback(async () => {
     if (!canRemoveColumn) return;
@@ -257,6 +175,32 @@ function PurchaseOrderColumnFilterMenu({
     onToggleLineColumnSum(column.key, !isLineColumnSummed);
     setOpen(false);
   }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum]);
+  const handleTextColorChange = useCallback((event) => {
+    const nextColor = String(event.target.value || '').toLowerCase();
+    setTextStyleDraft((prev) => ({ ...prev, textColor: HEX_COLOR_PATTERN.test(nextColor) ? nextColor : '' }));
+  }, []);
+  const handleToggleBold = useCallback(() => {
+    setTextStyleDraft((prev) => ({ ...prev, bold: !prev.bold }));
+  }, []);
+  const handleToggleItalic = useCallback(() => {
+    setTextStyleDraft((prev) => ({ ...prev, italic: !prev.italic }));
+  }, []);
+  const handleToggleUnderline = useCallback(() => {
+    setTextStyleDraft((prev) => ({ ...prev, underline: !prev.underline }));
+  }, []);
+  const handleApplyTextStyle = useCallback(async () => {
+    if (!canSetColumnTextStyle) return;
+    await onSetColumnTextStyle(column.key, textStyleDraft);
+    setOpen(false);
+    setActiveSubmenu('none');
+  }, [canSetColumnTextStyle, onSetColumnTextStyle, column.key, textStyleDraft]);
+  const handleClearTextStyle = useCallback(async () => {
+    if (!canSetColumnTextStyle) return;
+    await onSetColumnTextStyle(column.key, { textColor: '', bold: false, italic: false, underline: false });
+    setTextStyleDraft({ textColor: '', bold: false, italic: false, underline: false });
+    setOpen(false);
+    setActiveSubmenu('none');
+  }, [canSetColumnTextStyle, onSetColumnTextStyle, column.key]);
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;
     onPushLineTotalToHeader(column);
@@ -286,175 +230,60 @@ function PurchaseOrderColumnFilterMenu({
         </Button>
       </PopoverTrigger>
       <PopoverSurface className={styles.surface}>
-        <div className={styles.mainPane}>
-        <Text className={styles.fieldTitle}>{column.label}</Text>
-        <div className={styles.divider} />
-        <div className={styles.sortActions}>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>
-            Sort A to Z
-          </Button>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortDesc}>
-            Sort Z to A
-          </Button>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={clearSort}>
-            Clear sort
-          </Button>
-        </div>
-        <div className={styles.divider} />
-        <Button
-          className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
-          appearance="subtle"
-          size="small"
-          onClick={() => toggleSubmenu('group')}
-        >
-          <span>Categorie / groeperen</span>
-          <span aria-hidden>›</span>
-        </Button>
-        {canToggleWriteback ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
-                {writable ? 'Sync uitzetten' : 'Sync aanzetten'}
-              </span>
-            </Button>
-          </>
-        ) : null}
-        {canAddColumn ? (
-          <>
-            <div className={styles.divider} />
-            <Button
-              className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'add' ? styles.submenuButtonActive : ''}`}
-              appearance="subtle"
-              size="small"
-              onClick={() => toggleSubmenu('add')}
-            >
-              <span>+ Kolom rechts toevoegen</span>
-              <span aria-hidden>›</span>
-            </Button>
-          </>
-        ) : null}
-        {canRemoveColumn ? (
-          <>
-            <div className={styles.divider} />
-            <Button
-              className={styles.sortButton}
-              appearance="subtle"
-              size="small"
-              onClick={handleRemoveColumn}
-            >
-              Delete column
-            </Button>
-          </>
-        ) : null}
-        {canToggleLineTotal ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleLineTotal}>
-              {isLineColumnSummed ? 'Disable total row sum' : 'Enable total row sum'}
-            </Button>
-          </>
-        ) : null}
-        {canPushLineTotalToHeader ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineTotalToHeader}>
-              Push total to header column
-            </Button>
-          </>
-        ) : null}
-        {canPushLineValuesToHeader ? (
-          <>
-            <div className={styles.divider} />
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>
-              Push values to header column
-            </Button>
-          </>
-        ) : null}
-        <div className={styles.divider} />
-        <Text className={styles.fieldTitle}>Filter</Text>
-        <div className={styles.filterRow}>
-          <Dropdown
-            selectedOptions={[draft.operator]}
-            value={operatorLabels[draft.operator]}
-            onOptionSelect={handleOperatorSelect}
-          >
-            {operatorEntries.map(([key, label]) => (
-              <Option key={key} value={key} text={label}>
-                {label}
-              </Option>
-            ))}
-          </Dropdown>
-          {isDate && draft.operator === 'between' ? (
-            <>
-              <Input type="date" value={draft.value} onChange={handleValueChange} />
-              <Input type="date" value={draft.secondaryValue} onChange={handleSecondaryValueChange} />
-            </>
-          ) : null}
-          {isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
-            <Input type="date" value={draft.value} onChange={handleValueChange} />
-          ) : null}
-          {isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
-            <Input
-              type="number"
-              min={1}
-              value={draft.value}
-              onChange={handleValueChange}
-              placeholder="Amount"
-            />
-          ) : null}
-          {isDate && draft.operator === 'nextWeek' ? (
-            <Text className={styles.hint}>Matches records in the next calendar week.</Text>
-          ) : null}
-          {!isDate ? (
-            <Input
-              value={draft.value}
-              onChange={handleValueChange}
-              placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'}
-            />
-          ) : null}
-          <div className={styles.actionRow}>
-            <Button size="small" appearance="primary" onClick={handleApply}>
-              Apply
-            </Button>
-            <Button size="small" appearance="secondary" onClick={handleClearFilter}>
-              Clear
-            </Button>
-          </div>
-        </div>
-        </div>
-
-        {activeSubmenu === 'add' ? (
-          <div className={styles.subPane}>
-            <Text className={styles.subPaneTitle}>Kolomtype</Text>
-            {NEW_COLUMN_TYPES.map((type) => (
-              <Button
-                key={type.key}
-                className={styles.sortButton}
-                appearance="subtle"
-                size="small"
-                onClick={() => handleAddType(type)}
-              >
-                {type.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-
-        {activeSubmenu === 'group' ? (
-          <div className={styles.subPane}>
-            <Text className={styles.subPaneTitle}>Categorie / groeperen</Text>
-            <PurchaseOrderColumnGroupingSection
-              column={column}
-              isGroupingColumn={isGroupingColumn}
-              groupingColor={groupingColor}
-              onSetGroupingColumn={onSetGroupingColumn}
-              onClearGrouping={onClearGrouping}
-              onSetGroupingColor={onSetGroupingColor}
-            />
-          </div>
-        ) : null}
+        <FilterMenuMainPane
+          styles={styles}
+          columnLabel={column.label}
+          activeSubmenu={activeSubmenu}
+          toggleSubmenu={toggleSubmenu}
+          canSetColumnTextStyle={canSetColumnTextStyle}
+          canToggleWriteback={canToggleWriteback}
+          handleToggleWriteback={handleToggleWriteback}
+          writable={writable}
+          canAddColumn={canAddColumn}
+          canRenameColumn={canRenameColumn}
+          handleRenameColumn={handleRenameColumn}
+          canRemoveColumn={canRemoveColumn}
+          handleRemoveColumn={handleRemoveColumn}
+          canToggleLineTotal={canToggleLineTotal}
+          isLineColumnSummed={isLineColumnSummed}
+          handleToggleLineTotal={handleToggleLineTotal}
+          canPushLineTotalToHeader={canPushLineTotalToHeader}
+          handlePushLineTotalToHeader={handlePushLineTotalToHeader}
+          canPushLineValuesToHeader={canPushLineValuesToHeader}
+          handlePushLineValuesToHeader={handlePushLineValuesToHeader}
+          setSortAsc={setSortAsc}
+          setSortDesc={setSortDesc}
+          clearSort={clearSort}
+          isDate={isDate}
+          draft={draft}
+          operatorLabels={operatorLabels}
+          operatorEntries={operatorEntries}
+          handleOperatorSelect={handleOperatorSelect}
+          handleValueChange={handleValueChange}
+          handleSecondaryValueChange={handleSecondaryValueChange}
+          handleApply={handleApply}
+          handleClearFilter={handleClearFilter}
+        />
+        <FilterMenuSubPane
+          styles={styles}
+          activeSubmenu={activeSubmenu}
+          newColumnTypes={NEW_COLUMN_TYPES}
+          handleAddType={handleAddType}
+          textStyleDraft={textStyleDraft}
+          handleTextColorChange={handleTextColorChange}
+          handleToggleBold={handleToggleBold}
+          handleToggleItalic={handleToggleItalic}
+          handleToggleUnderline={handleToggleUnderline}
+          columnLabel={column.label}
+          handleApplyTextStyle={handleApplyTextStyle}
+          handleClearTextStyle={handleClearTextStyle}
+          column={column}
+          isGroupingColumn={isGroupingColumn}
+          groupingColor={groupingColor}
+          onSetGroupingColumn={onSetGroupingColumn}
+          onClearGrouping={onClearGrouping}
+          onSetGroupingColor={onSetGroupingColor}
+        />
       </PopoverSurface>
     </Popover>
   );

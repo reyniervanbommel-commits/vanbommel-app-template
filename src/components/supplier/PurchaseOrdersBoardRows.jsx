@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
+import { getColumnCellStyle } from './columnTextStyleUtils';
 import { rowSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 
 const useStyles = makeStyles({
@@ -99,12 +100,6 @@ function getOrderRowClassName(order, styles) {
   return styles.itemRow;
 }
 
-function getColumnCellStyle(columnWidths, columnKey) {
-  const width = Number(columnWidths?.[columnKey]);
-  if (!Number.isFinite(width)) return undefined;
-  return { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px`, maxWidth: `${Math.round(width)}px` };
-}
-
 function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
@@ -115,6 +110,8 @@ function PurchaseOrdersBoardRows({
   lineColumns,
   headerColumnWidths,
   lineColumnWidths,
+  headerColumnTextStyles,
+  lineColumnTextStyles,
   onSaveLineColumnWidth,
   colCount,
   groupingColumnLabel,
@@ -222,7 +219,7 @@ function PurchaseOrdersBoardRows({
                       <td
                         key={`${rowId}-${column.key}`}
                         className={styles.itemCell}
-                        style={getColumnCellStyle(headerColumnWidths, column.key)}
+                        style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key)}
                       >
                         <PurchaseOrderHeaderCellContent
                           order={order}
@@ -252,7 +249,9 @@ function PurchaseOrdersBoardRows({
                           onToggleWriteback={cellActions.onToggleWriteback}
                           onReorderColumn={cellActions.onReorderLineColumn}
                           columnWidths={lineColumnWidths}
+                          columnTextStyles={lineColumnTextStyles}
                           onSaveColumnWidth={onSaveLineColumnWidth}
+                          onSaveColumnTextStyle={cellActions.onSaveLineColumnTextStyle}
                           reorderBusy={cellActions.reorderingColumns}
                           summedLineColumnKeys={lineTotalColumns}
                           onSetLineColumnTotal={cellActions.onSetLineColumnTotal}

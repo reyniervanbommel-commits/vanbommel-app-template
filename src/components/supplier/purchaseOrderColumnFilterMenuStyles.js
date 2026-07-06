@@ -1,0 +1,116 @@
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+
+export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
+  trigger: {
+    minWidth: '22px',
+    width: '22px',
+    height: '22px',
+    ...shorthands.padding('0'),
+    color: tokens.colorNeutralForeground3,
+    cursor: 'pointer',
+    flexShrink: 0,
+    opacity: 0,
+    pointerEvents: 'none',
+    transitionDuration: '0.12s',
+    transitionProperty: 'opacity,color,background-color',
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+  },
+  triggerActive: {
+    color: tokens.colorBrandForeground1,
+  },
+  surface: {
+    ...shorthands.padding('0'),
+    width: 'auto',
+    maxWidth: 'none',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  mainPane: {
+    width: '256px',
+    minWidth: '256px',
+    boxSizing: 'border-box',
+    ...shorthands.padding('8px'),
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+  },
+  subPane: {
+    width: '168px',
+    minWidth: '168px',
+    boxSizing: 'border-box',
+    ...shorthands.padding('8px'),
+    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
+    backgroundColor: tokens.colorNeutralBackground2,
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('4px'),
+  },
+  subPaneTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: '4px',
+  },
+  submenuButton: {
+    justifyContent: 'space-between',
+  },
+  submenuButtonActive: {
+    backgroundColor: tokens.colorNeutralBackground1Selected,
+  },
+  sortActions: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('4px'),
+  },
+  sortButton: {
+    justifyContent: 'flex-start',
+  },
+  divider: {
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  fieldTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  filterRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('6px'),
+  },
+  actionRow: {
+    display: 'flex',
+    ...shorthands.gap('6px'),
+  },
+  hint: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+  },
+  colorInput: {
+    width: '40px',
+    height: '28px',
+    ...shorthands.padding('0'),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusSmall,
+  },
+  colorRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
+  formatButtons: {
+    display: 'flex',
+    ...shorthands.gap('4px'),
+  },
+  formatButton: {
+    minWidth: '32px',
+    width: '32px',
+    ...shorthands.padding('0'),
+  },
+  stylePreview: {
+    ...shorthands.padding('4px', '6px'),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusSmall,
+  },
+});
