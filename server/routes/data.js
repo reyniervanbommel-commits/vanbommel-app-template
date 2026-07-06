@@ -81,9 +81,9 @@ router.get('/:tableKey/columns', async (req, res, next) => {
 // POST /api/data/:tableKey/columns — app-native kolom toevoegen.
 router.post('/:tableKey/columns', async (req, res, next) => {
   try {
-    const { scope, label, dataType, options } = req.body || {};
+    const { scope, label, dataType, options, formulaExpr } = req.body || {};
     const column = await columnsService.createColumn(
-      { tableKey: req.params.tableKey, scope, label, dataType, options },
+      { tableKey: req.params.tableKey, scope, label, dataType, options, formulaExpr },
       req.user.id,
     );
     return res.status(201).json({ column });
@@ -97,7 +97,21 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
-    const column = await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+    const hasFormulaPayload = req.body && (
+      Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
+      || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
+    );
+    const column = hasFormulaPayload
+      ? await columnsService.updateFormulaColumn(
+        columnId,
+        {
+          label: req.body?.label,
+          dataType: req.body?.dataType,
+          formulaExpr: req.body?.formulaExpr,
+        },
+        req.user.id,
+      )
+      : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);

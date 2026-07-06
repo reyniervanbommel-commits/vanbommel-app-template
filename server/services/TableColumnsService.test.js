@@ -1,6 +1,12 @@
 'use strict';
 
-const { resolveWriteback, slugify, findDependentFormulaColumn } = require('./TableColumnsService');
+const {
+  resolveWriteback,
+  slugify,
+  findDependentFormulaColumn,
+  normalizeFormulaExpression,
+  validateFormulaReferences,
+} = require('./TableColumnsService');
 
 describe('TableColumnsService.resolveWriteback', () => {
   it('writable=false => mechanism altijd null', () => {
@@ -53,5 +59,26 @@ describe('TableColumnsService.findDependentFormulaColumn', () => {
       'niet_bestaand'
     );
     expect(dependent).toBeNull();
+  });
+});
+
+describe('TableColumnsService formula helpers', () => {
+  it('normaliseert formule en refs', () => {
+    const normalized = normalizeFormulaExpression("= ALS((a)>(b);'Fout';(a)+(b)) ");
+    expect(normalized.expression).toBe("ALS((a)>(b);'Fout';(a)+(b))");
+    expect(normalized.references.sort()).toEqual(['a', 'b']);
+  });
+
+  it('laat lege formule door als null', () => {
+    expect(normalizeFormulaExpression('  ')).toEqual({ expression: null, references: [] });
+  });
+
+  it('weigert onbekende of formule-referenties', () => {
+    const columns = [
+      { key: 'budget', scope: 'master', formulaExpr: null },
+      { key: 'delta', scope: 'master', formulaExpr: '(a)+(b)' },
+    ];
+    expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Onbekende kolomreferentie/i);
+    expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formulekolom/i);
   });
 });
