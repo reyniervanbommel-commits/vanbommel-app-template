@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
 const POLL_INTERVAL_MS = 750;
+const MAX_WAIT_MS = 15 * 60 * 1000;
 
 /**
  * Pollt de server-side D365 refreshvoortgang.
@@ -11,11 +12,20 @@ const POLL_INTERVAL_MS = 750;
  */
 export function usePurchaseOrderRefreshProgress() {
   const [progress, setProgress] = useState(null);
+  const [running, setRunning] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  // Board-cutover Fase 8 (#AB:177): het po_-refresh/progress-endpoint is vervallen; de tb_*-refresh is
-  // synchroon (geen server-side voortgang). We laten de startProgress-schatting staan i.p.v. te pollen.
-  const loadProgress = useCallback(async () => {}, []);
+  const loadProgress = useCallback(async () => {
+    const data = await apiRequest('/data/purchase-orders/refresh/progress');
+    const nextProgress = data?.progress || null;
+    const nextRunning = Boolean(data?.running);
+    setProgress(nextProgress);
+    setRunning(nextRunning);
+    return {
+      running: nextRunning,
+      progress: nextProgress,
+    };
+  }, []);
 
   useEffect(() => {
     if (!polling) return undefined;
@@ -62,9 +72,27 @@ export function usePurchaseOrderRefreshProgress() {
     }
   }, [loadProgress]);
 
+  const waitForCompletion = useCallback(async () => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < MAX_WAIT_MS) {
+      const state = await loadProgress();
+      const status = String(state?.progress?.status || '').toLowerCase();
+      if ((status === 'done' || status === 'error') && !state?.running) {
+        return state?.progress || null;
+      }
+      if (!state?.running && status !== 'fetching' && status !== 'saving') {
+        return state?.progress || null;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+    throw new Error('D365 refresh duurde te lang en is afgebroken');
+  }, [loadProgress]);
+
   return useMemo(() => ({
     progress,
+    running,
     startProgress,
     finishProgress,
-  }), [progress, startProgress, finishProgress]);
+    waitForCompletion,
+  }), [progress, running, startProgress, finishProgress, waitForCompletion]);
 }

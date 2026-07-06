@@ -349,19 +349,37 @@ export function usePurchaseOrdersPage() {
     };
   }, [applyData, loadPurchaseOrders, loadBoardSettings]);
 
-  // Forceert een D365-refresh server-side en herlaadt de hele state.
+  // Start een D365-refresh op de achtergrond; de tabeldata blijft staan tot expliciete reload.
   const refresh = useCallback(async () => {
     setRefreshing(true);
     setError('');
     try {
-      const raw = await apiRequest(`${boardBase()}/refresh`, { method: 'POST' });
-      applyData(BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw);
+      return await apiRequest(`${boardBase()}/refresh/start`, { method: 'POST' });
+    } catch (err) {
+      setError(err.message);
+      setRefreshing(false);
+      return null;
+    }
+  }, []);
+
+  const finishRefresh = useCallback(() => {
+    setRefreshing(false);
+  }, []);
+
+  const setRefreshError = useCallback((message) => {
+    if (!message) return;
+    setError(String(message));
+  }, []);
+
+  const reloadAfterRefresh = useCallback(async () => {
+    try {
+      await loadPurchaseOrders({ skipLoading: true, autoRefresh: false });
     } catch (err) {
       setError(err.message);
     } finally {
       setRefreshing(false);
     }
-  }, [applyData]);
+  }, [loadPurchaseOrders]);
 
   // Markeer alles als gezien: zet het laatst-bekeken-watermerk en herlaad zodat de highlights verdwijnen.
   const markViewed = useCallback(async () => {
@@ -974,6 +992,9 @@ export function usePurchaseOrdersPage() {
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     markViewed,
     deleteRows,
@@ -1025,6 +1046,9 @@ export function usePurchaseOrdersPage() {
     effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     markViewed,
     deleteRows,

@@ -48,8 +48,7 @@ const useStyles = makeStyles({
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const { progress: refreshProgress, startProgress, finishProgress } = usePurchaseOrderRefreshProgress();
-
+  const { progress: refreshProgress, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress();
   const {
     orders,
     visibleHeaderColumns,
@@ -62,6 +61,9 @@ export default function PurchaseOrdersPage() {
     refreshing,
     error,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     deleteRows,
     saveValue,
@@ -97,17 +99,10 @@ export default function PurchaseOrdersPage() {
     exportColumnLayout,
     applyColumnLayout,
   } = usePurchaseOrdersPage();
-
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
-
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
-  const {
-    selection,
-    tableSelection,
-    handleDeleteSelected,
-  } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
-
+  const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
   const {
     savedViews,
@@ -126,7 +121,6 @@ export default function PurchaseOrdersPage() {
     applyColumnLayout,
     boardView,
   });
-
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
   const {
@@ -171,16 +165,23 @@ export default function PurchaseOrdersPage() {
   const handleRefresh = useCallback(async () => {
     startProgress();
     try {
-      await refresh();
-      // Na een D365-refresh kan de set "verborgen maar nog in de filter" veranderd zijn.
+      const started = await refresh();
+      if (!started) return;
+      const finalProgress = await waitForCompletion();
+      if (String(finalProgress?.status || '').toLowerCase() === 'error') {
+        setRefreshError(finalProgress?.error || 'D365 refresh mislukt');
+        return;
+      }
+      await reloadAfterRefresh();
       await hiddenRows.reload();
+    } catch (err) {
+      setRefreshError(err?.message || 'D365 refresh mislukt');
     } finally {
       await finishProgress();
+      finishRefresh();
     }
-  }, [finishProgress, refresh, startProgress, hiddenRows]);
-
+  }, [finishProgress, finishRefresh, hiddenRows, refresh, reloadAfterRefresh, setRefreshError, startProgress, waitForCompletion]);
   const relativeSynced = formatSyncedAt(syncedAt);
-
   return (
     <div className={styles.page}>
       <PurchaseOrdersPageTopBar

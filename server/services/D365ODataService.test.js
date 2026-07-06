@@ -60,6 +60,26 @@ describe('D365ODataService', () => {
     expect(parsed.searchParams.get('$filter')).toBe("dataAreaId eq 'WHSL'");
   });
 
+  it('zet $select op kop- en regelniveau wanneer selectvelden zijn opgegeven', async () => {
+    const url = await buildPurchaseOrderUrl({
+      supplierAccount: null,
+      top: 10,
+      skip: 0,
+      selectFields: ['dataAreaId', 'PurchaseOrderNumber', 'PurchaseOrderStatus'],
+      lineSelectFields: ['LineNumber', 'ItemNumber'],
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('$select')).toBe('dataAreaId,PurchaseOrderNumber,PurchaseOrderStatus');
+    expect(parsed.searchParams.get('$expand')).toBe('PurchaseOrderLines($select=LineNumber,ItemNumber)');
+  });
+
+  it('laat $select weg en houdt $expand ongewijzigd zonder selectvelden', async () => {
+    const url = await buildPurchaseOrderUrl({ supplierAccount: null, top: 10, skip: 0 });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.has('$select')).toBe(false);
+    expect(parsed.searchParams.get('$expand')).toBe('PurchaseOrderLines');
+  });
+
   it('mapt purchase order velden naar intern model', () => {
     const mapped = mapPurchaseOrder({
       PurchaseOrderNumber: 'PO-1001',
