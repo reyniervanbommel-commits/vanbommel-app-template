@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileFormula, extractFormulaReferences } = require('./tableFormulaEngine');
+const { compileFormula, evaluateCompiledFormula, extractFormulaReferences } = require('./tableFormulaEngine');
 
 function fallbackExtractFormulaReferences(formulaExpr) {
   const text = String(formulaExpr || '');
@@ -60,9 +60,47 @@ function validateFormulaReferences(references, columns, ownKey = '') {
   }
 }
 
+function sampleValueForColumn(column) {
+  const type = String(column?.dataType || '').toLowerCase();
+  if (type === 'number') return 10;
+  if (type === 'boolean') return true;
+  if (type === 'date') return '2026-07-01';
+  return 'tekst';
+}
+
+function validateFormulaResultTypeCompatibility(expression, references, columns, resultType) {
+  const cleanExpression = String(expression || '').trim();
+  if (!cleanExpression) {
+    throw Object.assign(new Error('Formule is verplicht'), { status: 400 });
+  }
+  const compiled = compileFormula(cleanExpression);
+  const byKey = new Map((Array.isArray(columns) ? columns : []).map((column) => [
+    String(column?.key || '').toLowerCase(),
+    column,
+  ]));
+  const sampleValues = {};
+  for (const ref of Array.isArray(references) ? references : []) {
+    const target = byKey.get(String(ref || '').toLowerCase());
+    if (!target) continue;
+    const sample = sampleValueForColumn(target);
+    const targetKey = String(target.key || '').trim();
+    if (targetKey) sampleValues[targetKey] = sample;
+    sampleValues[String(ref || '').trim()] = sample;
+    sampleValues[String(ref || '').trim().toLowerCase()] = sample;
+  }
+  const result = evaluateCompiledFormula(compiled, sampleValues, { resultType });
+  if (result.error) {
+    throw Object.assign(
+      new Error(`Formule past niet bij resultaattype '${resultType}': ${result.error}`),
+      { status: 400 }
+    );
+  }
+}
+
 module.exports = {
   fallbackExtractFormulaReferences,
   findDependentFormulaColumn,
   normalizeFormulaExpression,
   validateFormulaReferences,
+  validateFormulaResultTypeCompatibility,
 };

@@ -16,6 +16,10 @@ const useStyles = makeStyles({
   rowBadge: {
     marginLeft: '6px',
   },
+  formulaError: {
+    color: tokens.colorPaletteRedForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
 });
 
 function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
@@ -93,7 +97,11 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
       ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
       : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
   const displayNode = isFormulaColumn
-    ? <span title={formulaError || undefined}>{formulaError ? '\u00A0' : display}</span>
+    ? (
+      <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
+        {formulaError ? 'Formulefout' : display}
+      </span>
+    )
     : display;
 
   if (isFirst && order.removedInD365) {

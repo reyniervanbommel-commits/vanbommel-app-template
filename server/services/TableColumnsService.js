@@ -18,6 +18,7 @@ const {
   findDependentFormulaColumn,
   normalizeFormulaExpression,
   validateFormulaReferences,
+  validateFormulaResultTypeCompatibility,
 } = require('../utils/tableColumnFormulaValidation');
 
 const MAX_LABEL_LENGTH = 128;
@@ -95,6 +96,12 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   if (isFormulaColumn) {
     const masterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
     validateFormulaReferences(normalizedFormula.references, masterColumns, key);
+    validateFormulaResultTypeCompatibility(
+      normalizedFormula.expression,
+      normalizedFormula.references,
+      masterColumns,
+      dataType
+    );
   }
   const result = await pool.request()
     .input('tableId', sql.BigInt, table.id)
@@ -168,6 +175,12 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
 
   const masterColumns = await listColumns({ tableId: existing.tableId, scope: 'master', includeInactive: false });
   validateFormulaReferences(normalizedFormula.references, masterColumns, existing.key);
+  validateFormulaResultTypeCompatibility(
+    normalizedFormula.expression,
+    normalizedFormula.references,
+    masterColumns,
+    nextDataType
+  );
 
   const pool = await getPool();
   const result = await pool.request()
@@ -302,6 +315,7 @@ module.exports = {
   normalizeFormulaExpression,
   validateFormulaReferences,
   findDependentFormulaColumn,
+  validateFormulaResultTypeCompatibility,
   createColumn,
   renameColumn,
   updateFormulaColumn,

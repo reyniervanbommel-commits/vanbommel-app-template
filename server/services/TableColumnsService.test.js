@@ -6,6 +6,7 @@ const {
   findDependentFormulaColumn,
   normalizeFormulaExpression,
   validateFormulaReferences,
+  validateFormulaResultTypeCompatibility,
 } = require('./TableColumnsService');
 
 describe('TableColumnsService.resolveWriteback', () => {
@@ -80,5 +81,31 @@ describe('TableColumnsService formula helpers', () => {
     ];
     expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Onbekende kolomreferentie/i);
     expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formulekolom/i);
+  });
+
+  it('weigert formule met onjuist resultaattype', () => {
+    const columns = [
+      { key: 'a', dataType: 'number' },
+      { key: 'b', dataType: 'number' },
+    ];
+    expect(() => validateFormulaResultTypeCompatibility(
+      "ALS((a)>(b);'kleiner';'groter')",
+      ['a', 'b'],
+      columns,
+      'number'
+    )).toThrow(/resultaattype/i);
+  });
+
+  it('accepteert formule als resultaattype klopt', () => {
+    const columns = [
+      { key: 'a', dataType: 'number' },
+      { key: 'b', dataType: 'number' },
+    ];
+    expect(() => validateFormulaResultTypeCompatibility(
+      "ALS((a)>(b);'kleiner';'groter')",
+      ['a', 'b'],
+      columns,
+      'text'
+    )).not.toThrow();
   });
 });

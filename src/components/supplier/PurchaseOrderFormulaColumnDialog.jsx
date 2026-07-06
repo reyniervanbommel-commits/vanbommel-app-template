@@ -156,6 +156,7 @@ export default function PurchaseOrderFormulaColumnDialog({
     const validation = await validateFormula({
       formulaExpr: cleanFormula,
       ownColumnKey: initialValue?.key,
+      dataType: resultType,
     });
     if (!validation.valid) {
       setError('Formule controle mislukt. Pas de formule aan met de tip.');
@@ -233,7 +234,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                   <Button
                     size="small"
                     appearance="secondary"
-                    onClick={() => validateFormula({ formulaExpr, ownColumnKey: initialValue?.key })}
+                    onClick={() => validateFormula({ formulaExpr, ownColumnKey: initialValue?.key, dataType: resultType })}
                     disabled={saving || formulaValidation.status === 'checking'}
                   >
                     {formulaValidation.status === 'checking' ? 'Controleren...' : 'Check formule'}

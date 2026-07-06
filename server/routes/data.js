@@ -97,12 +97,19 @@ router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
   try {
     const table = await registry.getTableByKey(req.params.tableKey);
     const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
+    const resultType = String(req.body?.dataType || 'number').trim() || 'number';
     const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
     if (!normalized.expression) {
       return res.status(400).json({ error: 'Formule is verplicht' });
     }
     const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
     columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    columnsService.validateFormulaResultTypeCompatibility(
+      normalized.expression,
+      normalized.references,
+      masterColumns,
+      resultType
+    );
     return res.json({
       valid: true,
       normalizedExpression: normalized.expression,

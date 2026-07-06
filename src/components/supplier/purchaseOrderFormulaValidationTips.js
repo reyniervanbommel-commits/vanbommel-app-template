@@ -16,5 +16,8 @@ export function getFormulaValidationTip(message) {
   if (text.includes('master-kolommen')) {
     return 'Gebruik alleen kolommen uit de hoofdtabel (master).';
   }
+  if (text.includes('resultaattype')) {
+    return 'Kies een resultaattype dat past bij je uitkomst, bijvoorbeeld Tekst voor \'kleiner/groter\'.';
+  }
   return 'Controleer syntax, kolomnamen en scheiding met puntkomma\'s.';
 }

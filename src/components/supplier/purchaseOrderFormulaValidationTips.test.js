@@ -12,4 +12,8 @@ describe('purchaseOrderFormulaValidationTips', () => {
   it('geeft lege string bij lege foutmelding', () => {
     expect(getFormulaValidationTip('')).toBe('');
   });
+
+  it('geeft resultaattype-tip bij typefout', () => {
+    expect(getFormulaValidationTip("Formule past niet bij resultaattype 'number'")).toContain('resultaattype');
+  });
 });

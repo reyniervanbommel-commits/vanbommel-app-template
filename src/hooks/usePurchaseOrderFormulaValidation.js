@@ -11,7 +11,7 @@ export function usePurchaseOrderFormulaValidation() {
     setFormulaValidation(IDLE_VALIDATION);
   }, []);
 
-  const validateFormula = useCallback(async ({ formulaExpr, ownColumnKey = '' }) => {
+  const validateFormula = useCallback(async ({ formulaExpr, ownColumnKey = '', dataType = 'number' }) => {
     const cleanFormula = String(formulaExpr || '').trim();
     if (!cleanFormula) {
       const message = 'Formule is verplicht';
@@ -28,7 +28,11 @@ export function usePurchaseOrderFormulaValidation() {
     try {
       const result = await apiRequest('/data/purchase-orders/columns/validate-formula', {
         method: 'POST',
-        body: { formulaExpr: cleanFormula, ownColumnKey: String(ownColumnKey || '') },
+        body: {
+          formulaExpr: cleanFormula,
+          ownColumnKey: String(ownColumnKey || ''),
+          dataType: String(dataType || 'number'),
+        },
       });
       const normalizedExpression = String(result?.normalizedExpression || cleanFormula);
       setFormulaValidation({
