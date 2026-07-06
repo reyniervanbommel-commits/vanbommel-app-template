@@ -13,4 +13,13 @@ export const devTestItems = [
       'Tweede rij-opmaakdoel wordt geweigerd en bestaande rij-opmaak blijft leidend',
     ],
   },
+  {
+    id: 'feature-187-formulekolom-linked-total-v1-0-7',
+    title: 'Feature 187 - Formule op linked totaal kolom (v1.0.7)',
+    checks: [
+      'Formule (aantal_total_2)*2 gebruikt de actuele line-total waarde en niet standaard 0',
+      'Na opslaan van formulekolom worden rijwaarden direct opnieuw geladen op de boardpagina',
+      'Formulekolommen op linked headerkolommen tonen verwachte numerieke uitkomst per rij',
+    ],
+  },
 ];
