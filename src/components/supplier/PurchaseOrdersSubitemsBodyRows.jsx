@@ -82,7 +82,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
             }
             return (
               <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={subCellClassName} style={cellStyle}>
-                {formatCellValue(rawValue, column.dataType)}
+                {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
               </td>
             );
           })}

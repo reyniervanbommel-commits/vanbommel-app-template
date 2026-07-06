@@ -88,7 +88,7 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     ? formatCellValue(calculateLineColumnSum(order.lines, linkedLineTotalColumnKey), column.dataType)
     : linkedLineValueMeta
       ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
-      : formatCellValue(rawValue, column.dataType);
+      : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
 
   if (isFirst && order.removedInD365) {
     return (

@@ -29,7 +29,7 @@ export function calculateLineColumnValues(lines, columnKey, lineDataType = 'text
   lines.forEach((line) => {
     const raw = line?.values?.[columnKey];
     if (raw === null || raw === undefined || raw === '') return;
-    const display = String(formatCellValue(raw, lineDataType)).trim();
+    const display = String(formatCellValue(raw, lineDataType, columnKey)).trim();
     if (!display || display === '-') return;
     if (seen.has(display)) return;
     seen.add(display);
