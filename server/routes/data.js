@@ -247,6 +247,16 @@ router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, ne
   }
 });
 
+// POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
+// geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
+router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.discoverSourceFields(req.params.tableKey));
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
 router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {

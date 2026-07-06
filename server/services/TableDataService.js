@@ -200,33 +200,39 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
 // Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
 // de interne mappers (mapPurchaseOrder/mapPurchaseOrderLine), de partitiesleutel (dataAreaId) en het
 // watermerk (ModifiedDateTime) nodig hebben. Zonder deze zou het beperken van de kolommen de sync breken.
+// LET OP: alleen velden die écht op PurchaseOrderHeaderV2 bestaan (geverifieerd via een $select-loze probe).
+// Niet-bestaande fallback-namen (ModifiedDateTime, PurchId, PurchaseOrderId, RecId, VendorAccountNumber,
+// VendorName, DocumentStatus, RequestedDeliveryDateTime, CreatedDateTime) laten D365 de hele query met 400
+// afwijzen; de mapper valt netjes terug op de geldige varianten. Er is geen modified-veld op deze entiteit,
+// dus de incrementele watermark blijft leeg (sync draait volledig) — dat was feitelijk al zo.
 const REQUIRED_HEADER_D365_FIELDS = [
-  'dataAreaId', 'ModifiedDateTime',
-  'PurchaseOrderNumber', 'PurchId', 'PurchaseOrderId', 'RecId',
-  'OrderVendorAccountNumber', 'InvoiceVendorAccountNumber', 'VendorAccountNumber',
-  'PurchaseOrderName', 'VendorName', 'PurchaseOrderStatus', 'DocumentStatus',
-  'CurrencyCode', 'RequestedDeliveryDate', 'RequestedDeliveryDateTime',
-  'CreatedDateTime', 'AccountingDate',
+  'dataAreaId',
+  'PurchaseOrderNumber',
+  'OrderVendorAccountNumber', 'InvoiceVendorAccountNumber',
+  'PurchaseOrderName', 'PurchaseOrderStatus',
+  'CurrencyCode', 'RequestedDeliveryDate', 'AccountingDate',
 ];
+// LET OP: alleen velden die écht op PurchaseOrderLineV2 bestaan. CurrencyCode en RequestedReceiptDate
+// bestaan NIET op deze regel-entiteit (geverifieerd via $metadata / #131-2) — ze in $select opnemen laat
+// D365 de hele query met 400 afwijzen (en brak zo de refresh sinds #177). De mapper valt netjes terug op null.
 const REQUIRED_LINE_D365_FIELDS = [
   'PurchaseOrderNumber', 'LineNumber', 'ItemNumber', 'LineDescription',
-  'OrderedPurchaseQuantity', 'PurchaseUnitSymbol', 'LineAmount', 'CurrencyCode',
-  'RequestedDeliveryDate', 'RequestedReceiptDate',
+  'OrderedPurchaseQuantity', 'PurchaseUnitSymbol', 'LineAmount',
+  'RequestedDeliveryDate',
 ];
 
 // Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
-// Retourneert null wanneer er (nog) geen geconfigureerde bron-kolom is: dan geen $select, zodat een verse
-// tabel via de volledige respons kan bootstrappen (veld-discovery) en niets stilzwijgend wegvalt.
+// Retourneert ALTIJD een lijst (minimaal de verplichte sleutel-/watermerkvelden), zodat de board-sync
+// nooit de volledige bron-entiteit ophaalt. Veld-discovery loopt via het aparte discoverSourceFields-pad
+// (alle velden, kleine sample, geen cache-write) i.p.v. als neveneffect van een ongefilterde refresh.
 function buildD365SelectFields(requiredFields, columns) {
   const fields = new Set(requiredFields);
-  let hasConfigured = false;
   for (const col of columns) {
     if (col.source === 'source' && col.sourceField && !String(col.sourceField).startsWith('@')) {
       fields.add(col.sourceField);
-      hasConfigured = true;
     }
   }
-  return hasConfigured ? [...fields] : null;
+  return [...fields];
 }
 
 const FETCH_ADAPTERS = {
@@ -383,7 +389,7 @@ async function syncSourceColumnsFromRecords(table, records) {
             (table_id, scope, [key], label, source, source_field, data_type, writable, write_mechanism,
              is_default_visible, filterable, sortable, is_active, sort_order)
           VALUES
-            (@tableId, @scope, @key, @label, 'source', @sourceField, @dataType, 0, NULL, 1, 1, 1, 1, @sortOrder)
+            (@tableId, @scope, @key, @label, 'source', @sourceField, @dataType, 0, NULL, 0, 1, 1, 0, @sortOrder)
         `);
       inserted += 1;
     }
@@ -650,9 +656,12 @@ async function refresh(tableKey) {
         error: discoveryErr.message,
       });
     }
+    // Alleen de geselecteerde (actieve) bron-kolommen landen in data_json. Zo draagt elke blob precies
+    // de kolommen die op het bord staan i.p.v. de volledige bron-entiteit — de grootste payload-besparing
+    // op zowel de refresh-write als elke read (#AB:177). Uitgezette kolommen horen niet in de cache.
     const [masterCols, detailCols] = await Promise.all([
-      listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
-      listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
     ]);
     const masterSource = masterCols.filter((c) => c.source === 'source');
     const detailSource = detailCols.filter((c) => c.source === 'source');
@@ -727,6 +736,36 @@ async function refresh(tableKey) {
     });
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------
+// discoverSourceFields — los, licht discovery-pad voor de datamodel-pagina. Haalt ALLE bronvelden op met
+// een kleine sample (bewust géén $select) en registreert nieuwe velden als beschikbare (inactieve) kolommen,
+// zodat de admin ze kan kiezen. Schrijft NIETS naar tb_cache. Zo blijft "alle kolommen tonen om te kiezen"
+// gescheiden van de board-sync, die alleen de geselecteerde kolommen ophaalt en wegschrijft (#AB:177).
+// ---------------------------------------------------------------------------
+const FIELD_DISCOVERY_ROW_LIMIT = 5;
+
+async function discoverSourceFields(tableKey) {
+  const table = await getTableByKey(tableKey);
+  // Fase A: discovery is bron-specifiek (PO). In Fase B levert SourceProvider.discoverFields() dit generiek.
+  if (table.key !== 'purchase-orders') {
+    throw Object.assign(new Error(`Veld-discovery nog niet beschikbaar voor tabel '${table.key}'`), { status: 501 });
+  }
+  const result = await fetchPurchaseOrders({
+    supplierAccount: null,
+    top: FIELD_DISCOVERY_ROW_LIMIT,
+    skip: 0,
+    fetchAll: false,
+    maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+  });
+  const records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
+    masterRaw: order.raw || {},
+    details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
+  }));
+  const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
+  logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
+  return { headerInserted, lineInserted, sampledRows: records.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -1850,6 +1889,7 @@ module.exports = {
   correctField,
   getCellHistory,
   getDataModel,
+  discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,
   getSyncState,
