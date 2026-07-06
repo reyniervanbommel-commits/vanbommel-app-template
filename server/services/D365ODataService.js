@@ -186,7 +186,14 @@ function escapeODataLiteral(value) {
   return String(value || '').replace(/'/g, "''");
 }
 
-async function buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter = '' }) {
+async function buildPurchaseOrderUrl({
+  supplierAccount,
+  top,
+  skip,
+  extraFilter = '',
+  selectFields = null,
+  lineSelectFields = null,
+}) {
   const baseUrl = await getBaseUrl();
   const path = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', DEFAULT_PURCHASE_ORDERS_PATH)).trim();
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
@@ -197,7 +204,20 @@ async function buildPurchaseOrderUrl({ supplierAccount, top, skip, extraFilter =
   searchParams.set('$top', String(top));
   searchParams.set('$skip', String(skip));
   searchParams.set('$count', 'true');
-  searchParams.set('$expand', 'PurchaseOrderLines');
+
+  // $expand van de regels, optioneel met een genest $select zodat alleen de geconfigureerde
+  // regel-velden over de lijn komen. Zonder lijst blijft het gedrag ongewijzigd (alle regelvelden).
+  const hasLineSelect = Array.isArray(lineSelectFields) && lineSelectFields.length > 0;
+  searchParams.set(
+    '$expand',
+    hasLineSelect ? `PurchaseOrderLines($select=${lineSelectFields.join(',')})` : 'PurchaseOrderLines',
+  );
+
+  // $select op kopniveau: alleen de geconfigureerde bron-velden ophalen i.p.v. de volledige entiteit.
+  // Zonder lijst geen $select (bootstrap/legacy: alles ophalen, zodat veld-discovery kan werken).
+  if (Array.isArray(selectFields) && selectFields.length > 0) {
+    searchParams.set('$select', selectFields.join(','));
+  }
 
   // Filterclausules opbouwen en met 'and' samenvoegen, zodat een optionele scope-filter
   // (B2: begrenst de cache-sync) bij elke combinatie van company/supplier werkt.
@@ -434,6 +454,8 @@ async function fetchPurchaseOrderRecords({
   extraFilter = '',
   maxItems = MAX_PURCHASE_ORDER_ITEMS,
   onProgress,
+  selectFields = null,
+  lineSelectFields = null,
 }) {
   const records = [];
   let total = null;
@@ -445,7 +467,9 @@ async function fetchPurchaseOrderRecords({
     ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
     : MAX_PURCHASE_ORDER_ITEMS;
   const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
-  let currentUrl = await buildPurchaseOrderUrl({ supplierAccount, top: initialTop, skip, extraFilter });
+  let currentUrl = await buildPurchaseOrderUrl({
+    supplierAccount, top: initialTop, skip, extraFilter, selectFields, lineSelectFields,
+  });
   const emitProgress = (isTruncated = false) => {
     if (typeof onProgress !== 'function') return;
     onProgress({
@@ -522,6 +546,8 @@ async function fetchPurchaseOrders({
   extraFilter = '',
   maxItems,
   onProgress,
+  selectFields = null,
+  lineSelectFields = null,
 }) {
   const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
@@ -542,6 +568,8 @@ async function fetchPurchaseOrders({
     extraFilter,
     maxItems,
     onProgress,
+    selectFields,
+    lineSelectFields,
   });
   const vendorAccounts = Array.from(new Set(
     records
