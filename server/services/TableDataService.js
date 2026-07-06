@@ -16,6 +16,7 @@ const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 const MAX_KEY_LENGTH = 64;
@@ -497,6 +498,56 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
   }
 }
 
+function isFormulaColumn(column) {
+  return Boolean(String(column?.formulaExpr || '').trim());
+}
+
+function assertCustomColumnWritable(column) {
+  if (!column || column.source !== 'custom') {
+    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
+  }
+  if (isFormulaColumn(column)) {
+    throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
+  }
+}
+
+function compileMasterFormulaColumns(masterColumns) {
+  return (Array.isArray(masterColumns) ? masterColumns : [])
+    .filter((column) => isFormulaColumn(column))
+    .map((column) => {
+      try {
+        return {
+          column,
+          compiled: compileFormula(column.formulaExpr),
+          compileError: null,
+        };
+      } catch (err) {
+        return {
+          column,
+          compiled: null,
+          compileError: `Ongeldige formule: ${err?.message || 'Onbekende fout'}`,
+        };
+      }
+    });
+}
+
+function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
+  const formulaErrors = {};
+  for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
+    const formulaKey = item?.column?.key;
+    if (!formulaKey) continue;
+    if (item.compileError) {
+      masterValues[formulaKey] = null;
+      formulaErrors[formulaKey] = item.compileError;
+      continue;
+    }
+    const result = evaluateCompiledFormula(item.compiled, masterValues, { resultType: item.column.dataType });
+    masterValues[formulaKey] = result.value;
+    if (result.error) formulaErrors[formulaKey] = result.error;
+  }
+  return formulaErrors;
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
@@ -507,6 +558,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
   ]);
+  const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -566,7 +618,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   function valuesFor(cols, sourceJson, custom) {
     const values = {};
     for (const col of cols) {
-      if (col.source === 'source') values[col.key] = col.key in sourceJson ? sourceJson[col.key] : null;
+      if (isFormulaColumn(col)) values[col.key] = null;
+      else if (col.source === 'source') values[col.key] = col.key in sourceJson ? sourceJson[col.key] : null;
       else values[col.key] = custom && col.key in custom ? custom[col.key] : null;
     }
     return values;
@@ -596,6 +649,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
     return {
       partitionKey: m.partition_key,
@@ -604,6 +658,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       isNew,
       isChanged,
       values: masterValues,
+      formulaErrors,
       details,
       detailCount: details.length,
     };
@@ -675,9 +730,7 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   if (!column || !column.isActive || column.tableId !== table.id) {
     throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   }
-  if (column.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
-  }
+  assertCustomColumnWritable(column);
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
@@ -1348,6 +1401,10 @@ module.exports = {
   markViewed,
   computeContentHash,
   applyLookups,
+  isFormulaColumn,
+  assertCustomColumnWritable,
+  compileMasterFormulaColumns,
+  applyFormulaColumnsToRowValues,
   normalizeExclusionRows,
   excludeRows,
   includeRows,

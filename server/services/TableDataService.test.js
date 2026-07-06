@@ -1,6 +1,13 @@
 'use strict';
 
-const { computeContentHash, applyLookups, normalizeExclusionRows } = require('./TableDataService');
+const {
+  computeContentHash,
+  applyLookups,
+  normalizeExclusionRows,
+  compileMasterFormulaColumns,
+  applyFormulaColumnsToRowValues,
+  assertCustomColumnWritable,
+} = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
   const masterJson = JSON.stringify({ vendorAccount: 'Q000104', status: 'Open' });
@@ -102,5 +109,43 @@ describe('TableDataService.normalizeExclusionRows', () => {
   it('weert te lange sleutels en niet-arrays', () => {
     expect(normalizeExclusionRows([{ partitionKey: 'x'.repeat(33), recordKey: 'PO-1' }])).toEqual([]);
     expect(normalizeExclusionRows(null)).toEqual([]);
+  });
+});
+
+describe('TableDataService.formule-evaluatie in read-flow', () => {
+  it('compileert formulekolommen en evalueert per rij', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'delta', dataType: 'number', formulaExpr: '(inkoop)-(budget)' },
+    ]);
+    const values = { inkoop: 12, budget: 7 };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.delta).toBe(5);
+    expect(errors).toEqual({});
+  });
+
+  it('rapporteert formulefouten zonder crash', () => {
+    const formulas = compileMasterFormulaColumns([
+      { key: 'ratio', dataType: 'number', formulaExpr: '(a)/(b)' },
+    ]);
+    const values = { a: 10, b: 0 };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.ratio).toBeNull();
+    expect(errors.ratio).toContain('Deling door nul');
+  });
+});
+
+describe('TableDataService.assertCustomColumnWritable', () => {
+  it('weigert formulekolommen voor handmatige save', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      formulaExpr: '(a)+(b)',
+    })).toThrow(/read-only/i);
+  });
+
+  it('accepteert gewone custom kolommen', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      formulaExpr: null,
+    })).not.toThrow();
   });
 });

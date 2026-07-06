@@ -6,6 +6,7 @@
 
 const sql = require('mssql');
 const { getPool, getTableByKey, getColumnById, mapColumnRow, SCOPES, DATA_TYPES } = require('./TableRegistryService');
+const { extractFormulaReferences } = require('../utils/tableFormulaEngine');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -39,7 +40,7 @@ const COLUMN_OUTPUT = `
   OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label, INSERTED.source,
          INSERTED.source_field, INSERTED.data_type, INSERTED.options_json, INSERTED.writable,
          INSERTED.write_mechanism, INSERTED.is_default_visible, INSERTED.filterable, INSERTED.sortable,
-         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete
+         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr
 `;
 
 const WRITE_MECHANISMS = ['patch', 'action', 'sql'];
@@ -53,6 +54,29 @@ function resolveWriteback({ writable, mechanism }) {
     throw Object.assign(new Error(`Ongeldig write-mechanisme '${mech}' (patch, action of sql)`), { status: 400 });
   }
   return { writable: 1, mechanism: mech };
+}
+
+function fallbackExtractFormulaReferences(formulaExpr) {
+  const text = String(formulaExpr || '');
+  const matches = text.match(/\(([A-Za-z0-9_]+)\)/g) || [];
+  return matches.map((m) => m.slice(1, -1).toLowerCase());
+}
+
+function findDependentFormulaColumn(formulaRows, targetColumnKey) {
+  const targetKey = String(targetColumnKey || '').toLowerCase();
+  if (!targetKey) return null;
+  for (const row of Array.isArray(formulaRows) ? formulaRows : []) {
+    const expression = String(row.formula_expr || '').trim();
+    if (!expression) continue;
+    let refs = [];
+    try {
+      refs = extractFormulaReferences(expression);
+    } catch {
+      refs = fallbackExtractFormulaReferences(expression);
+    }
+    if (refs.map((r) => String(r).toLowerCase()).includes(targetKey)) return row;
+  }
+  return null;
 }
 
 async function createColumn({ tableKey, scope, label, dataType, options = null }, userId) {
@@ -120,6 +144,29 @@ async function deactivateColumn(columnId, userId) {
   if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet verwijderd worden'), { status: 400 });
 
   const pool = await getPool();
+  if (existing.scope === 'master') {
+    const formulaRows = await pool.request()
+      .input('tableId', sql.BigInt, existing.tableId)
+      .input('columnId', sql.BigInt, columnId)
+      .query(`
+        SELECT id, [key], label, formula_expr
+        FROM dbo.tb_columns
+        WHERE table_id = @tableId
+          AND scope = 'master'
+          AND is_active = 1
+          AND source = 'custom'
+          AND formula_expr IS NOT NULL
+          AND id <> @columnId
+      `);
+    const dependent = findDependentFormulaColumn(formulaRows.recordset, existing.key);
+    if (dependent) {
+      throw Object.assign(
+        new Error(`Kolom '${existing.label}' wordt gebruikt door formulekolom '${dependent.label}'`),
+        { status: 409 }
+      );
+    }
+  }
+
   await pool.request()
     .input('id', sql.BigInt, columnId)
     .input('userId', sql.Int, userId || null)
@@ -196,6 +243,7 @@ module.exports = {
   DATA_TYPES,
   slugify,
   resolveWriteback,
+  findDependentFormulaColumn,
   createColumn,
   renameColumn,
   deactivateColumn,

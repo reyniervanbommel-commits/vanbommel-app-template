@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveWriteback, slugify } = require('./TableColumnsService');
+const { resolveWriteback, slugify, findDependentFormulaColumn } = require('./TableColumnsService');
 
 describe('TableColumnsService.resolveWriteback', () => {
   it('writable=false => mechanism altijd null', () => {
@@ -32,5 +32,26 @@ describe('TableColumnsService.slugify', () => {
   it('valt terug op "kolom" bij lege input', () => {
     expect(slugify('')).toBe('kolom');
     expect(slugify('!!!')).toBe('kolom');
+  });
+});
+
+describe('TableColumnsService.findDependentFormulaColumn', () => {
+  it('vindt een formule die naar de doelkolom verwijst', () => {
+    const dependent = findDependentFormulaColumn(
+      [
+        { label: 'Totale score', formula_expr: "ALS((a)>(b);'Fout';(a)+(b))" },
+        { label: 'Overig', formula_expr: '(x)+(y)' },
+      ],
+      'b'
+    );
+    expect(dependent?.label).toBe('Totale score');
+  });
+
+  it('geeft null als geen formule de kolom gebruikt', () => {
+    const dependent = findDependentFormulaColumn(
+      [{ label: 'Overig', formula_expr: '(x)+(y)' }],
+      'niet_bestaand'
+    );
+    expect(dependent).toBeNull();
   });
 });
