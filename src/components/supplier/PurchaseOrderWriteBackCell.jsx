@@ -26,23 +26,73 @@ const useStyles = makeStyles({
   },
 });
 
-function toInputValue(value, dataType) {
-  if (value === null || value === undefined) return '';
-  if (dataType === 'date') {
-    const m = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : String(value);
-  }
-  return String(value);
+function padDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function isDateDataType(dataType) {
+  const normalized = String(dataType || '').trim().toLowerCase();
+  return normalized === 'date' || normalized === 'datetime' || normalized === 'date-time';
 }
 
 function normalizeDateValue(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
-  const directMatch = text.match(/^(\d{4}-\d{2}-\d{2})$/);
-  if (directMatch) return directMatch[1];
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const dmyMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) {
+    const day = Number(dmyMatch[1]);
+    const month = Number(dmyMatch[2]);
+    const year = Number(dmyMatch[3]);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      const probe = new Date(Date.UTC(year, month - 1, day));
+      if (
+        probe.getUTCFullYear() === year
+        && probe.getUTCMonth() === month - 1
+        && probe.getUTCDate() === day
+      ) {
+        return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+      }
+    }
+  }
+
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return text;
   return parsed.toISOString().slice(0, 10);
+}
+
+function toDisplayDateValue(value) {
+  const normalized = normalizeDateValue(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value ?? '');
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function isDateLikeColumn(column, value) {
+  if (isDateDataType(column?.dataType)) return true;
+  const hints = `${String(column?.key || '')} ${String(column?.label || '')}`;
+  if (/date|datum|aangemaakt|created/i.test(hints)) return true;
+  if (typeof value === 'string') {
+    return /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/.test(value.trim());
+  }
+  return false;
+}
+
+function toInputValue(value, dataType, treatAsDate = false) {
+  if (value === null || value === undefined) return '';
+  if (treatAsDate || isDateDataType(dataType)) {
+    return toDisplayDateValue(value);
+  }
+  return String(value);
+}
+
+function toHiddenDatePickerValue(value) {
+  const normalized = normalizeDateValue(value);
+  const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : '';
 }
 
 /**
@@ -59,33 +109,38 @@ export default function PurchaseOrderWriteBackCell({
   hasHistory = false,
 }) {
   const styles = useStyles();
-  const [local, setLocal] = useState(toInputValue(value, column.dataType));
+  const [local, setLocal] = useState(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const [error, setError] = useState('');
   const savedTimer = useRef(null);
   const datePickerRef = useRef(null);
-  const isDate = column.dataType === 'date';
+  const isDate = isDateLikeColumn(column, value);
 
-  useEffect(() => { setLocal(toInputValue(value, column.dataType)); }, [value, column.dataType]);
+  useEffect(() => {
+    const nextIsDate = isDateLikeColumn(column, value);
+    setLocal(toInputValue(value, column.dataType, nextIsDate));
+  }, [value, column.dataType, column.key, column.label]);
   useEffect(() => () => { if (savedTimer.current) window.clearTimeout(savedTimer.current); }, []);
 
   const commit = useCallback(async (draftValue = local) => {
-    const resolvedValue = column.dataType === 'date' ? normalizeDateValue(draftValue) : draftValue;
-    if (resolvedValue === toInputValue(value, column.dataType)) return; // niets gewijzigd
+    const treatAsDate = isDateLikeColumn(column, value) || isDateLikeColumn(column, draftValue);
+    const resolvedValue = treatAsDate ? normalizeDateValue(draftValue) : draftValue;
+    const currentValue = treatAsDate ? normalizeDateValue(value) : toInputValue(value, column.dataType);
+    if (resolvedValue === currentValue) return; // niets gewijzigd
     setStatus('saving');
     setError('');
     try {
       await onCorrect({ value: resolvedValue, basedOnValue: value });
-      setLocal(toInputValue(resolvedValue, column.dataType));
+      setLocal(toInputValue(resolvedValue, column.dataType, treatAsDate));
       setStatus('saved');
       if (savedTimer.current) window.clearTimeout(savedTimer.current);
       savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch (err) {
       setStatus('error');
       setError(err.message || 'Terugschrijven mislukt');
-      setLocal(toInputValue(value, column.dataType)); // oude waarde terug
+      setLocal(toInputValue(value, column.dataType, treatAsDate)); // oude waarde terug
     }
-  }, [local, value, column.dataType, onCorrect]);
+  }, [local, value, column, onCorrect]);
 
   const openDatePicker = useCallback(() => {
     const picker = datePickerRef.current;
@@ -97,8 +152,11 @@ export default function PurchaseOrderWriteBackCell({
 
   const onKeyDown = useCallback((e) => {
     if (e.key === 'Enter') e.currentTarget.blur();
-    if (e.key === 'Escape') { setLocal(toInputValue(value, column.dataType)); e.currentTarget.blur(); }
-  }, [value, column.dataType]);
+    if (e.key === 'Escape') {
+      setLocal(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
+      e.currentTarget.blur();
+    }
+  }, [value, column]);
 
   const inputControl = (
     <>
@@ -122,10 +180,10 @@ export default function PurchaseOrderWriteBackCell({
           tabIndex={-1}
           aria-hidden="true"
           className={styles.hiddenDatePicker}
-          value={toInputValue(local, 'date')}
+          value={toHiddenDatePickerValue(local)}
           onChange={(event) => {
             const nextValue = event.target.value;
-            setLocal(nextValue);
+            setLocal(toDisplayDateValue(nextValue));
             commit(nextValue);
           }}
         />
