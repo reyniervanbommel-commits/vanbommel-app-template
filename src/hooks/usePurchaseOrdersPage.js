@@ -529,9 +529,13 @@ export function usePurchaseOrdersPage() {
       body.formulaExpr = formulaExpr;
     }
     const res = await apiRequest(`${boardBase()}/columns`, { method: 'POST', body });
-    await reloadColumns();
+    if (formulaExpr !== undefined && BOARD_TB_SOURCE) {
+      await reload();
+    } else {
+      await reloadColumns();
+    }
     return res?.column || null;
-  }, [reloadColumns]);
+  }, [reload, reloadColumns]);
 
   // Monday-stijl: voeg een header-kolom toe direct rechts van een bestaande kolom.
   // De nieuwe kolom wordt aangemaakt (achteraan), waarna een effect hem naar de juiste
@@ -549,8 +553,8 @@ export function usePurchaseOrdersPage() {
       method: 'PATCH',
       body: { label, dataType, formulaExpr },
     });
-    await reloadColumns();
-  }, [reloadColumns]);
+    await reload();
+  }, [reload]);
 
   const renameColumn = useCallback(async (id, label) => {
     await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body: { label } });
