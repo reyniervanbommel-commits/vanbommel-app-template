@@ -52,6 +52,16 @@ router.post('/:tableKey/refresh', async (req, res, next) => {
   }
 });
 
+// GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
+router.get('/:tableKey/refresh/progress', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    return res.json({ progress: dataService.getRefreshProgress(tableKey) });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // POST /api/data/:tableKey/viewed — markeer alles als gezien (reset nieuw/gewijzigd voor deze gebruiker).
 router.post('/:tableKey/viewed', async (req, res, next) => {
   try {
