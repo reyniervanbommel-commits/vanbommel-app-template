@@ -45,11 +45,7 @@ const useStyles = makeStyles({
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const {
-    progress: refreshProgress,
-    startProgress,
-    finishProgress,
-  } = usePurchaseOrderRefreshProgress();
+  const { progress: refreshProgress, startProgress, finishProgress } = usePurchaseOrderRefreshProgress();
 
   const {
     orders,
@@ -79,11 +75,15 @@ export default function PurchaseOrdersPage() {
     reorderLineColumn,
     headerColumnWidths,
     lineColumnWidths,
+    headerColumnTextStyles,
+    lineColumnTextStyles,
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
+    saveHeaderColumnTextStyle,
+    saveLineColumnTextStyle,
     setLineColumnTotal,
     addLineTotalHeaderLink,
     addLineValueHeaderLink,
@@ -95,16 +95,13 @@ export default function PurchaseOrdersPage() {
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
 
-  // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
-  // kolomlayout kunnen serialiseren en terugzetten.
-  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns });
+  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
   const {
     selection,
     tableSelection,
     handleDeleteSelected,
   } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
 
-  // Verborgen rijen die nog binnen de harde D365-filter vallen (zien + terugzetten).
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
   const {
     savedViews,
@@ -124,8 +121,6 @@ export default function PurchaseOrdersPage() {
     boardView,
   });
 
-  // Monday-stijl kolom toevoegen vanuit het per-kolom menu: maak de kolom rechts van
-  // de bron aan en zet zijn header direct in inline-hernoem-modus.
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
@@ -276,8 +271,12 @@ export default function PurchaseOrdersPage() {
             onReorderLineColumn={reorderLineColumn}
             headerColumnWidths={headerColumnWidths}
             lineColumnWidths={lineColumnWidths}
+            headerColumnTextStyles={headerColumnTextStyles}
+            lineColumnTextStyles={lineColumnTextStyles}
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
+            onSaveHeaderColumnTextStyle={saveHeaderColumnTextStyle}
+            onSaveLineColumnTextStyle={saveLineColumnTextStyle}
             onAddColumnRightOf={handleAddColumnRightOf}
             onSetLineColumnTotal={setLineColumnTotal}
             onPushLineTotalToHeader={handlePushLineTotalToHeader}
@@ -292,7 +291,6 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
-
     </div>
   );
 }
