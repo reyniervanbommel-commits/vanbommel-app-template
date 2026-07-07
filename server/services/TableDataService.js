@@ -1495,7 +1495,10 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const isNew = Boolean(ledgerState?.isNew) || isBaseNew;
       const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
       const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
-      if (isNew || isChanged || isRemoved) hasLineChanges = true;
+      // Alleen recente removal-events laten meetellen als "gewijzigd".
+      // Historisch removed-at-source mag niet elke refresh opnieuw changedCount opblazen.
+      const hasRemovalChange = Boolean(ledgerState?.isRemoved);
+      if (isNew || isChanged || hasRemovalChange) hasLineChanges = true;
       return {
         detailKey: d.detail_key,
         values: detailValues,
