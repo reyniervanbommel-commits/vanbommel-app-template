@@ -982,7 +982,8 @@ async function loadLookupEnrichment(table) {
     } catch {
       continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
     }
-    const targetColumns = await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false });
+    const targetColumns = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }))
+      .filter((column) => column.source === 'source');
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
     const fieldEntries = Object.entries(isPlainObject(lk.fields) ? lk.fields : {})
       .filter(([derivedKey, targetColKey]) => (
@@ -2050,10 +2051,15 @@ async function getDataModel(tableKey) {
     try {
       const target = await getTableByKey(lookup.targetTableKey);
       targetLabel = target.label;
-      const columns = await listColumns({ tableId: target.id, scope: 'master', includeInactive: false });
+      const columns = await listColumns({ tableId: target.id, scope: 'master', includeInactive: true });
       targetColumns = columns
         .filter((column) => column.source === 'source')
-        .map((column) => ({ key: column.key, label: column.label, dataType: column.dataType }));
+        .map((column) => ({
+          key: column.key,
+          label: column.label,
+          dataType: column.dataType,
+          isActive: Boolean(column.isActive),
+        }));
     } catch {
       // Doeltabel ontbreekt/inactief; key blijft als label zichtbaar in het diagram.
     }
@@ -2108,7 +2114,7 @@ async function updateLookupFields(tableKey, targetTableKey, targetFields) {
   const targetColumns = (await listColumns({
     tableId: targetTable.id,
     scope: 'master',
-    includeInactive: false,
+    includeInactive: true,
   })).filter((column) => column.source === 'source');
   const allowedTargetFields = new Set(targetColumns.map((column) => column.key));
   const selectedTargetFields = normalizeLookupTargetFields(targetFields);
