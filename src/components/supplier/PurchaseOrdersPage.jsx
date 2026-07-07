@@ -4,6 +4,7 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
 import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
+import PurchaseOrderImageColumnDialog from './PurchaseOrderImageColumnDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
@@ -129,10 +130,15 @@ export default function PurchaseOrdersPage() {
     handleFormulaTypeSelection,
     formulaReferenceColumns,
     submitFormulaColumn,
+    imageDialogState,
+    closeImageDialog,
+    handleImageTypeSelection,
+    submitImageColumn,
   } = usePurchaseOrderFormulaDialogState({
     visibleHeaderColumns,
     addHeaderColumnAfter,
     updateFormulaColumn,
+    renameColumn,
     headerColumnFormatRules,
     saveHeaderColumnFormatRules,
     setEditingColumnKey,
@@ -142,13 +148,14 @@ export default function PurchaseOrdersPage() {
     if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
       return;
     }
+    if (handleImageTypeSelection(sourceColumn, typeDef)) return;
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, handleFormulaTypeSelection]);
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleImageTypeSelection]);
 
   const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
@@ -283,14 +290,8 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
-      <PurchaseOrderFormulaColumnDialog
-        open={formulaDialogState.open}
-        onOpenChange={(open) => !open && closeFormulaDialog()}
-        onSubmit={submitFormulaColumn}
-        sourceColumn={formulaDialogState.sourceColumn}
-        availableColumns={formulaReferenceColumns}
-        initialValue={formulaDialogState.editingColumn}
-      />
+      <PurchaseOrderFormulaColumnDialog open={formulaDialogState.open} onOpenChange={(open) => !open && closeFormulaDialog()} onSubmit={submitFormulaColumn} sourceColumn={formulaDialogState.sourceColumn} availableColumns={formulaReferenceColumns} initialValue={formulaDialogState.editingColumn} />
+      <PurchaseOrderImageColumnDialog open={imageDialogState.open} onOpenChange={(open) => !open && closeImageDialog()} onSubmit={submitImageColumn} sourceColumn={imageDialogState.sourceColumn} availableColumns={visibleHeaderColumns} initialValue={imageDialogState.editingColumn} sampleRowValues={boardView.processedItems?.[0]?.values || {}} />
     </div>
   );
 }

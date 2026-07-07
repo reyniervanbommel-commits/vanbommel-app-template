@@ -149,9 +149,10 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    const hasImagePayload = req.body && Object.prototype.hasOwnProperty.call(req.body, 'options');
     const hasFormulaPayload = req.body && (
       Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
-      || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
+      || (Object.prototype.hasOwnProperty.call(req.body, 'dataType') && !hasImagePayload)
     );
     const column = hasFormulaPayload
       ? await columnsService.updateFormulaColumn(
@@ -163,6 +164,16 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
         },
         req.user.id,
       )
+      : hasImagePayload
+        ? await columnsService.updateImageColumn(
+          columnId,
+          {
+            label: req.body?.label,
+            dataType: req.body?.dataType,
+            options: req.body?.options,
+          },
+          req.user.id,
+        )
       : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {

@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';

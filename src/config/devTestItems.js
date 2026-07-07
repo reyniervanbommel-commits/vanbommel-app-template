@@ -3,6 +3,17 @@
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 export const devTestItems = [
   {
+    id: 'feature-178-image-column-main-table',
+    title: 'Feature 178 - Plaatje-kolom in main tabel',
+    checks: [
+      'Via kolommenu kan type Plaatje worden gekozen en geconfigureerd met urlTemplate + bronkolom',
+      'Nieuwe plaatje-kolom rendert read-only afbeeldingen per rij op basis van de bronkolomwaarde',
+      'Ongeldige template of ontbrekende bronwaarde veroorzaakt geen crash en toont geen gebroken afbeelding',
+      'Sorteren en filteren op een plaatje-kolom is niet beschikbaar in het kolommenu',
+      'Externe https-afbeeldingen laden in preview/DEV met CSP-header img-src self,data,https',
+    ],
+  },
+  {
     id: 'perf-frontend-timing',
     title: 'Performance: compressie, code-splitting + timing-infra (#AB:142)',
     checks: [
@@ -31,6 +42,16 @@ export const devTestItems = [
       'Formule (aantal_total_2)*2 gebruikt de actuele line-total waarde en niet standaard 0',
       'Na opslaan van formulekolom worden rijwaarden direct opnieuw geladen op de boardpagina',
       'Formulekolommen op linked headerkolommen tonen verwachte numerieke uitkomst per rij',
+    ],
+  },
+  {
+    id: 'feature-178-image-column-ux-v1-0-7',
+    title: 'Feature 178 - Plaatjekolom UX-afwerking (v1.0.7)',
+    checks: [
+      'Plaatje-thumbnail vult de cel tot aan de randen zonder de rijhoogte op te rekken',
+      'Klik op plaatje opent popup met grote preview en broninformatie (alleen originele waarde)',
+      'Popup toont geen extra linked-table blok, bronkolom of na-transformatie regel meer',
+      'Plaatjekolom blijft read-only en menu-acties veroorzaken geen layout-sprongen in de tabel',
     ],
   },
 ];

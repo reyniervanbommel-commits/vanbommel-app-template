@@ -4,11 +4,13 @@ export function usePurchaseOrderFormulaDialogState({
   visibleHeaderColumns,
   addHeaderColumnAfter,
   updateFormulaColumn,
+  renameColumn,
   headerColumnFormatRules,
   saveHeaderColumnFormatRules,
   setEditingColumnKey,
 }) {
   const [formulaDialogState, setFormulaDialogState] = useState({ open: false, sourceColumn: null, editingColumn: null });
+  const [imageDialogState, setImageDialogState] = useState({ open: false, sourceColumn: null, editingColumn: null });
 
   const openFormulaDialog = useCallback((sourceColumn, editingColumn = null) => {
     setFormulaDialogState({ open: true, sourceColumn, editingColumn });
@@ -24,6 +26,18 @@ export function usePurchaseOrderFormulaDialogState({
     openFormulaDialog(sourceColumn, typeKey === 'formula-edit' ? sourceColumn : null);
     return true;
   }, [openFormulaDialog]);
+  const openImageDialog = useCallback((sourceColumn, editingColumn = null) => {
+    setImageDialogState({ open: true, sourceColumn, editingColumn });
+  }, []);
+  const closeImageDialog = useCallback(() => {
+    setImageDialogState({ open: false, sourceColumn: null, editingColumn: null });
+  }, []);
+  const handleImageTypeSelection = useCallback((sourceColumn, typeDef) => {
+    const typeKey = String(typeDef?.key || '').trim().toLowerCase();
+    if (typeKey !== 'image' && typeKey !== 'image-edit') return false;
+    openImageDialog(sourceColumn, typeKey === 'image-edit' ? sourceColumn : null);
+    return true;
+  }, [openImageDialog]);
 
   const formulaReferenceColumns = useMemo(
     () => (Array.isArray(visibleHeaderColumns) ? visibleHeaderColumns : [])
@@ -68,6 +82,19 @@ export function usePurchaseOrderFormulaDialogState({
     setEditingColumnKey,
     updateFormulaColumn,
   ]);
+  const submitImageColumn = useCallback(async ({ label, options }) => {
+    const editingColumn = imageDialogState.editingColumn;
+    if (editingColumn?.id) {
+      await renameColumn(editingColumn.id, label, { dataType: 'image', options });
+      setEditingColumnKey(String(editingColumn.key || ''));
+      return;
+    }
+    const anchorKey = String(imageDialogState.sourceColumn?.key || '').trim();
+    if (!anchorKey) return;
+    const created = await addHeaderColumnAfter(anchorKey, { label, dataType: 'image', options });
+    if (!created?.key) return;
+    setEditingColumnKey(created.key);
+  }, [addHeaderColumnAfter, imageDialogState, renameColumn, setEditingColumnKey]);
 
   return {
     formulaDialogState,
@@ -76,5 +103,10 @@ export function usePurchaseOrderFormulaDialogState({
     handleFormulaTypeSelection,
     formulaReferenceColumns,
     submitFormulaColumn,
+    imageDialogState,
+    openImageDialog,
+    closeImageDialog,
+    handleImageTypeSelection,
+    submitImageColumn,
   };
 }

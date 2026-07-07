@@ -859,6 +859,9 @@ function assertCustomColumnWritable(column) {
   if (!column || column.source !== 'custom') {
     throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
   }
+  if (String(column?.dataType || '').toLowerCase() === 'image') {
+    throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
+  }
   if (isFormulaColumn(column)) {
     throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
   }

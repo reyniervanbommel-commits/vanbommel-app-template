@@ -5,21 +5,11 @@ import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilt
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
 import {
   HEX_COLOR_PATTERN,
-  NEW_COLUMN_TYPES,
   getDraftFromFilter,
   getTextStyleDraft,
+  isColumnFilterActive,
   isDateColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
-
-export function isColumnFilterActive(column, filter) {
-  if (!filter) return false;
-  if (isDateColumn(column)) {
-    if (filter.operator === 'nextWeek') return true;
-    if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
-    return Boolean(filter.value);
-  }
-  return Boolean(filter.value);
-}
 
 function PurchaseOrderColumnFilterMenu({
   column,
@@ -69,25 +59,23 @@ function PurchaseOrderColumnFilterMenu({
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
-
+  const isImageColumn = column?.dataType === 'image';
   useEffect(() => {
     if (open) {
       setDraft(getDraftFromFilter(column, filter));
       setTextStyleDraft(getTextStyleDraft(columnTextStyle));
     }
   }, [open, column, filter, columnTextStyle]);
-
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
     if (!data.open) setActiveSubmenu('none');
   }, []);
-
   const toggleSubmenu = useCallback((name) => {
     setActiveSubmenu((prev) => (prev === name ? 'none' : name));
   }, []);
-
   const canAddColumn = typeof onAddColumnRightOf === 'function';
   const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
+  const canEditImageColumn = Boolean(canAddColumn && column.source === 'custom' && column.dataType === 'image');
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
     setActiveSubmenu('none');
@@ -98,6 +86,11 @@ function PurchaseOrderColumnFilterMenu({
     onAddColumnRightOf(column, { key: 'formula-edit' });
     setOpen(false);
   }, [canEditFormulaColumn, column, onAddColumnRightOf]);
+  const handleEditImageColumn = useCallback(() => {
+    if (!canEditImageColumn) return;
+    onAddColumnRightOf(column, { key: 'image-edit' });
+    setOpen(false);
+  }, [canEditImageColumn, column, onAddColumnRightOf]);
 
   const handleRenameColumn = useCallback(async () => {
     if (!canRenameColumn) return;
@@ -238,7 +231,10 @@ function PurchaseOrderColumnFilterMenu({
       <PopoverSurface className={styles.surface}>
         <FilterMenuMainPane
           styles={styles}
+          column={column}
           columnLabel={column.label}
+          showSortAndFilter={!isImageColumn}
+          showGrouping={!isImageColumn}
           activeSubmenu={activeSubmenu}
           toggleSubmenu={toggleSubmenu}
           canSetColumnTextStyle={canSetColumnTextStyle}
@@ -250,6 +246,8 @@ function PurchaseOrderColumnFilterMenu({
           handleRenameColumn={handleRenameColumn}
           canEditFormulaColumn={canEditFormulaColumn}
           handleEditFormulaColumn={handleEditFormulaColumn}
+          canEditImageColumn={canEditImageColumn}
+          handleEditImageColumn={handleEditImageColumn}
           canRemoveColumn={canRemoveColumn}
           handleRemoveColumn={handleRemoveColumn}
           canToggleLineTotal={canToggleLineTotal}
@@ -275,7 +273,6 @@ function PurchaseOrderColumnFilterMenu({
         <FilterMenuSubPane
           styles={styles}
           activeSubmenu={activeSubmenu}
-          newColumnTypes={NEW_COLUMN_TYPES}
           handleAddType={handleAddType}
           textStyleDraft={textStyleDraft}
           handleTextColorChange={handleTextColorChange}
