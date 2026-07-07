@@ -208,6 +208,8 @@ export default function PurchaseOrdersPage() {
           changedCount,
           markViewed,
           markingViewed,
+          changedOnlyFilter: boardView.changedOnlyFilter,
+          toggleChangedOnlyFilter: boardView.toggleChangedOnlyFilter,
         }}
         bulkState={{
           selectedCount: selection.selectedCount,

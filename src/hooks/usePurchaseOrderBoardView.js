@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../utils/purchaseOrderTotals';
@@ -17,6 +17,7 @@ export function usePurchaseOrderBoardView({
   lineTotalHeaderLinks = [],
   lineValueHeaderLinks = [],
 }) {
+  const [changedOnlyFilter, setChangedOnlyFilter] = useState(false);
   const linkedLineTotalByHeaderKey = useMemo(
     () => (Array.isArray(lineTotalHeaderLinks)
       ? lineTotalHeaderLinks.reduce((acc, link) => {
@@ -75,7 +76,28 @@ export function usePurchaseOrderBoardView({
     });
   }, [items, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
-  const tableView = usePurchaseOrderTableView({ items: itemsWithLinkedValues, columns });
+  const hasChangedData = useCallback((order) => {
+    const orderChanged = Boolean(order?.isChanged || order?.isRemoved || order?.isNew);
+    const headerCellChanged = Array.isArray(order?.changedFieldKeys) && order.changedFieldKeys.length > 0;
+    const lineChanged = Array.isArray(order?.lines) && order.lines.some((line) => (
+      line?.isChanged
+      || line?.isRemoved
+      || line?.isNew
+      || (Array.isArray(line?.changedFieldKeys) && line.changedFieldKeys.length > 0)
+    ));
+    return orderChanged || headerCellChanged || lineChanged;
+  }, []);
+
+  const filteredItems = useMemo(
+    () => (changedOnlyFilter ? itemsWithLinkedValues.filter(hasChangedData) : itemsWithLinkedValues),
+    [changedOnlyFilter, hasChangedData, itemsWithLinkedValues]
+  );
+
+  const toggleChangedOnlyFilter = useCallback(() => {
+    setChangedOnlyFilter((prev) => !prev);
+  }, []);
+
+  const tableView = usePurchaseOrderTableView({ items: filteredItems, columns });
 
   const rows = useMemo(
     () =>
@@ -123,6 +145,8 @@ export function usePurchaseOrderBoardView({
       toggleSort: tableView.toggleSort,
       clearSort: tableView.clearSort,
       setSortDirection: tableView.setSortDirection,
+      changedOnlyFilter,
+      toggleChangedOnlyFilter,
       // afgeleide rijen
       rows,
       // grouping API
@@ -137,6 +161,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, changedOnlyFilter, toggleChangedOnlyFilter, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

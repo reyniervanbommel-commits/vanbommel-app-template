@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, CheckmarkRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
+import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -96,6 +97,8 @@ export default function PurchaseOrdersPageTopBar({
     changedCount,
     markViewed,
     markingViewed,
+    changedOnlyFilter,
+    toggleChangedOnlyFilter,
   } = activityState;
   const {
     selectedCount,
@@ -179,26 +182,14 @@ export default function PurchaseOrdersPageTopBar({
       </div>
 
       <div className={styles.toolbar}>
-        {(newCount > 0 || changedCount > 0) ? (
-          <div className={styles.freshness}>
-            {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
-            {changedCount > 0 ? <Badge color="warning" appearance="filled">{changedCount} gewijzigd</Badge> : null}
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<CheckmarkRegular />}
-              onClick={markViewed}
-              disabled={markingViewed}
-            >
-              {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
-            </Button>
-          </div>
-        ) : null}
-        <div className={styles.freshness} title="Highlight-prioriteit: verwijderd > nieuw > gewijzigd">
-          <Badge color="danger" appearance="tint" size="small">verwijderd</Badge>
-          <Badge color="success" appearance="tint" size="small">nieuw</Badge>
-          <Badge color="warning" appearance="tint" size="small">gewijzigd</Badge>
-        </div>
+        <PurchaseOrderChangeActivityBar
+          newCount={newCount}
+          changedCount={changedCount}
+          markViewed={markViewed}
+          markingViewed={markingViewed}
+          changedOnlyFilter={changedOnlyFilter}
+          toggleChangedOnlyFilter={toggleChangedOnlyFilter}
+        />
 
         <PurchaseOrderBulkActionsBar
           selectedCount={selectedCount}

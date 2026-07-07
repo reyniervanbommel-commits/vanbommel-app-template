@@ -23,8 +23,13 @@ const useStyles = makeStyles({
   changedCell: {
     backgroundColor: '#fff4ce',
     borderRadius: '4px',
-    paddingLeft: '4px',
-    paddingRight: '4px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: '24px',
+    width: '100%',
+    boxSizing: 'border-box',
+    paddingLeft: '6px',
+    paddingRight: '6px',
   },
 });
 
