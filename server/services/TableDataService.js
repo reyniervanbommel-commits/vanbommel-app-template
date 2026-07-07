@@ -1027,8 +1027,14 @@ async function loadLookupEnrichment(table) {
         lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
       };
     });
-    if (lk.sourceScope === 'detail') detailCols.push(...synthetic);
-    else masterCols.push(...synthetic);
+    if (lk.sourceScope === 'detail') {
+      detailCols.push(...synthetic);
+      // Detail-lookups worden ook op masterniveau getoond als geaggregeerde headerwaarde,
+      // zodat gekozen itemkolommen zichtbaar zijn in de hoofd-PO-tabel.
+      masterCols.push(...synthetic.map((column) => ({ ...column, scope: 'master' })));
+    } else {
+      masterCols.push(...synthetic);
+    }
     enriched.push({ ...lk, byKey, fieldEntries, partitionless });
   }
 
@@ -1046,6 +1052,30 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
     const targetData = hasFk ? lk.byKey.get(lookupKey) : null;
     for (const [derivedKey, targetColKey] of lk.fieldEntries) {
       valueBag[derivedKey] = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+    }
+  }
+}
+
+function aggregateDetailLookupValues(details, derivedKey) {
+  const values = [];
+  const seen = new Set();
+  for (const detail of Array.isArray(details) ? details : []) {
+    const value = detail?.values?.[derivedKey];
+    if (value === null || value === undefined || value === '') continue;
+    const text = String(value).trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    values.push(text);
+  }
+  if (!values.length) return null;
+  return values.length === 1 ? values[0] : values.join(', ');
+}
+
+function applyDetailLookupRollupsToMaster(masterValues, details, enrichedLookups) {
+  for (const lk of Array.isArray(enrichedLookups) ? enrichedLookups : []) {
+    if (lk.sourceScope !== 'detail') continue;
+    for (const [derivedKey] of lk.fieldEntries || []) {
+      masterValues[derivedKey] = aggregateDetailLookupValues(details, derivedKey);
     }
   }
 }
@@ -1340,6 +1370,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    applyDetailLookupRollupsToMaster(masterValues, details, enrichment.lookups);
     applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
@@ -2224,6 +2255,7 @@ module.exports = {
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
+  applyDetailLookupRollupsToMaster,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,

@@ -9,6 +9,7 @@ const {
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
+  applyDetailLookupRollupsToMaster,
   assertCustomColumnWritable,
   buildLookupFieldMap,
   FETCH_ADAPTERS,
@@ -213,6 +214,22 @@ describe('TableDataService runtime linked header values', () => {
       'quantity'
     );
     expect(total).toBe(4);
+  });
+});
+
+describe('TableDataService detail lookup rollups', () => {
+  it('rolt detail lookupwaarden door naar master als unieke lijst', () => {
+    const masterValues = {};
+    const details = [
+      { values: { items_searchName: 'Item A' } },
+      { values: { items_searchName: 'Item B' } },
+      { values: { items_searchName: 'Item A' } },
+    ];
+    applyDetailLookupRollupsToMaster(masterValues, details, [{
+      sourceScope: 'detail',
+      fieldEntries: [['items_searchName', 'searchName']],
+    }]);
+    expect(masterValues.items_searchName).toBe('Item A, Item B');
   });
 });
 
