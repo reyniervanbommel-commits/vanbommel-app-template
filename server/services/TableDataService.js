@@ -1322,10 +1322,10 @@ function createLineChangeState() {
   return { isNew: false, isChanged: false, isRemoved: false, changedFieldKeys: new Set() };
 }
 
-function buildD365ChangeState(ledgerRows, lastViewedMs) {
+function buildD365ChangeState(ledgerRows) {
   const orderChanges = new Map();
   const lineChanges = new Map();
-  if (lastViewedMs === null || !Array.isArray(ledgerRows) || !ledgerRows.length) {
+  if (!Array.isArray(ledgerRows) || !ledgerRows.length) {
     return { orderChanges, lineChanges };
   }
 
@@ -1368,6 +1368,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   ]));
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const runtimeLinks = await loadUserRuntimeHeaderLinks(pool, userId, table.key);
+  const { lastFullSyncAt } = await getSyncState(table.id);
+  const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -1428,18 +1430,22 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     detailsByRecord.get(recKey).push(d);
   }
 
+  const ledgerSinceAt = lastViewedAt
+    ? new Date(lastViewedAt)
+    : (lastFullSyncAt ? new Date(lastFullSyncAt) : null);
+
   let d365LedgerRows = [];
-  if (lastViewedMs !== null) {
+  if (ledgerSinceAt) {
     try {
       const ledgerResult = await pool.request()
         .input('tableId', sql.BigInt, table.id)
-        .input('lastViewedAt', sql.DateTime2, new Date(lastViewedAt))
+        .input('sinceAt', sql.DateTime2, ledgerSinceAt)
         .query(`
           SELECT partition_key, record_key, detail_key, field_key, action
           FROM dbo.tb_change_ledger WITH (NOLOCK)
           WHERE table_id = @tableId
             AND source = 'D365'
-            AND created_at > @lastViewedAt
+            AND created_at >= @sinceAt
           ORDER BY created_at ASC, id ASC
         `);
       d365LedgerRows = ledgerResult.recordset;
@@ -1450,7 +1456,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       });
     }
   }
-  const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows, lastViewedMs);
+  const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows);
 
   function valuesFor(cols, sourceJson, custom) {
     const values = {};
@@ -1470,6 +1476,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
+    const hasViewedBaseline = lastViewedMs !== null;
     let hasLineChanges = false;
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
@@ -1479,10 +1486,14 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
       const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
-      const isBaseNew = lastViewedMs !== null && detailFirstSeenMs !== null && detailFirstSeenMs > lastViewedMs;
-      const isBaseChanged = lastViewedMs !== null && detailChangedMs !== null && detailChangedMs > lastViewedMs;
-      const isNew = lastViewedMs !== null && (Boolean(ledgerState?.isNew) || isBaseNew);
-      const isChanged = lastViewedMs !== null && !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
+      const isBaseNew = hasViewedBaseline
+        ? (detailFirstSeenMs !== null && detailFirstSeenMs > lastViewedMs)
+        : (detailFirstSeenMs !== null && lastSyncedMs !== null && detailFirstSeenMs >= lastSyncedMs);
+      const isBaseChanged = hasViewedBaseline
+        ? (detailChangedMs !== null && detailChangedMs > lastViewedMs)
+        : (detailChangedMs !== null && lastSyncedMs !== null && detailChangedMs >= lastSyncedMs);
+      const isNew = Boolean(ledgerState?.isNew) || isBaseNew;
+      const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
       const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
       if (isNew || isChanged || isRemoved) hasLineChanges = true;
       return {
@@ -1491,17 +1502,21 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
         isNew,
         isChanged,
         isRemoved,
-        changedFieldKeys: lastViewedMs !== null ? [...(ledgerState?.changedFieldKeys || new Set())] : [],
+        changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
       };
     });
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
     const orderLedgerState = orderChanges.get(recKey);
-    const isBaseNew = lastViewedMs !== null && firstSeenMs !== null && firstSeenMs > lastViewedMs;
-    const isBaseChanged = lastViewedMs !== null && changedMs !== null && changedMs > lastViewedMs;
-    const isNew = lastViewedMs !== null && (Boolean(orderLedgerState?.isNew) || isBaseNew);
-    const isChanged = lastViewedMs !== null && !isNew && (Boolean(orderLedgerState?.isChanged) || isBaseChanged || hasLineChanges);
+    const isBaseNew = hasViewedBaseline
+      ? (firstSeenMs !== null && firstSeenMs > lastViewedMs)
+      : (firstSeenMs !== null && lastSyncedMs !== null && firstSeenMs >= lastSyncedMs);
+    const isBaseChanged = hasViewedBaseline
+      ? (changedMs !== null && changedMs > lastViewedMs)
+      : (changedMs !== null && lastSyncedMs !== null && changedMs >= lastSyncedMs);
+    const isNew = Boolean(orderLedgerState?.isNew) || isBaseNew;
+    const isChanged = !isNew && (Boolean(orderLedgerState?.isChanged) || isBaseChanged || hasLineChanges);
     if (isNew) newCount += 1;
     else if (isChanged) changedCount += 1;
 
@@ -1516,7 +1531,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       removedAtSource: Boolean(m.removed_at_source),
       isNew,
       isChanged,
-      changedFieldKeys: lastViewedMs !== null ? [...(orderLedgerState?.changedFieldKeys || new Set())] : [],
+      changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
       values: masterValues,
       formulaErrors,
       details,
@@ -1524,7 +1539,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     };
   });
 
-  const { lastFullSyncAt } = await getSyncState(table.id);
   const staleThresholdMinutes = await getStaleThresholdMinutes(table);
   const stale = table.cacheMode === 'never'
     ? false
