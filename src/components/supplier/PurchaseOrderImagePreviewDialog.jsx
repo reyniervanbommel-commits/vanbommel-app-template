@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import {
   Dialog,
   DialogBody,
@@ -9,10 +9,6 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { applyImageTransforms } from '../../utils/imageColumnUrl';
-
-const MAX_LINKED_ROWS = 5;
-const MAX_LINKED_FIELDS = 4;
 
 const useStyles = makeStyles({
   dialogContent: {
@@ -38,31 +34,12 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: '6px',
   },
-  muted: {
-    color: tokens.colorNeutralForeground3,
-  },
-  lineRow: {
-    marginBottom: '6px',
-  },
 });
 
 function formatPlainValue(value) {
   if (value === null || value === undefined || value === '') return '-';
   if (typeof value === 'boolean') return value ? 'Ja' : 'Nee';
   return String(value);
-}
-
-function getLinkedRowPreview(lines) {
-  const safeLines = Array.isArray(lines) ? lines.slice(0, MAX_LINKED_ROWS) : [];
-  return safeLines.map((line) => {
-    const values = line?.values && typeof line.values === 'object' ? line.values : {};
-    const keys = Object.keys(values).filter((key) => values[key] !== null && values[key] !== undefined && values[key] !== '').slice(0, MAX_LINKED_FIELDS);
-    const fields = keys.map((key) => ({ key, value: formatPlainValue(values[key]) }));
-    return {
-      lineNumber: line?.lineNumber ?? '-',
-      fields,
-    };
-  });
 }
 
 export default function PurchaseOrderImagePreviewDialog({
@@ -73,13 +50,7 @@ export default function PurchaseOrderImagePreviewDialog({
   order,
 }) {
   const styles = useStyles();
-  const sourceColumnKey = String(column?.options?.sourceColumnKey || '');
-  const sourceRawValue = sourceColumnKey ? order?.values?.[sourceColumnKey] : '';
-  const transformedValue = useMemo(
-    () => applyImageTransforms(sourceRawValue, column?.options?.transforms),
-    [column?.options?.transforms, sourceRawValue]
-  );
-  const linkedRows = useMemo(() => getLinkedRowPreview(order?.lines), [order?.lines]);
+  const sourceRawValue = String(order?.values?.[column?.options?.sourceColumnKey] || '');
   const handleOpenChange = useCallback((_, data) => {
     onOpenChange(data.open);
   }, [onOpenChange]);
@@ -94,28 +65,7 @@ export default function PurchaseOrderImagePreviewDialog({
 
             <div className={styles.block}>
               <div className={styles.title}>Broninformatie</div>
-              <div>Bronkolom: {sourceColumnKey || '-'}</div>
               <div>Originele waarde: {formatPlainValue(sourceRawValue)}</div>
-              <div>Na transformatie: {formatPlainValue(transformedValue)}</div>
-            </div>
-
-            <div className={styles.block}>
-              <div className={styles.title}>Gegevens van gelinkte tabel</div>
-              {!linkedRows.length ? (
-                <div className={styles.muted}>Geen gekoppelde regels gevonden.</div>
-              ) : (
-                linkedRows.map((row, index) => (
-                  <div key={`${row.lineNumber}-${index}`} className={styles.lineRow}>
-                    <div><strong>Regel {row.lineNumber}:</strong></div>
-                    {row.fields.length ? row.fields.map((field) => (
-                      <div key={`${field.key}-${index}`}>{field.key}: {field.value}</div>
-                    )) : <div className={styles.muted}>Geen waarden</div>}
-                  </div>
-                ))
-              )}
-              {Array.isArray(order?.lines) && order.lines.length > MAX_LINKED_ROWS ? (
-                <div className={styles.muted}>Alleen eerste {MAX_LINKED_ROWS} regels getoond.</div>
-              ) : null}
             </div>
           </DialogContent>
         </DialogBody>
