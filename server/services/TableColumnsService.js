@@ -308,6 +308,66 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   return mapColumnRow(result.recordset[0]);
 }
 
+async function updateImageColumn(columnId, { label, dataType, options }, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (existing.source !== 'custom') {
+    throw Object.assign(new Error('Alleen eigen kolommen kunnen als plaatje worden bewerkt'), { status: 400 });
+  }
+  if (existing.scope !== 'master') {
+    throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+  }
+  const cleanLabel = String(label || existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
+  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+
+  const nextDataType = String(dataType || existing.dataType || '').trim();
+  if (nextDataType !== 'image') {
+    throw Object.assign(new Error('Alleen image-datatype is toegestaan voor deze bewerking'), { status: 400 });
+  }
+
+  const normalizedImageOptions = validateImageOptions(options !== undefined ? options : existing.options);
+  if (normalizedImageOptions.sourceColumnKey === existing.key) {
+    throw Object.assign(new Error('sourceColumnKey mag niet naar dezelfde image-kolom verwijzen'), { status: 400 });
+  }
+
+  const pool = await getPool();
+  const sourceCheck = await pool.request()
+    .input('tableId', sql.BigInt, existing.tableId)
+    .input('sourceColumnKey', sql.NVarChar(64), normalizedImageOptions.sourceColumnKey)
+    .query(`
+      SELECT 1
+      FROM dbo.tb_columns
+      WHERE table_id = @tableId
+        AND scope = 'master'
+        AND [key] = @sourceColumnKey
+        AND is_active = 1
+    `);
+  if (!sourceCheck.recordset.length) {
+    throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+  }
+
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('label', sql.NVarChar(128), cleanLabel)
+    .input('options', sql.NVarChar(sql.MAX), JSON.stringify(normalizedImageOptions))
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET label = @label,
+          data_type = 'image',
+          options_json = @options,
+          formula_expr = NULL,
+          writable = 0,
+          write_mechanism = NULL,
+          updated_by = @userId,
+          updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
 // Soft-delete: alleen eigen kolommen. Bronvelden blijven bestaan (read-only referentie).
 async function deactivateColumn(columnId, userId) {
   const existing = await getColumnById(columnId);
@@ -422,6 +482,7 @@ module.exports = {
   createColumn,
   renameColumn,
   updateFormulaColumn,
+  updateImageColumn,
   deactivateColumn,
   setColumnVisibility,
   setVisibleAtDelete,

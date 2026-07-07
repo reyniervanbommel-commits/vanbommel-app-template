@@ -24,22 +24,31 @@ function applyTransform(value, transform) {
   }
 }
 
-export function resolveImageUrl(column, rowValues) {
-  const options = column?.options;
-  if (!options || typeof options !== 'object') return '';
+export function applyImageTransforms(rawValue, transforms) {
+  if (rawValue === undefined || rawValue === null || rawValue === '') return '';
+  let value = String(rawValue);
+  const safeTransforms = Array.isArray(transforms) ? transforms : [];
+  for (const transform of safeTransforms) {
+    value = applyTransform(value, transform);
+  }
+  return value;
+}
+
+export function resolveImageUrlFromConfig(config, rowValues) {
+  const options = config && typeof config === 'object' ? config : null;
+  if (!options) return '';
   const { urlTemplate, sourceColumnKey } = options;
   if (typeof urlTemplate !== 'string' || !urlTemplate) return '';
   if (typeof sourceColumnKey !== 'string' || !sourceColumnKey) return '';
   if (!/^https?:\/\//i.test(urlTemplate)) return '';
-
   const raw = rowValues?.[sourceColumnKey];
   if (raw === undefined || raw === null || raw === '') return '';
-
-  let value = String(raw);
-  const transforms = Array.isArray(options.transforms) ? options.transforms : [];
-  for (const transform of transforms) {
-    value = applyTransform(value, transform);
-  }
+  const value = applyImageTransforms(raw, options.transforms);
   const encoded = encodeURIComponent(value);
   return urlTemplate.split('{xxx}').join(encoded);
+}
+
+export function resolveImageUrl(column, rowValues) {
+  const options = column?.options;
+  return resolveImageUrlFromConfig(options, rowValues);
 }

@@ -574,8 +574,13 @@ export function usePurchaseOrdersPage() {
     await reload();
   }, [reload]);
 
-  const renameColumn = useCallback(async (id, label) => {
-    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body: { label } });
+  const renameColumn = useCallback(async (id, label, patch = null) => {
+    const body = { label };
+    if (patch && typeof patch === 'object') {
+      if (patch.dataType !== undefined) body.dataType = patch.dataType;
+      if (patch.options !== undefined) body.options = patch.options;
+    }
+    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body });
     await reloadColumns();
   }, [reloadColumns]);
 

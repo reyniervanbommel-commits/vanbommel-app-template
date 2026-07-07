@@ -20,6 +20,8 @@ export function FilterMenuMainPane({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
+  canEditImageColumn,
+  handleEditImageColumn,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -121,6 +123,12 @@ export function FilterMenuMainPane({
           <div className={styles.divider} />
         </>
       ) : null}
+      {canEditImageColumn ? (
+        <>
+          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditImageColumn}>Plaatjekolom bewerken</Button>
+          <div className={styles.divider} />
+        </>
+      ) : null}
       <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRemoveColumn} disabled={!canRemoveColumn}>
         Delete column
       </Button>
@@ -182,11 +190,9 @@ export function FilterMenuMainPane({
     </div>
   );
 }
-
 export function FilterMenuSubPane({
   styles,
   activeSubmenu,
-  availableColumns,
   handleAddType,
   textStyleDraft,
   handleTextColorChange,
@@ -206,11 +212,10 @@ export function FilterMenuSubPane({
   if (activeSubmenu === 'add') {
     return (
       <div className={styles.subPane}>
-        <PurchaseOrderAddColumnPane availableColumns={availableColumns} columnLevel={column?.level} onConfirm={handleAddType} />
+        <PurchaseOrderAddColumnPane columnLevel={column?.level} onConfirm={handleAddType} />
       </div>
     );
   }
-
   if (activeSubmenu === 'textStyle') {
     return (
       <div className={styles.subPane}>

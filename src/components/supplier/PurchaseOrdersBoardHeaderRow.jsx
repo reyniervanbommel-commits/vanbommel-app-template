@@ -88,7 +88,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                 groupingColumnKey={groupingColumnKey}
                 groupingColor={groupingColor}
                 isAdmin={isAdmin}
-                availableColumns={columns}
                 onToggleWriteback={onToggleWriteback}
                 onSetSortDirection={setSortDirection}
                 onSetOperator={setFilterOperator}

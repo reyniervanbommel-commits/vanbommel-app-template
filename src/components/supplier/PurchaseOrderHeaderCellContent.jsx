@@ -22,11 +22,13 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
   },
   image: {
-    height: '30px',
-    maxWidth: '100%',
-    objectFit: 'contain',
+    width: 'calc(100% + 20px)',
+    height: 'calc(100% + 4px)',
+    margin: '-2px -10px',
+    minHeight: '96px',
+    objectFit: 'cover',
     display: 'block',
-    borderRadius: tokens.borderRadiusSmall,
+    borderRadius: 0,
   },
 });
 
