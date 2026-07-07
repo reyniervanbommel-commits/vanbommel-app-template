@@ -11,6 +11,7 @@ import {
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
 import DataModelDiagram from './DataModelDiagram';
+import LookupFieldMappingPanel from './LookupFieldMappingPanel';
 import ExcelLinkWizard from './ExcelLinkWizard';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 
@@ -68,6 +69,13 @@ export default function AdminDataModel() {
               cache={selectedModel.cache}
               lookups={selectedModel.lookups}
             />
+            {selectedTab === 'purchase-orders' ? (
+              <LookupFieldMappingPanel
+                tableKey={selectedTab}
+                lookups={selectedModel.lookups}
+                onReload={selectedModel.reload}
+              />
+            ) : null}
             <SyncFilterBuilder
               tableKey={selectedTab}
               filterCatalog={selectedModel.filterCatalog}

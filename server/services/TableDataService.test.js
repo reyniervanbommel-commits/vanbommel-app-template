@@ -10,6 +10,7 @@ const {
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
+  buildLookupFieldMap,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -220,5 +221,34 @@ describe('TableDataService fetch adapters (#195)', () => {
     expect(typeof FETCH_ADAPTERS['purchase-orders']).toBe('function');
     expect(typeof FETCH_ADAPTERS.vendors).toBe('function');
     expect(typeof FETCH_ADAPTERS.items).toBe('function');
+  });
+});
+
+describe('TableDataService.buildLookupFieldMap', () => {
+  it('behoudt bestaande derived keys wanneer dezelfde targetvelden geselecteerd blijven', () => {
+    const map = buildLookupFieldMap({
+      targetTableKey: 'vendors',
+      targetFieldKeys: ['vendorOrganizationName', 'partyNumber'],
+      existingFields: {
+        vendorOrganizationName: 'vendorOrganizationName',
+        vendors_partyNumber: 'partyNumber',
+      },
+    });
+    expect(map).toEqual({
+      vendorOrganizationName: 'vendorOrganizationName',
+      vendors_partyNumber: 'partyNumber',
+    });
+  });
+
+  it('maakt stabiele prefixed keys voor nieuw geselecteerde velden', () => {
+    const map = buildLookupFieldMap({
+      targetTableKey: 'items',
+      targetFieldKeys: ['searchName', 'itemGroupId'],
+      existingFields: {},
+    });
+    expect(map).toEqual({
+      items_searchName: 'searchName',
+      items_itemGroupId: 'itemGroupId',
+    });
   });
 });

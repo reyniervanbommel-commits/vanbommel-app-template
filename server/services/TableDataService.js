@@ -413,6 +413,56 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizeLookupTargetFields(fields) {
+  const list = Array.isArray(fields) ? fields : [];
+  return [...new Set(list.map((field) => String(field || '').trim()).filter(Boolean))];
+}
+
+function sanitizeLookupDerivedKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MAX_KEY_LENGTH);
+}
+
+function ensureUniqueLookupDerivedKey(baseKey, usedKeys) {
+  const normalized = sanitizeLookupDerivedKey(baseKey) || 'lookup';
+  if (!usedKeys.has(normalized.toLowerCase())) return normalized;
+  for (let i = 2; i < 1000; i += 1) {
+    const withSuffix = sanitizeLookupDerivedKey(`${normalized}_${i}`) || `lookup_${i}`;
+    if (!usedKeys.has(withSuffix.toLowerCase())) return withSuffix;
+  }
+  throw new Error(`Kon geen unieke lookup-kolomkey maken voor '${baseKey}'`);
+}
+
+function buildLookupFieldMap({ targetTableKey, targetFieldKeys, existingFields = {} }) {
+  const selectedTargets = normalizeLookupTargetFields(targetFieldKeys);
+  if (!selectedTargets.length) return {};
+
+  const existingEntries = Object.entries(isPlainObject(existingFields) ? existingFields : {});
+  const existingDerivedByTarget = new Map();
+  existingEntries.forEach(([derivedKey, targetField]) => {
+    const normalizedTarget = String(targetField || '').trim();
+    const normalizedDerived = String(derivedKey || '').trim();
+    if (!normalizedTarget || !normalizedDerived) return;
+    if (!existingDerivedByTarget.has(normalizedTarget)) {
+      existingDerivedByTarget.set(normalizedTarget, normalizedDerived);
+    }
+  });
+
+  const usedDerived = new Set();
+  const result = {};
+  selectedTargets.forEach((targetField) => {
+    const preferredExisting = existingDerivedByTarget.get(targetField);
+    const generatedBase = `${targetTableKey}_${targetField}`;
+    const derived = ensureUniqueLookupDerivedKey(preferredExisting || generatedBase, usedDerived);
+    usedDerived.add(derived.toLowerCase());
+    result[derived] = targetField;
+  });
+  return result;
+}
+
 function toColumnLabelFromField(field) {
   return String(field || '')
     .replace(/[_-]+/g, ' ')
@@ -934,6 +984,12 @@ async function loadLookupEnrichment(table) {
     }
     const targetColumns = await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false });
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+    const fieldEntries = Object.entries(isPlainObject(lk.fields) ? lk.fields : {})
+      .filter(([derivedKey, targetColKey]) => (
+        Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
+      ))
+      .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
+    if (!fieldEntries.length) continue;
 
     const partitionless = targetTable.source && targetTable.source.providerType === 'excel';
 
@@ -948,7 +1004,6 @@ async function loadLookupEnrichment(table) {
       byKey.set(mapKey, parseJson(r.data_json));
     }
 
-    const fieldEntries = Object.entries(lk.fields); // [afgeleide-kolom-key, doel-kolom-key]
     const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
       const tc = targetColByKey.get(targetColKey);
       return {
@@ -1991,19 +2046,29 @@ async function getDataModel(tableKey) {
   const lookups = await getLookups(table.id);
   const lookupEntities = await Promise.all(lookups.map(async (lookup) => {
     let targetLabel = lookup.targetTableKey;
+    let targetColumns = [];
     try {
       const target = await getTableByKey(lookup.targetTableKey);
       targetLabel = target.label;
+      const columns = await listColumns({ tableId: target.id, scope: 'master', includeInactive: false });
+      targetColumns = columns
+        .filter((column) => column.source === 'source')
+        .map((column) => ({ key: column.key, label: column.label, dataType: column.dataType }));
     } catch {
       // Doeltabel ontbreekt/inactief; key blijft als label zichtbaar in het diagram.
     }
+    const selectedTargetColumns = normalizeLookupTargetFields(Object.values(isPlainObject(lookup.fields) ? lookup.fields : {}))
+      .filter((key) => targetColumns.some((column) => column.key === key));
     return {
+      id: lookup.id,
       sourceScope: lookup.sourceScope,
       sourceField: lookup.sourceField,
       targetTableKey: lookup.targetTableKey,
       targetTableLabel: targetLabel,
       targetKeyField: lookup.targetKeyField,
       fields: lookup.fields,
+      selectedTargetColumns,
+      targetColumns,
     };
   }));
 
@@ -2023,6 +2088,54 @@ async function getDataModel(tableKey) {
     filterCatalog: filterMeta.catalog,
     previewTables,
     lookups: lookupEntities,
+  };
+}
+
+async function updateLookupFields(tableKey, targetTableKey, targetFields) {
+  const table = await getTableByKey(tableKey);
+  const normalizedTargetTableKey = String(targetTableKey || '').trim();
+  if (!normalizedTargetTableKey) {
+    throw Object.assign(new Error('targetTableKey is verplicht'), { status: 400 });
+  }
+
+  const lookups = await getLookups(table.id);
+  const lookup = lookups.find((entry) => entry.targetTableKey === normalizedTargetTableKey);
+  if (!lookup) {
+    throw Object.assign(new Error(`Lookup '${normalizedTargetTableKey}' bestaat niet voor '${table.key}'`), { status: 404 });
+  }
+
+  const targetTable = await getTableByKey(normalizedTargetTableKey);
+  const targetColumns = (await listColumns({
+    tableId: targetTable.id,
+    scope: 'master',
+    includeInactive: false,
+  })).filter((column) => column.source === 'source');
+  const allowedTargetFields = new Set(targetColumns.map((column) => column.key));
+  const selectedTargetFields = normalizeLookupTargetFields(targetFields);
+  const invalidFields = selectedTargetFields.filter((field) => !allowedTargetFields.has(field));
+  if (invalidFields.length) {
+    throw Object.assign(new Error(`Ongeldige lookupvelden: ${invalidFields.join(', ')}`), { status: 400 });
+  }
+
+  const nextFieldMap = buildLookupFieldMap({
+    targetTableKey: normalizedTargetTableKey,
+    targetFieldKeys: selectedTargetFields,
+    existingFields: lookup.fields,
+  });
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.BigInt, lookup.id)
+    .input('fieldsJson', sql.NVarChar(sql.MAX), JSON.stringify(nextFieldMap))
+    .query(`
+      UPDATE dbo.tb_relations
+      SET lookup_fields_json = @fieldsJson
+      WHERE id = @id
+    `);
+
+  return {
+    targetTableKey: normalizedTargetTableKey,
+    selectedTargetColumns: Object.values(nextFieldMap),
+    fields: nextFieldMap,
   };
 }
 
@@ -2089,6 +2202,7 @@ module.exports = {
   correctField,
   getCellHistory,
   getDataModel,
+  updateLookupFields,
   discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,
@@ -2109,5 +2223,6 @@ module.exports = {
   excludeRows,
   includeRows,
   listHiddenInFilterRows,
+  buildLookupFieldMap,
   FETCH_ADAPTERS,
 };
