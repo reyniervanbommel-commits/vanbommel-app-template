@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
-const POLL_INTERVAL_MS = 750;
+const POLL_INTERVAL_MS = 1250;
 const MAX_WAIT_MS = 15 * 60 * 1000;
 
 /**
@@ -13,54 +13,55 @@ const MAX_WAIT_MS = 15 * 60 * 1000;
 export function usePurchaseOrderRefreshProgress() {
   const [progress, setProgress] = useState(null);
   const [running, setRunning] = useState(false);
-  const [polling, setPolling] = useState(false);
+  const lastKnownStateRef = useRef({ progress: null, running: false });
 
-  const loadProgress = useCallback(async () => {
-    const data = await apiRequest('/data/purchase-orders/refresh/progress');
-    const nextProgress = data?.progress || null;
-    const nextRunning = Boolean(data?.running);
+  const setKnownState = useCallback((nextProgress, nextRunning) => {
     setProgress(nextProgress);
     setRunning(nextRunning);
-    return {
-      running: nextRunning,
+    lastKnownStateRef.current = {
       progress: nextProgress,
+      running: nextRunning,
     };
   }, []);
 
-  useEffect(() => {
-    if (!polling) return undefined;
-    let stopped = false;
-    let timer = null;
+  const isProgressRateLimited = useCallback((err) => {
+    const status = Number(err?.status);
+    if (status === 429) return true;
+    return /\b429\b/.test(String(err?.message || ''));
+  }, []);
 
-    const tick = async () => {
-      try {
-        await loadProgress();
-      } catch {
-        // Polling is ondersteunend; de refresh-call zelf toont de echte foutmelding.
+  const loadProgress = useCallback(async () => {
+    try {
+      const data = await apiRequest('/data/purchase-orders/refresh/progress');
+      const nextProgress = data?.progress || null;
+      const nextRunning = Boolean(data?.running);
+      setKnownState(nextProgress, nextRunning);
+      return {
+        running: nextRunning,
+        progress: nextProgress,
+        rateLimited: false,
+      };
+    } catch (err) {
+      if (isProgressRateLimited(err)) {
+        return {
+          running: lastKnownStateRef.current.running,
+          progress: lastKnownStateRef.current.progress,
+          rateLimited: true,
+        };
       }
-      if (!stopped) {
-        timer = window.setTimeout(tick, POLL_INTERVAL_MS);
-      }
-    };
-
-    tick();
-
-    return () => {
-      stopped = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [loadProgress, polling]);
+      throw err;
+    }
+  }, [isProgressRateLimited, setKnownState]);
 
   const startProgress = useCallback(() => {
-    setProgress({
+    setKnownState({
       status: 'fetching',
       fetched: 0,
       totalToFetch: null,
       saved: 0,
       totalToSave: null,
-    });
-    setPolling(true);
-  }, []);
+    }, true);
+  }, [setKnownState]);
 
   const finishProgress = useCallback(async () => {
     try {
@@ -68,9 +69,10 @@ export function usePurchaseOrderRefreshProgress() {
     } catch {
       // Laat de laatst bekende voortgang staan als de eindpoll faalt.
     } finally {
-      setPolling(false);
+      const last = lastKnownStateRef.current;
+      setKnownState(last.progress, false);
     }
-  }, [loadProgress]);
+  }, [loadProgress, setKnownState]);
 
   const waitForCompletion = useCallback(async () => {
     const startedAt = Date.now();
@@ -78,15 +80,17 @@ export function usePurchaseOrderRefreshProgress() {
       const state = await loadProgress();
       const status = String(state?.progress?.status || '').toLowerCase();
       if ((status === 'done' || status === 'error') && !state?.running) {
+        setKnownState(state?.progress || null, false);
         return state?.progress || null;
       }
       if (!state?.running && status !== 'fetching' && status !== 'saving') {
+        setKnownState(state?.progress || null, false);
         return state?.progress || null;
       }
       await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
     }
     throw new Error('D365 refresh duurde te lang en is afgebroken');
-  }, [loadProgress]);
+  }, [loadProgress, setKnownState]);
 
   return useMemo(() => ({
     progress,

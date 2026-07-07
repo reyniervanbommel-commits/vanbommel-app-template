@@ -52,11 +52,18 @@ app.use(cors({
   credentials: true,
 }));
 
+function shouldSkipGlobalRateLimit(req) {
+  const requestPath = String(req.path || '').trim();
+  if (requestPath === '/api/purchase-orders/refresh/progress') return true;
+  return /^\/api\/data\/[^/]+\/refresh\/progress$/.test(requestPath);
+}
+
 app.use(rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipGlobalRateLimit,
 }));
 
 app.use(express.json());
