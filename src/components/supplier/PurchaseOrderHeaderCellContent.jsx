@@ -32,7 +32,7 @@ const useStyles = makeStyles({
   imageButton: {
     display: 'block',
     width: 'calc(100% + 20px)',
-    height: '24px',
+    height: '18px',
     margin: '-2px -10px',
     overflow: 'hidden',
     border: 'none',
