@@ -20,6 +20,12 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
   },
+  changedCell: {
+    backgroundColor: '#fff4ce',
+    borderRadius: '4px',
+    paddingLeft: '4px',
+    paddingRight: '4px',
+  },
 });
 
 function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
@@ -31,6 +37,8 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
   const formulaError = isFormulaColumn ? String(order?.formulaErrors?.[key] || '') : '';
   const linkedLineTotalColumnKey = linkedLineTotalMap?.[key] || '';
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
+  const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
+  const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
 
   const handleSave = useCallback((value) => {
     onSaveValue({
@@ -96,13 +104,16 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     : linkedLineValueMeta
       ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
       : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
-  const displayNode = isFormulaColumn
+  const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
         {formulaError ? 'Formulefout' : display}
       </span>
     )
     : display;
+  const displayNode = isChangedCell
+    ? <span className={styles.changedCell}>{rawDisplayNode}</span>
+    : rawDisplayNode;
 
   if (isFirst && order.removedInD365) {
     return (

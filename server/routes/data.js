@@ -335,7 +335,10 @@ router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
 // POST /api/data/:tableKey/rows/include — "terugzetten": hef de exclusion op. #AB:171
 router.post('/:tableKey/rows/include', async (req, res, next) => {
   try {
-    const result = await dataService.includeRows({ tableKey: req.params.tableKey, rows: req.body?.rows });
+    const result = await dataService.includeRows(
+      { tableKey: req.params.tableKey, rows: req.body?.rows },
+      req.user.id,
+    );
     return res.json(result);
   } catch (err) {
     return next(err);

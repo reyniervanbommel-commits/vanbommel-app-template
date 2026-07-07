@@ -2,6 +2,7 @@
 
 const {
   computeContentHash,
+  computeChangedFieldKeys,
   applyLookups,
   normalizeExclusionRows,
   compileMasterFormulaColumns,
@@ -38,6 +39,29 @@ describe('TableDataService.computeContentHash', () => {
 
   it('werkt zonder details', () => {
     expect(typeof computeContentHash(masterJson, [])).toBe('string');
+  });
+});
+
+describe('TableDataService.computeChangedFieldKeys', () => {
+  it('detecteert gewijzigde velden op sleutelnaam', () => {
+    expect(computeChangedFieldKeys(
+      { status: 'Open', quantity: 10 },
+      { status: 'Confirmed', quantity: 10 }
+    )).toEqual(['status']);
+  });
+
+  it('normaliseert lege/whitespace strings zodat false positives wegblijven', () => {
+    expect(computeChangedFieldKeys(
+      { comment: '   ' },
+      { comment: null }
+    )).toEqual([]);
+  });
+
+  it('detecteert toegevoegde en verwijderde keys', () => {
+    expect(computeChangedFieldKeys(
+      { oldField: 'A' },
+      { newField: 'B' }
+    )).toEqual(['newField', 'oldField']);
   });
 });
 

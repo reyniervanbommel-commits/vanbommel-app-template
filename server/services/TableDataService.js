@@ -278,6 +278,127 @@ function parseJson(raw) {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
+function normalizeDiffValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return trimmed;
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'boolean') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value) || isPlainObject(value)) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return value;
+}
+
+function toLedgerValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function computeChangedFieldKeys(previousValues, nextValues) {
+  const previous = isPlainObject(previousValues) ? previousValues : {};
+  const next = isPlainObject(nextValues) ? nextValues : {};
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  const changed = [];
+  for (const key of keys) {
+    const prev = normalizeDiffValue(previous[key]);
+    const nxt = normalizeDiffValue(next[key]);
+    if (!Object.is(prev, nxt)) changed.push(key);
+  }
+  return changed.sort();
+}
+
+function buildD365LedgerEntries({
+  tableId,
+  partitionKey,
+  recordKey,
+  detailKey = MASTER_DETAIL_KEY,
+  action,
+  previousValues = {},
+  nextValues = {},
+  refreshJobId = null,
+}) {
+  if (!tableId || !partitionKey || !recordKey || !action) return [];
+  if (action === 'DELETE') {
+    return [{
+      tableId,
+      partitionKey,
+      recordKey,
+      detailKey,
+      fieldKey: null,
+      source: 'D365',
+      action,
+      oldValue: toLedgerValue(previousValues),
+      newValue: null,
+      changedByUserId: null,
+      correlationId: null,
+      refreshJobId,
+    }];
+  }
+
+  const fieldKeys = action === 'INSERT'
+    ? Object.keys(isPlainObject(nextValues) ? nextValues : {}).sort()
+    : computeChangedFieldKeys(previousValues, nextValues);
+
+  if (!fieldKeys.length) return [];
+
+  return fieldKeys.map((fieldKey) => ({
+    tableId,
+    partitionKey,
+    recordKey,
+    detailKey,
+    fieldKey,
+    source: 'D365',
+    action,
+    oldValue: action === 'INSERT' ? null : toLedgerValue(previousValues?.[fieldKey]),
+    newValue: toLedgerValue(nextValues?.[fieldKey]),
+    changedByUserId: null,
+    correlationId: null,
+    refreshJobId,
+  }));
+}
+
+async function writeChangeLedgerEntries(requestFactory, entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (!list.length) return;
+  for (const entry of list) {
+    await requestFactory()
+      .input('tableId', sql.BigInt, entry.tableId)
+      .input('partitionKey', sql.NVarChar(32), entry.partitionKey)
+      .input('recordKey', sql.NVarChar(128), entry.recordKey)
+      .input('detailKey', sql.Int, Number.isInteger(entry.detailKey) ? entry.detailKey : MASTER_DETAIL_KEY)
+      .input('fieldKey', sql.NVarChar(128), entry.fieldKey || null)
+      .input('source', sql.NVarChar(16), entry.source || 'USER')
+      .input('action', sql.NVarChar(16), entry.action || 'UPDATE')
+      .input('oldValue', sql.NVarChar(sql.MAX), entry.oldValue || null)
+      .input('newValue', sql.NVarChar(sql.MAX), entry.newValue || null)
+      .input('changedByUserId', sql.Int, entry.changedByUserId || null)
+      .input('correlationId', sql.NVarChar(64), entry.correlationId || null)
+      .input('refreshJobId', sql.NVarChar(64), entry.refreshJobId || null)
+      .query(`
+        INSERT INTO dbo.tb_change_ledger
+          (table_id, partition_key, record_key, detail_key, field_key, source, action,
+           old_value, new_value, changed_by_user_id, correlation_id, refresh_job_id)
+        VALUES
+          (@tableId, @partitionKey, @recordKey, @detailKey, @fieldKey, @source, @action,
+           @oldValue, @newValue, @changedByUserId, @correlationId, @refreshJobId)
+      `);
+  }
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -439,7 +560,7 @@ async function isStale(tableKey) {
 // draai daarna één MERGE (master) en één DELETE + INSERT (details). Zo verdwijnt het N+1-patroon
 // (transactie + losse INSERT per order/regel) dat de refresh traag maakte.
 // ---------------------------------------------------------------------------
-async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource) {
+async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId) {
   const masterRows = [];
   const detailRows = [];
   let watermark = null;
@@ -467,11 +588,13 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     for (let i = 0; i < rec.details.length; i += 1) {
       const detail = rec.details[i];
       if (detail.detailKey === null || detail.detailKey === undefined) continue;
+      const detailJson = detailJsons[i];
       detailRows.push({
         partitionKey: rec.partitionKey,
         recordKey: rec.recordKey,
         detailKey: detail.detailKey,
-        dataJson: detailJsons[i],
+        dataJson: detailJson,
+        contentHash: computeContentHash(detailJson, []),
       });
     }
   }
@@ -497,9 +620,98 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
         partition_key NVARCHAR(32)  NOT NULL,
         record_key    NVARCHAR(128) NOT NULL,
         detail_key    INT           NOT NULL,
-        data_json     NVARCHAR(MAX) NOT NULL
+        data_json     NVARCHAR(MAX) NOT NULL,
+        content_hash  NVARCHAR(64)  NOT NULL
       );
     `);
+
+    const existingRows = await new sql.Request(tx)
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT c.scope, c.partition_key, c.record_key, c.detail_key, c.data_json, c.removed_at_source
+        FROM dbo.tb_cache c
+        INNER JOIN #stg_master m
+          ON c.partition_key = m.partition_key AND c.record_key = m.record_key
+        WHERE c.table_id = @tableId
+      `);
+
+    const previousMasterByRecord = new Map();
+    const previousDetailByRecord = new Map();
+    for (const row of existingRows.recordset) {
+      const rowKey = `${row.partition_key}|${row.record_key}`;
+      if (row.scope === 'master') {
+        if (!row.removed_at_source) previousMasterByRecord.set(rowKey, parseJson(row.data_json));
+        continue;
+      }
+      if (row.scope !== 'detail' || row.removed_at_source) continue;
+      if (!previousDetailByRecord.has(rowKey)) previousDetailByRecord.set(rowKey, new Map());
+      previousDetailByRecord.get(rowKey).set(Number(row.detail_key), parseJson(row.data_json));
+    }
+
+    const ledgerEntries = [];
+    const detailRowMapByRecord = new Map();
+    for (const row of detailRows) {
+      const rowKey = `${row.partitionKey}|${row.recordKey}`;
+      if (!detailRowMapByRecord.has(rowKey)) detailRowMapByRecord.set(rowKey, new Map());
+      detailRowMapByRecord.get(rowKey).set(Number(row.detailKey), row);
+    }
+
+    for (const row of masterRows) {
+      const rowKey = `${row.partitionKey}|${row.recordKey}`;
+      const previousMaster = previousMasterByRecord.get(rowKey);
+      const nextMaster = parseJson(row.dataJson);
+      if (!previousMaster) {
+        ledgerEntries.push(...buildD365LedgerEntries({
+          tableId: table.id,
+          partitionKey: row.partitionKey,
+          recordKey: row.recordKey,
+          detailKey: MASTER_DETAIL_KEY,
+          action: 'INSERT',
+          nextValues: nextMaster,
+          refreshJobId,
+        }));
+      } else {
+        ledgerEntries.push(...buildD365LedgerEntries({
+          tableId: table.id,
+          partitionKey: row.partitionKey,
+          recordKey: row.recordKey,
+          detailKey: MASTER_DETAIL_KEY,
+          action: 'UPDATE',
+          previousValues: previousMaster,
+          nextValues: nextMaster,
+          refreshJobId,
+        }));
+      }
+
+      const previousDetails = previousDetailByRecord.get(rowKey) || new Map();
+      const nextDetails = detailRowMapByRecord.get(rowKey) || new Map();
+      for (const [detailKey, nextDetailRow] of nextDetails.entries()) {
+        const nextValues = parseJson(nextDetailRow.dataJson);
+        const previousValues = previousDetails.get(detailKey);
+        if (!previousValues) {
+          ledgerEntries.push(...buildD365LedgerEntries({
+            tableId: table.id,
+            partitionKey: row.partitionKey,
+            recordKey: row.recordKey,
+            detailKey,
+            action: 'INSERT',
+            nextValues,
+            refreshJobId,
+          }));
+        } else {
+          ledgerEntries.push(...buildD365LedgerEntries({
+            tableId: table.id,
+            partitionKey: row.partitionKey,
+            recordKey: row.recordKey,
+            detailKey,
+            action: 'UPDATE',
+            previousValues,
+            nextValues,
+            refreshJobId,
+          }));
+        }
+      }
+    }
 
     const masterTable = new sql.Table('#stg_master');
     masterTable.create = false;
@@ -520,8 +732,9 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
       detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
       detailTable.columns.add('detail_key', sql.Int, { nullable: false });
       detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+      detailTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
       for (const r of detailRows) {
-        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson);
+        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson, r.contentHash);
       }
       await new sql.Request(tx).bulk(detailTable);
     }
@@ -548,26 +761,43 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
            @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
       `);
 
-    // Details: verwijder de bestaande regels van de records in deze chunk en herinsert set-based.
-    await new sql.Request(tx)
-      .input('tableId', sql.BigInt, table.id)
-      .query(`
-        DELETE d FROM dbo.tb_cache d
-        INNER JOIN #stg_master m
-          ON d.partition_key = m.partition_key AND d.record_key = m.record_key
-        WHERE d.table_id = @tableId AND d.scope = 'detail';
-      `);
-
     if (detailRows.length) {
       await new sql.Request(tx)
         .input('tableId', sql.BigInt, table.id)
         .input('syncedAt', sql.DateTime2, refreshStart)
         .query(`
-          INSERT INTO dbo.tb_cache
-            (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
-          SELECT @tableId, 'detail', partition_key, record_key, detail_key, data_json, @syncedAt, @syncedAt, 0
-          FROM #stg_detail;
+          MERGE dbo.tb_cache AS target
+          USING (
+            SELECT @tableId AS table_id, partition_key, record_key, detail_key, data_json, content_hash
+            FROM #stg_detail
+          ) AS src
+            ON target.table_id = src.table_id AND target.scope = 'detail'
+               AND target.partition_key = src.partition_key AND target.record_key = src.record_key
+               AND target.detail_key = src.detail_key
+          WHEN MATCHED THEN UPDATE SET
+            data_json = src.data_json,
+            synced_at = @syncedAt,
+            removed_at_source = 0,
+            content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> src.content_hash THEN @syncedAt ELSE target.content_changed_at END,
+            content_hash = src.content_hash
+          WHEN NOT MATCHED THEN INSERT
+            (table_id, scope, partition_key, record_key, detail_key, data_json,
+             synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
+          VALUES
+            (@tableId, 'detail', src.partition_key, src.record_key, src.detail_key, src.data_json,
+             @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
         `);
+    }
+
+    if (ledgerEntries.length) {
+      try {
+        await writeChangeLedgerEntries(() => new sql.Request(tx), ledgerEntries);
+      } catch (ledgerErr) {
+        logger.warn('Change-ledger (D365 insert/update events) wegschrijven mislukt; refresh gaat door', {
+          tableKey: table.key,
+          error: ledgerErr.message,
+        });
+      }
     }
 
     await new sql.Request(tx).batch(`
@@ -597,6 +827,7 @@ async function refresh(tableKey) {
   }
   const adapter = getFetchAdapter(table);
   const refreshStart = new Date();
+  const refreshJobId = `tb-refresh-${table.id}-${refreshStart.getTime()}`;
   resetRefreshProgress(tableKey, {
     status: 'fetching',
     startedAt: refreshStart.toISOString(),
@@ -679,7 +910,7 @@ async function refresh(tableKey) {
     for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
       const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
       const { saved: chunkSaved, watermark: chunkWatermark } =
-        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource);
+        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId);
       if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
       saved += chunkSaved;
       updateRefreshProgress(tableKey, {
@@ -694,14 +925,63 @@ async function refresh(tableKey) {
       });
     }
 
-    await pool.request()
+    const removedMasters = await pool.request()
       .input('tableId', sql.BigInt, table.id)
       .input('refreshStart', sql.DateTime2, refreshStart)
       .query(`
         UPDATE dbo.tb_cache
         SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+        OUTPUT inserted.partition_key, inserted.record_key, inserted.detail_key,
+               inserted.data_json, inserted.removed_at_source, deleted.removed_at_source AS previous_removed
         WHERE table_id = @tableId AND scope = 'master'
       `);
+
+    const removedDetails = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('refreshStart', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.tb_cache
+        SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+        OUTPUT inserted.partition_key, inserted.record_key, inserted.detail_key,
+               inserted.data_json, inserted.removed_at_source, deleted.removed_at_source AS previous_removed
+        WHERE table_id = @tableId AND scope = 'detail'
+      `);
+
+    const removedEntries = [];
+    for (const row of removedMasters.recordset || []) {
+      if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
+      removedEntries.push(...buildD365LedgerEntries({
+        tableId: table.id,
+        partitionKey: row.partition_key,
+        recordKey: row.record_key,
+        detailKey: MASTER_DETAIL_KEY,
+        action: 'DELETE',
+        previousValues: parseJson(row.data_json),
+        refreshJobId,
+      }));
+    }
+    for (const row of removedDetails.recordset || []) {
+      if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
+      removedEntries.push(...buildD365LedgerEntries({
+        tableId: table.id,
+        partitionKey: row.partition_key,
+        recordKey: row.record_key,
+        detailKey: Number(row.detail_key),
+        action: 'DELETE',
+        previousValues: parseJson(row.data_json),
+        refreshJobId,
+      }));
+    }
+    if (removedEntries.length) {
+      try {
+        await writeChangeLedgerEntries(() => pool.request(), removedEntries);
+      } catch (err) {
+        logger.warn('Change-ledger (D365 remove events) opslaan mislukt; refresh gaat door', {
+          tableKey,
+          error: err.message,
+        });
+      }
+    }
 
     await pool.request()
       .input('tableId', sql.BigInt, table.id)
@@ -1034,6 +1314,48 @@ function applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks) {
   }
 }
 
+function createOrderChangeState() {
+  return { isNew: false, isChanged: false, changedFieldKeys: new Set() };
+}
+
+function createLineChangeState() {
+  return { isNew: false, isChanged: false, isRemoved: false, changedFieldKeys: new Set() };
+}
+
+function buildD365ChangeState(ledgerRows, lastViewedMs) {
+  const orderChanges = new Map();
+  const lineChanges = new Map();
+  if (lastViewedMs === null || !Array.isArray(ledgerRows) || !ledgerRows.length) {
+    return { orderChanges, lineChanges };
+  }
+
+  for (const row of ledgerRows) {
+    const orderKey = `${row.partition_key}|${row.record_key}`;
+    if (!orderChanges.has(orderKey)) orderChanges.set(orderKey, createOrderChangeState());
+    const orderState = orderChanges.get(orderKey);
+    const detailKey = Number(row.detail_key);
+    const fieldKey = String(row.field_key || '').trim();
+    const action = String(row.action || '').toUpperCase();
+
+    if (detailKey === MASTER_DETAIL_KEY) {
+      if (action === 'INSERT') orderState.isNew = true;
+      else if (action === 'UPDATE') orderState.isChanged = true;
+      if (fieldKey) orderState.changedFieldKeys.add(fieldKey);
+      continue;
+    }
+
+    const lineKey = `${orderKey}|${detailKey}`;
+    if (!lineChanges.has(lineKey)) lineChanges.set(lineKey, createLineChangeState());
+    const lineState = lineChanges.get(lineKey);
+    if (action === 'INSERT') lineState.isNew = true;
+    else if (action === 'UPDATE') lineState.isChanged = true;
+    else if (action === 'DELETE') lineState.isRemoved = true;
+    if (fieldKey) lineState.changedFieldKeys.add(fieldKey);
+  }
+
+  return { orderChanges, lineChanges };
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
@@ -1069,7 +1391,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const detailsRes = await pool.request()
       .input('tableId', sql.BigInt, table.id)
       .query(`
-        SELECT partition_key, record_key, detail_key, data_json
+        SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
         FROM dbo.tb_cache WITH (NOLOCK)
         WHERE table_id = @tableId AND scope = 'detail'
         ORDER BY record_key, detail_key
@@ -1107,6 +1429,30 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     detailsByRecord.get(recKey).push(d);
   }
 
+  let d365LedgerRows = [];
+  if (lastViewedMs !== null) {
+    try {
+      const ledgerResult = await pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('lastViewedAt', sql.DateTime2, new Date(lastViewedAt))
+        .query(`
+          SELECT partition_key, record_key, detail_key, field_key, action
+          FROM dbo.tb_change_ledger WITH (NOLOCK)
+          WHERE table_id = @tableId
+            AND source = 'D365'
+            AND created_at > @lastViewedAt
+          ORDER BY created_at ASC, id ASC
+        `);
+      d365LedgerRows = ledgerResult.recordset;
+    } catch (ledgerErr) {
+      logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
+        tableKey: table.key,
+        error: ledgerErr.message,
+      });
+    }
+  }
+  const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows, lastViewedMs);
+
   function valuesFor(cols, sourceJson, custom) {
     const values = {};
     for (const col of cols) {
@@ -1125,17 +1471,38 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
+    let hasLineChanges = false;
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
       const detailValues = valuesFor(detailCols, parseJson(d.data_json), detailCustom);
       applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail');
-      return { detailKey: d.detail_key, values: detailValues };
+      const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
+      const ledgerState = lineChanges.get(lineKey);
+      const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
+      const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
+      const isBaseNew = lastViewedMs !== null && detailFirstSeenMs !== null && detailFirstSeenMs > lastViewedMs;
+      const isBaseChanged = lastViewedMs !== null && detailChangedMs !== null && detailChangedMs > lastViewedMs;
+      const isNew = lastViewedMs !== null && (Boolean(ledgerState?.isNew) || isBaseNew);
+      const isChanged = lastViewedMs !== null && !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
+      const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
+      if (isNew || isChanged || isRemoved) hasLineChanges = true;
+      return {
+        detailKey: d.detail_key,
+        values: detailValues,
+        isNew,
+        isChanged,
+        isRemoved,
+        changedFieldKeys: lastViewedMs !== null ? [...(ledgerState?.changedFieldKeys || new Set())] : [],
+      };
     });
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
-    const isNew = lastViewedMs !== null && firstSeenMs !== null && firstSeenMs > lastViewedMs;
-    const isChanged = !isNew && lastViewedMs !== null && changedMs !== null && changedMs > lastViewedMs;
+    const orderLedgerState = orderChanges.get(recKey);
+    const isBaseNew = lastViewedMs !== null && firstSeenMs !== null && firstSeenMs > lastViewedMs;
+    const isBaseChanged = lastViewedMs !== null && changedMs !== null && changedMs > lastViewedMs;
+    const isNew = lastViewedMs !== null && (Boolean(orderLedgerState?.isNew) || isBaseNew);
+    const isChanged = lastViewedMs !== null && !isNew && (Boolean(orderLedgerState?.isChanged) || isBaseChanged || hasLineChanges);
     if (isNew) newCount += 1;
     else if (isChanged) changedCount += 1;
 
@@ -1150,6 +1517,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       removedAtSource: Boolean(m.removed_at_source),
       isNew,
       isChanged,
+      changedFieldKeys: lastViewedMs !== null ? [...(orderLedgerState?.changedFieldKeys || new Set())] : [],
       values: masterValues,
       formulaErrors,
       details,
@@ -1165,6 +1533,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },
+    changeContractVersion: 1,
     syncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
     stale,
     hasCache: Boolean(lastFullSyncAt),
@@ -1307,6 +1676,40 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   // Cel-geschiedenis best-effort wegschrijven; een fout hier mag de (al opgeslagen) waarde niet laten mislukken.
   const change = result.recordset && result.recordset[0];
   if (change) {
+    const ledgerAction = String(change.action || '').toLowerCase() === 'insert'
+      ? 'INSERT'
+      : (String(change.action || '').toLowerCase() === 'clear' ? 'DELETE' : 'UPDATE');
+    const oldLedgerValue = pickTypedValue({
+      text: change.old_value_text,
+      number: change.old_value_number,
+      date: change.old_value_date,
+      bool: change.old_value_bool,
+    });
+    const newLedgerValue = pickTypedValue({
+      text: change.new_value_text,
+      number: change.new_value_number,
+      date: change.new_value_date,
+      bool: change.new_value_bool,
+    });
+    try {
+      await writeChangeLedgerEntries(() => pool.request(), [{
+        tableId: table.id,
+        partitionKey: part,
+        recordKey: record,
+        detailKey: resolvedDetail,
+        fieldKey: column.key,
+        source: 'USER',
+        action: ledgerAction,
+        oldValue: toLedgerValue(oldLedgerValue),
+        newValue: toLedgerValue(newLedgerValue),
+        changedByUserId: userId || null,
+        correlationId: crypto.randomUUID(),
+        refreshJobId: null,
+      }]);
+    } catch (ledgerErr) {
+      logger.warn('Change-ledger (user custom value) wegschrijven mislukt', { error: ledgerErr.message });
+    }
+
     try {
       await pool.request()
         .input('columnId', sql.BigInt, columnId)
@@ -1397,10 +1800,29 @@ async function excludeRows({ tableKey, rows }, userId) {
     await tx.rollback();
     throw err;
   }
+  try {
+    const correlationId = crypto.randomUUID();
+    await writeChangeLedgerEntries(() => pool.request(), normalized.map(({ partitionKey, recordKey }) => ({
+      tableId: table.id,
+      partitionKey,
+      recordKey,
+      detailKey: MASTER_DETAIL_KEY,
+      fieldKey: null,
+      source: 'USER',
+      action: 'DELETE',
+      oldValue: null,
+      newValue: null,
+      changedByUserId: userId || null,
+      correlationId,
+      refreshJobId: null,
+    })));
+  } catch (ledgerErr) {
+    logger.warn('Change-ledger (exclude rows) wegschrijven mislukt', { error: ledgerErr.message });
+  }
   return { excluded: normalized.length };
 }
 
-async function includeRows({ tableKey, rows }) {
+async function includeRows({ tableKey, rows }, userId) {
   const table = await getTableByKey(tableKey);
   const normalized = normalizeExclusionRows(rows);
   if (!normalized.length) throw Object.assign(new Error('Geen geldige rijen om terug te zetten'), { status: 400 });
@@ -1423,6 +1845,25 @@ async function includeRows({ tableKey, rows }) {
   } catch (err) {
     await tx.rollback();
     throw err;
+  }
+  try {
+    const correlationId = crypto.randomUUID();
+    await writeChangeLedgerEntries(() => pool.request(), normalized.map(({ partitionKey, recordKey }) => ({
+      tableId: table.id,
+      partitionKey,
+      recordKey,
+      detailKey: MASTER_DETAIL_KEY,
+      fieldKey: null,
+      source: 'USER',
+      action: 'INSERT',
+      oldValue: null,
+      newValue: null,
+      changedByUserId: userId || null,
+      correlationId,
+      refreshJobId: null,
+    })));
+  } catch (ledgerErr) {
+    logger.warn('Change-ledger (include rows) wegschrijven mislukt', { error: ledgerErr.message });
   }
   return { included: normalized.length };
 }
@@ -1534,6 +1975,25 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   await pool.request()
     .input('id', sql.BigInt, correctionId)
     .query("UPDATE dbo.tb_field_corrections SET status = 'applied', applied_at = SYSUTCDATETIME() WHERE id = @id");
+
+  try {
+    await writeChangeLedgerEntries(() => pool.request(), [{
+      tableId: table.id,
+      partitionKey: part,
+      recordKey: record,
+      detailKey: resolvedDetail,
+      fieldKey: column.key,
+      source: 'USER',
+      action: basedOnValue === null || basedOnValue === undefined ? 'INSERT' : 'UPDATE',
+      oldValue: toLedgerValue(basedOnValue),
+      newValue: toLedgerValue(newValue),
+      changedByUserId: userId || null,
+      correlationId: crypto.randomUUID(),
+      refreshJobId: null,
+    }]);
+  } catch (ledgerErr) {
+    logger.warn('Change-ledger (user D365 correction) wegschrijven mislukt', { error: ledgerErr.message });
+  }
 
   try {
     const cacheRow = await pool.request()
@@ -1897,6 +2357,7 @@ module.exports = {
   getLastViewedAt,
   markViewed,
   computeContentHash,
+  computeChangedFieldKeys,
   applyLookups,
   isFormulaColumn,
   assertCustomColumnWritable,

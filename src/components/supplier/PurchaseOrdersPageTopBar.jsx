@@ -194,6 +194,11 @@ export default function PurchaseOrdersPageTopBar({
             </Button>
           </div>
         ) : null}
+        <div className={styles.freshness} title="Highlight-prioriteit: verwijderd > nieuw > gewijzigd">
+          <Badge color="danger" appearance="tint" size="small">verwijderd</Badge>
+          <Badge color="success" appearance="tint" size="small">nieuw</Badge>
+          <Badge color="warning" appearance="tint" size="small">gewijzigd</Badge>
+        </div>
 
         <PurchaseOrderBulkActionsBar
           selectedCount={selectedCount}

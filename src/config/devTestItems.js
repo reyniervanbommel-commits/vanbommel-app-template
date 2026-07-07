@@ -3,6 +3,17 @@
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 export const devTestItems = [
   {
+    id: 'feature-196-d365-diff-ledger',
+    title: 'Feature 196 - D365 diff + change ledger',
+    checks: [
+      'Na refresh zijn nieuwe/gewijzigde orders zichtbaar en celniveau highlights tonen gewijzigde header-velden',
+      'Nieuwe, gewijzigde en verwijderde line-items tonen statusbadge en celhighlight op changedFieldKeys',
+      'Markeer als gezien verwijdert highlights op order-, line- en celniveau voor de ingelogde gebruiker',
+      'Write acties (custom value, D365 correctie, rij verbergen/terugzetten) schrijven events naar tb_change_ledger',
+      'Topbar legenda komt overeen met prioriteit: verwijderd > nieuw > gewijzigd',
+    ],
+  },
+  {
     id: 'perf-frontend-timing',
     title: 'Performance: compressie, code-splitting + timing-infra (#AB:142)',
     checks: [
