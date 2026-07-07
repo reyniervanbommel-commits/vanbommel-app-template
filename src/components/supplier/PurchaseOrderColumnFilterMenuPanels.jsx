@@ -1,10 +1,14 @@
 import React from 'react';
 import { Button, Dropdown, Input, Option, Text } from '@fluentui/react-components';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
+import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 
 export function FilterMenuMainPane({
   styles,
+  column,
   columnLabel,
+  showSortAndFilter = true,
+  showGrouping = true,
   activeSubmenu,
   toggleSubmenu,
   canSetColumnTextStyle,
@@ -42,21 +46,29 @@ export function FilterMenuMainPane({
     <div className={styles.mainPane}>
       <Text className={styles.fieldTitle}>{columnLabel}</Text>
       <div className={styles.divider} />
-      <div className={styles.sortActions}>
-        <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>Sort A to Z</Button>
-        <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortDesc}>Sort Z to A</Button>
-        <Button className={styles.sortButton} appearance="subtle" size="small" onClick={clearSort}>Clear sort</Button>
-      </div>
-      <div className={styles.divider} />
-      <Button
-        className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
-        appearance="subtle"
-        size="small"
-        onClick={() => toggleSubmenu('group')}
-      >
-        <span>Categorie / groeperen</span>
-        <span aria-hidden>›</span>
-      </Button>
+      {showSortAndFilter ? (
+        <>
+          <div className={styles.sortActions}>
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>Sort A to Z</Button>
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortDesc}>Sort Z to A</Button>
+            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={clearSort}>Clear sort</Button>
+          </div>
+          {showGrouping ? (
+            <>
+              <div className={styles.divider} />
+              <Button
+                className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
+                appearance="subtle"
+                size="small"
+                onClick={() => toggleSubmenu('group')}
+              >
+                <span>Categorie / groeperen</span>
+                <span aria-hidden>›</span>
+              </Button>
+            </>
+          ) : null}
+        </>
+      ) : null}
       {canSetColumnTextStyle ? (
         <>
           <div className={styles.divider} />
@@ -132,37 +144,41 @@ export function FilterMenuMainPane({
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>Push values to header column</Button>
         </>
       ) : null}
-      <div className={styles.divider} />
-      <Text className={styles.fieldTitle}>Filter</Text>
-      <div className={styles.filterRow}>
-        <Dropdown selectedOptions={[draft.operator]} value={operatorLabels[draft.operator]} onOptionSelect={handleOperatorSelect}>
-          {operatorEntries.map(([key, label]) => (
-            <Option key={key} value={key} text={label}>{label}</Option>
-          ))}
-        </Dropdown>
-        {isDate && draft.operator === 'between' ? (
-          <>
-            <Input type="date" value={draft.value} onChange={handleValueChange} />
-            <Input type="date" value={draft.secondaryValue} onChange={handleSecondaryValueChange} />
-          </>
-        ) : null}
-        {isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
-          <Input type="date" value={draft.value} onChange={handleValueChange} />
-        ) : null}
-        {isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
-          <Input type="number" min={1} value={draft.value} onChange={handleValueChange} placeholder="Amount" />
-        ) : null}
-        {isDate && draft.operator === 'nextWeek' ? (
-          <Text className={styles.hint}>Matches records in the next calendar week.</Text>
-        ) : null}
-        {!isDate ? (
-          <Input value={draft.value} onChange={handleValueChange} placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'} />
-        ) : null}
-        <div className={styles.actionRow}>
-          <Button size="small" appearance="primary" onClick={handleApply}>Apply</Button>
-          <Button size="small" appearance="secondary" onClick={handleClearFilter}>Clear</Button>
-        </div>
-      </div>
+      {showSortAndFilter ? (
+        <>
+          <div className={styles.divider} />
+          <Text className={styles.fieldTitle}>Filter</Text>
+          <div className={styles.filterRow}>
+            <Dropdown selectedOptions={[draft.operator]} value={operatorLabels[draft.operator]} onOptionSelect={handleOperatorSelect}>
+              {operatorEntries.map(([key, label]) => (
+                <Option key={key} value={key} text={label}>{label}</Option>
+              ))}
+            </Dropdown>
+            {isDate && draft.operator === 'between' ? (
+              <>
+                <Input type="date" value={draft.value} onChange={handleValueChange} />
+                <Input type="date" value={draft.secondaryValue} onChange={handleSecondaryValueChange} />
+              </>
+            ) : null}
+            {isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
+              <Input type="date" value={draft.value} onChange={handleValueChange} />
+            ) : null}
+            {isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
+              <Input type="number" min={1} value={draft.value} onChange={handleValueChange} placeholder="Amount" />
+            ) : null}
+            {isDate && draft.operator === 'nextWeek' ? (
+              <Text className={styles.hint}>Matches records in the next calendar week.</Text>
+            ) : null}
+            {!isDate ? (
+              <Input value={draft.value} onChange={handleValueChange} placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'} />
+            ) : null}
+            <div className={styles.actionRow}>
+              <Button size="small" appearance="primary" onClick={handleApply}>Apply</Button>
+              <Button size="small" appearance="secondary" onClick={handleClearFilter}>Clear</Button>
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -170,7 +186,7 @@ export function FilterMenuMainPane({
 export function FilterMenuSubPane({
   styles,
   activeSubmenu,
-  newColumnTypes,
+  availableColumns,
   handleAddType,
   textStyleDraft,
   handleTextColorChange,
@@ -190,12 +206,7 @@ export function FilterMenuSubPane({
   if (activeSubmenu === 'add') {
     return (
       <div className={styles.subPane}>
-        <Text className={styles.subPaneTitle}>Kolomtype</Text>
-        {newColumnTypes.map((type) => (
-          <Button key={type.key} className={styles.sortButton} appearance="subtle" size="small" onClick={() => handleAddType(type)}>
-            {type.label}
-          </Button>
-        ))}
+        <PurchaseOrderAddColumnPane availableColumns={availableColumns} columnLevel={column?.level} onConfirm={handleAddType} />
       </div>
     );
   }

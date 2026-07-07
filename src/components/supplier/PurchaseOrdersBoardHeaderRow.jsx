@@ -1,8 +1,9 @@
 import React from 'react';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -87,6 +88,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 groupingColumnKey={groupingColumnKey}
                 groupingColor={groupingColor}
                 isAdmin={isAdmin}
+                availableColumns={columns}
                 onToggleWriteback={onToggleWriteback}
                 onSetSortDirection={setSortDirection}
                 onSetOperator={setFilterOperator}

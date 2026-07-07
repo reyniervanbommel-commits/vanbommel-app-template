@@ -4,6 +4,7 @@ export const NEW_COLUMN_TYPES = [
   { key: 'number', label: 'Nummers', dataType: 'number' },
   { key: 'date', label: 'Datum', dataType: 'date' },
   { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
+  { key: 'image', label: 'Plaatje', dataType: 'image' },
   { key: 'formula', label: 'Formule', dataType: 'number' },
 ];
 
@@ -23,6 +24,16 @@ export function getDraftFromFilter(column, filter) {
     value: filter?.value || '',
     secondaryValue: filter?.secondaryValue || '',
   };
+}
+
+export function isColumnFilterActive(column, filter) {
+  if (!filter) return false;
+  if (isDateColumn(column)) {
+    if (filter.operator === 'nextWeek') return true;
+    if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
+    return Boolean(filter.value);
+  }
+  return Boolean(filter.value);
 }
 
 export function getTextStyleDraft(columnTextStyle) {

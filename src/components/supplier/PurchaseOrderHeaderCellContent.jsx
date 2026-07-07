@@ -4,6 +4,7 @@ import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
+import { resolveImageUrl } from '../../utils/imageColumnUrl';
 
 const useStyles = makeStyles({
   removedText: {
@@ -20,6 +21,13 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
   },
+  image: {
+    height: '30px',
+    maxWidth: '100%',
+    objectFit: 'contain',
+    display: 'block',
+    borderRadius: tokens.borderRadiusSmall,
+  },
 });
 
 function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
@@ -31,6 +39,22 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
   const formulaError = isFormulaColumn ? String(order?.formulaErrors?.[key] || '') : '';
   const linkedLineTotalColumnKey = linkedLineTotalMap?.[key] || '';
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
+
+  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+    const url = resolveImageUrl(column, order.values);
+    if (!url) return null;
+    return (
+      <img
+        key={url}
+        className={styles.image}
+        src={url}
+        alt={`${column.label} voor order ${order.orderNumber}`}
+        loading="lazy"
+        draggable={false}
+        onError={(event) => { event.currentTarget.style.display = 'none'; }}
+      />
+    );
+  }
 
   const handleSave = useCallback((value) => {
     onSaveValue({

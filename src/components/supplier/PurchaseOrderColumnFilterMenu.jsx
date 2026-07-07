@@ -5,21 +5,11 @@ import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilt
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
 import {
   HEX_COLOR_PATTERN,
-  NEW_COLUMN_TYPES,
   getDraftFromFilter,
   getTextStyleDraft,
+  isColumnFilterActive,
   isDateColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
-
-export function isColumnFilterActive(column, filter) {
-  if (!filter) return false;
-  if (isDateColumn(column)) {
-    if (filter.operator === 'nextWeek') return true;
-    if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
-    return Boolean(filter.value);
-  }
-  return Boolean(filter.value);
-}
 
 function PurchaseOrderColumnFilterMenu({
   column,
@@ -28,6 +18,7 @@ function PurchaseOrderColumnFilterMenu({
   groupingColumnKey,
   groupingColor,
   isAdmin,
+  availableColumns = [],
   onToggleWriteback,
   onSetSortDirection,
   onSetOperator,
@@ -69,6 +60,7 @@ function PurchaseOrderColumnFilterMenu({
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
+  const isImageColumn = column?.dataType === 'image';
 
   useEffect(() => {
     if (open) {
@@ -238,7 +230,10 @@ function PurchaseOrderColumnFilterMenu({
       <PopoverSurface className={styles.surface}>
         <FilterMenuMainPane
           styles={styles}
+          column={column}
           columnLabel={column.label}
+          showSortAndFilter={!isImageColumn}
+          showGrouping={!isImageColumn}
           activeSubmenu={activeSubmenu}
           toggleSubmenu={toggleSubmenu}
           canSetColumnTextStyle={canSetColumnTextStyle}
@@ -275,7 +270,7 @@ function PurchaseOrderColumnFilterMenu({
         <FilterMenuSubPane
           styles={styles}
           activeSubmenu={activeSubmenu}
-          newColumnTypes={NEW_COLUMN_TYPES}
+          availableColumns={availableColumns}
           handleAddType={handleAddType}
           textStyleDraft={textStyleDraft}
           handleTextColorChange={handleTextColorChange}

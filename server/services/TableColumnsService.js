@@ -69,6 +69,81 @@ function resolveWriteback({ writable, mechanism }) {
   return { writable: 1, mechanism: mech };
 }
 
+function badRequest(message) {
+  return Object.assign(new Error(message), { status: 400 });
+}
+
+function validateImageTransform(item, index) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw badRequest(`Transform #${index + 1} moet een object zijn`);
+  }
+  const type = String(item.type || '').trim();
+  switch (type) {
+    case 'trim':
+      return { type: 'trim' };
+    case 'remove':
+      if (typeof item.value !== 'string' || item.value.length === 0) {
+        throw badRequest("Transform 'remove' vereist een niet-lege string 'value'");
+      }
+      return { type: 'remove', value: item.value };
+    case 'replace':
+      if (typeof item.from !== 'string' || item.from.length === 0) {
+        throw badRequest("Transform 'replace' vereist een niet-lege string 'from'");
+      }
+      if (typeof item.to !== 'string') {
+        throw badRequest("Transform 'replace' vereist een string 'to'");
+      }
+      return { type: 'replace', from: item.from, to: item.to };
+    case 'substring': {
+      if (!Number.isInteger(item.start) || item.start < 0) {
+        throw badRequest("Transform 'substring' vereist een geheel getal 'start' >= 0");
+      }
+      const normalized = { type: 'substring', start: item.start };
+      if (item.end !== undefined && item.end !== null) {
+        if (!Number.isInteger(item.end)) {
+          throw badRequest("Transform 'substring' veld 'end' moet een geheel getal zijn");
+        }
+        normalized.end = item.end;
+      }
+      return normalized;
+    }
+    default:
+      throw badRequest(`Onbekend transform-type: ${type || 'leeg'}`);
+  }
+}
+
+function validateImageOptions(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw badRequest('Image-opties moeten een object zijn');
+  }
+  const { urlTemplate, sourceColumnKey, transforms } = options;
+  if (typeof urlTemplate !== 'string' || urlTemplate.trim().length === 0) {
+    throw badRequest('urlTemplate is verplicht');
+  }
+  const template = urlTemplate.trim();
+  if (!/^https?:\/\//i.test(template)) {
+    throw badRequest('urlTemplate moet beginnen met http:// of https://');
+  }
+  if (!template.includes('{xxx}')) {
+    throw badRequest('urlTemplate moet de placeholder {xxx} bevatten');
+  }
+  if (typeof sourceColumnKey !== 'string' || sourceColumnKey.trim().length === 0) {
+    throw badRequest('sourceColumnKey is verplicht');
+  }
+  let normalizedTransforms = [];
+  if (transforms !== undefined && transforms !== null) {
+    if (!Array.isArray(transforms)) {
+      throw badRequest('transforms moet een array zijn');
+    }
+    normalizedTransforms = transforms.map(validateImageTransform);
+  }
+  return {
+    urlTemplate: template,
+    sourceColumnKey: sourceColumnKey.trim(),
+    transforms: normalizedTransforms,
+  };
+}
+
 async function createColumn({ tableKey, scope, label, dataType, options = null, formulaExpr = null }, userId) {
   const table = await getTableByKey(tableKey);
   const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
@@ -82,16 +157,43 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   }
 
   let optionsJson = null;
+  let normalizedImageOptions = null;
   if (dataType === 'select' && !isFormulaColumn) {
     const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
     if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
     optionsJson = JSON.stringify(list);
+  }
+  if (dataType === 'image') {
+    if (scope !== 'master') {
+      throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+    }
+    if (isFormulaColumn) {
+      throw Object.assign(new Error('Formulekolommen ondersteunen geen image-datatype'), { status: 400 });
+    }
+    normalizedImageOptions = validateImageOptions(options);
+    optionsJson = JSON.stringify(normalizedImageOptions);
   }
   if (isFormulaColumn && dataType === 'select') {
     throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-datatype'), { status: 400 });
   }
 
   const pool = await getPool();
+  if (dataType === 'image') {
+    const sourceCheck = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('sourceColumnKey', sql.NVarChar(64), normalizedImageOptions.sourceColumnKey)
+      .query(`
+        SELECT 1
+        FROM dbo.tb_columns
+        WHERE table_id = @tableId
+          AND scope = 'master'
+          AND [key] = @sourceColumnKey
+          AND is_active = 1
+      `);
+    if (!sourceCheck.recordset.length) {
+      throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+    }
+  }
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
   if (isFormulaColumn) {
     const masterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
@@ -165,8 +267,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (!DATA_TYPES.includes(nextDataType)) {
     throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
   }
-  if (nextDataType === 'select') {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-datatype'), { status: 400 });
+  if (nextDataType === 'select' || nextDataType === 'image') {
+    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of image-datatype'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
@@ -312,6 +414,7 @@ module.exports = {
   DATA_TYPES,
   slugify,
   resolveWriteback,
+  validateImageOptions,
   normalizeFormulaExpression,
   validateFormulaReferences,
   findDependentFormulaColumn,

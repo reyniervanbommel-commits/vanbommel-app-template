@@ -3,6 +3,17 @@
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 export const devTestItems = [
   {
+    id: 'feature-178-image-column-main-table',
+    title: 'Feature 178 - Plaatje-kolom in main tabel',
+    checks: [
+      'Via kolommenu kan type Plaatje worden gekozen en geconfigureerd met urlTemplate + bronkolom',
+      'Nieuwe plaatje-kolom rendert read-only afbeeldingen per rij op basis van de bronkolomwaarde',
+      'Ongeldige template of ontbrekende bronwaarde veroorzaakt geen crash en toont geen gebroken afbeelding',
+      'Sorteren en filteren op een plaatje-kolom is niet beschikbaar in het kolommenu',
+      'Externe https-afbeeldingen laden in preview/DEV met CSP-header img-src self,data,https',
+    ],
+  },
+  {
     id: 'perf-frontend-timing',
     title: 'Performance: compressie, code-splitting + timing-infra (#AB:142)',
     checks: [
