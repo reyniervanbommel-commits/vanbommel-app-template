@@ -44,4 +44,14 @@ export const devTestItems = [
       'Formulekolommen op linked headerkolommen tonen verwachte numerieke uitkomst per rij',
     ],
   },
+  {
+    id: 'feature-178-image-column-ux-v1-0-7',
+    title: 'Feature 178 - Plaatjekolom UX-afwerking (v1.0.7)',
+    checks: [
+      'Plaatje-thumbnail vult de cel tot aan de randen zonder de rijhoogte op te rekken',
+      'Klik op plaatje opent popup met grote preview en broninformatie (alleen originele waarde)',
+      'Popup toont geen extra linked-table blok, bronkolom of na-transformatie regel meer',
+      'Plaatjekolom blijft read-only en menu-acties veroorzaken geen layout-sprongen in de tabel',
+    ],
+  },
 ];
