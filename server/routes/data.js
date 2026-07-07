@@ -247,20 +247,6 @@ router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, ne
   }
 });
 
-// PUT /api/data/:tableKey/lookups/:targetTableKey — admin: kies welke lookupkolommen op het PO-bord komen.
-router.put('/:tableKey/lookups/:targetTableKey', requireRole(ROLES.ADMIN), async (req, res, next) => {
-  try {
-    const result = await dataService.updateLookupFields(
-      req.params.tableKey,
-      req.params.targetTableKey,
-      req.body?.targetFields
-    );
-    return res.json(result);
-  } catch (err) {
-    return next(err);
-  }
-});
-
 // POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
 // geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
 router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {

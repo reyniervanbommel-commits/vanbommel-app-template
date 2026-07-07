@@ -982,10 +982,16 @@ async function loadLookupEnrichment(table) {
     } catch {
       continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
     }
-    const targetColumns = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }))
+    const targetColumns = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false }))
       .filter((column) => column.source === 'source');
+    if (!targetColumns.length) continue;
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
-    const fieldEntries = Object.entries(isPlainObject(lk.fields) ? lk.fields : {})
+    const fieldMap = buildLookupFieldMap({
+      targetTableKey: lk.targetTableKey,
+      targetFieldKeys: targetColumns.map((column) => column.key),
+      existingFields: lk.fields,
+    });
+    const fieldEntries = Object.entries(fieldMap)
       .filter(([derivedKey, targetColKey]) => (
         Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
       ))
@@ -1035,7 +1041,7 @@ async function loadLookupEnrichment(table) {
     } else {
       masterCols.push(...synthetic);
     }
-    enriched.push({ ...lk, byKey, fieldEntries, partitionless });
+    enriched.push({ ...lk, fields: fieldMap, byKey, fieldEntries, partitionless });
   }
 
   return { lookups: enriched, masterCols, detailCols };
@@ -2094,8 +2100,7 @@ async function getDataModel(tableKey) {
     } catch {
       // Doeltabel ontbreekt/inactief; key blijft als label zichtbaar in het diagram.
     }
-    const selectedTargetColumns = normalizeLookupTargetFields(Object.values(isPlainObject(lookup.fields) ? lookup.fields : {}))
-      .filter((key) => targetColumns.some((column) => column.key === key));
+    const selectedTargetColumns = targetColumns.filter((column) => column.isActive).map((column) => column.key);
     return {
       id: lookup.id,
       sourceScope: lookup.sourceScope,
@@ -2125,54 +2130,6 @@ async function getDataModel(tableKey) {
     filterCatalog: filterMeta.catalog,
     previewTables,
     lookups: lookupEntities,
-  };
-}
-
-async function updateLookupFields(tableKey, targetTableKey, targetFields) {
-  const table = await getTableByKey(tableKey);
-  const normalizedTargetTableKey = String(targetTableKey || '').trim();
-  if (!normalizedTargetTableKey) {
-    throw Object.assign(new Error('targetTableKey is verplicht'), { status: 400 });
-  }
-
-  const lookups = await getLookups(table.id);
-  const lookup = lookups.find((entry) => entry.targetTableKey === normalizedTargetTableKey);
-  if (!lookup) {
-    throw Object.assign(new Error(`Lookup '${normalizedTargetTableKey}' bestaat niet voor '${table.key}'`), { status: 404 });
-  }
-
-  const targetTable = await getTableByKey(normalizedTargetTableKey);
-  const targetColumns = (await listColumns({
-    tableId: targetTable.id,
-    scope: 'master',
-    includeInactive: true,
-  })).filter((column) => column.source === 'source');
-  const allowedTargetFields = new Set(targetColumns.map((column) => column.key));
-  const selectedTargetFields = normalizeLookupTargetFields(targetFields);
-  const invalidFields = selectedTargetFields.filter((field) => !allowedTargetFields.has(field));
-  if (invalidFields.length) {
-    throw Object.assign(new Error(`Ongeldige lookupvelden: ${invalidFields.join(', ')}`), { status: 400 });
-  }
-
-  const nextFieldMap = buildLookupFieldMap({
-    targetTableKey: normalizedTargetTableKey,
-    targetFieldKeys: selectedTargetFields,
-    existingFields: lookup.fields,
-  });
-  const pool = await getPool();
-  await pool.request()
-    .input('id', sql.BigInt, lookup.id)
-    .input('fieldsJson', sql.NVarChar(sql.MAX), JSON.stringify(nextFieldMap))
-    .query(`
-      UPDATE dbo.tb_relations
-      SET lookup_fields_json = @fieldsJson
-      WHERE id = @id
-    `);
-
-  return {
-    targetTableKey: normalizedTargetTableKey,
-    selectedTargetColumns: Object.values(nextFieldMap),
-    fields: nextFieldMap,
   };
 }
 
@@ -2239,7 +2196,6 @@ module.exports = {
   correctField,
   getCellHistory,
   getDataModel,
-  updateLookupFields,
   discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,
