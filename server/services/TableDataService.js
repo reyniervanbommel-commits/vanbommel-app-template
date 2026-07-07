@@ -625,6 +625,32 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
       );
     `);
 
+    const masterTable = new sql.Table('#stg_master');
+    masterTable.create = false;
+    masterTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+    masterTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+    masterTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+    masterTable.columns.add('modified_at', sql.DateTime2, { nullable: true });
+    masterTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
+    for (const r of masterRows) {
+      masterTable.rows.add(r.partitionKey, r.recordKey, r.dataJson, r.modifiedAt, r.contentHash);
+    }
+    await new sql.Request(tx).bulk(masterTable);
+
+    if (detailRows.length) {
+      const detailTable = new sql.Table('#stg_detail');
+      detailTable.create = false;
+      detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+      detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+      detailTable.columns.add('detail_key', sql.Int, { nullable: false });
+      detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+      detailTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
+      for (const r of detailRows) {
+        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson, r.contentHash);
+      }
+      await new sql.Request(tx).bulk(detailTable);
+    }
+
     const existingRows = await new sql.Request(tx)
       .input('tableId', sql.BigInt, table.id)
       .query(`
@@ -711,32 +737,6 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
           }));
         }
       }
-    }
-
-    const masterTable = new sql.Table('#stg_master');
-    masterTable.create = false;
-    masterTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
-    masterTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
-    masterTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
-    masterTable.columns.add('modified_at', sql.DateTime2, { nullable: true });
-    masterTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
-    for (const r of masterRows) {
-      masterTable.rows.add(r.partitionKey, r.recordKey, r.dataJson, r.modifiedAt, r.contentHash);
-    }
-    await new sql.Request(tx).bulk(masterTable);
-
-    if (detailRows.length) {
-      const detailTable = new sql.Table('#stg_detail');
-      detailTable.create = false;
-      detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
-      detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
-      detailTable.columns.add('detail_key', sql.Int, { nullable: false });
-      detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
-      detailTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
-      for (const r of detailRows) {
-        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson, r.contentHash);
-      }
-      await new sql.Request(tx).bulk(detailTable);
     }
 
     // Master: één set-based MERGE (nieuw/gewijzigd-detectie via content_hash blijft identiek).
@@ -1380,8 +1380,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
         SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
         FROM dbo.tb_cache c WITH (NOLOCK)
         WHERE c.table_id = @tableId AND c.scope = 'master'
-        ${includeRemoved ? '' : `AND c.removed_at_source = 0
-          AND NOT EXISTS (
+        ${includeRemoved ? '' : `AND NOT EXISTS (
             SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
             WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
           )`}
@@ -1597,6 +1596,12 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
   if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
+  if (part.length > 32 || record.length > 128) {
+    throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+  }
+  if (part.length > 32 || record.length > 128) {
+    throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+  }
   if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
 
   let resolvedDetail = MASTER_DETAIL_KEY;
@@ -2046,8 +2051,8 @@ function formatHistoryRow(row) {
     newValue: pickTypedValue({ text: row.new_value_text, number: row.new_value_number, date: row.new_value_date, bool: row.new_value_bool }),
     status: row.status || null,               // alleen write-back (pending/applied/failed)
     reason: row.change_reason || null,
-    user: (row.user_name || row.user_email)
-      ? { name: row.user_name || null, email: row.user_email || null }
+    user: row.user_name
+      ? { name: row.user_name }
       : null,
   };
 }
@@ -2082,7 +2087,7 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
              h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
              h.new_value_text, h.new_value_number, h.new_value_date, h.new_value_bool,
              CAST(NULL AS NVARCHAR(16)) AS status, h.change_reason,
-             u.email AS user_email, u.display_name AS user_name
+             u.display_name AS user_name
       FROM dbo.tb_cell_history h
       LEFT JOIN dbo.users u ON u.id = h.changed_by
       WHERE h.column_id = @columnId AND h.partition_key = @partitionKey
@@ -2092,7 +2097,7 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
              c.old_value AS old_value_text, CAST(NULL AS DECIMAL(38,10)) AS old_value_number, CAST(NULL AS DATETIME2) AS old_value_date, CAST(NULL AS BIT) AS old_value_bool,
              c.new_value AS new_value_text, CAST(NULL AS DECIMAL(38,10)) AS new_value_number, CAST(NULL AS DATETIME2) AS new_value_date, CAST(NULL AS BIT) AS new_value_bool,
              c.status, CAST(NULL AS NVARCHAR(512)) AS change_reason,
-             u2.email AS user_email, u2.display_name AS user_name
+             u2.display_name AS user_name
       FROM dbo.tb_field_corrections c
       LEFT JOIN dbo.users u2 ON u2.id = c.created_by
       WHERE c.column_id = @columnId AND c.partition_key = @partitionKey

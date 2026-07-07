@@ -50,6 +50,18 @@ export default function PurchaseOrdersSubitemsBodyRows({
               : (line?.isNew
                 ? <Badge appearance="tint" color="success" size="small">nieuw</Badge>
                 : (line?.isChanged ? <Badge appearance="tint" color="warning" size="small">gewijzigd</Badge> : null));
+            if (line?.isRemoved) {
+              return (
+                <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={subCellClassName} style={cellStyle}>
+                  <span className={showLineBadge ? styles.statusWrap : undefined}>
+                    <span className={styles.removedText}>
+                      {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
+                    </span>
+                    {showLineBadge ? lineBadge : null}
+                  </span>
+                </td>
+              );
+            }
             if (column.source === 'custom') {
               return (
                 <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={subCellClassName} style={cellStyle}>

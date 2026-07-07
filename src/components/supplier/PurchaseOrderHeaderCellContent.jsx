@@ -65,37 +65,41 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
 
   if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (
-      <EditableCell
-        dataType={column.dataType}
-        value={rawValue}
-        options={column.options}
-        ariaLabel={`${column.label} voor order ${order.orderNumber}`}
-        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
-        cellKeys={{
-          columnId: column.id,
-          dataAreaId: order.dataAreaId,
-          orderNumber: order.orderNumber,
-          lineNumber: null,
-        }}
-        onSave={handleSave}
-      />
+      <span className={isChangedCell ? styles.changedCell : undefined}>
+        <EditableCell
+          dataType={column.dataType}
+          value={rawValue}
+          options={column.options}
+          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onSave={handleSave}
+        />
+      </span>
     );
   }
 
   if (column.source === 'd365' && column.writableToD365 && onCorrect) {
     return (
-      <PurchaseOrderWriteBackCell
-        column={column}
-        value={rawValue}
-        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
-        cellKeys={{
-          columnId: column.id,
-          dataAreaId: order.dataAreaId,
-          orderNumber: order.orderNumber,
-          lineNumber: null,
-        }}
-        onCorrect={handleCorrect}
-      />
+      <span className={isChangedCell ? styles.changedCell : undefined}>
+        <PurchaseOrderWriteBackCell
+          column={column}
+          value={rawValue}
+          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onCorrect={handleCorrect}
+        />
+      </span>
     );
   }
 

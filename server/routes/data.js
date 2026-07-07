@@ -14,6 +14,7 @@ const { ROLES } = require('../constants/roles');
 const router = express.Router();
 
 function toColumnId(raw) {
+  if (!/^\d+$/.test(String(raw || '').trim())) return null;
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
 }
@@ -30,7 +31,7 @@ router.get('/:tableKey', async (req, res, next) => {
         await dataService.refresh(tableKey);
         refreshed = true;
       } catch (refreshErr) {
-        refreshError = refreshErr.message || 'Verversen mislukt';
+        refreshError = 'Verversen mislukt';
       }
     }
     const data = await dataService.read({ tableKey, userId: req.user.id });
