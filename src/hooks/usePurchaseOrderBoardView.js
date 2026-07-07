@@ -3,6 +3,11 @@ import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../utils/purchaseOrderTotals';
 
+const ACTIVITY_FILTER_ALL = 'all';
+const ACTIVITY_FILTER_NEW = 'new';
+const ACTIVITY_FILTER_CHANGED = 'changed';
+const ACTIVITY_FILTER_REMOVED = 'removed';
+
 /**
  * Compositiepunt voor de board-view state: combineert filter/sort
  * (usePurchaseOrderTableView) met grouping (usePurchaseOrderGrouping) en levert
@@ -17,7 +22,7 @@ export function usePurchaseOrderBoardView({
   lineTotalHeaderLinks = [],
   lineValueHeaderLinks = [],
 }) {
-  const [changedOnlyFilter, setChangedOnlyFilter] = useState(false);
+  const [activityFilter, setActivityFilter] = useState(ACTIVITY_FILTER_ALL);
   const linkedLineTotalByHeaderKey = useMemo(
     () => (Array.isArray(lineTotalHeaderLinks)
       ? lineTotalHeaderLinks.reduce((acc, link) => {
@@ -76,26 +81,48 @@ export function usePurchaseOrderBoardView({
     });
   }, [items, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
+  const hasNewData = useCallback((order) => (
+    Boolean(order?.isNew)
+    || (Array.isArray(order?.lines) && order.lines.some((line) => line?.isNew))
+  ), []);
+
+  const hasRemovedData = useCallback((order) => (
+    Boolean(order?.removedInD365)
+    || (Array.isArray(order?.lines) && order.lines.some((line) => line?.isRemoved))
+  ), []);
+
   const hasChangedData = useCallback((order) => {
-    const orderChanged = Boolean(order?.isChanged || order?.isRemoved || order?.isNew);
+    if (hasNewData(order)) return false;
     const headerCellChanged = Array.isArray(order?.changedFieldKeys) && order.changedFieldKeys.length > 0;
+    const orderChanged = Boolean(order?.isChanged) || headerCellChanged;
     const lineChanged = Array.isArray(order?.lines) && order.lines.some((line) => (
-      line?.isChanged
-      || line?.isRemoved
-      || line?.isNew
-      || (Array.isArray(line?.changedFieldKeys) && line.changedFieldKeys.length > 0)
+      line?.isChanged || (Array.isArray(line?.changedFieldKeys) && line.changedFieldKeys.length > 0)
     ));
-    return orderChanged || headerCellChanged || lineChanged;
+    return orderChanged || lineChanged;
+  }, [hasNewData]);
+
+  const matchesActivityFilter = useCallback((order) => {
+    if (activityFilter === ACTIVITY_FILTER_NEW) return hasNewData(order);
+    if (activityFilter === ACTIVITY_FILTER_CHANGED) return hasChangedData(order);
+    if (activityFilter === ACTIVITY_FILTER_REMOVED) return hasRemovedData(order);
+    return true;
+  }, [activityFilter, hasChangedData, hasNewData, hasRemovedData]);
+
+  const activityCounts = useMemo(() => itemsWithLinkedValues.reduce((acc, order) => {
+    if (hasNewData(order)) acc.newCount += 1;
+    if (hasChangedData(order)) acc.changedCount += 1;
+    if (hasRemovedData(order)) acc.removedCount += 1;
+    return acc;
+  }, { newCount: 0, changedCount: 0, removedCount: 0 }), [itemsWithLinkedValues, hasChangedData, hasNewData, hasRemovedData]);
+
+  const toggleActivityFilter = useCallback((nextFilter) => {
+    setActivityFilter((prev) => (prev === nextFilter ? ACTIVITY_FILTER_ALL : nextFilter));
   }, []);
 
   const filteredItems = useMemo(
-    () => (changedOnlyFilter ? itemsWithLinkedValues.filter(hasChangedData) : itemsWithLinkedValues),
-    [changedOnlyFilter, hasChangedData, itemsWithLinkedValues]
+    () => (activityFilter === ACTIVITY_FILTER_ALL ? itemsWithLinkedValues : itemsWithLinkedValues.filter(matchesActivityFilter)),
+    [activityFilter, itemsWithLinkedValues, matchesActivityFilter]
   );
-
-  const toggleChangedOnlyFilter = useCallback(() => {
-    setChangedOnlyFilter((prev) => !prev);
-  }, []);
 
   const tableView = usePurchaseOrderTableView({ items: filteredItems, columns });
 
@@ -145,8 +172,9 @@ export function usePurchaseOrderBoardView({
       toggleSort: tableView.toggleSort,
       clearSort: tableView.clearSort,
       setSortDirection: tableView.setSortDirection,
-      changedOnlyFilter,
-      toggleChangedOnlyFilter,
+      activityFilter,
+      toggleActivityFilter,
+      activityCounts,
       // afgeleide rijen
       rows,
       // grouping API
@@ -161,6 +189,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, changedOnlyFilter, toggleChangedOnlyFilter, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

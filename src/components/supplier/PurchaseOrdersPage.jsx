@@ -204,12 +204,13 @@ export default function PurchaseOrdersPage() {
           total,
         }}
         activityState={{
-          newCount,
-          changedCount,
+          newCount: boardView.activityCounts?.newCount ?? newCount,
+          changedCount: boardView.activityCounts?.changedCount ?? changedCount,
+          removedCount: boardView.activityCounts?.removedCount ?? 0,
           markViewed,
           markingViewed,
-          changedOnlyFilter: boardView.changedOnlyFilter,
-          toggleChangedOnlyFilter: boardView.toggleChangedOnlyFilter,
+          activityFilter: boardView.activityFilter,
+          toggleActivityFilter: boardView.toggleActivityFilter,
         }}
         bulkState={{
           selectedCount: selection.selectedCount,

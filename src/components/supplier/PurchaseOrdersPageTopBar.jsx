@@ -95,10 +95,11 @@ export default function PurchaseOrdersPageTopBar({
   const {
     newCount,
     changedCount,
+    removedCount,
     markViewed,
     markingViewed,
-    changedOnlyFilter,
-    toggleChangedOnlyFilter,
+    activityFilter,
+    toggleActivityFilter,
   } = activityState;
   const {
     selectedCount,
@@ -185,10 +186,11 @@ export default function PurchaseOrdersPageTopBar({
         <PurchaseOrderChangeActivityBar
           newCount={newCount}
           changedCount={changedCount}
+          removedCount={removedCount}
           markViewed={markViewed}
           markingViewed={markingViewed}
-          changedOnlyFilter={changedOnlyFilter}
-          toggleChangedOnlyFilter={toggleChangedOnlyFilter}
+          activityFilter={activityFilter}
+          toggleActivityFilter={toggleActivityFilter}
         />
 
         <PurchaseOrderBulkActionsBar

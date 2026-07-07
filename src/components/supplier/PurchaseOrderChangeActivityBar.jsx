@@ -21,25 +21,49 @@ const useStyles = makeStyles({
 function PurchaseOrderChangeActivityBar({
   newCount,
   changedCount,
+  removedCount,
   markViewed,
   markingViewed,
-  changedOnlyFilter,
-  toggleChangedOnlyFilter,
+  activityFilter,
+  toggleActivityFilter,
 }) {
-  if (!(newCount > 0 || changedCount > 0)) return null;
+  if (!(newCount > 0 || changedCount > 0 || removedCount > 0)) return null;
   const styles = useStyles();
   return (
     <div className={styles.wrap}>
-      {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
+      {newCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => toggleActivityFilter('new')}
+          className={styles.filterBadgeButton}
+          title={activityFilter === 'new' ? 'Toon alles' : 'Filter op nieuwe regels'}
+        >
+          <Badge color="success" appearance={activityFilter === 'new' ? 'filled' : 'tint'}>
+            {newCount} nieuw
+          </Badge>
+        </button>
+      ) : null}
       {changedCount > 0 ? (
         <button
           type="button"
-          onClick={toggleChangedOnlyFilter}
+          onClick={() => toggleActivityFilter('changed')}
           className={styles.filterBadgeButton}
-          title={changedOnlyFilter ? 'Toon alles' : 'Filter op gewijzigde regels'}
+          title={activityFilter === 'changed' ? 'Toon alles' : 'Filter op gewijzigde regels'}
         >
-          <Badge color="warning" appearance={changedOnlyFilter ? 'filled' : 'tint'}>
+          <Badge color="warning" appearance={activityFilter === 'changed' ? 'filled' : 'tint'}>
             {changedCount} gewijzigd
+          </Badge>
+        </button>
+      ) : null}
+      {removedCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => toggleActivityFilter('removed')}
+          className={styles.filterBadgeButton}
+          title={activityFilter === 'removed' ? 'Toon alles' : 'Filter op verwijderde regels'}
+        >
+          <Badge color="danger" appearance={activityFilter === 'removed' ? 'filled' : 'tint'}>
+            {removedCount} verwijderd
           </Badge>
         </button>
       ) : null}
