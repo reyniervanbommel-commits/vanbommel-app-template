@@ -463,6 +463,31 @@ function buildLookupFieldMap({ targetTableKey, targetFieldKeys, existingFields =
   return result;
 }
 
+function resolveLookupSourceKey(lookup, sourceColumns) {
+  const relationSourceField = String(lookup?.sourceField || '').trim();
+  if (!relationSourceField) return relationSourceField;
+
+  const candidates = Array.isArray(sourceColumns) ? sourceColumns.filter((column) => column.source === 'source') : [];
+  if (!candidates.length) return relationSourceField;
+
+  const byExactKey = candidates.find((column) => String(column.key || '').trim() === relationSourceField);
+  if (byExactKey) return String(byExactKey.key || '').trim();
+
+  const byExactSourceField = candidates.find((column) => String(column.sourceField || '').trim() === relationSourceField);
+  if (byExactSourceField) return String(byExactSourceField.key || '').trim();
+
+  const sourceFieldLower = relationSourceField.toLowerCase();
+  const byInsensitiveKey = candidates.find((column) => String(column.key || '').trim().toLowerCase() === sourceFieldLower);
+  if (byInsensitiveKey) return String(byInsensitiveKey.key || '').trim();
+
+  const byInsensitiveSourceField = candidates.find((column) => (
+    String(column.sourceField || '').trim().toLowerCase() === sourceFieldLower
+  ));
+  if (byInsensitiveSourceField) return String(byInsensitiveSourceField.key || '').trim();
+
+  return relationSourceField;
+}
+
 function resolveLookupProjectionColumns({ activeColumns, allColumns, lookups, scope }) {
   const normalizedScope = scope === 'detail' ? 'detail' : 'master';
   const sourceColumns = (Array.isArray(activeColumns) ? activeColumns : [])
@@ -1010,11 +1035,28 @@ async function loadLookupEnrichment(table) {
   if (!lookups.length) return { lookups: [], masterCols: [], detailCols: [] };
 
   const pool = await getPool();
+  const [lookupSourceMasterCols, lookupSourceDetailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+  ]);
   const enriched = [];
   const masterCols = [];
   const detailCols = [];
+  const seenLookupSignatures = new Set();
 
   for (const lk of lookups) {
+    const normalizedSourceScope = lk.sourceScope === 'detail' ? 'detail' : 'master';
+    const lookupSourceColumns = normalizedSourceScope === 'detail' ? lookupSourceDetailCols : lookupSourceMasterCols;
+    const resolvedSourceField = resolveLookupSourceKey(lk, lookupSourceColumns);
+    const dedupeSignature = [
+      normalizedSourceScope,
+      String(resolvedSourceField || '').toLowerCase(),
+      String(lk.targetTableKey || '').toLowerCase(),
+      String(lk.targetKeyField || '').toLowerCase(),
+    ].join('|');
+    if (seenLookupSignatures.has(dedupeSignature)) continue;
+    seenLookupSignatures.add(dedupeSignature);
+
     let targetTable;
     try {
       targetTable = await getTableByKey(lk.targetTableKey);
@@ -1080,7 +1122,7 @@ async function loadLookupEnrichment(table) {
     } else {
       masterCols.push(...synthetic);
     }
-    enriched.push({ ...lk, fields: fieldMap, byKey, fieldEntries, partitionless });
+    enriched.push({ ...lk, sourceFieldKey: resolvedSourceField, fields: fieldMap, byKey, fieldEntries, partitionless });
   }
 
   return { lookups: enriched, masterCols, detailCols };
@@ -1089,7 +1131,7 @@ async function loadLookupEnrichment(table) {
 function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
   for (const lk of enrichedLookups) {
     if (lk.sourceScope !== scope) continue;
-    const sourceField = String(lk.sourceField || '').trim();
+    const sourceField = String(lk.sourceFieldKey || lk.sourceField || '').trim();
     const fkVal = sourceField && valueBag && Object.prototype.hasOwnProperty.call(valueBag, sourceField)
       ? valueBag[sourceField]
       : (sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)
@@ -2263,6 +2305,7 @@ module.exports = {
   includeRows,
   listHiddenInFilterRows,
   buildLookupFieldMap,
+  resolveLookupSourceKey,
   resolveLookupProjectionColumns,
   FETCH_ADAPTERS,
 };

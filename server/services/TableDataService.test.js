@@ -12,6 +12,7 @@ const {
   applyDetailLookupRollupsToMaster,
   assertCustomColumnWritable,
   buildLookupFieldMap,
+  resolveLookupSourceKey,
   resolveLookupProjectionColumns,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
@@ -274,6 +275,29 @@ describe('TableDataService.buildLookupFieldMap', () => {
       items_searchName: 'searchName',
       items_itemGroupId: 'itemGroupId',
     });
+  });
+});
+
+describe('TableDataService.resolveLookupSourceKey', () => {
+  it('mapt relation source_field naar de lokale kolomkey via sourceField', () => {
+    const sourceKey = resolveLookupSourceKey(
+      { sourceField: 'OrderVendorAccountNumber' },
+      [
+        { source: 'source', key: 'vendorAccount', sourceField: 'OrderVendorAccountNumber' },
+        { source: 'source', key: 'orderNumber', sourceField: 'PurchaseOrderNumber' },
+      ]
+    );
+    expect(sourceKey).toBe('vendorAccount');
+  });
+
+  it('is tolerant voor hoofdletters in relation source_field', () => {
+    const sourceKey = resolveLookupSourceKey(
+      { sourceField: 'ItemNumber' },
+      [
+        { source: 'source', key: 'itemNumber', sourceField: 'ItemNumber' },
+      ]
+    );
+    expect(sourceKey).toBe('itemNumber');
   });
 });
 
