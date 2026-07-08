@@ -128,7 +128,7 @@ export default function ResizableTableHeaderCell({
     <th
       ref={cellRef}
       className={combineClassNames(styles.cell, className)}
-      style={resolvedWidth ? { width: `${resolvedWidth}px`, minWidth: `${minWidth}px` } : { minWidth: `${minWidth}px` }}
+      style={resolvedWidth ? { width: `${resolvedWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${resolvedWidth}px` } : { minWidth: `${minWidth}px` }}
       {...cellProps}
     >
       <div className={styles.content}>

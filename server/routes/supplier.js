@@ -5,6 +5,7 @@ const sql = require('mssql');
 const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { ROLES } = require('../constants/roles');
+const { getSqlPool } = require('../utils/sqlPool');
 
 const router = express.Router();
 
@@ -16,6 +17,8 @@ const purchaseOrdersValidator = [
 const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -35,7 +38,7 @@ function isStaffUser(user) {
 }
 
 function getPool() {
-  return sql.connect(process.env.SQL_CONNECTION_STRING);
+  return getSqlPool();
 }
 
 function normalizeStringArray(value) {
@@ -60,8 +63,69 @@ function normalizeColumnWidthMap(value) {
   }, {});
 }
 
+function normalizeColumnTextStyleMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).slice(0, MAX_COLUMNS);
+  return entries.reduce((acc, [rawKey, rawStyle]) => {
+    const key = normalizeColumnKey(rawKey);
+    if (!key || !rawStyle || typeof rawStyle !== 'object' || Array.isArray(rawStyle)) return acc;
+    const textColor = HEX_COLOR_PATTERN.test(String(rawStyle.textColor || ''))
+      ? String(rawStyle.textColor).toLowerCase()
+      : '';
+    const bold = rawStyle.bold === true;
+    const italic = rawStyle.italic === true;
+    const underline = rawStyle.underline === true;
+    if (!textColor && !bold && !italic && !underline) return acc;
+    acc[key] = {};
+    if (textColor) acc[key].textColor = textColor;
+    if (bold) acc[key].bold = true;
+    if (italic) acc[key].italic = true;
+    if (underline) acc[key].underline = true;
+    return acc;
+  }, {});
+}
+
 function normalizeColumnKey(value) {
   return String(value || '').trim().slice(0, 64);
+}
+
+function normalizeFormatRule(rule) {
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return null;
+  const op = FORMAT_RULE_OPERATORS.has(rule.op) ? rule.op : '=';
+  const color = HEX_COLOR_PATTERN.test(String(rule.color || '')) ? String(rule.color).toLowerCase() : '';
+  if (!color) return null;
+  const valueRef = normalizeColumnKey(rule.valueRef);
+  if (valueRef) return { op, valueRef, color };
+  const rawValue = rule.value;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return { op, value: rawValue, color };
+  if (typeof rawValue === 'boolean') return { op, value: rawValue, color };
+  const value = String(rawValue ?? '').trim().slice(0, 200);
+  if (!value) return null;
+  return { op, value, color };
+}
+
+function normalizeColumnFormatRuleSet(ruleSet) {
+  if (!ruleSet || typeof ruleSet !== 'object' || Array.isArray(ruleSet)) return null;
+  const target = ruleSet.target === 'row' ? 'row' : 'cell';
+  const rules = (Array.isArray(ruleSet.rules) ? ruleSet.rules : [])
+    .map(normalizeFormatRule)
+    .filter(Boolean)
+    .slice(0, 20);
+  if (!rules.length) return null;
+  return { target, rules };
+}
+
+function normalizeColumnFormatRuleMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).slice(0, MAX_COLUMNS);
+  return entries.reduce((acc, [rawKey, rawRuleSet]) => {
+    const key = normalizeColumnKey(rawKey);
+    if (!key) return acc;
+    const normalizedRuleSet = normalizeColumnFormatRuleSet(rawRuleSet);
+    if (!normalizedRuleSet) return acc;
+    acc[key] = normalizedRuleSet;
+    return acc;
+  }, {});
 }
 
 function normalizeLineTotalLinks(value) {
@@ -104,6 +168,9 @@ function normalizeBoardSettings(rawSettings) {
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
     headerColumnWidths: normalizeColumnWidthMap(input.headerColumnWidths),
     lineColumnWidths: normalizeColumnWidthMap(input.lineColumnWidths),
+    headerColumnTextStyles: normalizeColumnTextStyleMap(input.headerColumnTextStyles),
+    headerColumnFormatRules: normalizeColumnFormatRuleMap(input.headerColumnFormatRules),
+    lineColumnTextStyles: normalizeColumnTextStyleMap(input.lineColumnTextStyles),
     lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
     lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
     lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
@@ -116,7 +183,6 @@ const VIEW_SCOPES = new Set(['personal', 'global']);
 const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
 const MAX_VIEW_NAME = 120;
 const MAX_VIEW_STATE_LENGTH = 100000;
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 function normalizeViewName(value) {
   return String(value === null || value === undefined ? '' : value).trim().slice(0, MAX_VIEW_NAME);
@@ -151,6 +217,9 @@ function normalizeViewState(rawState) {
       lineColumnOrder: normalizeStringArray(columns.lineColumnOrder),
       headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
       lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
+      headerColumnTextStyles: normalizeColumnTextStyleMap(columns.headerColumnTextStyles),
+      headerColumnFormatRules: normalizeColumnFormatRuleMap(columns.headerColumnFormatRules),
+      lineColumnTextStyles: normalizeColumnTextStyleMap(columns.lineColumnTextStyles),
       lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
       lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),

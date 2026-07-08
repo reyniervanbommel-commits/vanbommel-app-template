@@ -16,14 +16,114 @@ const settingsService = require('./SettingsService');
 const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
+const { time } = require('../utils/timing');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
+const MAX_KEY_LENGTH = 64;
+const FIELD_DISCOVERY_SAMPLE_LIMIT = 800;
+const DATA_MODEL_PREVIEW_ROW_LIMIT = 60;
+const MAX_BOARD_LINKS = 80;
+// Aantal masterrecords per save-batch. De save schrijft per chunk set-based weg (bulk copy naar een
+// staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
+// aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
+const SAVE_CHUNK_SIZE = 500;
+const EMPTY_REFRESH_PROGRESS = Object.freeze({
+  status: 'idle',
+  fetched: 0,
+  totalToFetch: null,
+  saved: 0,
+  totalToSave: null,
+  sourceTotal: null,
+  pagesFetched: 0,
+  truncated: false,
+  startedAt: null,
+  finishedAt: null,
+  error: null,
+  updatedAt: null,
+});
+const refreshProgressByTable = new Map();
+const refreshJobsByTable = new Map();
+
+function createRefreshProgressBase() {
+  return { ...EMPTY_REFRESH_PROGRESS };
+}
+
+function resetRefreshProgress(tableKey, patch = {}) {
+  const key = String(tableKey || '').trim();
+  if (!key) return;
+  refreshProgressByTable.set(key, {
+    ...createRefreshProgressBase(),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function updateRefreshProgress(tableKey, patch = {}) {
+  const key = String(tableKey || '').trim();
+  if (!key) return;
+  const current = refreshProgressByTable.get(key) || createRefreshProgressBase();
+  refreshProgressByTable.set(key, {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function getRefreshProgress(tableKey) {
+  const key = String(tableKey || '').trim();
+  if (!key) return createRefreshProgressBase();
+  return { ...(refreshProgressByTable.get(key) || createRefreshProgressBase()) };
+}
+
+function isRefreshRunning(tableKey) {
+  const key = String(tableKey || '').trim();
+  if (!key) return false;
+  return refreshJobsByTable.has(key);
+}
+
+async function startRefresh(tableKey) {
+  const key = String(tableKey || '').trim();
+  if (!key) throw Object.assign(new Error('Ongeldige tabelkey'), { status: 400 });
+  if (refreshJobsByTable.has(key)) {
+    return {
+      started: false,
+      running: true,
+      progress: getRefreshProgress(key),
+    };
+  }
+  resetRefreshProgress(key, {
+    status: 'fetching',
+    fetched: 0,
+    totalToFetch: null,
+    saved: 0,
+    totalToSave: null,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    error: null,
+  });
+  const job = (async () => {
+    try {
+      await refresh(key);
+    } catch (err) {
+      logger.error('Achtergrond-refresh mislukt', { tableKey: key, error: err.message });
+    } finally {
+      refreshJobsByTable.delete(key);
+    }
+  })();
+  refreshJobsByTable.set(key, job);
+  return {
+    started: true,
+    running: true,
+    progress: getRefreshProgress(key),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Fetch-adapters: vertalen een bron naar generieke records {partitionKey, recordKey, master, details}.
 // TODO (Fase B / #139): vervang door SourceProvider.fetch(), geresolved uit tb_sources.provider_type.
 // ---------------------------------------------------------------------------
-async function purchaseOrdersFetch(table) {
+async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
   const parsedMax = Number.parseInt(rawMax, 10);
@@ -35,7 +135,31 @@ async function purchaseOrdersFetch(table) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
 
-  const result = await fetchPurchaseOrders({ supplierAccount: null, fetchAll: true, extraFilter, maxItems });
+  // Kolom-projectie aan de bron ($select): haal alleen de geconfigureerde bron-velden op i.p.v. de volledige
+  // D365-entiteit. Kan uitgezet worden via D365_ODATA_SELECT_ENABLED=false (bv. om alle velden opnieuw te
+  // laten ontdekken). Actieve bron-kolommen bepalen de lijst; verplichte velden gaan altijd mee.
+  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
+    .trim().toLowerCase() !== 'false';
+  let selectFields = null;
+  let lineSelectFields = null;
+  if (selectEnabled) {
+    const [masterCols, detailCols] = await Promise.all([
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    ]);
+    selectFields = buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols);
+    lineSelectFields = buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols);
+  }
+
+  const result = await fetchPurchaseOrders({
+    supplierAccount: null,
+    fetchAll: true,
+    extraFilter,
+    maxItems,
+    onProgress,
+    selectFields,
+    lineSelectFields,
+  });
   const items = Array.isArray(result.items) ? result.items : [];
 
   const records = items.map((order) => {
@@ -44,6 +168,7 @@ async function purchaseOrdersFetch(table) {
       partitionKey: String(raw.dataAreaId || company || '').trim(),
       recordKey: String(order.orderNumber || raw.PurchaseOrderNumber || '').trim(),
       modifiedAt: raw.ModifiedDateTime || null,
+      masterRaw: raw,
       master: {
         orderNumber: order.orderNumber,
         vendorAccount: order.vendorAccount,
@@ -55,6 +180,7 @@ async function purchaseOrdersFetch(table) {
       },
       details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({
         detailKey: toNumberOrNull(line.lineNumber),
+        raw: line.raw || {},
         values: {
           lineNumber: line.lineNumber,
           itemNumber: line.itemNumber,
@@ -69,6 +195,44 @@ async function purchaseOrdersFetch(table) {
     };
   });
   return { records, total: result.total, truncated: Boolean(result.truncated) };
+}
+
+// Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
+// de interne mappers (mapPurchaseOrder/mapPurchaseOrderLine), de partitiesleutel (dataAreaId) en het
+// watermerk (ModifiedDateTime) nodig hebben. Zonder deze zou het beperken van de kolommen de sync breken.
+// LET OP: alleen velden die écht op PurchaseOrderHeaderV2 bestaan (geverifieerd via een $select-loze probe).
+// Niet-bestaande fallback-namen (ModifiedDateTime, PurchId, PurchaseOrderId, RecId, VendorAccountNumber,
+// VendorName, DocumentStatus, RequestedDeliveryDateTime, CreatedDateTime) laten D365 de hele query met 400
+// afwijzen; de mapper valt netjes terug op de geldige varianten. Er is geen modified-veld op deze entiteit,
+// dus de incrementele watermark blijft leeg (sync draait volledig) — dat was feitelijk al zo.
+const REQUIRED_HEADER_D365_FIELDS = [
+  'dataAreaId',
+  'PurchaseOrderNumber',
+  'OrderVendorAccountNumber', 'InvoiceVendorAccountNumber',
+  'PurchaseOrderName', 'PurchaseOrderStatus',
+  'CurrencyCode', 'RequestedDeliveryDate', 'AccountingDate',
+];
+// LET OP: alleen velden die écht op PurchaseOrderLineV2 bestaan. CurrencyCode en RequestedReceiptDate
+// bestaan NIET op deze regel-entiteit (geverifieerd via $metadata / #131-2) — ze in $select opnemen laat
+// D365 de hele query met 400 afwijzen (en brak zo de refresh sinds #177). De mapper valt netjes terug op null.
+const REQUIRED_LINE_D365_FIELDS = [
+  'PurchaseOrderNumber', 'LineNumber', 'ItemNumber', 'LineDescription',
+  'OrderedPurchaseQuantity', 'PurchaseUnitSymbol', 'LineAmount',
+  'RequestedDeliveryDate',
+];
+
+// Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
+// Retourneert ALTIJD een lijst (minimaal de verplichte sleutel-/watermerkvelden), zodat de board-sync
+// nooit de volledige bron-entiteit ophaalt. Veld-discovery loopt via het aparte discoverSourceFields-pad
+// (alle velden, kleine sample, geen cache-write) i.p.v. als neveneffect van een ongefilterde refresh.
+function buildD365SelectFields(requiredFields, columns) {
+  const fields = new Set(requiredFields);
+  for (const col of columns) {
+    if (col.source === 'source' && col.sourceField && !String(col.sourceField).startsWith('@')) {
+      fields.add(col.sourceField);
+    }
+  }
+  return [...fields];
 }
 
 const FETCH_ADAPTERS = {
@@ -102,12 +266,143 @@ function normalizeOut(value) {
 }
 function projectJson(source, sourceColumns) {
   const json = {};
-  for (const col of sourceColumns) json[col.key] = normalizeOut(source ? source[col.key] : null);
+  for (const col of sourceColumns) {
+    const directValue = source ? source[col.key] : null;
+    const fallbackValue = directValue === undefined && col.sourceField ? source?.[col.sourceField] : undefined;
+    json[col.key] = normalizeOut(fallbackValue === undefined ? directValue : fallbackValue);
+  }
   return JSON.stringify(json);
 }
 function parseJson(raw) {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toColumnLabelFromField(field) {
+  return String(field || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+    .slice(0, 128);
+}
+
+function slugifyColumnKey(label) {
+  const base = String(label || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MAX_KEY_LENGTH);
+  return base || 'kolom';
+}
+
+function inferSourceDataType(value) {
+  if (value instanceof Date) return 'date';
+  if (typeof value === 'number' && Number.isFinite(value)) return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  return 'text';
+}
+
+function shouldDiscoverSourceField(field, value) {
+  const normalizedField = String(field || '').trim();
+  if (!normalizedField || normalizedField.startsWith('@')) return false;
+  if (Array.isArray(value) || isPlainObject(value)) return false;
+  return true;
+}
+
+function nextUniqueKey(baseKey, existingKeys) {
+  let candidate = String(baseKey || '').slice(0, MAX_KEY_LENGTH) || 'kolom';
+  if (!existingKeys.has(candidate.toLowerCase())) return candidate;
+  for (let i = 2; i < 1000; i += 1) {
+    const withSuffix = `${baseKey}_${i}`.slice(0, MAX_KEY_LENGTH);
+    if (!existingKeys.has(withSuffix.toLowerCase())) return withSuffix;
+  }
+  throw new Error(`Kon geen unieke key bepalen voor '${baseKey}'`);
+}
+
+function collectDiscoveredFields(records, level) {
+  const discovered = new Map();
+  const list = Array.isArray(records) ? records.slice(0, FIELD_DISCOVERY_SAMPLE_LIMIT) : [];
+  for (const record of list) {
+    const rawObjects = level === 'line'
+      ? (Array.isArray(record.details) ? record.details.map((detail) => detail?.raw).filter(isPlainObject) : [])
+      : (isPlainObject(record.masterRaw) ? [record.masterRaw] : []);
+    for (const raw of rawObjects) {
+      Object.entries(raw).forEach(([field, value]) => {
+        if (!shouldDiscoverSourceField(field, value)) return;
+        const normalizedField = String(field).trim();
+        if (!discovered.has(normalizedField)) {
+          discovered.set(normalizedField, {
+            field: normalizedField,
+            label: toColumnLabelFromField(normalizedField) || normalizedField,
+            dataType: 'text',
+          });
+        }
+        const current = discovered.get(normalizedField);
+        const inferredType = inferSourceDataType(value);
+        if (current.dataType === 'text' && inferredType !== 'text') current.dataType = inferredType;
+      });
+    }
+  }
+  return [...discovered.values()].sort((a, b) => a.field.localeCompare(b.field));
+}
+
+async function syncSourceColumnsFromRecords(table, records) {
+  if (!Array.isArray(records) || !records.length) return { headerInserted: 0, lineInserted: 0 };
+  const pool = await getPool();
+
+  async function insertMissingForScope(scope, discoveredFields) {
+    if (!discoveredFields.length) return 0;
+    const existingColumns = await listColumns({ tableId: table.id, scope, includeInactive: true });
+    const existingSourceFields = new Set(
+      existingColumns
+        .filter((col) => col.source === 'source' && col.sourceField)
+        .map((col) => String(col.sourceField).toLowerCase())
+    );
+    const existingKeys = new Set(existingColumns.map((col) => String(col.key || '').toLowerCase()));
+    let nextSortOrder = existingColumns.reduce((maxSort, col) => Math.max(maxSort, Number(col.sortOrder) || 0), 0);
+    let inserted = 0;
+
+    for (const fieldMeta of discoveredFields) {
+      if (existingSourceFields.has(fieldMeta.field.toLowerCase())) continue;
+      const baseKey = slugifyColumnKey(fieldMeta.field);
+      const key = nextUniqueKey(baseKey, existingKeys);
+      existingKeys.add(key.toLowerCase());
+      existingSourceFields.add(fieldMeta.field.toLowerCase());
+      nextSortOrder += 10;
+
+      await pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('scope', sql.NVarChar(16), scope)
+        .input('key', sql.NVarChar(64), key)
+        .input('label', sql.NVarChar(128), fieldMeta.label)
+        .input('sourceField', sql.NVarChar(128), fieldMeta.field)
+        .input('dataType', sql.NVarChar(16), fieldMeta.dataType)
+        .input('sortOrder', sql.Int, nextSortOrder)
+        .query(`
+          INSERT INTO dbo.tb_columns
+            (table_id, scope, [key], label, source, source_field, data_type, writable, write_mechanism,
+             is_default_visible, filterable, sortable, is_active, sort_order)
+          VALUES
+            (@tableId, @scope, @key, @label, 'source', @sourceField, @dataType, 0, NULL, 0, 1, 1, 0, @sortOrder)
+        `);
+      inserted += 1;
+    }
+    return inserted;
+  }
+
+  const headerFields = collectDiscoveredFields(records, 'header');
+  const lineFields = collectDiscoveredFields(records, 'line');
+  const [headerInserted, lineInserted] = await Promise.all([
+    insertMissingForScope('master', headerFields),
+    insertMissingForScope('detail', lineFields),
+  ]);
+  return { headerInserted, lineInserted };
 }
 
 // Content-hash over de geprojecteerde master- + detail-JSON (bron-neutraal; nieuw/gewijzigd-detectie).
@@ -139,125 +434,338 @@ async function isStale(tableKey) {
 }
 
 // ---------------------------------------------------------------------------
+// persistRecordsChunk — schrijft één batch masterrecords (+ hun details) set-based weg naar tb_cache.
+// Aanpak: bulk-copy de geprojecteerde rijen naar twee staging-temptabellen op de transactie-connectie,
+// draai daarna één MERGE (master) en één DELETE + INSERT (details). Zo verdwijnt het N+1-patroon
+// (transactie + losse INSERT per order/regel) dat de refresh traag maakte.
+// ---------------------------------------------------------------------------
+async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource) {
+  const masterRows = [];
+  const detailRows = [];
+  let watermark = null;
+
+  for (const rec of chunk) {
+    if (!rec.partitionKey || !rec.recordKey) continue;
+    const modifiedAt = toDateOrNull(rec.modifiedAt);
+    if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
+
+    const masterValues = isPlainObject(rec.masterRaw) ? { ...rec.masterRaw, ...rec.master } : rec.master;
+    const masterJson = projectJson(masterValues, masterSource);
+    const detailJsons = rec.details.map((d) => {
+      const detailValues = isPlainObject(d.raw) ? { ...d.raw, ...d.values } : d.values;
+      return projectJson(detailValues, detailSource);
+    });
+    const contentHash = computeContentHash(masterJson, detailJsons);
+
+    masterRows.push({
+      partitionKey: rec.partitionKey,
+      recordKey: rec.recordKey,
+      dataJson: masterJson,
+      modifiedAt,
+      contentHash,
+    });
+    for (let i = 0; i < rec.details.length; i += 1) {
+      const detail = rec.details[i];
+      if (detail.detailKey === null || detail.detailKey === undefined) continue;
+      detailRows.push({
+        partitionKey: rec.partitionKey,
+        recordKey: rec.recordKey,
+        detailKey: detail.detailKey,
+        dataJson: detailJsons[i],
+      });
+    }
+  }
+
+  if (!masterRows.length) return { saved: 0, watermark };
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    // Staging-temptabellen aanmaken via .batch() (géén sp_executesql), zodat ze op de connectie blijven
+    // bestaan voor de bulk-copy en de daaropvolgende MERGE/INSERT binnen dezelfde transactie.
+    await new sql.Request(tx).batch(`
+      IF OBJECT_ID('tempdb..#stg_master') IS NOT NULL DROP TABLE #stg_master;
+      IF OBJECT_ID('tempdb..#stg_detail') IS NOT NULL DROP TABLE #stg_detail;
+      CREATE TABLE #stg_master (
+        partition_key NVARCHAR(32)  NOT NULL,
+        record_key    NVARCHAR(128) NOT NULL,
+        data_json     NVARCHAR(MAX) NOT NULL,
+        modified_at   DATETIME2     NULL,
+        content_hash  NVARCHAR(64)  NOT NULL
+      );
+      CREATE TABLE #stg_detail (
+        partition_key NVARCHAR(32)  NOT NULL,
+        record_key    NVARCHAR(128) NOT NULL,
+        detail_key    INT           NOT NULL,
+        data_json     NVARCHAR(MAX) NOT NULL
+      );
+    `);
+
+    const masterTable = new sql.Table('#stg_master');
+    masterTable.create = false;
+    masterTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+    masterTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+    masterTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+    masterTable.columns.add('modified_at', sql.DateTime2, { nullable: true });
+    masterTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
+    for (const r of masterRows) {
+      masterTable.rows.add(r.partitionKey, r.recordKey, r.dataJson, r.modifiedAt, r.contentHash);
+    }
+    await new sql.Request(tx).bulk(masterTable);
+
+    if (detailRows.length) {
+      const detailTable = new sql.Table('#stg_detail');
+      detailTable.create = false;
+      detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+      detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+      detailTable.columns.add('detail_key', sql.Int, { nullable: false });
+      detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+      for (const r of detailRows) {
+        detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson);
+      }
+      await new sql.Request(tx).bulk(detailTable);
+    }
+
+    // Master: één set-based MERGE (nieuw/gewijzigd-detectie via content_hash blijft identiek).
+    await new sql.Request(tx)
+      .input('tableId', sql.BigInt, table.id)
+      .input('syncedAt', sql.DateTime2, refreshStart)
+      .query(`
+        MERGE dbo.tb_cache AS target
+        USING (SELECT @tableId AS table_id, partition_key, record_key, data_json, modified_at, content_hash
+               FROM #stg_master) AS src
+          ON target.table_id = src.table_id AND target.scope = 'master'
+             AND target.partition_key = src.partition_key AND target.record_key = src.record_key
+             AND target.detail_key = ${MASTER_DETAIL_KEY}
+        WHEN MATCHED THEN UPDATE SET
+          data_json = src.data_json, source_modified_at = src.modified_at, synced_at = @syncedAt, removed_at_source = 0,
+          content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> src.content_hash THEN @syncedAt ELSE target.content_changed_at END,
+          content_hash = src.content_hash
+        WHEN NOT MATCHED THEN INSERT
+          (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
+           synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
+          VALUES (@tableId, 'master', src.partition_key, src.record_key, ${MASTER_DETAIL_KEY}, src.data_json, src.modified_at,
+           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
+      `);
+
+    // Details: verwijder de bestaande regels van de records in deze chunk en herinsert set-based.
+    await new sql.Request(tx)
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        DELETE d FROM dbo.tb_cache d
+        INNER JOIN #stg_master m
+          ON d.partition_key = m.partition_key AND d.record_key = m.record_key
+        WHERE d.table_id = @tableId AND d.scope = 'detail';
+      `);
+
+    if (detailRows.length) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('syncedAt', sql.DateTime2, refreshStart)
+        .query(`
+          INSERT INTO dbo.tb_cache
+            (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
+          SELECT @tableId, 'detail', partition_key, record_key, detail_key, data_json, @syncedAt, @syncedAt, 0
+          FROM #stg_detail;
+        `);
+    }
+
+    await new sql.Request(tx).batch(`
+      IF OBJECT_ID('tempdb..#stg_master') IS NOT NULL DROP TABLE #stg_master;
+      IF OBJECT_ID('tempdb..#stg_detail') IS NOT NULL DROP TABLE #stg_detail;
+    `);
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  return { saved: masterRows.length, watermark };
+}
+
+// ---------------------------------------------------------------------------
 // refresh — volledige resync vanuit de bron naar tb_cache (master + detail, data_json)
 // ---------------------------------------------------------------------------
 async function refresh(tableKey) {
   const table = await getTableByKey(tableKey);
   if (table.cacheMode === 'never') {
+    resetRefreshProgress(tableKey, {
+      status: 'done',
+      finishedAt: new Date().toISOString(),
+    });
     return { orders: 0, truncated: false, syncedAt: null, skipped: 'cache_mode=never' };
   }
   const adapter = getFetchAdapter(table);
   const refreshStart = new Date();
+  resetRefreshProgress(tableKey, {
+    status: 'fetching',
+    startedAt: refreshStart.toISOString(),
+  });
 
-  const [masterCols, detailCols] = await Promise.all([
-    listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
-    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-  ]);
-  const masterSource = masterCols.filter((c) => c.source === 'source');
-  const detailSource = detailCols.filter((c) => c.source === 'source');
-
-  const { records, total, truncated } = await adapter(table);
-  if (truncated) {
-    logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
-      tableKey, opgehaald: records.length, totaalInBron: total,
+  const handleFetchProgress = (progress) => {
+    const fetched = Number(progress?.fetched) || 0;
+    const totalToFetchRaw = Number(progress?.totalToFetch);
+    const sourceTotalRaw = Number(progress?.sourceTotal);
+    const pagesFetched = Number(progress?.pagesFetched) || 0;
+    updateRefreshProgress(tableKey, {
+      status: 'fetching',
+      fetched,
+      totalToFetch: Number.isFinite(totalToFetchRaw) ? totalToFetchRaw : null,
+      sourceTotal: Number.isFinite(sourceTotalRaw) ? sourceTotalRaw : null,
+      pagesFetched,
+      truncated: Boolean(progress?.truncated),
+      error: null,
     });
-  }
+  };
 
-  const pool = await getPool();
-  let watermark = null;
+  try {
+    const { records, total, truncated } = await adapter(table, { onProgress: handleFetchProgress });
+    const progressBeforeSave = getRefreshProgress(tableKey);
+    const totalToFetch = Number.isFinite(Number(progressBeforeSave.totalToFetch))
+      ? Number(progressBeforeSave.totalToFetch)
+      : records.length;
+    const sourceTotal = Number.isFinite(Number(progressBeforeSave.sourceTotal))
+      ? Number(progressBeforeSave.sourceTotal)
+      : (Number.isFinite(Number(total)) ? Number(total) : null);
+    const pagesFetched = Number(progressBeforeSave.pagesFetched) || 0;
 
-  for (const rec of records) {
-    if (!rec.partitionKey || !rec.recordKey) continue;
-    const modifiedAt = toDateOrNull(rec.modifiedAt);
-    if (modifiedAt && (!watermark || modifiedAt > watermark)) watermark = modifiedAt;
+    updateRefreshProgress(tableKey, {
+      status: 'saving',
+      fetched: records.length,
+      totalToFetch,
+      saved: 0,
+      totalToSave: records.length,
+      sourceTotal,
+      pagesFetched,
+      truncated: Boolean(truncated),
+      error: null,
+    });
 
-    const masterJson = projectJson(rec.master, masterSource);
-    const detailJsons = rec.details.map((d) => projectJson(d.values, detailSource));
-    const contentHash = computeContentHash(masterJson, detailJsons);
-
-    const tx = new sql.Transaction(pool);
-    await tx.begin();
     try {
-      await new sql.Request(tx)
-        .input('tableId', sql.BigInt, table.id)
-        .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-        .input('recordKey', sql.NVarChar(128), rec.recordKey)
-        .input('dataJson', sql.NVarChar(sql.MAX), masterJson)
-        .input('modifiedAt', sql.DateTime2, modifiedAt)
-        .input('syncedAt', sql.DateTime2, refreshStart)
-        .input('contentHash', sql.NVarChar(64), contentHash)
-        .query(`
-          MERGE dbo.tb_cache AS target
-          USING (SELECT @tableId AS table_id, 'master' AS scope, @partitionKey AS partition_key,
-                        @recordKey AS record_key, ${MASTER_DETAIL_KEY} AS detail_key) AS src
-            ON target.table_id = src.table_id AND target.scope = src.scope
-               AND target.partition_key = src.partition_key AND target.record_key = src.record_key
-               AND target.detail_key = src.detail_key
-          WHEN MATCHED THEN UPDATE SET
-            data_json = @dataJson, source_modified_at = @modifiedAt, synced_at = @syncedAt, removed_at_source = 0,
-            content_changed_at = CASE WHEN ISNULL(target.content_hash, '') <> @contentHash THEN @syncedAt ELSE target.content_changed_at END,
-            content_hash = @contentHash
-          WHEN NOT MATCHED THEN INSERT
-            (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
-             synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
-            VALUES (@tableId, 'master', @partitionKey, @recordKey, ${MASTER_DETAIL_KEY}, @dataJson, @modifiedAt,
-             @syncedAt, @syncedAt, 0, @contentHash, @syncedAt);
-        `);
-
-      await new sql.Request(tx)
-        .input('tableId', sql.BigInt, table.id)
-        .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-        .input('recordKey', sql.NVarChar(128), rec.recordKey)
-        .query(`DELETE FROM dbo.tb_cache
-                WHERE table_id = @tableId AND scope = 'detail'
-                  AND partition_key = @partitionKey AND record_key = @recordKey`);
-
-      for (let i = 0; i < rec.details.length; i += 1) {
-        const detail = rec.details[i];
-        if (detail.detailKey === null || detail.detailKey === undefined) continue;
-        await new sql.Request(tx)
-          .input('tableId', sql.BigInt, table.id)
-          .input('partitionKey', sql.NVarChar(32), rec.partitionKey)
-          .input('recordKey', sql.NVarChar(128), rec.recordKey)
-          .input('detailKey', sql.Int, detail.detailKey)
-          .input('dataJson', sql.NVarChar(sql.MAX), detailJsons[i])
-          .input('syncedAt', sql.DateTime2, refreshStart)
-          .query(`
-            INSERT INTO dbo.tb_cache
-              (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
-            VALUES
-              (@tableId, 'detail', @partitionKey, @recordKey, @detailKey, @dataJson, @syncedAt, @syncedAt, 0);
-          `);
+      const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
+      if (headerInserted || lineInserted) {
+        logger.info('tb_columns uitgebreid met ontdekte bronvelden', {
+          tableKey,
+          headerInserted,
+          lineInserted,
+        });
       }
-      await tx.commit();
-    } catch (err) {
-      await tx.rollback();
-      throw err;
+    } catch (discoveryErr) {
+      logger.warn('Bronveld-discovery voor tb_columns mislukt; refresh gaat door', {
+        tableKey,
+        error: discoveryErr.message,
+      });
     }
+    // Alleen de geselecteerde (actieve) bron-kolommen landen in data_json. Zo draagt elke blob precies
+    // de kolommen die op het bord staan i.p.v. de volledige bron-entiteit — de grootste payload-besparing
+    // op zowel de refresh-write als elke read (#AB:177). Uitgezette kolommen horen niet in de cache.
+    const [masterCols, detailCols] = await Promise.all([
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    ]);
+    const masterSource = masterCols.filter((c) => c.source === 'source');
+    const detailSource = detailCols.filter((c) => c.source === 'source');
+    if (truncated) {
+      logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
+        tableKey, opgehaald: records.length, totaalInBron: total,
+      });
+    }
+
+    const pool = await getPool();
+    let watermark = null;
+    let saved = 0;
+
+    const validRecords = records.filter((rec) => rec.partitionKey && rec.recordKey);
+    for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
+      const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
+      const { saved: chunkSaved, watermark: chunkWatermark } =
+        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource);
+      if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
+      saved += chunkSaved;
+      updateRefreshProgress(tableKey, {
+        status: 'saving',
+        fetched: records.length,
+        totalToFetch,
+        saved,
+        totalToSave: records.length,
+        sourceTotal,
+        pagesFetched,
+        truncated: Boolean(truncated),
+      });
+    }
+
+    await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('refreshStart', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.tb_cache
+        SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+        WHERE table_id = @tableId AND scope = 'master'
+      `);
+
+    await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('watermark', sql.DateTime2, watermark)
+      .input('syncedAt', sql.DateTime2, refreshStart)
+      .query(`
+        MERGE dbo.tb_sync_state AS target
+        USING (SELECT @tableId AS table_id) AS src ON target.table_id = src.table_id
+        WHEN MATCHED THEN UPDATE SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
+      `);
+
+    logger.info('tb_cache ververst', { tableKey, records: records.length, truncated });
+    updateRefreshProgress(tableKey, {
+      status: 'done',
+      fetched: records.length,
+      totalToFetch,
+      saved: records.length,
+      totalToSave: records.length,
+      sourceTotal,
+      pagesFetched,
+      truncated: Boolean(truncated),
+      finishedAt: new Date().toISOString(),
+      error: null,
+    });
+    return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+  } catch (err) {
+    updateRefreshProgress(tableKey, {
+      status: 'error',
+      finishedAt: new Date().toISOString(),
+      error: err.message || 'Refresh mislukt',
+    });
+    throw err;
   }
+}
 
-  await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .input('refreshStart', sql.DateTime2, refreshStart)
-    .query(`
-      UPDATE dbo.tb_cache
-      SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
-      WHERE table_id = @tableId AND scope = 'master'
-    `);
+// ---------------------------------------------------------------------------
+// discoverSourceFields — los, licht discovery-pad voor de datamodel-pagina. Haalt ALLE bronvelden op met
+// een kleine sample (bewust géén $select) en registreert nieuwe velden als beschikbare (inactieve) kolommen,
+// zodat de admin ze kan kiezen. Schrijft NIETS naar tb_cache. Zo blijft "alle kolommen tonen om te kiezen"
+// gescheiden van de board-sync, die alleen de geselecteerde kolommen ophaalt en wegschrijft (#AB:177).
+// ---------------------------------------------------------------------------
+const FIELD_DISCOVERY_ROW_LIMIT = 5;
 
-  await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .input('watermark', sql.DateTime2, watermark)
-    .input('syncedAt', sql.DateTime2, refreshStart)
-    .query(`
-      MERGE dbo.tb_sync_state AS target
-      USING (SELECT @tableId AS table_id) AS src ON target.table_id = src.table_id
-      WHEN MATCHED THEN UPDATE SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
-      WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
-    `);
-
-  logger.info('tb_cache ververst', { tableKey, records: records.length, truncated });
-  return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+async function discoverSourceFields(tableKey) {
+  const table = await getTableByKey(tableKey);
+  // Fase A: discovery is bron-specifiek (PO). In Fase B levert SourceProvider.discoverFields() dit generiek.
+  if (table.key !== 'purchase-orders') {
+    throw Object.assign(new Error(`Veld-discovery nog niet beschikbaar voor tabel '${table.key}'`), { status: 501 });
+  }
+  const result = await fetchPurchaseOrders({
+    supplierAccount: null,
+    top: FIELD_DISCOVERY_ROW_LIMIT,
+    skip: 0,
+    fetchAll: false,
+    maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+  });
+  const records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
+    masterRaw: order.raw || {},
+    details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
+  }));
+  const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
+  logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
+  return { headerInserted, lineInserted, sampledRows: records.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +797,7 @@ async function loadLookupEnrichment(table) {
     const cacheRes = await pool.request()
       .input('tableId', sql.BigInt, targetTable.id)
       .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
+              WITH (NOLOCK)
               WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`);
     const byKey = new Map();
     for (const r of cacheRes.recordset) {
@@ -342,52 +851,245 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
   }
 }
 
+function isFormulaColumn(column) {
+  return Boolean(String(column?.formulaExpr || '').trim());
+}
+
+function assertCustomColumnWritable(column) {
+  if (!column || column.source !== 'custom') {
+    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
+  }
+  if (String(column?.dataType || '').toLowerCase() === 'image') {
+    throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
+  }
+  if (isFormulaColumn(column)) {
+    throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
+  }
+}
+
+function compileMasterFormulaColumns(masterColumns) {
+  return (Array.isArray(masterColumns) ? masterColumns : [])
+    .filter((column) => isFormulaColumn(column))
+    .map((column) => {
+      try {
+        return {
+          column,
+          compiled: compileFormula(column.formulaExpr),
+          compileError: null,
+        };
+      } catch (err) {
+        return {
+          column,
+          compiled: null,
+          compileError: `Ongeldige formule: ${err?.message || 'Onbekende fout'}`,
+        };
+      }
+    });
+}
+
+function withCaseInsensitiveKeys(values) {
+  const normalized = { ...(values || {}) };
+  for (const [key, value] of Object.entries(values || {})) {
+    const lowerKey = String(key || '').toLowerCase();
+    if (lowerKey && !Object.prototype.hasOwnProperty.call(normalized, lowerKey)) {
+      normalized[lowerKey] = value;
+    }
+  }
+  return normalized;
+}
+
+function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
+  const formulaErrors = {};
+  const evaluationValues = withCaseInsensitiveKeys(masterValues);
+  for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
+    const formulaKey = item?.column?.key;
+    if (!formulaKey) continue;
+    if (item.compileError) {
+      masterValues[formulaKey] = null;
+      evaluationValues[formulaKey] = null;
+      evaluationValues[String(formulaKey).toLowerCase()] = null;
+      formulaErrors[formulaKey] = item.compileError;
+      continue;
+    }
+    const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
+    masterValues[formulaKey] = result.value;
+    evaluationValues[formulaKey] = result.value;
+    evaluationValues[String(formulaKey).toLowerCase()] = result.value;
+    if (result.error) formulaErrors[formulaKey] = result.error;
+  }
+  return formulaErrors;
+}
+
+function resolveSourceColumnValue(sourceJson, column) {
+  const safeSource = sourceJson && typeof sourceJson === 'object' ? sourceJson : {};
+  const sourceFieldKey = String(column?.sourceField || '').trim();
+  if (sourceFieldKey && Object.prototype.hasOwnProperty.call(safeSource, sourceFieldKey)) {
+    return safeSource[sourceFieldKey];
+  }
+  const columnKey = String(column?.key || '').trim();
+  if (columnKey && Object.prototype.hasOwnProperty.call(safeSource, columnKey)) {
+    return safeSource[columnKey];
+  }
+  return null;
+}
+
+function normalizeBoardColumnKey(value) {
+  return String(value || '').trim().slice(0, 64);
+}
+
+function normalizeRuntimeLinkArray(value) {
+  const entries = Array.isArray(value)
+    ? value
+    : (value && typeof value === 'object' ? [value] : []);
+  const seen = new Set();
+  return entries.slice(0, MAX_BOARD_LINKS).reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const lineColumnKey = normalizeBoardColumnKey(entry.lineColumnKey);
+    const headerColumnKey = normalizeBoardColumnKey(entry.headerColumnKey);
+    if (!lineColumnKey || !headerColumnKey) return acc;
+    const signature = `${lineColumnKey}|${headerColumnKey}`;
+    if (seen.has(signature)) return acc;
+    seen.add(signature);
+    acc.push({ lineColumnKey, headerColumnKey });
+    return acc;
+  }, []);
+}
+
+async function loadUserRuntimeHeaderLinks(pool, userId, boardKey) {
+  if (!pool || !userId || !boardKey) {
+    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
+  }
+  const result = await pool.request()
+    .input('userId', sql.Int, userId)
+    .input('boardKey', sql.NVarChar(64), boardKey)
+    .query(`
+      SELECT settings_json
+      FROM dbo.user_board_settings WITH (NOLOCK)
+      WHERE user_id = @userId AND board_key = @boardKey
+    `);
+  if (!result.recordset.length) {
+    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
+  }
+  let parsed = {};
+  try {
+    parsed = JSON.parse(result.recordset[0].settings_json || '{}');
+  } catch {
+    parsed = {};
+  }
+  return {
+    lineTotalHeaderLinks: normalizeRuntimeLinkArray(parsed.lineTotalHeaderLinks),
+    lineValueHeaderLinks: normalizeRuntimeLinkArray(parsed.lineValueHeaderLinks),
+  };
+}
+
+function toLineNumeric(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function calculateLinkedLineTotal(details, lineColumnKey) {
+  if (!Array.isArray(details) || !lineColumnKey) return 0;
+  return details.reduce((total, detail) => {
+    const numeric = toLineNumeric(detail?.values?.[lineColumnKey]);
+    return numeric === null ? total : total + numeric;
+  }, 0);
+}
+
+function calculateLinkedLineValues(details, lineColumnKey) {
+  if (!Array.isArray(details) || !lineColumnKey) return '-';
+  const seen = new Set();
+  const list = [];
+  for (const detail of details) {
+    const raw = detail?.values?.[lineColumnKey];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const text = String(raw).trim();
+    if (!text || text === '-') continue;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    list.push(text);
+  }
+  if (!list.length) return '-';
+  return list.length === 1 ? list[0] : list.join(', ');
+}
+
+function applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks) {
+  if (!masterValues || typeof masterValues !== 'object') return;
+  const totalLinks = Array.isArray(runtimeLinks?.lineTotalHeaderLinks) ? runtimeLinks.lineTotalHeaderLinks : [];
+  const valueLinks = Array.isArray(runtimeLinks?.lineValueHeaderLinks) ? runtimeLinks.lineValueHeaderLinks : [];
+
+  for (const link of totalLinks) {
+    const headerColumnKey = normalizeBoardColumnKey(link?.headerColumnKey);
+    const lineColumnKey = normalizeBoardColumnKey(link?.lineColumnKey);
+    if (!headerColumnKey || !lineColumnKey) continue;
+    masterValues[headerColumnKey] = calculateLinkedLineTotal(details, lineColumnKey);
+  }
+  for (const link of valueLinks) {
+    const headerColumnKey = normalizeBoardColumnKey(link?.headerColumnKey);
+    const lineColumnKey = normalizeBoardColumnKey(link?.lineColumnKey);
+    if (!headerColumnKey || !lineColumnKey) continue;
+    masterValues[headerColumnKey] = calculateLinkedLineValues(details, lineColumnKey);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
 async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
-  const [masterCols, detailCols] = await Promise.all([
+  const [masterCols, detailCols] = await time('tb_read_cols', () => Promise.all([
     listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-  ]);
+  ]));
+  const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  const runtimeLinks = await loadUserRuntimeHeaderLinks(pool, userId, table.key);
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
 
-  const mastersResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
-      FROM dbo.tb_cache c
-      WHERE c.table_id = @tableId AND c.scope = 'master'
-      ${includeRemoved ? '' : `AND c.removed_at_source = 0
-        AND NOT EXISTS (
-          SELECT 1 FROM dbo.tb_row_exclusions ex
-          WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
-        )`}
-      ORDER BY c.record_key
-    `);
+  // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
+  const { mastersResult, detailsResult, customResult } = await time('tb_read_sql', async () => {
+    const mastersRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
+        FROM dbo.tb_cache c WITH (NOLOCK)
+        WHERE c.table_id = @tableId AND c.scope = 'master'
+        ${includeRemoved ? '' : `AND c.removed_at_source = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
+            WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+          )`}
+        ORDER BY c.record_key
+      `);
 
-  const detailsResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT partition_key, record_key, detail_key, data_json
-      FROM dbo.tb_cache
-      WHERE table_id = @tableId AND scope = 'detail'
-      ORDER BY record_key, detail_key
-    `);
+    const detailsRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT partition_key, record_key, detail_key, data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'detail'
+        ORDER BY record_key, detail_key
+      `);
 
-  const customResult = await pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .query(`
-      SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
-             cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
-      FROM dbo.tb_custom_values cv
-      INNER JOIN dbo.tb_columns c ON c.id = cv.column_id
-      WHERE cv.table_id = @tableId AND c.is_active = 1
-    `);
+    const customRes = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
+               cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
+        FROM dbo.tb_custom_values cv WITH (NOLOCK)
+        INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
+        WHERE cv.table_id = @tableId AND c.is_active = 1
+      `);
+
+    return { mastersResult: mastersRes, detailsResult: detailsRes, customResult: customRes };
+  });
 
   const customByCell = new Map();
   for (const row of customResult.recordset) {
@@ -411,7 +1113,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   function valuesFor(cols, sourceJson, custom) {
     const values = {};
     for (const col of cols) {
-      if (col.source === 'source') values[col.key] = col.key in sourceJson ? sourceJson[col.key] : null;
+      if (isFormulaColumn(col)) values[col.key] = null;
+      else if (col.source === 'source') values[col.key] = resolveSourceColumnValue(sourceJson, col);
       else values[col.key] = custom && col.key in custom ? custom[col.key] : null;
     }
     return values;
@@ -441,6 +1144,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
+    const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
     return {
       partitionKey: m.partition_key,
@@ -449,6 +1154,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       isNew,
       isChanged,
       values: masterValues,
+      formulaErrors,
       details,
       detailCount: details.length,
     };
@@ -520,9 +1226,7 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   if (!column || !column.isActive || column.tableId !== table.id) {
     throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   }
-  if (column.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
-  }
+  assertCustomColumnWritable(column);
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
@@ -974,6 +1678,81 @@ function toAdminColumn(col) {
   };
 }
 
+function normalizePreviewSampleValue(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function buildPreviewTableFromCacheRows(columns, cacheRows) {
+  const d365Columns = (Array.isArray(columns) ? columns : []).filter(
+    (column) => column.source === 'd365' && column.d365Field
+  );
+  const d365Fields = [...new Set(d365Columns.map((column) => String(column.d365Field)))];
+  const rows = (Array.isArray(cacheRows) ? cacheRows : []).map((cacheRow) => {
+    const source = parseJson(cacheRow?.data_json);
+    const values = {};
+    for (const column of d365Columns) {
+      const preferred = Object.prototype.hasOwnProperty.call(source, column.key)
+        ? source[column.key]
+        : source[column.d365Field];
+      values[column.d365Field] = preferred === undefined ? null : preferred;
+    }
+    return { values };
+  });
+
+  const sampleByField = {};
+  for (const field of d365Fields) {
+    sampleByField[field] = '—';
+    for (let i = 0; i < rows.length; i += 1) {
+      const candidate = rows[i]?.values?.[field];
+      if (candidate === null || candidate === undefined || candidate === '') continue;
+      sampleByField[field] = normalizePreviewSampleValue(candidate);
+      break;
+    }
+  }
+
+  return {
+    columns: d365Fields,
+    rows,
+    sampledRows: rows.length,
+    sampleByField,
+  };
+}
+
+function getMissingPreviewFields(columns, sampleByField) {
+  const fields = [...new Set(
+    (Array.isArray(columns) ? columns : [])
+      .filter((column) => column.source === 'd365' && column.d365Field)
+      .map((column) => String(column.d365Field))
+  )];
+  return fields.filter((field) => {
+    const current = sampleByField?.[field];
+    return !current || current === '—';
+  });
+}
+
+function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
+  if (!previewTable || !Array.isArray(fields) || !fields.length || !Array.isArray(rawRows) || !rawRows.length) {
+    return previewTable;
+  }
+  const nextSampleByField = { ...(previewTable.sampleByField || {}) };
+  for (const field of fields) {
+    if (nextSampleByField[field] && nextSampleByField[field] !== '—') continue;
+    for (let i = 0; i < rawRows.length; i += 1) {
+      const candidate = rawRows[i]?.[field];
+      if (candidate === null || candidate === undefined || candidate === '') continue;
+      nextSampleByField[field] = normalizePreviewSampleValue(candidate);
+      break;
+    }
+    if (!nextSampleByField[field]) nextSampleByField[field] = '—';
+  }
+  return {
+    ...previewTable,
+    sampleByField: nextSampleByField,
+  };
+}
+
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -987,11 +1766,37 @@ async function getDataModel(tableKey) {
 
   const hasDetail = Boolean(table.relation && table.relation.kind && table.relation.kind !== 'none');
 
+  const [headerPreviewRowsRes, linePreviewRowsRes] = await Promise.all([
+    pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
+      .query(`
+        SELECT TOP (@rowLimit) data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0
+        ORDER BY synced_at DESC, record_key ASC
+      `),
+    hasDetail
+      ? pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
+        .query(`
+          SELECT TOP (@rowLimit) data_json
+          FROM dbo.tb_cache WITH (NOLOCK)
+          WHERE table_id = @tableId AND scope = 'detail'
+          ORDER BY synced_at DESC, record_key ASC, detail_key ASC
+        `)
+      : Promise.resolve({ recordset: [] }),
+  ]);
+
   const [baseUrl, company, rulesJson] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
     settingsService.getAsync('PO_SYNC_RULES', ''),
   ]);
+  const syncRules = parseSyncRules(rulesJson);
+  let compiledFilter = '';
+  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
 
   // Cache-stats uit tb_cache + tb_sync_state.
   const statsRes = await pool.request().input('t', sql.BigInt, table.id).query(`
@@ -1008,10 +1813,37 @@ async function getDataModel(tableKey) {
   // D365-filtercatalogus uit de admin-gemapte kolommen (generiek; geen po_-afhankelijkheid meer).
   const { buildFilterCatalogPayload } = require('../utils/tbSyncFilterCatalog');
   const filterMeta = buildFilterCatalogPayload([...headerCols, ...lineCols]);
-
-  const syncRules = parseSyncRules(rulesJson);
-  let compiledFilter = '';
-  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+  let previewTables = {
+    header: buildPreviewTableFromCacheRows(headerCols, headerPreviewRowsRes.recordset),
+    line: buildPreviewTableFromCacheRows(lineCols, linePreviewRowsRes.recordset),
+  };
+  const missingHeaderFields = getMissingPreviewFields(headerCols, previewTables.header.sampleByField);
+  const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
+  if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
+    try {
+      const fallbackSample = await fetchPurchaseOrders({
+        supplierAccount: null,
+        top: DATA_MODEL_PREVIEW_ROW_LIMIT,
+        skip: 0,
+        fetchAll: false,
+        extraFilter: compiledFilter,
+        maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
+      });
+      const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
+      const lineRawRows = (fallbackSample.items || []).flatMap((item) => (
+        Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
+      ));
+      previewTables = {
+        header: fillMissingSamplesFromRawRows(previewTables.header, missingHeaderFields, headerRawRows),
+        line: fillMissingSamplesFromRawRows(previewTables.line, missingLineFields, lineRawRows),
+      };
+    } catch (err) {
+      logger.warn('Fallback sample preview uit D365 mislukt; cache-samples blijven leidend', {
+        tableKey,
+        error: err.message,
+      });
+    }
+  }
 
   return {
     entities: [
@@ -1027,7 +1859,7 @@ async function getDataModel(tableKey) {
     cache,
     syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: SYNC_TEMPLATES },
     filterCatalog: filterMeta.catalog,
-    previewTables: filterMeta.preview,
+    previewTables,
   };
 }
 
@@ -1051,12 +1883,16 @@ async function countSyncFilter(tableKey, rules) {
 }
 
 module.exports = {
+  startRefresh,
+  isRefreshRunning,
   refresh,
+  getRefreshProgress,
   read,
   saveCustomValue,
   correctField,
   getCellHistory,
   getDataModel,
+  discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,
   getSyncState,
@@ -1065,6 +1901,13 @@ module.exports = {
   markViewed,
   computeContentHash,
   applyLookups,
+  isFormulaColumn,
+  assertCustomColumnWritable,
+  compileMasterFormulaColumns,
+  applyFormulaColumnsToRowValues,
+  resolveSourceColumnValue,
+  calculateLinkedLineTotal,
+  applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,
   includeRows,

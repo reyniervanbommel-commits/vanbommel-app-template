@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
+import { usePurchaseOrderBoardView } from './usePurchaseOrderBoardView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 
 const COLUMNS = [
@@ -55,6 +56,47 @@ describe('usePurchaseOrderTableView saved-view serialisatie', () => {
     expect(result.current.sortState).toEqual({ columnKey: '', direction: 'none' });
     // Er crasht niets en de geldige filter blijft actief.
     expect(result.current.processedItems).toHaveLength(1);
+  });
+});
+
+describe('usePurchaseOrderBoardView linked line sortering', () => {
+  it('sorteert header-kolommen met gepushte line totals op de berekende som', () => {
+    const columns = [
+      { key: 'orderNumber', dataType: 'text', label: 'Order' },
+      { key: 'lineAmountTotal', dataType: 'number', label: 'Line Amount Total' },
+    ];
+    const lineColumns = [
+      { key: 'lineAmount', dataType: 'number', label: 'Line Amount' },
+    ];
+    const items = [
+      {
+        orderNumber: 'PO-2',
+        dataAreaId: 'nl',
+        values: { orderNumber: 'PO-2' },
+        lines: [{ lineNumber: '10', values: { lineAmount: 20 } }],
+      },
+      {
+        orderNumber: 'PO-1',
+        dataAreaId: 'nl',
+        values: { orderNumber: 'PO-1' },
+        lines: [{ lineNumber: '10', values: { lineAmount: 10 } }],
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      usePurchaseOrderBoardView({
+        items,
+        columns,
+        lineColumns,
+        lineTotalHeaderLinks: [{ lineColumnKey: 'lineAmount', headerColumnKey: 'lineAmountTotal' }],
+      })
+    );
+
+    act(() => {
+      result.current.setSortDirection('lineAmountTotal', 'asc');
+    });
+
+    expect(result.current.processedItems.map((order) => order.orderNumber)).toEqual(['PO-1', 'PO-2']);
   });
 });
 

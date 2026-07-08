@@ -6,8 +6,8 @@ const sql = require('mssql');
 const router = express.Router();
 const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
-const { requireSession } = require('../middleware/auth');
 const { auditLog } = require('../middleware/auditLog');
+const { getSqlPool } = require('../utils/sqlPool');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -20,7 +20,7 @@ const strictLimiter = rateLimit({
 async function recordLoginAnalytics(userId, sessionId) {
   if (!userId || !sessionId) return;
   try {
-    const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
+    const pool = await getSqlPool();
     await pool.request()
       .input('userId', sql.Int, userId)
       .input('sessionId', sql.NVarChar, sessionId)
@@ -40,7 +40,7 @@ async function recordLogoutAnalytics(userId, sessionId, loggedInAt) {
       : null;
     const safeSessionId = sessionId || 'unknown';
 
-    const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
+    const pool = await getSqlPool();
     const latestLoginQuery = sessionId
       ? `;WITH latest_login AS (
            SELECT TOP (1) id
@@ -180,8 +180,11 @@ router.post('/reset-password', async (req, res, next) => {
   }
 });
 
-router.get('/me', requireSession, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', (req, res) => {
+  if (req.session && req.session.userId) {
+    return res.json({ user: req.session.user || null });
+  }
+  return res.json({ user: null });
 });
 
 module.exports = router;

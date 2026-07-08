@@ -54,3 +54,16 @@ Tabelnamen: `users`, `sessions`, `password_reset_tokens`, `mfa_backup_codes`, `a
 ## Cursor rules
 
 `.cursor/rules/` bevat: code-kwaliteit, versiebeheer, data-en-security, fluentui-valkuilen.
+
+## Performance / timing (verplicht bij nieuwe code)
+
+Snelheid is standaard meetbaar via vaste "chokepoints" — houd nieuwe code daarbinnen zodat het **automatisch** getimed wordt:
+
+| Wat je toevoegt | Hoe het getimed wordt | Actie |
+|---|---|---|
+| Nieuwe backend-route | `Server-Timing: app` (totale request-tijd) via de middleware in `server/server.js` | Niets — automatisch |
+| Zware backend-suboperatie (DB-query, externe call, parse) | `time('label', () => ...)` uit `server/utils/timing.js` → aparte Server-Timing-metric (werkt overal, ook diep in een service; request-scoped via AsyncLocalStorage) | Wrap het blok in `time()` |
+| Nieuwe frontend backend-call | `apiRequest` (`src/utils/api.js`) logt duur naar console + perf-HUD | **Altijd** `apiRequest`, nooit raw `fetch` (ESLint waarschuwt) |
+| Zware client-berekening | `measure('label', () => ...)` uit `src/utils/perf.js` → User Timing + perf-HUD | Wrap het blok in `measure()` |
+
+Zien: DevTools → Network → **Timing** (Server-Timing), de **⚡ perf-HUD** linksonder (dev/preview), of de console. De HUD is dev/preview-only (`VITE_APP_ENV`), nooit in productie. Voorbeeld-instrumentatie: `TableDataService.read()` (het board leest hieruit) → `tb_read_cols` / `tb_read_sql`.

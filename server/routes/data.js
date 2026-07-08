@@ -52,6 +52,30 @@ router.post('/:tableKey/refresh', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
+router.post('/:tableKey/refresh/start', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const result = await dataService.startRefresh(tableKey);
+    return res.status(result.started ? 202 : 200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
+router.get('/:tableKey/refresh/progress', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    return res.json({
+      running: dataService.isRefreshRunning(tableKey),
+      progress: dataService.getRefreshProgress(tableKey),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // POST /api/data/:tableKey/viewed — markeer alles als gezien (reset nieuw/gewijzigd voor deze gebruiker).
 router.post('/:tableKey/viewed', async (req, res, next) => {
   try {
@@ -81,12 +105,40 @@ router.get('/:tableKey/columns', async (req, res, next) => {
 // POST /api/data/:tableKey/columns — app-native kolom toevoegen.
 router.post('/:tableKey/columns', async (req, res, next) => {
   try {
-    const { scope, label, dataType, options } = req.body || {};
+    const { scope, label, dataType, options, formulaExpr } = req.body || {};
     const column = await columnsService.createColumn(
-      { tableKey: req.params.tableKey, scope, label, dataType, options },
+      { tableKey: req.params.tableKey, scope, label, dataType, options, formulaExpr },
       req.user.id,
     );
     return res.status(201).json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/columns/validate-formula — valideer formule + refs zonder opslaan.
+router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey(req.params.tableKey);
+    const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
+    const resultType = String(req.body?.dataType || 'number').trim() || 'number';
+    const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
+    if (!normalized.expression) {
+      return res.status(400).json({ error: 'Formule is verplicht' });
+    }
+    const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+    columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    columnsService.validateFormulaResultTypeCompatibility(
+      normalized.expression,
+      normalized.references,
+      masterColumns,
+      resultType
+    );
+    return res.json({
+      valid: true,
+      normalizedExpression: normalized.expression,
+      references: normalized.references,
+    });
   } catch (err) {
     return next(err);
   }
@@ -97,7 +149,32 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
-    const column = await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+    const hasImagePayload = req.body && Object.prototype.hasOwnProperty.call(req.body, 'options');
+    const hasFormulaPayload = req.body && (
+      Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
+      || (Object.prototype.hasOwnProperty.call(req.body, 'dataType') && !hasImagePayload)
+    );
+    const column = hasFormulaPayload
+      ? await columnsService.updateFormulaColumn(
+        columnId,
+        {
+          label: req.body?.label,
+          dataType: req.body?.dataType,
+          formulaExpr: req.body?.formulaExpr,
+        },
+        req.user.id,
+      )
+      : hasImagePayload
+        ? await columnsService.updateImageColumn(
+          columnId,
+          {
+            label: req.body?.label,
+            dataType: req.body?.dataType,
+            options: req.body?.options,
+          },
+          req.user.id,
+        )
+      : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);
@@ -176,6 +253,16 @@ router.put('/:tableKey/value', async (req, res, next) => {
 router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     return res.json(await dataService.getDataModel(req.params.tableKey));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
+// geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
+router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    return res.json(await dataService.discoverSourceFields(req.params.tableKey));
   } catch (err) {
     return next(err);
   }

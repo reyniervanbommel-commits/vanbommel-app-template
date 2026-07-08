@@ -11,6 +11,7 @@
 
 const session = require('express-session');
 const sql = require('mssql');
+const { getSqlPool } = require('../utils/sqlPool');
 
 const DEFAULT_TABLE = 'sessions';
 
@@ -25,7 +26,7 @@ class SqlSessionStore extends session.Store {
   }
 
   getPool() {
-    return sql.connect(process.env.SQL_CONNECTION_STRING);
+    return getSqlPool();
   }
 
   resolveExpiry(sess) {

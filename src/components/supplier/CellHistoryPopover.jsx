@@ -13,7 +13,6 @@ import {
 } from '@fluentui/react-components';
 import { History20Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
-import { BOARD_TB_SOURCE } from '../../config/featureFlags';
 
 const useStyles = makeStyles({
   wrapper: {

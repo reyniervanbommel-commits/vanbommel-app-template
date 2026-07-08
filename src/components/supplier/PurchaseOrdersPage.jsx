@@ -3,12 +3,18 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
+import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
+import PurchaseOrderImageColumnDialog from './PurchaseOrderImageColumnDialog';
+import PurchaseOrderBulkEditDialog from './PurchaseOrderBulkEditDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
 import { usePurchaseOrderSavedViewState } from '../../hooks/usePurchaseOrderSavedViewState';
 import { usePurchaseOrdersSelection } from '../../hooks/usePurchaseOrdersSelection';
 import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRows';
+import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
+import { usePurchaseOrderBulkEdit } from '../../hooks/usePurchaseOrderBulkEdit';
+import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
@@ -45,12 +51,7 @@ const useStyles = makeStyles({
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const {
-    progress: refreshProgress,
-    startProgress,
-    finishProgress,
-  } = usePurchaseOrderRefreshProgress();
-
+  const { progress: refreshProgress, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress();
   const {
     orders,
     visibleHeaderColumns,
@@ -63,10 +64,14 @@ export default function PurchaseOrdersPage() {
     refreshing,
     error,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     deleteRows,
     saveValue,
     addHeaderColumnAfter,
+    updateFormulaColumn,
     renameColumn,
     removeColumn,
     newCount,
@@ -79,11 +84,17 @@ export default function PurchaseOrdersPage() {
     reorderLineColumn,
     headerColumnWidths,
     lineColumnWidths,
+    headerColumnTextStyles,
+    headerColumnFormatRules,
+    lineColumnTextStyles,
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
+    saveHeaderColumnTextStyle,
+    saveHeaderColumnFormatRules,
+    saveLineColumnTextStyle,
     setLineColumnTotal,
     addLineTotalHeaderLink,
     addLineValueHeaderLink,
@@ -91,111 +102,86 @@ export default function PurchaseOrdersPage() {
     exportColumnLayout,
     applyColumnLayout,
   } = usePurchaseOrdersPage();
-
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
-
-  // Filter/sort/grouping-state op page-niveau, zodat saved views deze samen met de
-  // kolomlayout kunnen serialiseren en terugzetten.
-  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns });
-  const {
-    selection,
-    tableSelection,
-    handleDeleteSelected,
-  } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
-
-  // Verborgen rijen die nog binnen de harde D365-filter vallen (zien + terugzetten).
+  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
+  const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
-  const {
-    savedViews,
-    activeViewId,
-    applyViewState,
-    handleResetView,
-    handleSaveAsNew,
-    handleUpdateActive,
-    handleRenameView,
-    handleSetDefault,
-    handleDeleteView,
-  } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
     applyColumnLayout,
     boardView,
   });
-
-  // Monday-stijl kolom toevoegen vanuit het per-kolom menu: maak de kolom rechts van
-  // de bron aan en zet zijn header direct in inline-hernoem-modus.
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
+  const {
+    formulaDialogState,
+    closeFormulaDialog,
+    handleFormulaTypeSelection,
+    formulaReferenceColumns,
+    submitFormulaColumn,
+    imageDialogState,
+    closeImageDialog,
+    handleImageTypeSelection,
+    submitImageColumn,
+  } = usePurchaseOrderFormulaDialogState({
+    visibleHeaderColumns,
+    addHeaderColumnAfter,
+    updateFormulaColumn,
+    renameColumn,
+    headerColumnFormatRules,
+    saveHeaderColumnFormatRules,
+    setEditingColumnKey,
+  });
+  const bulkEdit = usePurchaseOrderBulkEdit({ visibleHeaderColumns, visibleOrders: boardView.processedItems, selection, saveValue, correctField });
+
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
+    if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
+      return;
+    }
+    if (handleImageTypeSelection(sourceColumn, typeDef)) return;
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter]);
-  const handlePushLineTotalToHeader = useCallback(async (lineColumn) => {
-    const lineColumnKey = String(lineColumn?.key || '').trim();
-    if (!lineColumnKey) return;
-    const activeLink = lineTotalHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
-    if (activeLink?.headerColumnKey) {
-      setEditingColumnKey(activeLink.headerColumnKey);
-      return;
-    }
-    const sameKeyHeader = visibleHeaderColumns.find((column) => column.key === lineColumnKey);
-    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
-    const afterKey = sameKeyHeader?.key || fallbackHeader?.key || '';
-    const created = await addHeaderColumnAfter(afterKey, {
-      label: `${lineColumn.label} Total`,
-      dataType: 'number',
-    });
-    if (!created?.key) return;
-    await addLineTotalHeaderLink({ lineColumnKey, headerColumnKey: created.key });
-    if (!lineTotalColumns.includes(lineColumnKey)) {
-      await setLineColumnTotal(lineColumnKey, true);
-    }
-    setEditingColumnKey(created.key);
-  }, [
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleImageTypeSelection]);
+
+  const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
+    lineValueHeaderLinks,
     visibleHeaderColumns,
+    lineTotalColumns,
     addHeaderColumnAfter,
     addLineTotalHeaderLink,
-    lineTotalColumns,
+    addLineValueHeaderLink,
     setLineColumnTotal,
-  ]);
-  const handlePushLineValuesToHeader = useCallback(async (lineColumn) => {
-    const lineColumnKey = String(lineColumn?.key || '').trim();
-    if (!lineColumnKey) return;
-    const activeLink = lineValueHeaderLinks.find((link) => link.lineColumnKey === lineColumnKey);
-    if (activeLink?.headerColumnKey) {
-      setEditingColumnKey(activeLink.headerColumnKey);
-      return;
-    }
-    const fallbackHeader = visibleHeaderColumns[visibleHeaderColumns.length - 1];
-    const created = await addHeaderColumnAfter(fallbackHeader?.key || '', {
-      label: `${lineColumn.label} Values`,
-      dataType: 'text',
-    });
-    if (!created?.key) return;
-    await addLineValueHeaderLink({ lineColumnKey, headerColumnKey: created.key });
-    setEditingColumnKey(created.key);
-  }, [lineValueHeaderLinks, visibleHeaderColumns, addHeaderColumnAfter, addLineValueHeaderLink]);
+    setEditingColumnKey,
+  });
 
   const handleRefresh = useCallback(async () => {
     startProgress();
     try {
-      await refresh();
-      // Na een D365-refresh kan de set "verborgen maar nog in de filter" veranderd zijn.
+      const started = await refresh();
+      if (!started) return;
+      const finalProgress = await waitForCompletion();
+      if (String(finalProgress?.status || '').toLowerCase() === 'error') {
+        setRefreshError(finalProgress?.error || 'D365 refresh mislukt');
+        return;
+      }
+      await reloadAfterRefresh();
       await hiddenRows.reload();
+    } catch (err) {
+      setRefreshError(err?.message || 'D365 refresh mislukt');
     } finally {
       await finishProgress();
+      finishRefresh();
     }
-  }, [finishProgress, refresh, startProgress, hiddenRows]);
-
+  }, [finishProgress, finishRefresh, hiddenRows, refresh, reloadAfterRefresh, setRefreshError, startProgress, waitForCompletion]);
   const relativeSynced = formatSyncedAt(syncedAt);
-
   return (
     <div className={styles.page}>
       <PurchaseOrdersPageTopBar
@@ -266,18 +252,23 @@ export default function PurchaseOrdersPage() {
             lineColumns={lineColumns}
             items={orders}
             boardView={boardView}
-            onSaveValue={saveValue}
+            onSaveValue={bulkEdit.handleSaveValue}
             onRenameColumn={renameColumn}
             onRemoveColumn={removeColumn}
-            onCorrect={correctField}
+            onCorrect={bulkEdit.handleCorrectField}
             isAdmin={isAdmin}
             onToggleWriteback={toggleWriteback}
             onReorderHeaderColumn={reorderHeaderColumn}
             onReorderLineColumn={reorderLineColumn}
             headerColumnWidths={headerColumnWidths}
             lineColumnWidths={lineColumnWidths}
+            headerColumnTextStyles={headerColumnTextStyles}
+            headerColumnFormatRules={headerColumnFormatRules}
+            lineColumnTextStyles={lineColumnTextStyles}
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
+            onSaveHeaderColumnTextStyle={saveHeaderColumnTextStyle}
+            onSaveLineColumnTextStyle={saveLineColumnTextStyle}
             onAddColumnRightOf={handleAddColumnRightOf}
             onSetLineColumnTotal={setLineColumnTotal}
             onPushLineTotalToHeader={handlePushLineTotalToHeader}
@@ -292,7 +283,9 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
-
+      <PurchaseOrderFormulaColumnDialog open={formulaDialogState.open} onOpenChange={(open) => !open && closeFormulaDialog()} onSubmit={submitFormulaColumn} sourceColumn={formulaDialogState.sourceColumn} availableColumns={formulaReferenceColumns} initialValue={formulaDialogState.editingColumn} />
+      <PurchaseOrderImageColumnDialog open={imageDialogState.open} onOpenChange={(open) => !open && closeImageDialog()} onSubmit={submitImageColumn} sourceColumn={imageDialogState.sourceColumn} availableColumns={visibleHeaderColumns} initialValue={imageDialogState.editingColumn} sampleRowValues={boardView.processedItems?.[0]?.values || {}} />
+      <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
     </div>
   );
 }

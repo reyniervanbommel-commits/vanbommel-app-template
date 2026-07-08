@@ -1,7 +1,9 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
+import { getColumnCellStyle } from './columnTextStyleUtils';
+import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { rowSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 
 const useStyles = makeStyles({
@@ -75,6 +77,8 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     verticalAlign: 'middle',
   },
   newRow: {
@@ -97,10 +101,15 @@ function getOrderRowClassName(order, styles) {
   return styles.itemRow;
 }
 
-function getColumnCellStyle(columnWidths, columnKey) {
-  const width = Number(columnWidths?.[columnKey]);
-  if (!Number.isFinite(width)) return undefined;
-  return { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` };
+function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
+  if (order?.removedInD365) return '';
+  for (const column of Array.isArray(columns) ? columns : []) {
+    const ruleSet = headerColumnFormatRules[column.key];
+    if (!ruleSet || ruleSet.target !== 'row') continue;
+    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {});
+    if (color) return color;
+  }
+  return '';
 }
 
 function PurchaseOrdersBoardRows({
@@ -113,6 +122,9 @@ function PurchaseOrdersBoardRows({
   lineColumns,
   headerColumnWidths,
   lineColumnWidths,
+  headerColumnTextStyles,
+  headerColumnFormatRules,
+  lineColumnTextStyles,
   onSaveLineColumnWidth,
   colCount,
   groupingColumnLabel,
@@ -125,6 +137,10 @@ function PurchaseOrdersBoardRows({
   selection,
 }) {
   const styles = useStyles();
+  const effectiveHeaderColumnFormatRules = useMemo(
+    () => normalizeColumnFormatRulesMap(headerColumnFormatRules),
+    [headerColumnFormatRules]
+  );
   const { onToggleGroup, onToggleOrder } = tableActions;
   const selectionEnabled = Boolean(selection?.enabled);
   const handleGroupSelection = useCallback((keys, shouldSelect) => {
@@ -189,10 +205,14 @@ function PurchaseOrdersBoardRows({
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];
               const selectionKey = rowSelectionKey(order.dataAreaId, order.orderNumber);
+              const rowFormatColor = resolveRowFormatColor(order, columns, effectiveHeaderColumnFormatRules);
 
               return (
                 <React.Fragment key={rowId}>
-                  <tr className={getOrderRowClassName(order, styles)}>
+                  <tr
+                    className={getOrderRowClassName(order, styles)}
+                    style={!order.removedInD365 && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
+                  >
                     <td className={styles.controlCell}>
                       <div className={styles.controlCellInner}>
                         {selectionEnabled ? (
@@ -216,23 +236,29 @@ function PurchaseOrdersBoardRows({
                         ) : null}
                       </div>
                     </td>
-                    {columns.map((column, columnIndex) => (
-                      <td
-                        key={`${rowId}-${column.key}`}
-                        className={styles.itemCell}
-                        style={getColumnCellStyle(headerColumnWidths, column.key)}
-                      >
-                        <PurchaseOrderHeaderCellContent
-                          order={order}
-                          column={column}
-                          isFirst={columnIndex === 0}
-                          onSaveValue={cellActions.onSaveValue}
-                          onCorrect={cellActions.onCorrect}
-                          linkedLineTotalMap={linkedLineTotalByHeaderKey}
-                          linkedLineValueMap={linkedLineValueByHeaderKey}
-                        />
-                      </td>
-                    ))}
+                    {columns.map((column, columnIndex) => {
+                      const ruleSet = effectiveHeaderColumnFormatRules?.[column.key];
+                      const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
+                        ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
+                        : '';
+                      return (
+                        <td
+                          key={`${rowId}-${column.key}`}
+                          className={styles.itemCell}
+                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
+                        >
+                          <PurchaseOrderHeaderCellContent
+                            order={order}
+                            column={column}
+                            isFirst={columnIndex === 0}
+                            onSaveValue={cellActions.onSaveValue}
+                            onCorrect={cellActions.onCorrect}
+                            linkedLineTotalMap={linkedLineTotalByHeaderKey}
+                            linkedLineValueMap={linkedLineValueByHeaderKey}
+                          />
+                        </td>
+                      );
+                    })}
                   </tr>
                   {hasLines && isExpanded ? (
                     <tr>
@@ -250,7 +276,9 @@ function PurchaseOrdersBoardRows({
                           onToggleWriteback={cellActions.onToggleWriteback}
                           onReorderColumn={cellActions.onReorderLineColumn}
                           columnWidths={lineColumnWidths}
+                          columnTextStyles={lineColumnTextStyles}
                           onSaveColumnWidth={onSaveLineColumnWidth}
+                          onSaveColumnTextStyle={cellActions.onSaveLineColumnTextStyle}
                           reorderBusy={cellActions.reorderingColumns}
                           summedLineColumnKeys={lineTotalColumns}
                           onSetLineColumnTotal={cellActions.onSetLineColumnTotal}

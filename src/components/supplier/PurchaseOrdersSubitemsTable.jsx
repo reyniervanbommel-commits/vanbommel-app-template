@@ -1,12 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import EditableCell from './EditableCell';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
-import PurchaseOrderColumnFilterMenu, { isColumnFilterActive } from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
-import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
@@ -79,6 +78,8 @@ const useStyles = makeStyles({
     ...shorthands.padding('2px', '8px'),
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   empty: {
     ...shorthands.padding('8px'),
@@ -107,7 +108,9 @@ export default function PurchaseOrdersSubitemsTable({
   onToggleWriteback,
   onReorderColumn,
   columnWidths = {},
+  columnTextStyles = {},
   onSaveColumnWidth,
+  onSaveColumnTextStyle,
   reorderBusy = false,
   summedLineColumnKeys = [],
   onSetLineColumnTotal,
@@ -189,11 +192,14 @@ export default function PurchaseOrdersSubitemsTable({
                   onSetGroupingColumn={noop}
                   onClearGrouping={noop}
                   onSetGroupingColor={noop}
+                  onRenameColumn={onRenameColumn}
                   onRemoveColumn={onRemoveColumn}
                   isLineColumnSummed={summedColumnsSet.has(column.key)}
                   onToggleLineColumnSum={onSetLineColumnTotal}
                   onPushLineTotalToHeader={onPushLineTotalToHeader}
                   onPushLineValuesToHeader={onPushLineValuesToHeader}
+                  columnTextStyle={columnTextStyles[column.key]}
+                  onSetColumnTextStyle={onSaveColumnTextStyle}
                 />
               </div>
             </ResizableTableHeaderCell>
@@ -201,88 +207,18 @@ export default function PurchaseOrdersSubitemsTable({
           })}
         </tr>
       </thead>
-      <tbody>
-        {visibleLines.map((line, index) => (
-          <tr key={`${rowId}-line-${line.lineNumber ?? index}`}>
-            {lineColumns.map((column) => {
-              const rawValue = line.values?.[column.key];
-              const width = Number(columnWidths[column.key]);
-              const cellStyle = Number.isFinite(width)
-                ? { width: `${Math.round(width)}px`, minWidth: `${Math.round(width)}px` }
-                : undefined;
-              if (column.source === 'custom') {
-                return (
-                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
-                    <EditableCell
-                      dataType={column.dataType}
-                      value={rawValue}
-                      options={column.options}
-                      ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
-                      hasHistory={Boolean(line.historyByColumnId?.[column.id])}
-                      cellKeys={{
-                        columnId: column.id,
-                        dataAreaId: order.dataAreaId,
-                        orderNumber: order.orderNumber,
-                        lineNumber: line.lineNumber,
-                      }}
-                      onSave={(value) =>
-                        onSaveValue({
-                          columnId: column.id,
-                          columnKey: column.key,
-                          dataAreaId: order.dataAreaId,
-                          orderNumber: order.orderNumber,
-                          lineNumber: line.lineNumber,
-                          value,
-                        })
-                      }
-                    />
-                  </td>
-                );
-              }
-              if (column.source === 'd365' && column.writableToD365 && onCorrect) {
-                return (
-                  <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
-                    <PurchaseOrderWriteBackCell
-                      column={column}
-                      value={rawValue}
-                      hasHistory={Boolean(line.historyByColumnId?.[column.id])}
-                      cellKeys={{
-                        columnId: column.id,
-                        dataAreaId: order.dataAreaId,
-                        orderNumber: order.orderNumber,
-                        lineNumber: line.lineNumber,
-                      }}
-                      onCorrect={({ value, basedOnValue }) =>
-                        onCorrect({
-                          columnId: column.id,
-                          columnKey: column.key,
-                          dataAreaId: order.dataAreaId,
-                          orderNumber: order.orderNumber,
-                          lineNumber: line.lineNumber,
-                          value,
-                          basedOnValue,
-                        })
-                      }
-                    />
-                  </td>
-                );
-              }
-              return (
-                <td key={`${rowId}-${line.lineNumber ?? index}-${column.key}`} className={styles.subCell} style={cellStyle}>
-                  {formatCellValue(rawValue, column.dataType)}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-        {!visibleLines.length ? (
-          <tr>
-            <td className={styles.noRowsCell} colSpan={lineColumns.length}>
-              No lines match the active filters
-            </td>
-          </tr>
-        ) : null}
-      </tbody>
+      <PurchaseOrdersSubitemsBodyRows
+        rowId={rowId}
+        order={order}
+        lineColumns={lineColumns}
+        visibleLines={visibleLines}
+        columnWidths={columnWidths}
+        columnTextStyles={columnTextStyles}
+        onSaveValue={onSaveValue}
+        onCorrect={onCorrect}
+        subCellClassName={styles.subCell}
+        noRowsCellClassName={styles.noRowsCell}
+      />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow
           rowId={rowId}

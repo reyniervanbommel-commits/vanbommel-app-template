@@ -2,16 +2,47 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
+import { normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
 
 const BOARD_KEY = 'purchase-orders';
 const MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 1000;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 // Board-cutover Fase 7 (#AB:176): endpoints + response-shape-mapping tussen de generieke tb_*-laag
 // (/api/data/purchase-orders) en de po_*-vorm die de board-componenten verwachten. Achter BOARD_TB_SOURCE.
 const DATA_BASE = '/data/purchase-orders';
 const PO_BASE = '/purchase-orders';
 const boardBase = () => (BOARD_TB_SOURCE ? DATA_BASE : PO_BASE);
+const NON_WRITABLE_BOARD_KEYS = {
+  header: new Set(['orderNumber', 'status', 'createdDateTime']),
+  line: new Set(['lineNumber']),
+};
+
+function resolveBoardWriteBackAllowed(column) {
+  if (typeof column.writeBackAllowed === 'boolean') return column.writeBackAllowed;
+  if (column.source !== 'd365' || !column.d365Field) return false;
+  return !(NON_WRITABLE_BOARD_KEYS[column.level] || new Set()).has(column.key);
+}
+
+function mapTbColumnToBoard(column) {
+  if (!column || typeof column !== 'object') return column;
+  const source = column.source === 'source' ? 'd365' : column.source;
+  const level = column.level === 'line' || column.level === 'header'
+    ? column.level
+    : (column.scope === 'detail' ? 'line' : 'header');
+  const mapped = {
+    ...column,
+    source,
+    level,
+    d365Field: column.sourceField ?? column.d365Field ?? null,
+    writableToD365: Boolean(column.writable ?? column.writableToD365),
+  };
+  return {
+    ...mapped,
+    writeBackAllowed: resolveBoardWriteBackAllowed(mapped),
+  };
+}
 
 // tb_*-read → board-shape: rows→orders, meta.columns.master|detail→columns.header|line,
 // partitionKey→dataAreaId, recordKey→orderNumber, detailKey→lineNumber, details→lines,
@@ -19,14 +50,15 @@ const boardBase = () => (BOARD_TB_SOURCE ? DATA_BASE : PO_BASE);
 function mapTbResponseToBoard(data) {
   if (!data || typeof data !== 'object') return data;
   const rows = Array.isArray(data.rows) ? data.rows : [];
-  const master = Array.isArray(data?.meta?.columns?.master) ? data.meta.columns.master : [];
-  const detail = Array.isArray(data?.meta?.columns?.detail) ? data.meta.columns.detail : [];
+  const master = Array.isArray(data?.meta?.columns?.master) ? data.meta.columns.master.map(mapTbColumnToBoard) : [];
+  const detail = Array.isArray(data?.meta?.columns?.detail) ? data.meta.columns.detail.map(mapTbColumnToBoard) : [];
   return {
     ...data,
     orders: rows.map((r) => ({
       dataAreaId: r.partitionKey,
       orderNumber: r.recordKey,
       values: r.values || {},
+      formulaErrors: r.formulaErrors && typeof r.formulaErrors === 'object' ? r.formulaErrors : {},
       isNew: Boolean(r.isNew),
       isChanged: Boolean(r.isChanged),
       removedInD365: Boolean(r.removedAtSource),
@@ -88,6 +120,36 @@ function normalizeColumnWidths(rawWidths, allowedKeys) {
     if (!Number.isFinite(width)) return acc;
     const clamped = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(width)));
     acc[key] = clamped;
+    return acc;
+  }, {});
+}
+
+function normalizeColumnTextStyleMap(rawStyles, allowedKeys) {
+  if (!rawStyles || typeof rawStyles !== 'object' || Array.isArray(rawStyles)) {
+    return {};
+  }
+  const allowed = Array.isArray(allowedKeys) && allowedKeys.length
+    ? new Set(allowedKeys)
+    : null;
+  return Object.entries(rawStyles).reduce((acc, [rawKey, rawStyle]) => {
+    const key = String(rawKey || '').trim();
+    if (!key) return acc;
+    if (allowed && !allowed.has(key)) return acc;
+    if (!rawStyle || typeof rawStyle !== 'object' || Array.isArray(rawStyle)) return acc;
+
+    const textColor = HEX_COLOR_PATTERN.test(String(rawStyle.textColor || ''))
+      ? String(rawStyle.textColor).toLowerCase()
+      : '';
+    const bold = rawStyle.bold === true;
+    const italic = rawStyle.italic === true;
+    const underline = rawStyle.underline === true;
+    if (!textColor && !bold && !italic && !underline) return acc;
+
+    acc[key] = {};
+    if (textColor) acc[key].textColor = textColor;
+    if (bold) acc[key].bold = true;
+    if (italic) acc[key].italic = true;
+    if (underline) acc[key].underline = true;
     return acc;
   }, {});
 }
@@ -176,6 +238,9 @@ export function usePurchaseOrdersPage() {
   const [lineColumnOrder, setLineColumnOrder] = useState([]);
   const [headerColumnWidths, setHeaderColumnWidths] = useState({});
   const [lineColumnWidths, setLineColumnWidths] = useState({});
+  const [headerColumnTextStyles, setHeaderColumnTextStyles] = useState({});
+  const [headerColumnFormatRules, setHeaderColumnFormatRules] = useState({});
+  const [lineColumnTextStyles, setLineColumnTextStyles] = useState({});
   const [lineTotalColumns, setLineTotalColumns] = useState([]);
   const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState([]);
   const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState([]);
@@ -239,6 +304,9 @@ export function usePurchaseOrdersPage() {
       setLineColumnOrder(Array.isArray(settings?.lineColumnOrder) ? settings.lineColumnOrder : []);
       setHeaderColumnWidths(normalizeColumnWidths(settings?.headerColumnWidths));
       setLineColumnWidths(normalizeColumnWidths(settings?.lineColumnWidths));
+      setHeaderColumnTextStyles(normalizeColumnTextStyleMap(settings?.headerColumnTextStyles));
+      setHeaderColumnFormatRules(normalizeColumnFormatRulesMap(settings?.headerColumnFormatRules));
+      setLineColumnTextStyles(normalizeColumnTextStyleMap(settings?.lineColumnTextStyles));
       setLineTotalColumns(Array.isArray(settings?.lineTotalColumns) ? settings.lineTotalColumns : []);
       setLineTotalHeaderLinks(Array.isArray(settings?.lineTotalHeaderLinks) ? settings.lineTotalHeaderLinks : []);
       setLineValueHeaderLinks(Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : []);
@@ -249,6 +317,9 @@ export function usePurchaseOrdersPage() {
       setLineColumnOrder([]);
       setHeaderColumnWidths({});
       setLineColumnWidths({});
+      setHeaderColumnTextStyles({});
+      setHeaderColumnFormatRules({});
+      setLineColumnTextStyles({});
       setLineTotalColumns([]);
       setLineTotalHeaderLinks([]);
       setLineValueHeaderLinks([]);
@@ -278,19 +349,37 @@ export function usePurchaseOrdersPage() {
     };
   }, [applyData, loadPurchaseOrders, loadBoardSettings]);
 
-  // Forceert een D365-refresh server-side en herlaadt de hele state.
+  // Start een D365-refresh op de achtergrond; de tabeldata blijft staan tot expliciete reload.
   const refresh = useCallback(async () => {
     setRefreshing(true);
     setError('');
     try {
-      const raw = await apiRequest(`${boardBase()}/refresh`, { method: 'POST' });
-      applyData(BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw);
+      return await apiRequest(`${boardBase()}/refresh/start`, { method: 'POST' });
+    } catch (err) {
+      setError(err.message);
+      setRefreshing(false);
+      return null;
+    }
+  }, []);
+
+  const finishRefresh = useCallback(() => {
+    setRefreshing(false);
+  }, []);
+
+  const setRefreshError = useCallback((message) => {
+    if (!message) return;
+    setError(String(message));
+  }, []);
+
+  const reloadAfterRefresh = useCallback(async () => {
+    try {
+      await loadPurchaseOrders({ skipLoading: true, autoRefresh: false });
     } catch (err) {
       setError(err.message);
     } finally {
       setRefreshing(false);
     }
-  }, [applyData]);
+  }, [loadPurchaseOrders]);
 
   // Markeer alles als gezien: zet het laatst-bekeken-watermerk en herlaad zodat de highlights verdwijnen.
   const markViewed = useCallback(async () => {
@@ -438,35 +527,60 @@ export function usePurchaseOrdersPage() {
           apiRequest('/purchase-orders/columns?level=header'),
           apiRequest('/purchase-orders/columns?level=line'),
         ]);
+    if (BOARD_TB_SOURCE) {
+      setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns.map(mapTbColumnToBoard) : []);
+      setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns.map(mapTbColumnToBoard) : []);
+      return;
+    }
     setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns : []);
     setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns : []);
   }, []);
 
-  const addColumn = useCallback(async ({ label, level, dataType, options }) => {
+  const addColumn = useCallback(async ({ label, level, dataType, options, formulaExpr }) => {
     const body = BOARD_TB_SOURCE
       ? { scope: scopeForLevel(level), label, dataType }
       : { label, level, dataType };
     if (options !== undefined) {
       body.options = options;
     }
+    if (formulaExpr !== undefined && BOARD_TB_SOURCE) {
+      body.formulaExpr = formulaExpr;
+    }
     const res = await apiRequest(`${boardBase()}/columns`, { method: 'POST', body });
-    await reloadColumns();
+    if (formulaExpr !== undefined && BOARD_TB_SOURCE) {
+      await reload();
+    } else {
+      await reloadColumns();
+    }
     return res?.column || null;
-  }, [reloadColumns]);
+  }, [reload, reloadColumns]);
 
   // Monday-stijl: voeg een header-kolom toe direct rechts van een bestaande kolom.
   // De nieuwe kolom wordt aangemaakt (achteraan), waarna een effect hem naar de juiste
   // plek verplaatst zodra hij in de kolomdefinities verschijnt (async na reload).
-  const addHeaderColumnAfter = useCallback(async (afterKey, { label, dataType, options }) => {
-    const created = await addColumn({ label, level: 'header', dataType, options });
+  const addHeaderColumnAfter = useCallback(async (afterKey, { label, dataType, options, formulaExpr }) => {
+    const created = await addColumn({ label, level: 'header', dataType, options, formulaExpr });
     if (created?.key && afterKey) {
       setPendingInsertAfter({ newKey: created.key, afterKey });
     }
     return created;
   }, [addColumn]);
 
-  const renameColumn = useCallback(async (id, label) => {
-    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body: { label } });
+  const updateFormulaColumn = useCallback(async (id, { label, dataType, formulaExpr }) => {
+    await apiRequest(`${boardBase()}/columns/${id}`, {
+      method: 'PATCH',
+      body: { label, dataType, formulaExpr },
+    });
+    await reload();
+  }, [reload]);
+
+  const renameColumn = useCallback(async (id, label, patch = null) => {
+    const body = { label };
+    if (patch && typeof patch === 'object') {
+      if (patch.dataType !== undefined) body.dataType = patch.dataType;
+      if (patch.options !== undefined) body.options = patch.options;
+    }
+    await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body });
     await reloadColumns();
   }, [reloadColumns]);
 
@@ -546,6 +660,18 @@ export function usePurchaseOrdersPage() {
     () => normalizeColumnWidths(lineColumnWidths, defaultLineKeys),
     [lineColumnWidths, defaultLineKeys]
   );
+  const effectiveHeaderColumnTextStyles = useMemo(
+    () => normalizeColumnTextStyleMap(headerColumnTextStyles, defaultHeaderKeys),
+    [headerColumnTextStyles, defaultHeaderKeys]
+  );
+  const effectiveHeaderColumnFormatRules = useMemo(
+    () => normalizeColumnFormatRulesMap(headerColumnFormatRules, defaultHeaderKeys),
+    [headerColumnFormatRules, defaultHeaderKeys]
+  );
+  const effectiveLineColumnTextStyles = useMemo(
+    () => normalizeColumnTextStyleMap(lineColumnTextStyles, defaultLineKeys),
+    [lineColumnTextStyles, defaultLineKeys]
+  );
 
   const persistBoardSettings = useCallback(async ({
     nextVisibleKeys = visibleColumnKeys,
@@ -553,6 +679,9 @@ export function usePurchaseOrdersPage() {
     nextLineOrder = lineColumnOrder,
     nextHeaderWidths = headerColumnWidths,
     nextLineWidths = lineColumnWidths,
+    nextHeaderTextStyles = headerColumnTextStyles,
+    nextHeaderFormatRules = headerColumnFormatRules,
+    nextLineTextStyles = lineColumnTextStyles,
     nextLineTotalColumns = lineTotalColumns,
     nextLineTotalHeaderLinks = lineTotalHeaderLinks,
     nextLineValueHeaderLinks = lineValueHeaderLinks,
@@ -562,6 +691,9 @@ export function usePurchaseOrdersPage() {
     const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
     const normalizedHeaderWidths = normalizeColumnWidths(nextHeaderWidths, defaultHeaderKeys);
     const normalizedLineWidths = normalizeColumnWidths(nextLineWidths, defaultLineKeys);
+    const normalizedHeaderTextStyles = normalizeColumnTextStyleMap(nextHeaderTextStyles, defaultHeaderKeys);
+    const normalizedHeaderFormatRules = normalizeColumnFormatRulesMap(nextHeaderFormatRules, defaultHeaderKeys);
+    const normalizedLineTextStyles = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
     const normalizedLineTotalColumns = normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys);
     const normalizedLineTotalHeaderLinks = normalizeLineTotalLinks(
       nextLineTotalHeaderLinks,
@@ -577,6 +709,9 @@ export function usePurchaseOrdersPage() {
     setLineColumnOrder(normalizedLineOrder);
     setHeaderColumnWidths(normalizedHeaderWidths);
     setLineColumnWidths(normalizedLineWidths);
+    setHeaderColumnTextStyles(normalizedHeaderTextStyles);
+    setHeaderColumnFormatRules(normalizedHeaderFormatRules);
+    setLineColumnTextStyles(normalizedLineTextStyles);
     setLineTotalColumns(normalizedLineTotalColumns);
     setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
     setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
@@ -591,6 +726,9 @@ export function usePurchaseOrdersPage() {
             lineColumnOrder: normalizedLineOrder,
             headerColumnWidths: normalizedHeaderWidths,
             lineColumnWidths: normalizedLineWidths,
+            headerColumnTextStyles: normalizedHeaderTextStyles,
+            headerColumnFormatRules: normalizedHeaderFormatRules,
+            lineColumnTextStyles: normalizedLineTextStyles,
             lineTotalColumns: normalizedLineTotalColumns,
             lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
             lineValueHeaderLinks: normalizedLineValueHeaderLinks,
@@ -600,7 +738,21 @@ export function usePurchaseOrdersPage() {
     } finally {
       setSavingColumns(false);
     }
-  }, [visibleColumnKeys, columnOrder, lineColumnOrder, headerColumnWidths, lineColumnWidths, lineTotalColumns, lineTotalHeaderLinks, lineValueHeaderLinks, defaultHeaderKeys, defaultLineKeys]);
+  }, [
+    visibleColumnKeys,
+    columnOrder,
+    lineColumnOrder,
+    headerColumnWidths,
+    lineColumnWidths,
+    headerColumnTextStyles,
+    headerColumnFormatRules,
+    lineColumnTextStyles,
+    lineTotalColumns,
+    lineTotalHeaderLinks,
+    lineValueHeaderLinks,
+    defaultHeaderKeys,
+    defaultLineKeys,
+  ]);
 
   const saveVisibleColumns = useCallback(async (nextVisibleKeys) => {
     await persistBoardSettings({ nextVisibleKeys });
@@ -613,6 +765,9 @@ export function usePurchaseOrdersPage() {
     lineColumnOrder: normalizeColumnOrder(lineColumnOrder, defaultLineKeys),
     headerColumnWidths: effectiveHeaderColumnWidths,
     lineColumnWidths: effectiveLineColumnWidths,
+    headerColumnTextStyles: effectiveHeaderColumnTextStyles,
+    headerColumnFormatRules: effectiveHeaderColumnFormatRules,
+    lineColumnTextStyles: effectiveLineColumnTextStyles,
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
@@ -624,6 +779,9 @@ export function usePurchaseOrdersPage() {
     defaultLineKeys,
     effectiveHeaderColumnWidths,
     effectiveLineColumnWidths,
+    effectiveHeaderColumnTextStyles,
+    effectiveHeaderColumnFormatRules,
+    effectiveLineColumnTextStyles,
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
@@ -647,6 +805,15 @@ export function usePurchaseOrdersPage() {
     }
     if (layout.lineColumnWidths && typeof layout.lineColumnWidths === 'object') {
       setLineColumnWidths(normalizeColumnWidths(layout.lineColumnWidths, defaultLineKeys));
+    }
+    if (layout.headerColumnTextStyles && typeof layout.headerColumnTextStyles === 'object') {
+      setHeaderColumnTextStyles(normalizeColumnTextStyleMap(layout.headerColumnTextStyles, defaultHeaderKeys));
+    }
+    if (layout.headerColumnFormatRules && typeof layout.headerColumnFormatRules === 'object') {
+      setHeaderColumnFormatRules(normalizeColumnFormatRulesMap(layout.headerColumnFormatRules, defaultHeaderKeys));
+    }
+    if (layout.lineColumnTextStyles && typeof layout.lineColumnTextStyles === 'object') {
+      setLineColumnTextStyles(normalizeColumnTextStyleMap(layout.lineColumnTextStyles, defaultLineKeys));
     }
     if (Array.isArray(layout.lineTotalColumns)) {
       setLineTotalColumns(normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys));
@@ -676,6 +843,74 @@ export function usePurchaseOrdersPage() {
     );
     await persistBoardSettings({ nextLineWidths });
   }, [effectiveLineColumnWidths, defaultLineKeys, persistBoardSettings]);
+
+  const saveHeaderColumnTextStyle = useCallback(async (columnKey, stylePatch) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    const current = effectiveHeaderColumnTextStyles[key] || {};
+    const nextTextColor = stylePatch?.textColor !== undefined
+      ? (HEX_COLOR_PATTERN.test(String(stylePatch.textColor || '')) ? String(stylePatch.textColor).toLowerCase() : '')
+      : (HEX_COLOR_PATTERN.test(String(current.textColor || '')) ? String(current.textColor).toLowerCase() : '');
+    const nextBold = stylePatch?.bold !== undefined ? stylePatch.bold === true : current.bold === true;
+    const nextItalic = stylePatch?.italic !== undefined ? stylePatch.italic === true : current.italic === true;
+    const nextUnderline = stylePatch?.underline !== undefined ? stylePatch.underline === true : current.underline === true;
+    const nextHeaderTextStyles = { ...effectiveHeaderColumnTextStyles };
+    if (!nextTextColor && !nextBold && !nextItalic && !nextUnderline) {
+      delete nextHeaderTextStyles[key];
+    } else {
+      nextHeaderTextStyles[key] = {};
+      if (nextTextColor) nextHeaderTextStyles[key].textColor = nextTextColor;
+      if (nextBold) nextHeaderTextStyles[key].bold = true;
+      if (nextItalic) nextHeaderTextStyles[key].italic = true;
+      if (nextUnderline) nextHeaderTextStyles[key].underline = true;
+    }
+    await persistBoardSettings({ nextHeaderTextStyles });
+  }, [effectiveHeaderColumnTextStyles, persistBoardSettings]);
+
+  const saveHeaderColumnFormatRules = useCallback(async (columnKey, ruleSet) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    const nextHeaderFormatRules = { ...effectiveHeaderColumnFormatRules };
+    const normalizedRuleSet = normalizeColumnFormatRulesMap({ [key]: ruleSet }, defaultHeaderKeys)[key] || null;
+    if (!normalizedRuleSet) {
+      delete nextHeaderFormatRules[key];
+      await persistBoardSettings({ nextHeaderFormatRules });
+      return;
+    }
+    if (normalizedRuleSet.target === 'row') {
+      const existingRowTarget = Object.entries(nextHeaderFormatRules).find(
+        ([entryKey, entryRuleSet]) => entryKey !== key && entryRuleSet?.target === 'row'
+      );
+      if (existingRowTarget) {
+        throw new Error('Er mag maximaal één kolom rij-opmaak gebruiken.');
+      }
+    }
+    nextHeaderFormatRules[key] = normalizedRuleSet;
+    await persistBoardSettings({ nextHeaderFormatRules });
+  }, [defaultHeaderKeys, effectiveHeaderColumnFormatRules, persistBoardSettings]);
+
+  const saveLineColumnTextStyle = useCallback(async (columnKey, stylePatch) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    const current = effectiveLineColumnTextStyles[key] || {};
+    const nextTextColor = stylePatch?.textColor !== undefined
+      ? (HEX_COLOR_PATTERN.test(String(stylePatch.textColor || '')) ? String(stylePatch.textColor).toLowerCase() : '')
+      : (HEX_COLOR_PATTERN.test(String(current.textColor || '')) ? String(current.textColor).toLowerCase() : '');
+    const nextBold = stylePatch?.bold !== undefined ? stylePatch.bold === true : current.bold === true;
+    const nextItalic = stylePatch?.italic !== undefined ? stylePatch.italic === true : current.italic === true;
+    const nextUnderline = stylePatch?.underline !== undefined ? stylePatch.underline === true : current.underline === true;
+    const nextLineTextStyles = { ...effectiveLineColumnTextStyles };
+    if (!nextTextColor && !nextBold && !nextItalic && !nextUnderline) {
+      delete nextLineTextStyles[key];
+    } else {
+      nextLineTextStyles[key] = {};
+      if (nextTextColor) nextLineTextStyles[key].textColor = nextTextColor;
+      if (nextBold) nextLineTextStyles[key].bold = true;
+      if (nextItalic) nextLineTextStyles[key].italic = true;
+      if (nextUnderline) nextLineTextStyles[key].underline = true;
+    }
+    await persistBoardSettings({ nextLineTextStyles });
+  }, [effectiveLineColumnTextStyles, persistBoardSettings]);
 
   const reorderHeaderColumn = useCallback(async (sourceKey, targetKey, position = 'before') => {
     if (!sourceKey || !targetKey) return;
@@ -754,11 +989,17 @@ export function usePurchaseOrdersPage() {
     visibleColumnKeys: effectiveVisibleKeys,
     headerColumnWidths: effectiveHeaderColumnWidths,
     lineColumnWidths: effectiveLineColumnWidths,
+    headerColumnTextStyles: effectiveHeaderColumnTextStyles,
+    headerColumnFormatRules: effectiveHeaderColumnFormatRules,
+    lineColumnTextStyles: effectiveLineColumnTextStyles,
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     markViewed,
     deleteRows,
@@ -767,6 +1008,7 @@ export function usePurchaseOrdersPage() {
     toggleWriteback,
     addColumn,
     addHeaderColumnAfter,
+    updateFormulaColumn,
     renameColumn,
     removeColumn,
     saveVisibleColumns,
@@ -777,6 +1019,9 @@ export function usePurchaseOrdersPage() {
     addLineValueHeaderLink,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
+    saveHeaderColumnTextStyle,
+    saveHeaderColumnFormatRules,
+    saveLineColumnTextStyle,
     exportColumnLayout,
     applyColumnLayout,
   }), [
@@ -798,11 +1043,17 @@ export function usePurchaseOrdersPage() {
     effectiveVisibleKeys,
     effectiveHeaderColumnWidths,
     effectiveLineColumnWidths,
+    effectiveHeaderColumnTextStyles,
+    effectiveHeaderColumnFormatRules,
+    effectiveLineColumnTextStyles,
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
     savingColumns,
     refresh,
+    finishRefresh,
+    setRefreshError,
+    reloadAfterRefresh,
     reload,
     markViewed,
     deleteRows,
@@ -811,6 +1062,7 @@ export function usePurchaseOrdersPage() {
     toggleWriteback,
     addColumn,
     addHeaderColumnAfter,
+    updateFormulaColumn,
     renameColumn,
     removeColumn,
     saveVisibleColumns,
@@ -821,6 +1073,9 @@ export function usePurchaseOrdersPage() {
     addLineValueHeaderLink,
     saveHeaderColumnWidth,
     saveLineColumnWidth,
+    saveHeaderColumnTextStyle,
+    saveHeaderColumnFormatRules,
+    saveLineColumnTextStyle,
     exportColumnLayout,
     applyColumnLayout,
   ]);

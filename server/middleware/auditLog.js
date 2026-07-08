@@ -1,10 +1,11 @@
 'use strict';
 
 const sql = require('mssql');
+const { getSqlPool } = require('../utils/sqlPool');
 
 async function auditLog(userId, userEmail, action, tableName, recordId, payload) {
   try {
-    const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
+    const pool = await getSqlPool();
     await pool.request()
       .input('userId', sql.Int, userId || null)
       .input('userEmail', sql.NVarChar, userEmail || null)

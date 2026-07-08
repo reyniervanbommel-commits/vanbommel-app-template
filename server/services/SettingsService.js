@@ -6,13 +6,14 @@
  */
 
 const sql = require('mssql');
+const { getSqlPool } = require('../utils/sqlPool');
 
 const _cache = new Map();
 let _initialized = false;
 let _initPromise = null;
 
 function getPool() {
-  return sql.connect(process.env.SQL_CONNECTION_STRING);
+  return getSqlPool();
 }
 
 async function _loadFromDb() {
