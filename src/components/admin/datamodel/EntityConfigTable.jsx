@@ -117,6 +117,7 @@ export default function EntityConfigTable({
   exportSheetName,
   exportFileName,
   relationFields,
+  relationHint = '',
   togglingKey,
   onToggleVisibility,
   onToggleVisibleAtDelete,
@@ -239,7 +240,7 @@ export default function EntityConfigTable({
           <TableBody>
             {filteredColumns.map((column) => {
               const fieldKey = String(column.d365Field || '').toLowerCase();
-              const isRelationField = relationFields.has(fieldKey);
+              const isRelationField = relationFields?.has ? relationFields.has(fieldKey) : false;
               const sampleValue = sampleByField[column.d365Field] || sampleByField[column.label] || '—';
               return (
                 <DataPreviewColumnConfigRow
@@ -264,9 +265,7 @@ export default function EntityConfigTable({
           </TableBody>
         </Table>
       </div>
-      <Text className={styles.muted}>
-        Yellow-highlighted rows mark the 2 fields that join Purchase Order Headers and Purchase Order Lines.
-      </Text>
+      {relationHint ? <Text className={styles.muted}>{relationHint}</Text> : null}
     </div>
   );
 }

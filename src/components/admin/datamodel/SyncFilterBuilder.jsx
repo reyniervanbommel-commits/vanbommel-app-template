@@ -122,13 +122,16 @@ function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
   );
 }
 
-function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
+  const isReadOnly = Boolean(syncFilter?.readOnly);
+  const readOnlyMessage = String(syncFilter?.message || '').trim();
+  const inheritedCompiled = String(syncFilter?.inheritedCompiled || '').trim();
   const {
     rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
     save, saving, error, savedAt, queryCount, countLoading, countError,
-  } = useSyncFilters(syncFilter?.rules);
+  } = useSyncFilters(syncFilter?.rules, tableKey);
 
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
@@ -160,6 +163,25 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
     });
     closePicker();
   }, [pickerState.index, updateRule, closePicker]);
+
+  if (isReadOnly) {
+    return (
+      <div className={styles.section}>
+        <div className={styles.titleRow}>
+          <FilterRegular />
+          <Text weight="semibold" size={400}>D365 sync filters</Text>
+          <Badge appearance="tint" color="informative" size="small">Inherited</Badge>
+        </div>
+        <Text className={styles.hint} block>
+          {readOnlyMessage || 'This table inherits the active Purchase Orders sync filter.'}
+        </Text>
+        {inheritedCompiled ? <div className={styles.preview}>Inherited $filter = {inheritedCompiled}</div> : null}
+        <div className={styles.actions}>
+          <Button appearance="secondary" onClick={onSyncNow}>Sync now</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.section}>

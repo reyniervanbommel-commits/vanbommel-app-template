@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
-const POLL_INTERVAL_MS = 750;
+const POLL_INTERVAL_MS = 1250;
 const MAX_WAIT_MS = 15 * 60 * 1000;
 
 /**
@@ -13,54 +13,45 @@ const MAX_WAIT_MS = 15 * 60 * 1000;
 export function usePurchaseOrderRefreshProgress() {
   const [progress, setProgress] = useState(null);
   const [running, setRunning] = useState(false);
-  const [polling, setPolling] = useState(false);
+  const latestStateRef = useRef({ running: false, progress: null });
+
+  const applyProgressState = useCallback((nextState) => {
+    setProgress(nextState.progress);
+    setRunning(nextState.running);
+    latestStateRef.current = nextState;
+    return nextState;
+  }, []);
 
   const loadProgress = useCallback(async () => {
-    const data = await apiRequest('/data/purchase-orders/refresh/progress');
-    const nextProgress = data?.progress || null;
-    const nextRunning = Boolean(data?.running);
-    setProgress(nextProgress);
-    setRunning(nextRunning);
-    return {
-      running: nextRunning,
-      progress: nextProgress,
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!polling) return undefined;
-    let stopped = false;
-    let timer = null;
-
-    const tick = async () => {
-      try {
-        await loadProgress();
-      } catch {
-        // Polling is ondersteunend; de refresh-call zelf toont de echte foutmelding.
+    try {
+      const data = await apiRequest('/data/purchase-orders/refresh/progress');
+      const nextState = {
+        running: Boolean(data?.running),
+        progress: data?.progress || null,
+      };
+      return applyProgressState(nextState);
+    } catch (err) {
+      if (err?.status === 429) {
+        // Bij tijdelijke throttling houden we de laatste bekende status aan
+        // en laten we de polling-loop doorlopen.
+        return latestStateRef.current;
       }
-      if (!stopped) {
-        timer = window.setTimeout(tick, POLL_INTERVAL_MS);
-      }
-    };
-
-    tick();
-
-    return () => {
-      stopped = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [loadProgress, polling]);
+      throw err;
+    }
+  }, [applyProgressState]);
 
   const startProgress = useCallback(() => {
-    setProgress({
-      status: 'fetching',
-      fetched: 0,
-      totalToFetch: null,
-      saved: 0,
-      totalToSave: null,
+    applyProgressState({
+      running: true,
+      progress: {
+        status: 'fetching',
+        fetched: 0,
+        totalToFetch: null,
+        saved: 0,
+        totalToSave: null,
+      },
     });
-    setPolling(true);
-  }, []);
+  }, [applyProgressState]);
 
   const finishProgress = useCallback(async () => {
     try {
@@ -68,7 +59,11 @@ export function usePurchaseOrderRefreshProgress() {
     } catch {
       // Laat de laatst bekende voortgang staan als de eindpoll faalt.
     } finally {
-      setPolling(false);
+      setRunning(false);
+      latestStateRef.current = {
+        ...latestStateRef.current,
+        running: false,
+      };
     }
   }, [loadProgress]);
 

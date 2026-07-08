@@ -66,6 +66,12 @@ app.use(rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // Refresh-voortgang wordt tijdens een actieve D365-sync periodiek gepolld; die requests mogen
+  // niet door de globale limiter worden afgekapt, anders lijkt de refresh "vastgelopen".
+  skip: (req) => (
+    req.path === '/api/purchase-orders/refresh/progress'
+    || /^\/api\/data\/[^/]+\/refresh\/progress$/.test(req.path)
+  ),
 }));
 
 app.use(express.json());

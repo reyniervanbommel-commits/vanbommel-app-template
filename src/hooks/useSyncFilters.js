@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
 // Sync-filter-endpoints op de generieke tb_*-laag (po_* is verwijderd, #AB:177).
-const SYNC_BASE = '/data/purchase-orders';
+const syncBase = (tableKey) => `/data/${tableKey}`;
 
 // Enum-metadata voor D365-velden die geen vrije tekst zijn. De Status-kolom gebruikt
 // de PurchStatus-enum; OData vereist daarvoor de notatie EnumType'Member'.
@@ -65,8 +65,10 @@ export function valueTypeForColumn(column) {
  * Input: initialRules (uit het datamodel-endpoint)
  * Output: { rules, preview, addRule, updateRule, removeRule, save, saving, error, savedAt }
  */
-export function useSyncFilters(initialRules) {
+export function useSyncFilters(initialRules, tableKey = 'purchase-orders') {
   const [rules, setRules] = useState(() => (Array.isArray(initialRules) ? initialRules : []));
+  const tableSyncBase = syncBase(tableKey);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [savedAt, setSavedAt] = useState(null);
@@ -110,7 +112,7 @@ export function useSyncFilters(initialRules) {
     setCountLoading(true);
     setCountError('');
     try {
-      const data = await apiRequest(`${SYNC_BASE}/sync-filters/count`, {
+      const data = await apiRequest(`${tableSyncBase}/sync-filters/count`, {
         method: 'POST',
         body: { rules: rulesToCount },
       });
@@ -122,7 +124,7 @@ export function useSyncFilters(initialRules) {
     } finally {
       setCountLoading(false);
     }
-  }, [rules]);
+  }, [rules, tableSyncBase]);
 
   const preview = useMemo(
     () => rules.map(previewRule).filter(Boolean).join(' and '),
@@ -133,7 +135,7 @@ export function useSyncFilters(initialRules) {
     setSaving(true);
     setError('');
     try {
-      await apiRequest(`${SYNC_BASE}/sync-filters`, { method: 'PUT', body: { rules } });
+      await apiRequest(`${tableSyncBase}/sync-filters`, { method: 'PUT', body: { rules } });
       setSavedAt(new Date());
       await countRows(rules);
     } catch (err) {
@@ -141,7 +143,7 @@ export function useSyncFilters(initialRules) {
     } finally {
       setSaving(false);
     }
-  }, [rules, countRows]);
+  }, [rules, tableSyncBase, countRows]);
 
   return useMemo(() => ({
     rules,
