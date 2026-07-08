@@ -514,6 +514,32 @@ function resolveLookupProjectionColumns({ activeColumns, allColumns, lookups, sc
   return [...sourceByKey.values()];
 }
 
+function buildLookupTargetAliases(activeTargetColumns, allTargetColumns) {
+  const activeList = Array.isArray(activeTargetColumns) ? activeTargetColumns : [];
+  const allList = Array.isArray(allTargetColumns) ? allTargetColumns : [];
+  const aliasesByKey = {};
+  activeList.forEach((targetColumn) => {
+    const targetKey = String(targetColumn?.key || '').trim();
+    if (!targetKey) return;
+
+    const aliasSet = new Set();
+    const sourceField = String(targetColumn?.sourceField || '').trim();
+    if (sourceField) {
+      aliasSet.add(sourceField);
+      const sourceFieldLower = sourceField.toLowerCase();
+      allList.forEach((column) => {
+        const colKey = String(column?.key || '').trim();
+        if (!colKey || colKey === targetKey) return;
+        if (String(column?.sourceField || '').trim().toLowerCase() === sourceFieldLower) {
+          aliasSet.add(colKey);
+        }
+      });
+    }
+    aliasesByKey[targetKey] = [...aliasSet];
+  });
+  return aliasesByKey;
+}
+
 function toColumnLabelFromField(field) {
   return String(field || '')
     .replace(/[_-]+/g, ' ')
@@ -1063,10 +1089,12 @@ async function loadLookupEnrichment(table) {
     } catch {
       continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
     }
-    const targetColumns = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false }))
+    const targetColumnsAll = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }))
       .filter((column) => column.source === 'source');
+    const targetColumns = targetColumnsAll.filter((column) => column.isActive);
     if (!targetColumns.length) continue;
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+    const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
     const fieldMap = buildLookupFieldMap({
       targetTableKey: lk.targetTableKey,
       targetFieldKeys: targetColumns.map((column) => column.key),
@@ -1122,7 +1150,15 @@ async function loadLookupEnrichment(table) {
     } else {
       masterCols.push(...synthetic);
     }
-    enriched.push({ ...lk, sourceFieldKey: resolvedSourceField, fields: fieldMap, byKey, fieldEntries, partitionless });
+    enriched.push({
+      ...lk,
+      sourceFieldKey: resolvedSourceField,
+      targetAliasesByKey,
+      fields: fieldMap,
+      byKey,
+      fieldEntries,
+      partitionless,
+    });
   }
 
   return { lookups: enriched, masterCols, detailCols };
@@ -1143,7 +1179,18 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValu
       : `${String(partitionKey).toLowerCase()}|${String(fkVal).trim()}`;
     const targetData = hasFk ? lk.byKey.get(lookupKey) : null;
     for (const [derivedKey, targetColKey] of lk.fieldEntries) {
-      valueBag[derivedKey] = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+      let value = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+      if ((value === null || value === undefined) && targetData && lk.targetAliasesByKey) {
+        const aliases = Array.isArray(lk.targetAliasesByKey[targetColKey]) ? lk.targetAliasesByKey[targetColKey] : [];
+        for (const aliasKey of aliases) {
+          if (!Object.prototype.hasOwnProperty.call(targetData, aliasKey)) continue;
+          const aliasValue = targetData[aliasKey];
+          if (aliasValue === null || aliasValue === undefined) continue;
+          value = aliasValue;
+          break;
+        }
+      }
+      valueBag[derivedKey] = value;
     }
   }
 }
@@ -2307,5 +2354,6 @@ module.exports = {
   buildLookupFieldMap,
   resolveLookupSourceKey,
   resolveLookupProjectionColumns,
+  buildLookupTargetAliases,
   FETCH_ADAPTERS,
 };

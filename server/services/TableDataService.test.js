@@ -14,6 +14,7 @@ const {
   buildLookupFieldMap,
   resolveLookupSourceKey,
   resolveLookupProjectionColumns,
+  buildLookupTargetAliases,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -95,6 +96,17 @@ describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
     const v = {};
     applyLookups(v, 'whsl', [vendorLookup], 'master', { vendorAccount: 'Q000101' });
     expect(v.vendorOrgName).toBe('Negende Generatie Beheer BV');
+  });
+
+  it('gebruikt alias-keys wanneer de actieve target-key nog geen waarde bevat', () => {
+    const v = { vendorAccount: 'Q000101' };
+    applyLookups(v, 'whsl', [{
+      ...vendorLookup,
+      fieldEntries: [['vendors_vendorGroupId', 'vendorGroupId']],
+      byKey: new Map([['whsl|Q000101', { vendorGroup: 'GRC' }]]),
+      targetAliasesByKey: { vendorGroupId: ['vendorGroup'] },
+    }], 'master');
+    expect(v.vendors_vendorGroupId).toBe('GRC');
   });
 });
 
@@ -327,5 +339,20 @@ describe('TableDataService.resolveLookupProjectionColumns', () => {
       lookups: [{ sourceScope: 'master', sourceField: 'vendorAccount' }],
     });
     expect(resolved.map((column) => column.key)).toEqual(['orderNumber']);
+  });
+});
+
+describe('TableDataService.buildLookupTargetAliases', () => {
+  it('neemt inactieve alias-keys met hetzelfde sourceField mee', () => {
+    const aliases = buildLookupTargetAliases(
+      [{ key: 'vendorGroupId', sourceField: 'VendorGroupId' }],
+      [
+        { key: 'vendorGroupId', sourceField: 'VendorGroupId' },
+        { key: 'vendorGroup', sourceField: 'VendorGroupId' },
+      ]
+    );
+    expect(aliases).toEqual({
+      vendorGroupId: ['VendorGroupId', 'vendorGroup'],
+    });
   });
 });
