@@ -5,6 +5,7 @@ const {
   applyLookups,
   normalizeExclusionRows,
   resolveConfiguredMaxItems,
+  requiredMasterFieldsFromTable,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
@@ -270,6 +271,14 @@ describe('TableDataService.resolveConfiguredMaxItems', () => {
 
   it('valt terug op tabel maxRows wanneer setting ontbreekt', () => {
     expect(resolveConfiguredMaxItems(null, 10000, 2000)).toBe(10000);
+  });
+});
+
+describe('TableDataService.requiredMasterFieldsFromTable', () => {
+  it('forceert geen ModifiedDateTime voor generieke entiteiten', () => {
+    expect(requiredMasterFieldsFromTable({
+      keyFields: ['dataAreaId', 'VendorAccountNumber'],
+    })).toEqual(['dataAreaId', 'VendorAccountNumber']);
   });
 });
 

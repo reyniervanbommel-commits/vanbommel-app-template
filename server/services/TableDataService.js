@@ -308,11 +308,9 @@ function resolveRecordKeys(table, rawRecord, fallbackPartitionKey) {
 
 function requiredMasterFieldsFromTable(table) {
   const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
-  return uniqueFieldList([
-    'dataAreaId',
-    'ModifiedDateTime',
-    ...keyFields,
-  ]);
+  // Niet elke D365-entiteit heeft ModifiedDateTime; dat veld hard forceren in $select
+  // veroorzaakt 400's op o.a. VendorsV2. Sleutels volstaan voor generieke fetches.
+  return uniqueFieldList(['dataAreaId', ...keyFields]);
 }
 
 async function genericMasterD365Fetch(table, { onProgress } = {}) {
@@ -2386,6 +2384,7 @@ module.exports = {
   applyLookups,
   isFormulaColumn,
   resolveConfiguredMaxItems,
+  requiredMasterFieldsFromTable,
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
