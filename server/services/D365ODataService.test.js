@@ -2,6 +2,7 @@
 
 const {
   buildPurchaseOrderUrl,
+  fetchEntityRecords,
   mapPurchaseOrder,
   mapPurchaseOrderLine,
   fetchPurchaseOrders,
@@ -488,6 +489,77 @@ describe('D365ODataService', () => {
 
       expect(calls[0].url).toContain('/data/PurchaseOrderLinesV2(');
       expect(calls[0].url).toContain('LineNumber=2');
+    });
+  });
+
+  describe('fetchEntityRecords (#195)', () => {
+    it('haalt generieke entiteiten op met company-filter en $select', async () => {
+      const calls = [];
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        calls.push(String(url));
+        return {
+          ok: true,
+          json: async () => ({
+            '@odata.count': 1,
+            value: [{ dataAreaId: 'WHSL', VendorAccountNumber: 'SUPP-1', VendorOrganizationName: 'Vendor 1' }],
+          }),
+        };
+      });
+
+      const result = await fetchEntityRecords({
+        sourceEntity: '/data/VendorsV2',
+        top: 20,
+        skip: 0,
+        fetchAll: false,
+        extraFilter: "VendorGroupId eq 'DOM'",
+        selectFields: ['dataAreaId', 'VendorAccountNumber', 'VendorOrganizationName'],
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      const requestUrl = new URL(calls[0]);
+      expect(requestUrl.pathname).toContain('/data/VendorsV2');
+      expect(requestUrl.searchParams.get('cross-company')).toBe('true');
+      expect(requestUrl.searchParams.get('$filter')).toContain("dataAreaId eq 'WHSL'");
+      expect(requestUrl.searchParams.get('$filter')).toContain("(VendorGroupId eq 'DOM')");
+      expect(requestUrl.searchParams.get('$select')).toBe('dataAreaId,VendorAccountNumber,VendorOrganizationName');
+    });
+
+    it('ondersteunt paginatie op generieke entiteiten', async () => {
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        const parsed = new URL(String(url));
+        const skipValue = Number.parseInt(parsed.searchParams.get('$skip') || '0', 10);
+        if (skipValue === 0) {
+          return {
+            ok: true,
+            json: async () => ({
+              '@odata.count': 3,
+              '@odata.nextLink': 'https://example.operations.dynamics.com/data/ReleasedProductsV2?$top=2&$skip=2',
+              value: [
+                { dataAreaId: 'WHSL', ItemNumber: 'ART-1' },
+                { dataAreaId: 'WHSL', ItemNumber: 'ART-2' },
+              ],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            value: [{ dataAreaId: 'WHSL', ItemNumber: 'ART-3' }],
+          }),
+        };
+      });
+
+      const result = await fetchEntityRecords({
+        sourceEntity: '/data/ReleasedProductsV2',
+        top: 2,
+        skip: 0,
+        fetchAll: true,
+      });
+
+      expect(result.items).toHaveLength(3);
+      expect(result.pagesFetched).toBe(2);
+      expect(result.fetchedAll).toBe(true);
     });
   });
 });

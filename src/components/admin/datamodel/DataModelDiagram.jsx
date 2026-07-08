@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
 import { Badge, Text, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import { KeyRegular, TableRegular, LinkRegular } from '@fluentui/react-icons';
+import { KeyRegular, TableRegular, ArrowRightRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   diagram: {
     display: 'flex',
     alignItems: 'stretch',
-    ...shorthands.gap('0px'),
+    ...shorthands.gap('12px'),
     flexWrap: 'wrap',
   },
   entityCard: {
@@ -44,25 +44,25 @@ const useStyles = makeStyles({
     wordBreak: 'break-all',
   },
   muted: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  connector: {
+  relationsWrap: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shorthands.padding('8px', '4px'),
-    minWidth: '170px',
-    flex: '0 1 auto',
+    ...shorthands.gap('6px'),
   },
-  connectorSvg: { display: 'block' },
-  connectorLabel: {
+  relationRow: {
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap('4px'),
     color: tokens.colorNeutralForeground2,
     fontSize: tokens.fontSizeBase200,
+  },
+  relationTitle: {
+    marginTop: '4px',
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
   },
-  keyBadgeWrap: { display: 'flex', flexWrap: 'wrap', ...shorthands.gap('4px'), justifyContent: 'center' },
+  relationBadgeWrap: { display: 'flex', flexWrap: 'wrap', ...shorthands.gap('4px') },
 });
 
 function EntityCard({ entity, columnCount, visibleCount, rowCount }) {
@@ -98,56 +98,87 @@ function EntityCard({ entity, columnCount, visibleCount, rowCount }) {
   );
 }
 
-/**
- * Visueel ER-diagram (header 1:n lines) met de koppelvelden op de connector.
- * Bewust simpel gehouden (flex + SVG) — geen diagram-library nodig voor 2 entiteiten.
- */
-function DataModelDiagram({ entities, relation, columns, cache }) {
+function lookupToRelationText(lookup) {
+  const sourceLabel = lookup.sourceScope === 'detail' ? 'PO line' : 'PO header';
+  const targetLabel = lookup.targetTableLabel || lookup.targetTableKey;
+  return `${sourceLabel} n:1 ${targetLabel}`;
+}
+
+function DataModelDiagram({ entities, relation, columns, cache, lookups = [] }) {
   const styles = useStyles();
   const header = entities.find((e) => e.id === 'header');
   const line = entities.find((e) => e.id === 'line');
-  if (!header || !line) return null;
+  const lookupEntities = lookups.map((lookup) => ({
+    id: `lookup-${lookup.targetTableKey}`,
+    title: lookup.targetTableLabel || lookup.targetTableKey,
+    name: lookup.targetTableKey,
+    path: lookup.targetTableKey,
+    keys: [lookup.targetKeyField].filter(Boolean),
+    cacheTable: 'tb_cache',
+  }));
+  const cards = [header, line, ...lookupEntities].filter(Boolean);
+  if (!cards.length) return null;
 
   const headerCols = columns.header || [];
   const lineCols = columns.line || [];
 
   return (
-    <div className={styles.diagram}>
-      <EntityCard
-        entity={header}
-        columnCount={headerCols.length}
-        visibleCount={headerCols.filter((c) => c.isActive).length}
-        rowCount={cache ? cache.headerCount : undefined}
-      />
-
-      <div className={styles.connector}>
-        <div className={styles.connectorLabel}>
-          <LinkRegular fontSize={14} />
-          <span>1&nbsp;:&nbsp;n</span>
-        </div>
-        <svg className={styles.connectorSvg} width="150" height="28" viewBox="0 0 150 28" aria-hidden="true">
-          {/* Relatielijn met crow's foot aan de n-zijde */}
-          <line x1="4" y1="14" x2="132" y2="14" stroke={tokens.colorBrandStroke1} strokeWidth="2" />
-          <line x1="4" y1="6" x2="4" y2="22" stroke={tokens.colorBrandStroke1} strokeWidth="2" />
-          <line x1="132" y1="14" x2="146" y2="5" stroke={tokens.colorBrandStroke1} strokeWidth="2" />
-          <line x1="132" y1="14" x2="146" y2="14" stroke={tokens.colorBrandStroke1} strokeWidth="2" />
-          <line x1="132" y1="14" x2="146" y2="23" stroke={tokens.colorBrandStroke1} strokeWidth="2" />
-        </svg>
-        <div className={styles.keyBadgeWrap}>
-          {(relation?.onFields || []).map((field) => (
-            <Badge key={field} appearance="tint" color="brand" size="small">{field}</Badge>
-          ))}
-        </div>
+    <>
+      <div className={styles.diagram}>
+        {cards.map((entity) => {
+          // Cache counts are available for the selected table only; lookup targets omit row count.
+          // This keeps the diagram accurate while still showing target entities and relation keys.
+          const isLine = entity.id === 'line';
+          const isLookup = String(entity.id).startsWith('lookup-');
+          return (
+            <EntityCard
+              key={entity.id}
+              entity={entity}
+              columnCount={isLine ? lineCols.length : headerCols.length}
+              visibleCount={(isLine ? lineCols : headerCols).filter((c) => c.isActive).length}
+              rowCount={isLookup ? undefined : (isLine ? cache?.detailRows : cache?.masterRows)}
+            />
+          );
+        })}
       </div>
 
-      <EntityCard
-        entity={line}
-        columnCount={lineCols.length}
-        visibleCount={lineCols.filter((c) => c.isActive).length}
-        rowCount={cache ? cache.lineCount : undefined}
-      />
-    </div>
+      <div className={styles.relationsWrap}>
+        <Text className={styles.relationTitle}>Relations</Text>
+        {relation ? (
+          <div className={styles.relationRow}>
+            <Badge appearance="tint" color="brand" size="small">
+              1:n
+            </Badge>
+            <span>{`${header?.title || 'Header'} -> ${line?.title || 'Line'}`}</span>
+            <div className={styles.relationBadgeWrap}>
+              {(relation?.onFields || []).map((field) => (
+                <Badge key={field} appearance="outline" size="small">{field}</Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {lookups.map((lookup) => (
+          <div key={`${lookup.sourceScope}-${lookup.targetTableKey}-${lookup.sourceField}`} className={styles.relationRow}>
+            <ArrowRightRegular fontSize={14} />
+            <span>{lookupToRelationText(lookup)}</span>
+            <div className={styles.relationBadgeWrap}>
+              <Badge appearance="outline" size="small">{lookup.sourceField}</Badge>
+              <Badge appearance="outline" size="small">{lookup.targetKeyField}</Badge>
+            </div>
+          </div>
+        ))}
+        {!relation && !lookups.length ? (
+          <Text size={200}>No relations configured for this entity.</Text>
+        ) : null}
+      </div>
+    </>
   );
 }
 
 export default memo(DataModelDiagram);
+
+/*
+  Note:
+  The previous SVG connector implementation was limited to exactly 2 entities.
+  This generalized version keeps the overview readable for PO + lookup nodes.
+*/

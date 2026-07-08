@@ -125,7 +125,7 @@ export default function PurchaseOrdersPageTopBar({
     <div className={styles.contentInset}>
       <div className={styles.header}>
         <div className={styles.titleWrap}>
-          <div className={styles.tableName}>Master plan purchase orders</div>
+          <div className={styles.tableName}>Purchase Orders</div>
           <div className={styles.viewRow}>
             <PurchaseOrderSavedViewsControl
               titleMode
