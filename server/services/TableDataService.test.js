@@ -4,6 +4,7 @@ const {
   computeContentHash,
   applyLookups,
   normalizeExclusionRows,
+  resolveConfiguredMaxItems,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
@@ -14,6 +15,7 @@ const {
   buildLookupFieldMap,
   resolveLookupSourceKey,
   resolveLookupProjectionColumns,
+  buildLookupDedupeSignature,
   buildLookupTargetAliases,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
@@ -261,6 +263,16 @@ describe('TableDataService fetch adapters (#195)', () => {
   });
 });
 
+describe('TableDataService.resolveConfiguredMaxItems', () => {
+  it('gebruikt expliciete settingwaarde wanneer geldig', () => {
+    expect(resolveConfiguredMaxItems('500', 2000, 1000)).toBe(500);
+  });
+
+  it('valt terug op tabel maxRows wanneer setting ontbreekt', () => {
+    expect(resolveConfiguredMaxItems(null, 10000, 2000)).toBe(10000);
+  });
+});
+
 describe('TableDataService.buildLookupFieldMap', () => {
   it('behoudt bestaande derived keys wanneer dezelfde targetvelden geselecteerd blijven', () => {
     const map = buildLookupFieldMap({
@@ -339,6 +351,22 @@ describe('TableDataService.resolveLookupProjectionColumns', () => {
       lookups: [{ sourceScope: 'master', sourceField: 'vendorAccount' }],
     });
     expect(resolved.map((column) => column.key)).toEqual(['orderNumber']);
+  });
+});
+
+describe('TableDataService.buildLookupDedupeSignature', () => {
+  it('dedupliceert lookup-relaties op scope + source + target table', () => {
+    const a = buildLookupDedupeSignature({
+      sourceScope: 'master',
+      sourceFieldKey: 'vendorAccount',
+      targetTableKey: 'vendors',
+    });
+    const b = buildLookupDedupeSignature({
+      sourceScope: 'master',
+      sourceFieldKey: 'vendorAccount',
+      targetTableKey: 'vendors',
+    });
+    expect(a).toBe(b);
   });
 });
 

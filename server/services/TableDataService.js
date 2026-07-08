@@ -126,8 +126,7 @@ async function startRefresh(tableKey) {
 async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const parsedMax = Number.parseInt(rawMax, 10);
-  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
   let extraFilter = '';
   try {
     extraFilter = await getTableSyncFilter(table);
@@ -244,6 +243,14 @@ function uniqueFieldList(fields) {
   return [...list];
 }
 
+function resolveConfiguredMaxItems(settingValue, tableMaxRows, fallbackMax = 2000) {
+  const parsedSetting = Number.parseInt(String(settingValue ?? ''), 10);
+  if (Number.isFinite(parsedSetting) && parsedSetting > 0) return parsedSetting;
+  const parsedTable = Number.parseInt(String(tableMaxRows ?? ''), 10);
+  if (Number.isFinite(parsedTable) && parsedTable > 0) return parsedTable;
+  return fallbackMax;
+}
+
 async function getTableSyncRules(table) {
   if (table.key === 'purchase-orders') {
     const fromSettings = parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
@@ -310,9 +317,7 @@ function requiredMasterFieldsFromTable(table) {
 
 async function genericMasterD365Fetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const parsedMax = Number.parseInt(rawMax, 10);
-  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+  const maxItems = resolveConfiguredMaxItems(null, table.maxRows, 2000);
 
   let extraFilter = '';
   try {
@@ -538,6 +543,14 @@ function buildLookupTargetAliases(activeTargetColumns, allTargetColumns) {
     aliasesByKey[targetKey] = [...aliasSet];
   });
   return aliasesByKey;
+}
+
+function buildLookupDedupeSignature({ sourceScope, sourceFieldKey, targetTableKey }) {
+  return [
+    String(sourceScope === 'detail' ? 'detail' : 'master').toLowerCase(),
+    String(sourceFieldKey || '').trim().toLowerCase(),
+    String(targetTableKey || '').trim().toLowerCase(),
+  ].join('|');
 }
 
 function toColumnLabelFromField(field) {
@@ -844,8 +857,40 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
 // ---------------------------------------------------------------------------
 // refresh — volledige resync vanuit de bron naar tb_cache (master + detail, data_json)
 // ---------------------------------------------------------------------------
-async function refresh(tableKey) {
+async function refreshLookupTargetsIfStale(table, visitedTables) {
+  if (!table || table.key !== 'purchase-orders') return;
+  const lookups = await getLookups(table.id);
+  const targetKeys = [...new Set(
+    lookups
+      .map((lookup) => String(lookup?.targetTableKey || '').trim())
+      .filter(Boolean)
+  )];
+  for (const targetKey of targetKeys) {
+    if (visitedTables.has(targetKey)) continue;
+    try {
+      const targetTable = await getTableByKey(targetKey);
+      if (targetTable.cacheMode === 'never') continue;
+      if (!(await isStale(targetKey))) continue;
+      await refresh(targetKey, { visitedTables });
+    } catch (err) {
+      logger.warn('Lookup-doeltabel verversen mislukt; hoofdrefresh gaat door', {
+        tableKey: table.key,
+        targetTableKey: targetKey,
+        error: err.message,
+      });
+    }
+  }
+}
+
+async function refresh(tableKey, options = {}) {
+  const visitedTables = options?.visitedTables instanceof Set
+    ? options.visitedTables
+    : new Set();
   const table = await getTableByKey(tableKey);
+  if (visitedTables.has(table.key)) {
+    return { orders: 0, truncated: false, syncedAt: null, skipped: 'already_visited' };
+  }
+  visitedTables.add(table.key);
   if (table.cacheMode === 'never') {
     resetRefreshProgress(tableKey, {
       status: 'done',
@@ -877,6 +922,7 @@ async function refresh(tableKey) {
   };
 
   try {
+    await refreshLookupTargetsIfStale(table, visitedTables);
     const { records, total, truncated } = await adapter(table, { onProgress: handleFetchProgress });
     const progressBeforeSave = getRefreshProgress(tableKey);
     const totalToFetch = Number.isFinite(Number(progressBeforeSave.totalToFetch))
@@ -1074,12 +1120,11 @@ async function loadLookupEnrichment(table) {
     const normalizedSourceScope = lk.sourceScope === 'detail' ? 'detail' : 'master';
     const lookupSourceColumns = normalizedSourceScope === 'detail' ? lookupSourceDetailCols : lookupSourceMasterCols;
     const resolvedSourceField = resolveLookupSourceKey(lk, lookupSourceColumns);
-    const dedupeSignature = [
-      normalizedSourceScope,
-      String(resolvedSourceField || '').toLowerCase(),
-      String(lk.targetTableKey || '').toLowerCase(),
-      String(lk.targetKeyField || '').toLowerCase(),
-    ].join('|');
+    const dedupeSignature = buildLookupDedupeSignature({
+      sourceScope: normalizedSourceScope,
+      sourceFieldKey: resolvedSourceField,
+      targetTableKey: lk.targetTableKey,
+    });
     if (seenLookupSignatures.has(dedupeSignature)) continue;
     seenLookupSignatures.add(dedupeSignature);
 
@@ -2340,6 +2385,7 @@ module.exports = {
   computeContentHash,
   applyLookups,
   isFormulaColumn,
+  resolveConfiguredMaxItems,
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
@@ -2354,6 +2400,7 @@ module.exports = {
   buildLookupFieldMap,
   resolveLookupSourceKey,
   resolveLookupProjectionColumns,
+  buildLookupDedupeSignature,
   buildLookupTargetAliases,
   FETCH_ADAPTERS,
 };
