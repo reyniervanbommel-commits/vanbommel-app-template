@@ -23,6 +23,7 @@ const MAX_ROWS = 50000;                // harde rij-cap (read() bouwt alle rijen
 const MAX_COLUMNS = 200;
 const SAMPLE_LIMIT = 200;              // aantal waarden dat we samplen voor typedetectie
 const EXCEL_KEY_PREFIX = 'excel-';
+const CACHE_BULK_CHUNK_SIZE = 1000;    // batch-size voor snelle inserts zonder enorme payload
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,6 +131,84 @@ function parseWorkbook(buffer) {
   return { columns, rows };
 }
 
+function createTbColumnsBulkTable() {
+  const table = new sql.Table('dbo.tb_columns');
+  table.columns.add('table_id', sql.BigInt, { nullable: false });
+  table.columns.add('scope', sql.NVarChar(16), { nullable: false });
+  table.columns.add('key', sql.NVarChar(64), { nullable: false });
+  table.columns.add('label', sql.NVarChar(128), { nullable: false });
+  table.columns.add('source', sql.NVarChar(16), { nullable: false });
+  table.columns.add('source_field', sql.NVarChar(128), { nullable: true });
+  table.columns.add('data_type', sql.NVarChar(16), { nullable: false });
+  table.columns.add('writable', sql.Bit, { nullable: false });
+  table.columns.add('is_default_visible', sql.Bit, { nullable: false });
+  table.columns.add('filterable', sql.Bit, { nullable: false });
+  table.columns.add('sortable', sql.Bit, { nullable: false });
+  table.columns.add('is_active', sql.Bit, { nullable: false });
+  table.columns.add('sort_order', sql.Int, { nullable: false });
+  return table;
+}
+
+function createTbCacheBulkTable() {
+  const table = new sql.Table('dbo.tb_cache');
+  table.columns.add('table_id', sql.BigInt, { nullable: false });
+  table.columns.add('scope', sql.NVarChar(16), { nullable: false });
+  table.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
+  table.columns.add('record_key', sql.NVarChar(128), { nullable: false });
+  table.columns.add('detail_key', sql.Int, { nullable: false });
+  table.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+  table.columns.add('synced_at', sql.DateTime2, { nullable: false });
+  table.columns.add('first_seen_at', sql.DateTime2, { nullable: false });
+  table.columns.add('removed_at_source', sql.Bit, { nullable: false });
+  return table;
+}
+
+async function bulkInsertColumns(tx, tableId, columns) {
+  if (!Array.isArray(columns) || !columns.length) return;
+  const table = createTbColumnsBulkTable();
+  for (let i = 0; i < columns.length; i += 1) {
+    const col = columns[i];
+    table.rows.add(
+      tableId,
+      'master',
+      col.key,
+      col.label,
+      'source',
+      col.key,
+      col.dataType,
+      false,
+      true,
+      true,
+      true,
+      true,
+      (i + 1) * 10
+    );
+  }
+  await new sql.Request(tx).bulk(table);
+}
+
+async function bulkInsertCacheRows(tx, tableId, rows, syncedAt) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  for (let start = 0; start < rows.length; start += CACHE_BULK_CHUNK_SIZE) {
+    const chunk = rows.slice(start, start + CACHE_BULK_CHUNK_SIZE);
+    const table = createTbCacheBulkTable();
+    for (const row of chunk) {
+      table.rows.add(
+        tableId,
+        'master',
+        PARTITION_SENTINEL,
+        row.recordKey,
+        MASTER_DETAIL_KEY,
+        row.dataJson,
+        syncedAt,
+        syncedAt,
+        false
+      );
+    }
+    await new sql.Request(tx).bulk(table);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Dataset aanmaken/vervangen (upload). Idempotent op de afgeleide tableKey.
 // ---------------------------------------------------------------------------
@@ -185,19 +264,8 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
       tableId = Number(ins.recordset[0].id);
     }
 
-    // tb_columns (source='source', scope master). sort_order 10,20,...
-    for (let i = 0; i < columns.length; i += 1) {
-      const col = columns[i];
-      await new sql.Request(tx)
-        .input('tableId', sql.BigInt, tableId)
-        .input('key', sql.NVarChar(64), col.key)
-        .input('label', sql.NVarChar(128), col.label)
-        .input('dataType', sql.NVarChar(16), col.dataType)
-        .input('sortOrder', sql.Int, (i + 1) * 10)
-        .query(`
-          INSERT INTO dbo.tb_columns (table_id, scope, [key], label, source, source_field, data_type, writable, is_default_visible, filterable, sortable, is_active, sort_order)
-          VALUES (@tableId, 'master', @key, @label, 'source', @key, @dataType, 0, 1, 1, 1, 1, @sortOrder)`);
-    }
+    // tb_columns (source='source', scope master). Bulk-insert i.p.v. 1 query per kolom.
+    await bulkInsertColumns(tx, tableId, columns);
 
     // tb_cache (scope master). record_key = synthetische rij-index bij een verse upload; bij een her-upload
     // van een al-gekoppelde dataset direct op de sleutelwaarde (linkedKeyField) zodat de join blijft matchen.
@@ -205,6 +273,7 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
     const syncedAt = new Date();
     const seenKeys = new Set();
     let droppedForKey = 0;
+    const cacheRows = [];
     for (let i = 0; i < rows.length; i += 1) {
       let recordKey = String(i + 1);
       if (linkedKeyField) {
@@ -214,16 +283,9 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
         if (seenKeys.has(recordKey)) { droppedForKey += 1; continue; } // dubbele sleutel in de nieuwe upload -> overslaan
         seenKeys.add(recordKey);
       }
-      await new sql.Request(tx)
-        .input('tableId', sql.BigInt, tableId)
-        .input('partitionKey', sql.NVarChar(32), PARTITION_SENTINEL)
-        .input('recordKey', sql.NVarChar(128), recordKey)
-        .input('dataJson', sql.NVarChar(sql.MAX), JSON.stringify(rows[i]))
-        .input('syncedAt', sql.DateTime2, syncedAt)
-        .query(`
-          INSERT INTO dbo.tb_cache (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
-          VALUES (@tableId, 'master', @partitionKey, @recordKey, ${MASTER_DETAIL_KEY}, @dataJson, @syncedAt, @syncedAt, 0)`);
+      cacheRows.push({ recordKey, dataJson: JSON.stringify(rows[i]) });
     }
+    await bulkInsertCacheRows(tx, tableId, cacheRows, syncedAt);
     if (linkedKeyField && droppedForKey > 0) {
       logger.warn('Her-upload: rijen overgeslagen wegens lege/dubbele gekoppelde sleutel', { tableKey, linkedKeyField, droppedForKey });
     }
@@ -413,6 +475,7 @@ async function publishLink({ mainTableKey, datasetTableKey, sourceScope, mainKey
       .query(`DELETE FROM dbo.tb_cache WHERE table_id = @t AND scope = 'master'`);
     const syncedAt = new Date();
     const seen = new Set();
+    const cacheRows = [];
     for (const r of rowsRes.recordset) {
       let json; try { json = JSON.parse(r.data_json); } catch { json = {}; }
       const raw = json[datasetKeyField];
@@ -420,15 +483,9 @@ async function publishLink({ mainTableKey, datasetTableKey, sourceScope, mainKey
       const key = String(raw).trim().slice(0, 128);
       if (seen.has(key)) continue; // defensief; computeStats gaf ok=true
       seen.add(key);
-      await new sql.Request(tx)
-        .input('t', sql.BigInt, datasetTable.id)
-        .input('pk', sql.NVarChar(32), PARTITION_SENTINEL)
-        .input('rk', sql.NVarChar(128), key)
-        .input('dj', sql.NVarChar(sql.MAX), r.data_json)
-        .input('s', sql.DateTime2, syncedAt)
-        .query(`INSERT INTO dbo.tb_cache (table_id, scope, partition_key, record_key, detail_key, data_json, synced_at, first_seen_at, removed_at_source)
-                VALUES (@t, 'master', @pk, @rk, ${MASTER_DETAIL_KEY}, @dj, @s, @s, 0)`);
+      cacheRows.push({ recordKey: key, dataJson: r.data_json });
     }
+    await bulkInsertCacheRows(tx, datasetTable.id, cacheRows, syncedAt);
 
     // Upsert de lookup-relatie (idempotent op main+target).
     const relRes = await new sql.Request(tx)

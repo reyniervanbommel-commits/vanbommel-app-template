@@ -3,6 +3,27 @@
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 export const devTestItems = [
   {
+    id: 'feature-202-upload-performance-v1-14-44',
+    title: 'Feature 202 - Upload performance verbetering (v1.14.44)',
+    checks: [
+      'Upload van een groter Excel-bestand start en rondt merkbaar sneller af dan voorheen',
+      'Na upload verschijnen dataset-label, rij-aantal en kolommen correct in de wizard',
+      'Publiceren van de koppeling werkt nog steeds zonder fouten na de performance-aanpassing',
+      'Bulk-edit functionaliteit uit Feature 202 blijft ongewijzigd werken op header-cellen',
+    ],
+  },
+  {
+    id: 'feature-202-bulk-edit-geselecteerde-rijen-v1-14-43',
+    title: 'Feature 202 - Bulk bewerken geselecteerde rijen (v1.14.43)',
+    checks: [
+      'Bij 1 geselecteerde zichtbare rij wordt direct opgeslagen zonder modal',
+      'Bij meerdere zichtbare geselecteerde rijen verschijnt modal met Alleen deze cel / Toepassen op geselecteerde rijen',
+      'Bulk op header-cellen werkt voor custom save en D365 write-back; regelcellen blijven single-update',
+      'Bij write-back worden rijen met dezelfde waarde overgeslagen (geen overbodige D365-call)',
+      'Bij fout stopt bulk direct en toont samenvatting met bijgewerkt, overgeslagen en niet geprobeerd',
+    ],
+  },
+  {
     id: 'feature-178-image-column-main-table',
     title: 'Feature 178 - Plaatje-kolom in main tabel',
     checks: [
