@@ -1371,7 +1371,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const { lastFullSyncAt } = await getSyncState(table.id);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
-  const lastViewedAt = await getLastViewedAt(userId, table.id);
+  const lastViewedAt = await getLastViewedAt(table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
   const useViewedBaseline = lastViewedMs !== null && (lastSyncedMs === null || lastViewedMs >= lastSyncedMs);
   const baselineMs = useViewedBaseline ? lastViewedMs : lastSyncedMs;
@@ -1439,6 +1439,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const ledgerSinceAt = baselineMs !== null ? new Date(baselineMs) : null;
 
   let d365LedgerRows = [];
+  let hasLedgerWindow = false;
   if (ledgerSinceAt) {
     try {
       const ledgerResult = await pool.request()
@@ -1453,6 +1454,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
           ORDER BY created_at ASC, id ASC
         `);
       d365LedgerRows = ledgerResult.recordset;
+      hasLedgerWindow = true;
     } catch (ledgerErr) {
       logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
         tableKey: table.key,
@@ -1491,8 +1493,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
       const isBaseNew = compareAgainstBaseline(detailFirstSeenMs);
       const isBaseChanged = compareAgainstBaseline(detailChangedMs);
-      const isNew = Boolean(ledgerState?.isNew) || isBaseNew;
-      const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
+      const isNew = Boolean(ledgerState?.isNew) || (!hasLedgerWindow && isBaseNew);
+      const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || (!hasLedgerWindow && isBaseChanged));
       const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
       // Alleen recente removal-events laten meetellen als "gewijzigd".
       // Historisch removed-at-source mag niet elke refresh opnieuw changedCount opblazen.
@@ -1513,8 +1515,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const orderLedgerState = orderChanges.get(recKey);
     const isBaseNew = compareAgainstBaseline(firstSeenMs);
     const isBaseChanged = compareAgainstBaseline(changedMs);
-    const isNew = Boolean(orderLedgerState?.isNew) || isBaseNew;
-    const isChanged = !isNew && (Boolean(orderLedgerState?.isChanged) || isBaseChanged || hasLineChanges);
+    const isNew = Boolean(orderLedgerState?.isNew) || (!hasLedgerWindow && isBaseNew);
+    const isChanged = !isNew && (Boolean(orderLedgerState?.isChanged) || (!hasLedgerWindow && isBaseChanged) || hasLineChanges);
     if (isNew) newCount += 1;
     else if (isChanged) changedCount += 1;
 
@@ -1564,16 +1566,20 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Nieuw-detectie per gebruiker
+// Nieuw-detectie op basis van admin-view-state (globale baseline voor alle gebruikers)
 // ---------------------------------------------------------------------------
-async function getLastViewedAt(userId, tableId) {
-  if (!userId) return null;
+async function getLastViewedAt(tableId) {
   const pool = await getPool();
   const result = await pool.request()
-    .input('userId', sql.Int, userId)
     .input('tableId', sql.BigInt, tableId)
-    .query('SELECT last_viewed_at FROM dbo.tb_user_view_state WHERE user_id = @userId AND table_id = @tableId');
-  return result.recordset.length ? result.recordset[0].last_viewed_at : null;
+    .query(`
+      SELECT MAX(vs.last_viewed_at) AS last_viewed_at
+      FROM dbo.tb_user_view_state vs WITH (NOLOCK)
+      INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
+      WHERE vs.table_id = @tableId
+        AND u.role = 'admin'
+    `);
+  return result.recordset[0]?.last_viewed_at || null;
 }
 
 async function markViewed(userId, tableKey) {

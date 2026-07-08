@@ -24,6 +24,7 @@ function PurchaseOrderChangeActivityBar({
   removedCount,
   markViewed,
   markingViewed,
+  canMarkViewed = true,
   activityFilter,
   toggleActivityFilter,
 }) {
@@ -72,7 +73,8 @@ function PurchaseOrderChangeActivityBar({
         size="small"
         icon={<CheckmarkRegular />}
         onClick={markViewed}
-        disabled={markingViewed}
+        disabled={markingViewed || !canMarkViewed}
+        title={canMarkViewed ? 'Markeer wijzigingen als gezien' : 'Alleen admin kan afvinken'}
       >
         {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
       </Button>

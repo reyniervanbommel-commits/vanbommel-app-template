@@ -82,6 +82,7 @@ function PurchaseOrderErrorDialog({
   onOpenChange,
   onRefresh,
   refreshing,
+  canRefresh = true,
 }) {
   const styles = useStyles();
   const info = useMemo(() => classifyError(error), [error]);
@@ -114,7 +115,8 @@ function PurchaseOrderErrorDialog({
               appearance="primary"
               icon={<ArrowClockwiseRegular />}
               onClick={onRefresh}
-              disabled={refreshing}
+              disabled={refreshing || !canRefresh}
+              title={canRefresh ? 'Probeer opnieuw te verversen' : 'Alleen admin kan verversen'}
             >
               {refreshing ? 'Refreshing...' : 'Refresh data'}
             </Button>

@@ -24,9 +24,10 @@ router.get('/:tableKey', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const autoRefresh = req.query.autoRefresh === '1' || req.query.autoRefresh === 'true';
+    const canRefresh = req.user?.role === ROLES.ADMIN;
     let refreshed = false;
     let refreshError = null;
-    if (autoRefresh && (await dataService.isStale(tableKey))) {
+    if (autoRefresh && canRefresh && (await dataService.isStale(tableKey))) {
       try {
         await dataService.refresh(tableKey);
         refreshed = true;
@@ -42,7 +43,7 @@ router.get('/:tableKey', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/refresh — forceer een bron-refresh.
-router.post('/:tableKey/refresh', async (req, res, next) => {
+router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const summary = await dataService.refresh(tableKey);
@@ -54,7 +55,7 @@ router.post('/:tableKey/refresh', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
-router.post('/:tableKey/refresh/start', async (req, res, next) => {
+router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const result = await dataService.startRefresh(tableKey);
@@ -77,8 +78,8 @@ router.get('/:tableKey/refresh/progress', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/viewed — markeer alles als gezien (reset nieuw/gewijzigd voor deze gebruiker).
-router.post('/:tableKey/viewed', async (req, res, next) => {
+// POST /api/data/:tableKey/viewed — markeer alles als gezien (admin baseline voor alle gebruikers).
+router.post('/:tableKey/viewed', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const result = await dataService.markViewed(req.user.id, req.params.tableKey);
     return res.json(result);

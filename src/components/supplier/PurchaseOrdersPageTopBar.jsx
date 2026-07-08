@@ -7,6 +7,7 @@ import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
 import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
+import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -73,6 +74,8 @@ export default function PurchaseOrdersPageTopBar({
   error,
 }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const {
     savedViews,
@@ -149,6 +152,7 @@ export default function PurchaseOrdersPageTopBar({
               progress={refreshProgress}
               refreshing={refreshing}
               onRefresh={onRefresh}
+              canRefresh={isAdmin}
             />
           </div>
         </div>
@@ -189,6 +193,7 @@ export default function PurchaseOrdersPageTopBar({
           removedCount={removedCount}
           markViewed={markViewed}
           markingViewed={markingViewed}
+          canMarkViewed={isAdmin}
           activityFilter={activityFilter}
           toggleActivityFilter={toggleActivityFilter}
         />
@@ -209,7 +214,8 @@ export default function PurchaseOrdersPageTopBar({
               size="small"
               icon={<ArrowClockwiseRegular />}
               onClick={onRefresh}
-              disabled={refreshing}
+              disabled={refreshing || !isAdmin}
+              title={isAdmin ? 'Refresh data' : 'Alleen admin kan verversen'}
             >
               {refreshing ? 'Refreshing...' : 'Refresh data'}
             </Button>
@@ -223,6 +229,7 @@ export default function PurchaseOrdersPageTopBar({
             onOpenChange={closeErrorDialog}
             onRefresh={onRefresh}
             refreshing={refreshing}
+            canRefresh={isAdmin}
           />
         </>
       ) : null}
