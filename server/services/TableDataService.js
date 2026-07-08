@@ -1373,6 +1373,12 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
   const lastViewedAt = await getLastViewedAt(userId, table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
+  const useViewedBaseline = lastViewedMs !== null && (lastSyncedMs === null || lastViewedMs >= lastSyncedMs);
+  const baselineMs = useViewedBaseline ? lastViewedMs : lastSyncedMs;
+  const compareAgainstBaseline = (valueMs) => {
+    if (valueMs === null || baselineMs === null) return false;
+    return useViewedBaseline ? valueMs > baselineMs : valueMs >= baselineMs;
+  };
 
   // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
   const { mastersResult, detailsResult, customResult } = await time('tb_read_sql', async () => {
@@ -1430,9 +1436,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     detailsByRecord.get(recKey).push(d);
   }
 
-  const ledgerSinceAt = lastViewedAt
-    ? new Date(lastViewedAt)
-    : (lastFullSyncAt ? new Date(lastFullSyncAt) : null);
+  const ledgerSinceAt = baselineMs !== null ? new Date(baselineMs) : null;
 
   let d365LedgerRows = [];
   if (ledgerSinceAt) {
@@ -1476,7 +1480,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
-    const hasViewedBaseline = lastViewedMs !== null;
     let hasLineChanges = false;
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
@@ -1486,12 +1489,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
       const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
-      const isBaseNew = hasViewedBaseline
-        ? (detailFirstSeenMs !== null && detailFirstSeenMs > lastViewedMs)
-        : (detailFirstSeenMs !== null && lastSyncedMs !== null && detailFirstSeenMs >= lastSyncedMs);
-      const isBaseChanged = hasViewedBaseline
-        ? (detailChangedMs !== null && detailChangedMs > lastViewedMs)
-        : (detailChangedMs !== null && lastSyncedMs !== null && detailChangedMs >= lastSyncedMs);
+      const isBaseNew = compareAgainstBaseline(detailFirstSeenMs);
+      const isBaseChanged = compareAgainstBaseline(detailChangedMs);
       const isNew = Boolean(ledgerState?.isNew) || isBaseNew;
       const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || isBaseChanged);
       const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
@@ -1512,12 +1511,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
     const orderLedgerState = orderChanges.get(recKey);
-    const isBaseNew = hasViewedBaseline
-      ? (firstSeenMs !== null && firstSeenMs > lastViewedMs)
-      : (firstSeenMs !== null && lastSyncedMs !== null && firstSeenMs >= lastSyncedMs);
-    const isBaseChanged = hasViewedBaseline
-      ? (changedMs !== null && changedMs > lastViewedMs)
-      : (changedMs !== null && lastSyncedMs !== null && changedMs >= lastSyncedMs);
+    const isBaseNew = compareAgainstBaseline(firstSeenMs);
+    const isBaseChanged = compareAgainstBaseline(changedMs);
     const isNew = Boolean(orderLedgerState?.isNew) || isBaseNew;
     const isChanged = !isNew && (Boolean(orderLedgerState?.isChanged) || isBaseChanged || hasLineChanges);
     if (isNew) newCount += 1;
