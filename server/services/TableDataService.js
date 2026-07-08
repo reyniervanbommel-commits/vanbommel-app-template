@@ -463,6 +463,32 @@ function buildLookupFieldMap({ targetTableKey, targetFieldKeys, existingFields =
   return result;
 }
 
+function resolveLookupProjectionColumns({ activeColumns, allColumns, lookups, scope }) {
+  const normalizedScope = scope === 'detail' ? 'detail' : 'master';
+  const sourceColumns = (Array.isArray(activeColumns) ? activeColumns : [])
+    .filter((column) => column.source === 'source');
+  const sourceByKey = new Map(sourceColumns.map((column) => [String(column.key || '').trim(), column]));
+  const lookupSourceKeys = new Set(
+    (Array.isArray(lookups) ? lookups : [])
+      .filter((lookup) => String(lookup?.sourceScope || 'master').trim() === normalizedScope)
+      .map((lookup) => String(lookup?.sourceField || '').trim())
+      .filter(Boolean)
+  );
+  if (!lookupSourceKeys.size) return sourceColumns;
+
+  const allSourceByKey = new Map(
+    (Array.isArray(allColumns) ? allColumns : [])
+      .filter((column) => column.source === 'source')
+      .map((column) => [String(column.key || '').trim(), column])
+  );
+  lookupSourceKeys.forEach((lookupSourceKey) => {
+    if (sourceByKey.has(lookupSourceKey)) return;
+    const fallbackColumn = allSourceByKey.get(lookupSourceKey);
+    if (fallbackColumn) sourceByKey.set(lookupSourceKey, fallbackColumn);
+  });
+  return [...sourceByKey.values()];
+}
+
 function toColumnLabelFromField(field) {
   return String(field || '')
     .replace(/[_-]+/g, ' ')
@@ -840,12 +866,25 @@ async function refresh(tableKey) {
     // Alleen de geselecteerde (actieve) bron-kolommen landen in data_json. Zo draagt elke blob precies
     // de kolommen die op het bord staan i.p.v. de volledige bron-entiteit — de grootste payload-besparing
     // op zowel de refresh-write als elke read (#AB:177). Uitgezette kolommen horen niet in de cache.
-    const [masterCols, detailCols] = await Promise.all([
+    const [masterCols, detailCols, allMasterCols, allDetailCols, lookupDefs] = await Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+      getLookups(table.id),
     ]);
-    const masterSource = masterCols.filter((c) => c.source === 'source');
-    const detailSource = detailCols.filter((c) => c.source === 'source');
+    const masterSource = resolveLookupProjectionColumns({
+      activeColumns: masterCols,
+      allColumns: allMasterCols,
+      lookups: lookupDefs,
+      scope: 'master',
+    });
+    const detailSource = resolveLookupProjectionColumns({
+      activeColumns: detailCols,
+      allColumns: allDetailCols,
+      lookups: lookupDefs,
+      scope: 'detail',
+    });
     if (truncated) {
       logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
         tableKey, opgehaald: records.length, totaalInBron: total,
@@ -1047,10 +1086,15 @@ async function loadLookupEnrichment(table) {
   return { lookups: enriched, masterCols, detailCols };
 }
 
-function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
+function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
   for (const lk of enrichedLookups) {
     if (lk.sourceScope !== scope) continue;
-    const fkVal = valueBag[lk.sourceField];
+    const sourceField = String(lk.sourceField || '').trim();
+    const fkVal = sourceField && valueBag && Object.prototype.hasOwnProperty.call(valueBag, sourceField)
+      ? valueBag[sourceField]
+      : (sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)
+        ? sourceValues[sourceField]
+        : null);
     const hasFk = fkVal !== null && fkVal !== undefined && fkVal !== '';
     const lookupKey = lk.partitionless
       ? String(fkVal).trim()
@@ -1362,8 +1406,9 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
-      const detailValues = valuesFor(detailCols, parseJson(d.data_json), detailCustom);
-      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail');
+      const detailJson = parseJson(d.data_json);
+      const detailValues = valuesFor(detailCols, detailJson, detailCustom);
+      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
       return { detailKey: d.detail_key, values: detailValues };
     });
 
@@ -1375,7 +1420,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     else if (isChanged) changedCount += 1;
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
-    applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
     applyDetailLookupRollupsToMaster(masterValues, details, enrichment.lookups);
     applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
@@ -2218,5 +2263,6 @@ module.exports = {
   includeRows,
   listHiddenInFilterRows,
   buildLookupFieldMap,
+  resolveLookupProjectionColumns,
   FETCH_ADAPTERS,
 };

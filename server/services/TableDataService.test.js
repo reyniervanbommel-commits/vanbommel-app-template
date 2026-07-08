@@ -12,6 +12,7 @@ const {
   applyDetailLookupRollupsToMaster,
   assertCustomColumnWritable,
   buildLookupFieldMap,
+  resolveLookupProjectionColumns,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -87,6 +88,12 @@ describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
     const v = { itemNumber: 'ART-9' };
     applyLookups(v, 'whsl', [excelLookup], 'detail');
     expect(v.artikelKleur).toBeNull();
+  });
+
+  it('valt terug op source-json wanneer de lookup-bronkolom niet zichtbaar is', () => {
+    const v = {};
+    applyLookups(v, 'whsl', [vendorLookup], 'master', { vendorAccount: 'Q000101' });
+    expect(v.vendorOrgName).toBe('Negende Generatie Beheer BV');
   });
 });
 
@@ -267,5 +274,34 @@ describe('TableDataService.buildLookupFieldMap', () => {
       items_searchName: 'searchName',
       items_itemGroupId: 'itemGroupId',
     });
+  });
+});
+
+describe('TableDataService.resolveLookupProjectionColumns', () => {
+  it('neemt lookup-bronkolommen mee, ook als die inactief zijn', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'master',
+      activeColumns: [
+        { key: 'orderNumber', source: 'source' },
+      ],
+      allColumns: [
+        { key: 'orderNumber', source: 'source' },
+        { key: 'vendorAccount', source: 'source' },
+      ],
+      lookups: [
+        { sourceScope: 'master', sourceField: 'vendorAccount' },
+      ],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['orderNumber', 'vendorAccount']);
+  });
+
+  it('voegt geen onbekende lookup-bronkolommen toe', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'master',
+      activeColumns: [{ key: 'orderNumber', source: 'source' }],
+      allColumns: [{ key: 'orderNumber', source: 'source' }],
+      lookups: [{ sourceScope: 'master', sourceField: 'vendorAccount' }],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['orderNumber']);
   });
 });
