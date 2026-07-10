@@ -2,6 +2,7 @@
 
 const {
   computeContentHash,
+  dedupeDetailRows,
   applyLookups,
   normalizeExclusionRows,
   resolveConfiguredMaxItems,
@@ -47,6 +48,21 @@ describe('TableDataService.computeContentHash', () => {
 
   it('werkt zonder details', () => {
     expect(typeof computeContentHash(masterJson, [])).toBe('string');
+  });
+});
+
+describe('TableDataService.dedupeDetailRows', () => {
+  it('dedupliceert detailregels op partition + record + detail', () => {
+    const result = dedupeDetailRows([
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10b}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 20, dataJson: '{"line":20}' },
+    ]);
+    expect(result.duplicateCount).toBe(1);
+    expect(result.rows).toEqual([
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10b}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 20, dataJson: '{"line":20}' },
+    ]);
   });
 });
 
@@ -368,6 +384,19 @@ describe('TableDataService.resolveLookupProjectionColumns', () => {
       lookups: [{ sourceScope: 'master', sourceField: 'vendorAccount' }],
     });
     expect(resolved.map((column) => column.key)).toEqual(['orderNumber']);
+  });
+
+  it('resolveert relation source_field via sourceField naar lokale key', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'detail',
+      activeColumns: [{ key: 'lineNumber', source: 'source' }],
+      allColumns: [
+        { key: 'lineNumber', source: 'source', sourceField: 'LineNumber' },
+        { key: 'itemNumber', source: 'source', sourceField: 'ItemNumber' },
+      ],
+      lookups: [{ sourceScope: 'detail', sourceField: 'ItemNumber' }],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['lineNumber', 'itemNumber']);
   });
 });
 

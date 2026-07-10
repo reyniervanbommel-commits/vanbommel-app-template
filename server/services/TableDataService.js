@@ -294,11 +294,28 @@ async function listDistinctCacheFieldValues({ tableId, scope, sourceField }) {
   if (!tableId || !normalizedField) return [];
   const pool = await getPool();
   const jsonPath = `$.${normalizedField}`;
-  const result = await pool.request()
+  const request = pool.request()
     .input('tableId', sql.BigInt, tableId)
     .input('scope', sql.NVarChar(16), normalizedScope)
-    .input('jsonPath', sql.NVarChar(160), jsonPath)
-    .query(`
+    .input('jsonPath', sql.NVarChar(160), jsonPath);
+  const result = normalizedScope === 'detail'
+    ? await request.query(`
+      SELECT DISTINCT LTRIM(RTRIM(JSON_VALUE(d.data_json, @jsonPath))) AS lookup_value
+      FROM dbo.tb_cache d WITH (NOLOCK)
+      INNER JOIN dbo.tb_cache m WITH (NOLOCK)
+        ON m.table_id = d.table_id
+       AND m.scope = 'master'
+       AND m.partition_key = d.partition_key
+       AND m.record_key = d.record_key
+       AND m.detail_key = ${MASTER_DETAIL_KEY}
+       AND m.removed_at_source = 0
+      WHERE d.table_id = @tableId
+        AND d.scope = @scope
+        AND d.removed_at_source = 0
+        AND JSON_VALUE(d.data_json, @jsonPath) IS NOT NULL
+        AND LTRIM(RTRIM(JSON_VALUE(d.data_json, @jsonPath))) <> ''
+    `)
+    : await request.query(`
       SELECT DISTINCT LTRIM(RTRIM(JSON_VALUE(data_json, @jsonPath))) AS lookup_value
       FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId
@@ -664,23 +681,28 @@ function resolveLookupProjectionColumns({ activeColumns, allColumns, lookups, sc
   const normalizedScope = scope === 'detail' ? 'detail' : 'master';
   const sourceColumns = (Array.isArray(activeColumns) ? activeColumns : [])
     .filter((column) => column.source === 'source');
+  const allSourceColumns = (Array.isArray(allColumns) ? allColumns : [])
+    .filter((column) => column.source === 'source');
   const sourceByKey = new Map(sourceColumns.map((column) => [String(column.key || '').trim(), column]));
+  const allSourceByKey = new Map(
+    allSourceColumns.map((column) => [String(column.key || '').trim(), column])
+  );
+  const allSourceByKeyLower = new Map(
+    allSourceColumns.map((column) => [String(column.key || '').trim().toLowerCase(), column])
+  );
+
   const lookupSourceKeys = new Set(
     (Array.isArray(lookups) ? lookups : [])
       .filter((lookup) => String(lookup?.sourceScope || 'master').trim() === normalizedScope)
-      .map((lookup) => String(lookup?.sourceField || '').trim())
+      .map((lookup) => resolveLookupSourceKey(lookup, allSourceColumns))
       .filter(Boolean)
   );
   if (!lookupSourceKeys.size) return sourceColumns;
 
-  const allSourceByKey = new Map(
-    (Array.isArray(allColumns) ? allColumns : [])
-      .filter((column) => column.source === 'source')
-      .map((column) => [String(column.key || '').trim(), column])
-  );
   lookupSourceKeys.forEach((lookupSourceKey) => {
     if (sourceByKey.has(lookupSourceKey)) return;
-    const fallbackColumn = allSourceByKey.get(lookupSourceKey);
+    const fallbackColumn = allSourceByKey.get(lookupSourceKey)
+      || allSourceByKeyLower.get(String(lookupSourceKey).toLowerCase());
     if (fallbackColumn) sourceByKey.set(lookupSourceKey, fallbackColumn);
   });
   return [...sourceByKey.values()];
@@ -871,6 +893,18 @@ async function isStale(tableKey) {
   return Date.now() - new Date(lastFullSyncAt).getTime() > thresholdMs;
 }
 
+function dedupeDetailRows(detailRows) {
+  const rows = Array.isArray(detailRows) ? detailRows : [];
+  const byCompositeKey = new Map();
+  let duplicateCount = 0;
+  for (const row of rows) {
+    const compositeKey = `${row.partitionKey}::${row.recordKey}::${row.detailKey}`;
+    if (byCompositeKey.has(compositeKey)) duplicateCount += 1;
+    byCompositeKey.set(compositeKey, row);
+  }
+  return { rows: Array.from(byCompositeKey.values()), duplicateCount };
+}
+
 // ---------------------------------------------------------------------------
 // persistRecordsChunk — schrijft één batch masterrecords (+ hun details) set-based weg naar tb_cache.
 // Aanpak: bulk-copy de geprojecteerde rijen naar twee staging-temptabellen op de transactie-connectie,
@@ -914,6 +948,15 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
   }
 
+  const { rows: uniqueDetailRows, duplicateCount } = dedupeDetailRows(detailRows);
+  if (duplicateCount > 0) {
+    logger.warn('Dubbele detailregels in bron gededupliceerd tijdens refresh', {
+      tableKey: table?.key || null,
+      duplicates: duplicateCount,
+      chunkSize: chunk.length,
+    });
+  }
+
   if (!masterRows.length) return { saved: 0, watermark };
 
   const tx = new sql.Transaction(pool);
@@ -951,14 +994,14 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
     await new sql.Request(tx).bulk(masterTable);
 
-    if (detailRows.length) {
+    if (uniqueDetailRows.length) {
       const detailTable = new sql.Table('#stg_detail');
       detailTable.create = false;
       detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
       detailTable.columns.add('record_key', sql.NVarChar(128), { nullable: false });
       detailTable.columns.add('detail_key', sql.Int, { nullable: false });
       detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
-      for (const r of detailRows) {
+      for (const r of uniqueDetailRows) {
         detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson);
       }
       await new sql.Request(tx).bulk(detailTable);
@@ -996,7 +1039,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
         WHERE d.table_id = @tableId AND d.scope = 'detail';
       `);
 
-    if (detailRows.length) {
+    if (uniqueDetailRows.length) {
       await new sql.Request(tx)
         .input('tableId', sql.BigInt, table.id)
         .input('syncedAt', sql.DateTime2, refreshStart)
@@ -1032,6 +1075,7 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
       .map((lookup) => String(lookup?.targetTableKey || '').trim())
       .filter(Boolean)
   )];
+  const refreshFailures = [];
   for (const targetKey of targetKeys) {
     if (visitedTables.has(targetKey)) continue;
     try {
@@ -1039,12 +1083,19 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
       if (targetTable.cacheMode === 'never') continue;
       await refresh(targetKey, { visitedTables });
     } catch (err) {
-      logger.warn('Lookup-doeltabel verversen mislukt; hoofdrefresh gaat door', {
+      logger.error('Lookup-doeltabel verversen mislukt', {
         tableKey: table.key,
         targetTableKey: targetKey,
         error: err.message,
       });
+      refreshFailures.push(`${targetKey}: ${err.message}`);
     }
+  }
+  if (refreshFailures.length) {
+    throw Object.assign(
+      new Error(`Lookup-doeltabellen niet volledig ververst (${refreshFailures.join('; ')})`),
+      { status: 502 }
+    );
   }
 }
 
@@ -1183,6 +1234,15 @@ async function refresh(tableKey, options = {}) {
         UPDATE dbo.tb_cache
         SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
         WHERE table_id = @tableId AND scope = 'master'
+      `);
+
+    await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('refreshStart', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.tb_cache
+        SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+        WHERE table_id = @tableId AND scope = 'detail'
       `);
 
     await pool.request()
@@ -2582,6 +2642,7 @@ module.exports = {
   getLastViewedAt,
   markViewed,
   computeContentHash,
+  dedupeDetailRows,
   applyLookups,
   isFormulaColumn,
   resolveConfiguredMaxItems,
