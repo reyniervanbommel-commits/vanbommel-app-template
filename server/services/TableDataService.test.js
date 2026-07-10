@@ -3,14 +3,24 @@
 const {
   computeContentHash,
   computeChangedFieldKeys,
+  dedupeDetailRows,
   applyLookups,
   normalizeExclusionRows,
+  resolveConfiguredMaxItems,
+  requiredMasterFieldsFromTable,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
+  applyDetailLookupRollupsToMaster,
   assertCustomColumnWritable,
+  buildLookupFieldMap,
+  resolveLookupSourceKey,
+  resolveLookupProjectionColumns,
+  buildLookupDedupeSignature,
+  buildLookupTargetAliases,
+  FETCH_ADAPTERS,
 } = require('./TableDataService');
 
 describe('TableDataService.computeContentHash', () => {
@@ -65,6 +75,21 @@ describe('TableDataService.computeChangedFieldKeys', () => {
   });
 });
 
+describe('TableDataService.dedupeDetailRows', () => {
+  it('dedupliceert detailregels op partition + record + detail', () => {
+    const result = dedupeDetailRows([
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10b}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 20, dataJson: '{"line":20}' },
+    ]);
+    expect(result.duplicateCount).toBe(1);
+    expect(result.rows).toEqual([
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10b}' },
+      { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 20, dataJson: '{"line":20}' },
+    ]);
+  });
+});
+
 describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
   const vendorLookup = {
     sourceScope: 'master',
@@ -108,6 +133,23 @@ describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
     const v = { itemNumber: 'ART-9' };
     applyLookups(v, 'whsl', [excelLookup], 'detail');
     expect(v.artikelKleur).toBeNull();
+  });
+
+  it('valt terug op source-json wanneer de lookup-bronkolom niet zichtbaar is', () => {
+    const v = {};
+    applyLookups(v, 'whsl', [vendorLookup], 'master', { vendorAccount: 'Q000101' });
+    expect(v.vendorOrgName).toBe('Negende Generatie Beheer BV');
+  });
+
+  it('gebruikt alias-keys wanneer de actieve target-key nog geen waarde bevat', () => {
+    const v = { vendorAccount: 'Q000101' };
+    applyLookups(v, 'whsl', [{
+      ...vendorLookup,
+      fieldEntries: [['vendors_vendorGroupId', 'vendorGroupId']],
+      byKey: new Map([['whsl|Q000101', { vendorGroup: 'GRC' }]]),
+      targetAliasesByKey: { vendorGroupId: ['vendorGroup'] },
+    }], 'master');
+    expect(v.vendors_vendorGroupId).toBe('GRC');
   });
 });
 
@@ -175,6 +217,14 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
 });
 
 describe('TableDataService.assertCustomColumnWritable', () => {
+  it('weigert image-kolommen voor handmatige save', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      dataType: 'image',
+      formulaExpr: null,
+    })).toThrow(/read-only/i);
+  });
+
   it('weigert formulekolommen voor handmatige save', () => {
     expect(() => assertCustomColumnWritable({
       source: 'custom',
@@ -235,5 +285,172 @@ describe('TableDataService runtime linked header values', () => {
       'quantity'
     );
     expect(total).toBe(4);
+  });
+});
+
+describe('TableDataService detail lookup rollups', () => {
+  it('rolt detail lookupwaarden door naar master als unieke lijst', () => {
+    const masterValues = {};
+    const details = [
+      { values: { items_searchName: 'Item A' } },
+      { values: { items_searchName: 'Item B' } },
+      { values: { items_searchName: 'Item A' } },
+    ];
+    applyDetailLookupRollupsToMaster(masterValues, details, [{
+      sourceScope: 'detail',
+      fieldEntries: [['items_searchName', 'searchName']],
+    }]);
+    expect(masterValues.items_searchName).toBe('Item A, Item B');
+  });
+});
+
+describe('TableDataService fetch adapters (#195)', () => {
+  it('registreert adapters voor purchase-orders, vendors en items', () => {
+    expect(typeof FETCH_ADAPTERS['purchase-orders']).toBe('function');
+    expect(typeof FETCH_ADAPTERS.vendors).toBe('function');
+    expect(typeof FETCH_ADAPTERS.items).toBe('function');
+  });
+});
+
+describe('TableDataService.resolveConfiguredMaxItems', () => {
+  it('gebruikt expliciete settingwaarde wanneer geldig', () => {
+    expect(resolveConfiguredMaxItems('500', 2000, 1000)).toBe(500);
+  });
+
+  it('valt terug op tabel maxRows wanneer setting ontbreekt', () => {
+    expect(resolveConfiguredMaxItems(null, 10000, 2000)).toBe(10000);
+  });
+});
+
+describe('TableDataService.requiredMasterFieldsFromTable', () => {
+  it('forceert geen ModifiedDateTime voor generieke entiteiten', () => {
+    expect(requiredMasterFieldsFromTable({
+      keyFields: ['dataAreaId', 'VendorAccountNumber'],
+    })).toEqual(['dataAreaId', 'VendorAccountNumber']);
+  });
+});
+
+describe('TableDataService.buildLookupFieldMap', () => {
+  it('behoudt bestaande derived keys wanneer dezelfde targetvelden geselecteerd blijven', () => {
+    const map = buildLookupFieldMap({
+      targetTableKey: 'vendors',
+      targetFieldKeys: ['vendorOrganizationName', 'partyNumber'],
+      existingFields: {
+        vendorOrganizationName: 'vendorOrganizationName',
+        vendors_partyNumber: 'partyNumber',
+      },
+    });
+    expect(map).toEqual({
+      vendorOrganizationName: 'vendorOrganizationName',
+      vendors_partyNumber: 'partyNumber',
+    });
+  });
+
+  it('maakt stabiele prefixed keys voor nieuw geselecteerde velden', () => {
+    const map = buildLookupFieldMap({
+      targetTableKey: 'items',
+      targetFieldKeys: ['searchName', 'itemGroupId'],
+      existingFields: {},
+    });
+    expect(map).toEqual({
+      items_searchName: 'searchName',
+      items_itemGroupId: 'itemGroupId',
+    });
+  });
+});
+
+describe('TableDataService.resolveLookupSourceKey', () => {
+  it('mapt relation source_field naar de lokale kolomkey via sourceField', () => {
+    const sourceKey = resolveLookupSourceKey(
+      { sourceField: 'OrderVendorAccountNumber' },
+      [
+        { source: 'source', key: 'vendorAccount', sourceField: 'OrderVendorAccountNumber' },
+        { source: 'source', key: 'orderNumber', sourceField: 'PurchaseOrderNumber' },
+      ]
+    );
+    expect(sourceKey).toBe('vendorAccount');
+  });
+
+  it('is tolerant voor hoofdletters in relation source_field', () => {
+    const sourceKey = resolveLookupSourceKey(
+      { sourceField: 'ItemNumber' },
+      [
+        { source: 'source', key: 'itemNumber', sourceField: 'ItemNumber' },
+      ]
+    );
+    expect(sourceKey).toBe('itemNumber');
+  });
+});
+
+describe('TableDataService.resolveLookupProjectionColumns', () => {
+  it('neemt lookup-bronkolommen mee, ook als die inactief zijn', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'master',
+      activeColumns: [
+        { key: 'orderNumber', source: 'source' },
+      ],
+      allColumns: [
+        { key: 'orderNumber', source: 'source' },
+        { key: 'vendorAccount', source: 'source' },
+      ],
+      lookups: [
+        { sourceScope: 'master', sourceField: 'vendorAccount' },
+      ],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['orderNumber', 'vendorAccount']);
+  });
+
+  it('voegt geen onbekende lookup-bronkolommen toe', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'master',
+      activeColumns: [{ key: 'orderNumber', source: 'source' }],
+      allColumns: [{ key: 'orderNumber', source: 'source' }],
+      lookups: [{ sourceScope: 'master', sourceField: 'vendorAccount' }],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['orderNumber']);
+  });
+
+  it('resolveert relation source_field via sourceField naar lokale key', () => {
+    const resolved = resolveLookupProjectionColumns({
+      scope: 'detail',
+      activeColumns: [{ key: 'lineNumber', source: 'source' }],
+      allColumns: [
+        { key: 'lineNumber', source: 'source', sourceField: 'LineNumber' },
+        { key: 'itemNumber', source: 'source', sourceField: 'ItemNumber' },
+      ],
+      lookups: [{ sourceScope: 'detail', sourceField: 'ItemNumber' }],
+    });
+    expect(resolved.map((column) => column.key)).toEqual(['lineNumber', 'itemNumber']);
+  });
+});
+
+describe('TableDataService.buildLookupDedupeSignature', () => {
+  it('dedupliceert lookup-relaties op scope + source + target table', () => {
+    const a = buildLookupDedupeSignature({
+      sourceScope: 'master',
+      sourceFieldKey: 'vendorAccount',
+      targetTableKey: 'vendors',
+    });
+    const b = buildLookupDedupeSignature({
+      sourceScope: 'master',
+      sourceFieldKey: 'vendorAccount',
+      targetTableKey: 'vendors',
+    });
+    expect(a).toBe(b);
+  });
+});
+
+describe('TableDataService.buildLookupTargetAliases', () => {
+  it('neemt inactieve alias-keys met hetzelfde sourceField mee', () => {
+    const aliases = buildLookupTargetAliases(
+      [{ key: 'vendorGroupId', sourceField: 'VendorGroupId' }],
+      [
+        { key: 'vendorGroupId', sourceField: 'VendorGroupId' },
+        { key: 'vendorGroup', sourceField: 'VendorGroupId' },
+      ]
+    );
+    expect(aliases).toEqual({
+      vendorGroupId: ['VendorGroupId', 'vendorGroup'],
+    });
   });
 });

@@ -5,7 +5,7 @@ import { BOARD_TB_SOURCE } from '../config/featureFlags';
 // Board-cutover Fase 5/6 (#AB:174/#175): de admin-datamodel-pagina draait onder BOARD_TB_SOURCE op de
 // generieke tb_*-laag (/api/data/purchase-orders/...). De tb_-kolomrespons wordt naar de admin-vorm
 // (level/d365) gemapt zoals de po_-endpoints die leverden; het /datamodel-endpoint levert dat al gemapt.
-const ADMIN_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-orders';
+const adminBase = (tableKey) => (BOARD_TB_SOURCE ? `/data/${tableKey}` : '/purchase-orders');
 const NON_WRITABLE_KEYS = {
   header: new Set(['orderNumber', 'status', 'createdDateTime']),
   line: new Set(['lineNumber']),
@@ -69,24 +69,25 @@ function mapDataModelPayload(payload) {
  *           togglingKey, reload, toggleVisibility, toggleWriteback,
  *           setColumnToggleState, deleteColumn }
  */
-export function useDataModelAdmin() {
+export function useDataModelAdmin(tableKey = 'purchase-orders') {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Kolom-id waarvan een toggle bezig is (voorkomt dubbelklikken en toont spinner).
   const [togglingKey, setTogglingKey] = useState(null);
+  const adminBasePath = adminBase(tableKey);
 
   const reload = useCallback(async () => {
     setError('');
     try {
-      const result = await apiRequest(`${ADMIN_BASE}/datamodel`);
+      const result = await apiRequest(`${adminBasePath}/datamodel`);
       setData(mapDataModelPayload(result));
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [adminBasePath]);
 
   useEffect(() => {
     reload();
@@ -139,7 +140,7 @@ export function useDataModelAdmin() {
     setTogglingKey(`vis-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visibility`, {
+      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visibility`, {
         method: 'PATCH',
         body: { visible: !column.isActive },
       });
@@ -149,13 +150,13 @@ export function useDataModelAdmin() {
     } finally {
       setTogglingKey(null);
     }
-  }, [applyColumnUpdate]);
+  }, [adminBasePath, applyColumnUpdate]);
 
   const toggleVisibleAtDelete = useCallback(async (column) => {
     setTogglingKey(`vad-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visible-at-delete`, {
+      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visible-at-delete`, {
         method: 'PATCH',
         body: { visible: !column.visibleAtDelete },
       });
@@ -165,13 +166,13 @@ export function useDataModelAdmin() {
     } finally {
       setTogglingKey(null);
     }
-  }, [applyColumnUpdate]);
+  }, [adminBasePath, applyColumnUpdate]);
 
   const toggleWriteback = useCallback(async (column) => {
     setTogglingKey(`wb-${column.id}`);
     setError('');
     try {
-      const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/writeback`, {
+      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/writeback`, {
         method: 'PATCH',
         body: { writable: !column.writableToD365, mechanism: 'patch' },
       });
@@ -181,7 +182,7 @@ export function useDataModelAdmin() {
     } finally {
       setTogglingKey(null);
     }
-  }, [applyColumnUpdate]);
+  }, [adminBasePath, applyColumnUpdate]);
 
   const setColumnToggleState = useCallback(async ({ columns: scopedColumns = [], toggleType, enabled }) => {
     if (!Array.isArray(scopedColumns) || !toggleType) return;
@@ -201,20 +202,20 @@ export function useDataModelAdmin() {
     try {
       const updates = await Promise.allSettled(eligibleColumns.map(async (column) => {
         if (toggleType === 'visibility') {
-          const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visibility`, {
+          const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visibility`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
           });
           return mapAdminColumn(result.column);
         }
         if (toggleType === 'visibleAtDelete') {
-          const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/visible-at-delete`, {
+          const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visible-at-delete`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
           });
           return mapAdminColumn(result.column);
         }
-        const result = await apiRequest(`${ADMIN_BASE}/columns/${column.id}/writeback`, {
+        const result = await apiRequest(`${adminBasePath}/columns/${column.id}/writeback`, {
           method: 'PATCH',
           body: { writable: shouldEnable, mechanism: 'patch' },
         });
@@ -245,14 +246,14 @@ export function useDataModelAdmin() {
     } finally {
       setTogglingKey(null);
     }
-  }, [applyColumnUpdates]);
+  }, [adminBasePath, applyColumnUpdates]);
 
   const deleteColumn = useCallback(async (column) => {
     if (!column?.id || column.source !== 'custom') return;
     setTogglingKey(`del-${column.id}`);
     setError('');
     try {
-      await apiRequest(`${ADMIN_BASE}/columns/${column.id}`, {
+      await apiRequest(`${adminBasePath}/columns/${column.id}`, {
         method: 'DELETE',
       });
       removeColumnFromState(column);
@@ -261,17 +262,17 @@ export function useDataModelAdmin() {
     } finally {
       setTogglingKey(null);
     }
-  }, [removeColumnFromState]);
+  }, [adminBasePath, removeColumnFromState]);
 
   const syncNow = useCallback(async () => {
     setError('');
     try {
-      await apiRequest(`${ADMIN_BASE}/refresh`, { method: 'POST' });
+      await apiRequest(`${adminBasePath}/refresh`, { method: 'POST' });
       await reload();
     } catch (err) {
       setError(err.message);
     }
-  }, [reload]);
+  }, [adminBasePath, reload]);
 
   return useMemo(() => ({
     entities: data?.entities || [],
@@ -282,6 +283,7 @@ export function useDataModelAdmin() {
     syncFilter: data?.syncFilter || null,
     filterCatalog: data?.filterCatalog || { header: [], line: [] },
     previewTables: data?.previewTables || null,
+    lookups: data?.lookups || [],
     loading,
     error,
     togglingKey,

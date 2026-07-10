@@ -54,4 +54,15 @@ export const devTestItems = [
       'Formulekolommen op linked headerkolommen tonen verwachte numerieke uitkomst per rij',
     ],
   },
+  {
+    id: 'feature-195-vendors-items-datamodel-v1-14-37',
+    title: 'Feature 195 - Vendors/Items data model and PO lookup enrichment',
+    checks: [
+      'Admin > Data model shows tabs for Purchase Orders, Vendors and Items, each with configurable columns and sync filters',
+      'Purchase Orders data model shows a relations overview including 1:n header-line and n:1 lookups to Vendors and Items',
+      'After syncing vendors/items and then purchase orders, the PO board shows read-only lookup columns for vendor name and item name',
+      'Vendors and Items datamodel pages support refresh, sample preview and Excel export without errors',
+      'No regression in existing PO flow: table loads, column toggles work, and write-back controls stay available only where allowed',
+    ],
+  },
 ];

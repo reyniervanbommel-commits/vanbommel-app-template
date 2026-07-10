@@ -13,7 +13,12 @@ const crypto = require('crypto');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
-const { fetchPurchaseOrders, writeBackField } = require('./D365ODataService');
+const {
+  fetchPurchaseOrders,
+  fetchEntityRecords,
+  escapeODataLiteral,
+  writeBackField,
+} = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
@@ -28,6 +33,8 @@ const MAX_BOARD_LINKS = 80;
 // staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
 // aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
 const SAVE_CHUNK_SIZE = 500;
+const INHERITED_PO_FILTER_TABLE_KEYS = new Set(['vendors', 'items']);
+const INHERITED_FILTER_CHUNK_SIZE = 20;
 const EMPTY_REFRESH_PROGRESS = Object.freeze({
   status: 'idle',
   fetched: 0,
@@ -126,11 +133,10 @@ async function startRefresh(tableKey) {
 async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const parsedMax = Number.parseInt(rawMax, 10);
-  const maxItems = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : (table.maxRows || 2000);
+  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
   let extraFilter = '';
   try {
-    extraFilter = compileSyncRules(parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', '')));
+    extraFilter = await getTableSyncFilter(table);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
@@ -197,6 +203,16 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   return { records, total: result.total, truncated: Boolean(result.truncated) };
 }
 
+function parseDefaultFilterRules(defaultFilter) {
+  if (!defaultFilter) return [];
+  try {
+    const parsed = JSON.parse(defaultFilter);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
 // de interne mappers (mapPurchaseOrder/mapPurchaseOrderLine), de partitiesleutel (dataAreaId) en het
 // watermerk (ModifiedDateTime) nodig hebben. Zonder deze zou het beperken van de kolommen de sync breken.
@@ -221,6 +237,162 @@ const REQUIRED_LINE_D365_FIELDS = [
   'RequestedDeliveryDate',
 ];
 
+function normalizeD365FieldName(field) {
+  return String(field || '').trim();
+}
+
+function uniqueFieldList(fields) {
+  const list = new Set();
+  for (const field of fields) {
+    const normalized = normalizeD365FieldName(field);
+    if (normalized) list.add(normalized);
+  }
+  return [...list];
+}
+
+function resolveConfiguredMaxItems(settingValue, tableMaxRows, fallbackMax = 2000) {
+  const parsedSetting = Number.parseInt(String(settingValue ?? ''), 10);
+  if (Number.isFinite(parsedSetting) && parsedSetting > 0) return parsedSetting;
+  const parsedTable = Number.parseInt(String(tableMaxRows ?? ''), 10);
+  if (Number.isFinite(parsedTable) && parsedTable > 0) return parsedTable;
+  return fallbackMax;
+}
+
+function chunkList(values, size) {
+  const safeSize = Number.isFinite(size) && size > 0 ? Math.floor(size) : 20;
+  const list = Array.isArray(values) ? values : [];
+  const chunks = [];
+  for (let index = 0; index < list.length; index += safeSize) {
+    chunks.push(list.slice(index, index + safeSize));
+  }
+  return chunks;
+}
+
+function combineODataFilters(baseFilter, extraFilter) {
+  const base = String(baseFilter || '').trim();
+  const extra = String(extraFilter || '').trim();
+  if (!base) return extra;
+  if (!extra) return base;
+  return `(${base}) and (${extra})`;
+}
+
+function buildOneOfFilterClause(field, values) {
+  const normalizedField = String(field || '').trim();
+  const list = [...new Set((Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean))];
+  if (!normalizedField || !list.length) return '';
+  if (list.length === 1) {
+    return `${normalizedField} eq '${escapeODataLiteral(list[0])}'`;
+  }
+  return `(${list.map((value) => `${normalizedField} eq '${escapeODataLiteral(value)}'`).join(' or ')})`;
+}
+
+async function listDistinctCacheFieldValues({ tableId, scope, sourceField }) {
+  const normalizedScope = scope === 'detail' ? 'detail' : 'master';
+  const normalizedField = String(sourceField || '').trim();
+  if (!tableId || !normalizedField) return [];
+  const pool = await getPool();
+  const jsonPath = `$.${normalizedField}`;
+  const request = pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('scope', sql.NVarChar(16), normalizedScope)
+    .input('jsonPath', sql.NVarChar(160), jsonPath);
+  const result = normalizedScope === 'detail'
+    ? await request.query(`
+      SELECT DISTINCT LTRIM(RTRIM(JSON_VALUE(d.data_json, @jsonPath))) AS lookup_value
+      FROM dbo.tb_cache d WITH (NOLOCK)
+      INNER JOIN dbo.tb_cache m WITH (NOLOCK)
+        ON m.table_id = d.table_id
+       AND m.scope = 'master'
+       AND m.partition_key = d.partition_key
+       AND m.record_key = d.record_key
+       AND m.detail_key = ${MASTER_DETAIL_KEY}
+       AND m.removed_at_source = 0
+      WHERE d.table_id = @tableId
+        AND d.scope = @scope
+        AND d.removed_at_source = 0
+        AND JSON_VALUE(d.data_json, @jsonPath) IS NOT NULL
+        AND LTRIM(RTRIM(JSON_VALUE(d.data_json, @jsonPath))) <> ''
+    `)
+    : await request.query(`
+      SELECT DISTINCT LTRIM(RTRIM(JSON_VALUE(data_json, @jsonPath))) AS lookup_value
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId
+        AND scope = @scope
+        AND removed_at_source = 0
+        AND JSON_VALUE(data_json, @jsonPath) IS NOT NULL
+        AND LTRIM(RTRIM(JSON_VALUE(data_json, @jsonPath))) <> ''
+    `);
+  return result.recordset
+    .map((row) => String(row.lookup_value || '').trim())
+    .filter(Boolean);
+}
+
+async function getInheritedPoLookupScopes(table) {
+  const tableKey = String(table?.key || '').trim().toLowerCase();
+  if (!INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey)) return [];
+
+  let purchaseOrdersTable;
+  try {
+    purchaseOrdersTable = await getTableByKey('purchase-orders');
+  } catch {
+    return [];
+  }
+
+  const lookups = (await getLookups(purchaseOrdersTable.id))
+    .filter((lookup) => String(lookup?.targetTableKey || '').trim().toLowerCase() === tableKey);
+  if (!lookups.length) return [];
+
+  const [poMasterColumns, poDetailColumns] = await Promise.all([
+    listColumns({ tableId: purchaseOrdersTable.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: purchaseOrdersTable.id, scope: 'detail', includeInactive: true }),
+  ]);
+
+  const valuesByTargetField = new Map();
+  for (const lookup of lookups) {
+    const targetField = String(lookup?.targetKeyField || '').trim();
+    if (!targetField) continue;
+    const sourceScope = lookup.sourceScope === 'detail' ? 'detail' : 'master';
+    const sourceColumns = sourceScope === 'detail' ? poDetailColumns : poMasterColumns;
+    const resolvedSourceField = resolveLookupSourceKey(lookup, sourceColumns);
+    if (!resolvedSourceField) continue;
+
+    const sourceValues = await listDistinctCacheFieldValues({
+      tableId: purchaseOrdersTable.id,
+      scope: sourceScope,
+      sourceField: resolvedSourceField,
+    });
+    if (!sourceValues.length) continue;
+
+    if (!valuesByTargetField.has(targetField)) valuesByTargetField.set(targetField, new Set());
+    const setForField = valuesByTargetField.get(targetField);
+    sourceValues.forEach((value) => setForField.add(value));
+  }
+
+  return [...valuesByTargetField.entries()].map(([targetField, values]) => ({
+    targetField,
+    values: [...values],
+  })).filter((entry) => entry.values.length > 0);
+}
+
+async function getTableSyncRules(table) {
+  if (table.key === 'purchase-orders') {
+    const fromSettings = parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+    if (fromSettings.length) return fromSettings;
+  }
+  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    return [];
+  }
+  return parseDefaultFilterRules(table.defaultFilter);
+}
+
+async function getTableSyncFilter(table) {
+  const rules = await getTableSyncRules(table);
+  if (!rules.length) return '';
+  return compileSyncRules(rules);
+}
+
 // Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
 // Retourneert ALTIJD een lijst (minimaal de verplichte sleutel-/watermerkvelden), zodat de board-sync
 // nooit de volledige bron-entiteit ophaalt. Veld-discovery loopt via het aparte discoverSourceFields-pad
@@ -235,8 +407,156 @@ function buildD365SelectFields(requiredFields, columns) {
   return [...fields];
 }
 
+function resolveRecordKeys(table, rawRecord, fallbackPartitionKey) {
+  const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
+  const firstKey = keyFields[0];
+  const secondKey = keyFields[1];
+  const firstValue = firstKey ? rawRecord?.[firstKey] : null;
+  const secondValue = secondKey ? rawRecord?.[secondKey] : null;
+
+  if (firstKey && /^dataareaid$/i.test(firstKey) && secondKey) {
+    return {
+      partitionKey: String(firstValue || fallbackPartitionKey || '').trim(),
+      recordKey: String(secondValue || '').trim(),
+    };
+  }
+
+  if (firstKey) {
+    return {
+      partitionKey: String(rawRecord?.dataAreaId || fallbackPartitionKey || '').trim(),
+      recordKey: String(firstValue || '').trim(),
+    };
+  }
+
+  return {
+    partitionKey: String(rawRecord?.dataAreaId || fallbackPartitionKey || '').trim(),
+    recordKey: String(rawRecord?.id || rawRecord?.RecId || '').trim(),
+  };
+}
+
+function requiredMasterFieldsFromTable(table) {
+  const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
+  // Niet elke D365-entiteit heeft ModifiedDateTime; dat veld hard forceren in $select
+  // veroorzaakt 400's op o.a. VendorsV2. Sleutels volstaan voor generieke fetches.
+  return uniqueFieldList(['dataAreaId', ...keyFields]);
+}
+
+async function genericMasterD365Fetch(table, { onProgress } = {}) {
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
+  const maxItems = resolveConfiguredMaxItems(null, table.maxRows, 2000);
+  const tableKey = String(table.key || '').trim().toLowerCase();
+  const usesInheritedPoFilter = INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey);
+
+  let extraFilter = '';
+  try {
+    extraFilter = await getTableSyncFilter(table);
+  } catch (err) {
+    logger.warn('Sync filter ongeldig; fetch draait zonder extra filter', { tableKey: table.key, error: err.message });
+  }
+
+  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
+    .trim().toLowerCase() !== 'false';
+  let selectFields = null;
+  if (selectEnabled) {
+    const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+    selectFields = buildD365SelectFields(requiredMasterFieldsFromTable(table), masterCols);
+  }
+
+  let rawItems = [];
+  let total = 0;
+  let truncated = false;
+
+  if (usesInheritedPoFilter) {
+    const inheritedScopes = await getInheritedPoLookupScopes(table);
+    if (!inheritedScopes.length) {
+      return { records: [], total: 0, truncated: false };
+    }
+
+    const dedupedRawByRecord = new Map();
+    let pagesFetched = 0;
+    const reportProgress = () => {
+      if (typeof onProgress !== 'function') return;
+      onProgress({
+        fetched: dedupedRawByRecord.size,
+        totalToFetch: null,
+        sourceTotal: null,
+        pagesFetched,
+        truncated,
+      });
+    };
+
+    for (const scope of inheritedScopes) {
+      const chunks = chunkList(scope.values, INHERITED_FILTER_CHUNK_SIZE);
+      for (const chunk of chunks) {
+        const inheritedFilter = buildOneOfFilterClause(scope.targetField, chunk);
+        if (!inheritedFilter) continue;
+        const scopedFilter = combineODataFilters(extraFilter, inheritedFilter);
+        const chunkResult = await fetchEntityRecords({
+          sourceEntity: table.sourceEntity,
+          fetchAll: true,
+          top: Math.min(Number(table.maxRows) || 2000, 2000),
+          skip: 0,
+          extraFilter: scopedFilter,
+          maxItems,
+          selectFields,
+        });
+        pagesFetched += Number(chunkResult.pagesFetched) || 0;
+        truncated = truncated || Boolean(chunkResult.truncated);
+        for (const raw of Array.isArray(chunkResult.items) ? chunkResult.items : []) {
+          const keys = resolveRecordKeys(table, raw, company);
+          if (!keys.partitionKey || !keys.recordKey) continue;
+          dedupedRawByRecord.set(`${keys.partitionKey}|${keys.recordKey}`, raw);
+        }
+        reportProgress();
+      }
+    }
+
+    rawItems = [...dedupedRawByRecord.values()];
+    total = rawItems.length;
+  } else {
+    const result = await fetchEntityRecords({
+      sourceEntity: table.sourceEntity,
+      fetchAll: true,
+      top: Math.min(Number(table.maxRows) || 2000, 2000),
+      skip: 0,
+      extraFilter,
+      maxItems,
+      onProgress,
+      selectFields,
+    });
+    rawItems = Array.isArray(result.items) ? result.items : [];
+    total = Number(result.total) || rawItems.length;
+    truncated = Boolean(result.truncated);
+  }
+
+  const records = rawItems.map((raw) => {
+    const normalizedRaw = raw && typeof raw === 'object' ? raw : {};
+    const keys = resolveRecordKeys(table, normalizedRaw, company);
+    return {
+      partitionKey: keys.partitionKey,
+      recordKey: keys.recordKey,
+      modifiedAt: normalizedRaw.ModifiedDateTime || normalizedRaw.modifiedDateTime || null,
+      masterRaw: normalizedRaw,
+      master: {},
+      details: [],
+    };
+  });
+
+  return { records, total, truncated };
+}
+
+async function vendorsFetch(table, context = {}) {
+  return genericMasterD365Fetch(table, context);
+}
+
+async function itemsFetch(table, context = {}) {
+  return genericMasterD365Fetch(table, context);
+}
+
 const FETCH_ADAPTERS = {
   'purchase-orders': purchaseOrdersFetch,
+  vendors: vendorsFetch,
+  items: itemsFetch,
 };
 
 function getFetchAdapter(table) {
@@ -403,6 +723,146 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizeLookupTargetFields(fields) {
+  const list = Array.isArray(fields) ? fields : [];
+  return [...new Set(list.map((field) => String(field || '').trim()).filter(Boolean))];
+}
+
+function sanitizeLookupDerivedKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MAX_KEY_LENGTH);
+}
+
+function ensureUniqueLookupDerivedKey(baseKey, usedKeys) {
+  const normalized = sanitizeLookupDerivedKey(baseKey) || 'lookup';
+  if (!usedKeys.has(normalized.toLowerCase())) return normalized;
+  for (let i = 2; i < 1000; i += 1) {
+    const withSuffix = sanitizeLookupDerivedKey(`${normalized}_${i}`) || `lookup_${i}`;
+    if (!usedKeys.has(withSuffix.toLowerCase())) return withSuffix;
+  }
+  throw new Error(`Kon geen unieke lookup-kolomkey maken voor '${baseKey}'`);
+}
+
+function buildLookupFieldMap({ targetTableKey, targetFieldKeys, existingFields = {} }) {
+  const selectedTargets = normalizeLookupTargetFields(targetFieldKeys);
+  if (!selectedTargets.length) return {};
+
+  const existingEntries = Object.entries(isPlainObject(existingFields) ? existingFields : {});
+  const existingDerivedByTarget = new Map();
+  existingEntries.forEach(([derivedKey, targetField]) => {
+    const normalizedTarget = String(targetField || '').trim();
+    const normalizedDerived = String(derivedKey || '').trim();
+    if (!normalizedTarget || !normalizedDerived) return;
+    if (!existingDerivedByTarget.has(normalizedTarget)) {
+      existingDerivedByTarget.set(normalizedTarget, normalizedDerived);
+    }
+  });
+
+  const usedDerived = new Set();
+  const result = {};
+  selectedTargets.forEach((targetField) => {
+    const preferredExisting = existingDerivedByTarget.get(targetField);
+    const generatedBase = `${targetTableKey}_${targetField}`;
+    const derived = ensureUniqueLookupDerivedKey(preferredExisting || generatedBase, usedDerived);
+    usedDerived.add(derived.toLowerCase());
+    result[derived] = targetField;
+  });
+  return result;
+}
+
+function resolveLookupSourceKey(lookup, sourceColumns) {
+  const relationSourceField = String(lookup?.sourceField || '').trim();
+  if (!relationSourceField) return relationSourceField;
+
+  const candidates = Array.isArray(sourceColumns) ? sourceColumns.filter((column) => column.source === 'source') : [];
+  if (!candidates.length) return relationSourceField;
+
+  const byExactKey = candidates.find((column) => String(column.key || '').trim() === relationSourceField);
+  if (byExactKey) return String(byExactKey.key || '').trim();
+
+  const byExactSourceField = candidates.find((column) => String(column.sourceField || '').trim() === relationSourceField);
+  if (byExactSourceField) return String(byExactSourceField.key || '').trim();
+
+  const sourceFieldLower = relationSourceField.toLowerCase();
+  const byInsensitiveKey = candidates.find((column) => String(column.key || '').trim().toLowerCase() === sourceFieldLower);
+  if (byInsensitiveKey) return String(byInsensitiveKey.key || '').trim();
+
+  const byInsensitiveSourceField = candidates.find((column) => (
+    String(column.sourceField || '').trim().toLowerCase() === sourceFieldLower
+  ));
+  if (byInsensitiveSourceField) return String(byInsensitiveSourceField.key || '').trim();
+
+  return relationSourceField;
+}
+
+function resolveLookupProjectionColumns({ activeColumns, allColumns, lookups, scope }) {
+  const normalizedScope = scope === 'detail' ? 'detail' : 'master';
+  const sourceColumns = (Array.isArray(activeColumns) ? activeColumns : [])
+    .filter((column) => column.source === 'source');
+  const allSourceColumns = (Array.isArray(allColumns) ? allColumns : [])
+    .filter((column) => column.source === 'source');
+  const sourceByKey = new Map(sourceColumns.map((column) => [String(column.key || '').trim(), column]));
+  const allSourceByKey = new Map(
+    allSourceColumns.map((column) => [String(column.key || '').trim(), column])
+  );
+  const allSourceByKeyLower = new Map(
+    allSourceColumns.map((column) => [String(column.key || '').trim().toLowerCase(), column])
+  );
+
+  const lookupSourceKeys = new Set(
+    (Array.isArray(lookups) ? lookups : [])
+      .filter((lookup) => String(lookup?.sourceScope || 'master').trim() === normalizedScope)
+      .map((lookup) => resolveLookupSourceKey(lookup, allSourceColumns))
+      .filter(Boolean)
+  );
+  if (!lookupSourceKeys.size) return sourceColumns;
+
+  lookupSourceKeys.forEach((lookupSourceKey) => {
+    if (sourceByKey.has(lookupSourceKey)) return;
+    const fallbackColumn = allSourceByKey.get(lookupSourceKey)
+      || allSourceByKeyLower.get(String(lookupSourceKey).toLowerCase());
+    if (fallbackColumn) sourceByKey.set(lookupSourceKey, fallbackColumn);
+  });
+  return [...sourceByKey.values()];
+}
+
+function buildLookupTargetAliases(activeTargetColumns, allTargetColumns) {
+  const activeList = Array.isArray(activeTargetColumns) ? activeTargetColumns : [];
+  const allList = Array.isArray(allTargetColumns) ? allTargetColumns : [];
+  const aliasesByKey = {};
+  activeList.forEach((targetColumn) => {
+    const targetKey = String(targetColumn?.key || '').trim();
+    if (!targetKey) return;
+
+    const aliasSet = new Set();
+    const sourceField = String(targetColumn?.sourceField || '').trim();
+    if (sourceField) {
+      aliasSet.add(sourceField);
+      const sourceFieldLower = sourceField.toLowerCase();
+      allList.forEach((column) => {
+        const colKey = String(column?.key || '').trim();
+        if (!colKey || colKey === targetKey) return;
+        if (String(column?.sourceField || '').trim().toLowerCase() === sourceFieldLower) {
+          aliasSet.add(colKey);
+        }
+      });
+    }
+    aliasesByKey[targetKey] = [...aliasSet];
+  });
+  return aliasesByKey;
+}
+
+function buildLookupDedupeSignature({ sourceScope, sourceFieldKey, targetTableKey }) {
+  return [
+    String(sourceScope === 'detail' ? 'detail' : 'master').toLowerCase(),
+    String(sourceFieldKey || '').trim().toLowerCase(),
+    String(targetTableKey || '').trim().toLowerCase(),
+  ].join('|');
+}
+
 function toColumnLabelFromField(field) {
   return String(field || '')
     .replace(/[_-]+/g, ' ')
@@ -554,6 +1014,18 @@ async function isStale(tableKey) {
   return Date.now() - new Date(lastFullSyncAt).getTime() > thresholdMs;
 }
 
+function dedupeDetailRows(detailRows) {
+  const rows = Array.isArray(detailRows) ? detailRows : [];
+  const byCompositeKey = new Map();
+  let duplicateCount = 0;
+  for (const row of rows) {
+    const compositeKey = `${row.partitionKey}::${row.recordKey}::${row.detailKey}`;
+    if (byCompositeKey.has(compositeKey)) duplicateCount += 1;
+    byCompositeKey.set(compositeKey, row);
+  }
+  return { rows: Array.from(byCompositeKey.values()), duplicateCount };
+}
+
 // ---------------------------------------------------------------------------
 // persistRecordsChunk — schrijft één batch masterrecords (+ hun details) set-based weg naar tb_cache.
 // Aanpak: bulk-copy de geprojecteerde rijen naar twee staging-temptabellen op de transactie-connectie,
@@ -599,6 +1071,15 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
   }
 
+  const { rows: uniqueDetailRows, duplicateCount } = dedupeDetailRows(detailRows);
+  if (duplicateCount > 0) {
+    logger.warn('Dubbele detailregels in bron gededupliceerd tijdens refresh', {
+      tableKey: table?.key || null,
+      duplicates: duplicateCount,
+      chunkSize: chunk.length,
+    });
+  }
+
   if (!masterRows.length) return { saved: 0, watermark };
 
   const tx = new sql.Transaction(pool);
@@ -637,7 +1118,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
     await new sql.Request(tx).bulk(masterTable);
 
-    if (detailRows.length) {
+    if (uniqueDetailRows.length) {
       const detailTable = new sql.Table('#stg_detail');
       detailTable.create = false;
       detailTable.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
@@ -645,7 +1126,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
       detailTable.columns.add('detail_key', sql.Int, { nullable: false });
       detailTable.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
       detailTable.columns.add('content_hash', sql.NVarChar(64), { nullable: false });
-      for (const r of detailRows) {
+      for (const r of uniqueDetailRows) {
         detailTable.rows.add(r.partitionKey, r.recordKey, r.detailKey, r.dataJson, r.contentHash);
       }
       await new sql.Request(tx).bulk(detailTable);
@@ -761,7 +1242,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
            @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
       `);
 
-    if (detailRows.length) {
+    if (uniqueDetailRows.length) {
       await new sql.Request(tx)
         .input('tableId', sql.BigInt, table.id)
         .input('syncedAt', sql.DateTime2, refreshStart)
@@ -816,8 +1297,47 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
 // ---------------------------------------------------------------------------
 // refresh — volledige resync vanuit de bron naar tb_cache (master + detail, data_json)
 // ---------------------------------------------------------------------------
-async function refresh(tableKey) {
+async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
+  if (!table || table.key !== 'purchase-orders') return;
+  const lookups = await getLookups(table.id);
+  const targetKeys = [...new Set(
+    lookups
+      .map((lookup) => String(lookup?.targetTableKey || '').trim())
+      .filter(Boolean)
+  )];
+  const refreshFailures = [];
+  for (const targetKey of targetKeys) {
+    if (visitedTables.has(targetKey)) continue;
+    try {
+      const targetTable = await getTableByKey(targetKey);
+      if (targetTable.cacheMode === 'never') continue;
+      await refresh(targetKey, { visitedTables });
+    } catch (err) {
+      logger.error('Lookup-doeltabel verversen mislukt', {
+        tableKey: table.key,
+        targetTableKey: targetKey,
+        error: err.message,
+      });
+      refreshFailures.push(`${targetKey}: ${err.message}`);
+    }
+  }
+  if (refreshFailures.length) {
+    throw Object.assign(
+      new Error(`Lookup-doeltabellen niet volledig ververst (${refreshFailures.join('; ')})`),
+      { status: 502 }
+    );
+  }
+}
+
+async function refresh(tableKey, options = {}) {
+  const visitedTables = options?.visitedTables instanceof Set
+    ? options.visitedTables
+    : new Set();
   const table = await getTableByKey(tableKey);
+  if (visitedTables.has(table.key)) {
+    return { orders: 0, truncated: false, syncedAt: null, skipped: 'already_visited' };
+  }
+  visitedTables.add(table.key);
   if (table.cacheMode === 'never') {
     resetRefreshProgress(tableKey, {
       status: 'done',
@@ -890,12 +1410,25 @@ async function refresh(tableKey) {
     // Alleen de geselecteerde (actieve) bron-kolommen landen in data_json. Zo draagt elke blob precies
     // de kolommen die op het bord staan i.p.v. de volledige bron-entiteit — de grootste payload-besparing
     // op zowel de refresh-write als elke read (#AB:177). Uitgezette kolommen horen niet in de cache.
-    const [masterCols, detailCols] = await Promise.all([
+    const [masterCols, detailCols, allMasterCols, allDetailCols, lookupDefs] = await Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+      getLookups(table.id),
     ]);
-    const masterSource = masterCols.filter((c) => c.source === 'source');
-    const detailSource = detailCols.filter((c) => c.source === 'source');
+    const masterSource = resolveLookupProjectionColumns({
+      activeColumns: masterCols,
+      allColumns: allMasterCols,
+      lookups: lookupDefs,
+      scope: 'master',
+    });
+    const detailSource = resolveLookupProjectionColumns({
+      activeColumns: detailCols,
+      allColumns: allDetailCols,
+      lookups: lookupDefs,
+      scope: 'detail',
+    });
     if (truncated) {
       logger.warn('tb_cache sync afgekapt op de cap; verfijn de scope voor volledige dekking', {
         tableKey, opgehaald: records.length, totaalInBron: total,
@@ -985,6 +1518,15 @@ async function refresh(tableKey) {
 
     await pool.request()
       .input('tableId', sql.BigInt, table.id)
+      .input('refreshStart', sql.DateTime2, refreshStart)
+      .query(`
+        UPDATE dbo.tb_cache
+        SET removed_at_source = CASE WHEN synced_at < @refreshStart THEN 1 ELSE 0 END
+        WHERE table_id = @tableId AND scope = 'detail'
+      `);
+
+    await pool.request()
+      .input('tableId', sql.BigInt, table.id)
       .input('watermark', sql.DateTime2, watermark)
       .input('syncedAt', sql.DateTime2, refreshStart)
       .query(`
@@ -993,6 +1535,8 @@ async function refresh(tableKey) {
         WHEN MATCHED THEN UPDATE SET watermark = @watermark, last_full_sync_at = @syncedAt, updated_at = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
+
+    await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated });
     updateRefreshProgress(tableKey, {
@@ -1028,21 +1572,33 @@ const FIELD_DISCOVERY_ROW_LIMIT = 5;
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
-  // Fase A: discovery is bron-specifiek (PO). In Fase B levert SourceProvider.discoverFields() dit generiek.
-  if (table.key !== 'purchase-orders') {
-    throw Object.assign(new Error(`Veld-discovery nog niet beschikbaar voor tabel '${table.key}'`), { status: 501 });
+  let records = [];
+  if (table.key === 'purchase-orders') {
+    const result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: FIELD_DISCOVERY_ROW_LIMIT,
+      skip: 0,
+      fetchAll: false,
+      maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+    });
+    records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
+      masterRaw: order.raw || {},
+      details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
+    }));
+  } else {
+    const sample = await fetchEntityRecords({
+      sourceEntity: table.sourceEntity,
+      top: FIELD_DISCOVERY_ROW_LIMIT,
+      skip: 0,
+      fetchAll: false,
+      maxItems: FIELD_DISCOVERY_ROW_LIMIT,
+      selectFields: null,
+    });
+    records = (Array.isArray(sample.items) ? sample.items : []).map((raw) => ({
+      masterRaw: raw && typeof raw === 'object' ? raw : {},
+      details: [],
+    }));
   }
-  const result = await fetchPurchaseOrders({
-    supplierAccount: null,
-    top: FIELD_DISCOVERY_ROW_LIMIT,
-    skip: 0,
-    fetchAll: false,
-    maxItems: FIELD_DISCOVERY_ROW_LIMIT,
-  });
-  const records = (Array.isArray(result.items) ? result.items : []).map((order) => ({
-    masterRaw: order.raw || {},
-    details: (Array.isArray(order.lines) ? order.lines : []).map((line) => ({ raw: line.raw || {} })),
-  }));
   const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
   logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
   return { headerInserted, lineInserted, sampledRows: records.length };
@@ -1058,19 +1614,50 @@ async function loadLookupEnrichment(table) {
   if (!lookups.length) return { lookups: [], masterCols: [], detailCols: [] };
 
   const pool = await getPool();
+  const [lookupSourceMasterCols, lookupSourceDetailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+  ]);
   const enriched = [];
   const masterCols = [];
   const detailCols = [];
+  const seenLookupSignatures = new Set();
 
   for (const lk of lookups) {
+    const normalizedSourceScope = lk.sourceScope === 'detail' ? 'detail' : 'master';
+    const lookupSourceColumns = normalizedSourceScope === 'detail' ? lookupSourceDetailCols : lookupSourceMasterCols;
+    const resolvedSourceField = resolveLookupSourceKey(lk, lookupSourceColumns);
+    const dedupeSignature = buildLookupDedupeSignature({
+      sourceScope: normalizedSourceScope,
+      sourceFieldKey: resolvedSourceField,
+      targetTableKey: lk.targetTableKey,
+    });
+    if (seenLookupSignatures.has(dedupeSignature)) continue;
+    seenLookupSignatures.add(dedupeSignature);
+
     let targetTable;
     try {
       targetTable = await getTableByKey(lk.targetTableKey);
     } catch {
       continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
     }
-    const targetColumns = await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: false });
+    const targetColumnsAll = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }))
+      .filter((column) => column.source === 'source');
+    const targetColumns = targetColumnsAll.filter((column) => column.isActive);
+    if (!targetColumns.length) continue;
     const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+    const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
+    const fieldMap = buildLookupFieldMap({
+      targetTableKey: lk.targetTableKey,
+      targetFieldKeys: targetColumns.map((column) => column.key),
+      existingFields: lk.fields,
+    });
+    const fieldEntries = Object.entries(fieldMap)
+      .filter(([derivedKey, targetColKey]) => (
+        Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
+      ))
+      .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
+    if (!fieldEntries.length) continue;
 
     const partitionless = targetTable.source && targetTable.source.providerType === 'excel';
 
@@ -1085,7 +1672,6 @@ async function loadLookupEnrichment(table) {
       byKey.set(mapKey, parseJson(r.data_json));
     }
 
-    const fieldEntries = Object.entries(lk.fields); // [afgeleide-kolom-key, doel-kolom-key]
     const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
       const tc = targetColByKey.get(targetColKey);
       return {
@@ -1108,25 +1694,79 @@ async function loadLookupEnrichment(table) {
         lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
       };
     });
-    if (lk.sourceScope === 'detail') detailCols.push(...synthetic);
-    else masterCols.push(...synthetic);
-    enriched.push({ ...lk, byKey, fieldEntries, partitionless });
+    if (lk.sourceScope === 'detail') {
+      detailCols.push(...synthetic);
+      // Detail-lookups worden ook op masterniveau getoond als geaggregeerde headerwaarde,
+      // zodat gekozen itemkolommen zichtbaar zijn in de hoofd-PO-tabel.
+      masterCols.push(...synthetic.map((column) => ({ ...column, scope: 'master' })));
+    } else {
+      masterCols.push(...synthetic);
+    }
+    enriched.push({
+      ...lk,
+      sourceFieldKey: resolvedSourceField,
+      targetAliasesByKey,
+      fields: fieldMap,
+      byKey,
+      fieldEntries,
+      partitionless,
+    });
   }
 
   return { lookups: enriched, masterCols, detailCols };
 }
 
-function applyLookups(valueBag, partitionKey, enrichedLookups, scope) {
+function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
   for (const lk of enrichedLookups) {
     if (lk.sourceScope !== scope) continue;
-    const fkVal = valueBag[lk.sourceField];
+    const sourceField = String(lk.sourceFieldKey || lk.sourceField || '').trim();
+    const fkVal = sourceField && valueBag && Object.prototype.hasOwnProperty.call(valueBag, sourceField)
+      ? valueBag[sourceField]
+      : (sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)
+        ? sourceValues[sourceField]
+        : null);
     const hasFk = fkVal !== null && fkVal !== undefined && fkVal !== '';
     const lookupKey = lk.partitionless
       ? String(fkVal).trim()
       : `${String(partitionKey).toLowerCase()}|${String(fkVal).trim()}`;
     const targetData = hasFk ? lk.byKey.get(lookupKey) : null;
     for (const [derivedKey, targetColKey] of lk.fieldEntries) {
-      valueBag[derivedKey] = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+      let value = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
+      if ((value === null || value === undefined) && targetData && lk.targetAliasesByKey) {
+        const aliases = Array.isArray(lk.targetAliasesByKey[targetColKey]) ? lk.targetAliasesByKey[targetColKey] : [];
+        for (const aliasKey of aliases) {
+          if (!Object.prototype.hasOwnProperty.call(targetData, aliasKey)) continue;
+          const aliasValue = targetData[aliasKey];
+          if (aliasValue === null || aliasValue === undefined) continue;
+          value = aliasValue;
+          break;
+        }
+      }
+      valueBag[derivedKey] = value;
+    }
+  }
+}
+
+function aggregateDetailLookupValues(details, derivedKey) {
+  const values = [];
+  const seen = new Set();
+  for (const detail of Array.isArray(details) ? details : []) {
+    const value = detail?.values?.[derivedKey];
+    if (value === null || value === undefined || value === '') continue;
+    const text = String(value).trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    values.push(text);
+  }
+  if (!values.length) return null;
+  return values.length === 1 ? values[0] : values.join(', ');
+}
+
+function applyDetailLookupRollupsToMaster(masterValues, details, enrichedLookups) {
+  for (const lk of Array.isArray(enrichedLookups) ? enrichedLookups : []) {
+    if (lk.sourceScope !== 'detail') continue;
+    for (const [derivedKey] of lk.fieldEntries || []) {
+      masterValues[derivedKey] = aggregateDetailLookupValues(details, derivedKey);
     }
   }
 }
@@ -1138,6 +1778,9 @@ function isFormulaColumn(column) {
 function assertCustomColumnWritable(column) {
   if (!column || column.source !== 'custom') {
     throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
+  }
+  if (String(column?.dataType || '').toLowerCase() === 'image') {
+    throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
   }
   if (isFormulaColumn(column)) {
     throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
@@ -1485,8 +2128,9 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     let hasLineChanges = false;
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
-      const detailValues = valuesFor(detailCols, parseJson(d.data_json), detailCustom);
-      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail');
+      const detailJson = parseJson(d.data_json);
+      const detailValues = valuesFor(detailCols, detailJson, detailCustom);
+      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
       const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -1521,7 +2165,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     else if (isChanged) changedCount += 1;
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
-    applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master');
+    applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
+    applyDetailLookupRollupsToMaster(masterValues, details, enrichment.lookups);
     applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
@@ -2130,10 +2775,14 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
 // relatie, kolommen (incl. verborgen, gemapt naar de admin-vorm), cache-stats en sync-filter. Vervangt
 // het po_*-specifieke /datamodel zodat de admin-pagina generiek wordt. De D365-filtercatalogus wordt
 // (voorlopig) hergebruikt uit de PO-cacheservice; in Fase 8 verhuist die mee naar de generieke laag.
-const SYNC_TEMPLATES = [
+const PURCHASE_ORDER_SYNC_TEMPLATES = [
   { id: 'open_orders', label: 'Open orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Backorder' }] },
   { id: 'received_orders', label: 'Received orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Received' }] },
 ];
+
+function syncTemplatesForTable(tableKey) {
+  return tableKey === 'purchase-orders' ? PURCHASE_ORDER_SYNC_TEMPLATES : [];
+}
 
 // tb_-kolom -> admin-vorm die DataPreviewTables/useDataModelAdmin verwacht (level i.p.v. scope, d365 i.p.v. source).
 function toAdminColumn(col) {
@@ -2269,12 +2918,11 @@ async function getDataModel(tableKey) {
       : Promise.resolve({ recordset: [] }),
   ]);
 
-  const [baseUrl, company, rulesJson] = await Promise.all([
+  const [baseUrl, company] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
-    settingsService.getAsync('PO_SYNC_RULES', ''),
   ]);
-  const syncRules = parseSyncRules(rulesJson);
+  const syncRules = await getTableSyncRules(table);
   let compiledFilter = '';
   try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
 
@@ -2325,6 +2973,62 @@ async function getDataModel(tableKey) {
     }
   }
 
+  const lookups = await getLookups(table.id);
+  const lookupEntities = await Promise.all(lookups.map(async (lookup) => {
+    let targetLabel = lookup.targetTableKey;
+    let targetColumns = [];
+    try {
+      const target = await getTableByKey(lookup.targetTableKey);
+      targetLabel = target.label;
+      const columns = await listColumns({ tableId: target.id, scope: 'master', includeInactive: true });
+      targetColumns = columns
+        .filter((column) => column.source === 'source')
+        .map((column) => ({
+          key: column.key,
+          label: column.label,
+          dataType: column.dataType,
+          isActive: Boolean(column.isActive),
+        }));
+    } catch {
+      // Doeltabel ontbreekt/inactief; key blijft als label zichtbaar in het diagram.
+    }
+    const selectedTargetColumns = targetColumns.filter((column) => column.isActive).map((column) => column.key);
+    return {
+      id: lookup.id,
+      sourceScope: lookup.sourceScope,
+      sourceField: lookup.sourceField,
+      targetTableKey: lookup.targetTableKey,
+      targetTableLabel: targetLabel,
+      targetKeyField: lookup.targetKeyField,
+      fields: lookup.fields,
+      selectedTargetColumns,
+      targetColumns,
+    };
+  }));
+
+  const isInheritedSyncFilterTable = INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
+  const syncFilterPayload = isInheritedSyncFilterTable
+    ? {
+        rules: [],
+        compiled: '',
+        inheritedRules: syncRules,
+        inheritedCompiled: compiledFilter,
+        readOnly: true,
+        inheritedFromTable: 'purchase-orders',
+        message: 'This table automatically inherits the active Purchase Orders sync filter.',
+        operators: OPERATORS,
+        maxRules: MAX_RULES,
+        templates: [],
+      }
+    : {
+        rules: syncRules,
+        compiled: compiledFilter,
+        readOnly: false,
+        operators: OPERATORS,
+        maxRules: MAX_RULES,
+        templates: syncTemplatesForTable(table.key),
+      };
+
   return {
     entities: [
       { id: 'header', name: table.sourceEntity, title: `${table.label} (kop)`, path: table.sourceEntity, keys: table.keyFields, cacheTable: 'tb_cache' },
@@ -2337,28 +3041,69 @@ async function getDataModel(tableKey) {
     connection: { baseUrl: baseUrl.trim() || null, company: company.trim() || null },
     columns: { header: headerCols, line: lineCols },
     cache,
-    syncFilter: { rules: syncRules, compiled: compiledFilter, operators: OPERATORS, maxRules: MAX_RULES, templates: SYNC_TEMPLATES },
+    syncFilter: syncFilterPayload,
     filterCatalog: filterMeta.catalog,
     previewTables,
+    lookups: lookupEntities,
   };
 }
 
-// Sync-filter-regels per tabel opslaan. v1: gedeelde PO_SYNC_RULES-setting (de tb_-sync leest die al);
-// TODO(#174): per tabel in tb_tables.default_filter_json zodra meerdere schrijfbare bronnen nodig zijn.
+async function saveTableDefaultFilter(tableId, rules) {
+  const pool = await getPool();
+  await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('defaultFilterJson', sql.NVarChar(sql.MAX), JSON.stringify(rules))
+    .query(`
+      UPDATE dbo.tb_tables
+      SET default_filter_json = @defaultFilterJson,
+          updated_at = SYSUTCDATETIME()
+      WHERE id = @tableId
+    `);
+}
+
+// Sync-filter-regels per tabel opslaan.
 async function saveSyncFilters(tableKey, rules) {
-  await getTableByKey(tableKey); // valideer bestaan
+  const table = await getTableByKey(tableKey);
+  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    throw Object.assign(new Error('Deze tabel erft automatisch de Purchase Orders-filter en kan niet handmatig worden aangepast.'), { status: 400 });
+  }
   const list = Array.isArray(rules) ? rules : [];
   const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
-  await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+  if (table.key === 'purchase-orders') {
+    await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+  }
+  await saveTableDefaultFilter(table.id, list);
   return { rules: list, compiled };
 }
 
-// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen). Hergebruikt de PO-fetch;
-// PO-specifiek tot de generieke provider-count er is (#177).
+// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen).
 async function countSyncFilter(tableKey, rules) {
-  await getTableByKey(tableKey);
+  const table = await getTableByKey(tableKey);
+  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    throw Object.assign(new Error('Deze tabel gebruikt automatisch de Purchase Orders-filter.'), { status: 400 });
+  }
   const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
-  const result = await fetchPurchaseOrders({ supplierAccount: null, top: 1, skip: 0, fetchAll: false, extraFilter: compiled, maxItems: 1 });
+  let result;
+  if (table.key === 'purchase-orders') {
+    result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: 1,
+      skip: 0,
+      fetchAll: false,
+      extraFilter: compiled,
+      maxItems: 1,
+    });
+  } else {
+    result = await fetchEntityRecords({
+      sourceEntity: table.sourceEntity,
+      top: 1,
+      skip: 0,
+      fetchAll: false,
+      extraFilter: compiled,
+      maxItems: 1,
+      selectFields: null,
+    });
+  }
   return { total: Number(result.total) || 0, compiled };
 }
 
@@ -2381,17 +3126,26 @@ module.exports = {
   markViewed,
   computeContentHash,
   computeChangedFieldKeys,
+  dedupeDetailRows,
   applyLookups,
   isFormulaColumn,
+  resolveConfiguredMaxItems,
+  requiredMasterFieldsFromTable,
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
+  applyDetailLookupRollupsToMaster,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,
   includeRows,
   listHiddenInFilterRows,
+  buildLookupFieldMap,
+  resolveLookupSourceKey,
+  resolveLookupProjectionColumns,
+  buildLookupDedupeSignature,
+  buildLookupTargetAliases,
   FETCH_ADAPTERS,
 };

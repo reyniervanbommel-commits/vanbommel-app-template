@@ -37,7 +37,16 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // Ticket #178: image-kolommen laden externe afbeeldingen via URL-template.
+      // We houden de rest van de CSP streng (defaults), en verruimen alleen img-src.
+      'img-src': ["'self'", 'data:', 'https:'],
+    },
+  },
+}));
 
 // Gzip/brotli-compressie op alle responses. De frontend-bundle en de board-JSON-payloads
 // zijn tekstueel en comprimeren ~4x; dit verkort de laadtijd fors zonder verdere ingrepen.
@@ -63,6 +72,8 @@ app.use(rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // Refresh-voortgang wordt tijdens een actieve D365-sync periodiek gepolld; die requests mogen
+  // niet door de globale limiter worden afgekapt, anders lijkt de refresh "vastgelopen".
   skip: shouldSkipGlobalRateLimit,
 }));
 

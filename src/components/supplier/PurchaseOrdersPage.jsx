@@ -4,6 +4,8 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
 import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
+import PurchaseOrderImageColumnDialog from './PurchaseOrderImageColumnDialog';
+import PurchaseOrderBulkEditDialog from './PurchaseOrderBulkEditDialog';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
@@ -11,6 +13,7 @@ import { usePurchaseOrderSavedViewState } from '../../hooks/usePurchaseOrderSave
 import { usePurchaseOrdersSelection } from '../../hooks/usePurchaseOrdersSelection';
 import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRows';
 import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
+import { usePurchaseOrderBulkEdit } from '../../hooks/usePurchaseOrderBulkEdit';
 import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
@@ -104,17 +107,7 @@ export default function PurchaseOrdersPage() {
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
-  const {
-    savedViews,
-    activeViewId,
-    applyViewState,
-    handleResetView,
-    handleSaveAsNew,
-    handleUpdateActive,
-    handleRenameView,
-    handleSetDefault,
-    handleDeleteView,
-  } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -129,26 +122,33 @@ export default function PurchaseOrdersPage() {
     handleFormulaTypeSelection,
     formulaReferenceColumns,
     submitFormulaColumn,
+    imageDialogState,
+    closeImageDialog,
+    handleImageTypeSelection,
+    submitImageColumn,
   } = usePurchaseOrderFormulaDialogState({
     visibleHeaderColumns,
     addHeaderColumnAfter,
     updateFormulaColumn,
+    renameColumn,
     headerColumnFormatRules,
     saveHeaderColumnFormatRules,
     setEditingColumnKey,
   });
+  const bulkEdit = usePurchaseOrderBulkEdit({ visibleHeaderColumns, visibleOrders: boardView.processedItems, selection, saveValue, correctField });
 
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
     if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
       return;
     }
+    if (handleImageTypeSelection(sourceColumn, typeDef)) return;
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, handleFormulaTypeSelection]);
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleImageTypeSelection]);
 
   const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
@@ -255,10 +255,10 @@ export default function PurchaseOrdersPage() {
             lineColumns={lineColumns}
             items={orders}
             boardView={boardView}
-            onSaveValue={saveValue}
+            onSaveValue={bulkEdit.handleSaveValue}
             onRenameColumn={renameColumn}
             onRemoveColumn={removeColumn}
-            onCorrect={correctField}
+            onCorrect={bulkEdit.handleCorrectField}
             isAdmin={isAdmin}
             onToggleWriteback={toggleWriteback}
             onReorderHeaderColumn={reorderHeaderColumn}
@@ -286,14 +286,9 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
-      <PurchaseOrderFormulaColumnDialog
-        open={formulaDialogState.open}
-        onOpenChange={(open) => !open && closeFormulaDialog()}
-        onSubmit={submitFormulaColumn}
-        sourceColumn={formulaDialogState.sourceColumn}
-        availableColumns={formulaReferenceColumns}
-        initialValue={formulaDialogState.editingColumn}
-      />
+      <PurchaseOrderFormulaColumnDialog open={formulaDialogState.open} onOpenChange={(open) => !open && closeFormulaDialog()} onSubmit={submitFormulaColumn} sourceColumn={formulaDialogState.sourceColumn} availableColumns={formulaReferenceColumns} initialValue={formulaDialogState.editingColumn} />
+      <PurchaseOrderImageColumnDialog open={imageDialogState.open} onOpenChange={(open) => !open && closeImageDialog()} onSubmit={submitImageColumn} sourceColumn={imageDialogState.sourceColumn} availableColumns={visibleHeaderColumns} initialValue={imageDialogState.editingColumn} sampleRowValues={boardView.processedItems?.[0]?.values || {}} />
+      <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
     </div>
   );
 }

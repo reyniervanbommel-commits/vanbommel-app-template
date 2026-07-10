@@ -9,7 +9,7 @@ const sql = require('mssql');
 const { getSqlPool } = require('../utils/sqlPool');
 
 const SCOPES = ['master', 'detail'];
-const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select'];
+const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'image'];
 
 function getPool() {
   return getSqlPool();
@@ -144,17 +144,18 @@ async function getLookups(tableId) {
   const result = await pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
-      SELECT source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
+      SELECT id, source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
       FROM dbo.tb_relations
       WHERE table_id = @tableId AND relation_role = 'lookup'
     `);
   return result.recordset.map((r) => ({
+    id: Number(r.id),
     sourceScope: r.source_scope || 'master',
     sourceField: r.source_field || null,
     targetTableKey: r.target_table_key || null,
     targetKeyField: r.target_key_field || null,
     fields: r.lookup_fields_json ? safeJson(r.lookup_fields_json) : {},
-  })).filter((l) => l.sourceField && l.targetTableKey && Object.keys(l.fields).length > 0);
+  })).filter((l) => l.sourceField && l.targetTableKey);
 }
 
 module.exports = {

@@ -3,16 +3,15 @@ import {
   Badge,
   Button,
   Dropdown,
-  Input,
-  Option,
   Text,
   makeStyles,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { AddRegular, DeleteRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
-import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
-import FilterFieldPickerDialog, { OPERATOR_LABELS } from './FilterFieldPickerDialog';
+import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
+import { useSyncFilters } from '../../../hooks/useSyncFilters';
+import FilterFieldPickerDialog from './FilterFieldPickerDialog';
+import SyncFilterRuleRow from './SyncFilterRuleRow';
 
 const useStyles = makeStyles({
   section: {
@@ -43,92 +42,21 @@ const useStyles = makeStyles({
   fieldBadge: { maxWidth: '420px' },
 });
 
-function operatorsForType(valueType) {
-  if (valueType === 'text') return ['eq', 'ne', 'contains', 'notcontains', 'startswith', 'notstartswith', 'oneof'];
-  if (valueType === 'enum') return ['eq', 'ne', 'oneof'];
-  return ['eq', 'ne', 'oneof'];
-}
-
-function RuleRow({ rule, index, onUpdate, onRemove, onOpenPicker }) {
-  const styles = useStyles();
-  const enumMeta = rule.field ? ENUM_FIELDS[rule.field] : null;
-  const operators = operatorsForType(rule.valueType);
-  const selectedOperator = operators.includes(rule.operator) ? rule.operator : operators[0];
-  const availableFieldCount = rule.availableFieldCount || 0;
-  const hasAvailableFields = availableFieldCount > 0;
-  const pickerDisabledReason = hasAvailableFields
-    ? ''
-    : 'No fields with sampled values for this level yet. Run Sync now first.';
-
-  return (
-    <div className={styles.ruleRow}>
-      <Dropdown
-        className={styles.levelDropdown}
-        selectedOptions={[rule.level || 'header']}
-        value={rule.level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)'}
-        onOptionSelect={(_, data) => onUpdate(index, { level: data.optionValue, field: '', value: '', valueType: 'text', operator: 'eq' })}
-      >
-        <Option value="header" text="Main items (Headers)">Main items (Headers)</Option>
-        <Option value="line" text="Subitems (Lines)">Subitems (Lines)</Option>
-      </Dropdown>
-
-      <Button
-        appearance="secondary"
-        onClick={() => onOpenPicker(index, rule.level || 'header')}
-        disabled={!hasAvailableFields}
-        title={pickerDisabledReason}
-      >
-        {rule.field ? 'Change field' : 'Choose field'}
-      </Button>
-      <Badge className={styles.fieldBadge} appearance="outline" color={rule.field ? 'brand' : 'subtle'}>
-        {rule.field ? `${rule.label || rule.field} (${rule.field})` : 'No field selected'}
-      </Badge>
-
-      <Dropdown
-        className={styles.operatorDropdown}
-        selectedOptions={[selectedOperator]}
-        value={OPERATOR_LABELS[selectedOperator]}
-        onOptionSelect={(_, data) => onUpdate(index, { operator: data.optionValue })}
-      >
-        {operators.map((op) => (
-          <Option key={op} value={op} text={OPERATOR_LABELS[op]}>{OPERATOR_LABELS[op]}</Option>
-        ))}
-      </Dropdown>
-
-      {rule.valueType === 'enum' && enumMeta && selectedOperator !== 'oneof' ? (
-        <Dropdown
-          className={styles.valueInput}
-          placeholder="Select value"
-          value={rule.value || ''}
-          selectedOptions={rule.value ? [rule.value] : []}
-          onOptionSelect={(_, data) => onUpdate(index, { value: data.optionValue })}
-        >
-          {enumMeta.members.map((member) => (
-            <Option key={member} value={member} text={member}>{member}</Option>
-          ))}
-        </Dropdown>
-      ) : (
-        <Input
-          className={styles.valueInput}
-          type={rule.valueType === 'number' ? 'number' : rule.valueType === 'date' ? 'date' : 'text'}
-          placeholder={selectedOperator === 'oneof' ? 'Value1, Value2, Value3' : 'Value'}
-          value={String(rule.value ?? '')}
-          onChange={(e) => onUpdate(index, { value: e.target.value })}
-        />
-      )}
-
-      <Button appearance="subtle" icon={<DeleteRegular />} onClick={() => onRemove(index)} />
-    </div>
-  );
-}
-
-function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
+  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items';
+  const isReadOnly = isInheritedTable || Boolean(syncFilter?.readOnly);
+  const readOnlyMessage = String(syncFilter?.message || '').trim();
+  const inheritedCompiled = String(
+    syncFilter?.inheritedCompiled
+    || (isInheritedTable ? syncFilter?.compiled : '')
+    || ''
+  ).trim();
   const {
     rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
     save, saving, error, savedAt, queryCount, countLoading, countError,
-  } = useSyncFilters(syncFilter?.rules);
+  } = useSyncFilters(syncFilter?.rules, tableKey);
 
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
@@ -160,6 +88,25 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
     });
     closePicker();
   }, [pickerState.index, updateRule, closePicker]);
+
+  if (isReadOnly) {
+    return (
+      <div className={styles.section}>
+        <div className={styles.titleRow}>
+          <FilterRegular />
+          <Text weight="semibold" size={400}>D365 sync filters</Text>
+          <Badge appearance="tint" color="informative" size="small">Inherited</Badge>
+        </div>
+        <Text className={styles.hint} block>
+          {readOnlyMessage || 'This table inherits the active Purchase Orders sync filter and cannot be edited separately.'}
+        </Text>
+        {inheritedCompiled ? <div className={styles.preview}>Inherited $filter = {inheritedCompiled}</div> : null}
+        <div className={styles.actions}>
+          <Button appearance="secondary" onClick={onSyncNow}>Sync now</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.section}>
@@ -206,7 +153,7 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
       </div>
 
       {rules.map((rule, index) => (
-        <RuleRow
+        <SyncFilterRuleRow
           key={index}
           rule={{
             ...rule,
@@ -216,6 +163,7 @@ function SyncFilterBuilder({ filterCatalog, syncFilter, onSyncNow }) {
           onUpdate={updateRule}
           onRemove={removeRule}
           onOpenPicker={openPicker}
+          styles={styles}
         />
       ))}
 

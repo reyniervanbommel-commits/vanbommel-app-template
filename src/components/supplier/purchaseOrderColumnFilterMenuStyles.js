@@ -40,8 +40,8 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.gap('8px'),
   },
   subPane: {
-    width: '168px',
-    minWidth: '168px',
+    width: '240px',
+    minWidth: '240px',
     boxSizing: 'border-box',
     ...shorthands.padding('8px'),
     ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),

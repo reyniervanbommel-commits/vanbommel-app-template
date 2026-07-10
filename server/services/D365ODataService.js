@@ -4,6 +4,8 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
+const DEFAULT_VENDORS_PATH = '/data/VendorsV2';
+const DEFAULT_RELEASED_PRODUCTS_PATH = '/data/ReleasedProductsV2';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const MAX_PURCHASE_ORDER_PAGES = 100;
 const MAX_PURCHASE_ORDER_ITEMS = 10000;
@@ -178,6 +180,18 @@ function mapVendor(record) {
     phone: record.PrimaryContactPhone || null,
     vendorGroup: record.VendorGroupId || null,
     currencyCode: record.CurrencyCode || null,
+    raw: record,
+  };
+}
+
+function mapReleasedProduct(record) {
+  return {
+    itemNumber: record.ItemNumber || null,
+    searchName: record.SearchName || record.ProductSearchName || null,
+    productSearchName: record.ProductSearchName || null,
+    productName: record.ProductName || null,
+    itemGroupId: record.ItemGroupId || null,
+    unitSymbol: record.ProductDefaultOrderUnitSymbol || null,
     raw: record,
   };
 }
@@ -391,7 +405,7 @@ async function fetchVendorsByAccounts(vendorAccounts, timeout) {
 
   const baseUrl = await getBaseUrl();
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
-  const url = new URL(baseUrl + '/data/VendorsV2');
+  const url = new URL(baseUrl + DEFAULT_VENDORS_PATH);
   const searchParams = url.searchParams;
 
   searchParams.set('$top', String(Math.max(vendorAccounts.length, 1)));
@@ -418,6 +432,44 @@ async function fetchVendorsByAccounts(vendorAccounts, timeout) {
     }
     return acc;
   }, {});
+}
+
+async function buildGenericEntityUrl({
+  sourceEntity,
+  company,
+  top,
+  skip,
+  extraFilter = '',
+  selectFields = null,
+}) {
+  const baseUrl = await getBaseUrl();
+  const normalizedPath = String(sourceEntity || '').trim();
+  if (!normalizedPath) {
+    const err = new Error('sourceEntity ontbreekt voor D365 fetch');
+    err.status = 400;
+    throw err;
+  }
+
+  const pathWithSlash = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  const url = new URL(baseUrl + pathWithSlash);
+  const searchParams = url.searchParams;
+
+  searchParams.set('$top', String(top));
+  searchParams.set('$skip', String(skip));
+  searchParams.set('$count', 'true');
+
+  if (Array.isArray(selectFields) && selectFields.length) {
+    searchParams.set('$select', selectFields.join(','));
+  }
+
+  const clauses = [];
+  if (company) clauses.push(`dataAreaId eq '${escapeODataLiteral(company)}'`);
+  const trimmedExtra = String(extraFilter || '').trim();
+  if (trimmedExtra) clauses.push(`(${trimmedExtra})`);
+  if (clauses.length) searchParams.set('$filter', clauses.join(' and '));
+  if (company) searchParams.set('cross-company', 'true');
+
+  return url.toString();
 }
 
 function resolveNextLink(nextLink, baseUrl) {
@@ -538,6 +590,104 @@ async function fetchPurchaseOrderRecords({
   };
 }
 
+async function fetchEntityRecords({
+  sourceEntity,
+  top = 100,
+  skip = 0,
+  fetchAll = false,
+  extraFilter = '',
+  maxItems = MAX_PURCHASE_ORDER_ITEMS,
+  onProgress,
+  selectFields = null,
+}) {
+  const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
+  const timeoutMs = Number.parseInt(timeoutRaw, 10);
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
+  const records = [];
+  let total = null;
+  let pagesFetched = 0;
+  let hasMore = false;
+  let truncated = false;
+  const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
+    ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
+    : MAX_PURCHASE_ORDER_ITEMS;
+  const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
+
+  let currentUrl = await buildGenericEntityUrl({
+    sourceEntity,
+    company,
+    top: initialTop,
+    skip,
+    extraFilter,
+    selectFields,
+  });
+
+  const emitProgress = (isTruncated = false) => {
+    if (typeof onProgress !== 'function') return;
+    onProgress({
+      fetched: records.length,
+      totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+      sourceTotal: total,
+      pagesFetched,
+      truncated: isTruncated,
+    });
+  };
+
+  while (currentUrl) {
+    const payload = await fetchODataJson(currentUrl, timeout);
+    const pageRecords = Array.isArray(payload.value) ? payload.value : [];
+    if (total === null) {
+      const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
+      if (Number.isFinite(parsedTotal)) total = parsedTotal;
+    }
+
+    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+    const recordsToAdd = pageRecords.slice(0, remaining);
+    pagesFetched += 1;
+    for (const record of recordsToAdd) {
+      records.push(record);
+      emitProgress(false);
+    }
+
+    const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+    const manualNextLink = fetchAll && !serverNextLink
+      ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
+      : null;
+    const nextLink = serverNextLink || manualNextLink;
+    const hitItemCap = fetchAll
+      && records.length >= effectiveMax
+      && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
+    emitProgress(hitItemCap);
+
+    if (!fetchAll || !nextLink) {
+      currentUrl = null;
+      hasMore = Boolean(nextLink) || hitItemCap;
+      truncated = hitItemCap;
+      break;
+    }
+
+    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
+      currentUrl = null;
+      hasMore = true;
+      truncated = true;
+      emitProgress(true);
+      break;
+    }
+
+    currentUrl = nextLink;
+  }
+
+  return {
+    total: total ?? records.length,
+    items: records,
+    hasMore,
+    truncated,
+    pagesFetched,
+    fetchedAll: fetchAll ? !hasMore : false,
+  };
+}
+
 async function fetchPurchaseOrders({
   supplierAccount,
   top = 50,
@@ -609,9 +759,13 @@ async function fetchPurchaseOrders({
 
 module.exports = {
   fetchPurchaseOrders,
+  fetchEntityRecords,
   mapPurchaseOrder,
   mapPurchaseOrderLine,
   mapVendor,
+  mapReleasedProduct,
+  DEFAULT_VENDORS_PATH,
+  DEFAULT_RELEASED_PRODUCTS_PATH,
   buildPurchaseOrderUrl,
   escapeODataLiteral,
   getAccessToken,
