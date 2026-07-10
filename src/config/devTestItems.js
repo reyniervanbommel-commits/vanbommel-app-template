@@ -3,6 +3,16 @@
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 export const devTestItems = [
   {
+    id: 'feature-196-admin-baseline-v1-0-7',
+    title: 'Feature 196 - Admin-only refresh en baseline (v1.0.7)',
+    checks: [
+      'Refresh vanuit D365 is alleen uitvoerbaar voor admin; niet-admin ziet de knop disabled',
+      'Markeer als gezien is alleen uitvoerbaar voor admin; niet-admin kan niet afvinken',
+      'Na admin-afvinken zien alle gebruikers dezelfde reset van nieuw/gewijzigd tellingen',
+      'Na een tweede refresh zonder bronwijziging blijft gewijzigd stabiel en loopt niet kunstmatig op',
+    ],
+  },
+  {
     id: 'feature-196-d365-diff-ledger',
     title: 'Feature 196 - D365 diff + change ledger',
     checks: [
