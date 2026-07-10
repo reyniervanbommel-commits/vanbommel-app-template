@@ -348,10 +348,11 @@ async function getInheritedPoLookupScopes(table) {
     listColumns({ tableId: purchaseOrdersTable.id, scope: 'master', includeInactive: true }),
     listColumns({ tableId: purchaseOrdersTable.id, scope: 'detail', includeInactive: true }),
   ]);
+  const targetMasterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: true });
 
   const valuesByTargetField = new Map();
   for (const lookup of lookups) {
-    const targetField = String(lookup?.targetKeyField || '').trim();
+    const targetField = resolveLookupTargetSourceField(lookup, targetMasterColumns);
     if (!targetField) continue;
     const sourceScope = lookup.sourceScope === 'detail' ? 'detail' : 'master';
     const sourceColumns = sourceScope === 'detail' ? poDetailColumns : poMasterColumns;
@@ -376,9 +377,32 @@ async function getInheritedPoLookupScopes(table) {
   })).filter((entry) => entry.values.length > 0);
 }
 
+async function getPurchaseOrderSyncRules() {
+  return parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+}
+
+function resolveLookupTargetSourceField(lookup, targetColumns) {
+  const configuredTargetField = String(lookup?.targetKeyField || '').trim();
+  if (!configuredTargetField) return '';
+  const columns = Array.isArray(targetColumns) ? targetColumns : [];
+  const normalizedTargetField = configuredTargetField.toLowerCase();
+
+  const bySourceField = columns.find((column) => (
+    String(column?.sourceField || '').trim().toLowerCase() === normalizedTargetField
+  ));
+  if (bySourceField?.sourceField) return String(bySourceField.sourceField).trim();
+
+  const byKey = columns.find((column) => (
+    String(column?.key || '').trim().toLowerCase() === normalizedTargetField
+  ));
+  if (byKey?.sourceField) return String(byKey.sourceField).trim();
+
+  return configuredTargetField;
+}
+
 async function getTableSyncRules(table) {
   if (table.key === 'purchase-orders') {
-    const fromSettings = parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+    const fromSettings = await getPurchaseOrderSyncRules();
     if (fromSettings.length) return fromSettings;
   }
   if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
@@ -2925,6 +2949,13 @@ async function getDataModel(tableKey) {
   const syncRules = await getTableSyncRules(table);
   let compiledFilter = '';
   try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+  const isInheritedSyncFilterTable = INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
+  let inheritedSyncRules = [];
+  let inheritedCompiledFilter = '';
+  if (isInheritedSyncFilterTable) {
+    inheritedSyncRules = await getPurchaseOrderSyncRules();
+    try { inheritedCompiledFilter = compileSyncRules(inheritedSyncRules); } catch { inheritedCompiledFilter = ''; }
+  }
 
   // Cache-stats uit tb_cache + tb_sync_state.
   const statsRes = await pool.request().input('t', sql.BigInt, table.id).query(`
@@ -3006,13 +3037,12 @@ async function getDataModel(tableKey) {
     };
   }));
 
-  const isInheritedSyncFilterTable = INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
   const syncFilterPayload = isInheritedSyncFilterTable
     ? {
         rules: [],
         compiled: '',
-        inheritedRules: syncRules,
-        inheritedCompiled: compiledFilter,
+        inheritedRules: inheritedSyncRules,
+        inheritedCompiled: inheritedCompiledFilter,
         readOnly: true,
         inheritedFromTable: 'purchase-orders',
         message: 'This table automatically inherits the active Purchase Orders sync filter.',
@@ -3144,6 +3174,7 @@ module.exports = {
   listHiddenInFilterRows,
   buildLookupFieldMap,
   resolveLookupSourceKey,
+  resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
   buildLookupDedupeSignature,
   buildLookupTargetAliases,

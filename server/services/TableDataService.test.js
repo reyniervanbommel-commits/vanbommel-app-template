@@ -17,6 +17,7 @@ const {
   assertCustomColumnWritable,
   buildLookupFieldMap,
   resolveLookupSourceKey,
+  resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
   buildLookupDedupeSignature,
   buildLookupTargetAliases,
@@ -379,6 +380,27 @@ describe('TableDataService.resolveLookupSourceKey', () => {
       ]
     );
     expect(sourceKey).toBe('itemNumber');
+  });
+});
+
+describe('TableDataService.resolveLookupTargetSourceField', () => {
+  it('mapt target_key_field op kolom key naar sourceField voor D365 filter', () => {
+    const targetField = resolveLookupTargetSourceField(
+      { targetKeyField: 'vendorAccountNumber' },
+      [
+        { key: 'vendorAccountNumber', sourceField: 'VendorAccountNumber' },
+        { key: 'vendorGroupId', sourceField: 'VendorGroupId' },
+      ]
+    );
+    expect(targetField).toBe('VendorAccountNumber');
+  });
+
+  it('behoudt het veld wanneer geen kolom-mapping bestaat', () => {
+    const targetField = resolveLookupTargetSourceField(
+      { targetKeyField: 'ItemNumber' },
+      [{ key: 'searchName', sourceField: 'SearchName' }]
+    );
+    expect(targetField).toBe('ItemNumber');
   });
 });
 
