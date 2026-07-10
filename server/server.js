@@ -61,6 +61,12 @@ app.use(cors({
   credentials: true,
 }));
 
+function shouldSkipGlobalRateLimit(req) {
+  const requestPath = String(req.path || '').trim();
+  if (requestPath === '/api/purchase-orders/refresh/progress') return true;
+  return /^\/api\/data\/[^/]+\/refresh\/progress$/.test(requestPath);
+}
+
 app.use(rateLimit({
   windowMs: 60 * 1000,
   max: 100,
@@ -68,10 +74,7 @@ app.use(rateLimit({
   legacyHeaders: false,
   // Refresh-voortgang wordt tijdens een actieve D365-sync periodiek gepolld; die requests mogen
   // niet door de globale limiter worden afgekapt, anders lijkt de refresh "vastgelopen".
-  skip: (req) => (
-    req.path === '/api/purchase-orders/refresh/progress'
-    || /^\/api\/data\/[^/]+\/refresh\/progress$/.test(req.path)
-  ),
+  skip: shouldSkipGlobalRateLimit,
 }));
 
 app.use(express.json());

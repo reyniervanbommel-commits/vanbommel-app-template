@@ -22,6 +22,17 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
   },
+  changedCell: {
+    backgroundColor: '#fff4ce',
+    borderRadius: '4px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: '24px',
+    width: '100%',
+    boxSizing: 'border-box',
+    paddingLeft: '6px',
+    paddingRight: '6px',
+  },
   image: {
     width: '100%',
     height: '100%',
@@ -51,6 +62,8 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
   const formulaError = isFormulaColumn ? String(order?.formulaErrors?.[key] || '') : '';
   const linkedLineTotalColumnKey = linkedLineTotalMap?.[key] || '';
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
+  const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
+  const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
 
   if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
@@ -108,37 +121,41 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
 
   if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (
-      <EditableCell
-        dataType={column.dataType}
-        value={rawValue}
-        options={column.options}
-        ariaLabel={`${column.label} voor order ${order.orderNumber}`}
-        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
-        cellKeys={{
-          columnId: column.id,
-          dataAreaId: order.dataAreaId,
-          orderNumber: order.orderNumber,
-          lineNumber: null,
-        }}
-        onSave={handleSave}
-      />
+      <span className={isChangedCell ? styles.changedCell : undefined}>
+        <EditableCell
+          dataType={column.dataType}
+          value={rawValue}
+          options={column.options}
+          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onSave={handleSave}
+        />
+      </span>
     );
   }
 
   if (column.source === 'd365' && column.writableToD365 && onCorrect) {
     return (
-      <PurchaseOrderWriteBackCell
-        column={column}
-        value={rawValue}
-        hasHistory={Boolean(order.historyByColumnId?.[column.id])}
-        cellKeys={{
-          columnId: column.id,
-          dataAreaId: order.dataAreaId,
-          orderNumber: order.orderNumber,
-          lineNumber: null,
-        }}
-        onCorrect={handleCorrect}
-      />
+      <span className={isChangedCell ? styles.changedCell : undefined}>
+        <PurchaseOrderWriteBackCell
+          column={column}
+          value={rawValue}
+          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+          onCorrect={handleCorrect}
+        />
+      </span>
     );
   }
 
@@ -147,13 +164,16 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
     : linkedLineValueMeta
       ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
       : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
-  const displayNode = isFormulaColumn
+  const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
         {formulaError ? 'Formulefout' : display}
       </span>
     )
     : display;
+  const displayNode = isChangedCell
+    ? <span className={styles.changedCell}>{rawDisplayNode}</span>
+    : rawDisplayNode;
 
   if (isFirst && order.removedInD365) {
     return (

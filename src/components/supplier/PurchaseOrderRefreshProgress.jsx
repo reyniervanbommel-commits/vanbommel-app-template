@@ -37,7 +37,7 @@ function buildRefreshCounters(progress) {
   };
 }
 
-function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh }) {
+function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh, canRefresh = true }) {
   const styles = useStyles();
   const counters = useMemo(() => buildRefreshCounters(progress), [progress]);
 
@@ -47,7 +47,8 @@ function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh }) {
         appearance="primary"
         icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
         onClick={onRefresh}
-        disabled={refreshing}
+        disabled={refreshing || !canRefresh}
+        title={canRefresh ? 'Ververs data uit D365' : 'Alleen admin kan verversen'}
       >
         {refreshing
           ? `D365F&O ${counters.fetchCounter} | Save ${counters.saveCounter}`

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, makeStyles, tokens } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, CheckmarkRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
+import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
+import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -72,6 +74,8 @@ export default function PurchaseOrdersPageTopBar({
   error,
 }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const {
     savedViews,
@@ -94,8 +98,11 @@ export default function PurchaseOrdersPageTopBar({
   const {
     newCount,
     changedCount,
+    removedCount,
     markViewed,
     markingViewed,
+    activityFilter,
+    toggleActivityFilter,
   } = activityState;
   const {
     selectedCount,
@@ -145,6 +152,7 @@ export default function PurchaseOrdersPageTopBar({
               progress={refreshProgress}
               refreshing={refreshing}
               onRefresh={onRefresh}
+              canRefresh={isAdmin}
             />
           </div>
         </div>
@@ -179,21 +187,16 @@ export default function PurchaseOrdersPageTopBar({
       </div>
 
       <div className={styles.toolbar}>
-        {(newCount > 0 || changedCount > 0) ? (
-          <div className={styles.freshness}>
-            {newCount > 0 ? <Badge color="success" appearance="filled">{newCount} nieuw</Badge> : null}
-            {changedCount > 0 ? <Badge color="warning" appearance="filled">{changedCount} gewijzigd</Badge> : null}
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<CheckmarkRegular />}
-              onClick={markViewed}
-              disabled={markingViewed}
-            >
-              {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
-            </Button>
-          </div>
-        ) : null}
+        <PurchaseOrderChangeActivityBar
+          newCount={newCount}
+          changedCount={changedCount}
+          removedCount={removedCount}
+          markViewed={markViewed}
+          markingViewed={markingViewed}
+          canMarkViewed={isAdmin}
+          activityFilter={activityFilter}
+          toggleActivityFilter={toggleActivityFilter}
+        />
 
         <PurchaseOrderBulkActionsBar
           selectedCount={selectedCount}
@@ -211,7 +214,8 @@ export default function PurchaseOrdersPageTopBar({
               size="small"
               icon={<ArrowClockwiseRegular />}
               onClick={onRefresh}
-              disabled={refreshing}
+              disabled={refreshing || !isAdmin}
+              title={isAdmin ? 'Refresh data' : 'Alleen admin kan verversen'}
             >
               {refreshing ? 'Refreshing...' : 'Refresh data'}
             </Button>
@@ -225,6 +229,7 @@ export default function PurchaseOrdersPageTopBar({
             onOpenChange={closeErrorDialog}
             onRefresh={onRefresh}
             refreshing={refreshing}
+            canRefresh={isAdmin}
           />
         </>
       ) : null}

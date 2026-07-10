@@ -13,45 +13,55 @@ const MAX_WAIT_MS = 15 * 60 * 1000;
 export function usePurchaseOrderRefreshProgress() {
   const [progress, setProgress] = useState(null);
   const [running, setRunning] = useState(false);
-  const latestStateRef = useRef({ running: false, progress: null });
+  const lastKnownStateRef = useRef({ progress: null, running: false });
 
-  const applyProgressState = useCallback((nextState) => {
-    setProgress(nextState.progress);
-    setRunning(nextState.running);
-    latestStateRef.current = nextState;
-    return nextState;
+  const setKnownState = useCallback((nextProgress, nextRunning) => {
+    setProgress(nextProgress);
+    setRunning(nextRunning);
+    lastKnownStateRef.current = {
+      progress: nextProgress,
+      running: nextRunning,
+    };
+  }, []);
+
+  const isProgressRateLimited = useCallback((err) => {
+    const status = Number(err?.status);
+    if (status === 429) return true;
+    return /\b429\b/.test(String(err?.message || ''));
   }, []);
 
   const loadProgress = useCallback(async () => {
     try {
       const data = await apiRequest('/data/purchase-orders/refresh/progress');
-      const nextState = {
-        running: Boolean(data?.running),
-        progress: data?.progress || null,
+      const nextProgress = data?.progress || null;
+      const nextRunning = Boolean(data?.running);
+      setKnownState(nextProgress, nextRunning);
+      return {
+        running: nextRunning,
+        progress: nextProgress,
+        rateLimited: false,
       };
-      return applyProgressState(nextState);
     } catch (err) {
-      if (err?.status === 429) {
-        // Bij tijdelijke throttling houden we de laatste bekende status aan
-        // en laten we de polling-loop doorlopen.
-        return latestStateRef.current;
+      if (isProgressRateLimited(err)) {
+        return {
+          running: lastKnownStateRef.current.running,
+          progress: lastKnownStateRef.current.progress,
+          rateLimited: true,
+        };
       }
       throw err;
     }
-  }, [applyProgressState]);
+  }, [isProgressRateLimited, setKnownState]);
 
   const startProgress = useCallback(() => {
-    applyProgressState({
-      running: true,
-      progress: {
-        status: 'fetching',
-        fetched: 0,
-        totalToFetch: null,
-        saved: 0,
-        totalToSave: null,
-      },
-    });
-  }, [applyProgressState]);
+    setKnownState({
+      status: 'fetching',
+      fetched: 0,
+      totalToFetch: null,
+      saved: 0,
+      totalToSave: null,
+    }, true);
+  }, [setKnownState]);
 
   const finishProgress = useCallback(async () => {
     try {
@@ -59,13 +69,10 @@ export function usePurchaseOrderRefreshProgress() {
     } catch {
       // Laat de laatst bekende voortgang staan als de eindpoll faalt.
     } finally {
-      setRunning(false);
-      latestStateRef.current = {
-        ...latestStateRef.current,
-        running: false,
-      };
+      const last = lastKnownStateRef.current;
+      setKnownState(last.progress, false);
     }
-  }, [loadProgress]);
+  }, [loadProgress, setKnownState]);
 
   const waitForCompletion = useCallback(async () => {
     const startedAt = Date.now();
@@ -73,15 +80,17 @@ export function usePurchaseOrderRefreshProgress() {
       const state = await loadProgress();
       const status = String(state?.progress?.status || '').toLowerCase();
       if ((status === 'done' || status === 'error') && !state?.running) {
+        setKnownState(state?.progress || null, false);
         return state?.progress || null;
       }
       if (!state?.running && status !== 'fetching' && status !== 'saving') {
+        setKnownState(state?.progress || null, false);
         return state?.progress || null;
       }
       await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
     }
     throw new Error('D365 refresh duurde te lang en is afgebroken');
-  }, [loadProgress]);
+  }, [loadProgress, setKnownState]);
 
   return useMemo(() => ({
     progress,
