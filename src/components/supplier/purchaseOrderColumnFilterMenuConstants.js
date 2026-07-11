@@ -37,8 +37,10 @@ export function isColumnFilterActive(column, filter) {
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
+    if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
   }
+  if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);
 }
 

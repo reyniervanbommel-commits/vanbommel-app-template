@@ -130,6 +130,7 @@ export default function PurchaseOrdersSubitemsTable({
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
+    applyFilterFromCellValue,
     setSortDirection,
   } = usePurchaseOrderTableView({ items: lines, columns: lineColumns });
   const groupingColumnKey = '';
@@ -224,6 +225,11 @@ export default function PurchaseOrdersSubitemsTable({
         onCorrect={onCorrect}
         subCellClassName={styles.subCell}
         noRowsCellClassName={styles.noRowsCell}
+        cellFilterActions={{
+          filterByColumn,
+          applyFilterFromCellValue,
+          clearColumnFilter,
+        }}
       />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow

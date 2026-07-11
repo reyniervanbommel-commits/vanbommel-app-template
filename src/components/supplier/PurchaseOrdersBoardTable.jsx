@@ -132,6 +132,7 @@ function PurchaseOrdersBoardTable({
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
+    applyFilterFromCellValue,
     setSortDirection,
     groupedRows,
     groupingColumnKey,
@@ -152,6 +153,15 @@ function PurchaseOrdersBoardTable({
     handleToggleGroupHeaders,
     tableActions,
   } = usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey });
+
+  const cellFilterActions = useMemo(
+    () => ({
+      filterByColumn,
+      applyFilterFromCellValue,
+      clearColumnFilter,
+    }),
+    [filterByColumn, applyFilterFromCellValue, clearColumnFilter]
+  );
 
   const cellActions = useMemo(
     () => ({
@@ -288,6 +298,7 @@ function PurchaseOrdersBoardTable({
           linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
           linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
           selection={selection}
+          cellFilterActions={cellFilterActions}
         />
       </table>
     </div>
