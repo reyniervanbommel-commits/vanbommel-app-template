@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
+import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
@@ -124,8 +125,9 @@ function PurchaseOrdersBoardRows({
   lineColumnWidths,
   headerColumnTextStyles,
   headerColumnFormatRules,
-  lineColumnTextStyles,
-  onSaveLineColumnWidth,
+    lineColumnTextStyles,
+    lineColumnFormatRules,
+    onSaveLineColumnWidth,
   colCount,
   groupingColumnLabel,
   groupingColor,
@@ -135,6 +137,7 @@ function PurchaseOrdersBoardRows({
   linkedLineTotalByHeaderKey,
   linkedLineValueByHeaderKey,
   selection,
+  cellFilterActions,
 }) {
   const styles = useStyles();
   const effectiveHeaderColumnFormatRules = useMemo(
@@ -241,11 +244,19 @@ function PurchaseOrdersBoardRows({
                       const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
                         ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
                         : '';
+                      const rawValue = order?.values?.[column.key];
                       return (
-                        <td
+                        <PurchaseOrderDataCell
                           key={`${rowId}-${column.key}`}
+                          column={column}
+                          rawValue={rawValue}
                           className={styles.itemCell}
                           style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
+                          filterByColumn={cellFilterActions?.filterByColumn}
+                          onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
+                          onClearColumnFilter={cellFilterActions?.clearColumnFilter}
+                          linkedLineTotalKeys={linkedLineTotalByHeaderKey}
+                          linkedLineValueKeys={linkedLineValueByHeaderKey}
                         >
                           <PurchaseOrderHeaderCellContent
                             order={order}
@@ -256,7 +267,7 @@ function PurchaseOrdersBoardRows({
                             linkedLineTotalMap={linkedLineTotalByHeaderKey}
                             linkedLineValueMap={linkedLineValueByHeaderKey}
                           />
-                        </td>
+                        </PurchaseOrderDataCell>
                       );
                     })}
                   </tr>
@@ -277,8 +288,10 @@ function PurchaseOrdersBoardRows({
                           onReorderColumn={cellActions.onReorderLineColumn}
                           columnWidths={lineColumnWidths}
                           columnTextStyles={lineColumnTextStyles}
+                          columnFormatRules={lineColumnFormatRules}
                           onSaveColumnWidth={onSaveLineColumnWidth}
                           onSaveColumnTextStyle={cellActions.onSaveLineColumnTextStyle}
+                          onSaveColumnFormatRules={cellActions.onSaveLineColumnFormatRules}
                           reorderBusy={cellActions.reorderingColumns}
                           summedLineColumnKeys={lineTotalColumns}
                           onSetLineColumnTotal={cellActions.onSetLineColumnTotal}

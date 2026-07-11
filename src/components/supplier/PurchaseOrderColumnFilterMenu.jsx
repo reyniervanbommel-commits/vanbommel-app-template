@@ -3,6 +3,8 @@ import { Button, Popover, PopoverSurface, PopoverTrigger } from '@fluentui/react
 import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
 import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilterMenuPanels';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
+import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesMenuDraft';
+import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
 import {
   HEX_COLOR_PATTERN,
   getDraftFromFilter,
@@ -36,6 +38,9 @@ function PurchaseOrderColumnFilterMenu({
   onPushLineValuesToHeader,
   columnTextStyle,
   onSetColumnTextStyle,
+  columnFormatRuleSet = null,
+  onSetColumnFormatRules,
+  referenceColumns = [],
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -59,7 +64,14 @@ function PurchaseOrderColumnFilterMenu({
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
+  const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
   const isImageColumn = column?.dataType === 'image';
+  const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
+  const formatReferenceColumns = useMemo(
+    () => (Array.isArray(referenceColumns) ? referenceColumns : [])
+      .filter((refColumn) => refColumn?.key && refColumn.key !== column.key),
+    [referenceColumns, column.key]
+  );
   useEffect(() => {
     if (open) {
       setDraft(getDraftFromFilter(column, filter));
@@ -200,6 +212,17 @@ function PurchaseOrderColumnFilterMenu({
     setOpen(false);
     setActiveSubmenu('none');
   }, [canSetColumnTextStyle, onSetColumnTextStyle, column.key]);
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setActiveSubmenu('none');
+  }, []);
+  const { handleApplyFormatRules, handleClearFormatRules } = useColumnFormatRulesMenuActions({
+    canSetColumnFormatRules,
+    columnKey: column.key,
+    formatRulesDraft,
+    onSetColumnFormatRules,
+    onClose: closeMenu,
+  });
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;
     onPushLineTotalToHeader(column);
@@ -231,13 +254,13 @@ function PurchaseOrderColumnFilterMenu({
       <PopoverSurface className={styles.surface}>
         <FilterMenuMainPane
           styles={styles}
-          column={column}
           columnLabel={column.label}
           showSortAndFilter={!isImageColumn}
           showGrouping={!isImageColumn}
           activeSubmenu={activeSubmenu}
           toggleSubmenu={toggleSubmenu}
           canSetColumnTextStyle={canSetColumnTextStyle}
+          canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
           canToggleWriteback={canToggleWriteback}
           handleToggleWriteback={handleToggleWriteback}
           writable={writable}
@@ -282,6 +305,15 @@ function PurchaseOrderColumnFilterMenu({
           columnLabel={column.label}
           handleApplyTextStyle={handleApplyTextStyle}
           handleClearTextStyle={handleClearTextStyle}
+          formatTarget={formatRulesDraft.formatTarget}
+          setFormatTarget={formatRulesDraft.setFormatTarget}
+          formatRules={formatRulesDraft.formatRules}
+          formatReferenceColumns={formatReferenceColumns}
+          addFormatRule={formatRulesDraft.addFormatRule}
+          updateFormatRule={formatRulesDraft.updateFormatRule}
+          removeFormatRule={formatRulesDraft.removeFormatRule}
+          handleApplyFormatRules={handleApplyFormatRules}
+          handleClearFormatRules={handleClearFormatRules}
           column={column}
           isGroupingColumn={isGroupingColumn}
           groupingColor={groupingColor}

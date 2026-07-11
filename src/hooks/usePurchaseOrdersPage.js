@@ -246,6 +246,7 @@ export function usePurchaseOrdersPage() {
   const [headerColumnTextStyles, setHeaderColumnTextStyles] = useState({});
   const [headerColumnFormatRules, setHeaderColumnFormatRules] = useState({});
   const [lineColumnTextStyles, setLineColumnTextStyles] = useState({});
+  const [lineColumnFormatRules, setLineColumnFormatRules] = useState({});
   const [lineTotalColumns, setLineTotalColumns] = useState([]);
   const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState([]);
   const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState([]);
@@ -312,6 +313,7 @@ export function usePurchaseOrdersPage() {
       setHeaderColumnTextStyles(normalizeColumnTextStyleMap(settings?.headerColumnTextStyles));
       setHeaderColumnFormatRules(normalizeColumnFormatRulesMap(settings?.headerColumnFormatRules));
       setLineColumnTextStyles(normalizeColumnTextStyleMap(settings?.lineColumnTextStyles));
+      setLineColumnFormatRules(normalizeColumnFormatRulesMap(settings?.lineColumnFormatRules));
       setLineTotalColumns(Array.isArray(settings?.lineTotalColumns) ? settings.lineTotalColumns : []);
       setLineTotalHeaderLinks(Array.isArray(settings?.lineTotalHeaderLinks) ? settings.lineTotalHeaderLinks : []);
       setLineValueHeaderLinks(Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : []);
@@ -325,6 +327,7 @@ export function usePurchaseOrdersPage() {
       setHeaderColumnTextStyles({});
       setHeaderColumnFormatRules({});
       setLineColumnTextStyles({});
+      setLineColumnFormatRules({});
       setLineTotalColumns([]);
       setLineTotalHeaderLinks([]);
       setLineValueHeaderLinks([]);
@@ -677,6 +680,10 @@ export function usePurchaseOrdersPage() {
     () => normalizeColumnTextStyleMap(lineColumnTextStyles, defaultLineKeys),
     [lineColumnTextStyles, defaultLineKeys]
   );
+  const effectiveLineColumnFormatRules = useMemo(
+    () => normalizeColumnFormatRulesMap(lineColumnFormatRules, defaultLineKeys),
+    [lineColumnFormatRules, defaultLineKeys]
+  );
 
   const persistBoardSettings = useCallback(async ({
     nextVisibleKeys = visibleColumnKeys,
@@ -687,6 +694,7 @@ export function usePurchaseOrdersPage() {
     nextHeaderTextStyles = headerColumnTextStyles,
     nextHeaderFormatRules = headerColumnFormatRules,
     nextLineTextStyles = lineColumnTextStyles,
+    nextLineFormatRules = lineColumnFormatRules,
     nextLineTotalColumns = lineTotalColumns,
     nextLineTotalHeaderLinks = lineTotalHeaderLinks,
     nextLineValueHeaderLinks = lineValueHeaderLinks,
@@ -699,6 +707,7 @@ export function usePurchaseOrdersPage() {
     const normalizedHeaderTextStyles = normalizeColumnTextStyleMap(nextHeaderTextStyles, defaultHeaderKeys);
     const normalizedHeaderFormatRules = normalizeColumnFormatRulesMap(nextHeaderFormatRules, defaultHeaderKeys);
     const normalizedLineTextStyles = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
+    const normalizedLineFormatRules = normalizeColumnFormatRulesMap(nextLineFormatRules, defaultLineKeys);
     const normalizedLineTotalColumns = normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys);
     const normalizedLineTotalHeaderLinks = normalizeLineTotalLinks(
       nextLineTotalHeaderLinks,
@@ -717,6 +726,7 @@ export function usePurchaseOrdersPage() {
     setHeaderColumnTextStyles(normalizedHeaderTextStyles);
     setHeaderColumnFormatRules(normalizedHeaderFormatRules);
     setLineColumnTextStyles(normalizedLineTextStyles);
+    setLineColumnFormatRules(normalizedLineFormatRules);
     setLineTotalColumns(normalizedLineTotalColumns);
     setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
     setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
@@ -734,6 +744,7 @@ export function usePurchaseOrdersPage() {
             headerColumnTextStyles: normalizedHeaderTextStyles,
             headerColumnFormatRules: normalizedHeaderFormatRules,
             lineColumnTextStyles: normalizedLineTextStyles,
+            lineColumnFormatRules: normalizedLineFormatRules,
             lineTotalColumns: normalizedLineTotalColumns,
             lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
             lineValueHeaderLinks: normalizedLineValueHeaderLinks,
@@ -752,6 +763,7 @@ export function usePurchaseOrdersPage() {
     headerColumnTextStyles,
     headerColumnFormatRules,
     lineColumnTextStyles,
+    lineColumnFormatRules,
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
@@ -773,6 +785,7 @@ export function usePurchaseOrdersPage() {
     headerColumnTextStyles: effectiveHeaderColumnTextStyles,
     headerColumnFormatRules: effectiveHeaderColumnFormatRules,
     lineColumnTextStyles: effectiveLineColumnTextStyles,
+    lineColumnFormatRules: effectiveLineColumnFormatRules,
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
@@ -787,6 +800,7 @@ export function usePurchaseOrdersPage() {
     effectiveHeaderColumnTextStyles,
     effectiveHeaderColumnFormatRules,
     effectiveLineColumnTextStyles,
+    effectiveLineColumnFormatRules,
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
@@ -819,6 +833,9 @@ export function usePurchaseOrdersPage() {
     }
     if (layout.lineColumnTextStyles && typeof layout.lineColumnTextStyles === 'object') {
       setLineColumnTextStyles(normalizeColumnTextStyleMap(layout.lineColumnTextStyles, defaultLineKeys));
+    }
+    if (layout.lineColumnFormatRules && typeof layout.lineColumnFormatRules === 'object') {
+      setLineColumnFormatRules(normalizeColumnFormatRulesMap(layout.lineColumnFormatRules, defaultLineKeys));
     }
     if (Array.isArray(layout.lineTotalColumns)) {
       setLineTotalColumns(normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys));
@@ -887,12 +904,34 @@ export function usePurchaseOrdersPage() {
         ([entryKey, entryRuleSet]) => entryKey !== key && entryRuleSet?.target === 'row'
       );
       if (existingRowTarget) {
-        throw new Error('Er mag maximaal één kolom rij-opmaak gebruiken.');
+        throw new Error('Only one column can use row-level conditional formatting.');
       }
     }
     nextHeaderFormatRules[key] = normalizedRuleSet;
     await persistBoardSettings({ nextHeaderFormatRules });
   }, [defaultHeaderKeys, effectiveHeaderColumnFormatRules, persistBoardSettings]);
+
+  const saveLineColumnFormatRules = useCallback(async (columnKey, ruleSet) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    const nextLineFormatRules = { ...effectiveLineColumnFormatRules };
+    const normalizedRuleSet = normalizeColumnFormatRulesMap({ [key]: ruleSet }, defaultLineKeys)[key] || null;
+    if (!normalizedRuleSet) {
+      delete nextLineFormatRules[key];
+      await persistBoardSettings({ nextLineFormatRules });
+      return;
+    }
+    if (normalizedRuleSet.target === 'row') {
+      const existingRowTarget = Object.entries(nextLineFormatRules).find(
+        ([entryKey, entryRuleSet]) => entryKey !== key && entryRuleSet?.target === 'row'
+      );
+      if (existingRowTarget) {
+        throw new Error('Only one line column can use row-level conditional formatting.');
+      }
+    }
+    nextLineFormatRules[key] = normalizedRuleSet;
+    await persistBoardSettings({ nextLineFormatRules });
+  }, [defaultLineKeys, effectiveLineColumnFormatRules, persistBoardSettings]);
 
   const saveLineColumnTextStyle = useCallback(async (columnKey, stylePatch) => {
     const key = String(columnKey || '').trim();
@@ -997,6 +1036,7 @@ export function usePurchaseOrdersPage() {
     headerColumnTextStyles: effectiveHeaderColumnTextStyles,
     headerColumnFormatRules: effectiveHeaderColumnFormatRules,
     lineColumnTextStyles: effectiveLineColumnTextStyles,
+    lineColumnFormatRules: effectiveLineColumnFormatRules,
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
@@ -1027,6 +1067,7 @@ export function usePurchaseOrdersPage() {
     saveHeaderColumnTextStyle,
     saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
+    saveLineColumnFormatRules,
     exportColumnLayout,
     applyColumnLayout,
   }), [
@@ -1051,6 +1092,7 @@ export function usePurchaseOrdersPage() {
     effectiveHeaderColumnTextStyles,
     effectiveHeaderColumnFormatRules,
     effectiveLineColumnTextStyles,
+    effectiveLineColumnFormatRules,
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
@@ -1081,6 +1123,7 @@ export function usePurchaseOrdersPage() {
     saveHeaderColumnTextStyle,
     saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
+    saveLineColumnFormatRules,
     exportColumnLayout,
     applyColumnLayout,
   ]);

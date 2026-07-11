@@ -20,6 +20,7 @@ function normalizeColumnKey(value) {
 function normalizeRuleValue(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'boolean') return value;
+  if (value === '') return '';
   const text = String(value ?? '').trim();
   if (!text) return null;
   if (/^[-+]?\d+(\.\d+)?$/.test(text)) return Number(text);
@@ -120,7 +121,7 @@ function compareValues(left, right, op) {
 }
 
 export function evalFormatRules(resultValue, ruleSet, rowValues = {}) {
-  if (resultValue === null || resultValue === undefined || resultValue === '') return null;
+  if (resultValue === null || resultValue === undefined) return null;
   const normalizedRuleSet = normalizeColumnFormatRuleSet(ruleSet);
   if (!normalizedRuleSet || !normalizedRuleSet.rules.length) return null;
   for (const rule of normalizedRuleSet.rules) {

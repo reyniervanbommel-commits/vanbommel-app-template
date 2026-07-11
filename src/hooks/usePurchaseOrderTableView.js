@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
+import { buildFilterFromCellValue } from '../utils/tableViewFilterUtils';
 
 export const TEXT_FILTER_OPERATORS = {
+  equals: 'equals',
   contains: 'contains',
   notContains: 'does not contain',
   startsWith: 'starts with',
@@ -9,6 +11,7 @@ export const TEXT_FILTER_OPERATORS = {
 };
 
 export const DATE_FILTER_OPERATORS = {
+  equals: 'equals',
   before: 'before',
   after: 'after',
   between: 'between',
@@ -80,8 +83,10 @@ function hasActiveFilter(column, filter) {
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
+    if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
   }
+  if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);
 }
 
@@ -124,6 +129,15 @@ function dateMatchesFilter(rawValue, filter) {
     const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000);
     return rowTime >= weekStart && rowTime < weekEnd;
   }
+  if (filter.operator === 'equals') {
+    const target = parseDateValue(filter.value);
+    if (target === null) return rowTime === null;
+    const rowDate = new Date(rowTime);
+    const targetDate = new Date(target);
+    return rowDate.getFullYear() === targetDate.getFullYear()
+      && rowDate.getMonth() === targetDate.getMonth()
+      && rowDate.getDate() === targetDate.getDate();
+  }
   return true;
 }
 
@@ -131,7 +145,8 @@ function textMatchesFilter(rawValue, filter) {
   const normalized = normalizeText(rawValue);
   const query = normalizeText(filter.value);
 
-  if (!query && filter.operator !== 'oneOf') return true;
+  if (!query && filter.operator !== 'oneOf' && filter.operator !== 'equals') return true;
+  if (filter.operator === 'equals') return normalized === query;
   if (filter.operator === 'contains') return normalized.includes(query);
   if (filter.operator === 'notContains') return !normalized.includes(query);
   if (filter.operator === 'startsWith') return normalized.startsWith(query);
@@ -230,6 +245,16 @@ export function usePurchaseOrderTableView({ items, columns }) {
       return next;
     });
   }, []);
+
+  const applyFilterFromCellValue = useCallback((columnKey, rawValue) => {
+    const column = columnByKey.get(columnKey);
+    if (!column) return;
+    const filter = buildFilterFromCellValue(column, rawValue);
+    setFilterByColumn((prev) => ({
+      ...prev,
+      [columnKey]: filter,
+    }));
+  }, [columnByKey]);
 
   const clearAllFilters = useCallback(() => {
     setFilterByColumn({});
@@ -346,6 +371,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
+    applyFilterFromCellValue,
     clearAllFilters,
     toggleSort,
     clearSort,
@@ -361,6 +387,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
+    applyFilterFromCellValue,
     clearAllFilters,
     toggleSort,
     clearSort,

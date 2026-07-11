@@ -109,8 +109,10 @@ export default function PurchaseOrdersSubitemsTable({
   onReorderColumn,
   columnWidths = {},
   columnTextStyles = {},
+  columnFormatRules = {},
   onSaveColumnWidth,
   onSaveColumnTextStyle,
+  onSaveColumnFormatRules,
   reorderBusy = false,
   summedLineColumnKeys = [],
   onSetLineColumnTotal,
@@ -128,6 +130,7 @@ export default function PurchaseOrdersSubitemsTable({
     setFilterValue,
     setFilterSecondaryValue,
     clearColumnFilter,
+    applyFilterFromCellValue,
     setSortDirection,
   } = usePurchaseOrderTableView({ items: lines, columns: lineColumns });
   const groupingColumnKey = '';
@@ -200,6 +203,9 @@ export default function PurchaseOrdersSubitemsTable({
                   onPushLineValuesToHeader={onPushLineValuesToHeader}
                   columnTextStyle={columnTextStyles[column.key]}
                   onSetColumnTextStyle={onSaveColumnTextStyle}
+                  columnFormatRuleSet={columnFormatRules[column.key]}
+                  onSetColumnFormatRules={onSaveColumnFormatRules}
+                  referenceColumns={lineColumns}
                 />
               </div>
             </ResizableTableHeaderCell>
@@ -214,10 +220,16 @@ export default function PurchaseOrdersSubitemsTable({
         visibleLines={visibleLines}
         columnWidths={columnWidths}
         columnTextStyles={columnTextStyles}
+        columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
         subCellClassName={styles.subCell}
         noRowsCellClassName={styles.noRowsCell}
+        cellFilterActions={{
+          filterByColumn,
+          applyFilterFromCellValue,
+          clearColumnFilter,
+        }}
       />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow

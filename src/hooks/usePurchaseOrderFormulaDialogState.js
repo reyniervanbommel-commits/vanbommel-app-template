@@ -53,7 +53,7 @@ export function usePurchaseOrderFormulaDialogState({
         ([columnKey, ruleSet]) => ruleSet?.target === 'row' && columnKey !== editingKey
       );
       if (existingRowTarget) {
-        throw new Error('Er mag maximaal één kolom rij-opmaak gebruiken.');
+        throw new Error('Only one column can use row-level conditional formatting.');
       }
     }
 
