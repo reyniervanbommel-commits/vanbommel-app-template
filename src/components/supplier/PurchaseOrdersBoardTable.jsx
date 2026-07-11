@@ -82,10 +82,13 @@ function PurchaseOrdersBoardTable({
   headerColumnTextStyles = {},
   headerColumnFormatRules = {},
   lineColumnTextStyles = {},
+  lineColumnFormatRules = {},
   onSaveHeaderColumnWidth,
   onSaveLineColumnWidth,
   onSaveHeaderColumnTextStyle,
+  onSaveHeaderColumnFormatRules,
   onSaveLineColumnTextStyle,
+  onSaveLineColumnFormatRules,
   onAddColumnRightOf,
   onSetLineColumnTotal,
   onPushLineTotalToHeader,
@@ -160,6 +163,7 @@ function PurchaseOrdersBoardTable({
       onToggleWriteback,
       onReorderLineColumn,
       onSaveLineColumnTextStyle,
+      onSaveLineColumnFormatRules,
       reorderingColumns,
       lineTotalColumns,
       onSetLineColumnTotal,
@@ -175,6 +179,7 @@ function PurchaseOrdersBoardTable({
       onToggleWriteback,
       onReorderLineColumn,
       onSaveLineColumnTextStyle,
+      onSaveLineColumnFormatRules,
       reorderingColumns,
       lineTotalColumns,
       onSetLineColumnTotal,
@@ -254,6 +259,9 @@ function PurchaseOrdersBoardTable({
             onAddColumnRightOf={onAddColumnRightOf}
             headerColumnTextStyles={headerColumnTextStyles}
             onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}
+            headerColumnFormatRules={headerColumnFormatRules}
+            onSaveHeaderColumnFormatRules={onSaveHeaderColumnFormatRules}
+            referenceColumns={columns}
           />
         </thead>
         <PurchaseOrdersBoardRows
@@ -269,6 +277,7 @@ function PurchaseOrdersBoardTable({
           headerColumnTextStyles={headerColumnTextStyles}
           headerColumnFormatRules={headerColumnFormatRules}
           lineColumnTextStyles={lineColumnTextStyles}
+          lineColumnFormatRules={lineColumnFormatRules}
           onSaveLineColumnWidth={onSaveLineColumnWidth}
           colCount={colCount}
           groupingColumnLabel={groupingColumnLabel}

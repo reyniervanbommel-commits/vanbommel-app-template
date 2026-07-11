@@ -64,4 +64,12 @@ describe('columnFormatRuleUtils.evalFormatRules', () => {
       rules: [{ op: '>', value: 10, color: '#E6F4FF' }],
     })).toBeNull();
   });
+
+  it('ondersteunt lege string vergelijking', () => {
+    const color = evalFormatRules('', {
+      target: 'cell',
+      rules: [{ op: '=', value: '', color: '#FFF4CE' }],
+    });
+    expect(color).toBe('#fff4ce');
+  });
 });

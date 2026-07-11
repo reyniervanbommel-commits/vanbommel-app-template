@@ -124,8 +124,9 @@ function PurchaseOrdersBoardRows({
   lineColumnWidths,
   headerColumnTextStyles,
   headerColumnFormatRules,
-  lineColumnTextStyles,
-  onSaveLineColumnWidth,
+    lineColumnTextStyles,
+    lineColumnFormatRules,
+    onSaveLineColumnWidth,
   colCount,
   groupingColumnLabel,
   groupingColor,
@@ -277,8 +278,10 @@ function PurchaseOrdersBoardRows({
                           onReorderColumn={cellActions.onReorderLineColumn}
                           columnWidths={lineColumnWidths}
                           columnTextStyles={lineColumnTextStyles}
+                          columnFormatRules={lineColumnFormatRules}
                           onSaveColumnWidth={onSaveLineColumnWidth}
                           onSaveColumnTextStyle={cellActions.onSaveLineColumnTextStyle}
+                          onSaveColumnFormatRules={cellActions.onSaveLineColumnFormatRules}
                           reorderBusy={cellActions.reorderingColumns}
                           summedLineColumnKeys={lineTotalColumns}
                           onSetLineColumnTotal={cellActions.onSetLineColumnTotal}

@@ -17,7 +17,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import PurchaseOrderFormulaFormatRulesSection from './PurchaseOrderFormulaFormatRulesSection';
+import PurchaseOrderColumnFormatRulesSection from './PurchaseOrderColumnFormatRulesSection';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -261,7 +261,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </div>
               </div>
 
-              <PurchaseOrderFormulaFormatRulesSection
+              <PurchaseOrderColumnFormatRulesSection
                 formatTarget={formatTarget}
                 setFormatTarget={setFormatTarget}
                 formatRules={formatRules}

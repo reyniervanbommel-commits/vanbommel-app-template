@@ -40,6 +40,9 @@ export default function PurchaseOrdersBoardHeaderRow({
   onAddColumnRightOf,
   headerColumnTextStyles,
   onSaveHeaderColumnTextStyle,
+  headerColumnFormatRules = {},
+  onSaveHeaderColumnFormatRules,
+  referenceColumns = [],
 }) {
   return (
     <tr>
@@ -102,6 +105,9 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onRemoveColumn={onRemoveColumn}
                 columnTextStyle={headerColumnTextStyles[column.key]}
                 onSetColumnTextStyle={onSaveHeaderColumnTextStyle}
+                columnFormatRuleSet={headerColumnFormatRules[column.key]}
+                onSetColumnFormatRules={onSaveHeaderColumnFormatRules}
+                referenceColumns={referenceColumns}
               />
             </div>
           </ResizableTableHeaderCell>

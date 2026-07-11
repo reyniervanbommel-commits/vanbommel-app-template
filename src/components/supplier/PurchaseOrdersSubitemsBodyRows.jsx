@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
+import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
@@ -17,6 +18,17 @@ const useStyles = makeStyles({
   },
 });
 
+function resolveLineRowFormatColor(line, lineColumns, columnFormatRules) {
+  if (line?.isRemoved) return '';
+  for (const column of Array.isArray(lineColumns) ? lineColumns : []) {
+    const ruleSet = columnFormatRules[column.key];
+    if (!ruleSet || ruleSet.target !== 'row') continue;
+    const color = evalFormatRules(line?.values?.[column.key], ruleSet, line?.values || {});
+    if (color) return color;
+  }
+  return '';
+}
+
 export default function PurchaseOrdersSubitemsBodyRows({
   rowId,
   order,
@@ -24,25 +36,40 @@ export default function PurchaseOrdersSubitemsBodyRows({
   visibleLines,
   columnWidths,
   columnTextStyles,
+  columnFormatRules = {},
   onSaveValue,
   onCorrect,
   subCellClassName,
   noRowsCellClassName,
 }) {
   const styles = useStyles();
+  const effectiveColumnFormatRules = useMemo(
+    () => normalizeColumnFormatRulesMap(columnFormatRules),
+    [columnFormatRules]
+  );
   return (
     <tbody>
-      {visibleLines.map((line, index) => (
-        <tr key={`${rowId}-line-${line.lineNumber ?? index}`}>
+      {visibleLines.map((line, index) => {
+        const rowFormatColor = resolveLineRowFormatColor(line, lineColumns, effectiveColumnFormatRules);
+        return (
+        <tr
+          key={`${rowId}-line-${line.lineNumber ?? index}`}
+          style={!line?.isRemoved && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
+        >
           {lineColumns.map((column) => {
             const rawValue = line.values?.[column.key];
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);
+            const ruleSet = effectiveColumnFormatRules?.[column.key];
+            const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
+              ? evalFormatRules(rawValue, ruleSet, line?.values || {})
+              : '';
+            const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
             const cellStyle = getColumnCellStyle(
               columnWidths,
               columnTextStyles,
               column.key,
-              line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '')
+              cellFormatColor || fallbackBackground
             );
             const showLineBadge = column === lineColumns[0] && (line?.isNew || line?.isChanged || line?.isRemoved);
             const lineBadge = line?.isRemoved
@@ -137,7 +164,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
             );
           })}
         </tr>
-      ))}
+        );
+      })}
       {!visibleLines.length ? (
         <tr>
           <td className={noRowsCellClassName} colSpan={lineColumns.length}>

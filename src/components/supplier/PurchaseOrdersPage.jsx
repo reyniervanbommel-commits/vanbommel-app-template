@@ -87,6 +87,7 @@ export default function PurchaseOrdersPage() {
     headerColumnTextStyles,
     headerColumnFormatRules,
     lineColumnTextStyles,
+    lineColumnFormatRules,
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
@@ -95,6 +96,7 @@ export default function PurchaseOrdersPage() {
     saveHeaderColumnTextStyle,
     saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
+    saveLineColumnFormatRules,
     setLineColumnTotal,
     addLineTotalHeaderLink,
     addLineValueHeaderLink,
@@ -268,10 +270,13 @@ export default function PurchaseOrdersPage() {
             headerColumnTextStyles={headerColumnTextStyles}
             headerColumnFormatRules={headerColumnFormatRules}
             lineColumnTextStyles={lineColumnTextStyles}
+            lineColumnFormatRules={lineColumnFormatRules}
             onSaveHeaderColumnWidth={saveHeaderColumnWidth}
             onSaveLineColumnWidth={saveLineColumnWidth}
             onSaveHeaderColumnTextStyle={saveHeaderColumnTextStyle}
+            onSaveHeaderColumnFormatRules={saveHeaderColumnFormatRules}
             onSaveLineColumnTextStyle={saveLineColumnTextStyle}
+            onSaveLineColumnFormatRules={saveLineColumnFormatRules}
             onAddColumnRightOf={handleAddColumnRightOf}
             onSetLineColumnTotal={setLineColumnTotal}
             onPushLineTotalToHeader={handlePushLineTotalToHeader}
@@ -286,7 +291,17 @@ export default function PurchaseOrdersPage() {
           />
         </div>
       )}
-      <PurchaseOrderFormulaColumnDialog open={formulaDialogState.open} onOpenChange={(open) => !open && closeFormulaDialog()} onSubmit={submitFormulaColumn} sourceColumn={formulaDialogState.sourceColumn} availableColumns={formulaReferenceColumns} initialValue={formulaDialogState.editingColumn} />
+      <PurchaseOrderFormulaColumnDialog
+        open={formulaDialogState.open}
+        onOpenChange={(open) => !open && closeFormulaDialog()}
+        onSubmit={submitFormulaColumn}
+        sourceColumn={formulaDialogState.sourceColumn}
+        availableColumns={formulaReferenceColumns}
+        initialValue={formulaDialogState.editingColumn}
+        initialFormatRuleSet={formulaDialogState.editingColumn?.key
+          ? headerColumnFormatRules[formulaDialogState.editingColumn.key]
+          : null}
+      />
       <PurchaseOrderImageColumnDialog open={imageDialogState.open} onOpenChange={(open) => !open && closeImageDialog()} onSubmit={submitImageColumn} sourceColumn={imageDialogState.sourceColumn} availableColumns={visibleHeaderColumns} initialValue={imageDialogState.editingColumn} sampleRowValues={boardView.processedItems?.[0]?.values || {}} />
       <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
     </div>
