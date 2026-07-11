@@ -72,6 +72,7 @@ export default function AdminDataModel() {
               tableKey={selectedTab}
               filterCatalog={selectedModel.filterCatalog}
               syncFilter={selectedModel.syncFilter}
+              cache={selectedModel.cache}
               onSyncNow={selectedModel.syncNow}
             />
             <DataPreviewTables

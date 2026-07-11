@@ -64,5 +64,15 @@ export const devTestItems = [
       'Vendors and Items datamodel pages support refresh, sample preview and Excel export without errors',
       'No regression in existing PO flow: table loads, column toggles work, and write-back controls stay available only where allowed',
     ],
+  {
+    id: 'feature-sync-retained-orders',
+    title: 'Sync-retained orders outside hard D365 filter',
+    checks: [
+      'After refresh, a PO that left the hard sync filter (e.g. Open → Delivered) stays visible on the board',
+      'Retained PO data updates on the next D365 refresh (status/fields from D365)',
+      'Hiding a row clears retention; the PO is no longer fetched in phase 2',
+      'Changing sync filters in Data model clears retained count',
+      'Admin Data model shows retained order count when > 0',
+    ],
   },
 ];

@@ -15,12 +15,14 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 const {
   fetchPurchaseOrders,
+  fetchPurchaseOrdersByKeys,
   fetchEntityRecords,
   escapeODataLiteral,
   writeBackField,
 } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
 
@@ -44,6 +46,11 @@ const EMPTY_REFRESH_PROGRESS = Object.freeze({
   sourceTotal: null,
   pagesFetched: 0,
   truncated: false,
+  retainedTotal: 0,
+  retainedFetched: 0,
+  retainedPhase: 'idle',
+  retentionCapReached: false,
+  retentionFetchTruncated: false,
   startedAt: null,
   finishedAt: null,
   error: null,
@@ -130,45 +137,8 @@ async function startRefresh(tableKey) {
 // Fetch-adapters: vertalen een bron naar generieke records {partitionKey, recordKey, master, details}.
 // TODO (Fase B / #139): vervang door SourceProvider.fetch(), geresolved uit tb_sources.provider_type.
 // ---------------------------------------------------------------------------
-async function purchaseOrdersFetch(table, { onProgress } = {}) {
-  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
-  let extraFilter = '';
-  try {
-    extraFilter = await getTableSyncFilter(table);
-  } catch (err) {
-    logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
-  }
-
-  // Kolom-projectie aan de bron ($select): haal alleen de geconfigureerde bron-velden op i.p.v. de volledige
-  // D365-entiteit. Kan uitgezet worden via D365_ODATA_SELECT_ENABLED=false (bv. om alle velden opnieuw te
-  // laten ontdekken). Actieve bron-kolommen bepalen de lijst; verplichte velden gaan altijd mee.
-  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
-    .trim().toLowerCase() !== 'false';
-  let selectFields = null;
-  let lineSelectFields = null;
-  if (selectEnabled) {
-    const [masterCols, detailCols] = await Promise.all([
-      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
-      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-    ]);
-    selectFields = buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols);
-    lineSelectFields = buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols);
-  }
-
-  const result = await fetchPurchaseOrders({
-    supplierAccount: null,
-    fetchAll: true,
-    extraFilter,
-    maxItems,
-    onProgress,
-    selectFields,
-    lineSelectFields,
-  });
-  const items = Array.isArray(result.items) ? result.items : [];
-
-  const records = items.map((order) => {
+function mapPurchaseOrderRecordsToCacheRecords(items, company) {
+  return (Array.isArray(items) ? items : []).map((order) => {
     const raw = order.raw || {};
     return {
       partitionKey: String(raw.dataAreaId || company || '').trim(),
@@ -199,8 +169,190 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
         },
       })),
     };
+  }).filter((rec) => rec.partitionKey && rec.recordKey);
+}
+
+async function clearSyncRetainedForTable(pool, tableId) {
+  await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      UPDATE dbo.tb_cache
+      SET sync_retained = 0, sync_retained_at = NULL
+      WHERE table_id = @tableId AND scope = 'master'
+    `);
+}
+
+async function countSyncRetainedMasters(pool, tableId) {
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT COUNT(*) AS retained_count
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'master' AND sync_retained = 1
+    `);
+  return Number(result.recordset?.[0]?.retained_count) || 0;
+}
+
+async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings) {
+  const candidates = (removedMasters.recordset || []).filter((row) => (
+    Number(row.previous_removed) === 0 && Number(row.removed_at_source) === 1
+  ));
+  if (!candidates.length) {
+    return { retainedAdded: 0, capReached: false, retainedKeys: new Set() };
+  }
+
+  const currentRetained = await countSyncRetainedMasters(pool, table.id);
+  const slotsLeft = Math.max(retentionSettings.maxAuto - currentRetained, 0);
+  if (!slotsLeft) {
+    return { retainedAdded: 0, capReached: true, retainedKeys: new Set() };
+  }
+
+  const exclusionRes = await pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .query(`
+      SELECT partition_key, record_key
+      FROM dbo.tb_row_exclusions WITH (NOLOCK)
+      WHERE table_id = @tableId
+    `);
+  const excluded = new Set(
+    (exclusionRes.recordset || []).map((row) => `${row.partition_key}|${row.record_key}`)
+  );
+
+  const toRetain = candidates
+    .filter((row) => !excluded.has(`${row.partition_key}|${row.record_key}`))
+    .slice(0, slotsLeft);
+  if (!toRetain.length) {
+    return { retainedAdded: 0, capReached: slotsLeft <= 0, retainedKeys: new Set() };
+  }
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const row of toRetain) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('partitionKey', sql.NVarChar(32), row.partition_key)
+        .input('recordKey', sql.NVarChar(128), row.record_key)
+        .query(`
+          UPDATE dbo.tb_cache
+          SET sync_retained = 1, sync_retained_at = SYSUTCDATETIME()
+          WHERE table_id = @tableId AND scope = 'master'
+            AND partition_key = @partitionKey AND record_key = @recordKey
+            AND detail_key = ${MASTER_DETAIL_KEY}
+            AND sync_retained = 0
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  return {
+    retainedAdded: toRetain.length,
+    capReached: toRetain.length < candidates.filter((row) => !excluded.has(`${row.partition_key}|${row.record_key}`)).length,
+    retainedKeys: new Set(toRetain.map((row) => `${row.partition_key}|${row.record_key}`)),
+  };
+}
+
+async function listRetainedOrderKeys(pool, tableId, fetchBudget) {
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('fetchBudget', sql.Int, fetchBudget)
+    .query(`
+      SELECT TOP (@fetchBudget) c.partition_key, c.record_key
+      FROM dbo.tb_cache c WITH (NOLOCK)
+      WHERE c.table_id = @tableId
+        AND c.scope = 'master'
+        AND c.sync_retained = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
+          WHERE ex.table_id = @tableId
+            AND ex.partition_key = c.partition_key
+            AND ex.record_key = c.record_key
+        )
+      ORDER BY c.sync_retained_at ASC, c.record_key ASC
+    `);
+  return (result.recordset || []).map((row) => ({
+    dataAreaId: row.partition_key,
+    orderNumber: row.record_key,
+  }));
+}
+
+async function refreshRetainedPurchaseOrders({
+  pool,
+  table,
+  refreshStart,
+  refreshJobId,
+  masterSource,
+  detailSource,
+  selectFields,
+  lineSelectFields,
+  retentionSettings,
+  tableKey,
+}) {
+  const retainedKeys = await listRetainedOrderKeys(pool, table.id, retentionSettings.fetchBudget);
+  const retainedTotal = await countSyncRetainedMasters(pool, table.id);
+  if (!retainedKeys.length) {
+    return {
+      retainedTotal,
+      retainedFetched: 0,
+      retentionFetchTruncated: retainedTotal > 0,
+    };
+  }
+
+  updateRefreshProgress(tableKey, {
+    retainedPhase: 'fetching',
+    retainedTotal,
+    retainedFetched: 0,
   });
-  return { records, total: result.total, truncated: Boolean(result.truncated) };
+
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
+  const retainedResult = await fetchPurchaseOrdersByKeys({
+    keys: retainedKeys,
+    selectFields,
+    lineSelectFields,
+    maxItems: retentionSettings.fetchBudget,
+    onProgress: (progress) => {
+      updateRefreshProgress(tableKey, {
+        retainedPhase: 'fetching',
+        retainedTotal,
+        retainedFetched: Number(progress?.fetched) || 0,
+      });
+    },
+  });
+  const retainedRecords = mapPurchaseOrderRecordsToCacheRecords(retainedResult.items, company);
+  updateRefreshProgress(tableKey, {
+    retainedPhase: 'saving',
+    retainedTotal,
+    retainedFetched: retainedRecords.length,
+  });
+
+  let saved = 0;
+  for (let offset = 0; offset < retainedRecords.length; offset += SAVE_CHUNK_SIZE) {
+    const chunk = retainedRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
+    const { saved: chunkSaved } = await persistRecordsChunk(
+      pool,
+      table,
+      chunk,
+      refreshStart,
+      masterSource,
+      detailSource,
+      refreshJobId
+    );
+    saved += chunkSaved;
+    updateRefreshProgress(tableKey, {
+      retainedPhase: 'saving',
+      retainedTotal,
+      retainedFetched: saved,
+    });
+  }
+
+  return {
+    retainedTotal,
+    retainedFetched: saved,
+    retentionFetchTruncated: Boolean(retainedResult.truncated) || retainedTotal > retainedKeys.length,
+  };
 }
 
 function parseDefaultFilterRules(defaultFilter) {
@@ -211,6 +363,47 @@ function parseDefaultFilterRules(defaultFilter) {
   } catch {
     return [];
   }
+}
+
+async function resolvePurchaseOrderSelectFields(table) {
+  const selectEnabled = String(await settingsService.getAsync('D365_ODATA_SELECT_ENABLED', 'true'))
+    .trim().toLowerCase() !== 'false';
+  if (!selectEnabled) {
+    return { selectFields: null, lineSelectFields: null };
+  }
+  const [masterCols, detailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+  ]);
+  return {
+    selectFields: buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols),
+    lineSelectFields: buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols),
+  };
+}
+
+async function purchaseOrdersFetch(table, { onProgress } = {}) {
+  const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
+  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
+  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
+  let extraFilter = '';
+  try {
+    extraFilter = await getTableSyncFilter(table);
+  } catch (err) {
+    logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
+  }
+  const { selectFields, lineSelectFields } = await resolvePurchaseOrderSelectFields(table);
+  const result = await fetchPurchaseOrders({
+    supplierAccount: null,
+    fetchAll: true,
+    extraFilter,
+    maxItems,
+    onProgress,
+    selectFields,
+    lineSelectFields,
+  });
+  const items = Array.isArray(result.items) ? result.items : [];
+  const records = mapPurchaseOrderRecordsToCacheRecords(items, company);
+  return { records, total: result.total, truncated: Boolean(result.truncated) };
 }
 
 // Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
@@ -1505,8 +1698,29 @@ async function refresh(tableKey, options = {}) {
       `);
 
     const removedEntries = [];
+    let retentionCapReached = false;
+    let retentionFetchTruncated = false;
+    let retainedTotal = 0;
+    let retainedFetched = 0;
+    let retainedKeys = new Set();
+
+    if (table.key === 'purchase-orders') {
+      const retentionSettings = await getSyncRetentionSettings();
+      const retentionResult = await applySyncRetainedTransitions(
+        pool,
+        table,
+        removedMasters,
+        retentionSettings
+      );
+      retentionCapReached = Boolean(retentionResult.capReached);
+      retainedKeys = retentionResult.retainedKeys || new Set();
+      retainedTotal = await countSyncRetainedMasters(pool, table.id);
+    }
+
     for (const row of removedMasters.recordset || []) {
       if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
+      const rowKey = `${row.partition_key}|${row.record_key}`;
+      if (retainedKeys.has(rowKey)) continue;
       removedEntries.push(...buildD365LedgerEntries({
         tableId: table.id,
         partitionKey: row.partition_key,
@@ -1549,6 +1763,26 @@ async function refresh(tableKey, options = {}) {
         WHERE table_id = @tableId AND scope = 'detail'
       `);
 
+    if (table.key === 'purchase-orders') {
+      const retentionSettings = await getSyncRetentionSettings();
+      const { selectFields, lineSelectFields } = await resolvePurchaseOrderSelectFields(table);
+      const phase2 = await refreshRetainedPurchaseOrders({
+        pool,
+        table,
+        refreshStart,
+        refreshJobId,
+        masterSource,
+        detailSource,
+        selectFields,
+        lineSelectFields,
+        retentionSettings,
+        tableKey,
+      });
+      retainedTotal = phase2.retainedTotal;
+      retainedFetched = phase2.retainedFetched;
+      retentionFetchTruncated = Boolean(phase2.retentionFetchTruncated);
+    }
+
     await pool.request()
       .input('tableId', sql.BigInt, table.id)
       .input('watermark', sql.DateTime2, watermark)
@@ -1562,7 +1796,7 @@ async function refresh(tableKey, options = {}) {
 
     await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
-    logger.info('tb_cache ververst', { tableKey, records: records.length, truncated });
+    logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
     updateRefreshProgress(tableKey, {
       status: 'done',
       fetched: records.length,
@@ -1572,6 +1806,11 @@ async function refresh(tableKey, options = {}) {
       sourceTotal,
       pagesFetched,
       truncated: Boolean(truncated),
+      retainedTotal,
+      retainedFetched,
+      retainedPhase: 'done',
+      retentionCapReached,
+      retentionFetchTruncated,
       finishedAt: new Date().toISOString(),
       error: null,
     });
@@ -2052,7 +2291,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     const mastersRes = await pool.request()
       .input('tableId', sql.BigInt, table.id)
       .query(`
-        SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source, c.first_seen_at, c.content_changed_at
+        SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
+               c.sync_retained, c.first_seen_at, c.content_changed_at
         FROM dbo.tb_cache c WITH (NOLOCK)
         WHERE c.table_id = @tableId AND c.scope = 'master'
         ${includeRemoved ? '' : `AND NOT EXISTS (
@@ -2198,6 +2438,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       partitionKey: m.partition_key,
       recordKey: m.record_key,
       removedAtSource: Boolean(m.removed_at_source),
+      syncRetained: Boolean(m.sync_retained),
       isNew,
       isChanged,
       changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
@@ -2212,6 +2453,18 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const stale = table.cacheMode === 'never'
     ? false
     : (!lastFullSyncAt || (Date.now() - new Date(lastFullSyncAt).getTime() > staleThresholdMinutes * 60 * 1000));
+
+  let retentionMeta = { retainedCount: 0, retentionWarning: 'none' };
+  if (table.key === 'purchase-orders') {
+    const retainedCount = rows.filter((row) => row.syncRetained).length;
+    const retentionSettings = await getSyncRetentionSettings();
+    retentionMeta = {
+      retainedCount,
+      retentionWarning: resolveRetentionWarning(retainedCount, retentionSettings),
+      retainedMaxAuto: retentionSettings.maxAuto,
+      retainedFetchBudget: retentionSettings.fetchBudget,
+    };
+  }
 
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },
@@ -2231,6 +2484,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     lastViewedAt: lastViewedAt ? new Date(lastViewedAt).toISOString() : null,
     newCount,
     changedCount,
+    retention: retentionMeta,
   };
 }
 
@@ -2485,6 +2739,17 @@ async function excludeRows({ tableKey, rows }, userId) {
           WHEN NOT MATCHED THEN
             INSERT (table_id, partition_key, record_key, reason, excluded_by)
             VALUES (@tableId, @partitionKey, @recordKey, 'manual_delete', @by);
+        `);
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, table.id)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .query(`
+          UPDATE dbo.tb_cache
+          SET sync_retained = 0, sync_retained_at = NULL
+          WHERE table_id = @tableId AND scope = 'master'
+            AND partition_key = @partitionKey AND record_key = @recordKey
+            AND detail_key = ${MASTER_DETAIL_KEY}
         `);
     }
     await tx.commit();
@@ -2961,12 +3226,23 @@ async function getDataModel(tableKey) {
   const statsRes = await pool.request().input('t', sql.BigInt, table.id).query(`
     SELECT
       (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'master' AND removed_at_source = 0) AS master_rows,
-      (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'detail') AS detail_rows`);
+      (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'detail') AS detail_rows,
+      (SELECT COUNT(*) FROM dbo.tb_cache WHERE table_id = @t AND scope = 'master' AND sync_retained = 1) AS retained_rows`);
   const { lastFullSyncAt } = await getSyncState(table.id);
+  const retainedRows = Number(statsRes.recordset[0]?.retained_rows) || 0;
+  const retentionSettings = table.key === 'purchase-orders'
+    ? await getSyncRetentionSettings()
+    : null;
   const cache = {
     masterRows: Number(statsRes.recordset[0]?.master_rows) || 0,
     detailRows: Number(statsRes.recordset[0]?.detail_rows) || 0,
     lastSyncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
+    retainedRows,
+    retentionWarning: retentionSettings
+      ? resolveRetentionWarning(retainedRows, retentionSettings)
+      : 'none',
+    retainedMaxAuto: retentionSettings?.maxAuto || null,
+    retainedFetchBudget: retentionSettings?.fetchBudget || null,
   };
 
   // D365-filtercatalogus uit de admin-gemapte kolommen (generiek; geen po_-afhankelijkheid meer).
@@ -3101,6 +3377,8 @@ async function saveSyncFilters(tableKey, rules) {
   const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
   if (table.key === 'purchase-orders') {
     await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+    const pool = await getPool();
+    await clearSyncRetainedForTable(pool, table.id);
   }
   await saveTableDefaultFilter(table.id, list);
   return { rules: list, compiled };

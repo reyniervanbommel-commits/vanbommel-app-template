@@ -42,7 +42,7 @@ const useStyles = makeStyles({
   fieldBadge: { maxWidth: '420px' },
 });
 
-function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, onSyncNow }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
   const isInheritedTable = tableKey === 'vendors' || tableKey === 'items';
@@ -60,6 +60,18 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
 
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
+  const retainedRows = Number(cache?.retainedRows) || 0;
+  const retentionHint = useMemo(() => {
+    if (tableKey !== 'purchase-orders' || retainedRows <= 0) return '';
+    const warning = String(cache?.retentionWarning || 'none');
+    if (warning === 'cap' || warning === 'critical') {
+      return `${retainedRows} orders are retained outside the current sync filter (limit reached — review filter or hidden rows).`;
+    }
+    if (warning === 'approaching') {
+      return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
+    }
+    return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
+  }, [cache?.retentionWarning, retainedRows, tableKey]);
 
   const fieldsForLevel = useCallback(
     (level) => (level === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || [])),
@@ -121,6 +133,11 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
         network traffic and sync time. Only fields that currently contain data are selectable.
       </Text>
+      {retentionHint ? (
+        <Text className={styles.hint} block>
+          {retentionHint}
+        </Text>
+      ) : null}
 
       <div className={styles.actions}>
         <Button appearance="secondary" icon={<AddRegular />} onClick={() => addRule()}>Add filter</Button>
