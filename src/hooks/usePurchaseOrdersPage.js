@@ -62,7 +62,8 @@ function mapTbResponseToBoard(data) {
       isNew: Boolean(r.isNew),
       isChanged: Boolean(r.isChanged),
       changedFieldKeys: Array.isArray(r.changedFieldKeys) ? r.changedFieldKeys : [],
-      removedInD365: Boolean(r.removedAtSource),
+      removedInD365: Boolean(r.removedAtSource) && !Boolean(r.syncRetained),
+      syncRetained: Boolean(r.syncRetained),
       lineCount: Number(r.detailCount) || 0,
       lines: (Array.isArray(r.details) ? r.details : []).map((d) => ({
         lineNumber: d.detailKey,

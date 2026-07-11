@@ -84,6 +84,10 @@ const ODATA_KEYS = [
   // Gestructureerde sync-filterregels (JSON) — gecompileerd naar $filter (zie odataSyncFilter.js)
   'PO_SYNC_RULES',
   'PO_SYNC_MAX_ORDERS',
+  'PO_SYNC_RETAINED_MAX_AUTO',
+  'PO_SYNC_RETAINED_FETCH_BUDGET',
+  'PO_SYNC_RETAINED_WARN_AT',
+  'PO_SYNC_RETAINED_CRITICAL_AT',
   'PO_CACHE_STALE_MINUTES',
   // Legacy fallback-token (alleen gebruikt als client-credentials ontbreken)
   'D365_ODATA_BEARER_TOKEN',

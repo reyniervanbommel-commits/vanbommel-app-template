@@ -688,6 +688,125 @@ async function fetchEntityRecords({
   };
 }
 
+function buildPurchaseOrderKeysFilter(keys) {
+  const list = Array.isArray(keys) ? keys : [];
+  const clauses = [];
+  const seen = new Set();
+  for (const entry of list) {
+    const dataAreaId = String(entry?.dataAreaId || '').trim();
+    const orderNumber = String(entry?.orderNumber || entry?.recordKey || '').trim();
+    if (!dataAreaId || !orderNumber) continue;
+    const dedupeKey = `${dataAreaId}|${orderNumber}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    clauses.push(
+      `(dataAreaId eq '${escapeODataLiteral(dataAreaId)}' and PurchaseOrderNumber eq '${escapeODataLiteral(orderNumber)}')`
+    );
+  }
+  return clauses.length ? `(${clauses.join(' or ')})` : '';
+}
+
+const RETAINED_PO_CHUNK_SIZE = 20;
+
+async function fetchPurchaseOrdersByKeys({
+  keys = [],
+  selectFields = null,
+  lineSelectFields = null,
+  maxItems,
+  onProgress,
+}) {
+  const deduped = [];
+  const seen = new Set();
+  for (const entry of Array.isArray(keys) ? keys : []) {
+    const dataAreaId = String(entry?.dataAreaId || entry?.partitionKey || '').trim();
+    const orderNumber = String(entry?.orderNumber || entry?.recordKey || '').trim();
+    if (!dataAreaId || !orderNumber) continue;
+    const dedupeKey = `${dataAreaId}|${orderNumber}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    deduped.push({ dataAreaId, orderNumber });
+  }
+  if (!deduped.length) {
+    return { items: [], total: 0, truncated: false, pagesFetched: 0, fetchedAll: true };
+  }
+
+  const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
+  const timeoutMs = Number.parseInt(timeoutRaw, 10);
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
+  const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
+    ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
+    : MAX_PURCHASE_ORDER_ITEMS;
+
+  const allRecords = [];
+  let truncated = false;
+  let pagesFetched = 0;
+
+  for (let offset = 0; offset < deduped.length; offset += RETAINED_PO_CHUNK_SIZE) {
+    if (allRecords.length >= effectiveMax) {
+      truncated = true;
+      break;
+    }
+    const chunk = deduped.slice(offset, offset + RETAINED_PO_CHUNK_SIZE);
+    const keysFilter = buildPurchaseOrderKeysFilter(chunk);
+    const remaining = Math.max(effectiveMax - allRecords.length, 0);
+    const {
+      records,
+      truncated: chunkTruncated,
+      pagesFetched: chunkPages,
+    } = await fetchPurchaseOrderRecords({
+      supplierAccount: null,
+      top: Math.min(remaining, RETAINED_PO_CHUNK_SIZE),
+      skip: 0,
+      timeout,
+      fetchAll: false,
+      extraFilter: keysFilter,
+      maxItems: remaining,
+      onProgress,
+      selectFields,
+      lineSelectFields,
+    });
+    pagesFetched += Number(chunkPages) || 0;
+    allRecords.push(...records);
+    if (chunkTruncated || allRecords.length >= effectiveMax) {
+      truncated = true;
+      break;
+    }
+  }
+
+  const vendorAccounts = Array.from(new Set(
+    allRecords
+      .map((record) => record.OrderVendorAccountNumber || record.InvoiceVendorAccountNumber || record.VendorAccountNumber)
+      .filter(Boolean)
+  ));
+  const vendorsByAccount = await fetchVendorsByAccounts(vendorAccounts, timeout);
+  const items = allRecords.map((record) => {
+    const mappedOrder = mapPurchaseOrder(record);
+    const lines = Array.isArray(record.PurchaseOrderLines)
+      ? record.PurchaseOrderLines.map(mapPurchaseOrderLine)
+      : [];
+    const vendor = mappedOrder.vendorAccount ? vendorsByAccount[mappedOrder.vendorAccount] || null : null;
+    return {
+      ...mappedOrder,
+      vendorName: mappedOrder.vendorName || vendor?.name || null,
+      vendorGroup: vendor?.vendorGroup || null,
+      vendorEmail: vendor?.email || null,
+      vendorPhone: vendor?.phone || null,
+      vendor,
+      lines,
+      lineCount: lines.length,
+    };
+  });
+
+  return {
+    total: items.length,
+    items,
+    hasMore: truncated,
+    truncated,
+    pagesFetched,
+    fetchedAll: !truncated,
+  };
+}
+
 async function fetchPurchaseOrders({
   supplierAccount,
   top = 50,
@@ -759,6 +878,7 @@ async function fetchPurchaseOrders({
 
 module.exports = {
   fetchPurchaseOrders,
+  fetchPurchaseOrdersByKeys,
   fetchEntityRecords,
   mapPurchaseOrder,
   mapPurchaseOrderLine,
@@ -767,8 +887,10 @@ module.exports = {
   DEFAULT_VENDORS_PATH,
   DEFAULT_RELEASED_PRODUCTS_PATH,
   buildPurchaseOrderUrl,
+  buildPurchaseOrderKeysFilter,
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
   __resetOAuthTokenCache,
+  RETAINED_PO_CHUNK_SIZE,
 };

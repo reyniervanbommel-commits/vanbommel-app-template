@@ -2,6 +2,7 @@
 
 const {
   buildPurchaseOrderUrl,
+  buildPurchaseOrderKeysFilter,
   fetchEntityRecords,
   mapPurchaseOrder,
   mapPurchaseOrderLine,
@@ -36,6 +37,18 @@ describe('D365ODataService', () => {
 
   it('escapet OData string literals veilig', () => {
     expect(escapeODataLiteral("a'b")).toBe("a''b");
+  });
+
+  it('bouwt een OR-filter voor retained purchase order keys', () => {
+    const filter = buildPurchaseOrderKeysFilter([
+      { dataAreaId: 'WHSL', orderNumber: 'PO-1' },
+      { dataAreaId: 'WHSL', orderNumber: "PO'2" },
+      { dataAreaId: 'WHSL', orderNumber: 'PO-1' },
+    ]);
+    expect(filter).toContain("dataAreaId eq 'WHSL'");
+    expect(filter).toContain("PurchaseOrderNumber eq 'PO-1'");
+    expect(filter).toContain("PurchaseOrderNumber eq 'PO''2'");
+    expect(filter.match(/PurchaseOrderNumber eq/g)?.length).toBe(2);
   });
 
   it('bouwt URL met escaped filter waarden', async () => {
