@@ -23,6 +23,7 @@ const useStyles = makeStyles({
     width: 'max-content',
     borderCollapse: 'collapse',
     minWidth: '100%',
+    tableLayout: 'fixed',
   },
   headerCell: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -36,6 +37,7 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightRegular,
     fontSize: tokens.fontSizeBase300,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
     ':hover [data-column-menu-trigger="true"]': {
       opacity: 1,
       pointerEvents: 'auto',
@@ -155,7 +157,6 @@ function PurchaseOrdersBoardTable({
     }),
     [filterByColumn, applyFilterFromCellValue, clearColumnFilter]
   );
-
   const cellActions = useMemo(
     () => ({
       onSaveValue,

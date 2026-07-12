@@ -46,6 +46,7 @@ export default function ResizableTableHeaderCell({
   minWidth = MIN_COLUMN_WIDTH,
   maxWidth = MAX_COLUMN_WIDTH,
   onResizeEnd,
+  cellStyle,
   children,
   ...cellProps
 }) {
@@ -53,6 +54,8 @@ export default function ResizableTableHeaderCell({
   const cellRef = useRef(null);
   const cleanupRef = useRef(null);
   const latestWidthRef = useRef(null);
+  const frameRef = useRef(null);
+  const pendingWidthRef = useRef(null);
   const [dragWidth, setDragWidth] = useState(null);
   const [dragging, setDragging] = useState(false);
 
@@ -71,6 +74,11 @@ export default function ResizableTableHeaderCell({
       cleanupRef.current();
       cleanupRef.current = null;
     }
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingWidthRef.current = null;
     setDragging(false);
     setDragWidth(null);
     if (!shouldPersist || typeof onResizeEnd !== 'function') return;
@@ -78,6 +86,11 @@ export default function ResizableTableHeaderCell({
     if (!Number.isFinite(nextWidth)) return;
     onResizeEnd(columnKey, clampWidth(nextWidth, minWidth, maxWidth));
   }, [columnKey, minWidth, maxWidth, onResizeEnd]);
+
+  const applyDragWidth = useCallback((nextWidth) => {
+    latestWidthRef.current = nextWidth;
+    setDragWidth((current) => (current === nextWidth ? current : nextWidth));
+  }, []);
 
   const handleResizeMouseDown = useCallback((event) => {
     event.preventDefault();
@@ -91,8 +104,7 @@ export default function ResizableTableHeaderCell({
       maxWidth
     );
     const startX = event.clientX;
-    latestWidthRef.current = startWidth;
-    setDragWidth(startWidth);
+    applyDragWidth(startWidth);
     setDragging(true);
 
     const previousUserSelect = document.body.style.userSelect;
@@ -100,14 +112,35 @@ export default function ResizableTableHeaderCell({
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
 
+    const flushPendingWidth = () => {
+      const pendingWidth = pendingWidthRef.current;
+      pendingWidthRef.current = null;
+      if (!Number.isFinite(pendingWidth)) return;
+      applyDragWidth(pendingWidth);
+    };
+
+    const schedulePreviewWidth = (nextWidth) => {
+      pendingWidthRef.current = nextWidth;
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        flushPendingWidth();
+      });
+    };
+
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const nextWidth = clampWidth(startWidth + deltaX, minWidth, maxWidth);
-      latestWidthRef.current = nextWidth;
-      setDragWidth(nextWidth);
+      if (nextWidth === latestWidthRef.current && !Number.isFinite(pendingWidthRef.current)) return;
+      schedulePreviewWidth(nextWidth);
     };
 
     const handleMouseUp = () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      flushPendingWidth();
       finishDrag(true);
     };
 
@@ -117,10 +150,15 @@ export default function ResizableTableHeaderCell({
     cleanupRef.current = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      pendingWidthRef.current = null;
       document.body.style.userSelect = previousUserSelect;
       document.body.style.cursor = previousCursor;
     };
-  }, [finishDrag, maxWidth, minWidth, width]);
+  }, [applyDragWidth, finishDrag, maxWidth, minWidth, width]);
 
   useEffect(() => () => finishDrag(false), [finishDrag]);
 
@@ -128,7 +166,9 @@ export default function ResizableTableHeaderCell({
     <th
       ref={cellRef}
       className={combineClassNames(styles.cell, className)}
-      style={resolvedWidth ? { width: `${resolvedWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${resolvedWidth}px` } : { minWidth: `${minWidth}px` }}
+      style={resolvedWidth
+        ? { ...(cellStyle || {}), width: `${resolvedWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${resolvedWidth}px` }
+        : { ...(cellStyle || {}), minWidth: `${minWidth}px` }}
       {...cellProps}
     >
       <div className={styles.content}>

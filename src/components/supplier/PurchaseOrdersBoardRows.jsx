@@ -140,7 +140,6 @@ function PurchaseOrdersBoardRows({
   expandedOrders,
   columns,
   lineColumns,
-  headerColumnWidths,
   lineColumnWidths,
   headerColumnTextStyles,
   headerColumnFormatRules,
@@ -258,7 +257,7 @@ function PurchaseOrdersBoardRows({
                           column={column}
                           rawValue={rawValue}
                           className={styles.itemCell}
-                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
+                          style={getColumnCellStyle(undefined, headerColumnTextStyles, column.key, cellFormatColor)}
                           filterByColumn={cellFilterActions?.filterByColumn}
                           onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
                           onClearColumnFilter={cellFilterActions?.clearColumnFilter}
