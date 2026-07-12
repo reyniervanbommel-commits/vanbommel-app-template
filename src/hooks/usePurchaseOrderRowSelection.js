@@ -2,8 +2,15 @@ import { useCallback, useMemo, useState } from 'react';
 
 // Stabiele selectiesleutel per order: de natuurlijke sleutel (dataAreaId + orderNumber)
 // die ook de backend gebruikt om een rij als exclusion te verwijderen.
-export function rowSelectionKey(dataAreaId, orderNumber) {
-  return `${dataAreaId}|${orderNumber}`;
+export function rowSelectionKey(dataAreaId, orderNumber, fallbackKey = '') {
+  const resolvedDataAreaId = dataAreaId ?? '';
+  const resolvedOrderNumber = orderNumber ?? fallbackKey;
+  return `${resolvedDataAreaId}|${resolvedOrderNumber}`;
+}
+
+export function resolveOrderSelectionKey(order, fallbackKey = '') {
+  const orderNumber = order?.orderNumber ?? order?.values?.orderNumber ?? fallbackKey;
+  return rowSelectionKey(order?.dataAreaId ?? '', orderNumber, fallbackKey);
 }
 
 // Beheert de multi-select-state van PO-rijen. Selectie is los van de tabel-/board-view

@@ -1,11 +1,13 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
+import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
-import PurchaseOrdersSubitemsTable from './PurchaseOrdersSubitemsTable';
+import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
+import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
-import { rowSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 
 const useStyles = makeStyles({
   groupRowCell: {
@@ -26,6 +28,18 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
   },
+  groupCollapseButton: {
+    width: '24px',
+    height: '24px',
+    minWidth: '24px',
+    minHeight: '24px',
+    ...shorthands.padding('0'),
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+  },
   groupDot: {
     color: '#c02f64',
     fontSize: '12px',
@@ -39,7 +53,7 @@ const useStyles = makeStyles({
   },
   groupCheckbox: {
     ...shorthands.padding('0'),
-    marginLeft: '8px',
+    marginLeft: '6px',
   },
   itemRow: {
     ':hover': {
@@ -64,6 +78,9 @@ const useStyles = makeStyles({
   },
   rowCheckbox: {
     ...shorthands.padding('0'),
+  },
+  rowStatusBadge: {
+    marginLeft: '2px',
   },
   compactToggleButton: {
     minWidth: '22px',
@@ -125,9 +142,9 @@ function PurchaseOrdersBoardRows({
   lineColumnWidths,
   headerColumnTextStyles,
   headerColumnFormatRules,
-    lineColumnTextStyles,
-    lineColumnFormatRules,
-    onSaveLineColumnWidth,
+  lineColumnTextStyles,
+  lineColumnFormatRules,
+  onSaveLineColumnWidth,
   colCount,
   groupingColumnLabel,
   groupingColor,
@@ -164,9 +181,9 @@ function PurchaseOrdersBoardRows({
     <tbody>
       {groupedRows.map((group) => {
         const isCollapsed = showGroupHeaders ? !!collapsedGroups[group.groupName] : false;
-        const groupSelectionKeys = group.entries
-          .map(({ order }) => rowSelectionKey(order.dataAreaId, order.orderNumber))
-          .filter(Boolean);
+        const groupSelectionKeys = Array.from(
+          new Set(group.entries.map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId)).filter(Boolean))
+        );
         const groupAllSelected = selectionEnabled
           && groupSelectionKeys.length > 0
           && groupSelectionKeys.every((key) => selection.isSelected(key));
@@ -176,38 +193,26 @@ function PurchaseOrdersBoardRows({
         return (
           <React.Fragment key={group.groupName}>
             {showGroupHeaders ? (
-              <tr>
-                <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupingColor }}>
-                  <div className={styles.groupRowInner}>
-                    {selectionEnabled ? (
-                      <Checkbox
-                        className={styles.groupCheckbox}
-                        checked={groupAllSelected ? true : (groupSomeSelected ? 'mixed' : false)}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(_, data) => handleGroupSelection(groupSelectionKeys, data.checked === true)}
-                        aria-label={`Select all rows in category ${group.groupName}`}
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      className={styles.groupButton}
-                      data-group={group.groupName}
-                      onClick={onToggleGroup}
-                    >
-                      <span>{isCollapsed ? '+' : '-'}</span>
-                      <span className={styles.groupDot}>●</span>
-                      <span>{`${groupingColumnLabel}: ${group.groupName}`}</span>
-                      <span>({group.entries.length})</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
+              <PurchaseOrdersGroupHeaderRow
+                colCount={colCount}
+                styles={styles}
+                groupingColor={groupingColor}
+                selectionEnabled={selectionEnabled}
+                groupAllSelected={groupAllSelected}
+                groupSomeSelected={groupSomeSelected}
+                groupName={group.groupName}
+                groupingColumnLabel={groupingColumnLabel}
+                entryCount={group.entries.length}
+                isCollapsed={isCollapsed}
+                onToggleGroup={onToggleGroup}
+                onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
+              />
             ) : null}
             {showBoardHeaders && !isCollapsed && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];
-              const selectionKey = rowSelectionKey(order.dataAreaId, order.orderNumber);
+              const selectionKey = resolveOrderSelectionKey(order, rowId);
               const rowFormatColor = resolveRowFormatColor(order, columns, effectiveHeaderColumnFormatRules);
 
               return (
@@ -226,6 +231,7 @@ function PurchaseOrdersBoardRows({
                             aria-label={`Selecteer order ${order.orderNumber}`}
                           />
                         ) : null}
+                        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
                         {hasLines ? (
                           <Button
                             size="small"
@@ -239,7 +245,7 @@ function PurchaseOrdersBoardRows({
                         ) : null}
                       </div>
                     </td>
-                    {columns.map((column, columnIndex) => {
+                    {columns.map((column) => {
                       const ruleSet = effectiveHeaderColumnFormatRules?.[column.key];
                       const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
                         ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
@@ -261,7 +267,6 @@ function PurchaseOrdersBoardRows({
                           <PurchaseOrderHeaderCellContent
                             order={order}
                             column={column}
-                            isFirst={columnIndex === 0}
                             onSaveValue={cellActions.onSaveValue}
                             onCorrect={cellActions.onCorrect}
                             linkedLineTotalMap={linkedLineTotalByHeaderKey}
@@ -271,36 +276,12 @@ function PurchaseOrdersBoardRows({
                       );
                     })}
                   </tr>
-                  {hasLines && isExpanded ? (
-                    <tr>
-                      <td colSpan={colCount} className={styles.subitemsContainer}>
-                        <PurchaseOrdersSubitemsTable
-                          rowId={rowId}
-                          order={order}
-                          lines={lines}
-                          columns={lineColumns}
-                          onSaveValue={cellActions.onSaveValue}
-                          onRenameColumn={cellActions.onRenameColumn}
-                          onRemoveColumn={cellActions.onRemoveColumn}
-                          onCorrect={cellActions.onCorrect}
-                          isAdmin={cellActions.isAdmin}
-                          onToggleWriteback={cellActions.onToggleWriteback}
-                          onReorderColumn={cellActions.onReorderLineColumn}
-                          columnWidths={lineColumnWidths}
-                          columnTextStyles={lineColumnTextStyles}
-                          columnFormatRules={lineColumnFormatRules}
-                          onSaveColumnWidth={onSaveLineColumnWidth}
-                          onSaveColumnTextStyle={cellActions.onSaveLineColumnTextStyle}
-                          onSaveColumnFormatRules={cellActions.onSaveLineColumnFormatRules}
-                          reorderBusy={cellActions.reorderingColumns}
-                          summedLineColumnKeys={lineTotalColumns}
-                          onSetLineColumnTotal={cellActions.onSetLineColumnTotal}
-                          onPushLineTotalToHeader={cellActions.onPushLineTotalToHeader}
-                          onPushLineValuesToHeader={cellActions.onPushLineValuesToHeader}
-                        />
-                      </td>
-                    </tr>
-                  ) : null}
+                  <PurchaseOrdersBoardExpandedRow
+                    expanded={hasLines && isExpanded}
+                    rowData={{ rowId, order, lines }}
+                    tableConfig={{ colCount, styles, lineColumns, lineColumnWidths, lineColumnTextStyles, lineColumnFormatRules, onSaveLineColumnWidth, lineTotalColumns }}
+                    cellActions={cellActions}
+                  />
                 </React.Fragment>
               );
             })}

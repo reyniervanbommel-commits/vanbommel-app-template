@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Badge, makeStyles, tokens } from '@fluentui/react-components';
+import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderImagePreviewDialog from './PurchaseOrderImagePreviewDialog';
@@ -11,12 +11,6 @@ const useStyles = makeStyles({
   removedText: {
     textDecorationLine: 'line-through',
     color: tokens.colorNeutralForeground3,
-  },
-  removedBadge: {
-    marginLeft: '6px',
-  },
-  rowBadge: {
-    marginLeft: '6px',
   },
   formulaError: {
     color: tokens.colorPaletteRedForeground1,
@@ -53,7 +47,7 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
+function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
@@ -174,33 +168,6 @@ function PurchaseOrderHeaderCellContent({ order, column, isFirst, onSaveValue, o
   const displayNode = isChangedCell
     ? <span className={styles.changedCell}>{rawDisplayNode}</span>
     : rawDisplayNode;
-
-  if (isFirst && order.removedInD365) {
-    return (
-      <span>
-        <span className={styles.removedText}>{displayNode}</span>
-        <Badge className={styles.removedBadge} color="danger" appearance="tint" size="small">
-          verwijderd in D365
-        </Badge>
-      </span>
-    );
-  }
-
-  if (isFirst && (order.isNew || order.isChanged)) {
-    return (
-      <span>
-        {displayNode}
-        <Badge
-          className={styles.rowBadge}
-          color={order.isNew ? 'success' : 'warning'}
-          appearance="tint"
-          size="small"
-        >
-          {order.isNew ? 'nieuw' : 'gewijzigd'}
-        </Badge>
-      </span>
-    );
-  }
 
   return order.removedInD365 ? <span className={styles.removedText}>{displayNode}</span> : displayNode;
 }

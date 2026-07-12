@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { usePurchaseOrderRowSelection, rowSelectionKey } from './usePurchaseOrderRowSelection';
+import { resolveOrderSelectionKey, usePurchaseOrderRowSelection } from './usePurchaseOrderRowSelection';
 
 /**
  * Beheert tabelselectie en bulk-delete voor purchase orders.
@@ -8,7 +8,7 @@ export function usePurchaseOrdersSelection({ orders, visibleOrders = orders, del
   const selection = usePurchaseOrderRowSelection();
 
   const visibleOrderKeys = useMemo(
-    () => visibleOrders.map((order) => rowSelectionKey(order.dataAreaId, order.orderNumber)),
+    () => visibleOrders.map((order) => resolveOrderSelectionKey(order)),
     [visibleOrders]
   );
   const allSelected = visibleOrderKeys.length > 0 && visibleOrderKeys.every((key) => selection.isSelected(key));
@@ -20,7 +20,7 @@ export function usePurchaseOrdersSelection({ orders, visibleOrders = orders, del
 
   const handleDeleteSelected = useCallback(async () => {
     const rows = orders
-      .filter((order) => selection.isSelected(rowSelectionKey(order.dataAreaId, order.orderNumber)))
+      .filter((order) => selection.isSelected(resolveOrderSelectionKey(order)))
       .map((order) => ({ dataAreaId: order.dataAreaId, orderNumber: order.orderNumber }));
     if (!rows.length) return;
     await deleteRows(rows);

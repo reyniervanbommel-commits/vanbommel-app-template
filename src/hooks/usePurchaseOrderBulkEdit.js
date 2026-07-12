@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { rowSelectionKey } from './usePurchaseOrderRowSelection';
+import { resolveOrderSelectionKey, rowSelectionKey } from './usePurchaseOrderRowSelection';
 
 const EMPTY_DIALOG_STATE = {
   open: false,
@@ -48,13 +48,13 @@ export function usePurchaseOrderBulkEdit({
 
   const selectedVisibleOrders = useMemo(
     () => (Array.isArray(visibleOrders) ? visibleOrders : []).filter(
-      (order) => selection?.isSelected?.(rowSelectionKey(order?.dataAreaId, order?.orderNumber))
+      (order) => selection?.isSelected?.(resolveOrderSelectionKey(order))
     ),
     [visibleOrders, selection]
   );
 
   const selectedVisibleKeys = useMemo(
-    () => new Set(selectedVisibleOrders.map((order) => rowSelectionKey(order.dataAreaId, order.orderNumber))),
+    () => new Set(selectedVisibleOrders.map((order) => resolveOrderSelectionKey(order))),
     [selectedVisibleOrders]
   );
 
