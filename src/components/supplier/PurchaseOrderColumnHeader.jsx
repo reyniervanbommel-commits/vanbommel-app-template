@@ -18,10 +18,10 @@ import {
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  header: { width: '100%', minWidth: 0, minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
-  labelWrap: { display: 'flex', alignItems: 'center', minWidth: 0, ...shorthands.gap('4px') },
-  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, lineHeight: 1.2, ...shorthands.gap('4px') },
-  labelText: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
+  labelWrap: { display: 'flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, ...shorthands.gap('4px') },
+  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, lineHeight: 1.2, ...shorthands.gap('4px') },
+  labelText: { minWidth: 0, maxWidth: '100%', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   writeBackCloud: { width: '16px', height: '16px', objectFit: 'contain', flexShrink: 0 },
   customIcon: {
     color: tokens.colorBrandForeground1,

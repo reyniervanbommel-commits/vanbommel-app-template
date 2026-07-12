@@ -10,6 +10,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     position: 'relative',
     height: '100%',
+    overflow: 'hidden',
   },
   resizeHandle: {
     position: 'absolute',

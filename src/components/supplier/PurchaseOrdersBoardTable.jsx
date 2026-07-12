@@ -24,7 +24,6 @@ const useStyles = makeStyles({
     borderCollapse: 'separate',
     borderSpacing: 0,
     minWidth: '100%',
-    tableLayout: 'fixed',
   },
   headerCell: {
     backgroundColor: tokens.colorNeutralBackground2,
