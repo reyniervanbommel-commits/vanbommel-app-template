@@ -70,6 +70,13 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(typeLabel.textContent).toBe('Number');
   });
 
+  it('toont Connected type voor gelinkte value-headerkolommen', async () => {
+    renderMenu({ isConnectedType: true });
+    openColumnMenu();
+    const typeLabel = await screen.findByTestId('column-type-label');
+    expect(typeLabel.textContent).toBe('Connected');
+  });
+
   it('opent het regels-submenu met Target en Add rule', async () => {
     renderMenu();
     openColumnMenu();

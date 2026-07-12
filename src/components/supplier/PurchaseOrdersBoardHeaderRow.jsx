@@ -108,6 +108,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 columnFormatRuleSet={headerColumnFormatRules[column.key]}
                 onSetColumnFormatRules={onSaveHeaderColumnFormatRules}
                 referenceColumns={referenceColumns}
+                isConnectedType={Boolean(linkedLineValueByHeaderKey[column.key])}
               />
             </div>
           </ResizableTableHeaderCell>

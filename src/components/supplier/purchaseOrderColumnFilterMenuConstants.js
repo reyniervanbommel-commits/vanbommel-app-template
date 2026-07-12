@@ -15,6 +15,7 @@ export const NEW_COLUMN_TYPES = [
 ];
 
 const COLUMN_TYPE_META = {
+  connected: { key: 'connected', label: 'Connected' },
   text: { key: 'text', label: 'Text' },
   number: { key: 'number', label: 'Number' },
   date: { key: 'date', label: 'Date' },
@@ -26,7 +27,8 @@ const COLUMN_TYPE_META = {
 
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-export function getColumnTypeMeta(column) {
+export function getColumnTypeMeta(column, { isConnected = false } = {}) {
+  if (isConnected) return COLUMN_TYPE_META.connected;
   if (String(column?.formulaExpr || '').trim()) return COLUMN_TYPE_META.formula;
   const typeKey = String(column?.dataType || 'text').trim().toLowerCase();
   return COLUMN_TYPE_META[typeKey] || COLUMN_TYPE_META.text;

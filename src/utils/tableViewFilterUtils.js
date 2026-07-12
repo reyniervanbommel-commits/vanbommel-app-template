@@ -34,11 +34,9 @@ export function buildFilterFromCellValue(column, rawValue) {
 /**
  * Bepaalt of het contextmenu op een cel uitgeschakeld moet zijn.
  */
-export function isCellContextMenuDisabled(column, { linkedLineTotalKeys = {}, linkedLineValueKeys = {} } = {}) {
+export function isCellContextMenuDisabled(column) {
   if (!column?.key) return true;
   if (column.dataType === 'image') return true;
-  if (linkedLineTotalKeys[column.key]) return true;
-  if (linkedLineValueKeys[column.key]) return true;
   return false;
 }
 

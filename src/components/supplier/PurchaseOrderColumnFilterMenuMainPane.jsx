@@ -21,6 +21,8 @@ function renderColumnTypeIcon(typeKey) {
       return <TextBulletList20Regular />;
     case 'image':
       return <LinkRegular />;
+    case 'connected':
+      return <LinkRegular />;
     case 'formula':
       return <span>fx</span>;
     case 'text':

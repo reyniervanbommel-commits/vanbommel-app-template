@@ -42,6 +42,7 @@ function PurchaseOrderColumnFilterMenu({
   columnFormatRuleSet = null,
   onSetColumnFormatRules,
   referenceColumns = [],
+  isConnectedType = false,
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -67,7 +68,7 @@ function PurchaseOrderColumnFilterMenu({
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
   const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
   const isImageColumn = column?.dataType === 'image';
-  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column), [column]);
+  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
   const formatReferenceColumns = useMemo(
     () => (Array.isArray(referenceColumns) ? referenceColumns : [])

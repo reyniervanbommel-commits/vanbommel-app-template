@@ -29,16 +29,16 @@ describe('tableViewFilterUtils', () => {
     });
   });
 
-  it('disables context menu for image and linked columns', () => {
+  it('disables context menu only for image columns', () => {
     expect(isCellContextMenuDisabled({ key: 'photo', dataType: 'image' })).toBe(true);
     expect(isCellContextMenuDisabled(
       { key: 'total', dataType: 'number' },
       { linkedLineTotalKeys: { total: 'qty' } }
-    )).toBe(true);
+    )).toBe(false);
     expect(isCellContextMenuDisabled(
       { key: 'values', dataType: 'text' },
       { linkedLineValueKeys: { values: { lineColumnKey: 'desc' } } }
-    )).toBe(true);
+    )).toBe(false);
     expect(isCellContextMenuDisabled({ key: 'status', dataType: 'text' })).toBe(false);
   });
 
