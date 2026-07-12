@@ -3,7 +3,7 @@ import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
-import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
+import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -21,6 +21,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   onEditingDone,
   linkedLineTotalByHeaderKey,
   linkedLineValueByHeaderKey,
+  lineColumns = [],
   filterByColumn,
   sortState,
   groupingColumnKey,
@@ -51,6 +52,18 @@ export default function PurchaseOrdersBoardHeaderRow({
       />
       {columns.map((column) => {
         const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
+        const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
+        const connectionTargets = [];
+        const linkedTotalColumnKey = linkedLineTotalByHeaderKey[column.key];
+        const linkedValueMeta = linkedLineValueByHeaderKey[column.key];
+        if (linkedTotalColumnKey) {
+          const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedTotalColumnKey)?.label || linkedTotalColumnKey;
+          connectionTargets.push(`Subitem column "${lineColumnLabel}" (total)`);
+        }
+        if (linkedValueMeta?.lineColumnKey) {
+          const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedValueMeta.lineColumnKey)?.label || linkedValueMeta.lineColumnKey;
+          connectionTargets.push(`Subitem column "${lineColumnLabel}" (values)`);
+        }
         return (
           <ResizableTableHeaderCell
             key={column.key}
@@ -73,6 +86,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                   autoEdit={editingColumnKey === column.key}
                   onEditingDone={onEditingDone}
                   showFilterIndicator={hasActiveFilter}
+                  showConditionalFormattingIndicator={hasActiveConditionalFormatting}
                   showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
                 />
               </div>
@@ -101,6 +115,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetColumnFormatRules={onSaveHeaderColumnFormatRules}
                 referenceColumns={referenceColumns}
                 isConnectedType={Boolean(linkedLineValueByHeaderKey[column.key])}
+                connectionTargets={connectionTargets}
               />
             </div>
           </ResizableTableHeaderCell>

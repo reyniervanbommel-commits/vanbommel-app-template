@@ -275,7 +275,7 @@ function PurchaseOrdersBoardRows({
                   <PurchaseOrdersBoardExpandedRow
                     expanded={hasLines && isExpanded}
                     rowData={{ rowId, order, lines }}
-                    tableConfig={{ colCount, styles, lineColumns, lineColumnWidths, lineColumnTextStyles, lineColumnFormatRules, onSaveLineColumnWidth, lineTotalColumns }}
+                    tableConfig={{ colCount, styles, lineColumns, lineColumnWidths, lineColumnTextStyles, lineColumnFormatRules, onSaveLineColumnWidth, lineTotalColumns, headerColumns: columns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
                     cellActions={cellActions}
                   />
                 </React.Fragment>

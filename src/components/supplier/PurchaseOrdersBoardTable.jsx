@@ -246,6 +246,7 @@ function PurchaseOrdersBoardTable({
             onEditingDone={onEditingDone}
             linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
             linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+            lineColumns={lineColumns}
             filterByColumn={filterByColumn}
             sortState={sortState}
             groupingColumnKey={groupingColumnKey}

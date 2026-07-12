@@ -5,7 +5,7 @@ import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
-import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
+import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
 import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
@@ -118,6 +118,9 @@ export default function PurchaseOrdersSubitemsTable({
   onSetLineColumnTotal,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
+  headerColumns = [],
+  linkedLineTotalByHeaderKey = {},
+  linkedLineValueByHeaderKey = {},
 }) {
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
@@ -142,6 +145,24 @@ export default function PurchaseOrdersSubitemsTable({
     if (summedColumnsSet.has(column.key)) acc[column.key] = calculateLineColumnSum(visibleLines, column.key);
     return acc;
   }, {}), [lineColumns, summedColumnsSet, visibleLines]);
+  const lineColumnConnectionTargets = useMemo(() => {
+    const headerLabelByKey = new Map(
+      (Array.isArray(headerColumns) ? headerColumns : []).map((column) => [column.key, column.label])
+    );
+    const next = {};
+    Object.entries(linkedLineTotalByHeaderKey || {}).forEach(([headerColumnKey, lineColumnKey]) => {
+      if (!lineColumnKey) return;
+      const headerLabel = headerLabelByKey.get(headerColumnKey) || headerColumnKey;
+      next[lineColumnKey] = [...(next[lineColumnKey] || []), `Header column "${headerLabel}" (total)`];
+    });
+    Object.entries(linkedLineValueByHeaderKey || {}).forEach(([headerColumnKey, meta]) => {
+      const lineColumnKey = meta?.lineColumnKey;
+      if (!lineColumnKey) return;
+      const headerLabel = headerLabelByKey.get(headerColumnKey) || headerColumnKey;
+      next[lineColumnKey] = [...(next[lineColumnKey] || []), `Header column "${headerLabel}" (values)`];
+    });
+    return next;
+  }, [headerColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
   if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
 
@@ -151,6 +172,8 @@ export default function PurchaseOrdersSubitemsTable({
         <tr>
           {lineColumns.map((column) => {
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
+            const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
+            const connectionTargets = lineColumnConnectionTargets[column.key] || [];
             return (
             <ResizableTableHeaderCell
               key={column.key}
@@ -176,7 +199,9 @@ export default function PurchaseOrdersSubitemsTable({
                     onToggleWriteback={onToggleWriteback}
                     showActionsMenu={false}
                     showFilterIndicator={hasActiveFilter}
+                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
                     showSumIndicator={summedColumnsSet.has(column.key)}
+                    showConnectionIndicator={connectionTargets.length > 0}
                   />
                 </div>
                 <PurchaseOrderColumnFilterMenu
@@ -206,6 +231,7 @@ export default function PurchaseOrdersSubitemsTable({
                   columnFormatRuleSet={columnFormatRules[column.key]}
                   onSetColumnFormatRules={onSaveColumnFormatRules}
                   referenceColumns={lineColumns}
+                  connectionTargets={connectionTargets}
                 />
               </div>
             </ResizableTableHeaderCell>

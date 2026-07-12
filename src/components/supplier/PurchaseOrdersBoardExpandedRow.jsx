@@ -23,6 +23,9 @@ function PurchaseOrdersBoardExpandedRow({
     lineColumnFormatRules,
     onSaveLineColumnWidth,
     lineTotalColumns,
+    headerColumns,
+    linkedLineTotalByHeaderKey,
+    linkedLineValueByHeaderKey,
   } = tableConfig;
 
   return (
@@ -51,6 +54,9 @@ function PurchaseOrdersBoardExpandedRow({
           onSetLineColumnTotal={cellActions.onSetLineColumnTotal}
           onPushLineTotalToHeader={cellActions.onPushLineTotalToHeader}
           onPushLineValuesToHeader={cellActions.onPushLineValuesToHeader}
+          headerColumns={headerColumns}
+          linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
+          linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
         />
       </td>
     </tr>
