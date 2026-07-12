@@ -39,23 +39,32 @@ function PurchaseOrderColumnGroupingSection({
   }, [column.key, onSetGroupingColumn]);
 
   const handleDisable = useCallback(() => {
+    onClearGrouping(column.key);
+  }, [column.key, onClearGrouping]);
+
+  const handleClearAll = useCallback(() => {
     onClearGrouping();
   }, [onClearGrouping]);
 
   const handleColorChange = useCallback((event) => {
-    onSetGroupingColor(event.target.value);
-  }, [onSetGroupingColor]);
+    onSetGroupingColor(column.key, event.target.value);
+  }, [column.key, onSetGroupingColor]);
 
   return (
     <div className={styles.section}>
       <Text className={styles.title}>Category bar</Text>
       {isGroupingColumn ? (
-        <Button size="small" appearance="subtle" onClick={handleDisable}>
-          Clear category grouping
-        </Button>
+        <>
+          <Button size="small" appearance="subtle" onClick={handleDisable}>
+            Remove grouping from this column
+          </Button>
+          <Button size="small" appearance="subtle" onClick={handleClearAll}>
+            Clear all category grouping
+          </Button>
+        </>
       ) : (
         <Button size="small" appearance="subtle" onClick={handleEnable}>
-          Group by this column
+          Add grouping by this column
         </Button>
       )}
       <div className={styles.colorRow}>

@@ -5,6 +5,8 @@ import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
+import useAxisLockedScroll from '../../hooks/useAxisLockedScroll';
+import { useSequentialStickyColumns } from '../../hooks/useSequentialStickyColumns';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -31,8 +33,8 @@ const useStyles = makeStyles({
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('10px', '12px'),
     textAlign: 'left',
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
     whiteSpace: 'nowrap',
     ':hover [data-column-menu-trigger="true"]': {
       opacity: 1,
@@ -103,10 +105,8 @@ function PurchaseOrdersBoardTable({
 }) {
   const styles = useStyles();
   const wrapperRef = useRef(null);
-
-  // Scroll gericht naar een net-aangemaakte kolom zodra hij op zijn definitieve plek
-  // staat (na het async herladen + verplaatsen). De debounce zorgt dat alleen de
-  // laatste positie telt, zodat de tabel niet eerst naar het eind springt.
+  useAxisLockedScroll(wrapperRef);
+  const { decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = useSequentialStickyColumns({ columns, headerColumnWidths, wrapperRef });
   useEffect(() => {
     if (!editingColumnKey) return undefined;
     const timer = setTimeout(() => {
@@ -119,10 +119,9 @@ function PurchaseOrdersBoardTable({
     }, 240);
     return () => clearTimeout(timer);
   }, [editingColumnKey, columns]);
-  const fallbackBoardView = usePurchaseOrderBoardView({ items, columns });
+  const fallbackBoardView = usePurchaseOrderBoardView({ items, columns: decoratedColumns });
   const resolvedBoardView = boardView || fallbackBoardView;
   const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
-
   const {
     processedItems,
     rows,
@@ -136,13 +135,11 @@ function PurchaseOrdersBoardTable({
     setSortDirection,
     groupedRows,
     groupingColumnKey,
-    groupingColumnLabel,
-    groupingColor,
+    groupingColorsByColumn,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,
   } = resolvedBoardView;
-
   const {
     collapsedGroups,
     expandedOrders,
@@ -208,7 +205,7 @@ function PurchaseOrdersBoardTable({
     () => (Array.isArray(lineValueHeaderLinks)
       ? lineValueHeaderLinks.reduce((acc, link) => {
         if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-        const lineColumn = lineColumns.find((column) => column.key === link.lineColumnKey);
+      const lineColumn = lineColumns.find((lineColumnEntry) => lineColumnEntry.key === link.lineColumnKey);
         if (!lineColumn) return acc;
         acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
         return acc;
@@ -234,7 +231,7 @@ function PurchaseOrdersBoardTable({
             styles={styles}
             selection={selection}
             onSetExpansion={handleSetExpansion}
-            columns={columns}
+            columns={decoratedColumns}
             headerColumnDrag={headerColumnDrag}
             headerColumnWidths={headerColumnWidths}
             onSaveHeaderColumnWidth={onSaveHeaderColumnWidth}
@@ -250,7 +247,7 @@ function PurchaseOrdersBoardTable({
             filterByColumn={filterByColumn}
             sortState={sortState}
             groupingColumnKey={groupingColumnKey}
-            groupingColor={groupingColor}
+            groupingColorsByColumn={groupingColorsByColumn}
             setSortDirection={setSortDirection}
             setFilterOperator={setFilterOperator}
             setFilterValue={setFilterValue}
@@ -264,14 +261,17 @@ function PurchaseOrdersBoardTable({
             onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}
             headerColumnFormatRules={headerColumnFormatRules}
             onSaveHeaderColumnFormatRules={onSaveHeaderColumnFormatRules}
-            referenceColumns={columns}
+            referenceColumns={decoratedColumns}
+            stickyColumnKeys={stickyColumnKeys}
+            firstNonStickyColumnKey={firstNonStickyColumnKey}
+            onMakeColumnSticky={makeColumnSticky}
           />
         </thead>
         <PurchaseOrdersBoardRows
           groupedRows={groupedRows}
           collapsedGroups={collapsedGroups}
           expandedOrders={expandedOrders}
-          columns={columns}
+          columns={decoratedColumns}
           lineColumns={lineColumns}
           headerColumnWidths={headerColumnWidths}
           lineColumnWidths={lineColumnWidths}
@@ -281,9 +281,8 @@ function PurchaseOrdersBoardTable({
           lineColumnFormatRules={lineColumnFormatRules}
           onSaveLineColumnWidth={onSaveLineColumnWidth}
           colCount={colCount}
-          groupingColumnLabel={groupingColumnLabel}
-          groupingColor={groupingColor}
           tableActions={tableActions}
+          onClearGrouping={clearGrouping}
           cellActions={cellActions}
           lineTotalColumns={lineTotalColumns}
           linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
@@ -295,5 +294,4 @@ function PurchaseOrdersBoardTable({
     </div>
   );
 }
-
 export default memo(PurchaseOrdersBoardTable);

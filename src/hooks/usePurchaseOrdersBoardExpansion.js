@@ -32,9 +32,9 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
   }, [groupingColumnKey]);
 
   const handleToggleGroup = useCallback((event) => {
-    const groupName = event.currentTarget.dataset.group || '';
-    if (!groupName) return;
-    setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
+    const groupKey = event.currentTarget.dataset.groupKey || event.currentTarget.dataset.group || '';
+    if (!groupKey) return;
+    setCollapsedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   }, []);
 
   const handleToggleOrder = useCallback((event) => {
@@ -47,7 +47,9 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
     setCollapsedGroups((prev) => {
       const next = { ...prev };
       groupedRows.forEach((group) => {
-        next[group.groupName] = !shouldExpand;
+        const groupKey = group.groupKey || group.groupName;
+        if (!groupKey) return;
+        next[groupKey] = !shouldExpand;
       });
       return next;
     });

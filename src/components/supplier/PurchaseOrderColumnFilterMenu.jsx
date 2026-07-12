@@ -47,6 +47,11 @@ function PurchaseOrderColumnFilterMenu({
   referenceColumns = [],
   isConnectedType = false,
   connectionTargets = [],
+  canMakeColumnSticky = false,
+  isStickyColumn = false,
+  isStickyActionEnabled = false,
+  stickyColumnCount = 0,
+  onMakeColumnSticky,
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -54,7 +59,14 @@ function PurchaseOrderColumnFilterMenu({
   const [activeSubmenu, setActiveSubmenu] = useState('none');
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
-  const isGroupingColumn = groupingColumnKey === column.key;
+  const groupingColumnKeys = useMemo(
+    () => String(groupingColumnKey || '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    [groupingColumnKey]
+  );
+  const isGroupingColumn = groupingColumnKeys.includes(column.key);
   const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
@@ -71,6 +83,19 @@ function PurchaseOrderColumnFilterMenu({
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
   const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
+  const canPromoteToSticky = Boolean(
+    canMakeColumnSticky
+    && !isStickyColumn
+    && isStickyActionEnabled
+    && typeof onMakeColumnSticky === 'function'
+  );
+  const canUnstickSticky = Boolean(
+    canMakeColumnSticky
+    && isStickyColumn
+    && isStickyActionEnabled
+    && typeof onMakeColumnSticky === 'function'
+  );
+  const canToggleStickyAction = canPromoteToSticky || canUnstickSticky;
   const { notifyError } = useAppToast();
   const isImageColumn = column?.dataType === 'image';
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
@@ -173,6 +198,11 @@ function PurchaseOrderColumnFilterMenu({
     onPushLineValuesToHeader(column);
     setOpen(false);
   }, [canPushLineValuesToHeader, column, onPushLineValuesToHeader]);
+  const handleMakeColumnSticky = useCallback(() => {
+    if (!canToggleStickyAction) return;
+    onMakeColumnSticky(column.key);
+    setOpen(false);
+  }, [canToggleStickyAction, column.key, onMakeColumnSticky]);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -224,6 +254,12 @@ function PurchaseOrderColumnFilterMenu({
           handlePushLineTotalToHeader={handlePushLineTotalToHeader}
           canPushLineValuesToHeader={canPushLineValuesToHeader}
           handlePushLineValuesToHeader={handlePushLineValuesToHeader}
+          canMakeColumnSticky={canMakeColumnSticky}
+          isStickyColumn={isStickyColumn}
+          canPromoteToSticky={canPromoteToSticky}
+          canUnstickSticky={canUnstickSticky}
+          stickyColumnCount={stickyColumnCount}
+          handleMakeColumnSticky={handleMakeColumnSticky}
           setSortAsc={setSortAsc}
           setSortDesc={setSortDesc}
           clearSort={clearSort}

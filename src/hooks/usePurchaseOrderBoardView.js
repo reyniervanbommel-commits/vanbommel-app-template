@@ -183,6 +183,7 @@ export function usePurchaseOrderBoardView({
       groupingColumnKey: grouping.groupingColumnKey,
       groupingColumnLabel: grouping.groupingColumnLabel,
       groupingColor: grouping.groupingColor,
+      groupingColorsByColumn: grouping.groupingColorsByColumn,
       setGroupingColumn: grouping.setGroupingColumn,
       clearGrouping: grouping.clearGrouping,
       setGroupingBarColor: grouping.setGroupingBarColor,

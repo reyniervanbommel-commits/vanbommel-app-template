@@ -8,7 +8,6 @@ import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
-
 const useStyles = makeStyles({
   groupRowCell: {
     backgroundColor: '#f4e6ed',
@@ -66,11 +65,11 @@ const useStyles = makeStyles({
   controlCell: {
     position: 'sticky',
     left: 0,
-    zIndex: 1,
+    zIndex: 3,
     width: '58px',
     minWidth: '58px',
     maxWidth: '58px',
-    backgroundColor: 'inherit',
+    backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('1px'),
@@ -125,7 +124,6 @@ function getOrderRowClassName(order, styles) {
   if (order.isChanged) return `${styles.itemRow} ${styles.changedRow}`;
   return styles.itemRow;
 }
-
 function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
   if (order?.removedInD365) return '';
   for (const column of Array.isArray(columns) ? columns : []) {
@@ -136,7 +134,6 @@ function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
   }
   return '';
 }
-
 function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
@@ -151,9 +148,8 @@ function PurchaseOrdersBoardRows({
   lineColumnFormatRules,
   onSaveLineColumnWidth,
   colCount,
-  groupingColumnLabel,
-  groupingColor,
   tableActions,
+  onClearGrouping,
   cellActions,
   lineTotalColumns,
   linkedLineTotalByHeaderKey,
@@ -185,31 +181,33 @@ function PurchaseOrdersBoardRows({
   return (
     <tbody>
       {groupedRows.map((group) => {
-        const isCollapsed = !!collapsedGroups[group.groupName];
-        const groupSelectionKeys = Array.from(
-          new Set(group.entries.map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId)).filter(Boolean))
-        );
-        const groupAllSelected = selectionEnabled
-          && groupSelectionKeys.length > 0
-          && groupSelectionKeys.every((key) => selection.isSelected(key));
-        const groupSomeSelected = selectionEnabled
-          && !groupAllSelected
-          && groupSelectionKeys.some((key) => selection.isSelected(key));
+        const groupKey = group.groupKey || group.groupName;
+        const selectionEntries = Array.isArray(group.entriesForSelection) ? group.entriesForSelection : group.entries;
+        const hiddenByCollapsedAncestor = Array.isArray(group.ancestorGroupKeys) && group.ancestorGroupKeys.some((ancestorKey) => collapsedGroups[ancestorKey]);
+        if (hiddenByCollapsedAncestor) return null;
+        const isCollapsed = !!collapsedGroups[groupKey];
+        const groupSelectionKeys = Array.from(new Set(selectionEntries.map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId)).filter(Boolean)));
+        const groupAllSelected = selectionEnabled && groupSelectionKeys.length > 0 && groupSelectionKeys.every((key) => selection.isSelected(key));
+        const groupSomeSelected = selectionEnabled && !groupAllSelected && groupSelectionKeys.some((key) => selection.isSelected(key));
         return (
-          <React.Fragment key={group.groupName}>
+          <React.Fragment key={groupKey}>
             <PurchaseOrdersGroupHeaderRow
               colCount={colCount}
               styles={styles}
-              groupingColor={groupingColor}
+              groupColor={group.groupColor}
               selectionEnabled={selectionEnabled}
               groupAllSelected={groupAllSelected}
               groupSomeSelected={groupSomeSelected}
+              groupKey={groupKey}
               groupName={group.groupName}
-              groupingColumnLabel={groupingColumnLabel}
-              entryCount={group.entries.length}
+              groupLabel={group.groupLabel}
+              groupColumnKey={group.groupColumnKey}
+              groupLevel={group.groupLevel || 0}
+              entryCount={selectionEntries.length}
               isCollapsed={isCollapsed}
               onToggleGroup={onToggleGroup}
               onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
+              onClearGroupingColumn={onClearGrouping}
             />
             {!isCollapsed && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
@@ -294,5 +292,4 @@ function PurchaseOrdersBoardRows({
     </tbody>
   );
 }
-
 export default memo(PurchaseOrdersBoardRows);

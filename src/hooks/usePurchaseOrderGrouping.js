@@ -8,6 +8,28 @@ function getDefaultGroupingColumnKey(columns) {
   return statusColumn?.key || '';
 }
 
+function parseGroupingColumnKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  const singleValue = String(value || '').trim();
+  if (!singleValue) return [];
+  return singleValue
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function dedupeKeys(keys) {
+  return Array.from(new Set(parseGroupingColumnKeys(keys)));
+}
+
+function pickColorByColumn(columnKey, colorsByColumn, fallbackColor = DEFAULT_GROUPING_COLOR) {
+  if (!columnKey) return fallbackColor;
+  const candidate = colorsByColumn?.[columnKey];
+  return isHexColor(candidate) ? candidate : fallbackColor;
+}
+
 function normalizeGroupLabel(value) {
   if (value === null || value === undefined) return 'No value';
   const text = String(value).trim();
@@ -26,79 +48,197 @@ function isHexColor(value) {
 export function usePurchaseOrderGrouping({ rows, columns }) {
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
   const safeRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
-  const [groupingColumnKey, setGroupingColumnKey] = useState(() => getDefaultGroupingColumnKey(safeColumns));
-  const [groupingColor, setGroupingColor] = useState(DEFAULT_GROUPING_COLOR);
+  const [groupingColumnKeys, setGroupingColumnKeys] = useState(() => {
+    const defaultKey = getDefaultGroupingColumnKey(safeColumns);
+    return defaultKey ? [defaultKey] : [];
+  });
+  const [groupingColorsByColumn, setGroupingColorsByColumn] = useState(() => {
+    const defaultKey = getDefaultGroupingColumnKey(safeColumns);
+    return defaultKey ? { [defaultKey]: DEFAULT_GROUPING_COLOR } : {};
+  });
 
   useEffect(() => {
-    setGroupingColumnKey((current) => {
-      if (current === '') {
-        return '';
+    setGroupingColumnKeys((current) => {
+      const normalizedCurrent = dedupeKeys(current);
+      if (normalizedCurrent.length === 0) {
+        return [];
       }
-      if (current && safeColumns.some((column) => column.key === current)) {
-        return current;
+      const validCurrent = normalizedCurrent.filter((key) => safeColumns.some((column) => column.key === key));
+      if (validCurrent.length > 0) {
+        return validCurrent;
       }
-      return getDefaultGroupingColumnKey(safeColumns);
+      const defaultKey = getDefaultGroupingColumnKey(safeColumns);
+      return defaultKey ? [defaultKey] : [];
     });
   }, [safeColumns]);
 
+  useEffect(() => {
+    setGroupingColorsByColumn((current) => {
+      const next = { ...current };
+      Object.keys(next).forEach((key) => {
+        if (!safeColumns.some((column) => column.key === key)) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
+  }, [safeColumns]);
+
+  const groupingColumnKey = useMemo(() => groupingColumnKeys.join(','), [groupingColumnKeys]);
+  const groupingColor = useMemo(
+    () => pickColorByColumn(groupingColumnKeys[0], groupingColorsByColumn),
+    [groupingColumnKeys, groupingColorsByColumn]
+  );
+
+  const columnLabelByKey = useMemo(
+    () => safeColumns.reduce((acc, column) => {
+      if (column?.key) acc[column.key] = column.label || column.key;
+      return acc;
+    }, {}),
+    [safeColumns]
+  );
+
   const groupingColumnLabel = useMemo(() => {
-    const activeColumn = safeColumns.find((column) => column.key === groupingColumnKey);
-    return activeColumn?.label || 'Category';
-  }, [safeColumns, groupingColumnKey]);
+    if (!groupingColumnKeys.length) return 'Category';
+    return groupingColumnKeys
+      .map((columnKey) => columnLabelByKey[columnKey] || columnKey)
+      .join(' + ');
+  }, [columnLabelByKey, groupingColumnKeys]);
 
   const groupedRows = useMemo(() => {
-    if (!groupingColumnKey) {
-      return [{ groupName: 'All rows', entries: safeRows }];
+    if (!groupingColumnKeys.length) {
+      return [{
+        groupKey: 'all-rows',
+        groupName: '',
+        groupLabel: '',
+        groupColumnKey: '',
+        groupLevel: 0,
+        groupColor: DEFAULT_GROUPING_COLOR,
+        ancestorGroupKeys: [],
+        entries: safeRows,
+        entriesForSelection: safeRows,
+      }];
     }
 
-    const byGroup = new Map();
-    safeRows.forEach((entry) => {
-      const rawValue = entry.order?.values?.[groupingColumnKey];
-      const groupName = normalizeGroupLabel(rawValue);
-      if (!byGroup.has(groupName)) {
-        byGroup.set(groupName, []);
-      }
-      byGroup.get(groupName).push(entry);
-    });
+    const buildLevel = (entries, level, pathParts = []) => {
+      const columnKey = groupingColumnKeys[level];
+      const isLeafLevel = level === groupingColumnKeys.length - 1;
+      const byGroup = new Map();
+      entries.forEach((entry) => {
+        const groupName = normalizeGroupLabel(entry.order?.values?.[columnKey]);
+        if (!byGroup.has(groupName)) {
+          byGroup.set(groupName, []);
+        }
+        byGroup.get(groupName).push(entry);
+      });
 
-    return Array.from(byGroup.entries()).map(([groupName, entries]) => ({ groupName, entries }));
-  }, [groupingColumnKey, safeRows]);
+      const flatGroups = [];
+      byGroup.forEach((bucketEntries, groupName) => {
+        const nextPath = [...pathParts, `${columnKey}:${groupName}`];
+        const groupKey = nextPath.join('||');
+        const ancestorGroupKeys = pathParts.map((_, index) => pathParts.slice(0, index + 1).join('||'));
+        flatGroups.push({
+          groupKey,
+          groupName,
+          groupLabel: columnLabelByKey[columnKey] || columnKey || 'Category',
+          groupColumnKey: columnKey,
+          groupLevel: level,
+          groupColor: pickColorByColumn(columnKey, groupingColorsByColumn),
+          ancestorGroupKeys,
+          entries: isLeafLevel ? bucketEntries : [],
+          entriesForSelection: bucketEntries,
+        });
+        if (!isLeafLevel) {
+          flatGroups.push(...buildLevel(bucketEntries, level + 1, nextPath));
+        }
+      });
+
+      return flatGroups;
+    };
+
+    return buildLevel(safeRows, 0);
+  }, [groupingColumnKeys, safeRows, columnLabelByKey, groupingColorsByColumn]);
 
   const setGroupingColumn = useCallback((columnKey) => {
-    setGroupingColumnKey(columnKey || '');
+    const nextColumnKey = String(columnKey || '').trim();
+    if (!nextColumnKey) return;
+    setGroupingColumnKeys((current) => (current.includes(nextColumnKey) ? current : [...current, nextColumnKey]));
+    setGroupingColorsByColumn((current) => {
+      if (isHexColor(current?.[nextColumnKey])) return current;
+      return {
+        ...current,
+        [nextColumnKey]: DEFAULT_GROUPING_COLOR,
+      };
+    });
   }, []);
 
-  const clearGrouping = useCallback(() => {
-    setGroupingColumnKey('');
-  }, []);
-
-  const setGroupingBarColor = useCallback((value) => {
-    if (!isHexColor(value)) return;
-    setGroupingColor(value);
-  }, []);
-
-  // Serialiseer de grouping-state (kolom + kleur) voor opslag in een saved view.
-  const exportState = useCallback(() => ({
-    columnKey: groupingColumnKey,
-    color: groupingColor,
-  }), [groupingColumnKey, groupingColor]);
-
-  // Pas een opgeslagen grouping-state toe. Een onbekende/verwijderde kolom-key valt
-  // terug op "geen grouping"; een ongeldige kleur wordt genegeerd.
-  const applyState = useCallback((state) => {
-    const key = state?.columnKey || '';
-    const validKey = key && safeColumns.some((column) => column.key === key);
-    setGroupingColumnKey(validKey ? key : '');
-    if (isHexColor(state?.color)) {
-      setGroupingColor(state.color);
+  const clearGrouping = useCallback((columnKey) => {
+    const targetColumnKey = String(columnKey || '').trim();
+    if (!targetColumnKey) {
+      setGroupingColumnKeys([]);
+      return;
     }
+    setGroupingColumnKeys((current) => current.filter((key) => key !== targetColumnKey));
+  }, []);
+
+  const setGroupingBarColor = useCallback((columnKeyOrValue, maybeValue) => {
+    const value = maybeValue === undefined ? columnKeyOrValue : maybeValue;
+    const targetColumnKey = maybeValue === undefined ? '' : String(columnKeyOrValue || '').trim();
+    if (!isHexColor(value)) return;
+    if (!targetColumnKey) {
+      setGroupingColorsByColumn((current) => {
+        if (!groupingColumnKeys.length) return current;
+        const next = { ...current };
+        groupingColumnKeys.forEach((key) => {
+          next[key] = value;
+        });
+        return next;
+      });
+      return;
+    }
+    setGroupingColorsByColumn((current) => ({
+      ...current,
+      [targetColumnKey]: value,
+    }));
+  }, [groupingColumnKeys]);
+
+  const exportState = useCallback(() => {
+    const activeColorsByColumn = groupingColumnKeys.reduce((acc, key) => {
+      const color = pickColorByColumn(key, groupingColorsByColumn);
+      if (isHexColor(color)) acc[key] = color;
+      return acc;
+    }, {});
+    return {
+      columnKeys: groupingColumnKeys,
+      columnKey: groupingColumnKeys[0] || '',
+      color: pickColorByColumn(groupingColumnKeys[0], groupingColorsByColumn),
+      colorsByColumn: activeColorsByColumn,
+    };
+  }, [groupingColumnKeys, groupingColorsByColumn]);
+
+  const applyState = useCallback((state) => {
+    const keysFromState = dedupeKeys(state?.columnKeys?.length ? state?.columnKeys : state?.columnKey);
+    const validKeys = keysFromState.filter((key) => safeColumns.some((column) => column.key === key));
+    const stateColorsByColumn = (state?.colorsByColumn && typeof state.colorsByColumn === 'object')
+      ? state.colorsByColumn
+      : {};
+    const fallbackColor = isHexColor(state?.color) ? state.color : DEFAULT_GROUPING_COLOR;
+    const nextColors = validKeys.reduce((acc, key) => {
+      const ownColor = stateColorsByColumn[key];
+      acc[key] = isHexColor(ownColor) ? ownColor : fallbackColor;
+      return acc;
+    }, {});
+    setGroupingColumnKeys(validKeys);
+    setGroupingColorsByColumn((current) => ({ ...current, ...nextColors }));
   }, [safeColumns]);
 
   return useMemo(() => ({
     groupedRows,
     groupingColumnKey,
+    groupingColumnKeys,
     groupingColumnLabel,
     groupingColor,
+    groupingColorsByColumn,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,
@@ -107,8 +247,10 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
   }), [
     groupedRows,
     groupingColumnKey,
+    groupingColumnKeys,
     groupingColumnLabel,
     groupingColor,
+    groupingColorsByColumn,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,

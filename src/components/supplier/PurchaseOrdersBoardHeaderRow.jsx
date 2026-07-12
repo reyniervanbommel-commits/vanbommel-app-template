@@ -1,4 +1,5 @@
 import React from 'react';
+import { tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
@@ -25,7 +26,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   filterByColumn,
   sortState,
   groupingColumnKey,
-  groupingColor,
+  groupingColorsByColumn = {},
   setSortDirection,
   setFilterOperator,
   setFilterValue,
@@ -40,6 +41,9 @@ export default function PurchaseOrdersBoardHeaderRow({
   headerColumnFormatRules = {},
   onSaveHeaderColumnFormatRules,
   referenceColumns = [],
+  stickyColumnKeys = [],
+  firstNonStickyColumnKey = '',
+  onMakeColumnSticky,
 }) {
   return (
     <tr>
@@ -64,6 +68,14 @@ export default function PurchaseOrdersBoardHeaderRow({
           const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedValueMeta.lineColumnKey)?.label || linkedValueMeta.lineColumnKey;
           connectionTargets.push(`Subitem column "${lineColumnLabel}" (values)`);
         }
+        const stickyLeft = Number(column?.stickyLeft);
+        const isStickyColumn = Number.isFinite(stickyLeft);
+        const canPromoteToSticky = column.key === firstNonStickyColumnKey;
+        const isRightMostStickyColumn = isStickyColumn && column.key === stickyColumnKeys[stickyColumnKeys.length - 1];
+        const canToggleStickyAction = canPromoteToSticky || isRightMostStickyColumn;
+        const stickyHeaderStyle = isStickyColumn
+          ? { left: `${stickyLeft}px`, zIndex: 3, boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}, inset 0 -1px 0 ${tokens.colorNeutralStroke2}` }
+          : undefined;
         return (
           <ResizableTableHeaderCell
             key={column.key}
@@ -72,6 +84,7 @@ export default function PurchaseOrdersBoardHeaderRow({
             width={headerColumnWidths[column.key]}
             className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
             onResizeEnd={onSaveHeaderColumnWidth}
+            cellStyle={stickyHeaderStyle}
             {...headerColumnDrag.getCellDragProps(column.key)}
           >
             <div className={styles.headerCellContent}>
@@ -95,7 +108,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 filter={filterByColumn[column.key]}
                 sortState={sortState}
                 groupingColumnKey={groupingColumnKey}
-                groupingColor={groupingColor}
+                groupingColor={groupingColorsByColumn[column.key] || '#f4e6ed'}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
                 onSetSortDirection={setSortDirection}
@@ -116,6 +129,11 @@ export default function PurchaseOrdersBoardHeaderRow({
                 referenceColumns={referenceColumns}
                 isConnectedType={Boolean(linkedLineValueByHeaderKey[column.key])}
                 connectionTargets={connectionTargets}
+                canMakeColumnSticky={typeof onMakeColumnSticky === 'function'}
+                isStickyColumn={isStickyColumn}
+                isStickyActionEnabled={canToggleStickyAction}
+                stickyColumnCount={stickyColumnKeys.length}
+                onMakeColumnSticky={onMakeColumnSticky}
               />
             </div>
           </ResizableTableHeaderCell>

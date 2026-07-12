@@ -112,7 +112,44 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
 
     expect(result.current.groupingColumnKey).toBe('status');
     expect(result.current.groupingColor).toBe('#abcdef');
-    expect(result.current.exportState()).toEqual({ columnKey: 'status', color: '#abcdef' });
+    expect(result.current.exportState()).toEqual({
+      columnKeys: ['status'],
+      columnKey: 'status',
+      color: '#abcdef',
+      colorsByColumn: { status: '#abcdef' },
+    });
+  });
+
+  it('ondersteunt grouping op meerdere kolommen in selectie-volgorde', () => {
+    const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyState({ columnKeys: ['status', 'orderDate'], color: '#abcdef' });
+    });
+
+    expect(result.current.groupingColumnKey).toBe('status,orderDate');
+    expect(result.current.groupingColumnLabel).toBe('Status + Orderdatum');
+    expect(result.current.groupedRows).toHaveLength(4);
+    expect(result.current.exportState()).toEqual({
+      columnKeys: ['status', 'orderDate'],
+      columnKey: 'status',
+      color: '#abcdef',
+      colorsByColumn: { status: '#abcdef', orderDate: '#abcdef' },
+    });
+  });
+
+  it('laat kleur per grouping-kolom apart instellen', () => {
+    const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyState({ columnKeys: ['status', 'orderDate'], color: '#abcdef' });
+      result.current.setGroupingBarColor('orderDate', '#123456');
+    });
+
+    expect(result.current.exportState().colorsByColumn).toEqual({
+      status: '#abcdef',
+      orderDate: '#123456',
+    });
   });
 
   it('valt terug op geen grouping bij een onbekende kolom-key', () => {
@@ -136,7 +173,7 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
 
     expect(result.current.groupingColumnKey).toBe('');
     expect(result.current.groupedRows).toHaveLength(1);
-    expect(result.current.groupedRows[0].groupName).toBe('All rows');
+    expect(result.current.groupedRows[0].groupName).toBe('');
   });
 
   it('houdt grouping uit na clearGrouping bij kolomwijzigingen', () => {

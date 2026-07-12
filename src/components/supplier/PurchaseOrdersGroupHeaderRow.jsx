@@ -4,17 +4,23 @@ import { Checkbox } from '@fluentui/react-components';
 function PurchaseOrdersGroupHeaderRow({
   colCount,
   styles,
-  groupingColor,
+  groupColor,
   selectionEnabled,
   groupAllSelected,
   groupSomeSelected,
+  groupKey,
   groupName,
-  groupingColumnLabel,
+  groupLabel,
+  groupColumnKey,
+  groupLevel = 0,
   entryCount,
   isCollapsed,
   onToggleGroup,
   onToggleGroupSelection,
+  onClearGroupingColumn,
 }) {
+  if (!groupName && !groupLabel) return null;
+
   const handleToggleGroupSelection = (_, data) => {
     onToggleGroupSelection(data.checked === true);
   };
@@ -29,8 +35,11 @@ function PurchaseOrdersGroupHeaderRow({
 
   return (
     <tr>
-      <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupingColor }}>
-        <div className={styles.groupRowInner}>
+      <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupColor }}>
+        <div
+          className={styles.groupRowInner}
+          style={{ position: 'sticky', left: 0, zIndex: 5, width: 'fit-content', backgroundColor: groupColor }}
+        >
           {selectionEnabled ? (
             <Checkbox
               className={styles.groupCheckbox}
@@ -43,21 +52,32 @@ function PurchaseOrdersGroupHeaderRow({
           <button
             type="button"
             className={styles.groupCollapseButton}
-            data-group={groupName}
+            data-group-key={groupKey}
             onClick={onToggleGroup}
             aria-label={isCollapsed ? `Expand category ${groupName}` : `Collapse category ${groupName}`}
           >
             {isCollapsed ? '+' : '-'}
           </button>
+          {groupColumnKey ? (
+            <button
+              type="button"
+              className={styles.groupCollapseButton}
+              onClick={() => onClearGroupingColumn(groupColumnKey)}
+              aria-label={`Remove grouping for ${groupLabel}`}
+            >
+              ×
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.groupButton}
-            data-group={groupName}
+            data-group-key={groupKey}
             onClick={handleGroupLabelClick}
             aria-label={`Select rows in category ${groupName}`}
+            style={{ paddingLeft: `${12 + (groupLevel * 14)}px` }}
           >
             <span className={styles.groupDot}>●</span>
-            <span>{`${groupingColumnLabel}: ${groupName}`}</span>
+            <span>{`${groupLabel}: ${groupName}`}</span>
             <span>({entryCount})</span>
           </button>
         </div>
