@@ -4,13 +4,17 @@ import {
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import {
+  ArrowClockwiseRegular,
+  CheckmarkRegular,
   CloudRegular,
   EditRegular,
   FilterRegular,
+  ImageRegular,
   LinkRegular,
   MoreVerticalRegular,
   NumberSymbolRegular,
   PaintBrushRegular,
+  TextBulletList20Regular,
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -75,6 +79,7 @@ export default function PurchaseOrderColumnHeader({
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
   const isFormulaColumn = Boolean(String(column.formulaExpr || '').trim());
+  const customTypeKey = String(column.dataType || 'text').trim().toLowerCase();
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
@@ -128,6 +133,18 @@ export default function PurchaseOrderColumnHeader({
     </Tooltip>
   ) : null;
   const showCustomTypeIndicator = !showConnectionIndicator;
+  const renderCustomTypeIcon = () => {
+    if (isFormulaColumn) return <span className={styles.formulaTypeIcon} aria-hidden>fx</span>;
+    switch (customTypeKey) {
+      case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Getalkolom" />;
+      case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Datumkolom" />;
+      case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Ja/nee-kolom" />;
+      case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Keuzelijstkolom" />;
+      case 'image': return <ImageRegular className={styles.customIcon} title="Plaatjekolom" />;
+      case 'text':
+      default: return <EditRegular className={styles.customIcon} title="Tekstkolom" />;
+    }
+  };
 
   if (autoEdit) {
     return (
@@ -216,13 +233,9 @@ export default function PurchaseOrderColumnHeader({
     <div className={styles.header}>
       <span className={styles.labelWrap}>
         {showCustomTypeIndicator ? (
-          isFormulaColumn ? (
-            <Tooltip content="Formulekolom" relationship="label">
-              <span className={styles.formulaTypeIcon} aria-hidden>fx</span>
-            </Tooltip>
-          ) : (
-            <EditRegular className={styles.customIcon} title="Eigen kolom" />
-          )
+          <Tooltip content={isFormulaColumn ? 'Formulekolom' : 'Eigen kolom'} relationship="label">
+            {renderCustomTypeIcon()}
+          </Tooltip>
         ) : null}
         {connectionIndicator}
         {showFilterIndicator ? (
