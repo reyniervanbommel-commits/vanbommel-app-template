@@ -46,6 +46,7 @@ function PurchaseOrderColumnFilterMenu({
   onSetColumnFormatRules,
   referenceColumns = [],
   isConnectedType = false,
+  connectionTargets = [],
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -60,6 +61,7 @@ function PurchaseOrderColumnFilterMenu({
   const filterActive = isColumnFilterActive(column, filter);
   const writable = !!column.writableToD365;
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
+  const showWritebackLocked = Boolean(column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
   const canRenameColumn = Boolean(column.source === 'custom' && typeof onRenameColumn === 'function');
   const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
   const isLineColumn = column.level === 'line';
@@ -195,6 +197,7 @@ function PurchaseOrderColumnFilterMenu({
           styles={styles}
           columnLabel={column.label}
           columnTypeMeta={columnTypeMeta}
+          connectionTargets={connectionTargets}
           showSortAndFilter={!isImageColumn}
           showGrouping={!isImageColumn}
           activeSubmenu={activeSubmenu}
@@ -202,6 +205,7 @@ function PurchaseOrderColumnFilterMenu({
           canSetColumnTextStyle={canSetColumnTextStyle}
           canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
           canToggleWriteback={canToggleWriteback}
+          showWritebackLocked={showWritebackLocked}
           handleToggleWriteback={handleToggleWriteback}
           writable={writable}
           canAddColumn={canAddColumn}

@@ -68,6 +68,34 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   sortButton: {
     justifyContent: 'flex-start',
   },
+  menuItemContent: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    color: tokens.colorNeutralForeground1,
+  },
+  menuItemIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: 1,
+    width: '16px',
+    minWidth: '16px',
+    flexShrink: 0,
+  },
+  submenuItemContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  submenuItemLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
   divider: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
@@ -80,10 +108,38 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     justifyContent: 'space-between',
     ...shorthands.gap('8px'),
   },
+  titleLabelWrap: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    minWidth: 0,
+    ...shorthands.gap('6px'),
+  },
+  titleLockIcon: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase300,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
+    flexShrink: 0,
+  },
   typeMeta: {
     display: 'inline-flex',
     alignItems: 'center',
     ...shorthands.gap('4px'),
+  },
+  typeMetaConnectionButton: {
+    minWidth: '16px',
+    width: '16px',
+    height: '16px',
+    ...shorthands.padding('0'),
+    color: tokens.colorBrandForeground1,
+  },
+  typeMetaConnectionSurface: {
+    maxWidth: '280px',
+  },
+  typeMetaConnectionList: {
+    margin: 0,
+    paddingLeft: '16px',
   },
   typeIcon: {
     display: 'inline-flex',

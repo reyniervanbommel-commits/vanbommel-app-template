@@ -3,20 +3,48 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { EditRegular, FilterRegular, LinkRegular, LockClosedRegular, MoreVerticalRegular } from '@fluentui/react-icons';
+import {
+  CloudRegular,
+  EditRegular,
+  FilterRegular,
+  LinkRegular,
+  MoreVerticalRegular,
+  NumberSymbolRegular,
+} from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
   labelWrap: { display: 'flex', alignItems: 'center', minWidth: 0, ...shorthands.gap('4px') },
   d365LabelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, lineHeight: 1.2, ...shorthands.gap('4px') },
   labelText: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  writeBackCloud: { width: '14px', height: '14px', objectFit: 'contain', flexShrink: 0 },
-  customIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
-  filterIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
-  sumIcon: { color: tokens.colorNeutralForeground2, fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
-  connectionIcon: { color: tokens.colorBrandForeground1, fontSize: tokens.fontSizeBase200 },
+  writeBackCloud: { width: '16px', height: '16px', objectFit: 'contain', flexShrink: 0 },
+  customIcon: {
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase300,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  formulaTypeIcon: {
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
+    textAlign: 'center',
+    flexShrink: 0,
+  },
+  indicatorIcon: {
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase300,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
+    flexShrink: 0,
+  },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
-  lockIcon: { marginLeft: '6px', color: tokens.colorNeutralForeground4, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
@@ -36,6 +64,7 @@ export default function PurchaseOrderColumnHeader({
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
+  const isFormulaColumn = Boolean(String(column.formulaExpr || '').trim());
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
@@ -83,6 +112,12 @@ export default function PurchaseOrderColumnHeader({
     setBusy(true); setError('');
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Verwijderen mislukt.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
+  const connectionIndicator = showConnectionIndicator ? (
+    <Tooltip content="Connected column" relationship="label">
+      <LinkRegular className={styles.indicatorIcon} />
+    </Tooltip>
+  ) : null;
+  const showCustomTypeIndicator = !showConnectionIndicator;
 
   if (autoEdit) {
     return (
@@ -119,32 +154,28 @@ export default function PurchaseOrderColumnHeader({
   if (!isCustom) {
     const labelWithWriteBack = (
       <span className={styles.d365LabelWrap}>
-        {writable ? (
-          <Tooltip content="D365 sync ingeschakeld" relationship="label">
-            <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
-          </Tooltip>
-        ) : null}
-        <span className={styles.labelText}>{column.label}</span>
+        <Tooltip content={writable ? 'D365 sync ingeschakeld' : 'D365 bronkolom'} relationship="label">
+          {writable
+            ? <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
+            : <CloudRegular className={styles.indicatorIcon} />}
+        </Tooltip>
+        {connectionIndicator}
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
-            <FilterRegular className={styles.filterIcon} />
+            <FilterRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
         {showSumIndicator ? (
           <Tooltip content="Column sum enabled" relationship="label">
-            <span className={styles.sumIcon} aria-hidden>∑</span>
+            <NumberSymbolRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
-        {showConnectionIndicator ? (
-          <Tooltip content="Linked line total" relationship="label">
-            <LinkRegular className={styles.connectionIcon} />
-          </Tooltip>
-        ) : null}
+        <span className={styles.labelText}>{column.label}</span>
       </span>
     );
     if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
     if (column.writeBackAllowed === false) {
-      return <div className={styles.header}><span className={styles.labelWrap}><span className={styles.labelText}>{column.label}</span><Tooltip content="Niet terugschrijfbaar (sleutel of boekings-/systeemveld)" relationship="label"><LockClosedRegular className={styles.lockIcon} /></Tooltip></span></div>;
+      return <div className={styles.header}>{labelWithWriteBack}</div>;
     }
     if (!showActionsMenu) {
       return <div className={styles.header}>{labelWithWriteBack}</div>;
@@ -169,23 +200,27 @@ export default function PurchaseOrderColumnHeader({
   return (
     <div className={styles.header}>
       <span className={styles.labelWrap}>
-        <EditRegular className={styles.customIcon} title="Eigen kolom" />
-        <span className={styles.labelText}>{column.label}</span>
+        {showCustomTypeIndicator ? (
+          isFormulaColumn ? (
+            <Tooltip content="Formulekolom" relationship="label">
+              <span className={styles.formulaTypeIcon} aria-hidden>fx</span>
+            </Tooltip>
+          ) : (
+            <EditRegular className={styles.customIcon} title="Eigen kolom" />
+          )
+        ) : null}
+        {connectionIndicator}
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
-            <FilterRegular className={styles.filterIcon} />
+            <FilterRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
         {showSumIndicator ? (
           <Tooltip content="Column sum enabled" relationship="label">
-            <span className={styles.sumIcon} aria-hidden>∑</span>
+            <NumberSymbolRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
-        {showConnectionIndicator ? (
-          <Tooltip content="Linked line total" relationship="label">
-            <LinkRegular className={styles.connectionIcon} />
-          </Tooltip>
-        ) : null}
+        <span className={styles.labelText}>{column.label}</span>
       </span>
       {showActionsMenu ? columnOptionsMenu : null}
 
