@@ -109,7 +109,7 @@ export default function PurchaseOrdersPage() {
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
-  const { savedViews, activeViewId, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -190,6 +190,7 @@ export default function PurchaseOrdersPage() {
         savedViewsState={{
           savedViews,
           activeViewId,
+          hasUnsavedChanges,
           applyViewState,
           handleResetView,
           handleSaveAsNew,

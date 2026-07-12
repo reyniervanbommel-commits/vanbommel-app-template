@@ -110,6 +110,7 @@ export default function PurchaseOrdersPageTopBar({
   const {
     savedViews,
     activeViewId,
+    hasUnsavedChanges,
     applyViewState,
     handleResetView,
     handleSaveAsNew,
@@ -170,6 +171,7 @@ export default function PurchaseOrdersPageTopBar({
               activeViewId={activeViewId}
               canManageGlobal={isStaff}
               saving={savedViews.saving}
+              hasUnsavedChanges={hasUnsavedChanges}
               onApplyView={applyViewState}
               onResetView={handleResetView}
               onSaveAsNew={handleSaveAsNew}

@@ -3,6 +3,25 @@ import { usePurchaseOrderSavedViews } from './usePurchaseOrderSavedViews';
 
 const BOARD_KEY = 'purchase-orders';
 
+function normalizeForComparison(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeForComparison(entry));
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = normalizeForComparison(value[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function stableSerialize(value) {
+  return JSON.stringify(normalizeForComparison(value));
+}
+
 /**
  * Bundelt saved-view state en handlers voor de purchase-order board.
  */
@@ -15,18 +34,34 @@ export function usePurchaseOrderSavedViewState({
 }) {
   const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
   const [activeViewId, setActiveViewId] = useState(null);
+  const [savedStateFingerprint, setSavedStateFingerprint] = useState(null);
   const autoAppliedRef = useRef(false);
+  const activeView = useMemo(
+    () => savedViews.views.find((view) => view.id === activeViewId) || null,
+    [savedViews.views, activeViewId]
+  );
 
   const buildCurrentViewState = useCallback(() => ({
     columns: exportColumnLayout(),
     table: boardView.exportFilterSortGrouping(),
   }), [exportColumnLayout, boardView]);
 
+  const buildCurrentFingerprint = useCallback(
+    () => stableSerialize(buildCurrentViewState()),
+    [buildCurrentViewState]
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!activeViewId || !savedStateFingerprint) return false;
+    return buildCurrentFingerprint() !== savedStateFingerprint;
+  }, [activeViewId, savedStateFingerprint, buildCurrentFingerprint]);
+
   const applyViewState = useCallback((view) => {
     const state = view?.viewState || {};
     applyColumnLayout(state.columns);
     boardView.applyFilterSortGrouping(state.table);
     setActiveViewId(view?.id ?? null);
+    setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
   }, [applyColumnLayout, boardView]);
 
   const handleResetView = useCallback(() => {
@@ -34,20 +69,28 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearSort();
     boardView.clearGrouping();
     setActiveViewId(null);
+    setSavedStateFingerprint(null);
   }, [boardView]);
 
   const handleSaveAsNew = useCallback(async ({ name, scope, isDefault }) => {
+    const currentState = buildCurrentViewState();
+    const currentFingerprint = stableSerialize(currentState);
     const created = await savedViews.createView({
       name,
       scope,
-      viewState: buildCurrentViewState(),
+      viewState: currentState,
       isDefault,
     });
-    if (created?.id) setActiveViewId(created.id);
+    if (created?.id) {
+      setActiveViewId(created.id);
+      setSavedStateFingerprint(currentFingerprint);
+    }
   }, [savedViews, buildCurrentViewState]);
 
   const handleUpdateActive = useCallback(async (view) => {
-    await savedViews.updateView(view.id, { viewState: buildCurrentViewState() });
+    const currentState = buildCurrentViewState();
+    await savedViews.updateView(view.id, { viewState: currentState });
+    setSavedStateFingerprint(stableSerialize(currentState));
   }, [savedViews, buildCurrentViewState]);
 
   const handleRenameView = useCallback(async (view, name) => {
@@ -60,7 +103,10 @@ export function usePurchaseOrderSavedViewState({
 
   const handleDeleteView = useCallback(async (view) => {
     await savedViews.deleteView(view.id);
-    if (view.id === activeViewId) setActiveViewId(null);
+    if (view.id === activeViewId) {
+      setActiveViewId(null);
+      setSavedStateFingerprint(null);
+    }
   }, [savedViews, activeViewId]);
 
   useEffect(() => {
@@ -85,6 +131,7 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    hasUnsavedChanges,
   }), [
     savedViews,
     activeViewId,
@@ -95,5 +142,6 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    hasUnsavedChanges,
   ]);
 }

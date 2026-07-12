@@ -1,15 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
   Menu,
   MenuDivider,
   MenuGroup,
@@ -18,8 +9,6 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
-  Radio,
-  RadioGroup,
   makeStyles,
   shorthands,
   tokens,
@@ -29,6 +18,7 @@ import {
   SaveRegular,
   EyeRegular,
 } from '@fluentui/react-icons';
+import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 
 const useStyles = makeStyles({
   trigger: {
@@ -63,10 +53,20 @@ const useStyles = makeStyles({
     fontSize: '20px',
     flexShrink: 0,
   },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('16px'),
+  unsavedIndicator: {
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightBold,
+    verticalAlign: 'super',
+    marginLeft: '4px',
+    fontSize: '18px',
+    lineHeight: '1',
+  },
+  updateActionLabel: {
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  menuPopover: {
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
   empty: {
     ...shorthands.padding('4px', '10px'),
@@ -76,98 +76,6 @@ const useStyles = makeStyles({
 });
 
 const NO_VIEW_LABEL = 'Alle orders (geen view)';
-
-// Dialog voor "opslaan als nieuwe view" en "hernoemen". mode bepaalt de velden.
-function SavedViewDialog({ open, mode, canManageGlobal, initialName, onOpenChange, onSubmit }) {
-  const styles = useStyles();
-  const [name, setName] = useState('');
-  const [scope, setScope] = useState('personal');
-  const [isDefault, setIsDefault] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      setName(initialName || '');
-      setScope('personal');
-      setIsDefault(false);
-      setSaving(false);
-      setError('');
-    }
-  }, [open, initialName]);
-
-  const handleSubmit = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError('Geef een naam op.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      await onSubmit({ name: trimmed, scope, isDefault });
-      onOpenChange(false);
-    } catch (err) {
-      setError(err.message || 'Opslaan mislukt.');
-    } finally {
-      setSaving(false);
-    }
-  }, [name, scope, isDefault, onSubmit, onOpenChange]);
-
-  const title = mode === 'rename' ? 'View hernoemen' : 'Opslaan als nieuwe view';
-
-  return (
-    <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
-      <DialogSurface>
-        <DialogBody>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogContent>
-            <div className={styles.form}>
-              <Field label="Naam" required>
-                <Input
-                  value={name}
-                  onChange={(_, data) => setName(data.value)}
-                  placeholder="Bijv. Openstaand deze week"
-                />
-              </Field>
-
-              {mode === 'create' && canManageGlobal ? (
-                <Field label="Zichtbaarheid">
-                  <RadioGroup
-                    layout="horizontal"
-                    value={scope}
-                    onChange={(_, data) => setScope(data.value)}
-                  >
-                    <Radio value="personal" label="Persoonlijk" />
-                    <Radio value="global" label="Gedeeld (iedereen)" />
-                  </RadioGroup>
-                </Field>
-              ) : null}
-
-              {mode === 'create' ? (
-                <Checkbox
-                  checked={isDefault}
-                  onChange={(_, data) => setIsDefault(Boolean(data.checked))}
-                  label="Als standaard-view instellen"
-                />
-              ) : null}
-
-              {error ? <Field validationState="error" validationMessage={error} /> : null}
-            </div>
-          </DialogContent>
-          <DialogActions>
-            <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-              Annuleren
-            </Button>
-            <Button appearance="primary" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Opslaan...' : 'Opslaan'}
-            </Button>
-          </DialogActions>
-        </DialogBody>
-      </DialogSurface>
-    </Dialog>
-  );
-}
 
 /**
  * D365-achtige view-control voor de Purchase Orders toolbar: kies/pas een view toe,
@@ -180,6 +88,7 @@ export default function PurchaseOrderSavedViewsControl({
   activeViewId,
   canManageGlobal,
   saving,
+  hasUnsavedChanges = false,
   titleMode = false,
   onApplyView,
   onResetView,
@@ -225,7 +134,10 @@ export default function PurchaseOrderSavedViewsControl({
               className={styles.titleTrigger}
               disabled={saving}
             >
-              <span className={styles.titleName}>{triggerLabel}</span>
+              <span className={styles.titleName}>
+                {triggerLabel}
+                {hasUnsavedChanges ? <span className={styles.unsavedIndicator} aria-hidden>*</span> : null}
+              </span>
               <ChevronDownRegular className={styles.titleChevron} />
             </Button>
           ) : (
@@ -241,8 +153,17 @@ export default function PurchaseOrderSavedViewsControl({
             </Button>
           )}
         </MenuTrigger>
-        <MenuPopover>
+        <MenuPopover className={styles.menuPopover}>
           <MenuList>
+            {activeView && activeCanManage ? (
+              <>
+                <MenuItem onClick={() => onUpdateActive(activeView)}>
+                  <span className={styles.updateActionLabel}>Huidige view bijwerken</span>
+                </MenuItem>
+                <MenuDivider />
+              </>
+            ) : null}
+
             <MenuItem
               icon={!activeView ? <span aria-hidden>✓</span> : undefined}
               onClick={onResetView}
@@ -291,9 +212,6 @@ export default function PurchaseOrderSavedViewsControl({
             </MenuItem>
             {activeView && activeCanManage ? (
               <>
-                <MenuItem onClick={() => onUpdateActive(activeView)}>
-                  Huidige view bijwerken
-                </MenuItem>
                 <MenuItem onClick={() => setDialogMode('rename')}>
                   Hernoemen…
                 </MenuItem>
@@ -311,7 +229,7 @@ export default function PurchaseOrderSavedViewsControl({
         </MenuPopover>
       </Menu>
 
-      <SavedViewDialog
+      <PurchaseOrderSavedViewDialog
         open={dialogMode !== null}
         mode={dialogMode || 'create'}
         canManageGlobal={canManageGlobal}
