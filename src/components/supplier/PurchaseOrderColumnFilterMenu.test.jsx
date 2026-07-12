@@ -63,6 +63,13 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(items.length).toBeGreaterThan(0);
   });
 
+  it('toont kolomtype in de menu-titel', async () => {
+    renderMenu();
+    openColumnMenu();
+    const typeLabel = await screen.findByTestId('column-type-label');
+    expect(typeLabel.textContent).toBe('Number');
+  });
+
   it('opent het regels-submenu met Target en Add rule', async () => {
     renderMenu();
     openColumnMenu();

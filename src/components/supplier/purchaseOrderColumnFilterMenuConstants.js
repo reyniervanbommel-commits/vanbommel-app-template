@@ -14,7 +14,23 @@ export const NEW_COLUMN_TYPES = [
   { key: 'formula', label: 'Formule', dataType: 'number' },
 ];
 
+const COLUMN_TYPE_META = {
+  text: { key: 'text', label: 'Text' },
+  number: { key: 'number', label: 'Number' },
+  date: { key: 'date', label: 'Date' },
+  boolean: { key: 'boolean', label: 'Yes/No' },
+  select: { key: 'select', label: 'Select' },
+  image: { key: 'image', label: 'Image' },
+  formula: { key: 'formula', label: 'Formula' },
+};
+
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+export function getColumnTypeMeta(column) {
+  if (String(column?.formulaExpr || '').trim()) return COLUMN_TYPE_META.formula;
+  const typeKey = String(column?.dataType || 'text').trim().toLowerCase();
+  return COLUMN_TYPE_META[typeKey] || COLUMN_TYPE_META.text;
+}
 
 export function isDateColumn(column) {
   return column?.dataType === 'date';

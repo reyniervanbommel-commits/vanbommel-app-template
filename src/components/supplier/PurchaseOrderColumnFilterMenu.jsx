@@ -8,6 +8,7 @@ import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRule
 import {
   HEX_COLOR_PATTERN,
   getDraftFromFilter,
+  getColumnTypeMeta,
   getTextStyleDraft,
   isColumnFilterActive,
   isDateColumn,
@@ -66,6 +67,7 @@ function PurchaseOrderColumnFilterMenu({
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
   const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
   const isImageColumn = column?.dataType === 'image';
+  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column), [column]);
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
   const formatReferenceColumns = useMemo(
     () => (Array.isArray(referenceColumns) ? referenceColumns : [])
@@ -255,6 +257,7 @@ function PurchaseOrderColumnFilterMenu({
         <FilterMenuMainPane
           styles={styles}
           columnLabel={column.label}
+          columnTypeMeta={columnTypeMeta}
           showSortAndFilter={!isImageColumn}
           showGrouping={!isImageColumn}
           activeSubmenu={activeSubmenu}

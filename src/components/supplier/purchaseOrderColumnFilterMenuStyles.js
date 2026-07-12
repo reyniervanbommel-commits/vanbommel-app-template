@@ -74,6 +74,29 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   fieldTitle: {
     fontWeight: tokens.fontWeightSemibold,
   },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('8px'),
+  },
+  typeMeta: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
+  },
+  typeIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: 1,
+  },
+  typeText: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+  },
   filterRow: {
     display: 'flex',
     flexDirection: 'column',

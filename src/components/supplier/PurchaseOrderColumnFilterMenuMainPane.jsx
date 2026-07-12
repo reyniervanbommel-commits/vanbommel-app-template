@@ -1,9 +1,38 @@
 import React from 'react';
 import { Button, Dropdown, Input, Option, Text } from '@fluentui/react-components';
+import {
+  ArrowClockwiseRegular,
+  CheckmarkRegular,
+  EditRegular,
+  LinkRegular,
+  NumberSymbolRegular,
+  TextBulletList20Regular,
+} from '@fluentui/react-icons';
+
+function renderColumnTypeIcon(typeKey) {
+  switch (typeKey) {
+    case 'number':
+      return <NumberSymbolRegular />;
+    case 'date':
+      return <ArrowClockwiseRegular />;
+    case 'boolean':
+      return <CheckmarkRegular />;
+    case 'select':
+      return <TextBulletList20Regular />;
+    case 'image':
+      return <LinkRegular />;
+    case 'formula':
+      return <span>fx</span>;
+    case 'text':
+    default:
+      return <EditRegular />;
+  }
+}
 
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
   columnLabel,
+  columnTypeMeta,
   showSortAndFilter = true,
   showGrouping = true,
   activeSubmenu,
@@ -42,9 +71,19 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handleApply,
   handleClearFilter,
 }) {
+  const resolvedTypeMeta = columnTypeMeta || { key: 'text', label: 'Text' };
+
   return (
     <div className={styles.mainPane}>
-      <Text className={styles.fieldTitle}>{columnLabel}</Text>
+      <div className={styles.titleRow}>
+        <Text className={styles.fieldTitle}>{columnLabel}</Text>
+        <span className={styles.typeMeta}>
+          <span className={styles.typeIcon} aria-hidden>
+            {renderColumnTypeIcon(resolvedTypeMeta.key)}
+          </span>
+          <span className={styles.typeText} data-testid="column-type-label">{resolvedTypeMeta.label}</span>
+        </span>
+      </div>
       <div className={styles.divider} />
       {showSortAndFilter ? (
         <>
