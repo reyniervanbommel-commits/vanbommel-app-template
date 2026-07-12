@@ -6,6 +6,7 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
+  tokens,
 } from '@fluentui/react-components';
 import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 import {
@@ -28,6 +29,16 @@ function PurchaseOrderDataCell({
   const disabled = isCellContextMenuDisabled(column, { linkedLineTotalKeys, linkedLineValueKeys });
   const activeFilter = filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
+  const stickyLeft = Number(column?.stickyLeft);
+  const stickyStyle = Number.isFinite(stickyLeft)
+    ? {
+      position: 'sticky',
+      left: `${stickyLeft}px`,
+      zIndex: 2,
+      backgroundColor: tokens.colorNeutralBackground1,
+    }
+    : null;
+  const resolvedCellStyle = stickyStyle ? { ...style, ...stickyStyle } : style;
 
   const handleFilterCell = useCallback(() => {
     onApplyFilterFromCellValue?.(column.key, rawValue);
@@ -43,7 +54,7 @@ function PurchaseOrderDataCell({
 
   if (disabled) {
     return (
-      <td className={className} style={style}>
+      <td className={className} style={resolvedCellStyle}>
         {children}
       </td>
     );
@@ -52,7 +63,7 @@ function PurchaseOrderDataCell({
   return (
     <Menu openOnContext>
       <MenuTrigger disableButtonEnhancement>
-        <td className={className} style={style}>
+        <td className={className} style={resolvedCellStyle}>
           {children}
         </td>
       </MenuTrigger>

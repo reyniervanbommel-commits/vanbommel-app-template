@@ -21,7 +21,8 @@ const useStyles = makeStyles({
   },
   table: {
     width: 'max-content',
-    borderCollapse: 'collapse',
+    borderCollapse: 'separate',
+    borderSpacing: 0,
     minWidth: '100%',
     tableLayout: 'fixed',
   },

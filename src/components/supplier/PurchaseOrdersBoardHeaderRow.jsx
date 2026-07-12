@@ -74,7 +74,10 @@ export default function PurchaseOrdersBoardHeaderRow({
         const isRightMostStickyColumn = isStickyColumn && column.key === stickyColumnKeys[stickyColumnKeys.length - 1];
         const canToggleStickyAction = canPromoteToSticky || isRightMostStickyColumn;
         const stickyHeaderStyle = isStickyColumn
-          ? { left: `${stickyLeft}px`, zIndex: 3, boxShadow: `inset -1px 0 0 ${tokens.colorNeutralStroke2}, inset 0 -1px 0 ${tokens.colorNeutralStroke2}` }
+          ? {
+            left: `${stickyLeft}px`,
+            zIndex: 3,
+          }
           : undefined;
         return (
           <ResizableTableHeaderCell
