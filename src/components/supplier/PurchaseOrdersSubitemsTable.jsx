@@ -14,6 +14,7 @@ const useStyles = makeStyles({
   subTable: {
     width: '100%',
     borderCollapse: 'collapse',
+    tableLayout: 'fixed',
     backgroundColor: tokens.colorNeutralBackground1,
   },
   subHeaderCell: {
@@ -26,6 +27,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     backgroundColor: tokens.colorNeutralBackground3,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
     textAlign: 'left',
     ':hover [data-column-menu-trigger="true"]': {
       opacity: 1,
@@ -40,6 +42,8 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minWidth: 0,
+    overflow: 'hidden',
     ...shorthands.gap('6px'),
   },
   headerCellLabel: {

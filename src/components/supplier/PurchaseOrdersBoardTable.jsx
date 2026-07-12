@@ -24,6 +24,7 @@ const useStyles = makeStyles({
     borderCollapse: 'separate',
     borderSpacing: 0,
     minWidth: '100%',
+    tableLayout: 'fixed',
   },
   headerCell: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -51,12 +52,7 @@ const useStyles = makeStyles({
   dragSourceCell: { opacity: 0.6 },
   dropBeforeCell: { '::before': { content: '""', position: 'absolute', left: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
   dropAfterCell: { '::after': { content: '""', position: 'absolute', right: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
-  headerCellContent: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shorthands.gap('6px'),
-  },
+  headerCellContent: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: 0, overflow: 'hidden', ...shorthands.gap('6px') },
   headerCellLabel: {
     flexGrow: 1,
     minWidth: 0,
