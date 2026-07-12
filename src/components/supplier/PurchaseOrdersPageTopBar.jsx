@@ -7,7 +7,6 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
@@ -84,13 +83,11 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '6px',
   },
-  error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
-  errorWrap: {
+  errorIndicator: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
+    gap: '8px',
     flexWrap: 'wrap',
-    marginBottom: '16px',
   },
 });
 
@@ -200,6 +197,14 @@ export default function PurchaseOrdersPageTopBar({
             onRefresh={onRefresh}
             canRefresh={isAdmin}
           />
+          {error ? (
+            <div className={styles.errorIndicator}>
+              <Badge color="danger" appearance="filled">Request failed</Badge>
+              <Button appearance="subtle" size="small" onClick={openErrorDialog}>
+                What went wrong?
+              </Button>
+            </div>
+          ) : null}
           <div className={styles.statusPanel}>
             <div className={styles.freshness}>
               {hasCache ? (
@@ -251,32 +256,14 @@ export default function PurchaseOrdersPageTopBar({
       </div>
 
       {error ? (
-        <>
-          <div className={styles.errorWrap}>
-            <div className={styles.error}>{error}</div>
-            <Button
-              appearance="secondary"
-              size="small"
-              icon={<ArrowClockwiseRegular />}
-              onClick={onRefresh}
-              disabled={refreshing || !isAdmin}
-              title={isAdmin ? 'Refresh data' : 'Alleen admin kan verversen'}
-            >
-              {refreshing ? 'Refreshing...' : 'Refresh data'}
-            </Button>
-            <Button appearance="subtle" size="small" onClick={openErrorDialog}>
-              What went wrong?
-            </Button>
-          </div>
-          <PurchaseOrderErrorDialog
-            error={error}
-            open={errorDialogOpen}
-            onOpenChange={closeErrorDialog}
-            onRefresh={onRefresh}
-            refreshing={refreshing}
-            canRefresh={isAdmin}
-          />
-        </>
+        <PurchaseOrderErrorDialog
+          error={error}
+          open={errorDialogOpen}
+          onOpenChange={closeErrorDialog}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          canRefresh={isAdmin}
+        />
       ) : null}
     </div>
   );
