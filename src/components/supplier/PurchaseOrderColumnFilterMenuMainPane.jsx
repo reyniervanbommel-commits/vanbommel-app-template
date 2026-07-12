@@ -5,7 +5,6 @@ import {
   ArrowClockwiseRegular,
   ArrowResetRegular,
   ArrowRightRegular,
-  CheckmarkRegular,
   DeleteRegular,
   EditRegular,
   FilterRegular,
@@ -14,50 +13,7 @@ import {
   NumberSymbolRegular,
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
-
-function menuLabel(styles, icon, text) {
-  return (
-    <span className={styles.menuItemContent}>
-      <span className={styles.menuItemIcon} aria-hidden>{icon}</span>
-      <span>{text}</span>
-    </span>
-  );
-}
-
-function submenuLabel(styles, icon, text) {
-  return (
-    <span className={styles.submenuItemContent}>
-      <span className={styles.submenuItemLabel}>
-        <span className={styles.menuItemIcon} aria-hidden>{icon}</span>
-        <span>{text}</span>
-      </span>
-      <span aria-hidden>›</span>
-    </span>
-  );
-}
-
-function renderColumnTypeIcon(typeKey) {
-  switch (typeKey) {
-    case 'number':
-      return <NumberSymbolRegular />;
-    case 'date':
-      return <ArrowClockwiseRegular />;
-    case 'boolean':
-      return <CheckmarkRegular />;
-    case 'select':
-      return <TextBulletList20Regular />;
-    case 'image':
-      return <LinkRegular />;
-    case 'connected':
-      return <LinkRegular />;
-    case 'formula':
-      return <span>fx</span>;
-    case 'text':
-    default:
-      return <EditRegular />;
-  }
-}
-
+import { menuLabel, renderColumnTypeIcon, submenuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
   columnLabel,
@@ -88,6 +44,12 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handlePushLineTotalToHeader,
   canPushLineValuesToHeader,
   handlePushLineValuesToHeader,
+  canMakeColumnSticky = false,
+  isStickyColumn = false,
+  canPromoteToSticky = false,
+  canUnstickSticky = false,
+  stickyColumnCount = 0,
+  handleMakeColumnSticky,
   setSortAsc,
   setSortDesc,
   clearSort,
@@ -104,12 +66,32 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
 }) {
   const resolvedTypeMeta = columnTypeMeta || { key: 'text', label: 'Text' };
   const normalizedConnectionTargets = Array.isArray(connectionTargets) ? connectionTargets.filter((target) => String(target || '').trim()) : [];
+  const stickyMenuText = canUnstickSticky
+    ? 'Unstick kolom'
+    : isStickyColumn
+    ? `Already sticky (${stickyColumnCount})`
+    : 'Make this the next sticky column';
+  const stickyActionDisabled = !canPromoteToSticky && !canUnstickSticky;
+  const stickyLabelClassName = `${styles.menuItemContent} ${stickyActionDisabled ? styles.menuItemContentDisabled : ''}`.trim();
+  const stickyIconClassName = `${styles.menuItemIcon} ${stickyActionDisabled ? styles.menuItemIconDisabled : ''}`.trim();
 
   return (
     <div className={styles.mainPane}>
       <div className={styles.titleRow}>
         <span className={styles.titleLabelWrap}>
-          <Text className={styles.fieldTitle}>{columnLabel}</Text>
+          {canRenameColumn ? (
+            <Button
+              className={styles.titleLabelButton}
+              appearance="transparent"
+              size="small"
+              onClick={handleRenameColumn}
+              aria-label={`Rename column ${columnLabel}`}
+            >
+              <Text className={styles.fieldTitle}>{columnLabel}</Text>
+            </Button>
+          ) : (
+            <Text className={styles.fieldTitle}>{columnLabel}</Text>
+          )}
           {showWritebackLocked ? (
             <LockClosedRegular className={styles.titleLockIcon} aria-label="Write-back not available" />
           ) : null}
@@ -214,14 +196,6 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         </>
       ) : null}
       <div className={styles.divider} />
-      {canRenameColumn ? (
-        <>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRenameColumn}>
-            {menuLabel(styles, <EditRegular />, 'Rename column')}
-          </Button>
-          <div className={styles.divider} />
-        </>
-      ) : null}
       {canEditFormulaColumn ? (
         <>
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditFormulaColumn}>
@@ -262,6 +236,25 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           <div className={styles.divider} />
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>
             {menuLabel(styles, <LinkRegular />, 'Push values to header column')}
+          </Button>
+        </>
+      ) : null}
+      {canMakeColumnSticky ? (
+        <>
+          <div className={styles.divider} />
+          <Button
+            className={styles.sortButton}
+            appearance="subtle"
+            size="small"
+            onClick={handleMakeColumnSticky}
+            disabled={stickyActionDisabled}
+          >
+            <span className={stickyLabelClassName}>
+              <span className={stickyIconClassName} aria-hidden>
+                <ArrowRightRegular />
+              </span>
+              <span>{stickyMenuText}</span>
+            </span>
           </Button>
         </>
       ) : null}

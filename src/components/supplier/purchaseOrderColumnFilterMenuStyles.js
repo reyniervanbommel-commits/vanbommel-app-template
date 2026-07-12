@@ -74,6 +74,9 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.gap('8px'),
     color: tokens.colorNeutralForeground1,
   },
+  menuItemContentDisabled: {
+    color: tokens.colorNeutralForegroundDisabled,
+  },
   menuItemIcon: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -84,6 +87,9 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     width: '16px',
     minWidth: '16px',
     flexShrink: 0,
+  },
+  menuItemIconDisabled: {
+    color: tokens.colorNeutralForegroundDisabled,
   },
   submenuItemContent: {
     display: 'flex',
@@ -113,6 +119,16 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     alignItems: 'center',
     minWidth: 0,
     ...shorthands.gap('6px'),
+  },
+  titleLabelButton: {
+    minWidth: 'auto',
+    height: 'auto',
+    ...shorthands.padding('0'),
+    color: tokens.colorNeutralForeground1,
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
   },
   titleLockIcon: {
     color: tokens.colorNeutralForeground3,

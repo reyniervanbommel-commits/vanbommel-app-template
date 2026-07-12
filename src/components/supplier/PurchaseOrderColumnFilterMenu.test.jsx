@@ -4,6 +4,7 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 
 const COLUMN = {
+  id: 'amount-id',
   key: 'amount',
   label: 'Amount',
   dataType: 'number',
@@ -75,6 +76,14 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     openColumnMenu();
     const typeLabel = await screen.findByTestId('column-type-label');
     expect(typeLabel.textContent).toBe('Connected');
+  });
+
+  it('maakt de kolomnaam klikbaar voor hernoemen (ook d365)', async () => {
+    const onRenameColumn = vi.fn().mockResolvedValue(undefined);
+    renderMenu({ onRenameColumn });
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Rename column Amount/i }));
+    expect(await screen.findByText('Rename column')).toBeTruthy();
   });
 
   it('opent het regels-submenu met Target en Add rule', async () => {

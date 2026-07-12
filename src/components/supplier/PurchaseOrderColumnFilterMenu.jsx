@@ -1,18 +1,19 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Popover, PopoverSurface, PopoverTrigger } from '@fluentui/react-components';
+import { Button, Popover, PopoverTrigger } from '@fluentui/react-components';
 import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
-import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilterMenuPanels';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
 import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesMenuDraft';
 import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
 import { useColumnTextStyleActions } from '../../hooks/useColumnTextStyleActions';
 import { usePurchaseOrderColumnMutationActions } from '../../hooks/usePurchaseOrderColumnMutationActions';
 import { usePurchaseOrderSortFilterActions } from '../../hooks/usePurchaseOrderSortFilterActions';
+import { usePurchaseOrderColumnMenuFlags } from '../../hooks/usePurchaseOrderColumnMenuFlags';
+import { usePurchaseOrderColumnMenuQuickActions } from '../../hooks/usePurchaseOrderColumnMenuQuickActions';
 import { useAppToast } from '../../hooks/useAppToast';
 import PurchaseOrderColumnMutationDialogs from './PurchaseOrderColumnMutationDialogs';
+import PurchaseOrderColumnFilterMenuPopoverContent from './PurchaseOrderColumnFilterMenuPopoverContent';
 import {
   getDraftFromFilter,
-  getColumnTypeMeta,
   isColumnFilterActive,
   isDateColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
@@ -72,34 +73,9 @@ function PurchaseOrderColumnFilterMenu({
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
   const filterActive = isColumnFilterActive(column, filter);
   const writable = !!column.writableToD365;
-  const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
-  const showWritebackLocked = Boolean(column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
-  const canRenameColumn = Boolean(column.source === 'custom' && typeof onRenameColumn === 'function');
-  const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
-  const isLineColumn = column.level === 'line';
-  const isLineNumberColumn = column.level === 'line' && column.dataType === 'number';
-  const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
-  const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
-  const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
-  const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
-  const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
-  const canPromoteToSticky = Boolean(
-    canMakeColumnSticky
-    && !isStickyColumn
-    && isStickyActionEnabled
-    && typeof onMakeColumnSticky === 'function'
-  );
-  const canUnstickSticky = Boolean(
-    canMakeColumnSticky
-    && isStickyColumn
-    && isStickyActionEnabled
-    && typeof onMakeColumnSticky === 'function'
-  );
-  const canToggleStickyAction = canPromoteToSticky || canUnstickSticky;
   const { notifyError } = useAppToast();
-  const isImageColumn = column?.dataType === 'image';
-  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canEditImageColumn, isImageColumn, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
@@ -142,9 +118,6 @@ function PurchaseOrderColumnFilterMenu({
   const toggleSubmenu = useCallback((name) => {
     setActiveSubmenu((prev) => (prev === name ? 'none' : name));
   }, []);
-  const canAddColumn = typeof onAddColumnRightOf === 'function';
-  const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
-  const canEditImageColumn = Boolean(canAddColumn && column.source === 'custom' && column.dataType === 'image');
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
     setActiveSubmenu('none');
@@ -172,14 +145,6 @@ function PurchaseOrderColumnFilterMenu({
     setDraft,
     setOpen,
   });
-  const handleToggleWriteback = useCallback(() => {
-    if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
-  }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
-  const handleToggleLineTotal = useCallback(() => {
-    if (!canToggleLineTotal) return;
-    onToggleLineColumnSum(column.key, !isLineColumnSummed);
-    setOpen(false);
-  }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum]);
   const { handleApplyFormatRules, handleClearFormatRules } = useColumnFormatRulesMenuActions({
     canSetColumnFormatRules,
     columnKey: column.key,
@@ -188,21 +153,7 @@ function PurchaseOrderColumnFilterMenu({
     onClose: closeMenu,
     onError: notifyError,
   });
-  const handlePushLineTotalToHeader = useCallback(() => {
-    if (!canPushLineTotalToHeader) return;
-    onPushLineTotalToHeader(column);
-    setOpen(false);
-  }, [canPushLineTotalToHeader, column, onPushLineTotalToHeader]);
-  const handlePushLineValuesToHeader = useCallback(() => {
-    if (!canPushLineValuesToHeader) return;
-    onPushLineValuesToHeader(column);
-    setOpen(false);
-  }, [canPushLineValuesToHeader, column, onPushLineValuesToHeader]);
-  const handleMakeColumnSticky = useCallback(() => {
-    if (!canToggleStickyAction) return;
-    onMakeColumnSticky(column.key);
-    setOpen(false);
-  }, [canToggleStickyAction, column.key, onMakeColumnSticky]);
+  const { handleToggleWriteback, handleToggleLineTotal, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, canToggleWriteback, canToggleLineTotal, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -222,86 +173,25 @@ function PurchaseOrderColumnFilterMenu({
           ...
         </Button>
       </PopoverTrigger>
-      <PopoverSurface className={styles.surface}>
-        <FilterMenuMainPane
-          styles={styles}
-          columnLabel={column.label}
-          columnTypeMeta={columnTypeMeta}
-          connectionTargets={connectionTargets}
-          showSortAndFilter={!isImageColumn}
-          showGrouping={!isImageColumn}
-          activeSubmenu={activeSubmenu}
-          toggleSubmenu={toggleSubmenu}
-          canSetColumnTextStyle={canSetColumnTextStyle}
-          canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
-          canToggleWriteback={canToggleWriteback}
-          showWritebackLocked={showWritebackLocked}
-          handleToggleWriteback={handleToggleWriteback}
-          writable={writable}
-          canAddColumn={canAddColumn}
-          canRenameColumn={canRenameColumn}
-          handleRenameColumn={handleRenameColumn}
-          canEditFormulaColumn={canEditFormulaColumn}
-          handleEditFormulaColumn={handleEditFormulaColumn}
-          canEditImageColumn={canEditImageColumn}
-          handleEditImageColumn={handleEditImageColumn}
-          canRemoveColumn={canRemoveColumn}
-          handleRemoveColumn={handleRemoveColumn}
-          canToggleLineTotal={canToggleLineTotal}
-          isLineColumnSummed={isLineColumnSummed}
-          handleToggleLineTotal={handleToggleLineTotal}
-          canPushLineTotalToHeader={canPushLineTotalToHeader}
-          handlePushLineTotalToHeader={handlePushLineTotalToHeader}
-          canPushLineValuesToHeader={canPushLineValuesToHeader}
-          handlePushLineValuesToHeader={handlePushLineValuesToHeader}
-          canMakeColumnSticky={canMakeColumnSticky}
-          isStickyColumn={isStickyColumn}
-          canPromoteToSticky={canPromoteToSticky}
-          canUnstickSticky={canUnstickSticky}
-          stickyColumnCount={stickyColumnCount}
-          handleMakeColumnSticky={handleMakeColumnSticky}
-          setSortAsc={setSortAsc}
-          setSortDesc={setSortDesc}
-          clearSort={clearSort}
-          isDate={isDate}
-          draft={draft}
-          operatorLabels={operatorLabels}
-          operatorEntries={operatorEntries}
-          handleOperatorSelect={handleOperatorSelect}
-          handleValueChange={handleValueChange}
-          handleSecondaryValueChange={handleSecondaryValueChange}
-          handleApply={handleApply}
-          handleClearFilter={handleClearFilter}
-        />
-        <FilterMenuSubPane
-          styles={styles}
-          activeSubmenu={activeSubmenu}
-          handleAddType={handleAddType}
-          textStyleDraft={textStyleDraft}
-          handleTextColorChange={handleTextColorChange}
-          handleToggleBold={handleToggleBold}
-          handleToggleItalic={handleToggleItalic}
-          handleToggleUnderline={handleToggleUnderline}
-          columnLabel={column.label}
-          handleApplyTextStyle={handleApplyTextStyle}
-          handleClearTextStyle={handleClearTextStyle}
-          formatTarget={formatRulesDraft.formatTarget}
-          setFormatTarget={formatRulesDraft.setFormatTarget}
-          formatRules={formatRulesDraft.formatRules}
-          formatReferenceColumns={formatReferenceColumns}
-          addFormatRule={formatRulesDraft.addFormatRule}
-          updateFormatRule={formatRulesDraft.updateFormatRule}
-          removeFormatRule={formatRulesDraft.removeFormatRule}
-          handleApplyFormatRules={handleApplyFormatRules}
-          handleClearFormatRules={handleClearFormatRules}
-          column={column}
-          isGroupingColumn={isGroupingColumn}
-          groupingColor={groupingColor}
-          onSetGroupingColumn={onSetGroupingColumn}
-          onClearGrouping={onClearGrouping}
-          onSetGroupingColor={onSetGroupingColor}
-        />
-      </PopoverSurface>
+      <PurchaseOrderColumnFilterMenuPopoverContent
+        styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets} isImageColumn={isImageColumn}
+        activeSubmenu={activeSubmenu} toggleSubmenu={toggleSubmenu} canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
+        canToggleWriteback={canToggleWriteback} showWritebackLocked={showWritebackLocked} handleToggleWriteback={handleToggleWriteback} writable={writable}
+        canAddColumn={canAddColumn} canRenameColumn={canRenameColumn} handleRenameColumn={handleRenameColumn} canEditFormulaColumn={canEditFormulaColumn}
+        handleEditFormulaColumn={handleEditFormulaColumn} canEditImageColumn={canEditImageColumn} handleEditImageColumn={handleEditImageColumn}
+        canRemoveColumn={canRemoveColumn} handleRemoveColumn={handleRemoveColumn} canToggleLineTotal={canToggleLineTotal} isLineColumnSummed={isLineColumnSummed}
+        handleToggleLineTotal={handleToggleLineTotal} canPushLineTotalToHeader={canPushLineTotalToHeader} handlePushLineTotalToHeader={handlePushLineTotalToHeader}
+        canPushLineValuesToHeader={canPushLineValuesToHeader} handlePushLineValuesToHeader={handlePushLineValuesToHeader}
+        canMakeColumnSticky={canMakeColumnSticky} isStickyColumn={isStickyColumn} canPromoteToSticky={canPromoteToSticky} canUnstickSticky={canUnstickSticky}
+        stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
+        isDate={isDate} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
+        handleSecondaryValueChange={handleSecondaryValueChange} handleApply={handleApply} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
+        textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
+        handleToggleUnderline={handleToggleUnderline} handleApplyTextStyle={handleApplyTextStyle} handleClearTextStyle={handleClearTextStyle}
+        formatRulesDraft={formatRulesDraft} formatReferenceColumns={formatReferenceColumns} handleApplyFormatRules={handleApplyFormatRules}
+        handleClearFormatRules={handleClearFormatRules} isGroupingColumn={isGroupingColumn} groupingColor={groupingColor}
+        onSetGroupingColumn={onSetGroupingColumn} onClearGrouping={onClearGrouping} onSetGroupingColor={onSetGroupingColor}
+      />
     </Popover>
     {dialogState.renameOpen || dialogState.removeOpen ? (
       <PurchaseOrderColumnMutationDialogs
