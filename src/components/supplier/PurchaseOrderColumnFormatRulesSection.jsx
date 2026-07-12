@@ -16,7 +16,8 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { FORMAT_RULE_COLOR_PALETTE, FORMAT_RULE_OPERATORS } from './columnFormatRuleUtils';
+import { DeleteRegular } from '@fluentui/react-icons';
+import { FORMAT_RULE_OPERATORS } from './columnFormatRuleUtils';
 
 const RULE_TARGET_LABELS = { cell: 'Cell', row: 'Row' };
 const RULE_OPERATOR_LABELS = { '=': '=', '<>': '!=', '>': '>', '<': '<', '>=': '>=', '<=': '<=' };
@@ -32,8 +33,8 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
   rulesDialogSurface: {
-    width: 'min(96vw, 940px)',
-    maxWidth: '940px',
+    width: 'min(94vw, 760px)',
+    maxWidth: '760px',
   },
   rulesDialogBody: {
     display: 'flex',
@@ -50,7 +51,7 @@ const useStyles = makeStyles({
   },
   ruleRow: {
     display: 'grid',
-    gridTemplateColumns: '96px 112px minmax(0, 1fr) 106px 32px',
+    gridTemplateColumns: '80px 120px minmax(150px, 220px) 112px 76px',
     ...shorthands.gap('6px'),
     alignItems: 'center',
     '@media (max-width: 900px)': {
@@ -60,10 +61,26 @@ const useStyles = makeStyles({
       borderRadius: tokens.borderRadiusMedium,
     },
   },
-  colorSwatch: {
+  compactControl: {
     width: '100%',
-    minWidth: '28px',
+    maxWidth: '220px',
+  },
+  colorInput: {
+    width: '100%',
+    maxWidth: '112px',
+    minWidth: '88px',
     ...shorthands.padding('0'),
+  },
+  emptyState: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+  addRuleButton: {
+    width: 'fit-content',
+    minWidth: '92px',
+    height: '26px',
+    ...shorthands.padding('0', '10px'),
+    fontSize: tokens.fontSizeBase200,
   },
 });
 
@@ -124,9 +141,13 @@ export default function PurchaseOrderColumnFormatRulesSection({
               </Field>
 
               <div className={styles.ruleList}>
+                {!formatRules.length ? (
+                  <Text className={styles.emptyState}>No rules yet. Add rule to start.</Text>
+                ) : null}
                 {formatRules.map((rule) => (
                   <div key={rule.id} className={styles.ruleRow}>
                     <Dropdown
+                      className={styles.compactControl}
                       value={RULE_OPERATOR_LABELS[rule.op]}
                       selectedOptions={[rule.op]}
                       onOptionSelect={(_, data) => updateFormatRule(rule.id, { op: data.optionValue })}
@@ -136,6 +157,7 @@ export default function PurchaseOrderColumnFormatRulesSection({
                       ))}
                     </Dropdown>
                     <Dropdown
+                      className={styles.compactControl}
                       value={rule.compareMode === 'column' ? 'Column' : 'Value'}
                       selectedOptions={[rule.compareMode]}
                       onOptionSelect={(_, data) => updateFormatRule(rule.id, { compareMode: data.optionValue })}
@@ -145,6 +167,7 @@ export default function PurchaseOrderColumnFormatRulesSection({
                     </Dropdown>
                     {rule.compareMode === 'column' ? (
                       <Dropdown
+                        className={styles.compactControl}
                         value={rule.valueRef || 'Select column'}
                         selectedOptions={rule.valueRef ? [rule.valueRef] : []}
                         onOptionSelect={(_, data) => updateFormatRule(rule.id, { valueRef: data.optionValue })}
@@ -155,30 +178,38 @@ export default function PurchaseOrderColumnFormatRulesSection({
                       </Dropdown>
                     ) : (
                       <Input
+                        className={styles.compactControl}
                         value={rule.value}
                         onChange={(_, data) => updateFormatRule(rule.id, { value: data.value })}
                         placeholder="Compare value"
                       />
                     )}
-                    <Dropdown
+                    <Input
+                      className={styles.colorInput}
+                      type="color"
                       value={rule.color}
-                      selectedOptions={[rule.color]}
-                      onOptionSelect={(_, data) => updateFormatRule(rule.id, { color: data.optionValue })}
+                      onChange={(_, data) => updateFormatRule(rule.id, { color: data.value })}
+                      aria-label="Rule color"
+                    />
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<DeleteRegular />}
+                      onClick={() => removeFormatRule(rule.id)}
+                      aria-label="Delete rule"
                     >
-                      {FORMAT_RULE_COLOR_PALETTE.map((color) => (
-                        <Option key={color} value={color}>
-                          <span className={styles.colorSwatch} style={{ backgroundColor: color }}>{color}</span>
-                        </Option>
-                      ))}
-                    </Dropdown>
-                    <Button size="small" appearance="subtle" onClick={() => removeFormatRule(rule.id)} aria-label="Remove rule">
-                      x
+                      Delete
                     </Button>
                   </div>
                 ))}
               </div>
 
-              <Button size="small" appearance="secondary" onClick={addFormatRule}>
+              <Button
+                className={styles.addRuleButton}
+                size="small"
+                appearance="primary"
+                onClick={addFormatRule}
+              >
                 + Add rule
               </Button>
             </DialogContent>
