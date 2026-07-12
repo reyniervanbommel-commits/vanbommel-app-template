@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, makeStyles, tokens } from '@fluentui/react-components';
+import {
+  Badge,
+  Button,
+  Divider,
+  Text,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components';
 import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
@@ -38,8 +45,9 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '12px',
     flexShrink: 0,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
-  subtitle: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
@@ -51,8 +59,30 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    flexWrap: 'wrap',
+  },
+  statusPanel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    minHeight: '32px',
+    padding: '4px 10px',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  freshnessLabel: {
     color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
+  },
+  freshnessValue: {
+    color: tokens.colorNeutralForeground2,
+    lineHeight: tokens.lineHeightBase200,
+  },
+  totalWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   error: { color: tokens.colorPaletteRedForeground1, marginBottom: '16px' },
   errorWrap: {
@@ -132,7 +162,7 @@ export default function PurchaseOrdersPageTopBar({
     <div className={styles.contentInset}>
       <div className={styles.header}>
         <div className={styles.titleWrap}>
-          <div className={styles.tableName}>Purchase Orders</div>
+          <div className={styles.tableName}>Master plan purchase orders</div>
           <div className={styles.viewRow}>
             <PurchaseOrderSavedViewsControl
               titleMode
@@ -148,12 +178,6 @@ export default function PurchaseOrdersPageTopBar({
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
             />
-            <PurchaseOrderRefreshProgress
-              progress={refreshProgress}
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              canRefresh={isAdmin}
-            />
           </div>
         </div>
 
@@ -168,21 +192,40 @@ export default function PurchaseOrdersPageTopBar({
               onRestore={hiddenRowsState.restoreRows}
             />
           ) : null}
-          <div className={styles.freshness}>
-            {!hasCache ? (
-              <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
-            ) : (
-              <>
-                <span>Laatst ververst: {relativeSynced || 'onbekend'}</span>
-                {stale ? (
+          <PurchaseOrderRefreshProgress
+            progress={refreshProgress}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            canRefresh={isAdmin}
+          />
+          <div className={styles.statusPanel}>
+            <div className={styles.freshness}>
+              {hasCache ? (
+                <>
+                  <Text size={200} className={styles.freshnessLabel}>Laatst ververst:</Text>
+                  <Text size={200} weight="medium" className={styles.freshnessValue}>
+                    {relativeSynced || 'onbekend'}
+                  </Text>
+                </>
+              ) : (
+                <Text size={200} className={styles.freshnessLabel}>Laatst ververst: onbekend</Text>
+              )}
+              {hasCache ? (
+                stale ? (
                   <Badge color="warning" appearance="tint">Verouderd</Badge>
                 ) : (
                   <Badge color="success" appearance="tint">Actueel</Badge>
-                )}
-              </>
-            )}
+                )
+              ) : (
+                <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+              )}
+            </div>
+            <Divider vertical />
+            <div className={styles.totalWrap}>
+              <Text size={200} className={styles.freshnessLabel}>Totaal</Text>
+              <Badge appearance="outline" color="brand">{total}</Badge>
+            </div>
           </div>
-          <div className={styles.subtitle}>Totaal: {total}</div>
         </div>
       </div>
 
