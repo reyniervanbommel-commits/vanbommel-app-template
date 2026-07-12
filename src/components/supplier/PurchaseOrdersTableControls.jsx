@@ -49,11 +49,7 @@ const useStyles = makeStyles({
 });
 
 function PurchaseOrdersTableControls({
-  showBoardHeaders,
-  showGroupHeaders,
   onSetExpansion,
-  onToggleBoardHeaders,
-  onToggleGroupHeaders,
   selectionEnabled = false,
   allSelected = false,
   someSelected = false,
@@ -93,8 +89,8 @@ function PurchaseOrdersTableControls({
                 <MenuPopover>
                   <MenuList>
                     <MenuItem onClick={() => onSetExpansion('all', true)}>All</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('boards', true)}>Boards</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('groups', true)}>Groups</MenuItem>
+                    <MenuItem onClick={() => onSetExpansion('boards', true)}>Groups</MenuItem>
+                    <MenuItem onClick={() => onSetExpansion('groups', true)}>Subitems</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
@@ -105,17 +101,11 @@ function PurchaseOrdersTableControls({
                 <MenuPopover>
                   <MenuList>
                     <MenuItem onClick={() => onSetExpansion('all', false)}>All</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('boards', false)}>Boards</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('groups', false)}>Groups</MenuItem>
+                    <MenuItem onClick={() => onSetExpansion('boards', false)}>Groups</MenuItem>
+                    <MenuItem onClick={() => onSetExpansion('groups', false)}>Subitems</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
-              <MenuItem onClick={onToggleBoardHeaders}>
-                {showBoardHeaders ? '✓ Show board headers' : 'Show board headers'}
-              </MenuItem>
-              <MenuItem onClick={onToggleGroupHeaders}>
-                {showGroupHeaders ? '✓ Show group headers' : 'Show group headers'}
-              </MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>

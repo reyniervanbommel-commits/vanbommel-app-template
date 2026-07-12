@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
@@ -146,11 +146,7 @@ function PurchaseOrdersBoardTable({
   const {
     collapsedGroups,
     expandedOrders,
-    showBoardHeaders,
-    showGroupHeaders,
     handleSetExpansion,
-    handleToggleBoardHeaders,
-    handleToggleGroupHeaders,
     tableActions,
   } = usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey });
 
@@ -237,11 +233,7 @@ function PurchaseOrdersBoardTable({
           <PurchaseOrdersBoardHeaderRow
             styles={styles}
             selection={selection}
-            showBoardHeaders={showBoardHeaders}
-            showGroupHeaders={showGroupHeaders}
             onSetExpansion={handleSetExpansion}
-            onToggleBoardHeaders={handleToggleBoardHeaders}
-            onToggleGroupHeaders={handleToggleGroupHeaders}
             columns={columns}
             headerColumnDrag={headerColumnDrag}
             headerColumnWidths={headerColumnWidths}
@@ -278,8 +270,6 @@ function PurchaseOrdersBoardTable({
           groupedRows={groupedRows}
           collapsedGroups={collapsedGroups}
           expandedOrders={expandedOrders}
-          showBoardHeaders={showBoardHeaders}
-          showGroupHeaders={showGroupHeaders}
           columns={columns}
           lineColumns={lineColumns}
           headerColumnWidths={headerColumnWidths}

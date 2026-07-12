@@ -3,8 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey }) {
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [expandedOrders, setExpandedOrders] = useState({});
-  const [showBoardHeaders, setShowBoardHeaders] = useState(true);
-  const [showGroupHeaders, setShowGroupHeaders] = useState(true);
 
   const allOrderRowsWithLines = useMemo(
     () =>
@@ -74,14 +72,6 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
     }
   }, [handleSetAllBoardsExpanded, handleSetAllGroupsExpanded]);
 
-  const handleToggleBoardHeaders = useCallback(() => {
-    setShowBoardHeaders((prev) => !prev);
-  }, []);
-
-  const handleToggleGroupHeaders = useCallback(() => {
-    setShowGroupHeaders((prev) => !prev);
-  }, []);
-
   const tableActions = useMemo(
     () => ({
       onToggleGroup: handleToggleGroup,
@@ -93,11 +83,7 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
   return {
     collapsedGroups,
     expandedOrders,
-    showBoardHeaders,
-    showGroupHeaders,
     handleSetExpansion,
-    handleToggleBoardHeaders,
-    handleToggleGroupHeaders,
     tableActions,
   };
 }

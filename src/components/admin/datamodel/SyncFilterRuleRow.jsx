@@ -30,6 +30,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
     <div className={styles.ruleRow}>
       <Dropdown
         className={styles.levelDropdown}
+        size="small"
         selectedOptions={[rule.level || 'header']}
         value={rule.level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)'}
         onOptionSelect={(_, data) => onUpdate(index, { level: data.optionValue, field: '', value: '', valueType: 'text', operator: 'eq' })}
@@ -39,6 +40,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
       </Dropdown>
 
       <Button
+        size="small"
         appearance="secondary"
         onClick={() => onOpenPicker(index, rule.level || 'header')}
         disabled={!hasAvailableFields}
@@ -52,6 +54,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
 
       <Dropdown
         className={styles.operatorDropdown}
+        size="small"
         selectedOptions={[selectedOperator]}
         value={OPERATOR_LABELS[selectedOperator]}
         onOptionSelect={(_, data) => onUpdate(index, { operator: data.optionValue })}
@@ -64,6 +67,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
       {rule.valueType === 'enum' && enumMeta && selectedOperator !== 'oneof' ? (
         <Dropdown
           className={styles.valueInput}
+          size="small"
           placeholder="Select value"
           value={rule.value || ''}
           selectedOptions={rule.value ? [rule.value] : []}
@@ -76,6 +80,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
       ) : (
         <Input
           className={styles.valueInput}
+          size="small"
           type={rule.valueType === 'number' ? 'number' : rule.valueType === 'date' ? 'date' : 'text'}
           placeholder={selectedOperator === 'oneof' ? 'Value1, Value2, Value3' : 'Value'}
           value={String(rule.value ?? '')}
@@ -83,7 +88,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
         />
       )}
 
-      <Button appearance="subtle" icon={<DeleteRegular />} onClick={() => onRemove(index)} />
+      <Button size="small" appearance="subtle" icon={<DeleteRegular />} onClick={() => onRemove(index)} />
     </div>
   );
 }

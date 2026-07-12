@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Dropdown,
+  Option,
   Text,
   makeStyles,
   shorthands,
@@ -17,17 +18,23 @@ const useStyles = makeStyles({
   section: {
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRadius('8px'),
-    ...shorthands.padding('16px', '20px'),
+    ...shorthands.padding('14px', '16px'),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('12px'),
+    ...shorthands.gap('10px'),
   },
   titleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  ruleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
-  levelDropdown: { minWidth: '170px' },
-  operatorDropdown: { minWidth: '190px' },
-  valueInput: { minWidth: '220px', flex: '1 1 auto' },
+  ruleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    flexWrap: 'wrap',
+    ...shorthands.padding('4px', '0'),
+  },
+  levelDropdown: { width: '170px', minWidth: '170px' },
+  operatorDropdown: { width: '170px', minWidth: '170px' },
+  valueInput: { width: '240px', minWidth: '180px', maxWidth: '320px', flex: '0 1 240px' },
   preview: {
     fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase200,
@@ -36,10 +43,11 @@ const useStyles = makeStyles({
     ...shorthands.borderRadius('6px'),
     wordBreak: 'break-all',
   },
-  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px'), flexWrap: 'wrap' },
+  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
   error: { color: tokens.colorPaletteRedForeground1, fontSize: tokens.fontSizeBase200 },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase200 },
-  fieldBadge: { maxWidth: '420px' },
+  fieldBadge: { minWidth: '220px', maxWidth: '420px', flex: '1 1 260px' },
+  templateDropdown: { width: '200px', minWidth: '180px' },
 });
 
 function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow }) {
@@ -140,9 +148,11 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       ) : null}
 
       <div className={styles.actions}>
-        <Button appearance="secondary" icon={<AddRegular />} onClick={() => addRule()}>Add filter</Button>
-        <Button appearance="secondary" icon={<ArrowResetRegular />} onClick={resetRules}>Reset filters</Button>
+        <Button size="small" appearance="secondary" icon={<AddRegular />} onClick={() => addRule()}>Add filter</Button>
+        <Button size="small" appearance="secondary" icon={<ArrowResetRegular />} onClick={resetRules}>Reset filters</Button>
         <Dropdown
+          className={styles.templateDropdown}
+          size="small"
           placeholder="Apply template"
           onOptionSelect={(_, data) => {
             const template = templates.find((t) => t.id === data.optionValue);
@@ -153,8 +163,9 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
             <Option key={template.id} value={template.id} text={template.label}>{template.label}</Option>
           ))}
         </Dropdown>
-        <Button appearance="secondary" onClick={onSyncNow}>Sync now</Button>
+        <Button size="small" appearance="secondary" onClick={onSyncNow}>Sync now</Button>
         <Button
+          size="small"
           appearance="secondary"
           icon={<NumberSymbolRegular />}
           onClick={() => countRows()}

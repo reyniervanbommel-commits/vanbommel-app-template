@@ -10,7 +10,6 @@ import {
 } from '@fluentui/react-components';
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
-import DataModelDiagram from './DataModelDiagram';
 import ExcelLinkWizard from './ExcelLinkWizard';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 
@@ -61,13 +60,6 @@ export default function AdminDataModel() {
         ) : (
           <>
             {selectedModel.error ? <Text className={styles.error} block>{selectedModel.error}</Text> : null}
-            <DataModelDiagram
-              entities={selectedModel.entities}
-              relation={selectedModel.relation}
-              columns={selectedModel.columns}
-              cache={selectedModel.cache}
-              lookups={selectedModel.lookups}
-            />
             <SyncFilterBuilder
               tableKey={selectedTab}
               filterCatalog={selectedModel.filterCatalog}

@@ -134,8 +134,6 @@ function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
   expandedOrders,
-  showBoardHeaders,
-  showGroupHeaders,
   columns,
   lineColumns,
   headerColumnWidths,
@@ -180,7 +178,7 @@ function PurchaseOrdersBoardRows({
   return (
     <tbody>
       {groupedRows.map((group) => {
-        const isCollapsed = showGroupHeaders ? !!collapsedGroups[group.groupName] : false;
+        const isCollapsed = !!collapsedGroups[group.groupName];
         const groupSelectionKeys = Array.from(
           new Set(group.entries.map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId)).filter(Boolean))
         );
@@ -192,23 +190,21 @@ function PurchaseOrdersBoardRows({
           && groupSelectionKeys.some((key) => selection.isSelected(key));
         return (
           <React.Fragment key={group.groupName}>
-            {showGroupHeaders ? (
-              <PurchaseOrdersGroupHeaderRow
-                colCount={colCount}
-                styles={styles}
-                groupingColor={groupingColor}
-                selectionEnabled={selectionEnabled}
-                groupAllSelected={groupAllSelected}
-                groupSomeSelected={groupSomeSelected}
-                groupName={group.groupName}
-                groupingColumnLabel={groupingColumnLabel}
-                entryCount={group.entries.length}
-                isCollapsed={isCollapsed}
-                onToggleGroup={onToggleGroup}
-                onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
-              />
-            ) : null}
-            {showBoardHeaders && !isCollapsed && group.entries.map(({ order, rowId }) => {
+            <PurchaseOrdersGroupHeaderRow
+              colCount={colCount}
+              styles={styles}
+              groupingColor={groupingColor}
+              selectionEnabled={selectionEnabled}
+              groupAllSelected={groupAllSelected}
+              groupSomeSelected={groupSomeSelected}
+              groupName={group.groupName}
+              groupingColumnLabel={groupingColumnLabel}
+              entryCount={group.entries.length}
+              isCollapsed={isCollapsed}
+              onToggleGroup={onToggleGroup}
+              onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
+            />
+            {!isCollapsed && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
               const hasLines = lines.length > 0;
               const isExpanded = !!expandedOrders[rowId];

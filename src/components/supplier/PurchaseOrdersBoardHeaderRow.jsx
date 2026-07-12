@@ -8,11 +8,7 @@ import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
   selection,
-  showBoardHeaders,
-  showGroupHeaders,
   onSetExpansion,
-  onToggleBoardHeaders,
-  onToggleGroupHeaders,
   columns,
   headerColumnDrag,
   headerColumnWidths,
@@ -47,11 +43,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   return (
     <tr>
       <PurchaseOrdersTableControls
-        showBoardHeaders={showBoardHeaders}
-        showGroupHeaders={showGroupHeaders}
         onSetExpansion={onSetExpansion}
-        onToggleBoardHeaders={onToggleBoardHeaders}
-        onToggleGroupHeaders={onToggleGroupHeaders}
         selectionEnabled={Boolean(selection?.enabled)}
         allSelected={Boolean(selection?.allSelected)}
         someSelected={Boolean(selection?.someSelected)}
