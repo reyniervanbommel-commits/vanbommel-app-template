@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Badge,
   Button,
@@ -13,6 +13,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { ArrowUploadRegular, LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 
 const useStyles = makeStyles({
   mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200 },
@@ -43,15 +44,19 @@ export default function DataPreviewColumnConfigRow({
   onDeleteColumn,
 }) {
   const styles = useStyles();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const handleVisibility = useCallback(() => onToggleVisibility(column), [onToggleVisibility, column]);
   const handleVisibleAtDelete = useCallback(() => onToggleVisibleAtDelete(column), [onToggleVisibleAtDelete, column]);
   const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
   const handleDelete = useCallback(() => {
     if (column.source !== 'custom') return;
-    const ok = window.confirm(
-      `Delete custom column "${column.label}"? This permanently removes the column and all related values from SQL.`
-    );
-    if (!ok) return;
+    setDeleteConfirmOpen(true);
+  }, [column.source]);
+  const handleCancelDelete = useCallback(() => {
+    setDeleteConfirmOpen(false);
+  }, []);
+  const handleConfirmDelete = useCallback(() => {
+    setDeleteConfirmOpen(false);
     onDeleteColumn(column);
   }, [onDeleteColumn, column]);
   const visibilityBusy = togglingKey === `vis-${column.id}`;
@@ -65,96 +70,109 @@ export default function DataPreviewColumnConfigRow({
   );
 
   return (
-    <TableRow className={rowClassName}>
-      <TableCell className={styles.valueCell}>
-        {isRelationField ? (
-          <Badge appearance="filled" color="warning" icon={<LinkRegular />}>
-            Header-Line link key
-          </Badge>
-        ) : (
-          <Text size={200} className={styles.muted}>—</Text>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        <Text weight="semibold">{column.label}</Text>
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.source === 'd365' ? (
-          <span className={styles.mono}>{column.d365Field || '(derived)'}</span>
-        ) : (
-          <Badge appearance="tint" color="informative" size="small">Custom column</Badge>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>{typeLabel}</TableCell>
-      <TableCell className={styles.valueCell} title={sampleValue}>{sampleValue}</TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.hideAllowed ? (
-          <Switch
-            checked={column.isActive}
-            disabled={visibilityBusy || bulkBusy}
-            onChange={handleVisibility}
-            aria-label={`Show or hide column ${column.label}`}
-          />
-        ) : (
-          <Tooltip content="Key column: cannot be hidden" relationship="label">
-            <span className={styles.cellCenter}>
-              <LockClosedRegular fontSize={14} />
-              <Text size={200}>Always visible</Text>
-            </span>
-          </Tooltip>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        <Switch
-          checked={column.visibleAtDelete}
-          disabled={visibleAtDeleteBusy || bulkBusy}
-          onChange={handleVisibleAtDelete}
-          aria-label={`Show column ${column.label} in the delete popup`}
-        />
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.writeBackAllowed ? (
-          <span className={styles.cellCenter}>
+    <>
+      <TableRow className={rowClassName}>
+        <TableCell className={styles.valueCell}>
+          {isRelationField ? (
+            <Badge appearance="filled" color="warning" icon={<LinkRegular />}>
+              Header-Line link key
+            </Badge>
+          ) : (
+            <Text size={200} className={styles.muted}>—</Text>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          <Text weight="semibold">{column.label}</Text>
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.source === 'd365' ? (
+            <span className={styles.mono}>{column.d365Field || '(derived)'}</span>
+          ) : (
+            <Badge appearance="tint" color="informative" size="small">Custom column</Badge>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>{typeLabel}</TableCell>
+        <TableCell className={styles.valueCell} title={sampleValue}>{sampleValue}</TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.hideAllowed ? (
             <Switch
-              checked={column.writableToD365}
-              disabled={writebackBusy || bulkBusy}
-              onChange={handleWriteback}
-              aria-label={`Write-back to D365 for ${column.label}`}
+              checked={column.isActive}
+              disabled={visibilityBusy || bulkBusy}
+              onChange={handleVisibility}
+              aria-label={`Show or hide column ${column.label}`}
             />
-            {column.writableToD365 ? (
-              <Badge appearance="tint" color="success" size="small" icon={<ArrowUploadRegular />}>
-                Enabled
-              </Badge>
-            ) : (
-              <Badge appearance="tint" color="informative" size="small">Available</Badge>
-            )}
-          </span>
-        ) : (
-          <Tooltip
-            content={column.source === 'custom'
-              ? 'Custom columns only exist in this app and are never written to D365'
-              : 'Key or system field: write-back is not allowed'}
-            relationship="label"
-          >
-            <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-          </Tooltip>
-        )}
-      </TableCell>
-      <TableCell className={styles.valueCell}>
-        {column.source === 'custom' ? (
-          <Button
-            className={styles.deleteButton}
-            appearance="secondary"
-            size="small"
-            disabled={deletingBusy || bulkBusy}
-            onClick={handleDelete}
-          >
-            {deletingBusy ? 'Deleting...' : 'Delete'}
-          </Button>
-        ) : (
-          <Text size={200} className={styles.muted}>—</Text>
-        )}
-      </TableCell>
-    </TableRow>
+          ) : (
+            <Tooltip content="Key column: cannot be hidden" relationship="label">
+              <span className={styles.cellCenter}>
+                <LockClosedRegular fontSize={14} />
+                <Text size={200}>Always visible</Text>
+              </span>
+            </Tooltip>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          <Switch
+            checked={column.visibleAtDelete}
+            disabled={visibleAtDeleteBusy || bulkBusy}
+            onChange={handleVisibleAtDelete}
+            aria-label={`Show column ${column.label} in the delete popup`}
+          />
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.writeBackAllowed ? (
+            <span className={styles.cellCenter}>
+              <Switch
+                checked={column.writableToD365}
+                disabled={writebackBusy || bulkBusy}
+                onChange={handleWriteback}
+                aria-label={`Write-back to D365 for ${column.label}`}
+              />
+              {column.writableToD365 ? (
+                <Badge appearance="tint" color="success" size="small" icon={<ArrowUploadRegular />}>
+                  Enabled
+                </Badge>
+              ) : (
+                <Badge appearance="tint" color="informative" size="small">Available</Badge>
+              )}
+            </span>
+          ) : (
+            <Tooltip
+              content={column.source === 'custom'
+                ? 'Custom columns only exist in this app and are never written to D365'
+                : 'Key or system field: write-back is not allowed'}
+              relationship="label"
+            >
+              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
+            </Tooltip>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.source === 'custom' ? (
+            <Button
+              className={styles.deleteButton}
+              appearance="secondary"
+              size="small"
+              disabled={deletingBusy || bulkBusy}
+              onClick={handleDelete}
+            >
+              {deletingBusy ? 'Deleting...' : 'Delete'}
+            </Button>
+          ) : (
+            <Text size={200} className={styles.muted}>—</Text>
+          )}
+        </TableCell>
+      </TableRow>
+      {deleteConfirmOpen ? (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          title="Delete custom column"
+          message={`Delete custom column "${column.label}"? This permanently removes the column and all related values from SQL.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      ) : null}
+    </>
   );
 }

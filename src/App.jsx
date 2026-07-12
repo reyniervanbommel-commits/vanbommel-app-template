@@ -6,6 +6,7 @@ import AuthGuard from './components/auth/AuthGuard';
 import LoginPage from './components/auth/LoginPage';
 import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay } from './components/layout';
+import AppToaster from './components/shared/AppToaster';
 import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
 // Route-based code-splitting: de admin-module (incl. de zware recharts-bibliotheek), de
@@ -81,6 +82,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
       </div>
 
       <AppFooter />
+      <AppToaster />
 
       {isDevEnvironment ? <DevFeatureChecklist /> : null}
       {isPerfEnabled ? <DevPerfOverlay /> : null}

@@ -5,11 +5,14 @@ import { FilterMenuMainPane, FilterMenuSubPane } from './PurchaseOrderColumnFilt
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
 import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesMenuDraft';
 import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
+import { useColumnTextStyleActions } from '../../hooks/useColumnTextStyleActions';
+import { usePurchaseOrderColumnMutationActions } from '../../hooks/usePurchaseOrderColumnMutationActions';
+import { usePurchaseOrderSortFilterActions } from '../../hooks/usePurchaseOrderSortFilterActions';
+import { useAppToast } from '../../hooks/useAppToast';
+import PurchaseOrderColumnMutationDialogs from './PurchaseOrderColumnMutationDialogs';
 import {
-  HEX_COLOR_PATTERN,
   getDraftFromFilter,
   getColumnTypeMeta,
-  getTextStyleDraft,
   isColumnFilterActive,
   isDateColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
@@ -49,7 +52,6 @@ function PurchaseOrderColumnFilterMenu({
   // Zijpaneel-submenu: 'none' | 'group' (categorie/groeperen) | 'add' (kolom rechts toevoegen).
   const [activeSubmenu, setActiveSubmenu] = useState('none');
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
-  const [textStyleDraft, setTextStyleDraft] = useState(() => getTextStyleDraft(columnTextStyle));
   const isDate = isDateColumn(column);
   const isGroupingColumn = groupingColumnKey === column.key;
   const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
@@ -67,20 +69,45 @@ function PurchaseOrderColumnFilterMenu({
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
   const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
+  const { notifyError } = useAppToast();
   const isImageColumn = column?.dataType === 'image';
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
-  const formatReferenceColumns = useMemo(
-    () => (Array.isArray(referenceColumns) ? referenceColumns : [])
-      .filter((refColumn) => refColumn?.key && refColumn.key !== column.key),
-    [referenceColumns, column.key]
-  );
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setActiveSubmenu('none');
+  }, []);
+  const {
+    textStyleDraft,
+    handleTextColorChange,
+    handleToggleBold,
+    handleToggleItalic,
+    handleToggleUnderline,
+    handleApplyTextStyle,
+    handleClearTextStyle,
+  } = useColumnTextStyleActions({
+    open,
+    columnTextStyle,
+    canSetColumnTextStyle,
+    onSetColumnTextStyle,
+    columnKey: column.key,
+    onClose: closeMenu,
+  });
+  const { dialogState, setRenameValue, handleRenameColumn, handleRenameCancel, handleRenameSubmit, handleRemoveColumn, handleRemoveCancel, handleRemoveConfirm } = usePurchaseOrderColumnMutationActions({
+    column,
+    canRenameColumn,
+    canRemoveColumn,
+    onRenameColumn,
+    onRemoveColumn,
+    onCloseMenu: closeMenu,
+  });
+  const handleRenameValueChange = useCallback((_, data) => setRenameValue(data.value), [setRenameValue]);
+  const formatReferenceColumns = useMemo(() => (Array.isArray(referenceColumns) ? referenceColumns : []).filter((refColumn) => refColumn?.key && refColumn.key !== column.key), [referenceColumns, column.key]);
   useEffect(() => {
     if (open) {
       setDraft(getDraftFromFilter(column, filter));
-      setTextStyleDraft(getTextStyleDraft(columnTextStyle));
     }
-  }, [open, column, filter, columnTextStyle]);
+  }, [open, column, filter]);
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
     if (!data.open) setActiveSubmenu('none');
@@ -106,81 +133,18 @@ function PurchaseOrderColumnFilterMenu({
     onAddColumnRightOf(column, { key: 'image-edit' });
     setOpen(false);
   }, [canEditImageColumn, column, onAddColumnRightOf]);
-
-  const handleRenameColumn = useCallback(async () => {
-    if (!canRenameColumn) return;
-    const nextLabel = window.prompt('Rename column', column.label);
-    if (nextLabel === null) return;
-    const trimmed = nextLabel.trim();
-    if (!trimmed || trimmed === column.label) return;
-    try {
-      await onRenameColumn(column.id, trimmed);
-      setOpen(false);
-    } catch (err) {
-      window.alert(err?.message || 'Renaming the column failed.');
-    }
-  }, [canRenameColumn, column.id, column.label, onRenameColumn]);
-
-  const handleRemoveColumn = useCallback(async () => {
-    if (!canRemoveColumn) return;
-    const shouldDelete = window.confirm(
-      `Delete column "${column.label}"? This permanently removes the column and all related values from SQL.`
-    );
-    if (!shouldDelete) return;
-    try {
-      await onRemoveColumn(column.id);
-      setOpen(false);
-    } catch (err) {
-      window.alert(err?.message || 'Deleting the column failed.');
-    }
-  }, [canRemoveColumn, column.id, column.label, onRemoveColumn]);
-
-  const setSortAsc = useCallback(() => {
-    onSetSortDirection(column.key, 'asc');
-    setOpen(false);
-  }, [column.key, onSetSortDirection]);
-
-  const setSortDesc = useCallback(() => {
-    onSetSortDirection(column.key, 'desc');
-    setOpen(false);
-  }, [column.key, onSetSortDirection]);
-
-  const clearSort = useCallback(() => {
-    onSetSortDirection('', 'none');
-    setOpen(false);
-  }, [onSetSortDirection]);
-
-  const handleOperatorSelect = useCallback((_, data) => {
-    if (!data.optionValue) return;
-    setDraft((prev) => ({ ...prev, operator: data.optionValue }));
-  }, []);
-
-  const handleValueChange = useCallback((event) => {
-    const nextValue = event.target.value;
-    setDraft((prev) => ({ ...prev, value: nextValue }));
-  }, []);
-
-  const handleSecondaryValueChange = useCallback((event) => {
-    const nextValue = event.target.value;
-    setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
-  }, []);
-
-  const handleApply = useCallback(() => {
-    onSetOperator(column.key, draft.operator);
-    onSetValue(column.key, draft.value);
-    if (isDate && draft.operator === 'between') {
-      onSetSecondaryValue(column.key, draft.secondaryValue);
-    } else {
-      onSetSecondaryValue(column.key, '');
-    }
-    setOpen(false);
-  }, [column.key, draft, isDate, onSetOperator, onSetSecondaryValue, onSetValue]);
-
-  const handleClearFilter = useCallback(() => {
-    onClearFilter(column.key);
-    setOpen(false);
-  }, [column.key, onClearFilter]);
-
+  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApply, handleClearFilter } = usePurchaseOrderSortFilterActions({
+    columnKey: column.key,
+    draft,
+    isDate,
+    onSetSortDirection,
+    onSetOperator,
+    onSetValue,
+    onSetSecondaryValue,
+    onClearFilter,
+    setDraft,
+    setOpen,
+  });
   const handleToggleWriteback = useCallback(() => {
     if (!canToggleWriteback) return; onToggleWriteback(column.id, !writable); setOpen(false);
   }, [canToggleWriteback, column.id, onToggleWriteback, writable]);
@@ -189,42 +153,13 @@ function PurchaseOrderColumnFilterMenu({
     onToggleLineColumnSum(column.key, !isLineColumnSummed);
     setOpen(false);
   }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum]);
-  const handleTextColorChange = useCallback((event) => {
-    const nextColor = String(event.target.value || '').toLowerCase();
-    setTextStyleDraft((prev) => ({ ...prev, textColor: HEX_COLOR_PATTERN.test(nextColor) ? nextColor : '' }));
-  }, []);
-  const handleToggleBold = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, bold: !prev.bold }));
-  }, []);
-  const handleToggleItalic = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, italic: !prev.italic }));
-  }, []);
-  const handleToggleUnderline = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, underline: !prev.underline }));
-  }, []);
-  const handleApplyTextStyle = useCallback(async () => {
-    if (!canSetColumnTextStyle) return;
-    await onSetColumnTextStyle(column.key, textStyleDraft);
-    setOpen(false);
-    setActiveSubmenu('none');
-  }, [canSetColumnTextStyle, onSetColumnTextStyle, column.key, textStyleDraft]);
-  const handleClearTextStyle = useCallback(async () => {
-    if (!canSetColumnTextStyle) return;
-    await onSetColumnTextStyle(column.key, { textColor: '', bold: false, italic: false, underline: false });
-    setTextStyleDraft({ textColor: '', bold: false, italic: false, underline: false });
-    setOpen(false);
-    setActiveSubmenu('none');
-  }, [canSetColumnTextStyle, onSetColumnTextStyle, column.key]);
-  const closeMenu = useCallback(() => {
-    setOpen(false);
-    setActiveSubmenu('none');
-  }, []);
   const { handleApplyFormatRules, handleClearFormatRules } = useColumnFormatRulesMenuActions({
     canSetColumnFormatRules,
     columnKey: column.key,
     formatRulesDraft,
     onSetColumnFormatRules,
     onClose: closeMenu,
+    onError: notifyError,
   });
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;
@@ -239,6 +174,7 @@ function PurchaseOrderColumnFilterMenu({
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
+    <>
     <Popover open={open} onOpenChange={handleOpenChange} positioning="below-start">
       <PopoverTrigger disableButtonEnhancement>
         <Button
@@ -327,6 +263,22 @@ function PurchaseOrderColumnFilterMenu({
         />
       </PopoverSurface>
     </Popover>
+    {dialogState.renameOpen || dialogState.removeOpen ? (
+      <PurchaseOrderColumnMutationDialogs
+        columnLabel={column.label}
+        renameOpen={dialogState.renameOpen}
+        renameValue={dialogState.renameValue}
+        renameBusy={dialogState.renameBusy}
+        onRenameValueChange={handleRenameValueChange}
+        onRenameCancel={handleRenameCancel}
+        onRenameSubmit={handleRenameSubmit}
+        removeOpen={dialogState.removeOpen}
+        removeBusy={dialogState.removeBusy}
+        onRemoveCancel={handleRemoveCancel}
+        onRemoveConfirm={handleRemoveConfirm}
+      />
+    ) : null}
+    </>
   );
 }
 

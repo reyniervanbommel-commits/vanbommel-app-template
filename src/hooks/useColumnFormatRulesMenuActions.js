@@ -6,6 +6,7 @@ export function useColumnFormatRulesMenuActions({
   formatRulesDraft,
   onSetColumnFormatRules,
   onClose,
+  onError,
 }) {
   const handleApplyFormatRules = useCallback(async () => {
     if (!canSetColumnFormatRules) return;
@@ -13,9 +14,11 @@ export function useColumnFormatRulesMenuActions({
       await onSetColumnFormatRules(columnKey, formatRulesDraft.buildRuleSet());
       onClose();
     } catch (err) {
-      window.alert(err?.message || 'Saving conditional formatting failed.');
+      if (typeof onError === 'function') {
+        onError(err?.message || 'Saving conditional formatting failed.');
+      }
     }
-  }, [canSetColumnFormatRules, columnKey, formatRulesDraft, onSetColumnFormatRules, onClose]);
+  }, [canSetColumnFormatRules, columnKey, formatRulesDraft, onSetColumnFormatRules, onClose, onError]);
 
   const handleClearFormatRules = useCallback(async () => {
     if (!canSetColumnFormatRules) return;
@@ -24,9 +27,11 @@ export function useColumnFormatRulesMenuActions({
       formatRulesDraft.resetDraft();
       onClose();
     } catch (err) {
-      window.alert(err?.message || 'Clearing conditional formatting failed.');
+      if (typeof onError === 'function') {
+        onError(err?.message || 'Clearing conditional formatting failed.');
+      }
     }
-  }, [canSetColumnFormatRules, columnKey, formatRulesDraft, onSetColumnFormatRules, onClose]);
+  }, [canSetColumnFormatRules, columnKey, formatRulesDraft, onSetColumnFormatRules, onClose, onError]);
 
   return { handleApplyFormatRules, handleClearFormatRules };
 }

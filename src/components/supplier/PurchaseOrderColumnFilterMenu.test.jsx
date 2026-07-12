@@ -81,10 +81,11 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     renderMenu();
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
-    fireEvent.click(submenuButtons[0]);
+    fireEvent.click(submenuButtons[submenuButtons.length - 1]);
+    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
 
-    expect(screen.getByText('Target')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /\+ Add rule/i })).toBeTruthy();
+    expect(await screen.findByText('Target')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /\+ Add rule/i })).toBeTruthy();
   });
 
   it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
@@ -92,8 +93,10 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
-    fireEvent.click(submenuButtons[0]);
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add rule/i }));
+    fireEvent.click(submenuButtons[submenuButtons.length - 1]);
+    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /\+ Add rule/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Done$/i }));
     const applyButtons = screen.getAllByRole('button', { name: /^Apply$/i });
     fireEvent.click(applyButtons[applyButtons.length - 1]);
 
