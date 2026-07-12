@@ -29,22 +29,34 @@ function normalizeRuleValue(value) {
 
 function normalizeRule(rawRule) {
   if (!rawRule || typeof rawRule !== 'object' || Array.isArray(rawRule)) return null;
-  const op = FORMAT_RULE_OPERATORS.includes(rawRule.op) ? rawRule.op : '=';
+  const rawOperator = rawRule.op ?? rawRule.operator;
+  const op = FORMAT_RULE_OPERATORS.includes(rawOperator) ? rawOperator : '=';
   const color = HEX_COLOR_PATTERN.test(String(rawRule.color || ''))
     ? String(rawRule.color).toLowerCase()
     : '';
   if (!color) return null;
-  const valueRef = normalizeColumnKey(rawRule.valueRef);
+  const valueRef = normalizeColumnKey(
+    rawRule.valueRef ?? rawRule.compareColumnKey ?? rawRule.compareToColumnKey
+  );
   if (valueRef) return { op, valueRef, color };
-  const value = normalizeRuleValue(rawRule.value);
+  const rawValue = Object.prototype.hasOwnProperty.call(rawRule, 'value')
+    ? rawRule.value
+    : rawRule.compareValue;
+  const value = normalizeRuleValue(rawValue);
   if (value === null) return null;
   return { op, value, color };
 }
 
 export function normalizeColumnFormatRuleSet(rawRuleSet) {
-  if (!rawRuleSet || typeof rawRuleSet !== 'object' || Array.isArray(rawRuleSet)) return null;
-  const target = FORMAT_RULE_TARGETS.includes(rawRuleSet.target) ? rawRuleSet.target : 'cell';
-  const rules = (Array.isArray(rawRuleSet.rules) ? rawRuleSet.rules : [])
+  if (!rawRuleSet || (typeof rawRuleSet !== 'object' && !Array.isArray(rawRuleSet))) return null;
+  const legacyRuleArray = Array.isArray(rawRuleSet);
+  const target = !legacyRuleArray && FORMAT_RULE_TARGETS.includes(rawRuleSet.target) ? rawRuleSet.target : 'cell';
+  const rawRules = legacyRuleArray
+    ? rawRuleSet
+    : (Array.isArray(rawRuleSet.rules)
+      ? rawRuleSet.rules
+      : (Array.isArray(rawRuleSet.conditions) ? rawRuleSet.conditions : []));
+  const rules = rawRules
     .map(normalizeRule)
     .filter(Boolean)
     .slice(0, 20);

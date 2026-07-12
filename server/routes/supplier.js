@@ -91,12 +91,15 @@ function normalizeColumnKey(value) {
 
 function normalizeFormatRule(rule) {
   if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return null;
-  const op = FORMAT_RULE_OPERATORS.has(rule.op) ? rule.op : '=';
+  const rawOperator = rule.op ?? rule.operator;
+  const op = FORMAT_RULE_OPERATORS.has(rawOperator) ? rawOperator : '=';
   const color = HEX_COLOR_PATTERN.test(String(rule.color || '')) ? String(rule.color).toLowerCase() : '';
   if (!color) return null;
-  const valueRef = normalizeColumnKey(rule.valueRef);
+  const valueRef = normalizeColumnKey(rule.valueRef ?? rule.compareColumnKey ?? rule.compareToColumnKey);
   if (valueRef) return { op, valueRef, color };
-  const rawValue = rule.value;
+  const rawValue = Object.prototype.hasOwnProperty.call(rule, 'value')
+    ? rule.value
+    : rule.compareValue;
   if (typeof rawValue === 'number' && Number.isFinite(rawValue)) return { op, value: rawValue, color };
   if (typeof rawValue === 'boolean') return { op, value: rawValue, color };
   const value = String(rawValue ?? '').trim().slice(0, 200);
@@ -105,9 +108,15 @@ function normalizeFormatRule(rule) {
 }
 
 function normalizeColumnFormatRuleSet(ruleSet) {
-  if (!ruleSet || typeof ruleSet !== 'object' || Array.isArray(ruleSet)) return null;
-  const target = ruleSet.target === 'row' ? 'row' : 'cell';
-  const rules = (Array.isArray(ruleSet.rules) ? ruleSet.rules : [])
+  if (!ruleSet || (typeof ruleSet !== 'object' && !Array.isArray(ruleSet))) return null;
+  const legacyRuleArray = Array.isArray(ruleSet);
+  const target = !legacyRuleArray && ruleSet.target === 'row' ? 'row' : 'cell';
+  const rawRules = legacyRuleArray
+    ? ruleSet
+    : (Array.isArray(ruleSet.rules)
+      ? ruleSet.rules
+      : (Array.isArray(ruleSet.conditions) ? ruleSet.conditions : []));
+  const rules = rawRules
     .map(normalizeFormatRule)
     .filter(Boolean)
     .slice(0, 20);

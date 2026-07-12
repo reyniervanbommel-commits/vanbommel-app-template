@@ -1,3 +1,31 @@
+describe('columnFormatRuleUtils legacy compatibility', () => {
+  it('normaliseert legacy rule-arrays naar een actief ruleset-object', () => {
+    const normalized = normalizeColumnFormatRuleSet([
+      { operator: '>=', compareValue: '10', color: '#FFF4CE' },
+    ]);
+
+    expect(normalized).toEqual({
+      target: 'cell',
+      rules: [{ op: '>=', value: 10, color: '#fff4ce' }],
+    });
+  });
+
+  it('accepteert legacy conditions en compareColumnKey in map-normalisatie', () => {
+    const normalized = normalizeColumnFormatRulesMap({
+      amount: {
+        target: 'row',
+        conditions: [{ operator: '=', compareColumnKey: 'budget', color: '#E6F4FF' }],
+      },
+    });
+
+    expect(normalized).toEqual({
+      amount: {
+        target: 'row',
+        rules: [{ op: '=', valueRef: 'budget', color: '#e6f4ff' }],
+      },
+    });
+  });
+});
 import {
   evalFormatRules,
   normalizeColumnFormatRuleSet,
