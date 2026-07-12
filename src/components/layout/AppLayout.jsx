@@ -120,7 +120,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
 
   const navItems = useMemo(
     () => [
-      { id: 'po', label: 'Purchase orders', icon: Table24Regular, path: '/' },
+      { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
       ...(isAdminLike ? [
         { type: 'divider' },
         { id: 'admin', label: 'Admin', icon: Person24Regular, path: '/admin' },
