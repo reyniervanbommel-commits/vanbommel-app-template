@@ -10,6 +10,7 @@ import {
   LinkRegular,
   MoreVerticalRegular,
   NumberSymbolRegular,
+  PaintBrushRegular,
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -45,12 +46,11 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
   conditionalFormattingIndicator: {
-    width: '10px',
-    height: '10px',
-    minWidth: '10px',
-    borderRadius: '999px',
-    backgroundColor: tokens.colorBrandForeground1,
-    display: 'inline-block',
+    color: tokens.colorPaletteDarkOrangeForeground2,
+    fontSize: tokens.fontSizeBase300,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
     flexShrink: 0,
   },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
@@ -177,7 +177,7 @@ export default function PurchaseOrderColumnHeader({
         ) : null}
         {showConditionalFormattingIndicator ? (
           <Tooltip content="Conditional formatting active" relationship="label">
-            <span className={styles.conditionalFormattingIndicator} aria-hidden />
+            <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
           </Tooltip>
         ) : null}
         {showSumIndicator ? (
@@ -232,7 +232,7 @@ export default function PurchaseOrderColumnHeader({
         ) : null}
         {showConditionalFormattingIndicator ? (
           <Tooltip content="Conditional formatting active" relationship="label">
-            <span className={styles.conditionalFormattingIndicator} aria-hidden />
+            <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
           </Tooltip>
         ) : null}
         {showSumIndicator ? (
