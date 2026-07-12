@@ -64,6 +64,13 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackgroundDisabled,
   },
   controlCell: {
+    position: 'sticky',
+    left: 0,
+    zIndex: 1,
+    width: '58px',
+    minWidth: '58px',
+    maxWidth: '58px',
+    backgroundColor: 'inherit',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('1px'),

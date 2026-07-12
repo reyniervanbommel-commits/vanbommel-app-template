@@ -62,6 +62,11 @@ export function isColumnFilterActive(column, filter) {
   return Boolean(filter.value);
 }
 
+export function isColumnFormatRuleSetActive(columnFormatRuleSet) {
+  const normalizedRuleSet = normalizeColumnFormatRuleSet(columnFormatRuleSet);
+  return Boolean(normalizedRuleSet?.rules?.length);
+}
+
 export function getTextStyleDraft(columnTextStyle) {
   const textColor = HEX_COLOR_PATTERN.test(String(columnTextStyle?.textColor || ''))
     ? String(columnTextStyle.textColor).toLowerCase()

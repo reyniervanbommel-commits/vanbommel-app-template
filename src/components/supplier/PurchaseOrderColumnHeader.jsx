@@ -44,6 +44,15 @@ const useStyles = makeStyles({
     lineHeight: 1,
     flexShrink: 0,
   },
+  conditionalFormattingIndicator: {
+    width: '10px',
+    height: '10px',
+    minWidth: '10px',
+    borderRadius: '999px',
+    backgroundColor: tokens.colorBrandForeground1,
+    display: 'inline-block',
+    flexShrink: 0,
+  },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
@@ -58,6 +67,7 @@ export default function PurchaseOrderColumnHeader({
   autoEdit = false,
   onEditingDone,
   showFilterIndicator = false,
+  showConditionalFormattingIndicator = false,
   showSumIndicator = false,
   showConnectionIndicator = false,
 }) {
@@ -165,6 +175,11 @@ export default function PurchaseOrderColumnHeader({
             <FilterRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
+        {showConditionalFormattingIndicator ? (
+          <Tooltip content="Conditional formatting active" relationship="label">
+            <span className={styles.conditionalFormattingIndicator} aria-hidden />
+          </Tooltip>
+        ) : null}
         {showSumIndicator ? (
           <Tooltip content="Column sum enabled" relationship="label">
             <NumberSymbolRegular className={styles.indicatorIcon} />
@@ -213,6 +228,11 @@ export default function PurchaseOrderColumnHeader({
         {showFilterIndicator ? (
           <Tooltip content="Filter active" relationship="label">
             <FilterRegular className={styles.indicatorIcon} />
+          </Tooltip>
+        ) : null}
+        {showConditionalFormattingIndicator ? (
+          <Tooltip content="Conditional formatting active" relationship="label">
+            <span className={styles.conditionalFormattingIndicator} aria-hidden />
           </Tooltip>
         ) : null}
         {showSumIndicator ? (
