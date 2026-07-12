@@ -57,8 +57,33 @@ const COLUMN_SELECT = `
   FROM dbo.tb_columns
 `;
 
+// Korte in-memory cache voor tabel-metadata. tb_tables/tb_sources/tb_relations wijzigen alleen
+// bij zeldzame admin-acties (Excel-koppeling publiceren, default-filter opslaan); elke board-read
+// betaalde er wél een SQL-round-trip (~80-200ms) voor — twee zelfs, want lookups resolven hun
+// doeltabel ook via getTableByKey. Schrijvende paden roepen invalidateTableCache() aan; de TTL
+// vangt wijzigingen door andere replica's af.
+const TABLE_META_CACHE_TTL_MS = 30 * 1000;
+const tableMetaCache = new Map();
+
+function invalidateTableCache(tableKey = null) {
+  if (tableKey === null || tableKey === undefined) {
+    tableMetaCache.clear();
+    return;
+  }
+  tableMetaCache.delete(String(tableKey));
+}
+
 // Resolve een tabel + bron + relatie op natuurlijke sleutel. Gooit 404 als de tabel onbekend/inactief is.
 async function getTableByKey(tableKey) {
+  const cacheKey = String(tableKey);
+  const cached = tableMetaCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const value = await fetchTableByKey(tableKey);
+  tableMetaCache.set(cacheKey, { value, expiresAt: Date.now() + TABLE_META_CACHE_TTL_MS });
+  return value;
+}
+
+async function fetchTableByKey(tableKey) {
   const pool = await getPool();
   const result = await pool.request()
     .input('key', sql.NVarChar(64), tableKey)
@@ -163,6 +188,7 @@ module.exports = {
   DATA_TYPES,
   getPool,
   getTableByKey,
+  invalidateTableCache,
   listColumns,
   getColumnById,
   getLookups,

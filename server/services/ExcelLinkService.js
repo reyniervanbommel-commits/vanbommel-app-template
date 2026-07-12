@@ -15,7 +15,7 @@ const crypto = require('crypto');
 const XLSX = require('xlsx');
 const sql = require('mssql');
 const { logger } = require('../utils/logger');
-const { getPool, getTableByKey, listColumns } = require('./TableRegistryService');
+const { getPool, getTableByKey, listColumns, invalidateTableCache } = require('./TableRegistryService');
 
 const PARTITION_SENTINEL = '_';        // excel-datasets zijn partitie-loos
 const MASTER_DETAIL_KEY = -1;          // master-rij sentinel (gelijk aan tb_cache-conventie)
@@ -306,6 +306,7 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
               VALUES (@t, @fn, @rc, @cc, 'draft', @u)`);
 
     await tx.commit();
+    invalidateTableCache(tableKey);
     logger.info('Excel-dataset opgeslagen', { tableKey, rows: rows.length, columns: columns.length });
     return { tableKey, label: cleanLabel, rowCount: rows.length, columns: columns.map((c) => ({ key: c.key, label: c.label, dataType: c.dataType, samples: c.samples })) };
   } catch (err) {
@@ -360,6 +361,8 @@ async function deleteDataset(tableKey) {
     await new sql.Request(tx).input('t', sql.BigInt, table.id).query(`DELETE FROM dbo.tb_sync_state WHERE table_id = @t`);
     await new sql.Request(tx).input('t', sql.BigInt, table.id).query(`DELETE FROM dbo.tb_tables WHERE id = @t`);
     await tx.commit();
+    // Relaties naar deze dataset zijn mee verwijderd; hele metadata-cache leegmaken.
+    invalidateTableCache();
   } catch (err) {
     await tx.rollback();
     throw err;
@@ -509,6 +512,8 @@ async function publishLink({ mainTableKey, datasetTableKey, sourceScope, mainKey
       .query(`UPDATE dbo.tb_upload_batches SET status = 'published', key_field = @kf WHERE table_id = @t AND status = 'draft'`);
 
     await tx.commit();
+    // tb_relations is onderdeel van de gecachte tabel-metadata van de hoofdtabel.
+    invalidateTableCache();
     const relationId = relRes.recordset[0] ? Number(relRes.recordset[0].id) : null;
     logger.info('Excel-koppeling gepubliceerd', { mainTableKey, datasetTableKey, matched: stats.matchRate.matched });
     return { published: true, relationId, matchRate: stats.matchRate };
@@ -555,6 +560,7 @@ async function deleteLink(relationId) {
   const pool = await getPool();
   await pool.request().input('id', sql.BigInt, id)
     .query(`DELETE FROM dbo.tb_relations WHERE id = @id AND relation_role = 'lookup'`);
+  invalidateTableCache();
   return { success: true };
 }
 
