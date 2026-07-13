@@ -51,7 +51,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    marginBottom: '16px',
+    marginBottom: '4px',
     flexWrap: 'wrap',
   },
   freshness: {
