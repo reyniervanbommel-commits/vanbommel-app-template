@@ -17,7 +17,6 @@ import {
   ChevronDownRegular,
   SaveRegular,
   EyeRegular,
-  StarFilled,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 
@@ -61,11 +60,6 @@ const useStyles = makeStyles({
     marginLeft: '4px',
     fontSize: '18px',
     lineHeight: '1',
-  },
-  defaultViewIndicator: {
-    color: tokens.colorPaletteMarigoldForeground2,
-    marginLeft: '6px',
-    verticalAlign: 'middle',
   },
   updateActionLabel: {
     color: tokens.colorBrandForeground1,
@@ -142,9 +136,6 @@ export default function PurchaseOrderSavedViewsControl({
             >
               <span className={styles.titleName}>
                 {triggerLabel}
-                {activeView?.isDefault ? (
-                  <StarFilled className={styles.defaultViewIndicator} aria-label="Default view" />
-                ) : null}
                 {hasUnsavedChanges ? <span className={styles.unsavedIndicator} aria-hidden>*</span> : null}
               </span>
               <ChevronDownRegular className={styles.titleChevron} />

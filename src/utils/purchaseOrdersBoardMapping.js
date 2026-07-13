@@ -46,6 +46,7 @@ export function mapTbResponseToBoard(data) {
       dataAreaId: r.partitionKey,
       orderNumber: r.recordKey,
       values: r.values || {},
+      historyByColumnId: r.historyByColumnId || {},
       formulaErrors: r.formulaErrors && typeof r.formulaErrors === 'object' ? r.formulaErrors : {},
       isNew: Boolean(r.isNew),
       isChanged: Boolean(r.isChanged),
@@ -56,6 +57,7 @@ export function mapTbResponseToBoard(data) {
       lines: (Array.isArray(r.details) ? r.details : []).map((d) => ({
         lineNumber: d.detailKey,
         values: d.values || {},
+        historyByColumnId: d.historyByColumnId || {},
         isNew: Boolean(d.isNew),
         isChanged: Boolean(d.isChanged),
         isRemoved: Boolean(d.isRemoved),

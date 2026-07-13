@@ -3,7 +3,9 @@
 const {
   computeContentHash,
   computeChangedFieldKeys,
+  buildHistoryByCell,
   dedupeDetailRows,
+  addLookupColumnsByScope,
   applyLookups,
   normalizeExclusionRows,
   resolveConfiguredMaxItems,
@@ -13,7 +15,6 @@ const {
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
-  applyDetailLookupRollupsToMaster,
   assertCustomColumnWritable,
   buildLookupFieldMap,
   resolveLookupSourceKey,
@@ -88,6 +89,23 @@ describe('TableDataService.dedupeDetailRows', () => {
       { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 10, dataJson: '{"line":10b}' },
       { partitionKey: 'whsl', recordKey: 'WSPO-1', detailKey: 20, dataJson: '{"line":20}' },
     ]);
+  });
+});
+
+describe('TableDataService.buildHistoryByCell', () => {
+  it('groepeert custom- en write-backhistorie per cel en kolom', () => {
+    const result = buildHistoryByCell([
+      { column_id: 11, partition_key: 'whsl', record_key: 'PO-1', detail_key: -1 },
+      { column_id: 12, partition_key: 'whsl', record_key: 'PO-1', detail_key: -1 },
+      { column_id: 21, partition_key: 'whsl', record_key: 'PO-1', detail_key: 10 },
+    ]);
+
+    expect(result.get(JSON.stringify(['whsl', 'PO-1', -1]))).toEqual({ 11: true, 12: true });
+    expect(result.get(JSON.stringify(['whsl', 'PO-1', 10]))).toEqual({ 21: true });
+  });
+
+  it('geeft een lege index voor ongeldige invoer', () => {
+    expect(buildHistoryByCell(null).size).toBe(0);
   });
 });
 
@@ -287,21 +305,35 @@ describe('TableDataService runtime linked header values', () => {
     );
     expect(total).toBe(4);
   });
-});
 
-describe('TableDataService detail lookup rollups', () => {
-  it('rolt detail lookupwaarden door naar master als unieke lijst', () => {
-    const masterValues = {};
+  it('zet unieke lijnwaarden alleen op een expliciet gekoppelde headerkolom', () => {
+    const masterValues = { item_values: null };
     const details = [
       { values: { items_searchName: 'Item A' } },
       { values: { items_searchName: 'Item B' } },
       { values: { items_searchName: 'Item A' } },
     ];
-    applyDetailLookupRollupsToMaster(masterValues, details, [{
-      sourceScope: 'detail',
-      fieldEntries: [['items_searchName', 'searchName']],
-    }]);
-    expect(masterValues.items_searchName).toBe('Item A, Item B');
+    applyRuntimeLinkedHeaderValues(masterValues, details, {
+      lineTotalHeaderLinks: [],
+      lineValueHeaderLinks: [{
+        lineColumnKey: 'items_searchName',
+        headerColumnKey: 'item_values',
+      }],
+    });
+    expect(masterValues).toEqual({ item_values: 'Item A, Item B' });
+  });
+});
+
+describe('TableDataService lookup column scopes', () => {
+  it('houdt detail-lookups uit de hoofditemkolommen', () => {
+    const masterCols = [];
+    const detailCols = [];
+    const itemColumns = [{ key: 'items_searchName', scope: 'detail' }];
+
+    addLookupColumnsByScope('detail', itemColumns, masterCols, detailCols);
+
+    expect(masterCols).toEqual([]);
+    expect(detailCols).toEqual(itemColumns);
   });
 });
 

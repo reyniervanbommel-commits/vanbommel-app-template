@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   Badge,
-  Button,
   Popover,
   PopoverSurface,
   PopoverTrigger,
@@ -11,29 +10,47 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { History20Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 
 const useStyles = makeStyles({
   wrapper: {
-    display: 'inline-flex',
+    display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('4px'),
+    width: '100%',
     maxWidth: '100%',
   },
   trigger: {
-    minWidth: '24px',
-    width: '24px',
-    height: '24px',
+    position: 'absolute',
+    top: '0',
+    right: '0',
+    zIndex: 2,
+    minWidth: '16px',
+    width: '16px',
+    height: '16px',
     ...shorthands.padding('0'),
-    color: tokens.colorNeutralForeground3,
-    transitionProperty: 'opacity',
+    ...shorthands.border('0'),
+    backgroundColor: '#a7d8f0',
+    clipPath: 'polygon(0 0, 100% 0, 100% 100%)',
+    cursor: 'pointer',
+    transformOrigin: 'top right',
+    transitionProperty: 'background-color, transform',
     transitionDuration: '120ms',
     transitionTimingFunction: 'ease',
+    ':hover': {
+      backgroundColor: '#72bde3',
+      transform: 'scale(1.15)',
+    },
+    ':focus-visible': {
+      backgroundColor: '#72bde3',
+      outlineColor: '#3089b8',
+      outlineStyle: 'solid',
+      outlineWidth: '2px',
+    },
   },
-  content: { display: 'inline-flex', alignItems: 'center', maxWidth: '100%' },
+  content: { display: 'inline-flex', alignItems: 'center', width: '100%', maxWidth: '100%' },
   surface: {
-    maxWidth: '340px',
+    width: 'min(720px, calc(100vw - 32px))',
+    maxWidth: '720px',
     maxHeight: '360px',
     overflowY: 'auto',
     ...shorthands.padding('12px'),
@@ -43,38 +60,44 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     marginBottom: '8px',
   },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('10px'),
+  tableWrapper: {
+    overflowX: 'auto',
   },
-  entry: {
-    ...shorthands.borderLeft('2px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('0', '0', '0', '10px'),
-  },
-  meta: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('6px'),
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
     fontSize: tokens.fontSizeBase200,
+  },
+  headerCell: {
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.padding('6px', '8px'),
+    backgroundColor: tokens.colorNeutralBackground2,
     color: tokens.colorNeutralForeground2,
+    fontWeight: tokens.fontWeightSemibold,
+    textAlign: 'left',
+    whiteSpace: 'nowrap',
+  },
+  cell: {
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.padding('7px', '8px'),
+    verticalAlign: 'top',
+  },
+  dateCell: {
+    whiteSpace: 'nowrap',
   },
   user: {
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
   },
-  transition: {
-    fontSize: tokens.fontSizeBase300,
-    marginTop: '2px',
+  valueCell: {
+    minWidth: '110px',
     wordBreak: 'break-word',
   },
-  oldValue: {
-    color: tokens.colorNeutralForeground3,
-    textDecorationLine: 'line-through',
-  },
-  arrow: {
-    color: tokens.colorNeutralForeground3,
-    ...shorthands.margin('0', '4px'),
+  statusList: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    ...shorthands.gap('4px'),
   },
   info: {
     fontSize: tokens.fontSizeBase200,
@@ -86,7 +109,7 @@ const useStyles = makeStyles({
   },
 });
 
-const dateTimeFormat = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'short', timeStyle: 'short' });
+const dateTimeFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
 function formatDateTime(iso) {
   if (!iso) return '';
@@ -97,49 +120,70 @@ function formatDateTime(iso) {
 // Weergave van een waarde volgens het kolomtype; leeg → em-dash.
 function formatValue(value, dataType) {
   if (value === null || value === undefined || value === '') return '—';
-  if (dataType === 'boolean') return value === 1 || value === true || value === '1' ? 'Ja' : 'Nee';
+  if (dataType === 'boolean') return value === 1 || value === true || value === '1' ? 'Yes' : 'No';
   return String(value);
 }
 
-const STATUS_LABEL = { pending: 'in behandeling', applied: 'toegepast', failed: 'mislukt' };
+const STATUS_LABEL = { pending: 'Pending', applied: 'Applied', failed: 'Failed' };
 const STATUS_COLOR = { pending: 'warning', applied: 'success', failed: 'danger' };
 
-function HistoryEntry({ entry, dataType, styles }) {
-  const userLabel = entry.user?.name || entry.user?.email || 'Onbekende gebruiker';
-  const showOld = entry.action !== 'insert';
+function HistoryRow({ entry, dataType, styles }) {
+  const userLabel = entry.user?.name || entry.user?.email || 'Unknown user';
   return (
-    <div className={styles.entry}>
-      <div className={styles.meta}>
-        <span>{formatDateTime(entry.at)}</span>
-        <span>·</span>
+    <tr>
+      <td className={`${styles.cell} ${styles.dateCell}`}>{formatDateTime(entry.at)}</td>
+      <td className={styles.cell}>
         <Tooltip content={entry.user?.email || ''} relationship="label">
           <span className={styles.user}>{userLabel}</span>
         </Tooltip>
-        {entry.source === 'writeback' ? (
-          <Badge appearance="tint" size="small">D365</Badge>
-        ) : null}
-        {entry.status ? (
-          <Badge appearance="tint" size="small" color={STATUS_COLOR[entry.status] || 'informative'}>
-            {STATUS_LABEL[entry.status] || entry.status}
-          </Badge>
-        ) : null}
-      </div>
-      <div className={styles.transition}>
-        {showOld ? (
-          <>
-            <span className={styles.oldValue}>{formatValue(entry.oldValue, dataType)}</span>
-            <span className={styles.arrow}>→</span>
-          </>
-        ) : null}
-        <span>{formatValue(entry.newValue, dataType)}</span>
-      </div>
+      </td>
+      <td className={`${styles.cell} ${styles.valueCell}`}>
+        {entry.action === 'insert' ? '—' : formatValue(entry.oldValue, dataType)}
+      </td>
+      <td className={`${styles.cell} ${styles.valueCell}`}>{formatValue(entry.newValue, dataType)}</td>
+      <td className={styles.cell}>
+        <div className={styles.statusList}>
+          {entry.source === 'writeback' ? (
+            <Badge appearance="tint" size="small">D365</Badge>
+          ) : null}
+          {entry.status ? (
+            <Badge appearance="tint" size="small" color={STATUS_COLOR[entry.status] || 'informative'}>
+              {STATUS_LABEL[entry.status] || entry.status}
+            </Badge>
+          ) : null}
+          {!entry.status && entry.source !== 'writeback' ? '—' : null}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function HistoryTable({ entries, dataType, styles }) {
+  return (
+    <div className={styles.tableWrapper}>
+      <table className={styles.table} aria-label="Cell history">
+        <thead>
+          <tr>
+            <th className={styles.headerCell}>Date/time</th>
+            <th className={styles.headerCell}>User</th>
+            <th className={styles.headerCell}>Previous value</th>
+            <th className={styles.headerCell}>New value</th>
+            <th className={styles.headerCell}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, index) => (
+            <HistoryRow key={index} entry={entry} dataType={dataType} styles={styles} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 /**
- * Toont een klokje vóór de celwaarde wanneer er historie bestaat.
- * Klik op dat klokje opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
+ * Toont een omgevouwen hoekje rechtsboven wanneer er historie bestaat.
+ * Klik op het hoekje opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
  */
 export default function CellHistoryPopover({ cellKeys, dataType, children, hasHistory = false }) {
   const styles = useStyles();
@@ -147,34 +191,21 @@ export default function CellHistoryPopover({ cellKeys, dataType, children, hasHi
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
 
-  if (!hasHistory) {
-    return children;
-  }
-
   const load = useCallback(async () => {
     setStatus('loading');
     setError('');
     try {
-      // Board-cutover Fase 4 (#AB:173): tb_*-history gebruikt partitionKey/recordKey/detailKey.
       const params = new URLSearchParams({ columnId: String(cellKeys.columnId) });
       const hasLine = cellKeys.lineNumber !== null && cellKeys.lineNumber !== undefined;
-      let endpoint;
-      if (BOARD_TB_SOURCE) {
-        params.set('partitionKey', cellKeys.dataAreaId ?? '');
-        params.set('recordKey', cellKeys.orderNumber ?? '');
-        if (hasLine) params.set('detailKey', String(cellKeys.lineNumber));
-        endpoint = '/data/purchase-orders/history?' + params.toString();
-      } else {
-        params.set('dataAreaId', cellKeys.dataAreaId ?? '');
-        params.set('orderNumber', cellKeys.orderNumber ?? '');
-        if (hasLine) params.set('lineNumber', String(cellKeys.lineNumber));
-        endpoint = '/purchase-orders/history?' + params.toString();
-      }
+      params.set('partitionKey', cellKeys.dataAreaId ?? '');
+      params.set('recordKey', cellKeys.orderNumber ?? '');
+      if (hasLine) params.set('detailKey', String(cellKeys.lineNumber));
+      const endpoint = '/data/purchase-orders/history?' + params.toString();
       const data = await apiRequest(endpoint);
       setHistory(Array.isArray(data?.history) ? data.history : []);
       setStatus('ready');
     } catch (err) {
-      setError(err.message || 'Geschiedenis laden mislukt');
+      setError(err.message || 'Failed to load history');
       setStatus('error');
     }
   }, [cellKeys]);
@@ -183,33 +214,33 @@ export default function CellHistoryPopover({ cellKeys, dataType, children, hasHi
     if (data.open) load();
   }, [load]);
 
+  if (!hasHistory) {
+    return children;
+  }
+
   return (
     <Popover withArrow size="small" onOpenChange={onOpenChange}>
       <div className={styles.wrapper}>
         <PopoverTrigger disableButtonEnhancement>
-          <Button
-            appearance="subtle"
-            size="small"
+          <button
+            type="button"
             className={styles.trigger}
-            icon={<History20Regular />}
-            aria-label="Geschiedenis tonen"
+            aria-label="View cell history"
+            title="View cell history"
+            data-cell-history-trigger="true"
           />
         </PopoverTrigger>
         <span className={styles.content}>{children}</span>
       </div>
       <PopoverSurface className={styles.surface}>
-        <div className={styles.title}>Geschiedenis</div>
-        {status === 'loading' ? <Spinner size="tiny" label="Laden…" /> : null}
+        <div className={styles.title}>History</div>
+        {status === 'loading' ? <Spinner size="tiny" label="Loading…" /> : null}
         {status === 'error' ? <div className={styles.error}>{error}</div> : null}
         {status === 'ready' && history.length === 0 ? (
-          <div className={styles.info}>Nog geen wijzigingen vastgelegd.</div>
+          <div className={styles.info}>No changes have been recorded yet.</div>
         ) : null}
         {status === 'ready' && history.length > 0 ? (
-          <div className={styles.list}>
-            {history.map((entry, index) => (
-              <HistoryEntry key={index} entry={entry} dataType={dataType} styles={styles} />
-            ))}
-          </div>
+          <HistoryTable entries={history} dataType={dataType} styles={styles} />
         ) : null}
       </PopoverSurface>
     </Popover>
