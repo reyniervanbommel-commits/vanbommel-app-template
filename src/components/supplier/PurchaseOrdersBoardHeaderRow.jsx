@@ -27,6 +27,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   sortState,
   groupingColumnKey,
   groupingColorsByColumn = {},
+  groupSummaryColumnKeys = [],
   setSortDirection,
   setFilterOperator,
   setFilterValue,
@@ -35,6 +36,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   setGroupingColumn,
   clearGrouping,
   setGroupingBarColor,
+  setGroupSummaryColumn,
   onAddColumnRightOf,
   headerColumnTextStyles,
   onSaveHeaderColumnTextStyle,
@@ -57,6 +59,7 @@ export default function PurchaseOrdersBoardHeaderRow({
       {columns.map((column) => {
         const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
+        const hasGroupSummary = groupSummaryColumnKeys.includes(column.key);
         const connectionTargets = [];
         const linkedTotalColumnKey = linkedLineTotalByHeaderKey[column.key];
         const linkedValueMeta = linkedLineValueByHeaderKey[column.key];
@@ -103,6 +106,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                   onEditingDone={onEditingDone}
                   showFilterIndicator={hasActiveFilter}
                   showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                  showSumIndicator={hasGroupSummary}
                   showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
                 />
               </div>
@@ -112,6 +116,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 sortState={sortState}
                 groupingColumnKey={groupingColumnKey}
                 groupingColor={groupingColorsByColumn[column.key] || '#f4e6ed'}
+                isGroupSummaryColumn={hasGroupSummary}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
                 onSetSortDirection={setSortDirection}
@@ -122,6 +127,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetGroupingColumn={setGroupingColumn}
                 onClearGrouping={clearGrouping}
                 onSetGroupingColor={setGroupingBarColor}
+                onSetGroupSummaryColumn={setGroupSummaryColumn}
                 onAddColumnRightOf={onAddColumnRightOf}
                 onRenameColumn={onRenameColumn}
                 onRemoveColumn={onRemoveColumn}

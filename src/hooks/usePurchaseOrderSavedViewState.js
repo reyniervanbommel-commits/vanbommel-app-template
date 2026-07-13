@@ -68,6 +68,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearAllFilters();
     boardView.clearSort();
     boardView.clearGrouping();
+    boardView.clearGroupSummaries();
     setActiveViewId(null);
     setSavedStateFingerprint(null);
   }, [boardView]);

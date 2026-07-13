@@ -13,7 +13,8 @@ import {
   NumberSymbolRegular,
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
-import { menuLabel, renderColumnTypeIcon, submenuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
+import PurchaseOrderColumnFilterSubmenuButton from './PurchaseOrderColumnFilterSubmenuButton';
+import { menuLabel, renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
   columnLabel,
@@ -21,7 +22,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   showSortAndFilter = true,
   showGrouping = true,
   activeSubmenu,
-  toggleSubmenu,
+  openSubmenu,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
   canToggleWriteback,
@@ -133,14 +134,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           {showGrouping ? (
             <>
               <div className={styles.divider} />
-              <Button
-                className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'group' ? styles.submenuButtonActive : ''}`}
-                appearance="subtle"
-                size="small"
-                onClick={() => toggleSubmenu('group')}
-              >
-                {submenuLabel(styles, <TextBulletList20Regular />, 'Categorie / groeperen')}
-              </Button>
+              <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="group" label="Categorie / groeperen" icon={<TextBulletList20Regular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
             </>
           ) : null}
         </>
@@ -148,27 +142,13 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       {canSetColumnTextStyle ? (
         <>
           <div className={styles.divider} />
-          <Button
-            className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'textStyle' ? styles.submenuButtonActive : ''}`}
-            appearance="subtle"
-            size="small"
-            onClick={() => toggleSubmenu('textStyle')}
-          >
-            {submenuLabel(styles, <EditRegular />, 'Text style')}
-          </Button>
+          <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="textStyle" label="Text style" icon={<EditRegular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
         </>
       ) : null}
       {canSetColumnFormatRules ? (
         <>
           <div className={styles.divider} />
-          <Button
-            className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'formatRules' ? styles.submenuButtonActive : ''}`}
-            appearance="subtle"
-            size="small"
-            onClick={() => toggleSubmenu('formatRules')}
-          >
-            {submenuLabel(styles, <NumberSymbolRegular />, 'Conditional formatting')}
-          </Button>
+          <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="formatRules" label="Conditional formatting" icon={<NumberSymbolRegular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
         </>
       ) : null}
       {canToggleWriteback ? (
@@ -185,14 +165,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       {canAddColumn ? (
         <>
           <div className={styles.divider} />
-          <Button
-            className={`${styles.sortButton} ${styles.submenuButton} ${activeSubmenu === 'add' ? styles.submenuButtonActive : ''}`}
-            appearance="subtle"
-            size="small"
-            onClick={() => toggleSubmenu('add')}
-          >
-            {submenuLabel(styles, <AddRegular />, 'Kolom rechts toevoegen')}
-          </Button>
+          <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="add" label="Kolom rechts toevoegen" icon={<AddRegular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
         </>
       ) : null}
       <div className={styles.divider} />

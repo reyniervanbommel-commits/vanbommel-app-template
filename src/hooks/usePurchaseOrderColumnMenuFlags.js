@@ -8,6 +8,7 @@ export function usePurchaseOrderColumnMenuFlags({
   onRenameColumn,
   onRemoveColumn,
   onToggleLineColumnSum,
+  onSetGroupSummaryColumn,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
   onSetColumnTextStyle,
@@ -25,7 +26,9 @@ export function usePurchaseOrderColumnMenuFlags({
   const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
   const isLineColumn = column.level === 'line';
   const isLineNumberColumn = isLineColumn && column.dataType === 'number';
+  const isHeaderNumberColumn = column.level !== 'line' && column.dataType === 'number';
   const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
+  const canToggleGroupSummary = Boolean(isHeaderNumberColumn && typeof onSetGroupSummaryColumn === 'function');
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
@@ -55,6 +58,7 @@ export function usePurchaseOrderColumnMenuFlags({
     canRenameColumn,
     canRemoveColumn,
     canToggleLineTotal,
+    canToggleGroupSummary,
     canPushLineTotalToHeader,
     canPushLineValuesToHeader,
     canSetColumnTextStyle,

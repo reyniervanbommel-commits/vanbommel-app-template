@@ -9,7 +9,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   connectionTargets,
   isImageColumn,
   activeSubmenu,
-  toggleSubmenu,
+  submenuTop,
+  openSubmenu,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
   canToggleWriteback,
@@ -67,6 +68,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
+  canToggleGroupSummary,
+  isGroupSummaryColumn,
+  handleToggleGroupSummary,
 }) {
   return (
     <PopoverSurface className={styles.surface}>
@@ -78,7 +82,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         showSortAndFilter={!isImageColumn}
         showGrouping={!isImageColumn}
         activeSubmenu={activeSubmenu}
-        toggleSubmenu={toggleSubmenu}
+        openSubmenu={openSubmenu}
         canSetColumnTextStyle={canSetColumnTextStyle}
         canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
         canToggleWriteback={canToggleWriteback}
@@ -123,6 +127,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
       <FilterMenuSubPane
         styles={styles}
         activeSubmenu={activeSubmenu}
+        submenuTop={submenuTop}
         handleAddType={handleAddType}
         textStyleDraft={textStyleDraft}
         handleTextColorChange={handleTextColorChange}
@@ -147,6 +152,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         onSetGroupingColumn={onSetGroupingColumn}
         onClearGrouping={onClearGrouping}
         onSetGroupingColor={onSetGroupingColor}
+        canToggleGroupSummary={canToggleGroupSummary}
+        isGroupSummaryColumn={isGroupSummaryColumn}
+        handleToggleGroupSummary={handleToggleGroupSummary}
       />
     </PopoverSurface>
   );

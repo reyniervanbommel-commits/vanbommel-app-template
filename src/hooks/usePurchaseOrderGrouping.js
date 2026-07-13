@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatCellValue } from '../utils/purchaseOrderFormat';
 
 const DEFAULT_GROUPING_COLOR = '#f4e6ed';
 
@@ -30,8 +31,39 @@ function pickColorByColumn(columnKey, colorsByColumn, fallbackColor = DEFAULT_GR
   return isHexColor(candidate) ? candidate : fallbackColor;
 }
 
-function normalizeGroupLabel(value) {
+function isDateLikeGroupingColumn(column) {
+  const dataType = String(column?.dataType || '').trim().toLowerCase();
+  const columnText = `${column?.key || ''} ${column?.label || ''}`;
+  return dataType === 'date'
+    || dataType === 'datetime'
+    || dataType === 'date-time'
+    || /date|datum|aangemaakt|created|delivery|ship/i.test(columnText);
+}
+
+function isNumberGroupingSummaryColumn(column) {
+  return String(column?.dataType || '').trim().toLowerCase() === 'number';
+}
+
+function toNumeric(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeGroupLabel(value, column) {
   if (value === null || value === undefined) return 'No value';
+  if (isDateLikeGroupingColumn(column)) {
+    const formattedDate = formatCellValue(value, column?.dataType, {
+      columnKey: column?.key,
+      columnLabel: column?.label,
+    });
+    if (formattedDate && formattedDate !== '-') return formattedDate;
+  }
   const text = String(value).trim();
   return text ? text : 'No value';
 }
@@ -56,6 +88,7 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     const defaultKey = getDefaultGroupingColumnKey(safeColumns);
     return defaultKey ? { [defaultKey]: DEFAULT_GROUPING_COLOR } : {};
   });
+  const [summaryColumnKeys, setSummaryColumnKeys] = useState([]);
 
   useEffect(() => {
     setGroupingColumnKeys((current) => {
@@ -83,6 +116,9 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
       return next;
     });
   }, [safeColumns]);
+  useEffect(() => {
+    setSummaryColumnKeys((current) => current.filter((key) => isNumberGroupingSummaryColumn(safeColumns.find((column) => column.key === key))));
+  }, [safeColumns]);
 
   const groupingColumnKey = useMemo(() => groupingColumnKeys.join(','), [groupingColumnKeys]);
   const groupingColor = useMemo(
@@ -97,6 +133,13 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     }, {}),
     [safeColumns]
   );
+  const columnByKey = useMemo(
+    () => safeColumns.reduce((acc, column) => {
+      if (column?.key) acc[column.key] = column;
+      return acc;
+    }, {}),
+    [safeColumns]
+  );
 
   const groupingColumnLabel = useMemo(() => {
     if (!groupingColumnKeys.length) return 'Category';
@@ -104,6 +147,12 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
       .map((columnKey) => columnLabelByKey[columnKey] || columnKey)
       .join(' + ');
   }, [columnLabelByKey, groupingColumnKeys]);
+  const summaryColumns = useMemo(
+    () => summaryColumnKeys
+      .map((columnKey) => columnByKey[columnKey])
+      .filter(isNumberGroupingSummaryColumn),
+    [columnByKey, summaryColumnKeys]
+  );
 
   const groupedRows = useMemo(() => {
     if (!groupingColumnKeys.length) {
@@ -114,18 +163,32 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
         groupColumnKey: '',
         groupLevel: 0,
         groupColor: DEFAULT_GROUPING_COLOR,
+        groupSummaries: [],
         ancestorGroupKeys: [],
         entries: safeRows,
         entriesForSelection: safeRows,
       }];
     }
 
+    const buildGroupSummaries = (bucketEntries) => summaryColumns.map((column) => {
+      const total = bucketEntries.reduce((sum, entry) => {
+        const numeric = toNumeric(entry.order?.values?.[column.key]);
+        return numeric === null ? sum : sum + numeric;
+      }, 0);
+      return {
+        columnKey: column.key,
+        label: column.label || column.key,
+        value: total,
+        displayValue: formatCellValue(total, 'number'),
+      };
+    });
+
     const buildLevel = (entries, level, pathParts = []) => {
       const columnKey = groupingColumnKeys[level];
       const isLeafLevel = level === groupingColumnKeys.length - 1;
       const byGroup = new Map();
       entries.forEach((entry) => {
-        const groupName = normalizeGroupLabel(entry.order?.values?.[columnKey]);
+        const groupName = normalizeGroupLabel(entry.order?.values?.[columnKey], columnByKey[columnKey]);
         if (!byGroup.has(groupName)) {
           byGroup.set(groupName, []);
         }
@@ -144,6 +207,7 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
           groupColumnKey: columnKey,
           groupLevel: level,
           groupColor: pickColorByColumn(columnKey, groupingColorsByColumn),
+          groupSummaries: buildGroupSummaries(bucketEntries),
           ancestorGroupKeys,
           entries: isLeafLevel ? bucketEntries : [],
           entriesForSelection: bucketEntries,
@@ -157,7 +221,7 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     };
 
     return buildLevel(safeRows, 0);
-  }, [groupingColumnKeys, safeRows, columnLabelByKey, groupingColorsByColumn]);
+  }, [groupingColumnKeys, safeRows, columnLabelByKey, columnByKey, groupingColorsByColumn, summaryColumns]);
 
   const setGroupingColumn = useCallback((columnKey) => {
     const nextColumnKey = String(columnKey || '').trim();
@@ -202,6 +266,21 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     }));
   }, [groupingColumnKeys]);
 
+  const setGroupSummaryColumn = useCallback((columnKey, enabled) => {
+    const targetColumnKey = String(columnKey || '').trim();
+    if (!targetColumnKey || !isNumberGroupingSummaryColumn(columnByKey[targetColumnKey])) return;
+    setSummaryColumnKeys((current) => {
+      const hasColumn = current.includes(targetColumnKey);
+      if (enabled && !hasColumn) return [...current, targetColumnKey];
+      if (!enabled && hasColumn) return current.filter((key) => key !== targetColumnKey);
+      return current;
+    });
+  }, [columnByKey]);
+
+  const clearGroupSummaries = useCallback(() => {
+    setSummaryColumnKeys([]);
+  }, []);
+
   const exportState = useCallback(() => {
     const activeColorsByColumn = groupingColumnKeys.reduce((acc, key) => {
       const color = pickColorByColumn(key, groupingColorsByColumn);
@@ -213,8 +292,9 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
       columnKey: groupingColumnKeys[0] || '',
       color: pickColorByColumn(groupingColumnKeys[0], groupingColorsByColumn),
       colorsByColumn: activeColorsByColumn,
+      summaryColumnKeys,
     };
-  }, [groupingColumnKeys, groupingColorsByColumn]);
+  }, [groupingColumnKeys, groupingColorsByColumn, summaryColumnKeys]);
 
   const applyState = useCallback((state) => {
     const keysFromState = dedupeKeys(state?.columnKeys?.length ? state?.columnKeys : state?.columnKey);
@@ -222,6 +302,8 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     const stateColorsByColumn = (state?.colorsByColumn && typeof state.colorsByColumn === 'object')
       ? state.colorsByColumn
       : {};
+    const validSummaryKeys = dedupeKeys(state?.summaryColumnKeys)
+      .filter((key) => isNumberGroupingSummaryColumn(columnByKey[key]));
     const fallbackColor = isHexColor(state?.color) ? state.color : DEFAULT_GROUPING_COLOR;
     const nextColors = validKeys.reduce((acc, key) => {
       const ownColor = stateColorsByColumn[key];
@@ -229,8 +311,9 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
       return acc;
     }, {});
     setGroupingColumnKeys(validKeys);
+    setSummaryColumnKeys(validSummaryKeys);
     setGroupingColorsByColumn((current) => ({ ...current, ...nextColors }));
-  }, [safeColumns]);
+  }, [safeColumns, columnByKey]);
 
   return useMemo(() => ({
     groupedRows,
@@ -239,9 +322,12 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     groupingColumnLabel,
     groupingColor,
     groupingColorsByColumn,
+    summaryColumnKeys,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,
+    setGroupSummaryColumn,
+    clearGroupSummaries,
     exportState,
     applyState,
   }), [
@@ -251,9 +337,12 @@ export function usePurchaseOrderGrouping({ rows, columns }) {
     groupingColumnLabel,
     groupingColor,
     groupingColorsByColumn,
+    summaryColumnKeys,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,
+    setGroupSummaryColumn,
+    clearGroupSummaries,
     exportState,
     applyState,
   ]);

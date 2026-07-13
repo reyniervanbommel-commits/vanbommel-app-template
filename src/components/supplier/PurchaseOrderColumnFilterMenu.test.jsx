@@ -97,6 +97,15 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(await screen.findByRole('button', { name: /\+ Add rule/i })).toBeTruthy();
   });
 
+  it('opent een submenu wanneer de gebruiker erover hovert', async () => {
+    renderMenu();
+    openColumnMenu();
+    const textStyleButton = await screen.findByRole('button', { name: /Text style/i });
+    fireEvent.mouseEnter(textStyleButton);
+
+    expect(await screen.findByText('Preview text')).toBeTruthy();
+  });
+
   it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
     const { onSetColumnFormatRules } = renderMenu();
 
@@ -113,6 +122,17 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
       expect(onSetColumnFormatRules).toHaveBeenCalledTimes(1);
     });
     expect(onSetColumnFormatRules.mock.calls[0][0]).toBe('amount');
+  });
+
+  it('toont group header sum toggle voor number header-kolommen', async () => {
+    const onSetGroupSummaryColumn = vi.fn();
+    renderMenu({ onSetGroupSummaryColumn });
+
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Categorie \/ groeperen/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Show sum in group header/i }));
+
+    expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
   });
 
   it('verbergt Conditional formatting voor image-kolommen', async () => {

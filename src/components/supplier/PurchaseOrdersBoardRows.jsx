@@ -202,6 +202,7 @@ function PurchaseOrdersBoardRows({
               groupName={group.groupName}
               groupLabel={group.groupLabel}
               groupColumnKey={group.groupColumnKey}
+              groupSummaries={group.groupSummaries}
               groupLevel={group.groupLevel || 0}
               entryCount={selectionEntries.length}
               isCollapsed={isCollapsed}

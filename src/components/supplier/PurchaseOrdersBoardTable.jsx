@@ -134,9 +134,11 @@ function PurchaseOrdersBoardTable({
     groupedRows,
     groupingColumnKey,
     groupingColorsByColumn,
+    groupSummaryColumnKeys,
     setGroupingColumn,
     clearGrouping,
     setGroupingBarColor,
+    setGroupSummaryColumn,
   } = resolvedBoardView;
   const {
     collapsedGroups,
@@ -245,6 +247,7 @@ function PurchaseOrdersBoardTable({
             sortState={sortState}
             groupingColumnKey={groupingColumnKey}
             groupingColorsByColumn={groupingColorsByColumn}
+            groupSummaryColumnKeys={groupSummaryColumnKeys}
             setSortDirection={setSortDirection}
             setFilterOperator={setFilterOperator}
             setFilterValue={setFilterValue}
@@ -253,6 +256,7 @@ function PurchaseOrdersBoardTable({
             setGroupingColumn={setGroupingColumn}
             clearGrouping={clearGrouping}
             setGroupingBarColor={setGroupingBarColor}
+            setGroupSummaryColumn={setGroupSummaryColumn}
             onAddColumnRightOf={onAddColumnRightOf}
             headerColumnTextStyles={headerColumnTextStyles}
             onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}

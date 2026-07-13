@@ -31,6 +31,9 @@ function PurchaseOrderColumnGroupingSection({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
+  canToggleGroupSummary = false,
+  isGroupSummaryColumn = false,
+  onToggleGroupSummary,
 }) {
   const styles = useStyles();
 
@@ -77,6 +80,11 @@ function PurchaseOrderColumnGroupingSection({
           aria-label="Category bar color"
         />
       </div>
+      {canToggleGroupSummary ? (
+        <Button size="small" appearance="subtle" onClick={onToggleGroupSummary}>
+          {isGroupSummaryColumn ? 'Hide sum in group header' : 'Show sum in group header'}
+        </Button>
+      ) : null}
     </div>
   );
 }

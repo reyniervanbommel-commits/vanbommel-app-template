@@ -184,9 +184,12 @@ export function usePurchaseOrderBoardView({
       groupingColumnLabel: grouping.groupingColumnLabel,
       groupingColor: grouping.groupingColor,
       groupingColorsByColumn: grouping.groupingColorsByColumn,
+      groupSummaryColumnKeys: grouping.summaryColumnKeys,
       setGroupingColumn: grouping.setGroupingColumn,
       clearGrouping: grouping.clearGrouping,
       setGroupingBarColor: grouping.setGroupingBarColor,
+      setGroupSummaryColumn: grouping.setGroupSummaryColumn,
+      clearGroupSummaries: grouping.clearGroupSummaries,
       // gecombineerde serialisatie voor saved views
       exportFilterSortGrouping,
       applyFilterSortGrouping,

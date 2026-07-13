@@ -13,7 +13,7 @@ export default function PurchaseOrderColumnTextStylePane({
   handleClearTextStyle,
 }) {
   return (
-    <div className={styles.subPane}>
+    <>
       <Text className={styles.subPaneTitle}>Text style</Text>
       <div className={styles.colorRow}>
         <Input
@@ -69,6 +69,6 @@ export default function PurchaseOrderColumnTextStylePane({
         <Button size="small" appearance="primary" onClick={handleApplyTextStyle}>Apply</Button>
         <Button size="small" appearance="secondary" onClick={handleClearTextStyle}>Reset</Button>
       </div>
-    </div>
+    </>
   );
 }
