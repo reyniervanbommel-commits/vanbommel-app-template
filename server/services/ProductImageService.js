@@ -1,15 +1,23 @@
 'use strict';
 
-const settingsService = require('./SettingsService');
-const { getAccessToken } = require('./D365ODataService');
+const d365ODataService = require('./D365ODataService');
 
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const PRODUCT_IMAGE_ENTITY_PATH = '/data/ReleasedProductDocumentAttachments';
+const PRODUCT_IMAGE_SELECT_FIELDS = [
+  'dataAreaId',
+  'ItemNumber',
+  'Attachment',
+  'FileType',
+  'IsProductImage',
+  'IsDefaultProductImage',
+  'AttachedDateTime',
+];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
 const DATA_AREA_ID_PATTERN = /^[A-Za-z0-9]{2,10}$/;
-const ITEM_NUMBER_PATTERN = /^[A-Za-z0-9._-]{1,60}$/;
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const ITEM_NUMBER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,59}$/;
 
 class ProductImageServiceError extends Error {
   constructor(message, status = 502) {
@@ -34,11 +42,27 @@ function buildCacheKey({ dataAreaId, itemNumber }) {
   return `${dataAreaId.length}:${dataAreaId}|${itemNumber.length}:${itemNumber}`;
 }
 
+function isValidBase64(encoded) {
+  if (!encoded || encoded.length % 4 !== 0) return false;
+  const paddingLength = encoded.endsWith('==') ? 2 : (encoded.endsWith('=') ? 1 : 0);
+  const contentLength = encoded.length - paddingLength;
+  for (let index = 0; index < contentLength; index += 1) {
+    const code = encoded.charCodeAt(index);
+    const isAlphaNumeric = (
+      (code >= 48 && code <= 57)
+      || (code >= 65 && code <= 90)
+      || (code >= 97 && code <= 122)
+    );
+    if (!isAlphaNumeric && code !== 43 && code !== 47) return false;
+  }
+  return true;
+}
+
 function decodeImageContent(contentBase64) {
   const encoded = String(contentBase64 || '');
   const maxBase64Length = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
 
-  if (!encoded || encoded.length > maxBase64Length || !BASE64_PATTERN.test(encoded)) {
+  if (encoded.length > maxBase64Length || !isValidBase64(encoded)) {
     throw new ProductImageServiceError('D365 leverde ongeldige afbeeldingsdata');
   }
 
@@ -54,48 +78,64 @@ function normalizeContentType(contentType) {
   return String(contentType || '').trim().toLowerCase();
 }
 
-function resolveTrustedServiceUrl(trustedOriginValue, baseUrlValue, serviceUrlValue) {
-  const rawServiceUrl = String(serviceUrlValue || '').trim();
-  if (!rawServiceUrl) {
-    throw new ProductImageServiceError('D365 productafbeeldingservice is niet geconfigureerd');
-  }
+function contentTypeFromFileType(fileType) {
+  const normalized = normalizeContentType(fileType).replace(/^\./, '');
+  const types = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    'image/jpeg': 'image/jpeg',
+    png: 'image/png',
+    'image/png': 'image/png',
+    webp: 'image/webp',
+    'image/webp': 'image/webp',
+  };
+  return types[normalized] || null;
+}
 
-  let trustedOrigin;
-  let baseUrl;
-  let serviceUrl;
-  try {
-    trustedOrigin = new URL(String(trustedOriginValue || '').trim());
-    baseUrl = new URL(String(baseUrlValue || '').trim());
-    serviceUrl = new URL(rawServiceUrl, baseUrl);
-  } catch {
-    throw new ProductImageServiceError('D365 productafbeeldingservice is niet geconfigureerd');
-  }
+function isTrue(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return value === true || value === 1 || normalized === 'true' || normalized === 'yes' || normalized === '1';
+}
 
-  if (
-    trustedOrigin.protocol !== 'https:'
-    || trustedOrigin.username
-    || trustedOrigin.password
-    || baseUrl.protocol !== 'https:'
-    || baseUrl.username
-    || baseUrl.password
-    || serviceUrl.protocol !== 'https:'
-    || serviceUrl.username
-    || serviceUrl.password
-    || baseUrl.origin !== trustedOrigin.origin
-    || serviceUrl.origin !== trustedOrigin.origin
-  ) {
-    throw new ProductImageServiceError('D365 productafbeeldingservice heeft geen vertrouwde origin');
-  }
+function selectDefaultProductImage(records) {
+  return (Array.isArray(records) ? records : [])
+    .filter((record) => (
+      isTrue(record?.IsProductImage)
+      && isTrue(record?.IsDefaultProductImage)
+      && typeof record?.Attachment === 'string'
+      && record.Attachment.length > 0
+    ))
+    .sort((left, right) => (
+      Date.parse(right.AttachedDateTime || 0) - Date.parse(left.AttachedDateTime || 0)
+    ))[0] || null;
+}
 
-  return serviceUrl.toString();
+function hasMatchingMagicBytes(contentType, content) {
+  if (contentType === 'image/jpeg') {
+    return content.length >= 3
+      && content[0] === 0xff
+      && content[1] === 0xd8
+      && content[2] === 0xff;
+  }
+  if (contentType === 'image/png') {
+    return content.length >= 8
+      && content.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  if (contentType === 'image/webp') {
+    return content.length >= 12
+      && content.subarray(0, 4).toString('ascii') === 'RIFF'
+      && content.subarray(8, 12).toString('ascii') === 'WEBP';
+  }
+  return false;
+}
+
+function escapeODataLiteral(value) {
+  return String(value || '').replace(/'/g, "''");
 }
 
 function createProductImageService({
-  settings = settingsService,
-  getAccessTokenFn = getAccessToken,
-  fetchFn = global.fetch,
+  fetchEntityRecordsFn = d365ODataService.fetchEntityRecords,
   now = Date.now,
-  trustedOrigin = process.env.D365_PRODUCT_IMAGE_TRUSTED_ORIGIN,
 } = {}) {
   const cache = new Map();
 
@@ -123,56 +163,24 @@ function createProductImageService({
     });
   }
 
-  async function getRequestConfig() {
-    const [baseUrl, url, timeoutValue] = await Promise.all([
-      settings.getAsync('D365_ODATA_BASE_URL'),
-      settings.getAsync('D365_PRODUCT_IMAGE_SERVICE_URL'),
-      settings.getAsync('D365_PRODUCT_IMAGE_TIMEOUT_MS', '10000'),
-    ]);
-    const timeoutMs = Number.parseInt(timeoutValue, 10);
-
-    return {
-      serviceUrl: resolveTrustedServiceUrl(trustedOrigin, baseUrl, url),
-      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 10000,
-    };
-  }
-
   async function fetchFromD365(input) {
-    const { serviceUrl, timeoutMs } = await getRequestConfig();
-    const accessToken = await getAccessTokenFn();
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-
     try {
-      const response = await fetchFn(serviceUrl, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify(input),
-        signal: controller.signal,
+      const result = await fetchEntityRecordsFn({
+        sourceEntity: PRODUCT_IMAGE_ENTITY_PATH,
+        top: 100,
+        skip: 0,
+        fetchAll: true,
+        maxItems: 100,
+        extraFilter: [
+          `dataAreaId eq '${escapeODataLiteral(input.dataAreaId)}'`,
+          `ItemNumber eq '${escapeODataLiteral(input.itemNumber)}'`,
+        ].join(' and '),
+        selectFields: PRODUCT_IMAGE_SELECT_FIELDS,
       });
-
-      if (!response.ok) {
-        throw new ProductImageServiceError('D365 productafbeeldingservice gaf een fout terug');
-      }
-
-      const payload = await response.json();
-      if (!payload || typeof payload !== 'object' || typeof payload.found !== 'boolean') {
-        throw new ProductImageServiceError('D365 productafbeeldingservice gaf een ongeldige respons terug');
-      }
-      return payload;
+      return selectDefaultProductImage(result?.items);
     } catch (error) {
       if (error instanceof ProductImageServiceError) throw error;
-      throw new ProductImageServiceError(
-        error?.name === 'AbortError'
-          ? 'D365 productafbeeldingservice reageerde niet op tijd'
-          : 'D365 productafbeeldingservice is niet bereikbaar'
-      );
-    } finally {
-      clearTimeout(timeoutHandle);
+      throw new ProductImageServiceError('D365 standaard productafbeeldingsentiteit is niet beschikbaar');
     }
   }
 
@@ -186,17 +194,22 @@ function createProductImageService({
     const cached = readCache(cacheKey);
     if (cached) return cached;
 
-    const payload = await fetchFromD365(validInput);
-    if (!payload.found) return null;
+    const record = await fetchFromD365(validInput);
+    if (!record) return null;
 
-    const contentType = normalizeContentType(payload.contentType);
+    const contentType = contentTypeFromFileType(record.FileType);
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
       throw new ProductImageServiceError('D365 leverde een niet-toegestaan afbeeldingstype');
     }
 
+    const content = decodeImageContent(record.Attachment);
+    if (!hasMatchingMagicBytes(contentType, content)) {
+      throw new ProductImageServiceError('D365 afbeeldingsinhoud komt niet overeen met het bestandstype');
+    }
+
     const image = {
       contentType,
-      content: decodeImageContent(payload.contentBase64),
+      content,
     };
     writeCache(cacheKey, image);
     return image;
@@ -213,10 +226,14 @@ module.exports = {
   ALLOWED_CONTENT_TYPES,
   CACHE_TTL_MS,
   MAX_IMAGE_BYTES,
+  PRODUCT_IMAGE_ENTITY_PATH,
+  PRODUCT_IMAGE_SELECT_FIELDS,
   ProductImageServiceError,
   buildCacheKey,
+  contentTypeFromFileType,
   createProductImageService,
   decodeImageContent,
-  resolveTrustedServiceUrl,
+  hasMatchingMagicBytes,
+  selectDefaultProductImage,
   validateProductImageInput,
 };

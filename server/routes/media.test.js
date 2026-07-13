@@ -5,7 +5,13 @@ const { createMediaRouter } = require('./media');
 
 const validQuery = 'dataAreaId=USMF&itemNumber=ITEM-001';
 
-async function requestMedia({ role = 'employee', serviceResult, query = validQuery }) {
+async function requestMedia({
+  role = 'employee',
+  authenticated = true,
+  serviceResult,
+  query = validQuery,
+  rateLimiter = (_req, _res, next) => next(),
+}) {
   const productImageService = {
     getProductImage: vi.fn().mockImplementation(async () => {
       if (serviceResult instanceof Error) throw serviceResult;
@@ -15,12 +21,12 @@ async function requestMedia({ role = 'employee', serviceResult, query = validQue
   const timeFn = vi.fn(async (_label, callback) => callback());
   const app = express();
   app.use((req, _res, next) => {
-    req.session = { userId: 1, user: { id: 1, role } };
+    req.session = authenticated ? { userId: 1, user: { id: 1, role } } : {};
     next();
   });
   app.use('/api/media', createMediaRouter({
     productImageService,
-    rateLimiter: (_req, _res, next) => next(),
+    rateLimiter,
     timeFn,
   }));
 
@@ -82,6 +88,26 @@ describe('GET /api/media/product-image', () => {
     const result = await requestMedia({ role: 'supplier', serviceResult: null });
 
     expect(result.status).toBe(403);
+    expect(result.cacheControl).toBe('no-store');
+    expect(result.productImageService.getProductImage).not.toHaveBeenCalled();
+  });
+
+  it('weigert requests zonder sessie met 401 en no-store', async () => {
+    const result = await requestMedia({ authenticated: false, serviceResult: null });
+
+    expect(result.status).toBe(401);
+    expect(result.cacheControl).toBe('no-store');
+    expect(result.productImageService.getProductImage).not.toHaveBeenCalled();
+  });
+
+  it('markeert rate-limit responses als no-store', async () => {
+    const result = await requestMedia({
+      serviceResult: null,
+      rateLimiter: (_req, res) => res.status(429).json({ error: 'Te veel verzoeken' }),
+    });
+
+    expect(result.status).toBe(429);
+    expect(result.cacheControl).toBe('no-store');
     expect(result.productImageService.getProductImage).not.toHaveBeenCalled();
   });
 

@@ -55,6 +55,11 @@ function createMediaRouter({
   const router = express.Router();
   const staffOnly = requireAnyRoleFn([ROLES.ADMIN, ROLES.EMPLOYEE]);
 
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+
   router.get(
     '/product-image',
     rateLimiter,
