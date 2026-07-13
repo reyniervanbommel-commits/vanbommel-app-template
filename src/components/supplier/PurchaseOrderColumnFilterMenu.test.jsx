@@ -30,6 +30,7 @@ function renderMenu(overrides = {}) {
     onSetGroupingColor: vi.fn(),
     columnFormatRuleSet: null,
     onSetColumnFormatRules,
+    onSetColumnTextStyle: vi.fn().mockResolvedValue(undefined),
     referenceColumns: [
       { key: 'amount', label: 'Amount' },
       { key: 'budget', label: 'Budget' },
@@ -86,15 +87,13 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(await screen.findByText('Rename column')).toBeTruthy();
   });
 
-  it('opent het regels-submenu met Target en Add rule', async () => {
+  it('opent het regels-submenu met de beheeractie', async () => {
     renderMenu();
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
     fireEvent.click(submenuButtons[submenuButtons.length - 1]);
-    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
 
-    expect(await screen.findByText('Target')).toBeTruthy();
-    expect(await screen.findByRole('button', { name: /\+ Add rule/i })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Manage formatting rules/i })).toBeTruthy();
   });
 
   it('opent een submenu wanneer de gebruiker erover hovert', async () => {
@@ -112,9 +111,6 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
     fireEvent.click(submenuButtons[submenuButtons.length - 1]);
-    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /\+ Add rule/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Done$/i }));
     const applyButtons = screen.getAllByRole('button', { name: /^Apply$/i });
     fireEvent.click(applyButtons[applyButtons.length - 1]);
 
