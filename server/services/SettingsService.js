@@ -80,6 +80,10 @@ const ODATA_KEYS = [
   'D365_ODATA_TENANT_ID',
   'D365_ODATA_CLIENT_ID',
   'D365_ODATA_CLIENT_SECRET',
+  // Productafbeelding custom service. De URL is configureerbaar zodat de app geen
+  // D365-endpoint, token of Blob-locatie in broncode vastlegt.
+  'D365_PRODUCT_IMAGE_SERVICE_URL',
+  'D365_PRODUCT_IMAGE_TIMEOUT_MS',
   // Cache-sync scope/versheid (Fase 1, B2)
   // Gestructureerde sync-filterregels (JSON) — gecompileerd naar $filter (zie odataSyncFilter.js)
   'PO_SYNC_RULES',

@@ -1,12 +1,8 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
-import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
-import PurchaseOrderDataCell from './PurchaseOrderDataCell';
-import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
-import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
-import { getColumnCellStyle } from './columnTextStyleUtils';
-import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import PurchaseOrdersBoardGroupHeader from './PurchaseOrdersBoardGroupHeader';
+import PurchaseOrdersBoardOrderRows from './PurchaseOrdersBoardOrderRows';
+import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 const useStyles = makeStyles({
   groupRowCell: {
@@ -118,22 +114,6 @@ const useStyles = makeStyles({
   },
 });
 
-function getOrderRowClassName(order, styles) {
-  if (order.removedInD365) return `${styles.itemRow} ${styles.removedRow}`;
-  if (order.isNew) return `${styles.itemRow} ${styles.newRow}`;
-  if (order.isChanged) return `${styles.itemRow} ${styles.changedRow}`;
-  return styles.itemRow;
-}
-function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
-  if (order?.removedInD365) return '';
-  for (const column of Array.isArray(columns) ? columns : []) {
-    const ruleSet = headerColumnFormatRules[column.key];
-    if (!ruleSet || ruleSet.target !== 'row') continue;
-    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {});
-    if (color) return color;
-  }
-  return '';
-}
 function PurchaseOrdersBoardRows({
   groupedRows,
   collapsedGroups,
@@ -162,7 +142,49 @@ function PurchaseOrdersBoardRows({
     () => normalizeColumnFormatRulesMap(headerColumnFormatRules),
     [headerColumnFormatRules]
   );
+  const productImageHeaderColumnKey = useMemo(
+    () => columns.find((column) => !(column.source === 'custom' && column.dataType === 'image'))?.key || '',
+    [columns]
+  );
   const { onToggleGroup, onToggleOrder } = tableActions;
+  const boardConfig = useMemo(() => ({
+    styles,
+    columns,
+    headerColumnWidths,
+    headerColumnTextStyles,
+    headerColumnFormatRules: effectiveHeaderColumnFormatRules,
+    productImageHeaderColumnKey,
+    onToggleOrder,
+    tableConfig: {
+      colCount,
+      styles,
+      lineColumns,
+      lineColumnWidths,
+      lineColumnTextStyles,
+      lineColumnFormatRules,
+      onSaveLineColumnWidth,
+      lineTotalColumns,
+      headerColumns: columns,
+      linkedLineTotalByHeaderKey,
+      linkedLineValueByHeaderKey,
+    },
+  }), [
+    colCount,
+    columns,
+    effectiveHeaderColumnFormatRules,
+    headerColumnTextStyles,
+    headerColumnWidths,
+    lineColumnFormatRules,
+    lineColumnTextStyles,
+    lineColumnWidths,
+    lineTotalColumns,
+    linkedLineTotalByHeaderKey,
+    linkedLineValueByHeaderKey,
+    onSaveLineColumnWidth,
+    onToggleOrder,
+    productImageHeaderColumnKey,
+    styles,
+  ]);
   const selectionEnabled = Boolean(selection?.enabled);
   const handleGroupSelection = useCallback((keys, shouldSelect) => {
     if (!selectionEnabled || !Array.isArray(keys) || !keys.length) return;
@@ -191,100 +213,41 @@ function PurchaseOrdersBoardRows({
         const groupSomeSelected = selectionEnabled && !groupAllSelected && groupSelectionKeys.some((key) => selection.isSelected(key));
         return (
           <React.Fragment key={groupKey}>
-            <PurchaseOrdersGroupHeaderRow
+            <PurchaseOrdersBoardGroupHeader
               colCount={colCount}
               styles={styles}
-              groupColor={group.groupColor}
-              selectionEnabled={selectionEnabled}
-              groupAllSelected={groupAllSelected}
-              groupSomeSelected={groupSomeSelected}
-              groupKey={groupKey}
-              groupName={group.groupName}
-              groupLabel={group.groupLabel}
-              groupColumnKey={group.groupColumnKey}
-              groupSummaries={group.groupSummaries}
-              groupLevel={group.groupLevel || 0}
-              entryCount={selectionEntries.length}
-              isCollapsed={isCollapsed}
+              group={group}
+              selectionEntries={selectionEntries}
+              groupState={{
+                key: groupKey,
+                selectionEnabled,
+                selectionKeys: groupSelectionKeys,
+                allSelected: groupAllSelected,
+                someSelected: groupSomeSelected,
+                isCollapsed,
+              }}
               onToggleGroup={onToggleGroup}
-              onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
-              onClearGroupingColumn={onClearGrouping}
+              onGroupSelection={handleGroupSelection}
+              onClearGrouping={onClearGrouping}
             />
             {!isCollapsed && group.entries.map(({ order, rowId }) => {
               const lines = Array.isArray(order.lines) ? order.lines : [];
-              const hasLines = lines.length > 0;
-              const isExpanded = !!expandedOrders[rowId];
               const selectionKey = resolveOrderSelectionKey(order, rowId);
-              const rowFormatColor = resolveRowFormatColor(order, columns, effectiveHeaderColumnFormatRules);
-
               return (
-                <React.Fragment key={rowId}>
-                  <tr
-                    className={getOrderRowClassName(order, styles)}
-                    style={!order.removedInD365 && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
-                  >
-                    <td className={styles.controlCell}>
-                      <div className={styles.controlCellInner}>
-                        {selectionEnabled ? (
-                          <Checkbox
-                            className={styles.rowCheckbox}
-                            checked={selection.isSelected(selectionKey)}
-                            onChange={() => selection.toggle(selectionKey)}
-                            aria-label={`Selecteer order ${order.orderNumber}`}
-                          />
-                        ) : null}
-                        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
-                        {hasLines ? (
-                          <Button
-                            size="small"
-                            appearance="subtle"
-                            className={styles.compactToggleButton}
-                            data-rowid={rowId}
-                            onClick={onToggleOrder}
-                          >
-                            {isExpanded ? '-' : '+'}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                    {columns.map((column) => {
-                      const ruleSet = effectiveHeaderColumnFormatRules?.[column.key];
-                      const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
-                        ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
-                        : '';
-                      const rawValue = order?.values?.[column.key];
-                      return (
-                        <PurchaseOrderDataCell
-                          key={`${rowId}-${column.key}`}
-                          column={column}
-                          rawValue={rawValue}
-                          className={styles.itemCell}
-                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
-                          filterByColumn={cellFilterActions?.filterByColumn}
-                          onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
-                          onClearColumnFilter={cellFilterActions?.clearColumnFilter}
-                          linkedLineTotalKeys={linkedLineTotalByHeaderKey}
-                          linkedLineValueKeys={linkedLineValueByHeaderKey}
-                        >
-                          <PurchaseOrderHeaderCellContent
-                            order={order}
-                            column={column}
-                            onSaveValue={cellActions.onSaveValue}
-                            onCorrect={cellActions.onCorrect}
-                            linkedLineTotalMap={linkedLineTotalByHeaderKey}
-                            linkedLineValueMap={linkedLineValueByHeaderKey}
-                          />
-                        </PurchaseOrderDataCell>
-                      );
-                    })}
-                  </tr>
-                  <PurchaseOrdersBoardExpandedRow
-                    expanded={hasLines && isExpanded}
-                    rowData={{ rowId, order, lines }}
-                    tableConfig={{ colCount, styles, lineColumns, lineColumnWidths, lineColumnTextStyles, lineColumnFormatRules, onSaveLineColumnWidth, lineTotalColumns, headerColumns: columns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
-                    cellActions={cellActions}
-                  />
-                </React.Fragment>
+                <PurchaseOrdersBoardOrderRows
+                  key={rowId}
+                  rowData={{
+                    rowId,
+                    order,
+                    lines,
+                    isExpanded: Boolean(expandedOrders[rowId]),
+                    selectionKey,
+                  }}
+                  boardConfig={boardConfig}
+                  cellActions={cellActions}
+                  selection={selection}
+                  cellFilterActions={cellFilterActions}
+                />
               );
             })}
           </React.Fragment>

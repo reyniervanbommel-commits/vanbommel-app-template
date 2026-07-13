@@ -6,6 +6,7 @@ const router = express.Router();
 const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
+const { requireRole } = require('../middleware/auth');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
@@ -295,7 +296,7 @@ router.get('/settings/odata', async (req, res, next) => {
   }
 });
 
-router.post('/settings/odata', async (req, res, next) => {
+router.post('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const allowed = [...settingsService.ODATA_KEYS];
     const incoming = req.body || {};
