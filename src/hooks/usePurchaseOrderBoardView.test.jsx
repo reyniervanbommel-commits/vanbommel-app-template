@@ -61,6 +61,23 @@ describe('usePurchaseOrderTableView saved-view serialisatie', () => {
 });
 
 describe('usePurchaseOrderBoardView linked line sortering', () => {
+  it('round-trips the activity filter as part of a saved view', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.toggleActivityFilter('new');
+    });
+    const savedState = result.current.exportFilterSortGrouping();
+
+    act(() => {
+      result.current.toggleActivityFilter('changed');
+      result.current.applyFilterSortGrouping(savedState);
+    });
+
+    expect(savedState.activityFilter).toBe('new');
+    expect(result.current.activityFilter).toBe('new');
+  });
+
   it('sorteert header-kolommen met gepushte line totals op de berekende som', () => {
     const columns = [
       { key: 'orderNumber', dataType: 'text', label: 'Order' },

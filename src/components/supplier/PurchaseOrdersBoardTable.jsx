@@ -1,12 +1,11 @@
-import React, { memo, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
-import useAxisLockedScroll from '../../hooks/useAxisLockedScroll';
-import { useSequentialStickyColumns } from '../../hooks/useSequentialStickyColumns';
+import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -63,7 +62,6 @@ const useStyles = makeStyles({
     textAlign: 'center',
   },
 });
-
 function PurchaseOrdersBoardTable({
   items,
   columns,
@@ -100,11 +98,15 @@ function PurchaseOrdersBoardTable({
   onEditingDone,
   reorderingColumns = false,
   selection,
+  stickyColumns = {},
 }) {
   const styles = useStyles();
-  const wrapperRef = useRef(null);
-  useAxisLockedScroll(wrapperRef);
-  const { decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = useSequentialStickyColumns({ columns, headerColumnWidths, wrapperRef });
+  const { wrapperRef, decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = usePurchaseOrdersBoardStickyColumns({
+    columns,
+    headerColumnWidths,
+    stickyColumnKeys: stickyColumns.keys,
+    onStickyColumnKeysChange: stickyColumns.onChange,
+  });
   useEffect(() => {
     if (!editingColumnKey) return undefined;
     const timer = setTimeout(() => {
