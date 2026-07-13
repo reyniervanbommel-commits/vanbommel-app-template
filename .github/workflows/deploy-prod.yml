@@ -1,6 +1,9 @@
 name: Deploy naar Productie
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       confirm:
@@ -17,7 +20,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'deploy-prod'
+    if: github.event_name == 'push' || github.event.inputs.confirm == 'deploy-prod'
 
     steps:
       - uses: actions/checkout@v4
