@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import { Person24Regular, Table24Regular } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -107,6 +107,18 @@ const useStyles = makeStyles({
       ...shorthands.padding('12px'),
     },
   },
+  purchaseOrdersMain: {
+    paddingTop: 0,
+    '& > *': {
+      marginTop: '-4px',
+    },
+    '@media (max-width: 768px)': {
+      paddingTop: 0,
+      '& > *': {
+        marginTop: 0,
+      },
+    },
+  },
 });
 
 export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
@@ -117,6 +129,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const isAdminLike = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+  const isPurchaseOrdersRoute = location.pathname === '/';
 
   const navItems = useMemo(
     () => [
@@ -211,7 +224,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
           </aside>
         )}
 
-        <main className={styles.main}>{children}</main>
+        <main className={mergeClasses(styles.main, isPurchaseOrdersRoute ? styles.purchaseOrdersMain : undefined)}>{children}</main>
       </div>
     </div>
   );

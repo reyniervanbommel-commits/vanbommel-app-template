@@ -7,11 +7,12 @@ import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 const COLUMNS = [
   { key: 'status', dataType: 'text', label: 'Status' },
   { key: 'orderDate', dataType: 'date', label: 'Orderdatum' },
+  { key: 'amount', dataType: 'number', label: 'Amount' },
 ];
 
 const ITEMS = [
-  { orderNumber: 'PO-1', dataAreaId: 'nl', values: { status: 'Open', orderDate: '2026-01-10' } },
-  { orderNumber: 'PO-2', dataAreaId: 'nl', values: { status: 'Afgerond', orderDate: '2026-02-20' } },
+  { orderNumber: 'PO-1', dataAreaId: 'nl', values: { status: 'Open', orderDate: '2026-01-10', amount: 10 } },
+  { orderNumber: 'PO-2', dataAreaId: 'nl', values: { status: 'Afgerond', orderDate: '2026-02-20', amount: 20 } },
 ];
 
 describe('usePurchaseOrderTableView saved-view serialisatie', () => {
@@ -60,6 +61,23 @@ describe('usePurchaseOrderTableView saved-view serialisatie', () => {
 });
 
 describe('usePurchaseOrderBoardView linked line sortering', () => {
+  it('round-trips the activity filter as part of a saved view', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.toggleActivityFilter('new');
+    });
+    const savedState = result.current.exportFilterSortGrouping();
+
+    act(() => {
+      result.current.toggleActivityFilter('changed');
+      result.current.applyFilterSortGrouping(savedState);
+    });
+
+    expect(savedState.activityFilter).toBe('new');
+    expect(result.current.activityFilter).toBe('new');
+  });
+
   it('sorteert header-kolommen met gepushte line totals op de berekende som', () => {
     const columns = [
       { key: 'orderNumber', dataType: 'text', label: 'Order' },
@@ -117,6 +135,7 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
       columnKey: 'status',
       color: '#abcdef',
       colorsByColumn: { status: '#abcdef' },
+      summaryColumnKeys: [],
     });
   });
 
@@ -130,11 +149,17 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
     expect(result.current.groupingColumnKey).toBe('status,orderDate');
     expect(result.current.groupingColumnLabel).toBe('Status + Orderdatum');
     expect(result.current.groupedRows).toHaveLength(4);
+    expect(
+      result.current.groupedRows
+        .filter((group) => group.groupColumnKey === 'orderDate')
+        .map((group) => group.groupName)
+    ).toEqual(['10/01/2026', '20/02/2026']);
     expect(result.current.exportState()).toEqual({
       columnKeys: ['status', 'orderDate'],
       columnKey: 'status',
       color: '#abcdef',
       colorsByColumn: { status: '#abcdef', orderDate: '#abcdef' },
+      summaryColumnKeys: [],
     });
   });
 
@@ -150,6 +175,21 @@ describe('usePurchaseOrderGrouping saved-view serialisatie', () => {
       status: '#abcdef',
       orderDate: '#123456',
     });
+  });
+
+  it('berekent number kolom-totalen voor group headers en serialiseert de keuze', () => {
+    const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyState({ columnKey: 'status', color: '#abcdef', summaryColumnKeys: ['amount'] });
+    });
+
+    expect(result.current.summaryColumnKeys).toEqual(['amount']);
+    expect(result.current.groupedRows.map((group) => group.groupSummaries)).toEqual([
+      [{ columnKey: 'amount', label: 'Amount', value: 10, displayValue: '10' }],
+      [{ columnKey: 'amount', label: 'Amount', value: 20, displayValue: '20' }],
+    ]);
+    expect(result.current.exportState().summaryColumnKeys).toEqual(['amount']);
   });
 
   it('valt terug op geen grouping bij een onbekende kolom-key', () => {

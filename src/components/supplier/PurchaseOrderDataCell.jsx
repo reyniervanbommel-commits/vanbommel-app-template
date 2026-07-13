@@ -38,7 +38,8 @@ function PurchaseOrderDataCell({
       backgroundColor: tokens.colorNeutralBackground1,
     }
     : null;
-  const resolvedCellStyle = stickyStyle ? { ...style, ...stickyStyle } : style;
+  const positionedCellStyle = { ...style, position: 'relative' };
+  const resolvedCellStyle = stickyStyle ? { ...positionedCellStyle, ...stickyStyle } : positionedCellStyle;
 
   const handleFilterCell = useCallback(() => {
     onApplyFilterFromCellValue?.(column.key, rawValue);

@@ -12,6 +12,7 @@ function PurchaseOrdersGroupHeaderRow({
   groupName,
   groupLabel,
   groupColumnKey,
+  groupSummaries = [],
   groupLevel = 0,
   entryCount,
   isCollapsed,
@@ -79,6 +80,9 @@ function PurchaseOrdersGroupHeaderRow({
             <span className={styles.groupDot}>●</span>
             <span>{`${groupLabel}: ${groupName}`}</span>
             <span>({entryCount})</span>
+            {groupSummaries.map((summary) => (
+              <span key={summary.columnKey}>{`${summary.label}: ${summary.displayValue}`}</span>
+            ))}
           </button>
         </div>
       </td>

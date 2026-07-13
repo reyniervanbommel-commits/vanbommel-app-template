@@ -4,12 +4,14 @@ import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSec
 import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRulesPane';
 import PurchaseOrderColumnTextStylePane from './PurchaseOrderColumnTextStylePane';
+import FilterMenuMainPane from './PurchaseOrderColumnFilterMenuMainPane';
 
-export { default as FilterMenuMainPane } from './PurchaseOrderColumnFilterMenuMainPane';
+export { FilterMenuMainPane };
 
 export function FilterMenuSubPane({
   styles,
   activeSubmenu,
+  submenuTop,
   handleAddType,
   textStyleDraft,
   handleTextColorChange,
@@ -34,16 +36,17 @@ export function FilterMenuSubPane({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
+  canToggleGroupSummary,
+  isGroupSummaryColumn,
+  handleToggleGroupSummary,
 }) {
+  let content = null;
+
   if (activeSubmenu === 'add') {
-    return (
-      <div className={styles.subPane}>
-        <PurchaseOrderAddColumnPane columnLevel={column?.level} onConfirm={handleAddType} />
-      </div>
-    );
+    content = <PurchaseOrderAddColumnPane columnLevel={column?.level} onConfirm={handleAddType} />;
   }
   if (activeSubmenu === 'textStyle') {
-    return (
+    content = (
       <PurchaseOrderColumnTextStylePane
         styles={styles}
         textStyleDraft={textStyleDraft}
@@ -59,7 +62,7 @@ export function FilterMenuSubPane({
   }
 
   if (activeSubmenu === 'formatRules') {
-    return (
+    content = (
       <PurchaseOrderColumnFormatRulesPane
         styles={styles}
         formatTarget={formatTarget}
@@ -76,8 +79,8 @@ export function FilterMenuSubPane({
   }
 
   if (activeSubmenu === 'group') {
-    return (
-      <div className={styles.subPane}>
+    content = (
+      <>
         <Text className={styles.subPaneTitle}>Categorie / groeperen</Text>
         <PurchaseOrderColumnGroupingSection
           column={column}
@@ -86,10 +89,19 @@ export function FilterMenuSubPane({
           onSetGroupingColumn={onSetGroupingColumn}
           onClearGrouping={onClearGrouping}
           onSetGroupingColor={onSetGroupingColor}
+          canToggleGroupSummary={canToggleGroupSummary}
+          isGroupSummaryColumn={isGroupSummaryColumn}
+          onToggleGroupSummary={handleToggleGroupSummary}
         />
-      </div>
+      </>
     );
   }
 
-  return null;
+  if (!content) return null;
+
+  return (
+    <div className={styles.subPane} style={{ top: `${submenuTop || 0}px` }}>
+      {content}
+    </div>
+  );
 }

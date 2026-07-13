@@ -140,6 +140,7 @@ function PurchaseOrdersBoardRows({
   expandedOrders,
   columns,
   lineColumns,
+  headerColumnWidths,
   lineColumnWidths,
   headerColumnTextStyles,
   headerColumnFormatRules,
@@ -201,6 +202,7 @@ function PurchaseOrdersBoardRows({
               groupName={group.groupName}
               groupLabel={group.groupLabel}
               groupColumnKey={group.groupColumnKey}
+              groupSummaries={group.groupSummaries}
               groupLevel={group.groupLevel || 0}
               entryCount={selectionEntries.length}
               isCollapsed={isCollapsed}
@@ -257,7 +259,7 @@ function PurchaseOrdersBoardRows({
                           column={column}
                           rawValue={rawValue}
                           className={styles.itemCell}
-                          style={getColumnCellStyle(undefined, headerColumnTextStyles, column.key, cellFormatColor)}
+                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
                           filterByColumn={cellFilterActions?.filterByColumn}
                           onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
                           onClearColumnFilter={cellFilterActions?.clearColumnFilter}

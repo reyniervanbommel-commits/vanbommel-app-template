@@ -19,6 +19,7 @@ const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
+const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -59,6 +60,16 @@ function normalizeColumnWidthMap(value) {
     if (!key || !Number.isFinite(width)) return acc;
     const clamped = Math.min(1000, Math.max(80, Math.round(width)));
     acc[key] = clamped;
+    return acc;
+  }, {});
+}
+
+function normalizeColorMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value).slice(0, MAX_COLUMNS).reduce((acc, [rawKey, rawColor]) => {
+    const key = normalizeColumnKey(rawKey);
+    const color = String(rawColor || '');
+    if (key && HEX_COLOR_PATTERN.test(color)) acc[key] = color.toLowerCase();
     return acc;
   }, {});
 }
@@ -224,6 +235,7 @@ function normalizeViewState(rawState) {
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),
+      stickyColumnKeys: normalizeStringArray(columns.stickyColumnKeys),
       lineColumnOrder: normalizeStringArray(columns.lineColumnOrder),
       headerColumnWidths: normalizeColumnWidthMap(columns.headerColumnWidths),
       lineColumnWidths: normalizeColumnWidthMap(columns.lineColumnWidths),
@@ -236,14 +248,18 @@ function normalizeViewState(rawState) {
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
     },
     table: {
+      activityFilter: VIEW_ACTIVITY_FILTERS.has(table.activityFilter) ? table.activityFilter : 'all',
       filterByColumn: normalizedFilters,
       sortState: {
         columnKey: String(sortState.columnKey || '').slice(0, 64),
         direction: VIEW_SORT_DIRECTIONS.has(sortState.direction) ? sortState.direction : 'none',
       },
       grouping: {
+        columnKeys: normalizeStringArray(grouping.columnKeys),
         columnKey: String(grouping.columnKey || '').slice(0, 64),
         color: HEX_COLOR_PATTERN.test(String(grouping.color || '')) ? grouping.color : '',
+        colorsByColumn: normalizeColorMap(grouping.colorsByColumn),
+        summaryColumnKeys: normalizeStringArray(grouping.summaryColumnKeys),
       },
     },
   };

@@ -35,6 +35,7 @@ export function usePurchaseOrderSavedViewState({
   const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
   const [activeViewId, setActiveViewId] = useState(null);
   const [savedStateFingerprint, setSavedStateFingerprint] = useState(null);
+  const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
   const autoAppliedRef = useRef(false);
   const activeView = useMemo(
     () => savedViews.views.find((view) => view.id === activeViewId) || null,
@@ -42,9 +43,12 @@ export function usePurchaseOrderSavedViewState({
   );
 
   const buildCurrentViewState = useCallback(() => ({
-    columns: exportColumnLayout(),
+    columns: {
+      ...exportColumnLayout(),
+      stickyColumnKeys,
+    },
     table: boardView.exportFilterSortGrouping(),
-  }), [exportColumnLayout, boardView]);
+  }), [exportColumnLayout, boardView, stickyColumnKeys]);
 
   const buildCurrentFingerprint = useCallback(
     () => stableSerialize(buildCurrentViewState()),
@@ -59,6 +63,7 @@ export function usePurchaseOrderSavedViewState({
   const applyViewState = useCallback((view) => {
     const state = view?.viewState || {};
     applyColumnLayout(state.columns);
+    setStickyColumnKeys(Array.isArray(state.columns?.stickyColumnKeys) ? state.columns.stickyColumnKeys : []);
     boardView.applyFilterSortGrouping(state.table);
     setActiveViewId(view?.id ?? null);
     setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
@@ -68,6 +73,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearAllFilters();
     boardView.clearSort();
     boardView.clearGrouping();
+    boardView.clearGroupSummaries();
     setActiveViewId(null);
     setSavedStateFingerprint(null);
   }, [boardView]);
@@ -132,6 +138,8 @@ export function usePurchaseOrderSavedViewState({
     handleSetDefault,
     handleDeleteView,
     hasUnsavedChanges,
+    stickyColumnKeys,
+    setStickyColumnKeys,
   }), [
     savedViews,
     activeViewId,
@@ -143,5 +151,7 @@ export function usePurchaseOrderSavedViewState({
     handleSetDefault,
     handleDeleteView,
     hasUnsavedChanges,
+    stickyColumnKeys,
+    setStickyColumnKeys,
   ]);
 }

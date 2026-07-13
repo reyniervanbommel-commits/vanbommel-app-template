@@ -11,10 +11,20 @@ function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
   return FALLBACK_COLUMN_WIDTH;
 }
 
-export function useSequentialStickyColumns({ columns, headerColumnWidths, wrapperRef }) {
+export function useSequentialStickyColumns({
+  columns,
+  headerColumnWidths,
+  wrapperRef,
+  stickyColumnKeys: controlledStickyColumnKeys,
+  onStickyColumnKeysChange,
+}) {
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
-  const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
+  const [uncontrolledStickyColumnKeys, setUncontrolledStickyColumnKeys] = useState([]);
   const [measuredStickyWidths, setMeasuredStickyWidths] = useState({});
+  const stickyColumnKeys = Array.isArray(controlledStickyColumnKeys)
+    ? controlledStickyColumnKeys
+    : uncontrolledStickyColumnKeys;
+  const setStickyColumnKeys = onStickyColumnKeysChange || setUncontrolledStickyColumnKeys;
 
   useEffect(() => {
     setStickyColumnKeys((current) => {

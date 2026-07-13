@@ -4,13 +4,16 @@ export function usePurchaseOrderColumnMenuQuickActions({
   column,
   writable,
   isLineColumnSummed,
+  isGroupSummaryColumn,
   canToggleWriteback,
   canToggleLineTotal,
+  canToggleGroupSummary,
   canPushLineTotalToHeader,
   canPushLineValuesToHeader,
   canToggleStickyAction,
   onToggleWriteback,
   onToggleLineColumnSum,
+  onSetGroupSummaryColumn,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
   onMakeColumnSticky,
@@ -27,6 +30,12 @@ export function usePurchaseOrderColumnMenuQuickActions({
     onToggleLineColumnSum(column.key, !isLineColumnSummed);
     setOpen(false);
   }, [canToggleLineTotal, column.key, isLineColumnSummed, onToggleLineColumnSum, setOpen]);
+
+  const handleToggleGroupSummary = useCallback(() => {
+    if (!canToggleGroupSummary) return;
+    onSetGroupSummaryColumn(column.key, !isGroupSummaryColumn);
+    setOpen(false);
+  }, [canToggleGroupSummary, column.key, isGroupSummaryColumn, onSetGroupSummaryColumn, setOpen]);
 
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;
@@ -49,6 +58,7 @@ export function usePurchaseOrderColumnMenuQuickActions({
   return {
     handleToggleWriteback,
     handleToggleLineTotal,
+    handleToggleGroupSummary,
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
     handleMakeColumnSticky,

@@ -34,6 +34,8 @@ function PurchaseOrderColumnFilterMenu({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
+  isGroupSummaryColumn = false,
+  onSetGroupSummaryColumn,
   onAddColumnRightOf,
   onRenameColumn,
   onRemoveColumn,
@@ -56,8 +58,9 @@ function PurchaseOrderColumnFilterMenu({
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
-  // Zijpaneel-submenu: 'none' | 'group' (categorie/groeperen) | 'add' (kolom rechts toevoegen).
+  // Tracks which flyout submenu is currently aligned with the hovered menu item.
   const [activeSubmenu, setActiveSubmenu] = useState('none');
+  const [submenuTop, setSubmenuTop] = useState(0);
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
   const groupingColumnKeys = useMemo(
@@ -75,10 +78,11 @@ function PurchaseOrderColumnFilterMenu({
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
-  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canEditImageColumn, isImageColumn, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canEditImageColumn, isImageColumn, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
+    setSubmenuTop(0);
   }, []);
   const {
     textStyleDraft,
@@ -113,10 +117,14 @@ function PurchaseOrderColumnFilterMenu({
   }, [open, column, filter]);
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
-    if (!data.open) setActiveSubmenu('none');
+    if (!data.open) {
+      setActiveSubmenu('none');
+      setSubmenuTop(0);
+    }
   }, []);
-  const toggleSubmenu = useCallback((name) => {
-    setActiveSubmenu((prev) => (prev === name ? 'none' : name));
+  const openSubmenu = useCallback((name, event) => {
+    setActiveSubmenu(name);
+    setSubmenuTop(event?.currentTarget?.offsetTop || 0);
   }, []);
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
@@ -153,7 +161,7 @@ function PurchaseOrderColumnFilterMenu({
     onClose: closeMenu,
     onError: notifyError,
   });
-  const { handleToggleWriteback, handleToggleLineTotal, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, canToggleWriteback, canToggleLineTotal, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
+  const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -175,7 +183,7 @@ function PurchaseOrderColumnFilterMenu({
       </PopoverTrigger>
       <PurchaseOrderColumnFilterMenuPopoverContent
         styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets} isImageColumn={isImageColumn}
-        activeSubmenu={activeSubmenu} toggleSubmenu={toggleSubmenu} canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
+        activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu} canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback} showWritebackLocked={showWritebackLocked} handleToggleWriteback={handleToggleWriteback} writable={writable}
         canAddColumn={canAddColumn} canRenameColumn={canRenameColumn} handleRenameColumn={handleRenameColumn} canEditFormulaColumn={canEditFormulaColumn}
         handleEditFormulaColumn={handleEditFormulaColumn} canEditImageColumn={canEditImageColumn} handleEditImageColumn={handleEditImageColumn}
@@ -191,6 +199,7 @@ function PurchaseOrderColumnFilterMenu({
         formatRulesDraft={formatRulesDraft} formatReferenceColumns={formatReferenceColumns} handleApplyFormatRules={handleApplyFormatRules}
         handleClearFormatRules={handleClearFormatRules} isGroupingColumn={isGroupingColumn} groupingColor={groupingColor}
         onSetGroupingColumn={onSetGroupingColumn} onClearGrouping={onClearGrouping} onSetGroupingColor={onSetGroupingColor}
+        canToggleGroupSummary={canToggleGroupSummary} isGroupSummaryColumn={isGroupSummaryColumn} handleToggleGroupSummary={handleToggleGroupSummary}
       />
     </Popover>
     {dialogState.renameOpen || dialogState.removeOpen ? (

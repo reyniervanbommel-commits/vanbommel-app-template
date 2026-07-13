@@ -15,7 +15,7 @@ export default function PurchaseOrderColumnFormatRulesPane({
   handleClearFormatRules,
 }) {
   return (
-    <div className={styles.subPane}>
+    <>
       <PurchaseOrderColumnFormatRulesSection
         formatTarget={formatTarget}
         setFormatTarget={setFormatTarget}
@@ -29,6 +29,6 @@ export default function PurchaseOrderColumnFormatRulesPane({
         <Button size="small" appearance="primary" onClick={handleApplyFormatRules}>Apply</Button>
         <Button size="small" appearance="secondary" onClick={handleClearFormatRules}>Reset</Button>
       </div>
-    </div>
+    </>
   );
 }

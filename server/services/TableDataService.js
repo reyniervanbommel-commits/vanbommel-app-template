@@ -20,7 +20,7 @@ const {
   escapeODataLiteral,
   writeBackField,
 } = require('./D365ODataService');
-const { getPool, getTableByKey, listColumns, getLookups } = require('./TableRegistryService');
+const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
@@ -1872,20 +1872,104 @@ async function discoverSourceFields(tableKey) {
 // read-only afgeleide kolommen uit de cache van een andere tabel. Cache-gedreven, geen bron-call per rij.
 // Excel-doeltabellen (provider 'excel') matchen partitie-loos (een Excel kent geen dataAreaId).
 // ---------------------------------------------------------------------------
-async function loadLookupEnrichment(table) {
-  const lookups = await getLookups(table.id);
-  if (!lookups.length) return { lookups: [], masterCols: [], detailCols: [] };
+// Laadt de data voor één (gededupliceerde) lookup: doeltabel + doelkolommen + cache-rijen.
+// Alle SQL-reads binnen één lookup zijn zo veel mogelijk parallel; retourneert null als de
+// lookup overgeslagen moet worden (doeltabel weg, geen kolommen, geen veld-mapping).
+async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
+  let targetTable;
+  try {
+    targetTable = await getTableByKey(lk.targetTableKey);
+  } catch {
+    return null; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
+  }
+  const partitionless = targetTable.source && targetTable.source.providerType === 'excel';
 
+  const [targetColumnsRaw, cacheRes] = await Promise.all([
+    listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }),
+    pool.request()
+      .input('tableId', sql.BigInt, targetTable.id)
+      .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
+              WITH (NOLOCK)
+              WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`),
+  ]);
+  const targetColumnsAll = targetColumnsRaw.filter((column) => column.source === 'source');
+  const targetColumns = targetColumnsAll.filter((column) => column.isActive);
+  if (!targetColumns.length) return null;
+  const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+  const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
+  const fieldMap = buildLookupFieldMap({
+    targetTableKey: lk.targetTableKey,
+    targetFieldKeys: targetColumns.map((column) => column.key),
+    existingFields: lk.fields,
+  });
+  const fieldEntries = Object.entries(fieldMap)
+    .filter(([derivedKey, targetColKey]) => (
+      Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
+    ))
+    .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
+  if (!fieldEntries.length) return null;
+
+  const byKey = new Map();
+  for (const r of cacheRes.recordset) {
+    const mapKey = partitionless ? String(r.record_key) : `${String(r.partition_key).toLowerCase()}|${r.record_key}`;
+    byKey.set(mapKey, parseJson(r.data_json));
+  }
+
+  const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
+    const tc = targetColByKey.get(targetColKey);
+    return {
+      id: null,
+      tableId: table.id,
+      scope: lk.sourceScope,
+      key: derivedKey,
+      label: tc ? `${tc.label} (${targetTable.label})` : derivedKey,
+      source: 'lookup',
+      sourceField: null,
+      dataType: tc ? tc.dataType : 'text',
+      options: null,
+      writable: false,
+      writeMechanism: null,
+      isDefaultVisible: true,
+      filterable: false,
+      sortable: true,
+      isActive: true,
+      sortOrder: 9000,
+      lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
+    };
+  });
+
+  return {
+    synthetic,
+    enrichedLookup: {
+      ...lk,
+      sourceFieldKey: resolvedSourceField,
+      targetAliasesByKey,
+      fields: fieldMap,
+      byKey,
+      fieldEntries,
+      partitionless,
+    },
+  };
+}
+
+function addLookupColumnsByScope(sourceScope, syntheticColumns, masterCols, detailCols) {
+  const targetColumns = sourceScope === 'detail' ? detailCols : masterCols;
+  targetColumns.push(...syntheticColumns);
+}
+
+async function loadLookupEnrichment(table) {
   const pool = await getPool();
-  const [lookupSourceMasterCols, lookupSourceDetailCols] = await Promise.all([
+  // getLookups en de bronkolommen zijn onafhankelijk; parallel scheelt een SQL-round-trip.
+  const [lookups, lookupSourceMasterCols, lookupSourceDetailCols] = await Promise.all([
+    getLookups(table.id),
     listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
   ]);
-  const enriched = [];
-  const masterCols = [];
-  const detailCols = [];
-  const seenLookupSignatures = new Set();
+  if (!lookups.length) return { lookups: [], masterCols: [], detailCols: [] };
 
+  // Dedupe-pass (sync, volgorde-behoudend), daarna alle lookups parallel laden.
+  const seenLookupSignatures = new Set();
+  const uniqueLookups = [];
   for (const lk of lookups) {
     const normalizedSourceScope = lk.sourceScope === 'detail' ? 'detail' : 'master';
     const lookupSourceColumns = normalizedSourceScope === 'detail' ? lookupSourceDetailCols : lookupSourceMasterCols;
@@ -1897,83 +1981,22 @@ async function loadLookupEnrichment(table) {
     });
     if (seenLookupSignatures.has(dedupeSignature)) continue;
     seenLookupSignatures.add(dedupeSignature);
+    uniqueLookups.push({ lk, resolvedSourceField });
+  }
 
-    let targetTable;
-    try {
-      targetTable = await getTableByKey(lk.targetTableKey);
-    } catch {
-      continue; // doeltabel bestaat niet (meer) of is inactief -> lookup overslaan
-    }
-    const targetColumnsAll = (await listColumns({ tableId: targetTable.id, scope: 'master', includeInactive: true }))
-      .filter((column) => column.source === 'source');
-    const targetColumns = targetColumnsAll.filter((column) => column.isActive);
-    if (!targetColumns.length) continue;
-    const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
-    const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
-    const fieldMap = buildLookupFieldMap({
-      targetTableKey: lk.targetTableKey,
-      targetFieldKeys: targetColumns.map((column) => column.key),
-      existingFields: lk.fields,
-    });
-    const fieldEntries = Object.entries(fieldMap)
-      .filter(([derivedKey, targetColKey]) => (
-        Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
-      ))
-      .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
-    if (!fieldEntries.length) continue;
+  const loaded = await Promise.all(
+    uniqueLookups.map(({ lk, resolvedSourceField }) => loadSingleLookup(pool, table, lk, resolvedSourceField))
+  );
 
-    const partitionless = targetTable.source && targetTable.source.providerType === 'excel';
-
-    const cacheRes = await pool.request()
-      .input('tableId', sql.BigInt, targetTable.id)
-      .query(`SELECT partition_key, record_key, data_json FROM dbo.tb_cache
-              WITH (NOLOCK)
-              WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0`);
-    const byKey = new Map();
-    for (const r of cacheRes.recordset) {
-      const mapKey = partitionless ? String(r.record_key) : `${String(r.partition_key).toLowerCase()}|${r.record_key}`;
-      byKey.set(mapKey, parseJson(r.data_json));
-    }
-
-    const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
-      const tc = targetColByKey.get(targetColKey);
-      return {
-        id: null,
-        tableId: table.id,
-        scope: lk.sourceScope,
-        key: derivedKey,
-        label: tc ? `${tc.label} (${targetTable.label})` : derivedKey,
-        source: 'lookup',
-        sourceField: null,
-        dataType: tc ? tc.dataType : 'text',
-        options: null,
-        writable: false,
-        writeMechanism: null,
-        isDefaultVisible: true,
-        filterable: false,
-        sortable: true,
-        isActive: true,
-        sortOrder: 9000,
-        lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
-      };
-    });
-    if (lk.sourceScope === 'detail') {
-      detailCols.push(...synthetic);
-      // Detail-lookups worden ook op masterniveau getoond als geaggregeerde headerwaarde,
-      // zodat gekozen itemkolommen zichtbaar zijn in de hoofd-PO-tabel.
-      masterCols.push(...synthetic.map((column) => ({ ...column, scope: 'master' })));
-    } else {
-      masterCols.push(...synthetic);
-    }
-    enriched.push({
-      ...lk,
-      sourceFieldKey: resolvedSourceField,
-      targetAliasesByKey,
-      fields: fieldMap,
-      byKey,
-      fieldEntries,
-      partitionless,
-    });
+  const enriched = [];
+  const masterCols = [];
+  const detailCols = [];
+  for (let i = 0; i < loaded.length; i++) {
+    const result = loaded[i];
+    if (!result) continue;
+    const { lk } = uniqueLookups[i];
+    addLookupColumnsByScope(lk.sourceScope, result.synthetic, masterCols, detailCols);
+    enriched.push(result.enrichedLookup);
   }
 
   return { lookups: enriched, masterCols, detailCols };
@@ -2006,30 +2029,6 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValu
         }
       }
       valueBag[derivedKey] = value;
-    }
-  }
-}
-
-function aggregateDetailLookupValues(details, derivedKey) {
-  const values = [];
-  const seen = new Set();
-  for (const detail of Array.isArray(details) ? details : []) {
-    const value = detail?.values?.[derivedKey];
-    if (value === null || value === undefined || value === '') continue;
-    const text = String(value).trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    values.push(text);
-  }
-  if (!values.length) return null;
-  return values.length === 1 ? values[0] : values.join(', ');
-}
-
-function applyDetailLookupRollupsToMaster(masterValues, details, enrichedLookups) {
-  for (const lk of Array.isArray(enrichedLookups) ? enrichedLookups : []) {
-    if (lk.sourceScope !== 'detail') continue;
-    for (const [derivedKey] of lk.fieldEntries || []) {
-      masterValues[derivedKey] = aggregateDetailLookupValues(details, derivedKey);
     }
   }
 }
@@ -2262,22 +2261,148 @@ function buildD365ChangeState(ledgerRows) {
   return { orderChanges, lineChanges };
 }
 
+// De drie tb_cache-reads (masters, details, custom values) parallel op de pool;
+// onafhankelijke queries, dus geen reden om op elkaar te wachten.
+async function readCacheRows(pool, tableId, includeRemoved) {
+  const mastersPromise = pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
+             c.sync_retained, c.first_seen_at, c.content_changed_at
+      FROM dbo.tb_cache c WITH (NOLOCK)
+      WHERE c.table_id = @tableId AND c.scope = 'master'
+      ${includeRemoved ? '' : `AND NOT EXISTS (
+          SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
+          WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+        )`}
+      ORDER BY c.record_key
+    `);
+
+  const detailsPromise = pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'detail'
+      ORDER BY record_key, detail_key
+    `);
+
+  const customPromise = pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
+             cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
+      FROM dbo.tb_custom_values cv WITH (NOLOCK)
+      INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
+      WHERE cv.table_id = @tableId AND c.is_active = 1
+    `);
+
+  const [mastersResult, detailsResult, customResult] = await Promise.all([
+    mastersPromise, detailsPromise, customPromise,
+  ]);
+  return { mastersResult, detailsResult, customResult };
+}
+
+function historyCellKey(partitionKey, recordKey, detailKey) {
+  return JSON.stringify([String(partitionKey), String(recordKey), Number(detailKey)]);
+}
+
+function buildHistoryByCell(rows) {
+  const historyByCell = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const key = historyCellKey(row.partition_key, row.record_key, row.detail_key);
+    if (!historyByCell.has(key)) historyByCell.set(key, {});
+    historyByCell.get(key)[String(row.column_id)] = true;
+  }
+  return historyByCell;
+}
+
+async function loadHistoryByCell(pool, tableId) {
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT column_id, partition_key, record_key, detail_key
+      FROM dbo.tb_cell_history WITH (NOLOCK)
+      WHERE table_id = @tableId
+      GROUP BY column_id, partition_key, record_key, detail_key
+      UNION
+      SELECT column_id, partition_key, record_key, detail_key
+      FROM dbo.tb_field_corrections WITH (NOLOCK)
+      WHERE table_id = @tableId
+      GROUP BY column_id, partition_key, record_key, detail_key
+    `);
+  return buildHistoryByCell(result.recordset);
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
 async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
-  const table = await getTableByKey(tableKey);
+  const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
-  const [masterCols, detailCols] = await time('tb_read_cols', () => Promise.all([
-    listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
-    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-  ]));
+
+  // Alle reads hieronder zijn onafhankelijk van elkaar (alleen afhankelijk van table.id/userId).
+  // Parallel uitvoeren i.p.v. sequentieel scheelt ~7 SQL-round-trips naar de remote database;
+  // dat was het leeuwendeel van de responstijd van het board (zie Server-Timing-metrics).
+  // De ledger-read hangt af van sync-state + viewed en is daarom als geketende promise in
+  // hetzelfde parallelle blok opgenomen.
+  const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
+  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
+  const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
+  const ledgerPromise = (async () => {
+    const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
+    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
+    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
+    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
+    try {
+      const ledgerResult = await time('tb_ledger', () => pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('sinceAt', sql.DateTime2, new Date(sinceMs))
+        .query(`
+          SELECT partition_key, record_key, detail_key, field_key, action
+          FROM dbo.tb_change_ledger WITH (NOLOCK)
+          WHERE table_id = @tableId
+            AND source = 'D365'
+            AND created_at >= @sinceAt
+          ORDER BY created_at ASC, id ASC
+        `));
+      return { d365LedgerRows: ledgerResult.recordset, hasLedgerWindow: true };
+    } catch (ledgerErr) {
+      logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
+        tableKey: table.key,
+        error: ledgerErr.message,
+      });
+      return { d365LedgerRows: [], hasLedgerWindow: false };
+    }
+  })();
+
+  const [
+    [masterCols, detailCols],
+    runtimeLinks,
+    { lastFullSyncAt },
+    lastViewedAt,
+    { mastersResult, detailsResult, customResult },
+    enrichment,
+    { d365LedgerRows, hasLedgerWindow },
+    historyByCell,
+  ] = await Promise.all([
+    time('tb_read_cols', () => Promise.all([
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    ])),
+    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key)),
+    syncStatePromise,
+    viewedPromise,
+    // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
+    time('tb_read_sql', () => readCacheRows(pool, table.id, includeRemoved)),
+    time('tb_lookups', () => loadLookupEnrichment(table)),
+    ledgerPromise,
+    historyByCellPromise,
+  ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
-  const runtimeLinks = await loadUserRuntimeHeaderLinks(pool, userId, table.key);
-  const { lastFullSyncAt } = await getSyncState(table.id);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
-  const lastViewedAt = await getLastViewedAt(table.id);
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
   const useViewedBaseline = lastViewedMs !== null && (lastSyncedMs === null || lastViewedMs >= lastSyncedMs);
   const baselineMs = useViewedBaseline ? lastViewedMs : lastSyncedMs;
@@ -2285,44 +2410,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     if (valueMs === null || baselineMs === null) return false;
     return useViewedBaseline ? valueMs > baselineMs : valueMs >= baselineMs;
   };
-
-  // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
-  const { mastersResult, detailsResult, customResult } = await time('tb_read_sql', async () => {
-    const mastersRes = await pool.request()
-      .input('tableId', sql.BigInt, table.id)
-      .query(`
-        SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
-               c.sync_retained, c.first_seen_at, c.content_changed_at
-        FROM dbo.tb_cache c WITH (NOLOCK)
-        WHERE c.table_id = @tableId AND c.scope = 'master'
-        ${includeRemoved ? '' : `AND NOT EXISTS (
-            SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
-            WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
-          )`}
-        ORDER BY c.record_key
-      `);
-
-    const detailsRes = await pool.request()
-      .input('tableId', sql.BigInt, table.id)
-      .query(`
-        SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
-        FROM dbo.tb_cache WITH (NOLOCK)
-        WHERE table_id = @tableId AND scope = 'detail'
-        ORDER BY record_key, detail_key
-      `);
-
-    const customRes = await pool.request()
-      .input('tableId', sql.BigInt, table.id)
-      .query(`
-        SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
-               cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
-        FROM dbo.tb_custom_values cv WITH (NOLOCK)
-        INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
-        WHERE cv.table_id = @tableId AND c.is_active = 1
-      `);
-
-    return { mastersResult: mastersRes, detailsResult: detailsRes, customResult: customRes };
-  });
 
   const customByCell = new Map();
   for (const row of customResult.recordset) {
@@ -2343,32 +2430,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     detailsByRecord.get(recKey).push(d);
   }
 
-  const ledgerSinceAt = baselineMs !== null ? new Date(baselineMs) : null;
-
-  let d365LedgerRows = [];
-  let hasLedgerWindow = false;
-  if (ledgerSinceAt) {
-    try {
-      const ledgerResult = await pool.request()
-        .input('tableId', sql.BigInt, table.id)
-        .input('sinceAt', sql.DateTime2, ledgerSinceAt)
-        .query(`
-          SELECT partition_key, record_key, detail_key, field_key, action
-          FROM dbo.tb_change_ledger WITH (NOLOCK)
-          WHERE table_id = @tableId
-            AND source = 'D365'
-            AND created_at >= @sinceAt
-          ORDER BY created_at ASC, id ASC
-        `);
-      d365LedgerRows = ledgerResult.recordset;
-      hasLedgerWindow = true;
-    } catch (ledgerErr) {
-      logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
-        tableKey: table.key,
-        error: ledgerErr.message,
-      });
-    }
-  }
   const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows);
 
   function valuesFor(cols, sourceJson, custom) {
@@ -2380,8 +2441,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     }
     return values;
   }
-
-  const enrichment = await loadLookupEnrichment(table);
 
   let newCount = 0;
   let changedCount = 0;
@@ -2411,6 +2470,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       return {
         detailKey: d.detail_key,
         values: detailValues,
+        historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
         isNew,
         isChanged,
         isRemoved,
@@ -2430,7 +2490,6 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
-    applyDetailLookupRollupsToMaster(masterValues, details, enrichment.lookups);
     applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
 
@@ -2443,6 +2502,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       isChanged,
       changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
       values: masterValues,
+      historyByColumnId: historyByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)) || {},
       formulaErrors,
       details,
       detailCount: details.length,
@@ -2457,7 +2517,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   let retentionMeta = { retainedCount: 0, retentionWarning: 'none' };
   if (table.key === 'purchase-orders') {
     const retainedCount = rows.filter((row) => row.syncRetained).length;
-    const retentionSettings = await getSyncRetentionSettings();
+    const retentionSettings = await time('tb_retention', () => getSyncRetentionSettings());
     retentionMeta = {
       retainedCount,
       retentionWarning: resolveRetentionWarning(retainedCount, retentionSettings),
@@ -3365,6 +3425,8 @@ async function saveTableDefaultFilter(tableId, rules) {
           updated_at = SYSUTCDATETIME()
       WHERE id = @tableId
     `);
+  // default_filter_json zit in de gecachte tabel-metadata; alleen tableId bekend -> alles leegmaken.
+  invalidateTableCache();
 }
 
 // Sync-filter-regels per tabel opslaan.
@@ -3434,7 +3496,9 @@ module.exports = {
   markViewed,
   computeContentHash,
   computeChangedFieldKeys,
+  buildHistoryByCell,
   dedupeDetailRows,
+  addLookupColumnsByScope,
   applyLookups,
   isFormulaColumn,
   resolveConfiguredMaxItems,
@@ -3444,7 +3508,6 @@ module.exports = {
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
-  applyDetailLookupRollupsToMaster,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,

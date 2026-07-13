@@ -9,11 +9,13 @@ import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrd
 import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
+import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 
 const useStyles = makeStyles({
   subTable: {
-    width: '100%',
+    width: 'max-content',
     borderCollapse: 'collapse',
+    tableLayout: 'fixed',
     backgroundColor: tokens.colorNeutralBackground1,
   },
   subHeaderCell: {
@@ -26,6 +28,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     backgroundColor: tokens.colorNeutralBackground3,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
     textAlign: 'left',
     ':hover [data-column-menu-trigger="true"]': {
       opacity: 1,
@@ -40,6 +43,8 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minWidth: 0,
+    overflow: 'hidden',
     ...shorthands.gap('6px'),
   },
   headerCellLabel: {
@@ -125,6 +130,13 @@ export default function PurchaseOrdersSubitemsTable({
   const styles = useStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
   const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
+  const effectiveColumnWidths = useMemo(
+    () => lineColumns.reduce((acc, column) => {
+      acc[column.key] = resolveLineColumnWidth(columnWidths, column.key);
+      return acc;
+    }, {}),
+    [lineColumns, columnWidths]
+  );
   const {
     processedItems: processedLines,
     filterByColumn,
@@ -168,6 +180,11 @@ export default function PurchaseOrdersSubitemsTable({
 
   return (
     <table className={styles.subTable}>
+      <colgroup>
+        {lineColumns.map((column) => (
+          <col key={`${column.key}-width`} style={{ width: `${effectiveColumnWidths[column.key]}px` }} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
           {lineColumns.map((column) => {
@@ -178,7 +195,7 @@ export default function PurchaseOrdersSubitemsTable({
             <ResizableTableHeaderCell
               key={column.key}
               columnKey={column.key}
-              width={columnWidths[column.key]}
+              width={effectiveColumnWidths[column.key]}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',
@@ -244,7 +261,7 @@ export default function PurchaseOrdersSubitemsTable({
         order={order}
         lineColumns={lineColumns}
         visibleLines={visibleLines}
-        columnWidths={columnWidths}
+        columnWidths={effectiveColumnWidths}
         columnTextStyles={columnTextStyles}
         columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}

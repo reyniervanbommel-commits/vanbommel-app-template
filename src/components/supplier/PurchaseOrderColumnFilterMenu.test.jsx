@@ -30,6 +30,7 @@ function renderMenu(overrides = {}) {
     onSetGroupingColor: vi.fn(),
     columnFormatRuleSet: null,
     onSetColumnFormatRules,
+    onSetColumnTextStyle: vi.fn().mockResolvedValue(undefined),
     referenceColumns: [
       { key: 'amount', label: 'Amount' },
       { key: 'budget', label: 'Budget' },
@@ -86,15 +87,22 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(await screen.findByText('Rename column')).toBeTruthy();
   });
 
-  it('opent het regels-submenu met Target en Add rule', async () => {
+  it('opent het regels-submenu met de beheeractie', async () => {
     renderMenu();
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
     fireEvent.click(submenuButtons[submenuButtons.length - 1]);
-    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
 
-    expect(await screen.findByText('Target')).toBeTruthy();
-    expect(await screen.findByRole('button', { name: /\+ Add rule/i })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Manage formatting rules/i })).toBeTruthy();
+  });
+
+  it('opent een submenu wanneer de gebruiker erover hovert', async () => {
+    renderMenu();
+    openColumnMenu();
+    const textStyleButton = await screen.findByRole('button', { name: /Text style/i });
+    fireEvent.mouseEnter(textStyleButton);
+
+    expect(await screen.findByText('Preview text')).toBeTruthy();
   });
 
   it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
@@ -103,9 +111,6 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
     fireEvent.click(submenuButtons[submenuButtons.length - 1]);
-    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /\+ Add rule/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Done$/i }));
     const applyButtons = screen.getAllByRole('button', { name: /^Apply$/i });
     fireEvent.click(applyButtons[applyButtons.length - 1]);
 
@@ -113,6 +118,17 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
       expect(onSetColumnFormatRules).toHaveBeenCalledTimes(1);
     });
     expect(onSetColumnFormatRules.mock.calls[0][0]).toBe('amount');
+  });
+
+  it('toont group header sum toggle voor number header-kolommen', async () => {
+    const onSetGroupSummaryColumn = vi.fn();
+    renderMenu({ onSetGroupSummaryColumn });
+
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Categorie \/ groeperen/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Show sum in group header/i }));
+
+    expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
   });
 
   it('verbergt Conditional formatting voor image-kolommen', async () => {

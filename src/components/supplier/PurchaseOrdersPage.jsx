@@ -3,9 +3,7 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
-import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
-import PurchaseOrderImageColumnDialog from './PurchaseOrderImageColumnDialog';
-import PurchaseOrderBulkEditDialog from './PurchaseOrderBulkEditDialog';
+import PurchaseOrdersPageDialogs from './PurchaseOrdersPageDialogs';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrderRefreshProgress } from '../../hooks/usePurchaseOrderRefreshProgress';
@@ -47,7 +45,6 @@ const useStyles = makeStyles({
     },
   },
 });
-
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
@@ -109,7 +106,7 @@ export default function PurchaseOrdersPage() {
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
-  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -289,22 +286,15 @@ export default function PurchaseOrdersPage() {
             onEditingDone={handleEditingDone}
             reorderingColumns={savingColumns}
             selection={tableSelection}
+            stickyColumns={{ keys: stickyColumnKeys, onChange: setStickyColumnKeys }}
           />
         </div>
       )}
-      <PurchaseOrderFormulaColumnDialog
-        open={formulaDialogState.open}
-        onOpenChange={(open) => !open && closeFormulaDialog()}
-        onSubmit={submitFormulaColumn}
-        sourceColumn={formulaDialogState.sourceColumn}
-        availableColumns={formulaReferenceColumns}
-        initialValue={formulaDialogState.editingColumn}
-        initialFormatRuleSet={formulaDialogState.editingColumn?.key
-          ? headerColumnFormatRules[formulaDialogState.editingColumn.key]
-          : null}
+      <PurchaseOrdersPageDialogs
+        formula={{ state: formulaDialogState, close: closeFormulaDialog, submit: submitFormulaColumn, availableColumns: formulaReferenceColumns, formatRules: headerColumnFormatRules }}
+        image={{ state: imageDialogState, close: closeImageDialog, submit: submitImageColumn, availableColumns: visibleHeaderColumns, sampleRowValues: boardView.processedItems?.[0]?.values || {} }}
+        bulkEdit={bulkEdit}
       />
-      <PurchaseOrderImageColumnDialog open={imageDialogState.open} onOpenChange={(open) => !open && closeImageDialog()} onSubmit={submitImageColumn} sourceColumn={imageDialogState.sourceColumn} availableColumns={visibleHeaderColumns} initialValue={imageDialogState.editingColumn} sampleRowValues={boardView.processedItems?.[0]?.values || {}} />
-      <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
     </div>
   );
 }
