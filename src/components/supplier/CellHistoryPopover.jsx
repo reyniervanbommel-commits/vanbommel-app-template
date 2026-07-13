@@ -11,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
+import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -82,9 +83,7 @@ const useStyles = makeStyles({
     ...shorthands.padding('7px', '8px'),
     verticalAlign: 'top',
   },
-  dateCell: {
-    whiteSpace: 'nowrap',
-  },
+  dateCell: { whiteSpace: 'nowrap' },
   user: {
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
@@ -109,17 +108,16 @@ const useStyles = makeStyles({
   },
 });
 
-const dateTimeFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' });
-
-function formatDateTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : dateTimeFormat.format(d);
+function formatHistoryDate(value) {
+  const formatted = formatCellValue(value, 'date');
+  return formatted === '-' ? '—' : formatted;
 }
 
-// Weergave van een waarde volgens het kolomtype; leeg → em-dash.
 function formatValue(value, dataType) {
   if (value === null || value === undefined || value === '') return '—';
+  const isDate = /^(date|datetime|date-time)$/i.test(String(dataType || ''));
+  const isIsoDate = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(value.trim());
+  if (isDate || isIsoDate) return formatHistoryDate(value);
   if (dataType === 'boolean') return value === 1 || value === true || value === '1' ? 'Yes' : 'No';
   return String(value);
 }
@@ -131,7 +129,7 @@ function HistoryRow({ entry, dataType, styles }) {
   const userLabel = entry.user?.name || entry.user?.email || 'Unknown user';
   return (
     <tr>
-      <td className={`${styles.cell} ${styles.dateCell}`}>{formatDateTime(entry.at)}</td>
+      <td className={`${styles.cell} ${styles.dateCell}`}>{formatHistoryDate(entry.at)}</td>
       <td className={styles.cell}>
         <Tooltip content={entry.user?.email || ''} relationship="label">
           <span className={styles.user}>{userLabel}</span>
@@ -164,7 +162,7 @@ function HistoryTable({ entries, dataType, styles }) {
       <table className={styles.table} aria-label="Cell history">
         <thead>
           <tr>
-            <th className={styles.headerCell}>Date/time</th>
+            <th className={styles.headerCell}>Date</th>
             <th className={styles.headerCell}>User</th>
             <th className={styles.headerCell}>Previous value</th>
             <th className={styles.headerCell}>New value</th>

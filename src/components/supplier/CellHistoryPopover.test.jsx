@@ -61,8 +61,8 @@ describe('CellHistoryPopover', () => {
         at: '2026-07-13T10:15:00.000Z',
         user: { name: 'Test User', email: 'test@example.com' },
         action: 'update',
-        oldValue: 'Old value',
-        newValue: 'New value',
+        oldValue: '2026-04-01T12:00:00Z',
+        newValue: '2026-04-17T00:00:00.000Z',
         source: 'writeback',
         status: 'applied',
       }],
@@ -72,12 +72,14 @@ describe('CellHistoryPopover', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View cell history' }));
 
     const table = await screen.findByRole('table', { name: 'Cell history' });
+    expect(within(table).getByRole('columnheader', { name: 'Date' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'User' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Previous value' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'New value' })).toBeTruthy();
     expect(within(table).getByText('Test User')).toBeTruthy();
-    expect(within(table).getByText('Old value')).toBeTruthy();
-    expect(within(table).getAllByRole('cell')[3].textContent).toBe('New value');
+    expect(within(table).getByText('13/07/2026')).toBeTruthy();
+    expect(within(table).getByText('01/04/2026')).toBeTruthy();
+    expect(within(table).getByText('17/04/2026')).toBeTruthy();
     expect(within(table).getByText('Applied')).toBeTruthy();
   });
 });
