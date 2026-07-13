@@ -3,218 +3,30 @@ import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
 import { normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
+import { mapTbColumnToBoard, mapTbResponseToBoard, scopeForLevel } from '../utils/purchaseOrdersBoardMapping';
+import {
+  arraysEqual,
+  mergeColumnTextStyle,
+  moveColumnKey,
+  normalizeColumnOrder,
+  normalizeColumnTextStyleMap,
+  normalizeColumnWidths,
+  normalizeLineTotalLinks,
+  normalizeSelectedColumns,
+  normalizeVisibleColumns,
+} from '../utils/boardColumnSettings';
 
 const BOARD_KEY = 'purchase-orders';
-const MIN_COLUMN_WIDTH = 80;
-const MAX_COLUMN_WIDTH = 1000;
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-// Board-cutover Fase 7 (#AB:176): endpoints + response-shape-mapping tussen de generieke tb_*-laag
-// (/api/data/purchase-orders) en de po_*-vorm die de board-componenten verwachten. Achter BOARD_TB_SOURCE.
+// Board-cutover Fase 7 (#AB:176): endpoints van de generieke tb_*-laag versus de
+// oorspronkelijke po_*-laag. Shape-mapping zit in utils/purchaseOrdersBoardMapping.
 const DATA_BASE = '/data/purchase-orders';
 const PO_BASE = '/purchase-orders';
 const boardBase = () => (BOARD_TB_SOURCE ? DATA_BASE : PO_BASE);
-const NON_WRITABLE_BOARD_KEYS = {
-  header: new Set(['orderNumber', 'status', 'createdDateTime']),
-  line: new Set(['lineNumber']),
-};
-
-function resolveBoardWriteBackAllowed(column) {
-  if (typeof column.writeBackAllowed === 'boolean') return column.writeBackAllowed;
-  if (column.source !== 'd365' || !column.d365Field) return false;
-  return !(NON_WRITABLE_BOARD_KEYS[column.level] || new Set()).has(column.key);
-}
-
-function mapTbColumnToBoard(column) {
-  if (!column || typeof column !== 'object') return column;
-  const source = column.source === 'source' ? 'd365' : column.source;
-  const level = column.level === 'line' || column.level === 'header'
-    ? column.level
-    : (column.scope === 'detail' ? 'line' : 'header');
-  const mapped = {
-    ...column,
-    source,
-    level,
-    d365Field: column.sourceField ?? column.d365Field ?? null,
-    writableToD365: Boolean(column.writable ?? column.writableToD365),
-  };
-  return {
-    ...mapped,
-    writeBackAllowed: resolveBoardWriteBackAllowed(mapped),
-  };
-}
-
-// tb_*-read → board-shape: rows→orders, meta.columns.master|detail→columns.header|line,
-// partitionKey→dataAreaId, recordKey→orderNumber, detailKey→lineNumber, details→lines,
-// detailCount→lineCount, removedAtSource→removedInD365. Overige velden passeren ongewijzigd.
-function mapTbResponseToBoard(data) {
-  if (!data || typeof data !== 'object') return data;
-  const rows = Array.isArray(data.rows) ? data.rows : [];
-  const master = Array.isArray(data?.meta?.columns?.master) ? data.meta.columns.master.map(mapTbColumnToBoard) : [];
-  const detail = Array.isArray(data?.meta?.columns?.detail) ? data.meta.columns.detail.map(mapTbColumnToBoard) : [];
-  return {
-    ...data,
-    orders: rows.map((r) => ({
-      dataAreaId: r.partitionKey,
-      orderNumber: r.recordKey,
-      values: r.values || {},
-      formulaErrors: r.formulaErrors && typeof r.formulaErrors === 'object' ? r.formulaErrors : {},
-      isNew: Boolean(r.isNew),
-      isChanged: Boolean(r.isChanged),
-      changedFieldKeys: Array.isArray(r.changedFieldKeys) ? r.changedFieldKeys : [],
-      removedInD365: Boolean(r.removedAtSource) && !Boolean(r.syncRetained),
-      syncRetained: Boolean(r.syncRetained),
-      lineCount: Number(r.detailCount) || 0,
-      lines: (Array.isArray(r.details) ? r.details : []).map((d) => ({
-        lineNumber: d.detailKey,
-        values: d.values || {},
-        isNew: Boolean(d.isNew),
-        isChanged: Boolean(d.isChanged),
-        isRemoved: Boolean(d.isRemoved),
-        changedFieldKeys: Array.isArray(d.changedFieldKeys) ? d.changedFieldKeys : [],
-      })),
-    })),
-    columns: { header: master, line: detail },
-  };
-}
-
-// tb_*-kolommen leveren scope master|detail; de board-hook denkt in header|line.
-const scopeForLevel = (level) => (level === 'line' ? 'detail' : 'master');
 
 // AANNAME: De nieuwe SQL-backed API levert alle data (orders + dynamische kolommen)
 // in één GET-call onder /purchase-orders (NIET onder /supplier). De tabelpagina
 // leest bij openen altijd uit SQL-cache; D365-refresh is expliciet handmatig.
-
-function normalizeVisibleColumns(rawKeys, defaultKeys) {
-  if (!Array.isArray(rawKeys) || !rawKeys.length) {
-    return defaultKeys;
-  }
-  const allowed = new Set(defaultKeys);
-  const filtered = Array.from(new Set(rawKeys.filter((key) => allowed.has(key))));
-  return filtered.length ? filtered : defaultKeys;
-}
-
-function normalizeColumnOrder(rawKeys, defaultKeys) {
-  if (!Array.isArray(rawKeys) || !rawKeys.length) {
-    return defaultKeys;
-  }
-  const allowed = new Set(defaultKeys);
-  const filtered = Array.from(new Set(rawKeys.filter((key) => allowed.has(key))));
-  const missing = defaultKeys.filter((key) => !filtered.includes(key));
-  return [...filtered, ...missing];
-}
-
-function arraysEqual(left, right) {
-  if (left === right) return true;
-  if (!Array.isArray(left) || !Array.isArray(right)) return false;
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
-
-function normalizeColumnWidths(rawWidths, allowedKeys) {
-  if (!rawWidths || typeof rawWidths !== 'object' || Array.isArray(rawWidths)) {
-    return {};
-  }
-  const allowed = Array.isArray(allowedKeys) && allowedKeys.length
-    ? new Set(allowedKeys)
-    : null;
-  return Object.entries(rawWidths).reduce((acc, [rawKey, rawWidth]) => {
-    const key = String(rawKey || '').trim();
-    if (!key) return acc;
-    if (allowed && !allowed.has(key)) return acc;
-    const width = Number(rawWidth);
-    if (!Number.isFinite(width)) return acc;
-    const clamped = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(width)));
-    acc[key] = clamped;
-    return acc;
-  }, {});
-}
-
-function normalizeColumnTextStyleMap(rawStyles, allowedKeys) {
-  if (!rawStyles || typeof rawStyles !== 'object' || Array.isArray(rawStyles)) {
-    return {};
-  }
-  const allowed = Array.isArray(allowedKeys) && allowedKeys.length
-    ? new Set(allowedKeys)
-    : null;
-  return Object.entries(rawStyles).reduce((acc, [rawKey, rawStyle]) => {
-    const key = String(rawKey || '').trim();
-    if (!key) return acc;
-    if (allowed && !allowed.has(key)) return acc;
-    if (!rawStyle || typeof rawStyle !== 'object' || Array.isArray(rawStyle)) return acc;
-
-    const textColor = HEX_COLOR_PATTERN.test(String(rawStyle.textColor || ''))
-      ? String(rawStyle.textColor).toLowerCase()
-      : '';
-    const bold = rawStyle.bold === true;
-    const italic = rawStyle.italic === true;
-    const underline = rawStyle.underline === true;
-    if (!textColor && !bold && !italic && !underline) return acc;
-
-    acc[key] = {};
-    if (textColor) acc[key].textColor = textColor;
-    if (bold) acc[key].bold = true;
-    if (italic) acc[key].italic = true;
-    if (underline) acc[key].underline = true;
-    return acc;
-  }, {});
-}
-
-function normalizeSelectedColumns(rawKeys, allowedKeys) {
-  if (!Array.isArray(rawKeys) || !rawKeys.length) return [];
-  const allowed = Array.isArray(allowedKeys) && allowedKeys.length ? new Set(allowedKeys) : null;
-  const unique = Array.from(new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean)));
-  return allowed ? unique.filter((key) => allowed.has(key)) : unique;
-}
-
-function normalizeLineTotalLinks(rawLinks, allowedLineKeys, allowedHeaderKeys) {
-  if (!Array.isArray(rawLinks) || !rawLinks.length) return [];
-  const allowedLineSet = Array.isArray(allowedLineKeys) && allowedLineKeys.length
-    ? new Set(allowedLineKeys)
-    : null;
-  const allowedHeaderSet = Array.isArray(allowedHeaderKeys) && allowedHeaderKeys.length
-    ? new Set(allowedHeaderKeys)
-    : null;
-  const seen = new Set();
-  return rawLinks.reduce((acc, entry) => {
-    if (!entry || typeof entry !== 'object') return acc;
-    const lineColumnKey = String(entry.lineColumnKey || '').trim();
-    const headerColumnKey = String(entry.headerColumnKey || '').trim();
-    if (!lineColumnKey || !headerColumnKey) return acc;
-    if (allowedLineSet && !allowedLineSet.has(lineColumnKey)) return acc;
-    if (allowedHeaderSet && !allowedHeaderSet.has(headerColumnKey)) return acc;
-    const signature = `${lineColumnKey}|${headerColumnKey}`;
-    if (seen.has(signature)) return acc;
-    seen.add(signature);
-    acc.push({ lineColumnKey, headerColumnKey });
-    return acc;
-  }, []);
-}
-
-function moveColumnKey(rawOrder, defaultKeys, sourceKey, targetKey, position = 'before', movableKeys = defaultKeys) {
-  const order = normalizeColumnOrder(rawOrder, defaultKeys);
-  const allowedSet = new Set(Array.isArray(movableKeys) && movableKeys.length ? movableKeys : defaultKeys);
-  const movableOrder = order.filter((key) => allowedSet.has(key));
-  const sourceIndex = movableOrder.indexOf(sourceKey);
-  const targetIndex = movableOrder.indexOf(targetKey);
-  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return order;
-
-  const nextMovableOrder = [...movableOrder];
-  const [movedKey] = nextMovableOrder.splice(sourceIndex, 1);
-  const normalizedPosition = position === 'after' ? 'after' : 'before';
-  const nextTargetIndex = nextMovableOrder.indexOf(targetKey);
-  if (nextTargetIndex === -1) return order;
-  const insertAt = normalizedPosition === 'after' ? nextTargetIndex + 1 : nextTargetIndex;
-  nextMovableOrder.splice(insertAt, 0, movedKey);
-
-  let movableIndex = 0;
-  return order.map((key) => {
-    if (!allowedSet.has(key)) return key;
-    const replacement = nextMovableOrder[movableIndex];
-    movableIndex += 1;
-    return replacement;
-  });
-}
 
 /**
  * Haalt purchase orders op uit de SQL-backed backend (met dynamische kolommen)
@@ -870,23 +682,10 @@ export function usePurchaseOrdersPage() {
   const saveHeaderColumnTextStyle = useCallback(async (columnKey, stylePatch) => {
     const key = String(columnKey || '').trim();
     if (!key) return;
-    const current = effectiveHeaderColumnTextStyles[key] || {};
-    const nextTextColor = stylePatch?.textColor !== undefined
-      ? (HEX_COLOR_PATTERN.test(String(stylePatch.textColor || '')) ? String(stylePatch.textColor).toLowerCase() : '')
-      : (HEX_COLOR_PATTERN.test(String(current.textColor || '')) ? String(current.textColor).toLowerCase() : '');
-    const nextBold = stylePatch?.bold !== undefined ? stylePatch.bold === true : current.bold === true;
-    const nextItalic = stylePatch?.italic !== undefined ? stylePatch.italic === true : current.italic === true;
-    const nextUnderline = stylePatch?.underline !== undefined ? stylePatch.underline === true : current.underline === true;
+    const merged = mergeColumnTextStyle(effectiveHeaderColumnTextStyles[key], stylePatch);
     const nextHeaderTextStyles = { ...effectiveHeaderColumnTextStyles };
-    if (!nextTextColor && !nextBold && !nextItalic && !nextUnderline) {
-      delete nextHeaderTextStyles[key];
-    } else {
-      nextHeaderTextStyles[key] = {};
-      if (nextTextColor) nextHeaderTextStyles[key].textColor = nextTextColor;
-      if (nextBold) nextHeaderTextStyles[key].bold = true;
-      if (nextItalic) nextHeaderTextStyles[key].italic = true;
-      if (nextUnderline) nextHeaderTextStyles[key].underline = true;
-    }
+    if (!merged) delete nextHeaderTextStyles[key];
+    else nextHeaderTextStyles[key] = merged;
     await persistBoardSettings({ nextHeaderTextStyles });
   }, [effectiveHeaderColumnTextStyles, persistBoardSettings]);
 
@@ -937,23 +736,10 @@ export function usePurchaseOrdersPage() {
   const saveLineColumnTextStyle = useCallback(async (columnKey, stylePatch) => {
     const key = String(columnKey || '').trim();
     if (!key) return;
-    const current = effectiveLineColumnTextStyles[key] || {};
-    const nextTextColor = stylePatch?.textColor !== undefined
-      ? (HEX_COLOR_PATTERN.test(String(stylePatch.textColor || '')) ? String(stylePatch.textColor).toLowerCase() : '')
-      : (HEX_COLOR_PATTERN.test(String(current.textColor || '')) ? String(current.textColor).toLowerCase() : '');
-    const nextBold = stylePatch?.bold !== undefined ? stylePatch.bold === true : current.bold === true;
-    const nextItalic = stylePatch?.italic !== undefined ? stylePatch.italic === true : current.italic === true;
-    const nextUnderline = stylePatch?.underline !== undefined ? stylePatch.underline === true : current.underline === true;
+    const merged = mergeColumnTextStyle(effectiveLineColumnTextStyles[key], stylePatch);
     const nextLineTextStyles = { ...effectiveLineColumnTextStyles };
-    if (!nextTextColor && !nextBold && !nextItalic && !nextUnderline) {
-      delete nextLineTextStyles[key];
-    } else {
-      nextLineTextStyles[key] = {};
-      if (nextTextColor) nextLineTextStyles[key].textColor = nextTextColor;
-      if (nextBold) nextLineTextStyles[key].bold = true;
-      if (nextItalic) nextLineTextStyles[key].italic = true;
-      if (nextUnderline) nextLineTextStyles[key].underline = true;
-    }
+    if (!merged) delete nextLineTextStyles[key];
+    else nextLineTextStyles[key] = merged;
     await persistBoardSettings({ nextLineTextStyles });
   }, [effectiveLineColumnTextStyles, persistBoardSettings]);
 
