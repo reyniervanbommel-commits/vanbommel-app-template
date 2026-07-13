@@ -4,8 +4,9 @@ import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSec
 import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRulesPane';
 import PurchaseOrderColumnTextStylePane from './PurchaseOrderColumnTextStylePane';
+import FilterMenuMainPane from './PurchaseOrderColumnFilterMenuMainPane';
 
-export { default as FilterMenuMainPane } from './PurchaseOrderColumnFilterMenuMainPane';
+export { FilterMenuMainPane };
 
 export function FilterMenuSubPane({
   styles,
