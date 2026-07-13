@@ -115,28 +115,33 @@ const useStyles = makeStyles({
 });
 
 function PurchaseOrdersBoardRows({
-  groupedRows,
-  collapsedGroups,
-  expandedOrders,
-  columns,
-  lineColumns,
-  headerColumnWidths,
-  lineColumnWidths,
-  headerColumnTextStyles,
-  headerColumnFormatRules,
-  lineColumnTextStyles,
-  lineColumnFormatRules,
-  onSaveLineColumnWidth,
-  colCount,
-  tableActions,
-  onClearGrouping,
-  cellActions,
-  lineTotalColumns,
-  linkedLineTotalByHeaderKey,
-  linkedLineValueByHeaderKey,
+  boardData,
+  columnConfig,
+  tableConfig,
   selection,
   cellFilterActions,
 }) {
+  const { groupedRows, collapsedGroups, expandedOrders } = boardData;
+  const {
+    columns,
+    lineColumns,
+    headerColumnWidths,
+    lineColumnWidths,
+    headerColumnTextStyles,
+    headerColumnFormatRules,
+    lineColumnTextStyles,
+    lineColumnFormatRules,
+    lineTotalColumns,
+    linkedLineTotalByHeaderKey,
+    linkedLineValueByHeaderKey,
+  } = columnConfig;
+  const {
+    colCount,
+    tableActions,
+    onClearGrouping,
+    cellActions,
+    onSaveLineColumnWidth,
+  } = tableConfig;
   const styles = useStyles();
   const effectiveHeaderColumnFormatRules = useMemo(
     () => normalizeColumnFormatRulesMap(headerColumnFormatRules),
@@ -147,7 +152,7 @@ function PurchaseOrdersBoardRows({
     [columns]
   );
   const { onToggleGroup, onToggleOrder } = tableActions;
-  const boardConfig = useMemo(() => ({
+  const orderRowsConfig = useMemo(() => ({
     styles,
     columns,
     headerColumnWidths,
@@ -243,7 +248,7 @@ function PurchaseOrdersBoardRows({
                     isExpanded: Boolean(expandedOrders[rowId]),
                     selectionKey,
                   }}
-                  boardConfig={boardConfig}
+                  boardConfig={orderRowsConfig}
                   cellActions={cellActions}
                   selection={selection}
                   cellFilterActions={cellFilterActions}

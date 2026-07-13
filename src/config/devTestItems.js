@@ -77,8 +77,8 @@ export const devTestItems = [
     ],
   },
   {
-    id: 'feature-206-d365-product-images',
-    title: 'Feature 206 - D365 productafbeeldingen (v1.14.131)',
+    id: 'feature-203-d365-product-images',
+    title: 'Feature 203 - D365 productafbeeldingen (v1.14.135)',
     checks: [
       'Elke zichtbare, niet-verwijderde orderregel met een itemnummer toont een productthumbnail via de same-origin media-route',
       'De orderheader toont het eerste zichtbare item en +1 wanneer drie regels twee unieke itemnummers bevatten',

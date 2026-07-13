@@ -11,6 +11,7 @@ import { usePurchaseOrderSavedViewState } from '../../hooks/usePurchaseOrderSave
 import { usePurchaseOrdersSelection } from '../../hooks/usePurchaseOrdersSelection';
 import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRows';
 import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
+import { usePurchaseOrdersBoardTableProps } from '../../hooks/usePurchaseOrdersBoardTableProps';
 import { usePurchaseOrderBulkEdit } from '../../hooks/usePurchaseOrderBulkEdit';
 import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
 import { useAuth } from '../../context/AuthContext';
@@ -49,6 +50,7 @@ export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
   const { progress: refreshProgress, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress();
+  const purchaseOrdersPage = usePurchaseOrdersPage();
   const {
     orders,
     visibleHeaderColumns,
@@ -76,31 +78,17 @@ export default function PurchaseOrdersPage() {
     markViewed,
     markingViewed,
     correctField,
-    toggleWriteback,
-    reorderHeaderColumn,
-    reorderLineColumn,
-    headerColumnWidths,
-    lineColumnWidths,
-    headerColumnTextStyles,
     headerColumnFormatRules,
-    lineColumnTextStyles,
-    lineColumnFormatRules,
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
-    saveHeaderColumnWidth,
-    saveLineColumnWidth,
-    saveHeaderColumnTextStyle,
     saveHeaderColumnFormatRules,
-    saveLineColumnTextStyle,
-    saveLineColumnFormatRules,
     setLineColumnTotal,
     addLineTotalHeaderLink,
     addLineValueHeaderLink,
-    savingColumns,
     exportColumnLayout,
     applyColumnLayout,
-  } = usePurchaseOrdersPage();
+  } = purchaseOrdersPage;
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
@@ -159,6 +147,20 @@ export default function PurchaseOrdersPage() {
     addLineValueHeaderLink,
     setLineColumnTotal,
     setEditingColumnKey,
+  });
+  const boardTableProps = usePurchaseOrdersBoardTableProps({
+    pageState: purchaseOrdersPage,
+    boardView,
+    bulkEdit,
+    isAdmin,
+    onAddColumnRightOf: handleAddColumnRightOf,
+    onPushLineTotalToHeader: handlePushLineTotalToHeader,
+    onPushLineValuesToHeader: handlePushLineValuesToHeader,
+    editingColumnKey,
+    onEditingDone: handleEditingDone,
+    tableSelection,
+    stickyColumnKeys,
+    setStickyColumnKeys,
   });
 
   const handleRefresh = useCallback(async () => {
@@ -250,44 +252,7 @@ export default function PurchaseOrdersPage() {
         </div>
       ) : (
         <div className={styles.tableRegion}>
-          <PurchaseOrdersBoardTable
-            columns={visibleHeaderColumns}
-            lineColumns={lineColumns}
-            items={orders}
-            boardView={boardView}
-            onSaveValue={bulkEdit.handleSaveValue}
-            onRenameColumn={renameColumn}
-            onRemoveColumn={removeColumn}
-            onCorrect={bulkEdit.handleCorrectField}
-            isAdmin={isAdmin}
-            onToggleWriteback={toggleWriteback}
-            onReorderHeaderColumn={reorderHeaderColumn}
-            onReorderLineColumn={reorderLineColumn}
-            headerColumnWidths={headerColumnWidths}
-            lineColumnWidths={lineColumnWidths}
-            headerColumnTextStyles={headerColumnTextStyles}
-            headerColumnFormatRules={headerColumnFormatRules}
-            lineColumnTextStyles={lineColumnTextStyles}
-            lineColumnFormatRules={lineColumnFormatRules}
-            onSaveHeaderColumnWidth={saveHeaderColumnWidth}
-            onSaveLineColumnWidth={saveLineColumnWidth}
-            onSaveHeaderColumnTextStyle={saveHeaderColumnTextStyle}
-            onSaveHeaderColumnFormatRules={saveHeaderColumnFormatRules}
-            onSaveLineColumnTextStyle={saveLineColumnTextStyle}
-            onSaveLineColumnFormatRules={saveLineColumnFormatRules}
-            onAddColumnRightOf={handleAddColumnRightOf}
-            onSetLineColumnTotal={setLineColumnTotal}
-            onPushLineTotalToHeader={handlePushLineTotalToHeader}
-            onPushLineValuesToHeader={handlePushLineValuesToHeader}
-            lineTotalColumns={lineTotalColumns}
-            lineTotalHeaderLinks={lineTotalHeaderLinks}
-            lineValueHeaderLinks={lineValueHeaderLinks}
-            editingColumnKey={editingColumnKey}
-            onEditingDone={handleEditingDone}
-            reorderingColumns={savingColumns}
-            selection={tableSelection}
-            stickyColumns={{ keys: stickyColumnKeys, onChange: setStickyColumnKeys }}
-          />
+          <PurchaseOrdersBoardTable {...boardTableProps} />
         </div>
       )}
       <PurchaseOrdersPageDialogs
