@@ -77,7 +77,7 @@ describe('CellHistoryPopover', () => {
     expect(within(table).getByRole('columnheader', { name: 'New value' })).toBeTruthy();
     expect(within(table).getByText('Test User')).toBeTruthy();
     expect(within(table).getByText('Old value')).toBeTruthy();
-    expect(within(table).getByText('New value')).toBeTruthy();
+    expect(within(table).getAllByRole('cell')[3].textContent).toBe('New value');
     expect(within(table).getByText('Applied')).toBeTruthy();
   });
 });
