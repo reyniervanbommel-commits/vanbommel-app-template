@@ -1,5 +1,5 @@
--- Migratie 021: datatype 'image' toestaan in po_columns en tb_columns (#AB:178).
--- Idempotent: drop + recreate van de CHECK-constraints met image toegevoegd.
+-- Migratie 021: datatype 'image', 'status' en 'remarks' toestaan in po_columns en tb_columns.
+-- Idempotent: drop + recreate van de CHECK-constraints.
 
 IF OBJECT_ID('dbo.po_columns', 'U') IS NOT NULL
 BEGIN
@@ -15,7 +15,7 @@ BEGIN
 
   ALTER TABLE dbo.po_columns WITH CHECK
     ADD CONSTRAINT CK_po_columns_data_type
-    CHECK (data_type IN ('text','number','date','boolean','select','image'));
+    CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
 END;
 
 IF OBJECT_ID('dbo.tb_columns', 'U') IS NOT NULL
@@ -27,6 +27,7 @@ BEGIN
       AND cc.parent_object_id = OBJECT_ID('dbo.tb_columns')
       AND cc.definition LIKE '%remarks%'
       AND cc.definition LIKE '%image%'
+      AND cc.definition LIKE '%status%'
   )
   BEGIN
     IF EXISTS (
@@ -39,6 +40,6 @@ BEGIN
 
     ALTER TABLE dbo.tb_columns WITH NOCHECK
       ADD CONSTRAINT CK_tb_columns_data_type
-      CHECK (data_type IN ('text','number','date','boolean','select','image','remarks'));
+      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
   END;
 END;

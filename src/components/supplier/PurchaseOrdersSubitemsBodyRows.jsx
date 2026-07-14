@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
+import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
@@ -8,6 +9,7 @@ import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { resolveSubitemConnectorCellClassName } from './purchaseOrderSubitemConnectorStyles';
+import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import {
   getProductImageCellStyle,
   isProductImageColumn,
@@ -36,9 +38,32 @@ function resolveLineRowFormatColor(line, lineColumns, columnFormatRules) {
   for (const column of Array.isArray(lineColumns) ? lineColumns : []) {
     const ruleSet = columnFormatRules[column.key];
     if (!ruleSet || ruleSet.target !== 'row') continue;
-    const color = evalFormatRules(line?.values?.[column.key], ruleSet, line?.values || {});
+    const statusOptions = isStatusColumn(column) ? column.options : null;
+    const color = evalFormatRules(line?.values?.[column.key], ruleSet, line?.values || {}, statusOptions);
     if (color) return color;
   }
+  return '';
+}
+
+function resolveLineCellBackground({
+  line,
+  column,
+  ruleSet,
+  rowFormatColor,
+  isChangedCell,
+}) {
+  const rawValue = line?.values?.[column.key];
+  const statusOptions = isStatusColumn(column) ? column.options : null;
+  const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
+    ? evalFormatRules(rawValue, ruleSet, line?.values || {}, statusOptions)
+    : '';
+  if (cellFormatColor) return cellFormatColor;
+  if (!line?.isRemoved && rowFormatColor) return rowFormatColor;
+  if (isStatusColumn(column)) {
+    return resolveStatusCellColor(rawValue, column.options);
+  }
+  if (line?.isRemoved) return '#f3f2f1';
+  if (isChangedCell) return '#fff4ce';
   return '';
 }
 
@@ -49,7 +74,10 @@ function renderLineCellContent({
   order,
   onSaveValue,
   onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
   styles,
+  cellBackgroundColor = '',
 }) {
   const rawValue = line.values?.[column.key];
   const firstDataColumn = lineColumns.find((entry) => !isProductImageColumn(entry));
@@ -83,12 +111,46 @@ function renderLineCellContent({
     );
   }
   if (column.source === 'custom') {
+    if (isStatusColumn(column)) {
+      return (
+        <span className={showLineBadge ? styles.statusWrap : undefined}>
+          <StatusCell
+            value={rawValue}
+            options={column.options}
+            isAdmin={isAdmin}
+            ariaLabel={`${column.label} for line ${line.lineNumber}`}
+            hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+            cellKeys={{
+              columnId: column.id,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: line.lineNumber,
+            }}
+            onSave={(value) =>
+              onSaveValue({
+                columnId: column.id,
+                columnKey: column.key,
+                dataAreaId: order.dataAreaId,
+                orderNumber: order.orderNumber,
+                lineNumber: line.lineNumber,
+                value,
+              })
+            }
+            onUpdateOptions={(options) =>
+              onUpdateStatusOptions?.(column.id, options, column.label)
+            }
+          />
+          {showLineBadge ? lineBadge : null}
+        </span>
+      );
+    }
     return (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <EditableCell
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
+          cellBackgroundColor={cellBackgroundColor}
           ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
@@ -118,6 +180,7 @@ function renderLineCellContent({
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
+          cellBackgroundColor={cellBackgroundColor}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -161,6 +224,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
   columnFormatRules = {},
   onSaveValue,
   onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
   subCellClassName,
   subCellContentClassName,
   noRowsCellClassName,
@@ -198,20 +263,27 @@ export default function PurchaseOrdersSubitemsBodyRows({
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);
             const ruleSet = effectiveColumnFormatRules?.[column.key];
-            const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
-              ? evalFormatRules(rawValue, ruleSet, line?.values || {})
-              : '';
-            const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
+            const cellBackground = resolveLineCellBackground({
+              line,
+              column,
+              ruleSet,
+              rowFormatColor,
+              isChangedCell,
+            });
+            const isImageColumn = isProductImageColumn(column);
+            const isStatus = isStatusColumn(column);
             const baseCellStyle = getColumnCellStyle(
               columnWidths,
               columnTextStyles,
               column.key,
-              cellFormatColor || fallbackBackground
+              cellBackground
             );
-            const isImageColumn = isProductImageColumn(column);
             const cellStyle = isImageColumn
               ? getProductImageCellStyle(baseCellStyle, PRODUCT_IMAGE_SUB_CELL_HEIGHT)
-              : baseCellStyle;
+              : {
+                ...baseCellStyle,
+                ...(isStatus ? { padding: 0 } : {}),
+              };
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
@@ -229,7 +301,10 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   order,
                   onSaveValue,
                   onCorrect,
+                  onUpdateStatusOptions,
+                  isAdmin,
                   styles,
+                  cellBackgroundColor: cellBackground,
                 })}
               </PurchaseOrderDataCell>
             );

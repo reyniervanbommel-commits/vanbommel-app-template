@@ -8,6 +8,7 @@ import { RemarksLatestCell, RowRemarksBadge } from './remarks';
 import { rowKey } from './remarks/remarksFormatters';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules } from './columnFormatRuleUtils';
+import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 import {
   getProductImageCellStyle,
@@ -28,8 +29,22 @@ function resolveRowFormatColor(order, columns, formatRules) {
   for (const column of columns) {
     const ruleSet = formatRules[column.key];
     if (ruleSet?.target !== 'row') continue;
-    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {});
+    const statusOptions = isStatusColumn(column) ? column.options : null;
+    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions);
     if (color) return color;
+  }
+  return '';
+}
+
+function resolveOrderCellBackground({ order, column, ruleSet, rowFormatColor }) {
+  const statusOptions = isStatusColumn(column) ? column.options : null;
+  const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
+    ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions)
+    : '';
+  if (cellFormatColor) return cellFormatColor;
+  if (!order.removedInD365 && rowFormatColor) return rowFormatColor;
+  if (isStatusColumn(column)) {
+    return resolveStatusCellColor(order?.values?.[column.key], column.options);
   }
   return '';
 }
@@ -97,14 +112,19 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
   links,
   contextMenu,
   remarks,
+  rowFormatColor,
 }) {
   const rawValue = order?.values?.[column.key];
   const ruleSet = formatting.headerColumnFormatRules[column.key];
-  const cellFormatColor = !order.removedInD365 && ruleSet?.target === 'cell'
-    ? evalFormatRules(rawValue, ruleSet, order?.values || {})
-    : '';
+  const cellBackgroundColor = resolveOrderCellBackground({
+    order,
+    column,
+    ruleSet,
+    rowFormatColor,
+  });
   const cell = useMemo(() => ({ column, rawValue, order }), [column, order, rawValue]);
   const isImageColumn = isProductImageColumn(column);
+  const isStatus = isStatusColumn(column);
   const handleOpenRemarks = useCallback(
     (target) => remarks?.open?.(order, column, target),
     [column, order, remarks]
@@ -114,16 +134,19 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
       formatting.headerColumnWidths,
       formatting.headerColumnTextStyles,
       column.key,
-      cellFormatColor
+      cellBackgroundColor
     );
     return {
       className: styles.itemCell,
       contentClassName: isImageColumn ? undefined : styles.itemCellContent,
       style: isImageColumn
         ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
-        : baseStyle,
+        : {
+          ...baseStyle,
+          ...(isStatus ? { padding: 0 } : {}),
+        },
     };
-  }, [cellFormatColor, column.key, formatting, isImageColumn, styles.itemCell, styles.itemCellContent]);
+  }, [cellBackgroundColor, column.key, formatting, isImageColumn, isStatus, styles.itemCell, styles.itemCellContent]);
 
   return (
     <PurchaseOrderDataCell
@@ -143,6 +166,9 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           column={column}
           onSaveValue={actions.onSaveValue}
           onCorrect={actions.onCorrect}
+          onUpdateStatusOptions={actions.onUpdateStatusOptions}
+          isAdmin={actions.isAdmin}
+          cellBackgroundColor={cellBackgroundColor}
           linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
           productImageLines={order.lines}
@@ -223,6 +249,7 @@ function PurchaseOrderBoardRow({
             links={links}
             contextMenu={contextMenu}
             remarks={rowRemarks}
+            rowFormatColor={rowFormatColor}
           />
         ))}
       </tr>

@@ -5,7 +5,7 @@ import {
 } from './columnFormatRuleUtils';
 
 export const NEW_COLUMN_TYPES = [
-  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
+  { key: 'status', label: 'Status', dataType: 'status' },
   { key: 'text', label: 'Tekst', dataType: 'text' },
   { key: 'number', label: 'Nummers', dataType: 'number' },
   { key: 'date', label: 'Datum', dataType: 'date' },
@@ -22,6 +22,7 @@ const COLUMN_TYPE_META = {
   date: { key: 'date', label: 'Date' },
   boolean: { key: 'boolean', label: 'Yes/No' },
   select: { key: 'select', label: 'Select' },
+  status: { key: 'status', label: 'Status' },
   image: { key: 'image', label: 'Image' },
   remarks: { key: 'remarks', label: 'Remarks' },
   formula: { key: 'formula', label: 'Formula' },

@@ -66,7 +66,14 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
     onCorrect: bulkEdit.handleCorrectField,
-  }), [bulkEdit.handleCorrectField, bulkEdit.handleSaveValue]);
+    onUpdateStatusOptions: pageModel.updateStatusOptions,
+    isAdmin: tableContext.isAdmin,
+  }), [
+    bulkEdit.handleCorrectField,
+    bulkEdit.handleSaveValue,
+    pageModel.updateStatusOptions,
+    tableContext.isAdmin,
+  ]);
   const columnActions = useMemo(() => ({
     onRenameColumn: pageModel.renameColumn,
     onRemoveColumn: pageModel.removeColumn,

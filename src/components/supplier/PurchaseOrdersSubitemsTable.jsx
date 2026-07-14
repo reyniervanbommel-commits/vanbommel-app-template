@@ -147,6 +147,7 @@ export default function PurchaseOrdersSubitemsTable({
   onSaveValue,
   onRenameColumn,
   onRemoveColumn,
+  onUpdateStatusOptions,
   onCorrect,
   isAdmin,
   onToggleWriteback,
@@ -321,6 +322,8 @@ export default function PurchaseOrdersSubitemsTable({
         columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
+        onUpdateStatusOptions={onUpdateStatusOptions}
+        isAdmin={isAdmin}
         subCellClassName={styles.subCell}
         subCellContentClassName={styles.subCellContent}
         noRowsCellClassName={styles.noRowsCell}
