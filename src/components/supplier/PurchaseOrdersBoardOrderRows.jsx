@@ -5,6 +5,7 @@ import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
 import PurchaseOrdersBoardRowControls from './PurchaseOrdersBoardRowControls';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules } from './columnFormatRuleUtils';
+import { getProductImageCellStyle, isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
 
 function getOrderRowClassName(order, styles) {
   if (order.removedInD365) return `${styles.itemRow} ${styles.removedRow}`;
@@ -73,13 +74,27 @@ function PurchaseOrdersBoardOrderRows({
             ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
             : '';
           const rawValue = order?.values?.[column.key];
+          const isImageColumn = isProductImageColumn(column);
+          const cellStyle = isImageColumn
+            ? getProductImageCellStyle(getColumnCellStyle(
+              headerColumnWidths,
+              headerColumnTextStyles,
+              column.key,
+              cellFormatColor
+            ))
+            : getColumnCellStyle(
+              headerColumnWidths,
+              headerColumnTextStyles,
+              column.key,
+              cellFormatColor
+            );
           return (
             <PurchaseOrderDataCell
               key={`${rowId}-${column.key}`}
               column={column}
               rawValue={rawValue}
               className={styles.itemCell}
-              style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
+              style={cellStyle}
               filterByColumn={cellFilterActions?.filterByColumn}
               onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
               onClearColumnFilter={cellFilterActions?.clearColumnFilter}

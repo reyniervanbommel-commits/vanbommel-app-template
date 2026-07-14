@@ -5,6 +5,7 @@ import {
   clampProductImageColumnWidth,
   createProductImageColumn,
   extendDefaultColumnKeys,
+  getProductImageCellStyle,
   isProductImageColumn,
   mergeProductImageColumnWidths,
   orderColumnsWithProductImage,
@@ -51,5 +52,13 @@ describe('purchaseOrderProductImageColumn', () => {
   it('allows a smaller minimum width for the image column', () => {
     expect(clampProductImageColumnWidth(36)).toBe(36);
     expect(clampProductImageColumnWidth(20)).toBe(PRODUCT_IMAGE_MIN_COLUMN_WIDTH);
+  });
+
+  it('removes padding so thumbnails can fill the full cell', () => {
+    expect(getProductImageCellStyle({ width: '52px' })).toMatchObject({
+      width: '52px',
+      padding: 0,
+      height: '1px',
+    });
   });
 });

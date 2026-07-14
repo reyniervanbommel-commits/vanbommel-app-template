@@ -7,7 +7,7 @@ import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
-import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
+import { isProductImageColumn, getProductImageCellStyle } from '../../utils/purchaseOrderProductImageColumn';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -177,12 +177,19 @@ export default function PurchaseOrdersSubitemsBodyRows({
               ? evalFormatRules(rawValue, ruleSet, line?.values || {})
               : '';
             const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
-            const cellStyle = getColumnCellStyle(
-              columnWidths,
-              columnTextStyles,
-              column.key,
-              cellFormatColor || fallbackBackground
-            );
+            const cellStyle = isProductImageColumn(column)
+              ? getProductImageCellStyle(getColumnCellStyle(
+                columnWidths,
+                columnTextStyles,
+                column.key,
+                cellFormatColor || fallbackBackground
+              ))
+              : getColumnCellStyle(
+                columnWidths,
+                columnTextStyles,
+                column.key,
+                cellFormatColor || fallbackBackground
+              );
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}

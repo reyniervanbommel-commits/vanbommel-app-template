@@ -2,50 +2,74 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
 import {
-  PRODUCT_IMAGE_HOVER_SCALE,
+  PRODUCT_IMAGE_HOVER_MAX_SIZE,
   PRODUCT_IMAGE_THUMBNAIL_SIZE,
 } from '../../utils/purchaseOrderProductImageColumn';
 
-const hoverPreviewSize = PRODUCT_IMAGE_THUMBNAIL_SIZE * PRODUCT_IMAGE_HOVER_SCALE;
-
 const useStyles = makeStyles({
   root: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shorthands.gap('4px'),
+    display: 'block',
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    minHeight: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
   },
   imageButton: {
-    display: 'block',
-    width: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
-    height: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+    minHeight: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
     ...shorthands.padding(0),
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    borderRadius: tokens.borderRadiusSmall,
+    ...shorthands.border('none'),
+    borderRadius: 0,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: tokens.colorNeutralBackground1,
     cursor: 'pointer',
   },
   image: {
     display: 'block',
     width: '100%',
     height: '100%',
-    objectFit: 'cover',
+    objectFit: 'contain',
+  },
+  hoverPreviewFrame: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
+    maxHeight: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
+    ...shorthands.padding('4px'),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
   },
   hoverPreviewImage: {
     display: 'block',
-    width: `${hoverPreviewSize}px`,
-    height: `${hoverPreviewSize}px`,
-    objectFit: 'cover',
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground1,
+    maxWidth: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
+    maxHeight: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
+    width: 'auto',
+    height: 'auto',
+    objectFit: 'contain',
   },
   badgeButton: {
+    position: 'absolute',
+    right: '2px',
+    bottom: '2px',
+    zIndex: 1,
     ...shorthands.padding(0),
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
+  },
+  badgeOverlay: {
+    position: 'absolute',
+    right: '2px',
+    bottom: '2px',
+    zIndex: 1,
+    pointerEvents: 'none',
   },
 });
 
@@ -84,12 +108,14 @@ function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemC
 
   const badgeLabel = `${additionalItemCount} additional unique items`;
   const hoverPreview = (
-    <img
-      className={styles.hoverPreviewImage}
-      src={imageUrl}
-      alt=""
-      draggable={false}
-    />
+    <div className={styles.hoverPreviewFrame}>
+      <img
+        className={styles.hoverPreviewImage}
+        src={imageUrl}
+        alt=""
+        draggable={false}
+      />
+    </div>
   );
 
   return (
@@ -125,7 +151,13 @@ function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemC
               <Badge appearance="tint" color="informative" size="small">+{additionalItemCount}</Badge>
             </button>
           ) : (
-            <Badge appearance="tint" color="informative" size="small" aria-label={badgeLabel}>
+            <Badge
+              className={styles.badgeOverlay}
+              appearance="tint"
+              color="informative"
+              size="small"
+              aria-label={badgeLabel}
+            >
               +{additionalItemCount}
             </Badge>
           )
