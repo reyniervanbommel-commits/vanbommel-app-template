@@ -9,6 +9,12 @@ import { rowKey } from './remarks/remarksFormatters';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules } from './columnFormatRuleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import {
+  getProductImageCellStyle,
+  isProductImageColumn,
+  PRODUCT_IMAGE_SUB_CELL_HEIGHT,
+} from '../../utils/purchaseOrderProductImageColumn';
+import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
 
 function getOrderRowClassName(order, styles) {
   if (order.removedInD365) return `${styles.itemRow} ${styles.removedRow}`;
@@ -98,20 +104,26 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
     ? evalFormatRules(rawValue, ruleSet, order?.values || {})
     : '';
   const cell = useMemo(() => ({ column, rawValue, order }), [column, order, rawValue]);
+  const isImageColumn = isProductImageColumn(column);
   const handleOpenRemarks = useCallback(
     (target) => remarks?.open?.(order, column, target),
     [column, order, remarks]
   );
-  const layout = useMemo(() => ({
-    className: styles.itemCell,
-    contentClassName: styles.itemCellContent,
-    style: getColumnCellStyle(
+  const layout = useMemo(() => {
+    const baseStyle = getColumnCellStyle(
       formatting.headerColumnWidths,
       formatting.headerColumnTextStyles,
       column.key,
       cellFormatColor
-    ),
-  }), [cellFormatColor, column.key, formatting, styles.itemCell]);
+    );
+    return {
+      className: styles.itemCell,
+      contentClassName: isImageColumn ? undefined : styles.itemCellContent,
+      style: isImageColumn
+        ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
+        : baseStyle,
+    };
+  }, [cellFormatColor, column.key, formatting, isImageColumn, styles.itemCell, styles.itemCellContent]);
 
   return (
     <PurchaseOrderDataCell
@@ -133,6 +145,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           onCorrect={actions.onCorrect}
           linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
+          productImageLines={order.lines}
         />
       )}
     </PurchaseOrderDataCell>

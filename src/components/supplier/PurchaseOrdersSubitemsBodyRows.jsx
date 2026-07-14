@@ -3,9 +3,15 @@ import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
+import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  getProductImageCellStyle,
+  isProductImageColumn,
+  PRODUCT_IMAGE_SUB_CELL_HEIGHT,
+} from '../../utils/purchaseOrderProductImageColumn';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -45,7 +51,20 @@ function renderLineCellContent({
   styles,
 }) {
   const rawValue = line.values?.[column.key];
-  const showLineBadge = column === lineColumns[0] && (line?.isNew || line?.isChanged || line?.isRemoved);
+  const firstDataColumn = lineColumns.find((entry) => !isProductImageColumn(entry));
+  const showLineBadge = column === firstDataColumn && (line?.isNew || line?.isChanged || line?.isRemoved);
+  const itemNumber = line?.itemNumber ?? line?.values?.itemNumber;
+
+  if (isProductImageColumn(column)) {
+    if (line?.isRemoved) return null;
+    return (
+      <PurchaseOrderProductImageCell
+        dataAreaId={order.dataAreaId}
+        itemNumber={itemNumber}
+      />
+    );
+  }
+
   const lineBadge = line?.isRemoved
     ? <Badge appearance="tint" color="danger" size="small">verwijderd</Badge>
     : (line?.isNew
@@ -169,19 +188,23 @@ export default function PurchaseOrdersSubitemsBodyRows({
               ? evalFormatRules(rawValue, ruleSet, line?.values || {})
               : '';
             const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
-            const cellStyle = getColumnCellStyle(
+            const baseCellStyle = getColumnCellStyle(
               columnWidths,
               columnTextStyles,
               column.key,
               cellFormatColor || fallbackBackground
             );
+            const isImageColumn = isProductImageColumn(column);
+            const cellStyle = isImageColumn
+              ? getProductImageCellStyle(baseCellStyle, PRODUCT_IMAGE_SUB_CELL_HEIGHT)
+              : baseCellStyle;
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
                 cell={{ column, rawValue, order }}
                 layout={{
                   className: subCellClassName,
-                  contentClassName: subCellContentClassName,
+                  contentClassName: isImageColumn ? undefined : subCellContentClassName,
                   style: cellStyle,
                 }}
               >

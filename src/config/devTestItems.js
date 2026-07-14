@@ -16,6 +16,23 @@ export const devTestItems = [
       'Remarks, reactions, soft delete, polling and keyboard focus work with two employee accounts',
     ],
   },
+  {
+    id: 'feature-203-d365-product-images',
+    title: 'Feature 203 - D365 product images (v1.14.142)',
+    checks: [
+      'The board shows a dedicated Image column with a cloud icon in the header',
+      'Thumbnails fill the Image cell width without increasing row height',
+      'Hovering a thumbnail shows the full product image scaled proportionally at 5x',
+      'The Image column can be made sticky via the column menu',
+      'The Image column can be dragged to another position and stays in that order',
+      'The Image column can be resized narrower than regular columns',
+      'Each visible, non-removed line with an item number shows a product thumbnail in the Image column',
+      'The order header Image column shows the first visible item and +N for additional unique items',
+      'Clicking a thumbnail opens a popup with the large image and the item number below it',
+      'A missing product image stays empty without a broken-image icon',
+      'An unauthorized request to /api/media/product-image is rejected',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

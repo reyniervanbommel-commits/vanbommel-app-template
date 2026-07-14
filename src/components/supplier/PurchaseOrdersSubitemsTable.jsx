@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
@@ -10,6 +11,7 @@ import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 
 import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
@@ -206,6 +208,7 @@ export default function PurchaseOrdersSubitemsTable({
       <thead>
         <tr>
           {lineColumns.map((column) => {
+            const isSystemColumn = isProductImageColumn(column);
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
             const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
             const connectionTargets = lineColumnConnectionTargets[column.key] || [];
@@ -214,6 +217,7 @@ export default function PurchaseOrdersSubitemsTable({
               key={column.key}
               columnKey={column.key}
               width={effectiveColumnWidths[column.key]}
+              minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',
@@ -226,20 +230,25 @@ export default function PurchaseOrdersSubitemsTable({
             >
               <div className={styles.headerCellContent}>
                 <div className={styles.headerCellLabel}>
-                  <PurchaseOrderColumnHeader
-                    column={column}
-                    onRename={onRenameColumn}
-                    onRemove={onRemoveColumn}
-                    isAdmin={isAdmin}
-                    onToggleWriteback={onToggleWriteback}
-                    showActionsMenu={false}
-                    showFilterIndicator={hasActiveFilter}
-                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                    showSumIndicator={summedColumnsSet.has(column.key)}
-                    showConnectionIndicator={connectionTargets.length > 0}
-                  />
+                  {isSystemColumn ? (
+                    <PurchaseOrderProductImageColumnHeader label={column.label} />
+                  ) : (
+                    <PurchaseOrderColumnHeader
+                      column={column}
+                      onRename={onRenameColumn}
+                      onRemove={onRemoveColumn}
+                      isAdmin={isAdmin}
+                      onToggleWriteback={onToggleWriteback}
+                      showActionsMenu={false}
+                      showFilterIndicator={hasActiveFilter}
+                      showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                      showSumIndicator={summedColumnsSet.has(column.key)}
+                      showConnectionIndicator={connectionTargets.length > 0}
+                    />
+                  )}
                 </div>
-                <PurchaseOrderColumnFilterMenu
+                {!isSystemColumn ? (
+                  <PurchaseOrderColumnFilterMenu
                   column={column}
                   filter={filterByColumn[column.key]}
                   sortState={sortState}
@@ -268,6 +277,7 @@ export default function PurchaseOrdersSubitemsTable({
                   referenceColumns={lineColumns}
                   connectionTargets={connectionTargets}
                 />
+                ) : null}
               </div>
             </ResizableTableHeaderCell>
             );
