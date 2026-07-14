@@ -82,6 +82,14 @@ const useStyles = makeStyles({
     textDecoration: 'line-through',
     color: tokens.colorNeutralForeground3,
   },
+  groupTitle: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: tokens.colorNeutralForeground2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.03em',
+    ...shorthands.padding('10px', '16px', '4px'),
+  },
   panelFooter: {
     ...shorthands.padding('10px', '16px'),
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -173,20 +181,27 @@ export default function DevFeatureChecklist() {
                 All open test items are completed. Enable &quot;Show completed&quot; to review them.
               </Text>
             ) : (
-              visibleItems.map((item) => (
-                <div key={item.id} className={styles.item}>
-                  <Checkbox
-                    data-feature-id={item.id}
-                    checked={checkedIdSet.has(item.id)}
-                    onChange={handleCheckboxChange}
-                  />
-                  <Text
-                    className={`${styles.itemLabel}${checkedIdSet.has(item.id) ? ` ${styles.itemDone}` : ''}`}
-                  >
-                    {item.label}
-                  </Text>
-                </div>
-              ))
+              visibleItems.map((item, index) => {
+                const previousTitle = index > 0 ? visibleItems[index - 1]?.title : null;
+                const showTitle = item.title && item.title !== previousTitle;
+                return (
+                  <React.Fragment key={item.id}>
+                    {showTitle ? <Text className={styles.groupTitle}>{item.title}</Text> : null}
+                    <div className={styles.item}>
+                      <Checkbox
+                        data-feature-id={item.id}
+                        checked={checkedIdSet.has(item.id)}
+                        onChange={handleCheckboxChange}
+                      />
+                      <Text
+                        className={`${styles.itemLabel}${checkedIdSet.has(item.id) ? ` ${styles.itemDone}` : ''}`}
+                      >
+                        {item.label}
+                      </Text>
+                    </div>
+                  </React.Fragment>
+                );
+              })
             )}
           </div>
 
