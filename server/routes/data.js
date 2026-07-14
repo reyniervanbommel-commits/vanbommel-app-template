@@ -7,17 +7,133 @@
 const express = require('express');
 const dataService = require('../services/TableDataService');
 const columnsService = require('../services/TableColumnsService');
+const remarksService = require('../services/RowRemarksService');
+const { getRowActivity } = require('../services/RowActivityService');
 const registry = require('../services/TableRegistryService');
+const {
+  normalizeActive,
+  normalizeBody,
+  normalizeCursor,
+  normalizeEmoji,
+  normalizeLimit,
+  normalizeOptionalColumnId,
+  normalizePositiveId,
+  normalizeRowIdentity,
+  normalizeTableKey,
+} = require('../services/RowRemarksValidation');
 const { requireRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
+
+function remarksActor(req) {
+  return { id: req.user?.id, role: req.user?.role };
+}
 
 function toColumnId(raw) {
   if (!/^\d+$/.test(String(raw || '').trim())) return null;
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
 }
+
+// GET /api/data/:tableKey/remarks/summary — actieve remarktellers per masterrij.
+router.get('/:tableKey/remarks/summary', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const rows = await remarksService.summarizeRemarks(tableKey, remarksActor(req));
+    return res.json({ rows });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/remarks — stabiel cursor-gepagineerde remarks, inclusief tombstones.
+router.get('/:tableKey/remarks', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const row = normalizeRowIdentity(req.query.partitionKey, req.query.recordKey);
+    normalizeCursor(req.query.cursor);
+    const limit = normalizeLimit(req.query.limit);
+    return res.json(await remarksService.listRemarks(
+      { tableKey, ...row, cursor: req.query.cursor || null, limit },
+      remarksActor(req),
+    ));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
+router.post('/:tableKey/remarks', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const body = normalizeBody(req.body?.body);
+    const columnId = normalizeOptionalColumnId(req.body?.columnId);
+    const remark = await remarksService.addRemark(
+      { tableKey, ...row, body, columnId },
+      remarksActor(req),
+    );
+    return res.status(201).json({ remark });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
+router.delete('/:tableKey/remarks/:id', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const id = normalizePositiveId(req.params.id, 'remarkId');
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const remark = await remarksService.deleteRemark(
+      { tableKey, id, ...row },
+      remarksActor(req),
+    );
+    return res.json({ remark });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/data/:tableKey/remarks/:id/reaction — atomische, idempotente reaction-toggle.
+router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const id = normalizePositiveId(req.params.id, 'remarkId');
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const emoji = normalizeEmoji(req.body?.emoji);
+    const active = normalizeActive(req.body?.active);
+    const reactions = await remarksService.setReaction(
+      { tableKey, id, ...row, emoji, active },
+      remarksActor(req),
+    );
+    return res.json({ reactions });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/activity — row history of gecombineerde remarks/activity-feed.
+router.get('/:tableKey/activity', async (req, res, next) => {
+  try {
+    const activity = await getRowActivity({
+      tableKey: normalizeTableKey(req.params.tableKey),
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+      kind: req.query.kind,
+      columnId: req.query.columnId,
+      actionFilter: req.query.actionFilter,
+      cursor: req.query.cursor,
+      afterCursor: req.query.afterCursor,
+      limit: req.query.limit,
+      currentUser: remarksActor(req),
+    });
+    return res.json(activity);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {

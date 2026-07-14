@@ -20,6 +20,10 @@ const {
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
 } = require('../utils/tableColumnFormulaValidation');
+const {
+  ensureRemarksColumn,
+  validateRemarksColumnRequest,
+} = require('./RemarksColumnService');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -146,10 +150,15 @@ function validateImageOptions(options) {
 
 async function createColumn({ tableKey, scope, label, dataType, options = null, formulaExpr = null }, userId) {
   const table = await getTableByKey(tableKey);
-  const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
   if (!SCOPES.includes(scope)) throw Object.assign(new Error('Ongeldige scope (master of detail)'), { status: 400 });
   if (!DATA_TYPES.includes(dataType)) throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
+  if (dataType === 'remarks') {
+    validateRemarksColumnRequest({ scope, options, formulaExpr });
+    const pool = await getPool();
+    return ensureRemarksColumn({ pool, tableId: table.id, userId });
+  }
+  const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
+  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
   const normalizedFormula = normalizeFormulaExpression(formulaExpr);
   const isFormulaColumn = Boolean(normalizedFormula.expression);
   if (isFormulaColumn && scope !== 'master') {
@@ -232,6 +241,9 @@ async function renameColumn(columnId, label, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet hernoemd worden'), { status: 400 });
+  if (existing.dataType === 'remarks') {
+    throw Object.assign(new Error('De Remarks-kolom heeft een vaste naam'), { status: 400 });
+  }
 
   const pool = await getPool();
   const result = await pool.request()
@@ -452,6 +464,9 @@ async function setVisibleAtDelete(columnId, flag, userId) {
 async function setWriteBackConfig(columnId, config, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (existing.dataType === 'remarks') {
+    throw Object.assign(new Error('De Remarks-kolom is read-only'), { status: 400 });
+  }
   const { writable, mechanism } = resolveWriteback(config || {});
   const pool = await getPool();
   const result = await pool.request()
@@ -475,6 +490,8 @@ module.exports = {
   slugify,
   resolveWriteback,
   validateImageOptions,
+  ensureRemarksColumn,
+  validateRemarksColumnRequest,
   normalizeFormulaExpression,
   validateFormulaReferences,
   findDependentFormulaColumn,

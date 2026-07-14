@@ -1,0 +1,43 @@
+import React, { memo } from 'react';
+import { formatHistoryValue } from '../../../utils/cellHistoryFormat';
+import { formatDateTime, getActivityTimestamp } from './remarksFormatters';
+
+function sourceDetails(entry) {
+  const source = String(entry?.source || entry?.type || 'change').toLowerCase();
+  if (source.includes('write')) return { icon: '↗', label: 'D365 write-back' };
+  if (source.includes('custom') || source.includes('cell')) return { icon: '✎', label: 'Cell edit' };
+  if (source.includes('row')) return { icon: '▤', label: 'Row action' };
+  return { icon: '↻', label: 'D365 refresh' };
+}
+
+function RowHistoryEntry({ entry }) {
+  const source = sourceDetails(entry);
+  const author = entry?.author?.displayName || entry?.user?.displayName || entry?.user?.name || 'System';
+  const title = entry?.label || entry?.actionLabel || entry?.action || source.label;
+  const dataType = entry?.column?.dataType || entry?.dataType || null;
+  const oldValue = formatHistoryValue(entry?.oldValue, dataType);
+  const newValue = formatHistoryValue(entry?.newValue, dataType);
+
+  return (
+    <article className="history-entry" aria-label={`${source.label}: ${title}`}>
+      <div className="history-title">
+        <span aria-hidden="true">{source.icon}</span> {title}
+      </div>
+      <div className="history-meta">
+        {entry?.column?.label || entry?.columnLabel || 'Row'} · {author} · {formatDateTime(getActivityTimestamp(entry))}
+      </div>
+      <div className="history-values">
+        <span className="history-value" title={oldValue}>
+          {oldValue}
+        </span>
+        <span aria-hidden="true">→</span>
+        <span className="history-value" title={newValue}>
+          {newValue}
+        </span>
+      </div>
+      {entry?.status ? <span className="history-status">{entry.status}</span> : null}
+    </article>
+  );
+}
+
+export default memo(RowHistoryEntry);

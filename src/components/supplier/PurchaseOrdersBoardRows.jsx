@@ -1,13 +1,20 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Button, Checkbox, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
-import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
-import PurchaseOrderDataCell from './PurchaseOrderDataCell';
-import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
-import { getColumnCellStyle } from './columnTextStyleUtils';
-import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
-import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
+import {
+  purchaseOrderBoardRowHeight,
+} from './purchaseOrderBoardLayout';
+
+const fixedCellOverflow = {
+  boxSizing: 'border-box',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  verticalAlign: 'middle',
+};
+
 const useStyles = makeStyles({
   groupRowCell: {
     backgroundColor: '#f4e6ed',
@@ -66,44 +73,73 @@ const useStyles = makeStyles({
     position: 'sticky',
     left: 0,
     zIndex: 3,
-    width: '58px',
-    minWidth: '58px',
-    maxWidth: '58px',
+    width: '92px',
+    minWidth: '92px',
+    maxWidth: '92px',
+    height: purchaseOrderBoardRowHeight,
+    maxHeight: purchaseOrderBoardRowHeight,
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('1px'),
+    ...shorthands.padding('0', '2px'),
     textAlign: 'center',
-    verticalAlign: 'middle',
+    ...fixedCellOverflow,
   },
   controlCellInner: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    ...shorthands.gap('2px'),
+    justifyContent: 'space-between',
+    minWidth: 0,
+    height: '100%',
+    maxHeight: purchaseOrderBoardRowHeight,
+    overflow: 'hidden',
+  },
+  rowControlsCluster: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('0'),
+    flexShrink: 0,
+    maxHeight: '100%',
+    overflow: 'hidden',
   },
   rowCheckbox: {
     ...shorthands.padding('0'),
+    marginRight: '-2px',
+    flexShrink: 0,
   },
   rowStatusBadge: {
     marginLeft: '2px',
+    flexShrink: 0,
   },
   compactToggleButton: {
-    minWidth: '22px',
-    height: '22px',
-    minHeight: '22px',
+    minWidth: '18px',
+    width: '18px',
+    height: '18px',
+    minHeight: '18px',
     ...shorthands.padding('0'),
+    marginLeft: '-1px',
+    flexShrink: 0,
   },
   itemCell: {
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '10px'),
+    height: purchaseOrderBoardRowHeight,
+    maxHeight: purchaseOrderBoardRowHeight,
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
-    whiteSpace: 'nowrap',
+    ...fixedCellOverflow,
+  },
+  itemCellContent: {
+    display: 'block',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `calc(${purchaseOrderBoardRowHeight} - 4px)`,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    verticalAlign: 'middle',
+    whiteSpace: 'nowrap',
+    lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
   },
   newRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
@@ -118,59 +154,90 @@ const useStyles = makeStyles({
   },
 });
 
-function getOrderRowClassName(order, styles) {
-  if (order.removedInD365) return `${styles.itemRow} ${styles.removedRow}`;
-  if (order.isNew) return `${styles.itemRow} ${styles.newRow}`;
-  if (order.isChanged) return `${styles.itemRow} ${styles.changedRow}`;
-  return styles.itemRow;
-}
-function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
-  if (order?.removedInD365) return '';
-  for (const column of Array.isArray(columns) ? columns : []) {
-    const ruleSet = headerColumnFormatRules[column.key];
-    if (!ruleSet || ruleSet.target !== 'row') continue;
-    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {});
-    if (color) return color;
-  }
-  return '';
-}
-function PurchaseOrdersBoardRows({
-  groupedRows,
+const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
+  group,
   collapsedGroups,
-  expandedOrders,
-  columns,
-  lineColumns,
-  headerColumnWidths,
-  lineColumnWidths,
-  headerColumnTextStyles,
-  headerColumnFormatRules,
-  lineColumnTextStyles,
-  lineColumnFormatRules,
-  onSaveLineColumnWidth,
-  colCount,
-  tableActions,
-  onClearGrouping,
-  cellActions,
-  lineTotalColumns,
-  linkedLineTotalByHeaderKey,
-  linkedLineValueByHeaderKey,
+  rowLayout,
+  formatting,
+  actions,
+  links,
   selection,
-  cellFilterActions,
+  contextMenu,
+  remarks,
+}) {
+  const groupKey = group.groupKey || group.groupName;
+  const hidden = group.ancestorGroupKeys?.some((key) => collapsedGroups[key]);
+  const isCollapsed = Boolean(collapsedGroups[groupKey]);
+  const selectionEntries = Array.isArray(group.entriesForSelection)
+    ? group.entriesForSelection
+    : group.entries;
+  const groupData = useMemo(
+    () => ({ ...group, groupKey, selectionEntries }),
+    [group, groupKey, selectionEntries]
+  );
+  const groupLayout = useMemo(
+    () => ({
+      colCount: rowLayout.colCount,
+      styles: rowLayout.styles,
+      isCollapsed,
+    }),
+    [isCollapsed, rowLayout]
+  );
+
+  if (hidden) return null;
+
+  return (
+    <React.Fragment>
+      <PurchaseOrdersGroupHeaderRow
+        group={groupData}
+        layout={groupLayout}
+        selection={selection}
+        actions={actions.group}
+      />
+      {!isCollapsed ? group.entries.map((entry) => (
+        <PurchaseOrderBoardRow
+          key={entry.rowId}
+          entry={entry}
+          layout={rowLayout}
+          formatting={formatting}
+          actions={actions.row}
+          links={links}
+          selection={selection}
+          contextMenu={contextMenu}
+          remarks={remarks}
+        />
+      )) : null}
+    </React.Fragment>
+  );
+});
+
+function PurchaseOrdersBoardRows({
+  data,
+  layout,
+  formatting,
+  actions,
+  links,
+  selection,
+  contextMenu,
+  remarks,
 }) {
   const styles = useStyles();
   const effectiveHeaderColumnFormatRules = useMemo(
-    () => normalizeColumnFormatRulesMap(headerColumnFormatRules),
-    [headerColumnFormatRules]
+    () => normalizeColumnFormatRulesMap(formatting.headerColumnFormatRules),
+    [formatting.headerColumnFormatRules]
   );
-  const { onToggleGroup, onToggleOrder } = tableActions;
+  const effectiveFormatting = useMemo(
+    () => ({ ...formatting, headerColumnFormatRules: effectiveHeaderColumnFormatRules }),
+    [effectiveHeaderColumnFormatRules, formatting]
+  );
   const selectionEnabled = Boolean(selection?.enabled);
-  const handleGroupSelection = useCallback((keys, shouldSelect) => {
-    if (!selectionEnabled || !Array.isArray(keys) || !keys.length) return;
+  const handleGroupSelection = useCallback((selectionKeys, shouldSelect) => {
+    if (!selectionEnabled || !selectionKeys.length) return;
     if (typeof selection?.setMany === 'function') {
-      selection.setMany(keys, shouldSelect);
+      selection.setMany(selectionKeys, shouldSelect);
       return;
     }
-    keys.forEach((key) => {
+    selectionKeys.forEach((key) => {
       const currentlySelected = selection?.isSelected?.(key);
       if (shouldSelect ? !currentlySelected : currentlySelected) {
         selection?.toggle?.(key);
@@ -178,118 +245,40 @@ function PurchaseOrdersBoardRows({
     });
   }, [selection, selectionEnabled]);
 
+  const rowLayout = useMemo(() => ({
+    ...layout,
+    styles,
+    expandedOrders: data.expandedOrders,
+  }), [data.expandedOrders, layout, styles]);
+  const stableActions = useMemo(() => ({
+    group: {
+      onToggleGroup: actions.tableActions.onToggleGroup,
+      onToggleGroupSelection: handleGroupSelection,
+      onClearGroupingColumn: actions.onClearGrouping,
+    },
+    row: {
+      onToggleOrder: actions.tableActions.onToggleOrder,
+      onSaveLineColumnWidth: actions.onSaveLineColumnWidth,
+      cellActions: actions.cellActions,
+    },
+  }), [actions, handleGroupSelection]);
+
   return (
     <tbody>
-      {groupedRows.map((group) => {
-        const groupKey = group.groupKey || group.groupName;
-        const selectionEntries = Array.isArray(group.entriesForSelection) ? group.entriesForSelection : group.entries;
-        const hiddenByCollapsedAncestor = Array.isArray(group.ancestorGroupKeys) && group.ancestorGroupKeys.some((ancestorKey) => collapsedGroups[ancestorKey]);
-        if (hiddenByCollapsedAncestor) return null;
-        const isCollapsed = !!collapsedGroups[groupKey];
-        const groupSelectionKeys = Array.from(new Set(selectionEntries.map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId)).filter(Boolean)));
-        const groupAllSelected = selectionEnabled && groupSelectionKeys.length > 0 && groupSelectionKeys.every((key) => selection.isSelected(key));
-        const groupSomeSelected = selectionEnabled && !groupAllSelected && groupSelectionKeys.some((key) => selection.isSelected(key));
-        return (
-          <React.Fragment key={groupKey}>
-            <PurchaseOrdersGroupHeaderRow
-              colCount={colCount}
-              styles={styles}
-              groupColor={group.groupColor}
-              selectionEnabled={selectionEnabled}
-              groupAllSelected={groupAllSelected}
-              groupSomeSelected={groupSomeSelected}
-              groupKey={groupKey}
-              groupName={group.groupName}
-              groupLabel={group.groupLabel}
-              groupColumnKey={group.groupColumnKey}
-              groupSummaries={group.groupSummaries}
-              groupLevel={group.groupLevel || 0}
-              entryCount={selectionEntries.length}
-              isCollapsed={isCollapsed}
-              onToggleGroup={onToggleGroup}
-              onToggleGroupSelection={(shouldSelect) => handleGroupSelection(groupSelectionKeys, shouldSelect)}
-              onClearGroupingColumn={onClearGrouping}
-            />
-            {!isCollapsed && group.entries.map(({ order, rowId }) => {
-              const lines = Array.isArray(order.lines) ? order.lines : [];
-              const hasLines = lines.length > 0;
-              const isExpanded = !!expandedOrders[rowId];
-              const selectionKey = resolveOrderSelectionKey(order, rowId);
-              const rowFormatColor = resolveRowFormatColor(order, columns, effectiveHeaderColumnFormatRules);
-
-              return (
-                <React.Fragment key={rowId}>
-                  <tr
-                    className={getOrderRowClassName(order, styles)}
-                    style={!order.removedInD365 && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
-                  >
-                    <td className={styles.controlCell}>
-                      <div className={styles.controlCellInner}>
-                        {selectionEnabled ? (
-                          <Checkbox
-                            className={styles.rowCheckbox}
-                            checked={selection.isSelected(selectionKey)}
-                            onChange={() => selection.toggle(selectionKey)}
-                            aria-label={`Selecteer order ${order.orderNumber}`}
-                          />
-                        ) : null}
-                        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
-                        {hasLines ? (
-                          <Button
-                            size="small"
-                            appearance="subtle"
-                            className={styles.compactToggleButton}
-                            data-rowid={rowId}
-                            onClick={onToggleOrder}
-                          >
-                            {isExpanded ? '-' : '+'}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                    {columns.map((column) => {
-                      const ruleSet = effectiveHeaderColumnFormatRules?.[column.key];
-                      const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
-                        ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
-                        : '';
-                      const rawValue = order?.values?.[column.key];
-                      return (
-                        <PurchaseOrderDataCell
-                          key={`${rowId}-${column.key}`}
-                          column={column}
-                          rawValue={rawValue}
-                          className={styles.itemCell}
-                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
-                          filterByColumn={cellFilterActions?.filterByColumn}
-                          onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
-                          onClearColumnFilter={cellFilterActions?.clearColumnFilter}
-                          linkedLineTotalKeys={linkedLineTotalByHeaderKey}
-                          linkedLineValueKeys={linkedLineValueByHeaderKey}
-                        >
-                          <PurchaseOrderHeaderCellContent
-                            order={order}
-                            column={column}
-                            onSaveValue={cellActions.onSaveValue}
-                            onCorrect={cellActions.onCorrect}
-                            linkedLineTotalMap={linkedLineTotalByHeaderKey}
-                            linkedLineValueMap={linkedLineValueByHeaderKey}
-                          />
-                        </PurchaseOrderDataCell>
-                      );
-                    })}
-                  </tr>
-                  <PurchaseOrdersBoardExpandedRow
-                    expanded={hasLines && isExpanded}
-                    rowData={{ rowId, order, lines }}
-                    tableConfig={{ colCount, styles, lineColumns, lineColumnWidths, lineColumnTextStyles, lineColumnFormatRules, onSaveLineColumnWidth, lineTotalColumns, headerColumns: columns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
-                    cellActions={cellActions}
-                  />
-                </React.Fragment>
-              );
-            })}
-          </React.Fragment>
-        );
-      })}
+      {data.groupedRows.map((group) => (
+        <PurchaseOrdersBoardGroup
+          key={group.groupKey || group.groupName}
+          group={group}
+          collapsedGroups={data.collapsedGroups}
+          rowLayout={rowLayout}
+          formatting={effectiveFormatting}
+          actions={stableActions}
+          links={links}
+          selection={selection}
+          contextMenu={contextMenu}
+          remarks={remarks}
+        />
+      ))}
     </tbody>
   );
 }

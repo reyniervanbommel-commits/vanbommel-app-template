@@ -11,7 +11,12 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  formatHistoryDate,
+  formatHistoryStatus,
+  formatHistoryValue,
+  historyStatusColor,
+} from '../../utils/cellHistoryFormat';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -108,23 +113,6 @@ const useStyles = makeStyles({
   },
 });
 
-function formatHistoryDate(value) {
-  const formatted = formatCellValue(value, 'date');
-  return formatted === '-' ? '—' : formatted;
-}
-
-function formatValue(value, dataType) {
-  if (value === null || value === undefined || value === '') return '—';
-  const isDate = /^(date|datetime|date-time)$/i.test(String(dataType || ''));
-  const isIsoDate = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(value.trim());
-  if (isDate || isIsoDate) return formatHistoryDate(value);
-  if (dataType === 'boolean') return value === 1 || value === true || value === '1' ? 'Yes' : 'No';
-  return String(value);
-}
-
-const STATUS_LABEL = { pending: 'Pending', applied: 'Applied', failed: 'Failed' };
-const STATUS_COLOR = { pending: 'warning', applied: 'success', failed: 'danger' };
-
 function HistoryRow({ entry, dataType, styles }) {
   const userLabel = entry.user?.name || entry.user?.email || 'Unknown user';
   return (
@@ -136,17 +124,17 @@ function HistoryRow({ entry, dataType, styles }) {
         </Tooltip>
       </td>
       <td className={`${styles.cell} ${styles.valueCell}`}>
-        {entry.action === 'insert' ? '—' : formatValue(entry.oldValue, dataType)}
+        {entry.action === 'insert' ? '—' : formatHistoryValue(entry.oldValue, dataType)}
       </td>
-      <td className={`${styles.cell} ${styles.valueCell}`}>{formatValue(entry.newValue, dataType)}</td>
+      <td className={`${styles.cell} ${styles.valueCell}`}>{formatHistoryValue(entry.newValue, dataType)}</td>
       <td className={styles.cell}>
         <div className={styles.statusList}>
           {entry.source === 'writeback' ? (
             <Badge appearance="tint" size="small">D365</Badge>
           ) : null}
           {entry.status ? (
-            <Badge appearance="tint" size="small" color={STATUS_COLOR[entry.status] || 'informative'}>
-              {STATUS_LABEL[entry.status] || entry.status}
+            <Badge appearance="tint" size="small" color={historyStatusColor(entry.status)}>
+              {formatHistoryStatus(entry.status)}
             </Badge>
           ) : null}
           {!entry.status && entry.source !== 'writeback' ? '—' : null}

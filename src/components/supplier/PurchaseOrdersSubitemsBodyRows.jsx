@@ -12,6 +12,11 @@ const useStyles = makeStyles({
     display: 'inline-flex',
     alignItems: 'center',
     columnGap: '6px',
+    maxWidth: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
   },
   removedText: {
     color: tokens.colorNeutralForeground3,
@@ -137,6 +142,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
   onSaveValue,
   onCorrect,
   subCellClassName,
+  subCellContentClassName,
   noRowsCellClassName,
   cellFilterActions,
 }) {
@@ -172,13 +178,12 @@ export default function PurchaseOrdersSubitemsBodyRows({
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
-                column={column}
-                rawValue={rawValue}
-                className={subCellClassName}
-                style={cellStyle}
-                filterByColumn={cellFilterActions?.filterByColumn}
-                onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
-                onClearColumnFilter={cellFilterActions?.clearColumnFilter}
+                cell={{ column, rawValue, order }}
+                layout={{
+                  className: subCellClassName,
+                  contentClassName: subCellContentClassName,
+                  style: cellStyle,
+                }}
               >
                 {renderLineCellContent({
                   line,
