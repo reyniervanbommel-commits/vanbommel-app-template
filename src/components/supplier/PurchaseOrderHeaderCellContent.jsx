@@ -98,6 +98,7 @@ function PurchaseOrderHeaderCellContent({
         dataAreaId={order.dataAreaId}
         itemNumber={productImageSummary.firstItemNumber}
         additionalItemCount={productImageSummary.additionalItemCount}
+        isConditionalFormat={isConditionalFormat}
       />
     );
   }

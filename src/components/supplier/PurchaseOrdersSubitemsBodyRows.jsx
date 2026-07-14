@@ -98,6 +98,7 @@ function renderLineCellContent({
       <PurchaseOrderProductImageCell
         dataAreaId={order.dataAreaId}
         itemNumber={itemNumber}
+        isConditionalFormat={isConditionalFormat}
       />
     );
   }

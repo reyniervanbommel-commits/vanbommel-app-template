@@ -139,4 +139,12 @@ describe('remarks components', () => {
     fireEvent.click(cell);
     expect(onOpen).toHaveBeenLastCalledWith(cell);
   });
+
+  it('toont een plus in het wolkje zonder remarks', () => {
+    renderWithFluent(<RowRemarksBadge count={0} orderNumber="PO-2" onOpen={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /Add a remark for purchase order PO-2/ })).toBeTruthy();
+    expect(screen.getByText('+')).toBeTruthy();
+    expect(screen.queryByText('3')).toBeNull();
+  });
 });

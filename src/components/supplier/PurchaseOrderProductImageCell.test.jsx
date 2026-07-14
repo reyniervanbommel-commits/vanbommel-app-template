@@ -52,4 +52,11 @@ describe('PurchaseOrderProductImageCell', () => {
       name: 'Show product image for ITEM-1 and 2 additional unique items',
     })).toBeNull();
   });
+
+  it('uses a transparent button background when conditional formatting is active', () => {
+    renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-1', isConditionalFormat: true });
+
+    const imageButton = screen.getByRole('button', { name: 'Show product image for ITEM-1' });
+    expect(window.getComputedStyle(imageButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  });
 });

@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Badge, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
 import {
   PRODUCT_IMAGE_CELL_HEIGHT,
@@ -28,6 +28,9 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     backgroundColor: tokens.colorNeutralBackground1,
     cursor: 'pointer',
+  },
+  imageButtonFormatted: {
+    backgroundColor: 'transparent',
   },
   image: {
     display: 'block',
@@ -76,7 +79,12 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemCount = 0 }) {
+function PurchaseOrderProductImageCell({
+  dataAreaId,
+  itemNumber,
+  additionalItemCount = 0,
+  isConditionalFormat = false,
+}) {
   const styles = useStyles();
   const [imageAvailable, setImageAvailable] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -107,6 +115,11 @@ function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemC
     setDialogOpen(open);
   }, []);
 
+  const imageButtonClassName = mergeClasses(
+    styles.imageButton,
+    isConditionalFormat ? styles.imageButtonFormatted : undefined,
+  );
+
   if (!imageUrl) return null;
 
   const badgeLabel = `${additionalItemCount} additional unique items`;
@@ -128,7 +141,7 @@ function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemC
           <Tooltip content={hoverPreview} relationship="description" positioning="above">
             <button
               type="button"
-              className={styles.imageButton}
+              className={imageButtonClassName}
               onClick={handleOpenDialog}
               aria-label={`Show product image for ${normalizedItemNumber}`}
             >
