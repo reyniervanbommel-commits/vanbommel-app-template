@@ -84,7 +84,7 @@ describe('TableColumnsService formula helpers', () => {
       { key: 'delta', scope: 'master', formulaExpr: '(a)+(b)' },
     ];
     expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Unknown column reference/i);
-    expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formulekolom/i);
+    expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formula column/i);
   });
 
   it('weigert formule met onjuist resultaattype', () => {
@@ -97,7 +97,7 @@ describe('TableColumnsService formula helpers', () => {
       ['a', 'b'],
       columns,
       'number'
-    )).toThrow(/resultaattype/i);
+    )).toThrow(/result type/i);
   });
 
   it('accepteert formule als resultaattype klopt', () => {

@@ -249,7 +249,7 @@ describe('TableDataService.assertCustomColumnWritable', () => {
       source: 'custom',
       dataType: 'remarks',
       formulaExpr: null,
-    })).toThrow(/directe waardewrites/i);
+    })).toThrow(/direct value writes/i);
   });
 
   it('weigert formulekolommen voor handmatige save', () => {

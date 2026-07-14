@@ -4,7 +4,6 @@ import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import {
-  purchaseOrderBoardControlColumnWidth,
   purchaseOrderBoardRowHeight,
 } from './purchaseOrderBoardLayout';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
@@ -75,9 +74,9 @@ const useStyles = makeStyles({
     position: 'sticky',
     left: 0,
     zIndex: 3,
-    width: purchaseOrderBoardControlColumnWidth,
-    minWidth: purchaseOrderBoardControlColumnWidth,
-    maxWidth: purchaseOrderBoardControlColumnWidth,
+    width: '92px',
+    minWidth: '92px',
+    maxWidth: '92px',
     height: purchaseOrderBoardRowHeight,
     maxHeight: purchaseOrderBoardRowHeight,
     backgroundColor: tokens.colorNeutralBackground1,
@@ -86,7 +85,7 @@ const useStyles = makeStyles({
     ...shorthands.padding('0', '2px'),
     textAlign: 'center',
     boxSizing: 'border-box',
-    overflow: 'hidden',
+    overflow: 'visible',
     verticalAlign: 'middle',
   },
   controlCellInner: {
@@ -96,7 +95,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     height: '100%',
     maxHeight: purchaseOrderBoardRowHeight,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   rowControlsCluster: {
     display: 'inline-flex',

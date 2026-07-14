@@ -72,8 +72,8 @@ function PurchaseOrdersTableControls({
             className={styles.selectAll}
             checked={allSelected ? true : (someSelected ? 'mixed' : false)}
             onChange={onToggleAll}
-            aria-label="Selecteer alle rijen"
-            title="Selecteer alle rijen"
+            aria-label="Select all rows"
+            title="Select all rows"
           />
         ) : null}
         <Menu positioning="below-start">

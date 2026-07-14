@@ -141,7 +141,7 @@ export default function ODataInfoDialog() {
             <DialogTitle>Configure OData connection</DialogTitle>
             <DialogContent>
               <Text className={styles.intro} block>
-                Vul onderstaande velden in om purchase orders uit Dynamics 365 te laden.
+                Fill in the fields below to load purchase orders from Dynamics 365.
                 Settings are saved in the database (app_settings table), not in .env.
               </Text>
 
@@ -161,8 +161,8 @@ export default function ODataInfoDialog() {
               ))}
 
               <Text className={styles.note} block>
-                Na opslaan: ga naar Purchase orders en klik Vernieuwen om te testen.
-                Bij foutmelding &quot;D365_ODATA_BASE_URL ontbreekt&quot; is de basis-URL nog leeg.
+                After saving: go to Purchase orders and click Refresh to test.
+                If you see &quot;D365_ODATA_BASE_URL is missing&quot;, the base URL is still empty.
               </Text>
             </DialogContent>
             <DialogActions>

@@ -213,7 +213,7 @@ export default function PurchaseOrderWriteBackCell({
         type={column.dataType === 'number' ? 'number' : 'text'}
         inputMode={isDate ? 'numeric' : undefined}
         value={local}
-        aria-label={`${column.label} (terugschrijven naar D365)`}
+        aria-label={`${column.label} (write back to D365)`}
         onChange={(_, data) => setLocal(data.value)}
         onBlur={() => commit(local)}
         onKeyDown={onKeyDown}
