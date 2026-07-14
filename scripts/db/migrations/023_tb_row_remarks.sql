@@ -40,8 +40,9 @@ BEGIN
       REFERENCES dbo.tb_columns(id) ON DELETE SET NULL,
     CONSTRAINT FK_tb_row_remarks_created_by FOREIGN KEY (created_by)
       REFERENCES dbo.users(id) ON DELETE SET NULL,
+    -- NO ACTION voorkomt SQL Server multiple-cascade-paths naast created_by; gebruikers worden soft-deleted.
     CONSTRAINT FK_tb_row_remarks_deleted_by FOREIGN KEY (deleted_by)
-      REFERENCES dbo.users(id) ON DELETE SET NULL
+      REFERENCES dbo.users(id)
   );
 END;
 
