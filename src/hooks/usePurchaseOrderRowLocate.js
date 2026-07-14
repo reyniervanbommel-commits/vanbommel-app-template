@@ -17,7 +17,14 @@ export function usePurchaseOrderRowLocate({
 }) {
   const [highlightedLocateKey, setHighlightedLocateKey] = useState(null);
   const pendingLocateKeyRef = useRef(null);
+  const pendingLocateSeqRef = useRef(null);
+  const lastHandledLocateSeqRef = useRef(null);
   const highlightTimerRef = useRef(null);
+  const groupedRowsRef = useRef(groupedRows);
+  const collapsedGroupsRef = useRef(collapsedGroups);
+
+  groupedRowsRef.current = groupedRows;
+  collapsedGroupsRef.current = collapsedGroups;
 
   const clearHighlightTimer = useCallback(() => {
     if (highlightTimerRef.current) {
@@ -50,42 +57,60 @@ export function usePurchaseOrderRowLocate({
     return true;
   }, [scheduleHighlightClear, tableWrapperRef]);
 
+  const completePendingLocate = useCallback((locateKey, seq) => {
+    pendingLocateKeyRef.current = null;
+    pendingLocateSeqRef.current = null;
+    lastHandledLocateSeqRef.current = seq;
+    scrollToLocatedRow(locateKey);
+  }, [scrollToLocatedRow]);
+
   useEffect(() => {
-    if (!locateRequest?.partitionKey || !locateRequest?.recordKey) return undefined;
+    const seq = locateRequest?.seq;
+    if (!locateRequest?.partitionKey || !locateRequest?.recordKey || !seq) return undefined;
+    if (seq === lastHandledLocateSeqRef.current) return undefined;
 
     const locateKey = orderLocateKeyFromPanelRow(locateRequest);
-    const context = findOrderGroupContext(groupedRows, locateKey);
-    if (!context) return undefined;
+    const context = findOrderGroupContext(groupedRowsRef.current, locateKey);
 
-    const needsExpand = context.keysToExpand.some((key) => collapsedGroups[key]);
+    pendingLocateSeqRef.current = seq;
+
+    if (!context) {
+      pendingLocateKeyRef.current = locateKey;
+      return undefined;
+    }
+
+    const needsExpand = context.keysToExpand.some((key) => collapsedGroupsRef.current[key]);
     if (needsExpand) {
       pendingLocateKeyRef.current = locateKey;
       ensureGroupsExpanded(context.keysToExpand);
       return undefined;
     }
 
-    pendingLocateKeyRef.current = null;
-    const timer = setTimeout(() => scrollToLocatedRow(locateKey), 40);
+    const timer = setTimeout(() => completePendingLocate(locateKey, seq), 40);
     return () => clearTimeout(timer);
   }, [
-    collapsedGroups,
+    completePendingLocate,
     ensureGroupsExpanded,
-    groupedRows,
-    locateRequest,
-    scrollToLocatedRow,
+    locateRequest?.partitionKey,
+    locateRequest?.recordKey,
+    locateRequest?.seq,
   ]);
 
   useEffect(() => {
     const pendingKey = pendingLocateKeyRef.current;
-    if (!pendingKey) return undefined;
+    const pendingSeq = pendingLocateSeqRef.current;
+    if (!pendingKey || !pendingSeq) return undefined;
+    if (pendingSeq === lastHandledLocateSeqRef.current) return undefined;
 
-    const timer = setTimeout(() => {
-      const found = scrollToLocatedRow(pendingKey);
-      if (found) pendingLocateKeyRef.current = null;
-    }, 120);
+    const context = findOrderGroupContext(groupedRows, pendingKey);
+    if (!context) return undefined;
 
+    const needsExpand = context.keysToExpand.some((key) => collapsedGroups[key]);
+    if (needsExpand) return undefined;
+
+    const timer = setTimeout(() => completePendingLocate(pendingKey, pendingSeq), 120);
     return () => clearTimeout(timer);
-  }, [collapsedGroups, groupedRows, scrollToLocatedRow]);
+  }, [collapsedGroups, completePendingLocate, groupedRows]);
 
   useEffect(() => () => clearHighlightTimer(), [clearHighlightTimer]);
 
