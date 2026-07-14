@@ -38,6 +38,7 @@ function PurchaseOrdersBoardExpandedRow({
           columns={lineColumns}
           onSaveValue={cellActions.onSaveValue}
           onRenameColumn={cellActions.onRenameColumn}
+          onUpdateStatusOptions={cellActions.onUpdateStatusOptions}
           onRemoveColumn={cellActions.onRemoveColumn}
           onCorrect={cellActions.onCorrect}
           isAdmin={cellActions.isAdmin}

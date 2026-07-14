@@ -8,6 +8,7 @@ import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 const useStyles = makeStyles({
   groupRowCell: {
     backgroundColor: '#f4e6ed',
@@ -113,7 +114,7 @@ const useStyles = makeStyles({
   },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('3px', '8px', '5px', '46px'),
+    ...shorthands.padding('10px', '8px', '10px', '46px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
   },
 });
@@ -253,13 +254,20 @@ function PurchaseOrdersBoardRows({
                         ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
                         : '';
                       const rawValue = order?.values?.[column.key];
+                      const statusBackground = isStatusColumn(column) && !cellFormatColor
+                        ? resolveStatusCellColor(rawValue, column.options)
+                        : '';
+                      const cellStyle = {
+                        ...getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor || statusBackground),
+                        ...(isStatusColumn(column) ? { padding: 0 } : {}),
+                      };
                       return (
                         <PurchaseOrderDataCell
                           key={`${rowId}-${column.key}`}
                           column={column}
                           rawValue={rawValue}
                           className={styles.itemCell}
-                          style={getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor)}
+                          style={cellStyle}
                           filterByColumn={cellFilterActions?.filterByColumn}
                           onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
                           onClearColumnFilter={cellFilterActions?.clearColumnFilter}
@@ -271,6 +279,8 @@ function PurchaseOrdersBoardRows({
                             column={column}
                             onSaveValue={cellActions.onSaveValue}
                             onCorrect={cellActions.onCorrect}
+                            onUpdateStatusOptions={cellActions.onUpdateStatusOptions}
+                            isAdmin={cellActions.isAdmin}
                             linkedLineTotalMap={linkedLineTotalByHeaderKey}
                             linkedLineValueMap={linkedLineValueByHeaderKey}
                           />

@@ -20,6 +20,7 @@ const {
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
 } = require('../utils/tableColumnFormulaValidation');
+const { normalizeStatusOptions } = require('../utils/statusColumnOptions');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -88,8 +89,11 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
     if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
     optionsJson = JSON.stringify(list);
   }
-  if (isFormulaColumn && dataType === 'select') {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-datatype'), { status: 400 });
+  if (dataType === 'status' && !isFormulaColumn) {
+    optionsJson = JSON.stringify(normalizeStatusOptions(options));
+  }
+  if (isFormulaColumn && (dataType === 'select' || dataType === 'status')) {
+    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of status-datatype'), { status: 400 });
   }
 
   const pool = await getPool();
@@ -147,6 +151,52 @@ async function renameColumn(columnId, label, userId) {
   return mapColumnRow(result.recordset[0]);
 }
 
+async function updateColumn(columnId, { label, options }, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet gewijzigd worden'), { status: 400 });
+
+  const hasLabel = label !== undefined;
+  const hasOptions = options !== undefined;
+  if (!hasLabel && !hasOptions) throw Object.assign(new Error('Geen wijzigingen opgegeven'), { status: 400 });
+
+  const cleanLabel = hasLabel
+    ? String(label || '').trim().slice(0, MAX_LABEL_LENGTH)
+    : String(existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
+  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+
+  let optionsJson = existing.options ? JSON.stringify(existing.options) : null;
+  if (hasOptions) {
+    if (existing.dataType === 'status') {
+      optionsJson = JSON.stringify(normalizeStatusOptions(options));
+    } else if (existing.dataType === 'select') {
+      const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
+      if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
+      optionsJson = JSON.stringify(list);
+    } else {
+      throw Object.assign(new Error('Opties kunnen alleen voor select- of status-kolommen worden gewijzigd'), { status: 400 });
+    }
+  }
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('label', sql.NVarChar(128), cleanLabel)
+    .input('options', sql.NVarChar(sql.MAX), optionsJson)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET label = @label,
+          options_json = @options,
+          updated_by = @userId,
+          updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
 async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
@@ -166,8 +216,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (!DATA_TYPES.includes(nextDataType)) {
     throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
   }
-  if (nextDataType === 'select') {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-datatype'), { status: 400 });
+  if (nextDataType === 'select' || nextDataType === 'status') {
+    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of status-datatype'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
@@ -319,6 +369,7 @@ module.exports = {
   validateFormulaResultTypeCompatibility,
   createColumn,
   renameColumn,
+  updateColumn,
   updateFormulaColumn,
   deactivateColumn,
   setColumnVisibility,

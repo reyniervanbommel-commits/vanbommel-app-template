@@ -137,7 +137,8 @@ export default function PurchaseOrderColumnHeader({
     switch (customTypeKey) {
       case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Getalkolom" />;
       case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Datumkolom" />;
-      case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Ja/nee-kolom" />;
+      case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Yes/No column" />;
+      case 'status': return <span className={styles.formulaTypeIcon} title="Status column">●</span>;
       case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Keuzelijstkolom" />;
       case 'text':
       default: return <EditRegular className={styles.customIcon} title="Tekstkolom" />;

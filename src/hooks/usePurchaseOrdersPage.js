@@ -396,14 +396,22 @@ export function usePurchaseOrdersPage() {
   }, [reload]);
 
   const renameColumn = useCallback(async (id, label, patch = null) => {
-    const body = { label };
+    const body = {};
+    if (label !== undefined) body.label = label;
     if (patch && typeof patch === 'object') {
       if (patch.dataType !== undefined) body.dataType = patch.dataType;
       if (patch.options !== undefined) body.options = patch.options;
     }
+    if (!body.label && !body.options && !body.dataType) {
+      body.label = label;
+    }
     await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body });
     await reloadColumns();
   }, [reloadColumns]);
+
+  const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
+    await renameColumn(columnId, columnLabel, { options });
+  }, [renameColumn]);
 
   // Admin: zet write-back aan/uit op een D365-kolom (#134).
   const toggleWriteback = useCallback(async (columnId, writable) => {
@@ -842,6 +850,7 @@ export function usePurchaseOrdersPage() {
     addHeaderColumnAfter,
     updateFormulaColumn,
     renameColumn,
+    updateStatusOptions,
     removeColumn,
     saveVisibleColumns,
     reorderHeaderColumn,
@@ -898,6 +907,7 @@ export function usePurchaseOrdersPage() {
     addHeaderColumnAfter,
     updateFormulaColumn,
     renameColumn,
+    updateStatusOptions,
     removeColumn,
     saveVisibleColumns,
     reorderHeaderColumn,

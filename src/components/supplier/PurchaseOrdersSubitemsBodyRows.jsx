@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
+import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -37,6 +39,8 @@ function renderLineCellContent({
   order,
   onSaveValue,
   onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
   styles,
 }) {
   const rawValue = line.values?.[column.key];
@@ -58,6 +62,39 @@ function renderLineCellContent({
     );
   }
   if (column.source === 'custom') {
+    if (isStatusColumn(column)) {
+      return (
+        <span className={showLineBadge ? styles.statusWrap : undefined}>
+          <StatusCell
+            value={rawValue}
+            options={column.options}
+            isAdmin={isAdmin}
+            ariaLabel={`${column.label} for line ${line.lineNumber}`}
+            hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+            cellKeys={{
+              columnId: column.id,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: line.lineNumber,
+            }}
+            onSave={(value) =>
+              onSaveValue({
+                columnId: column.id,
+                columnKey: column.key,
+                dataAreaId: order.dataAreaId,
+                orderNumber: order.orderNumber,
+                lineNumber: line.lineNumber,
+                value,
+              })
+            }
+            onUpdateOptions={(options) =>
+              onUpdateStatusOptions?.(column.id, options, column.label)
+            }
+          />
+          {showLineBadge ? lineBadge : null}
+        </span>
+      );
+    }
     return (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <EditableCell
@@ -136,6 +173,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
   columnFormatRules = {},
   onSaveValue,
   onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
   subCellClassName,
   noRowsCellClassName,
   cellFilterActions,
@@ -162,13 +201,19 @@ export default function PurchaseOrdersSubitemsBodyRows({
             const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
               ? evalFormatRules(rawValue, ruleSet, line?.values || {})
               : '';
+            const statusBackground = isStatusColumn(column) && !cellFormatColor
+              ? resolveStatusCellColor(rawValue, column.options)
+              : '';
             const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
-            const cellStyle = getColumnCellStyle(
-              columnWidths,
-              columnTextStyles,
-              column.key,
-              cellFormatColor || fallbackBackground
-            );
+            const cellStyle = {
+              ...getColumnCellStyle(
+                columnWidths,
+                columnTextStyles,
+                column.key,
+                cellFormatColor || statusBackground || fallbackBackground
+              ),
+              ...(isStatusColumn(column) ? { padding: 0 } : {}),
+            };
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
@@ -187,6 +232,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   order,
                   onSaveValue,
                   onCorrect,
+                  onUpdateStatusOptions,
+                  isAdmin,
                   styles,
                 })}
               </PurchaseOrderDataCell>

@@ -1,9 +1,11 @@
 import React, { memo, useCallback } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
+import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
+import { isStatusColumn } from '../../utils/statusColumnUtils';
 
 const useStyles = makeStyles({
   removedText: {
@@ -27,7 +29,16 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
+function PurchaseOrderHeaderCellContent({
+  order,
+  column,
+  onSaveValue,
+  onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
+  linkedLineTotalMap,
+  linkedLineValueMap,
+}) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
@@ -62,14 +73,38 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
+  const handleUpdateStatusOptions = useCallback((options) => {
+    if (typeof onUpdateStatusOptions !== 'function') return Promise.resolve();
+    return onUpdateStatusOptions(column.id, options, column.label);
+  }, [column.id, column.label, onUpdateStatusOptions]);
+
   if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+    if (isStatusColumn(column)) {
+      return (
+        <StatusCell
+          value={rawValue}
+          options={column.options}
+          onSave={handleSave}
+          onUpdateOptions={handleUpdateStatusOptions}
+          isAdmin={isAdmin}
+          ariaLabel={`${column.label} for order ${order.orderNumber}`}
+          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+        />
+      );
+    }
     return (
       <span className={isChangedCell ? styles.changedCell : undefined}>
         <EditableCell
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
-          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          ariaLabel={`${column.label} for order ${order.orderNumber}`}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -110,7 +145,7 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
-        {formulaError ? 'Formulefout' : display}
+        {formulaError ? 'Formula error' : display}
       </span>
     )
     : display;

@@ -12,6 +12,12 @@ import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 
 const useStyles = makeStyles({
+  subTableWrapper: {
+    display: 'inline-block',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    boxShadow: tokens.shadow2,
+  },
   subTable: {
     width: 'max-content',
     borderCollapse: 'collapse',
@@ -107,6 +113,7 @@ export default function PurchaseOrdersSubitemsTable({
   columns,
   onSaveValue,
   onRenameColumn,
+  onUpdateStatusOptions,
   onRemoveColumn,
   onCorrect,
   isAdmin,
@@ -179,6 +186,7 @@ export default function PurchaseOrdersSubitemsTable({
   if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
 
   return (
+    <div className={styles.subTableWrapper}>
     <table className={styles.subTable}>
       <colgroup>
         {lineColumns.map((column) => (
@@ -266,6 +274,8 @@ export default function PurchaseOrdersSubitemsTable({
         columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
+        onUpdateStatusOptions={onUpdateStatusOptions}
+        isAdmin={isAdmin}
         subCellClassName={styles.subCell}
         noRowsCellClassName={styles.noRowsCell}
         cellFilterActions={{
@@ -284,5 +294,6 @@ export default function PurchaseOrdersSubitemsTable({
         />
       ) : null}
     </table>
+    </div>
   );
 }

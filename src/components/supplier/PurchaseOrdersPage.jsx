@@ -70,6 +70,7 @@ export default function PurchaseOrdersPage() {
     addHeaderColumnAfter,
     updateFormulaColumn,
     renameColumn,
+    updateStatusOptions,
     removeColumn,
     newCount,
     changedCount,
@@ -252,6 +253,7 @@ export default function PurchaseOrdersPage() {
             boardView={boardView}
             onSaveValue={bulkEdit.handleSaveValue}
             onRenameColumn={renameColumn}
+            onUpdateStatusOptions={updateStatusOptions}
             onRemoveColumn={removeColumn}
             onCorrect={bulkEdit.handleCorrectField}
             isAdmin={isAdmin}

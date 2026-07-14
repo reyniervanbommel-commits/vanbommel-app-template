@@ -69,6 +69,7 @@ function PurchaseOrdersBoardTable({
   boardView,
   onSaveValue,
   onRenameColumn,
+  onUpdateStatusOptions,
   onRemoveColumn,
   onCorrect,
   isAdmin,
@@ -161,6 +162,7 @@ function PurchaseOrdersBoardTable({
     () => ({
       onSaveValue,
       onRenameColumn,
+      onUpdateStatusOptions,
       onRemoveColumn,
       onCorrect,
       isAdmin,
@@ -177,6 +179,7 @@ function PurchaseOrdersBoardTable({
     [
       onSaveValue,
       onRenameColumn,
+      onUpdateStatusOptions,
       onRemoveColumn,
       onCorrect,
       isAdmin,

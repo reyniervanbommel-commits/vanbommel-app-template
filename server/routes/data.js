@@ -155,6 +155,7 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
       Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
       || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
     );
+    const hasOptionsPayload = req.body && Object.prototype.hasOwnProperty.call(req.body, 'options');
     const column = hasFormulaPayload
       ? await columnsService.updateFormulaColumn(
         columnId,
@@ -165,7 +166,13 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
         },
         req.user.id,
       )
-      : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+      : hasOptionsPayload
+        ? await columnsService.updateColumn(
+          columnId,
+          { label: req.body?.label, options: req.body?.options },
+          req.user.id,
+        )
+        : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);

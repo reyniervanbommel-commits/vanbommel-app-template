@@ -2625,6 +2625,14 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
       const str = String(value);
       if (allowed.length && !allowed.includes(str)) throw Object.assign(new Error('Waarde valt buiten de keuzelijst'), { status: 400 });
       valueText = str;
+    } else if (column.dataType === 'status') {
+      const { getAllowedStatusLabels } = require('../utils/statusColumnOptions');
+      const allowed = getAllowedStatusLabels(column.options);
+      const str = String(value ?? '').trim();
+      if (str && allowed.length && !allowed.includes(str)) {
+        throw Object.assign(new Error('Waarde valt buiten de statuslabels'), { status: 400 });
+      }
+      valueText = str || null;
     } else {
       valueText = String(value);
     }
