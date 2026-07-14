@@ -23,7 +23,6 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     position: 'sticky',
     top: 0,
     zIndex: 2,
-    boxSizing: 'border-box',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('10px', '12px'),

@@ -57,7 +57,7 @@ export function useExcelLinkWizard() {
       setMainTables(Array.isArray(tablesRes?.tables) ? tablesRes.tables : []);
       setLinks(Array.isArray(linksRes?.links) ? linksRes.links : []);
     } catch (err) {
-      setRefError(err.message || 'Referentiedata laden mislukt');
+      setRefError(err.message || 'Failed to load reference data');
     } finally {
       setRefLoading(false);
     }
@@ -93,7 +93,7 @@ export function useExcelLinkWizard() {
         body: form,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Upload mislukt');
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
       setDataset(data.dataset || null);
       // Reset afgeleide keuzes die van een vorige dataset afhingen.
       setSelectedColumns(new Set());
@@ -101,7 +101,7 @@ export function useExcelLinkWizard() {
       setValidation(null);
       setPublishResult(null);
     } catch (err) {
-      setUploadError(err.message || 'Upload mislukt');
+      setUploadError(err.message || 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -157,7 +157,7 @@ export function useExcelLinkWizard() {
       });
       setValidation(result);
     } catch (err) {
-      setActionError(err.message || 'Validatie mislukt');
+      setActionError(err.message || 'Validation failed');
     } finally {
       setValidating(false);
     }
@@ -182,7 +182,7 @@ export function useExcelLinkWizard() {
       setPublishResult(result);
       await loadReference();
     } catch (err) {
-      setActionError(err.message || 'Publiceren mislukt');
+      setActionError(err.message || 'Publish failed');
     } finally {
       setPublishing(false);
     }
@@ -195,7 +195,7 @@ export function useExcelLinkWizard() {
       await apiRequest(`${BASE}/links/${id}`, { method: 'DELETE' });
       setLinks((prev) => prev.filter((l) => l.id !== id));
     } catch (err) {
-      setActionError(err.message || 'Verwijderen mislukt');
+      setActionError(err.message || 'Delete failed');
     }
   }, []);
 

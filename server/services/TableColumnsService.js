@@ -51,7 +51,7 @@ async function uniqueKeyForScope(pool, tableId, scope, desiredKey) {
     const candidate = (desiredKey + '_' + i).slice(0, MAX_KEY_LENGTH);
     if (!taken.has(candidate)) return candidate;
   }
-  throw Object.assign(new Error('Kon geen unieke kolomsleutel bepalen'), { status: 409 });
+  throw Object.assign(new Error('Could not determine a unique column key'), { status: 409 });
 }
 
 const COLUMN_OUTPUT = `
@@ -69,7 +69,7 @@ function resolveWriteback({ writable, mechanism }) {
   if (!writableBit) return { writable: 0, mechanism: null };
   const mech = mechanism == null || mechanism === '' ? 'patch' : String(mechanism);
   if (!WRITE_MECHANISMS.includes(mech)) {
-    throw Object.assign(new Error(`Ongeldig write-mechanisme '${mech}' (patch, action of sql)`), { status: 400 });
+    throw Object.assign(new Error(`Invalid write mechanism '${mech}' (patch, action or sql)`), { status: 400 });
   }
   return { writable: 1, mechanism: mech };
 }
@@ -80,7 +80,7 @@ function badRequest(message) {
 
 function validateImageTransform(item, index) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
-    throw badRequest(`Transform #${index + 1} moet een object zijn`);
+    throw badRequest(`Transform #${index + 1} must be an object`);
   }
   const type = String(item.type || '').trim();
   switch (type) {
@@ -88,57 +88,57 @@ function validateImageTransform(item, index) {
       return { type: 'trim' };
     case 'remove':
       if (typeof item.value !== 'string' || item.value.length === 0) {
-        throw badRequest("Transform 'remove' vereist een niet-lege string 'value'");
+        throw badRequest("Transform 'remove' requires a non-empty string 'value'");
       }
       return { type: 'remove', value: item.value };
     case 'replace':
       if (typeof item.from !== 'string' || item.from.length === 0) {
-        throw badRequest("Transform 'replace' vereist een niet-lege string 'from'");
+        throw badRequest("Transform 'replace' requires a non-empty string 'from'");
       }
       if (typeof item.to !== 'string') {
-        throw badRequest("Transform 'replace' vereist een string 'to'");
+        throw badRequest("Transform 'replace' requires a string 'to'");
       }
       return { type: 'replace', from: item.from, to: item.to };
     case 'substring': {
       if (!Number.isInteger(item.start) || item.start < 0) {
-        throw badRequest("Transform 'substring' vereist een geheel getal 'start' >= 0");
+        throw badRequest("Transform 'substring' requires an integer 'start' >= 0");
       }
       const normalized = { type: 'substring', start: item.start };
       if (item.end !== undefined && item.end !== null) {
         if (!Number.isInteger(item.end)) {
-          throw badRequest("Transform 'substring' veld 'end' moet een geheel getal zijn");
+          throw badRequest("Transform 'substring' field 'end' must be an integer");
         }
         normalized.end = item.end;
       }
       return normalized;
     }
     default:
-      throw badRequest(`Onbekend transform-type: ${type || 'leeg'}`);
+      throw badRequest(`Unknown transform type: ${type || 'empty'}`);
   }
 }
 
 function validateImageOptions(options) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) {
-    throw badRequest('Image-opties moeten een object zijn');
+    throw badRequest('Image options must be an object');
   }
   const { urlTemplate, sourceColumnKey, transforms } = options;
   if (typeof urlTemplate !== 'string' || urlTemplate.trim().length === 0) {
-    throw badRequest('urlTemplate is verplicht');
+    throw badRequest('urlTemplate is required');
   }
   const template = urlTemplate.trim();
   if (!/^https?:\/\//i.test(template)) {
-    throw badRequest('urlTemplate moet beginnen met http:// of https://');
+    throw badRequest('urlTemplate must start with http:// or https://');
   }
   if (!template.includes('{xxx}')) {
-    throw badRequest('urlTemplate moet de placeholder {xxx} bevatten');
+    throw badRequest('urlTemplate must contain the placeholder {xxx}');
   }
   if (typeof sourceColumnKey !== 'string' || sourceColumnKey.trim().length === 0) {
-    throw badRequest('sourceColumnKey is verplicht');
+    throw badRequest('sourceColumnKey is required');
   }
   let normalizedTransforms = [];
   if (transforms !== undefined && transforms !== null) {
     if (!Array.isArray(transforms)) {
-      throw badRequest('transforms moet een array zijn');
+      throw badRequest('transforms must be an array');
     }
     normalizedTransforms = transforms.map(validateImageTransform);
   }
@@ -151,26 +151,26 @@ function validateImageOptions(options) {
 
 async function createColumn({ tableKey, scope, label, dataType, options = null, formulaExpr = null }, userId) {
   const table = await getTableByKey(tableKey);
-  if (!SCOPES.includes(scope)) throw Object.assign(new Error('Ongeldige scope (master of detail)'), { status: 400 });
-  if (!DATA_TYPES.includes(dataType)) throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
+  if (!SCOPES.includes(scope)) throw Object.assign(new Error('Invalid scope (master or detail)'), { status: 400 });
+  if (!DATA_TYPES.includes(dataType)) throw Object.assign(new Error('Invalid data type'), { status: 400 });
   if (dataType === 'remarks') {
     validateRemarksColumnRequest({ scope, options, formulaExpr });
     const pool = await getPool();
     return ensureRemarksColumn({ pool, tableId: table.id, userId });
   }
   const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+  if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const normalizedFormula = normalizeFormulaExpression(formulaExpr);
   const isFormulaColumn = Boolean(normalizedFormula.expression);
   if (isFormulaColumn && scope !== 'master') {
-    throw Object.assign(new Error('Formulekolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+    throw Object.assign(new Error('Formula columns are only allowed at master level'), { status: 400 });
   }
 
   let optionsJson = null;
   let normalizedImageOptions = null;
   if (dataType === 'select' && !isFormulaColumn) {
     const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
-    if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
+    if (!list.length) throw Object.assign(new Error('A choice list requires at least one option'), { status: 400 });
     optionsJson = JSON.stringify(list);
   }
   if (dataType === 'status' && !isFormulaColumn) {
@@ -178,16 +178,16 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   }
   if (dataType === 'image') {
     if (scope !== 'master') {
-      throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+      throw Object.assign(new Error('Image columns are only allowed at master level'), { status: 400 });
     }
     if (isFormulaColumn) {
-      throw Object.assign(new Error('Formulekolommen ondersteunen geen image-datatype'), { status: 400 });
+      throw Object.assign(new Error('Formula columns do not support image data type'), { status: 400 });
     }
     normalizedImageOptions = validateImageOptions(options);
     optionsJson = JSON.stringify(normalizedImageOptions);
   }
   if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image')) {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-, status- of image-datatype'), { status: 400 });
+    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
   }
 
   const pool = await getPool();
@@ -204,7 +204,7 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
           AND is_active = 1
       `);
     if (!sourceCheck.recordset.length) {
-      throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+      throw Object.assign(new Error('sourceColumnKey does not reference an existing master column'), { status: 400 });
     }
   }
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
@@ -241,12 +241,12 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
 
 async function renameColumn(columnId, label, userId) {
   const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+  if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
-  if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet hernoemd worden'), { status: 400 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be renamed'), { status: 400 });
   if (existing.dataType === 'remarks') {
-    throw Object.assign(new Error('De Remarks-kolom heeft een vaste naam'), { status: 400 });
+    throw Object.assign(new Error('The Remarks column has a fixed name'), { status: 400 });
   }
 
   const pool = await getPool();
@@ -260,23 +260,23 @@ async function renameColumn(columnId, label, userId) {
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 async function updateColumn(columnId, { label, options }, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
-  if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet gewijzigd worden'), { status: 400 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be changed'), { status: 400 });
 
   const hasLabel = label !== undefined;
   const hasOptions = options !== undefined;
-  if (!hasLabel && !hasOptions) throw Object.assign(new Error('Geen wijzigingen opgegeven'), { status: 400 });
+  if (!hasLabel && !hasOptions) throw Object.assign(new Error('No changes specified'), { status: 400 });
 
   const cleanLabel = hasLabel
     ? String(label || '').trim().slice(0, MAX_LABEL_LENGTH)
     : String(existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+  if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
 
   let optionsJson = existing.options ? JSON.stringify(existing.options) : null;
   let normalizedStatusOptions = null;
@@ -286,10 +286,10 @@ async function updateColumn(columnId, { label, options }, userId) {
       optionsJson = JSON.stringify(normalizedStatusOptions);
     } else if (existing.dataType === 'select') {
       const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
-      if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
+      if (!list.length) throw Object.assign(new Error('A choice list requires at least one option'), { status: 400 });
       optionsJson = JSON.stringify(list);
     } else {
-      throw Object.assign(new Error('Opties kunnen alleen voor select- of status-kolommen worden gewijzigd'), { status: 400 });
+      throw Object.assign(new Error('Options can only be changed for select or status columns'), { status: 400 });
     }
   }
 
@@ -328,35 +328,35 @@ async function updateColumn(columnId, { label, options }, userId) {
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   if (existing.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen kunnen een formule hebben'), { status: 400 });
+    throw Object.assign(new Error('Only custom columns can have a formula'), { status: 400 });
   }
   if (existing.scope !== 'master') {
-    throw Object.assign(new Error('Alleen master-kolommen kunnen een formule hebben'), { status: 400 });
+    throw Object.assign(new Error('Only master columns can have a formula'), { status: 400 });
   }
   if (!String(existing.formulaExpr || '').trim()) {
-    throw Object.assign(new Error('Deze kolom is geen formulekolom'), { status: 400 });
+    throw Object.assign(new Error('This column is not a formula column'), { status: 400 });
   }
 
   const cleanLabel = String(label || existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+  if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const nextDataType = dataType || existing.dataType;
   if (!DATA_TYPES.includes(nextDataType)) {
-    throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
+    throw Object.assign(new Error('Invalid data type'), { status: 400 });
   }
   if (nextDataType === 'select' || nextDataType === 'status' || nextDataType === 'image') {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-, status- of image-datatype'), { status: 400 });
+    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
-    throw Object.assign(new Error('Formule is verplicht'), { status: 400 });
+    throw Object.assign(new Error('Formula is required'), { status: 400 });
   }
 
   const masterColumns = await listColumns({ tableId: existing.tableId, scope: 'master', includeInactive: false });
@@ -388,30 +388,30 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 async function updateImageColumn(columnId, { label, dataType, options }, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   if (existing.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen kunnen als plaatje worden bewerkt'), { status: 400 });
+    throw Object.assign(new Error('Only custom columns can be edited as an image'), { status: 400 });
   }
   if (existing.scope !== 'master') {
-    throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+    throw Object.assign(new Error('Image columns are only allowed at master level'), { status: 400 });
   }
   const cleanLabel = String(label || existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+  if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
 
   const nextDataType = String(dataType || existing.dataType || '').trim();
   if (nextDataType !== 'image') {
-    throw Object.assign(new Error('Alleen image-datatype is toegestaan voor deze bewerking'), { status: 400 });
+    throw Object.assign(new Error('Only image data type is allowed for this operation'), { status: 400 });
   }
 
   const normalizedImageOptions = validateImageOptions(options !== undefined ? options : existing.options);
   if (normalizedImageOptions.sourceColumnKey === existing.key) {
-    throw Object.assign(new Error('sourceColumnKey mag niet naar dezelfde image-kolom verwijzen'), { status: 400 });
+    throw Object.assign(new Error('sourceColumnKey cannot reference the same image column'), { status: 400 });
   }
 
   const pool = await getPool();
@@ -427,7 +427,7 @@ async function updateImageColumn(columnId, { label, dataType, options }, userId)
         AND is_active = 1
     `);
   if (!sourceCheck.recordset.length) {
-    throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+    throw Object.assign(new Error('sourceColumnKey does not reference an existing master column'), { status: 400 });
   }
 
   const result = await pool.request()
@@ -448,15 +448,15 @@ async function updateImageColumn(columnId, { label, dataType, options }, userId)
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 // Soft-delete: alleen eigen kolommen. Bronvelden blijven bestaan (read-only referentie).
 async function deactivateColumn(columnId, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
-  if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet verwijderd worden'), { status: 400 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be deleted'), { status: 400 });
 
   const pool = await getPool();
   if (existing.scope === 'master') {
@@ -476,7 +476,7 @@ async function deactivateColumn(columnId, userId) {
     const dependent = findDependentFormulaColumn(formulaRows.recordset, existing.key);
     if (dependent) {
       throw Object.assign(
-        new Error(`Kolom '${existing.label}' wordt gebruikt door formulekolom '${dependent.label}'`),
+        new Error(`Column '${existing.label}' is used by formula column '${dependent.label}'`),
         { status: 409 }
       );
     }
@@ -497,7 +497,7 @@ async function deactivateColumn(columnId, userId) {
 // Pariteit met po_* setColumnVisibility; read()/listColumns tonen alleen is_active=1 kolommen.
 async function setColumnVisibility(columnId, visible, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   const pool = await getPool();
   const result = await pool.request()
     .input('id', sql.BigInt, columnId)
@@ -509,14 +509,14 @@ async function setColumnVisibility(columnId, visible, userId) {
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 // Zichtbaar in de "verborgen orders in D365-filter"-popup (Fase 2). Los van is_active. Elke kolom.
 async function setVisibleAtDelete(columnId, flag, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   const pool = await getPool();
   const result = await pool.request()
     .input('id', sql.BigInt, columnId)
@@ -528,16 +528,16 @@ async function setVisibleAtDelete(columnId, flag, userId) {
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 
 // Write-back-config (admin): welke kolommen naar de bron terugschrijfbaar zijn en via welk mechanisme.
 async function setWriteBackConfig(columnId, config, userId) {
   const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   if (existing.dataType === 'remarks') {
-    throw Object.assign(new Error('De Remarks-kolom is read-only'), { status: 400 });
+    throw Object.assign(new Error('The Remarks column is read-only'), { status: 400 });
   }
   const { writable, mechanism } = resolveWriteback(config || {});
   const pool = await getPool();
@@ -552,7 +552,7 @@ async function setWriteBackConfig(columnId, config, userId) {
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
 }
 

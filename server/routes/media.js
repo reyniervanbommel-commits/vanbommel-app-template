@@ -21,7 +21,7 @@ function createGetProductImageHandler({ productImageService, timeFn = time }) {
     const input = validateProductImageInput(req.query);
     if (!input || !hasOnlyImageQueryParameters(req.query)) {
       res.set('Cache-Control', 'no-store');
-      return res.status(400).json({ error: 'Ongeldige productafbeeldingparameters' });
+      return res.status(400).json({ error: 'Invalid product image parameters' });
     }
 
     try {
@@ -35,7 +35,7 @@ function createGetProductImageHandler({ productImageService, timeFn = time }) {
       return res.type(image.contentType).send(image.content);
     } catch {
       res.set('Cache-Control', 'no-store');
-      return res.status(502).json({ error: 'Productafbeelding is tijdelijk niet beschikbaar' });
+      return res.status(502).json({ error: 'Product image is temporarily unavailable' });
     }
   };
 }

@@ -17,10 +17,10 @@ import StepPublish from './excel-link/StepPublish';
 import ExistingLinksList from './excel-link/ExistingLinksList';
 
 const STEPS = [
-  { n: 1, label: 'Bestand uploaden' },
-  { n: 2, label: 'Sleutels koppelen' },
-  { n: 3, label: 'Kolommen kiezen' },
-  { n: 4, label: 'Valideren & publiceren' },
+  { n: 1, label: 'Upload file' },
+  { n: 2, label: 'Link keys' },
+  { n: 3, label: 'Choose columns' },
+  { n: 4, label: 'Validate & publish' },
 ];
 
 const useStyles = makeStyles({
@@ -57,7 +57,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * 4-staps wizard "Externe koppelingen": koppelt een Excel/CSV-dataset als read-only
+ * 4-staps wizard "External links": koppelt een Excel/CSV-dataset als read-only
  * verrijkingskolommen aan een hoofdtabel (story #166). Statusbadges via Fluent Badge.
  */
 export default function ExcelLinkWizard() {
@@ -70,10 +70,10 @@ export default function ExcelLinkWizard() {
   return (
     <div className={styles.root}>
       <div>
-        <Text size={500} weight="semibold" block>Externe koppelingen</Text>
+        <Text size={500} weight="semibold" block>External links</Text>
         <Text className={styles.intro} block>
-          Upload een Excel- of CSV-bestand en koppel het via een sleutelveld aan een hoofdtabel.
-          De gekozen kolommen verschijnen als read-only verrijkingskolommen.
+          Upload an Excel or CSV file and link it to a main table via a key field.
+          The selected columns appear as read-only enrichment columns.
         </Text>
       </div>
 
@@ -106,7 +106,7 @@ export default function ExcelLinkWizard() {
 
       <div className={styles.panel}>
         {w.refLoading ? (
-          <Spinner label="Laden..." />
+          <Spinner label="Loading..." />
         ) : w.step === 1 ? (
           <StepUpload
             dataset={w.dataset}
@@ -159,14 +159,14 @@ export default function ExcelLinkWizard() {
           disabled={w.step <= 1}
           onClick={goPrev}
         >
-          Vorige
+          Previous
         </Button>
         <Button
           appearance="secondary"
           icon={<ArrowResetRegular />}
           onClick={w.reset}
         >
-          Opnieuw beginnen
+          Start over
         </Button>
         <div className={styles.spacer} />
         <Button
@@ -176,7 +176,7 @@ export default function ExcelLinkWizard() {
           disabled={w.step >= 4 || !w.canGoTo(w.step + 1)}
           onClick={goNext}
         >
-          Volgende
+          Next
         </Button>
       </div>
 

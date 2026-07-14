@@ -29,7 +29,7 @@ const useStyles = makeStyles({
   },
 });
 
-// Verschijnt zodra er rijen geselecteerd zijn. "Verwijderen" opent een bevestiging;
+// Verschijnt zodra er rijen geselecteerd zijn. "Delete" opent een bevestiging;
 // de rijen worden alleen uit dit overzicht verborgen (SQL-only exclusion), D365 blijft ongemoeid.
 function PurchaseOrderBulkActionsBar({ selectedCount, onDelete, onClear, busy = false }) {
   const styles = useStyles();
@@ -48,11 +48,11 @@ function PurchaseOrderBulkActionsBar({ selectedCount, onDelete, onClear, busy = 
     }
   };
 
-  const noun = selectedCount === 1 ? 'rij' : 'rijen';
+  const noun = selectedCount === 1 ? 'row' : 'rows';
 
   return (
     <div className={styles.bar}>
-      <span className={styles.count}>{selectedCount} geselecteerd</span>
+      <span className={styles.count}>{selectedCount} selected</span>
       <Button
         size="small"
         appearance="subtle"
@@ -60,7 +60,7 @@ function PurchaseOrderBulkActionsBar({ selectedCount, onDelete, onClear, busy = 
         onClick={onClear}
         disabled={busy || deleting}
       >
-        Deselecteren
+        Deselect
       </Button>
       <Button
         size="small"
@@ -69,23 +69,23 @@ function PurchaseOrderBulkActionsBar({ selectedCount, onDelete, onClear, busy = 
         onClick={() => setConfirmOpen(true)}
         disabled={busy || deleting}
       >
-        Verwijderen
+        Delete
       </Button>
 
       <Dialog open={confirmOpen} onOpenChange={(_, data) => setConfirmOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>{selectedCount} {noun} verwijderen</DialogTitle>
+            <DialogTitle>Delete {selectedCount} {noun}</DialogTitle>
             <DialogContent>
-              Deze {noun} {selectedCount === 1 ? 'wordt' : 'worden'} uit dit overzicht verborgen.
-              De inkooporder blijft ongewijzigd in D365 en de rij komt niet terug bij een volgende synchronisatie.
+              Deze {noun} {selectedCount === 1 ? 'will be' : 'will be'} hidden from this view.
+              The purchase order remains unchanged in D365 and the row will not return on the next sync.
             </DialogContent>
             <DialogActions>
               <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={deleting}>
-                Annuleren
+                Cancel
               </Button>
               <Button appearance="primary" onClick={handleConfirmDelete} disabled={deleting}>
-                {deleting ? 'Verwijderen...' : 'Verwijderen'}
+                {deleting ? 'Delete...' : 'Delete'}
               </Button>
             </DialogActions>
           </DialogBody>

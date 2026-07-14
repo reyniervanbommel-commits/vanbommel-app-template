@@ -151,14 +151,8 @@ const useStyles = makeStyles({
   changedRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
   },
-  locateHighlight: {
-    animationName: {
-      from: { boxShadow: `inset 0 0 0 2px ${tokens.colorStrokeFocus2}` },
-      to: { boxShadow: `inset 0 0 0 2px transparent` },
-    },
-    animationDuration: '0.75s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 3,
+  locateHighlightControlCell: {
+    backgroundColor: '#fff4ce',
   },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground1,

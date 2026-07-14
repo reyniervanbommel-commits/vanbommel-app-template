@@ -75,7 +75,7 @@ const useStyles = makeStyles({
   },
 });
 
-const NO_VIEW_LABEL = 'Alle orders (geen view)';
+const NO_VIEW_LABEL = 'All orders (no view)';
 
 /**
  * D365-achtige view-control voor de Purchase Orders toolbar: kies/pas een view toe,
@@ -122,7 +122,7 @@ export default function PurchaseOrderSavedViewsControl({
     await onRenameView(activeView, name);
   }, [activeView, onRenameView]);
 
-  const triggerLabel = activeView ? activeView.name : (titleMode ? 'Alle orders' : NO_VIEW_LABEL);
+  const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
 
   return (
     <>
@@ -158,7 +158,7 @@ export default function PurchaseOrderSavedViewsControl({
             {activeView && activeCanManage ? (
               <>
                 <MenuItem onClick={() => onUpdateActive(activeView)}>
-                  <span className={styles.updateActionLabel}>Huidige view bijwerken</span>
+                  <span className={styles.updateActionLabel}>Update current view</span>
                 </MenuItem>
                 <MenuDivider />
               </>
@@ -173,14 +173,14 @@ export default function PurchaseOrderSavedViewsControl({
 
             {personalViews.length ? (
               <MenuGroup>
-                <MenuGroupHeader>Persoonlijk</MenuGroupHeader>
+                <MenuGroupHeader>Personal</MenuGroupHeader>
                 {personalViews.map((view) => (
                   <MenuItem
                     key={view.id}
                     icon={view.id === activeViewId ? <span aria-hidden>✓</span> : undefined}
                     onClick={() => onApplyView(view)}
                   >
-                    {view.name}{view.isDefault ? ' (standaard)' : ''}
+                    {view.name}{view.isDefault ? ' (default)' : ''}
                   </MenuItem>
                 ))}
               </MenuGroup>
@@ -188,40 +188,40 @@ export default function PurchaseOrderSavedViewsControl({
 
             {globalViews.length ? (
               <MenuGroup>
-                <MenuGroupHeader>Gedeeld</MenuGroupHeader>
+                <MenuGroupHeader>Shared</MenuGroupHeader>
                 {globalViews.map((view) => (
                   <MenuItem
                     key={view.id}
                     icon={view.id === activeViewId ? <span aria-hidden>✓</span> : undefined}
                     onClick={() => onApplyView(view)}
                   >
-                    {view.name}{view.isDefault ? ' (standaard)' : ''}
+                    {view.name}{view.isDefault ? ' (default)' : ''}
                   </MenuItem>
                 ))}
               </MenuGroup>
             ) : null}
 
             {!personalViews.length && !globalViews.length ? (
-              <div className={styles.empty}>Nog geen opgeslagen views</div>
+              <div className={styles.empty}>No saved views yet</div>
             ) : null}
 
             <MenuDivider />
 
             <MenuItem icon={<SaveRegular />} onClick={() => setDialogMode('create')}>
-              Opslaan als nieuwe view…
+              Save as new view…
             </MenuItem>
             {activeView && activeCanManage ? (
               <>
                 <MenuItem onClick={() => setDialogMode('rename')}>
-                  Hernoemen…
+                  Rename…
                 </MenuItem>
                 {!activeView.isDefault ? (
                   <MenuItem onClick={() => onSetDefault(activeView)}>
-                    Als standaard instellen
+                    Set as default
                   </MenuItem>
                 ) : null}
                 <MenuItem onClick={() => onDeleteView(activeView)}>
-                  Verwijderen
+                  Delete
                 </MenuItem>
               </>
             ) : null}

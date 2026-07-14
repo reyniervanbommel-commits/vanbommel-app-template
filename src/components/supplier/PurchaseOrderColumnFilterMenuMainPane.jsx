@@ -66,7 +66,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   const resolvedTypeMeta = columnTypeMeta || { key: 'text', label: 'Text' };
   const normalizedConnectionTargets = Array.isArray(connectionTargets) ? connectionTargets.filter((target) => String(target || '').trim()) : [];
   const stickyMenuText = canUnstickSticky
-    ? 'Unstick kolom'
+    ? 'Unstick column'
     : isStickyColumn
     ? `Already sticky (${stickyColumnCount})`
     : 'Make this the next sticky column';
@@ -132,7 +132,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           {showGrouping ? (
             <>
               <div className={styles.divider} />
-              <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="group" label="Categorie / groeperen" icon={<TextBulletList20Regular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
+              <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="group" label="Category / group" icon={<TextBulletList20Regular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
             </>
           ) : null}
         </>
@@ -155,7 +155,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
-              {writable ? 'Sync uitzetten' : 'Sync aanzetten'}
+              {writable ? 'Disable sync' : 'Enable sync'}
             </span>
           </Button>
         </>
@@ -163,14 +163,14 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       {canAddColumn ? (
         <>
           <div className={styles.divider} />
-          <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="add" label="Kolom rechts toevoegen" icon={<AddRegular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
+          <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="add" label="Add column to the right" icon={<AddRegular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
         </>
       ) : null}
       <div className={styles.divider} />
       {canEditFormulaColumn ? (
         <>
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditFormulaColumn}>
-            {menuLabel(styles, <NumberSymbolRegular />, 'Formulekolom bewerken')}
+            {menuLabel(styles, <NumberSymbolRegular />, 'Edit formula column')}
           </Button>
           <div className={styles.divider} />
         </>

@@ -6,13 +6,13 @@ import {
 
 export const NEW_COLUMN_TYPES = [
   { key: 'status', label: 'Status', dataType: 'status' },
-  { key: 'text', label: 'Tekst', dataType: 'text' },
-  { key: 'number', label: 'Nummers', dataType: 'number' },
-  { key: 'date', label: 'Datum', dataType: 'date' },
-  { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
-  { key: 'image', label: 'Plaatje', dataType: 'image' },
+  { key: 'text', label: 'Text', dataType: 'text' },
+  { key: 'number', label: 'Numbers', dataType: 'number' },
+  { key: 'date', label: 'Date', dataType: 'date' },
+  { key: 'boolean', label: 'Yes/No', dataType: 'boolean' },
+  { key: 'image', label: 'Image', dataType: 'image' },
   { key: 'remarks', label: 'Remarks', dataType: 'remarks' },
-  { key: 'formula', label: 'Formule', dataType: 'number' },
+  { key: 'formula', label: 'Formula', dataType: 'number' },
 ];
 
 const COLUMN_TYPE_META = {

@@ -39,10 +39,10 @@ router.get('/users', async (req, res, next) => {
 router.post('/users', async (req, res, next) => {
   try {
     const { email, role, display_name } = req.body;
-    if (!email) return res.status(400).json({ error: 'E-mailadres is vereist' });
+    if (!email) return res.status(400).json({ error: 'Email address is required' });
     const normalizedRole = authService.normalizeRole(role || ROLES.SUPPLIER);
     if (!isAllowedRole(normalizedRole)) {
-      return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+      return res.status(400).json({ error: 'Invalid role specified' });
     }
     const pool = await getPool();
     const result = await pool.request()
@@ -71,7 +71,7 @@ router.patch('/users/:id', async (req, res, next) => {
     if (role !== undefined) {
       const normalizedRole = authService.normalizeRole(role);
       if (!isAllowedRole(normalizedRole)) {
-        return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+        return res.status(400).json({ error: 'Invalid role specified' });
       }
       setClauses.push('role = @role');
       request.input('role', sql.NVarChar, normalizedRole);
@@ -79,11 +79,11 @@ router.patch('/users/:id', async (req, res, next) => {
     if (is_locked !== undefined) { setClauses.push('is_locked = @locked'); request.input('locked', sql.Bit, is_locked ? 1 : 0); }
     if (mfa_required !== undefined) { setClauses.push('mfa_required = @mfaRequired'); request.input('mfaRequired', sql.Bit, mfa_required ? 1 : 0); }
 
-    if (!setClauses.length) return res.status(400).json({ error: 'Geen velden opgegeven' });
+    if (!setClauses.length) return res.status(400).json({ error: 'No fields specified' });
     setClauses.push('updated_at = SYSUTCDATETIME()');
 
     const result = await request.query('UPDATE dbo.users SET ' + setClauses.join(', ') + ' OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.is_locked, INSERTED.mfa_required WHERE id = @id');
-    if (!result.recordset.length) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
 
     await auditLog(req.user.id, req.user.email, 'UPDATE_USER', 'users', id, req.body);
     res.json({ user: result.recordset[0] });
@@ -98,7 +98,7 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
     const pool = await getPool();
     const userResult = await pool.request().input('id', sql.Int, parseInt(id)).query('SELECT * FROM dbo.users WHERE id = @id');
     const user = userResult.recordset[0];
-    if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const resetResult = await authService.requestPasswordReset(user.email);
     if (resetResult.success) {
@@ -115,12 +115,12 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
 router.delete('/users/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'Je kunt je eigen account niet verwijderen' });
+    if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
     const pool = await getPool();
     const result = await pool.request()
       .input('id', sql.Int, parseInt(id))
       .query('DELETE FROM dbo.users OUTPUT DELETED.email WHERE id = @id');
-    if (!result.recordset.length) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
     await auditLog(req.user.id, req.user.email, 'DELETE_USER', 'users', id, { email: result.recordset[0].email });
     res.json({ success: true });
   } catch (err) {

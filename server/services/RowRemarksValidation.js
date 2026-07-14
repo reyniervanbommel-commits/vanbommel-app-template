@@ -10,43 +10,43 @@ function badRequest(message) {
 }
 
 function normalizeTableKey(value) {
-  if (typeof value !== 'string') throw badRequest('Ongeldige tabelsleutel');
+  if (typeof value !== 'string') throw badRequest('Invalid table key');
   const normalized = value.trim();
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(normalized)) {
-    throw badRequest('Ongeldige tabelsleutel');
+    throw badRequest('Invalid table key');
   }
   return normalized;
 }
 
 function normalizeRowIdentity(partitionKey, recordKey) {
   if (typeof partitionKey !== 'string' || typeof recordKey !== 'string') {
-    throw badRequest('partitionKey en recordKey zijn verplicht');
+    throw badRequest('partitionKey and recordKey are required');
   }
   const partition = partitionKey.trim();
   const record = recordKey.trim();
   if (!partition || !record || partition.length > 32 || record.length > 128) {
-    throw badRequest('Ongeldige partitionKey of recordKey');
+    throw badRequest('Invalid partitionKey or recordKey');
   }
   if (CONTROL_CHARACTERS.test(partition) || CONTROL_CHARACTERS.test(record)) {
-    throw badRequest('Ongeldige partitionKey of recordKey');
+    throw badRequest('Invalid partitionKey or recordKey');
   }
   return { partitionKey: partition, recordKey: record };
 }
 
 function normalizeBody(value) {
-  if (typeof value !== 'string') throw badRequest('Remarktekst is verplicht');
+  if (typeof value !== 'string') throw badRequest('Remark text is required');
   const body = value.normalize('NFC').trim();
   if (!body || body.length > 2000 || CONTROL_CHARACTERS.test(body)) {
-    throw badRequest('Remarktekst moet 1 tot en met 2000 geldige tekens bevatten');
+    throw badRequest('Remark text must contain 1 to 2000 valid characters');
   }
   return body;
 }
 
 function normalizePositiveId(value, fieldName) {
   const raw = String(value ?? '').trim();
-  if (!/^[1-9]\d*$/.test(raw)) throw badRequest(`Ongeldige ${fieldName}`);
+  if (!/^[1-9]\d*$/.test(raw)) throw badRequest(`Invalid ${fieldName}`);
   const id = Number(raw);
-  if (!Number.isSafeInteger(id)) throw badRequest(`Ongeldige ${fieldName}`);
+  if (!Number.isSafeInteger(id)) throw badRequest(`Invalid ${fieldName}`);
   return id;
 }
 
@@ -59,7 +59,7 @@ function normalizeOptionalColumnId(value) {
 function normalizeLimit(value) {
   if (value === undefined || value === null || value === '') return DEFAULT_LIMIT;
   const limit = normalizePositiveId(value, 'limit');
-  if (limit > MAX_LIMIT) throw badRequest(`limit mag maximaal ${MAX_LIMIT} zijn`);
+  if (limit > MAX_LIMIT) throw badRequest(`limit must be at most ${MAX_LIMIT}`);
   return limit;
 }
 
@@ -73,7 +73,7 @@ function encodeCursor(row) {
 
 function normalizeCursor(value) {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value !== 'string' || value.length > 256) throw badRequest('Ongeldige cursor');
+  if (typeof value !== 'string' || value.length > 256) throw badRequest('Invalid cursor');
   try {
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
     const createdAt = new Date(parsed.createdAt);
@@ -83,19 +83,19 @@ function normalizeCursor(value) {
     }
     return { createdAt, id };
   } catch {
-    throw badRequest('Ongeldige cursor');
+    throw badRequest('Invalid cursor');
   }
 }
 
 function normalizeEmoji(value) {
   if (typeof value !== 'string' || !ALLOWED_EMOJIS.includes(value)) {
-    throw badRequest('Ongeldige emoji');
+    throw badRequest('Invalid emoji');
   }
   return value;
 }
 
 function normalizeActive(value) {
-  if (typeof value !== 'boolean') throw badRequest('active moet een boolean zijn');
+  if (typeof value !== 'boolean') throw badRequest('active must be a boolean');
   return value;
 }
 

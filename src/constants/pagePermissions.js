@@ -3,12 +3,12 @@ export const PAGE_PERMISSIONS = Object.freeze([
   {
     id: 'purchase-orders',
     label: 'Purchase orders',
-    description: 'Toegang tot het purchase orders overzicht',
+    description: 'Access to the purchase orders overview',
   },
   {
     id: 'admin',
-    label: 'Beheer',
-    description: 'Toegang tot admin: gebruikers, analytics en OData',
+    label: 'Admin',
+    description: 'Access to admin: users, analytics and OData',
   },
 ]);
 

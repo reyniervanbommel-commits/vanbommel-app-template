@@ -42,7 +42,7 @@ export default function PurchaseOrderAddColumnPane({
 
   return (
     <>
-      <Text className={styles.subPaneTitle}>Kolomtype</Text>
+      <Text className={styles.subPaneTitle}>Column type</Text>
       {addableTypes.map((type) => (
         <AddColumnTypeButton
           key={type.key}

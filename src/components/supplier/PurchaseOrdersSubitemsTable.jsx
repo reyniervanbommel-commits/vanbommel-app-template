@@ -220,7 +220,7 @@ export default function PurchaseOrdersSubitemsTable({
     return next;
   }, [headerColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
-  if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
+  if (!lineColumns.length) return <div className={styles.empty}>No line columns configured.</div>;
 
   return (
     <div className={styles.subitemsLayout}>

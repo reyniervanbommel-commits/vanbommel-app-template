@@ -15,20 +15,21 @@ function PurchaseOrderDataCell({
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
+  const isLocated = Boolean(layout?.isLocated);
   const resolvedCellStyle = useMemo(() => {
     const isSticky = Number.isFinite(stickyLeft);
-    const hasFormattedBackground = Boolean(style?.backgroundColor);
+    const hasBackground = Boolean(style?.backgroundColor);
     return {
       ...style,
       boxSizing: 'border-box',
       position: isSticky ? 'sticky' : 'relative',
       ...(isSticky ? {
         left: `${stickyLeft}px`,
-        zIndex: 2,
-        ...(hasFormattedBackground ? {} : { backgroundColor: tokens.colorNeutralBackground1 }),
+        zIndex: isLocated ? 4 : 2,
+        ...(hasBackground ? {} : { backgroundColor: tokens.colorNeutralBackground1 }),
       } : {}),
     };
-  }, [stickyLeft, style]);
+  }, [isLocated, stickyLeft, style]);
 
   const handleContextMenu = useCallback((event) => {
     if (disabled) return;

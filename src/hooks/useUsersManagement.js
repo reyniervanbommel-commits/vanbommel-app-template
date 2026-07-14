@@ -38,7 +38,7 @@ export function useUsersManagement() {
       }));
       setUserPermissions(permissionsMap);
     } catch (err) {
-      setError(err.message || 'Gebruikers laden mislukt');
+      setError(err.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export function useUsersManagement() {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { is_locked: !isLocked } });
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Gebruiker bijwerken mislukt');
+      setError(err.message || 'Failed to update user');
     }
   }, [loadUsers]);
 
@@ -69,17 +69,17 @@ export function useUsersManagement() {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { mfa_required: !isRequired } });
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'MFA-instelling bijwerken mislukt');
+      setError(err.message || 'Failed to update MFA setting');
     }
   }, [loadUsers]);
 
   const handleForceReset = useCallback(async (userId) => {
     try {
       await apiRequest(`/admin/users/${userId}/force-reset`, { method: 'POST', body: {} });
-      setResetMessage('Wachtwoord-reset e-mail is verstuurd.');
+      setResetMessage('Password reset email has been sent.');
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Reset versturen mislukt');
+      setError(err.message || 'Failed to send reset');
     }
   }, [loadUsers]);
 
@@ -91,7 +91,7 @@ export function useUsersManagement() {
       setDeleteDialogUser(null);
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Gebruiker verwijderen mislukt');
+      setError(err.message || 'Failed to delete user');
       setDeleteDialogOpen(false);
     }
   }, [deleteDialogUser, loadUsers]);

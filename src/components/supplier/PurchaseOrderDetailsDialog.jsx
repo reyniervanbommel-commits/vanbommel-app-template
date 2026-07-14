@@ -63,31 +63,31 @@ export default function PurchaseOrderDetailsDialog({ open, order, onClose }) {
                 <Text>{order?.vendorAccount || '-'}</Text>
               </div>
               <div className={styles.metaRow}>
-                <Text className={styles.metaLabel}>Naam</Text>
+                <Text className={styles.metaLabel}>Name</Text>
                 <Text>{order?.vendorName || '-'}</Text>
               </div>
               <div className={styles.metaRow}>
-                <Text className={styles.metaLabel}>Groep</Text>
+                <Text className={styles.metaLabel}>Group</Text>
                 <Text>{order?.vendorGroup || '-'}</Text>
               </div>
               <div className={styles.metaRow}>
-                <Text className={styles.metaLabel}>E-mail</Text>
+                <Text className={styles.metaLabel}>Email</Text>
                 <Text>{order?.vendorEmail || '-'}</Text>
               </div>
             </div>
 
             <div className={styles.section}>
-              <Text className={styles.sectionTitle} block>Regels ({lines.length})</Text>
+              <Text className={styles.sectionTitle} block>Lines ({lines.length})</Text>
               <div className={styles.tableWrap}>
                 <Table size="small">
                   <TableHeader>
                     <TableRow>
-                      <TableHeaderCell>Regel</TableHeaderCell>
-                      <TableHeaderCell>Artikel</TableHeaderCell>
-                      <TableHeaderCell>Omschrijving</TableHeaderCell>
-                      <TableHeaderCell>Aantal</TableHeaderCell>
-                      <TableHeaderCell>Eenheid</TableHeaderCell>
-                      <TableHeaderCell>Bedrag</TableHeaderCell>
+                      <TableHeaderCell>Line</TableHeaderCell>
+                      <TableHeaderCell>Item</TableHeaderCell>
+                      <TableHeaderCell>Description</TableHeaderCell>
+                      <TableHeaderCell>Quantity</TableHeaderCell>
+                      <TableHeaderCell>Unit</TableHeaderCell>
+                      <TableHeaderCell>Amount</TableHeaderCell>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -103,7 +103,7 @@ export default function PurchaseOrderDetailsDialog({ open, order, onClose }) {
                     )) : (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <Text>Geen regels gevonden voor deze order.</Text>
+                          <Text>No lines found for this order.</Text>
                         </TableCell>
                       </TableRow>
                     )}
@@ -113,7 +113,7 @@ export default function PurchaseOrderDetailsDialog({ open, order, onClose }) {
             </div>
           </DialogContent>
           <DialogActions>
-            <Button appearance="primary" onClick={onClose}>Sluiten</Button>
+            <Button appearance="primary" onClick={onClose}>Close</Button>
           </DialogActions>
         </DialogBody>
       </DialogSurface>

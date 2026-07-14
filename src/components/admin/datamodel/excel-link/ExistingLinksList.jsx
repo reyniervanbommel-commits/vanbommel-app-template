@@ -41,20 +41,20 @@ export default function ExistingLinksList({ links, onDelete }) {
 
   return (
     <div className={styles.root}>
-      <Text weight="semibold">Bestaande koppelingen</Text>
+      <Text weight="semibold">Existing links</Text>
       {!links?.length ? (
-        <Text className={styles.muted} block>Er zijn nog geen externe koppelingen gepubliceerd.</Text>
+        <Text className={styles.muted} block>No external links have been published yet.</Text>
       ) : (
         <div className={styles.tableWrap}>
           <Table size="small">
             <TableHeader>
               <TableRow>
-                <TableHeaderCell>Hoofdtabel</TableHeaderCell>
-                <TableHeaderCell>Bereik</TableHeaderCell>
-                <TableHeaderCell>Sleutelveld</TableHeaderCell>
+                <TableHeaderCell>Main table</TableHeaderCell>
+                <TableHeaderCell>Scope</TableHeaderCell>
+                <TableHeaderCell>Keyveld</TableHeaderCell>
                 <TableHeaderCell>Dataset</TableHeaderCell>
-                <TableHeaderCell>Kolommen</TableHeaderCell>
-                <TableHeaderCell>Actie</TableHeaderCell>
+                <TableHeaderCell>Columnmen</TableHeaderCell>
+                <TableHeaderCell>Action</TableHeaderCell>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -80,7 +80,7 @@ export default function ExistingLinksList({ links, onDelete }) {
                         icon={<DeleteRegular />}
                         onClick={() => onDelete(link.id)}
                       >
-                        Verwijderen
+                        Delete
                       </Button>
                     </TableCell>
                   </TableRow>

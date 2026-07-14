@@ -10,7 +10,7 @@ import { getColumnCellStyle, getFormattedCellContentStyle, getRowFormatControlCe
 import { evalFormatRules } from './columnFormatRuleUtils';
 import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
-import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
+import { orderLocateKeyFromOrder, ROW_LOCATE_HIGHLIGHT_COLOR } from '../../utils/purchaseOrderRowLocate';
 import {
   getProductImageCellStyle,
   isProductImageColumn,
@@ -18,13 +18,12 @@ import {
 } from '../../utils/purchaseOrderProductImageColumn';
 import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
 
-function getOrderRowClassName(order, styles, isLocated = false) {
+function getOrderRowClassName(order, styles) {
   const classes = [];
   if (order.removedInD365) classes.push(styles.itemRow, styles.removedRow);
   else if (order.isNew) classes.push(styles.itemRow, styles.newRow);
   else if (order.isChanged) classes.push(styles.itemRow, styles.changedRow);
   else classes.push(styles.itemRow);
-  if (isLocated) classes.push(styles.locateHighlight);
   return classes.join(' ');
 }
 
@@ -70,11 +69,14 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   onToggleOrder,
   remarks,
   rowFormatColor = '',
+  isLocated = false,
 }) {
   const selectionKey = resolveOrderSelectionKey(order, rowId);
   const controlCellStyle = useMemo(
-    () => getRowFormatControlCellStyle(rowFormatColor),
-    [rowFormatColor]
+    () => (isLocated
+      ? { backgroundColor: ROW_LOCATE_HIGHLIGHT_COLOR, zIndex: 5 }
+      : getRowFormatControlCellStyle(rowFormatColor)),
+    [isLocated, rowFormatColor]
   );
   const hasRowFormatColor = Boolean(controlCellStyle);
   const handleSelectionChange = useCallback(() => {
@@ -85,8 +87,12 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
     [order, remarks]
   );
 
+  const controlCellClassName = isLocated
+    ? `${styles.controlCell} ${styles.locateHighlightControlCell}`
+    : styles.controlCell;
+
   return (
-    <td className={styles.controlCell} style={controlCellStyle} data-board-control-column="true">
+    <td className={controlCellClassName} style={controlCellStyle} data-board-control-column="true">
       <div className={styles.controlCellInner}>
         <div className={styles.rowControlsCluster}>
           {selection?.enabled ? (
@@ -131,6 +137,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
   contextMenu,
   remarks,
   rowFormatColor,
+  isLocated = false,
 }) {
   const rawValue = order?.values?.[column.key];
   const ruleSet = formatting.headerColumnFormatRules[column.key];
@@ -148,25 +155,28 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
     [column, order, remarks]
   );
   const layout = useMemo(() => {
+    const highlightBackground = isLocated ? ROW_LOCATE_HIGHLIGHT_COLOR : cellBackgroundColor;
+    const useFormattedText = isLocated ? false : isConditionalFormat;
     const baseStyle = getColumnCellStyle(
       formatting.headerColumnWidths,
       formatting.headerColumnTextStyles,
       column.key,
-      cellBackgroundColor,
-      { useFormattedTextColor: isConditionalFormat }
+      highlightBackground,
+      { useFormattedTextColor: useFormattedText }
     );
     return {
       className: styles.itemCell,
       contentClassName: isImageColumn ? undefined : styles.itemCellContent,
-      contentStyle: getFormattedCellContentStyle(isConditionalFormat),
+      contentStyle: getFormattedCellContentStyle(useFormattedText),
       style: isImageColumn
         ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
         : {
           ...baseStyle,
           ...(isStatus ? { padding: 0 } : {}),
         },
+      isLocated,
     };
-  }, [cellBackgroundColor, column.key, formatting, isConditionalFormat, isImageColumn, isStatus, styles.itemCell, styles.itemCellContent]);
+  }, [cellBackgroundColor, column.key, formatting, isConditionalFormat, isImageColumn, isLocated, isStatus, styles.itemCell, styles.itemCellContent]);
 
   return (
     <PurchaseOrderDataCell
@@ -219,19 +229,21 @@ function PurchaseOrderBoardRow({
     layout.columns,
     formatting.headerColumnFormatRules
   );
+  const locateKey = orderLocateKeyFromOrder(order);
+  const isLocated = layout.highlightedLocateKey === locateKey;
   const rowStyle = useMemo(
-    () => (!order.removedInD365 && rowFormatColor
-      ? { backgroundColor: rowFormatColor }
-      : undefined),
-    [order.removedInD365, rowFormatColor]
+    () => {
+      if (isLocated) return { backgroundColor: ROW_LOCATE_HIGHLIGHT_COLOR };
+      if (!order.removedInD365 && rowFormatColor) return { backgroundColor: rowFormatColor };
+      return undefined;
+    },
+    [isLocated, order.removedInD365, rowFormatColor]
   );
   const expandedRowData = useMemo(
     () => ({ rowId, order, lines }),
     [lines, order, rowId]
   );
   const remarkSummary = remarks?.summaryByRow?.get(rowKey(order.dataAreaId, order.orderNumber)) || null;
-  const locateKey = orderLocateKeyFromOrder(order);
-  const isLocated = layout.highlightedLocateKey === locateKey;
   const rowRemarks = useMemo(
     () => ({ summary: remarkSummary, open: remarks?.open }),
     [remarkSummary, remarks?.open]
@@ -252,7 +264,7 @@ function PurchaseOrderBoardRow({
   return (
     <React.Fragment>
       <tr
-        className={getOrderRowClassName(order, layout.styles, isLocated)}
+        className={getOrderRowClassName(order, layout.styles)}
         style={rowStyle}
         data-locate-key={locateKey}
       >
@@ -266,6 +278,7 @@ function PurchaseOrderBoardRow({
           onToggleOrder={actions.onToggleOrder}
           remarks={rowRemarks}
           rowFormatColor={rowFormatColor}
+          isLocated={isLocated}
         />
         {layout.columns.map((column) => (
           <PurchaseOrderBoardCell
@@ -279,6 +292,7 @@ function PurchaseOrderBoardRow({
             contextMenu={contextMenu}
             remarks={rowRemarks}
             rowFormatColor={rowFormatColor}
+            isLocated={isLocated}
           />
         ))}
       </tr>

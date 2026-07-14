@@ -34,7 +34,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
       onOpenChange(false);
       if (onUserCreated) onUserCreated();
     } catch (err) {
-      setError(err.message || 'Gebruiker aanmaken mislukt');
+      setError(err.message || 'Failed to create user');
     } finally {
       setLoading(false);
     }
@@ -48,11 +48,11 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger disableButtonEnhancement>
         <Button appearance="primary" icon={<PersonAdd24Regular />}>
-          Gebruiker aanmaken
+          Create user
         </Button>
       </DialogTrigger>
       <DialogSurface>
-        <DialogTitle>Nieuwe gebruiker</DialogTitle>
+        <DialogTitle>New user</DialogTitle>
         <DialogBody>
           {error && (
             <MessageBar intent="error" style={{ marginBottom: '16px' }}>
@@ -60,7 +60,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
             </MessageBar>
           )}
           <DialogContent>
-            <Field label="E-mailadres" required>
+            <Field label="Email address" required>
               <Input
                 type="email"
                 value={email}
@@ -69,7 +69,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
                 disabled={loading}
               />
             </Field>
-            <Field label="Rol">
+            <Field label="Role">
               <Select value={role} onChange={(e) => setRole(e.target.value)} disabled={loading}>
                 <option value={ROLES.SUPPLIER}>Supplier</option>
                 <option value={ROLES.EMPLOYEE}>Employee</option>
@@ -80,10 +80,10 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
         </DialogBody>
         <DialogActions>
           <DialogTrigger disableButtonEnhancement>
-            <Button appearance="secondary" disabled={loading}>Annuleren</Button>
+            <Button appearance="secondary" disabled={loading}>Cancel</Button>
           </DialogTrigger>
           <Button appearance="primary" onClick={handleSubmit} disabled={loading || !email}>
-            {loading ? 'Bezig...' : 'Aanmaken'}
+            {loading ? 'Working...' : 'Create'}
           </Button>
         </DialogActions>
       </DialogSurface>

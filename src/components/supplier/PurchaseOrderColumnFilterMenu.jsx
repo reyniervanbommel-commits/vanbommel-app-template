@@ -171,7 +171,7 @@ function PurchaseOrderColumnFilterMenu({
           className={triggerClassName}
           appearance="subtle"
           size="small"
-          aria-label={`Sorteren, filteren en kolom toevoegen voor ${column.label}`}
+          aria-label={`Sort, filter and add column for ${column.label}`}
           data-column-menu-trigger="true"
           draggable={false}
           onDragStart={(event) => event.preventDefault()}

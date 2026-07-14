@@ -23,7 +23,7 @@ export async function apiRequest(path, options) {
     });
     status = res.status;
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(data.error || 'Verzoek mislukt'), { status: res.status, data });
+    if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status, data });
     return data;
   } finally {
     if (PERF_ENABLED) {

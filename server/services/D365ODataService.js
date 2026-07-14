@@ -53,7 +53,7 @@ async function requestAccessToken({ tenantId, clientId, clientSecret }) {
       signal: controller.signal,
     });
   } catch (error) {
-    const err = new Error('Azure AD token-endpoint niet bereikbaar');
+    const err = new Error('Azure AD token endpoint unreachable');
     err.status = error && error.name === 'AbortError' ? 504 : 502;
     throw err;
   } finally {
@@ -66,14 +66,14 @@ async function requestAccessToken({ tenantId, clientId, clientSecret }) {
       status: response.status,
       bodyPreview: responseBody.slice(0, 300),
     });
-    const err = new Error('Kon geen D365-toegangstoken ophalen');
+    const err = new Error('Could not obtain D365 access token');
     err.status = 502;
     throw err;
   }
 
   const payload = await response.json();
   if (!payload.access_token) {
-    const err = new Error('D365 OAuth-respons bevat geen access_token');
+    const err = new Error('D365 OAuth response does not contain access_token');
     err.status = 502;
     throw err;
   }
@@ -134,7 +134,7 @@ async function buildHeaders() {
 async function getBaseUrl() {
   const rawBaseUrl = (await settingsService.getAsync('D365_ODATA_BASE_URL')).trim();
   if (!rawBaseUrl) {
-    const err = new Error('D365_ODATA_BASE_URL ontbreekt');
+    const err = new Error('D365_ODATA_BASE_URL is missing');
     err.status = 500;
     throw err;
   }
@@ -256,7 +256,7 @@ async function fetchWithTimeout(url, options, timeout) {
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
-    const err = new Error('D365 OData is niet bereikbaar');
+    const err = new Error('D365 OData is unreachable');
     err.status = error && error.name === 'AbortError' ? 504 : 502;
     throw err;
   } finally {
@@ -318,7 +318,7 @@ function valuesEqualForConcurrency(currentValue, basedOnValue, dataType) {
  */
 async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365Field, newValue, basedOnValue, dataType }) {
   if (!d365Field) {
-    const err = new Error('Geen D365-veld opgegeven'); err.status = 400; throw err;
+    const err = new Error('No D365 field specified'); err.status = 400; throw err;
   }
   const baseUrl = await getBaseUrl();
   const headerPath = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH', DEFAULT_PURCHASE_ORDERS_PATH)).trim();
@@ -336,14 +336,14 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
 
   // 1) GET huidige waarde + etag
   const getRes = await fetchWithTimeout(entityUrl, { method: 'GET', headers: await buildHeaders() }, timeout);
-  if (getRes.status === 404) { const e = new Error('Record niet gevonden in D365'); e.status = 404; throw e; }
-  if (!getRes.ok) { const e = new Error('Kon D365-record niet lezen'); e.status = 502; throw e; }
+  if (getRes.status === 404) { const e = new Error('Record not found in D365'); e.status = 404; throw e; }
+  if (!getRes.ok) { const e = new Error('Could not read D365 record'); e.status = 502; throw e; }
   const current = await getRes.json();
   const etag = current['@odata.etag'] || getRes.headers.get('ETag') || null;
 
   // 2) concurrency-check op de waarde die de gebruiker zag
   if (!valuesEqualForConcurrency(current[d365Field], basedOnValue, dataType)) {
-    const e = new Error('De waarde is in D365 gewijzigd sinds u las. Ververs eerst en probeer opnieuw.');
+    const e = new Error('The value changed in D365 since you read it. Refresh first and try again.');
     e.status = 409; throw e;
   }
 
@@ -355,12 +355,12 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
     timeout,
   );
   if (patchRes.status === 412) {
-    const e = new Error('Conflict: het record is net gewijzigd in D365. Ververs eerst.'); e.status = 409; throw e;
+    const e = new Error('Conflict: the record was just changed in D365. Refresh first.'); e.status = 409; throw e;
   }
   if (!patchRes.ok) {
     const body = await patchRes.text().catch(() => '');
     logger.error('D365 write-back PATCH mislukt', { status: patchRes.status, bodyPreview: body.slice(0, 300) });
-    const e = new Error('Terugschrijven naar D365 mislukt'); e.status = 502; throw e;
+    const e = new Error('Write-back to D365 failed'); e.status = 502; throw e;
   }
   return { ok: true };
 }
@@ -377,7 +377,7 @@ async function fetchODataJson(url, timeout) {
       signal: controller.signal,
     });
   } catch (error) {
-    const err = new Error('D365 OData is niet bereikbaar');
+    const err = new Error('D365 OData is unreachable');
     err.status = error && error.name === 'AbortError' ? 504 : 502;
     throw err;
   } finally {
@@ -392,7 +392,7 @@ async function fetchODataJson(url, timeout) {
       bodyPreview: responseBody.slice(0, 300),
     });
 
-    const err = new Error('D365 OData verzoek mislukt');
+    const err = new Error('D365 OData request failed');
     err.status = 502;
     throw err;
   }
@@ -445,7 +445,7 @@ async function buildGenericEntityUrl({
   const baseUrl = await getBaseUrl();
   const normalizedPath = String(sourceEntity || '').trim();
   if (!normalizedPath) {
-    const err = new Error('sourceEntity ontbreekt voor D365 fetch');
+    const err = new Error('sourceEntity is missing for D365 fetch');
     err.status = 400;
     throw err;
   }

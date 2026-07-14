@@ -34,17 +34,17 @@ function escapeODataLiteral(value) {
 function serializeValue(rawValue, valueType, enumType, label) {
   if (valueType === 'enum') {
     const member = String(rawValue).trim();
-    if (!IDENT_RE.test(member)) throw badRequest(`${label}: ongeldige enum-waarde`);
+    if (!IDENT_RE.test(member)) throw badRequest(`${label}: invalid enum value`);
     return `${ENUM_NAMESPACE}.${enumType}'${member}'`;
   }
   if (valueType === 'number') {
     const num = Number(rawValue);
-    if (!Number.isFinite(num)) throw badRequest(`${label}: waarde moet een getal zijn`);
+    if (!Number.isFinite(num)) throw badRequest(`${label}: value must be a number`);
     return String(num);
   }
   if (valueType === 'date') {
     const parsed = new Date(rawValue);
-    if (Number.isNaN(parsed.getTime())) throw badRequest(`${label}: waarde moet een datum zijn`);
+    if (Number.isNaN(parsed.getTime())) throw badRequest(`${label}: value must be a date`);
     return parsed.toISOString();
   }
   return `'${escapeODataLiteral(String(rawValue).trim())}'`;
@@ -56,38 +56,38 @@ function compileRuleExpression(rule, fieldRef, label) {
   const valueType = String(rule.valueType || 'text').trim();
   const rawValue = rule.value;
 
-  if (!OPERATORS.includes(operator)) throw badRequest(`${label}: ongeldige operator`);
-  if (!VALUE_TYPES.includes(valueType)) throw badRequest(`${label}: ongeldig waardetype`);
+  if (!OPERATORS.includes(operator)) throw badRequest(`${label}: invalid operator`);
+  if (!VALUE_TYPES.includes(valueType)) throw badRequest(`${label}: invalid value type`);
 
   let enumType = null;
   if (valueType === 'enum') {
     enumType = String(rule.enumType || '').trim();
-    if (!IDENT_RE.test(enumType)) throw badRequest(`${label}: ongeldig enum-type`);
+    if (!IDENT_RE.test(enumType)) throw badRequest(`${label}: invalid enum type`);
     if (!['eq', 'ne', 'oneof'].includes(operator)) {
-      throw badRequest(`${label}: enum-velden ondersteunen alleen gelijk/ongelijk/één-van`);
+      throw badRequest(`${label}: enum fields only support equals/not equals/one-of`);
     }
   }
   if (TEXT_FUNCTION_OPERATORS.includes(operator) && valueType !== 'text') {
-    throw badRequest(`${label}: deze operator geldt alleen voor tekstvelden`);
+    throw badRequest(`${label}: this operator only applies to text fields`);
   }
 
   if (operator === 'oneof') {
     const list = Array.isArray(rawValue)
       ? rawValue
       : String(rawValue ?? '').split(',').map((v) => v.trim()).filter(Boolean);
-    if (!list.length) throw badRequest(`${label}: minimaal één waarde vereist`);
-    if (list.length > MAX_ONEOF_VALUES) throw badRequest(`${label}: maximaal ${MAX_ONEOF_VALUES} waarden`);
+    if (!list.length) throw badRequest(`${label}: at least one value is required`);
+    if (list.length > MAX_ONEOF_VALUES) throw badRequest(`${label}: maximum ${MAX_ONEOF_VALUES} values`);
     for (const v of list) {
-      if (String(v).length > MAX_VALUE_LENGTH) throw badRequest(`${label}: waarde is te lang`);
+      if (String(v).length > MAX_VALUE_LENGTH) throw badRequest(`${label}: value is too long`);
     }
     const clauses = list.map((v) => `${fieldRef} eq ${serializeValue(v, valueType, enumType, label)}`);
     return clauses.length === 1 ? clauses[0] : `(${clauses.join(' or ')})`;
   }
 
   if (rawValue === null || rawValue === undefined || rawValue === '') {
-    throw badRequest(`${label}: waarde is verplicht`);
+    throw badRequest(`${label}: value is required`);
   }
-  if (String(rawValue).length > MAX_VALUE_LENGTH) throw badRequest(`${label}: waarde is te lang`);
+  if (String(rawValue).length > MAX_VALUE_LENGTH) throw badRequest(`${label}: value is too long`);
 
   if (TEXT_FUNCTION_OPERATORS.includes(operator)) {
     const literal = serializeValue(rawValue, 'text', null, label);
@@ -101,13 +101,13 @@ function compileRuleExpression(rule, fieldRef, label) {
 
 // Compileert één regel inclusief level-wrapping (line-regels via any()-lambda).
 function compileRule(rule, index) {
-  const label = `Filterregel ${index + 1}`;
-  if (!rule || typeof rule !== 'object') throw badRequest(`${label}: ongeldige regel`);
+  const label = `Filter rule ${index + 1}`;
+  if (!rule || typeof rule !== 'object') throw badRequest(`${label}: invalid rule`);
 
   const field = String(rule.field || '').trim();
   const level = String(rule.level || 'header').trim();
-  if (!IDENT_RE.test(field)) throw badRequest(`${label}: ongeldig veld`);
-  if (!LEVELS.includes(level)) throw badRequest(`${label}: ongeldig niveau`);
+  if (!IDENT_RE.test(field)) throw badRequest(`${label}: invalid field`);
+  if (!LEVELS.includes(level)) throw badRequest(`${label}: invalid level`);
 
   if (level === 'line') {
     const expression = compileRuleExpression(rule, `l/${field}`, label);
@@ -122,7 +122,7 @@ function compileRule(rule, index) {
  */
 function compileSyncRules(rules) {
   if (!Array.isArray(rules) || !rules.length) return '';
-  if (rules.length > MAX_RULES) throw badRequest(`Maximaal ${MAX_RULES} filterregels`);
+  if (rules.length > MAX_RULES) throw badRequest(`Maximum ${MAX_RULES} filter rules`);
   return rules.map(compileRule).join(' and ');
 }
 

@@ -35,7 +35,7 @@ function httpError(status, message) {
 function normalizeActor(actor) {
   const id = normalizePositiveId(actor?.id, 'actor');
   if (![ROLES.ADMIN, ROLES.EMPLOYEE].includes(actor?.role)) {
-    throw httpError(403, 'Onvoldoende rechten');
+    throw httpError(403, 'Insufficient permissions');
   }
   return { id, role: actor.role, isAdmin: actor.role === ROLES.ADMIN };
 }
@@ -68,7 +68,7 @@ async function assertMasterRow(ctx, requestFactory = () => ctx.pool.request()) {
     WHERE table_id = @tableId AND scope = 'master'
       AND partition_key = @partitionKey AND record_key = @recordKey AND detail_key = -1
   `);
-  if (!result.recordset.length) throw httpError(404, 'Masterrij niet gevonden');
+  if (!result.recordset.length) throw httpError(404, 'Master row not found');
 }
 
 const REMARK_SELECT = `
@@ -139,7 +139,7 @@ async function fetchRemark(ctx, remarkId) {
     ${REMARK_SELECT}
   `);
   const remark = mapRemarkRows(result.recordset, ctx.actor)[0];
-  if (!remark) throw httpError(404, 'Remark niet gevonden');
+  if (!remark) throw httpError(404, 'Remark not found');
   return remark;
 }
 
@@ -166,7 +166,7 @@ async function addRemark(input, actor) {
             AND c.scope = 'master' AND c.is_active = 1
         ));
     `);
-  if (!result.recordset.length) throw httpError(404, 'Masterrij of kolom niet gevonden');
+  if (!result.recordset.length) throw httpError(404, 'Master row or column not found');
   return fetchRemark(ctx, Number(result.recordset[0].id));
 }
 
@@ -193,9 +193,9 @@ async function deleteRemark(input, actor) {
     `);
   if (!result.recordsets[0].length) {
     const state = result.recordsets[1]?.[0];
-    if (!state) throw httpError(404, 'Remark niet gevonden');
-    if (state.is_deleted) throw httpError(409, 'Remark is al verwijderd');
-    throw httpError(403, 'Alleen de auteur of een admin kan deze remark verwijderen');
+    if (!state) throw httpError(404, 'Remark not found');
+    if (state.is_deleted) throw httpError(409, 'Remark has already been deleted');
+    throw httpError(403, 'Only the author or an admin can delete this remark');
   }
   return fetchRemark(ctx, remarkId);
 }
@@ -220,9 +220,9 @@ async function setReaction(input, actor) {
         AND r.partition_key = @partitionKey AND r.record_key = @recordKey AND r.detail_key = -1;
     `);
     const state = locked.recordset[0];
-    if (!state) throw httpError(404, 'Remark of masterrij niet gevonden');
-    if (state.is_deleted) throw httpError(409, 'Reageren op een verwijderde remark is niet toegestaan');
-    if (Number(state.created_by) === ctx.actor.id) throw httpError(403, 'Reageren op een eigen remark is niet toegestaan');
+    if (!state) throw httpError(404, 'Remark or master row not found');
+    if (state.is_deleted) throw httpError(409, 'Reacting to a deleted remark is not allowed');
+    if (Number(state.created_by) === ctx.actor.id) throw httpError(403, 'Reacting to your own remark is not allowed');
     await dependencies.createRequest(tx)
       .input('remarkId', sql.BigInt, remarkId)
       .input('actorId', sql.Int, ctx.actor.id)

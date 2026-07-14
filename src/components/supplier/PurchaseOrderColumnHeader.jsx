@@ -119,13 +119,13 @@ export default function PurchaseOrderColumnHeader({
   const openRename = useCallback(() => { setLabel(column.label); setError(''); setRenameOpen(true); }, [column.label]);
   const submitRename = useCallback(async () => {
     const trimmed = label.trim();
-    if (!trimmed) return setError('Geef een kolomnaam op.');
+    if (!trimmed) return setError('Enter a column name.');
     setBusy(true); setError('');
-    try { await onRename(column.id, trimmed); setRenameOpen(false); } catch (err) { setError(err.message || 'Hernoemen mislukt.'); } finally { setBusy(false); }
+    try { await onRename(column.id, trimmed); setRenameOpen(false); } catch (err) { setError(err.message || 'Rename failed.'); } finally { setBusy(false); }
   }, [label, onRename, column.id]);
   const submitRemove = useCallback(async () => {
     setBusy(true); setError('');
-    try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Verwijderen mislukt.'); } finally { setBusy(false); }
+    try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
   const connectionIndicator = showConnectionIndicator ? (
     <Tooltip content="Connected column" relationship="label">
@@ -136,14 +136,14 @@ export default function PurchaseOrderColumnHeader({
   const renderCustomTypeIcon = () => {
     if (isFormulaColumn) return <span className={styles.formulaTypeIcon} aria-hidden>fx</span>;
     switch (customTypeKey) {
-      case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Getalkolom" />;
-      case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Datumkolom" />;
+      case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Number column" />;
+      case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Date column" />;
       case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Yes/No column" />;
       case 'status': return <span className={styles.formulaTypeIcon} title="Status column">●</span>;
       case 'remarks': return <Chat24Regular className={styles.customIcon} title="Remarks column" />;
-      case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Keuzelijstkolom" />;
+      case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Choice list column" />;
       case 'text':
-      default: return <EditRegular className={styles.customIcon} title="Tekstkolom" />;
+      default: return <EditRegular className={styles.customIcon} title="Text column" />;
     }
   };
 
@@ -159,7 +159,7 @@ export default function PurchaseOrderColumnHeader({
           onKeyDown={handleInlineKey}
           onMouseDown={(event) => event.stopPropagation()}
           draggable={false}
-          aria-label="Kolomnaam"
+          aria-label="Column name"
         />
       </div>
     );
@@ -168,12 +168,12 @@ export default function PurchaseOrderColumnHeader({
   const columnOptionsMenu = (
     <Menu>
       <MenuTrigger disableButtonEnhancement>
-        <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Kolomopties voor ${column.label}`} />
+        <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Column options for ${column.label}`} />
       </MenuTrigger>
       <MenuPopover>
         <MenuList>
-          <MenuItem onClick={openRename}>Hernoemen</MenuItem>
-          <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Verwijderen</MenuItem>
+          <MenuItem onClick={openRename}>Rename</MenuItem>
+          <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Delete</MenuItem>
         </MenuList>
       </MenuPopover>
     </Menu>
@@ -182,7 +182,7 @@ export default function PurchaseOrderColumnHeader({
   if (!isCustom) {
     const labelWithWriteBack = (
       <span className={styles.d365LabelWrap}>
-        <Tooltip content={writable ? 'D365 sync ingeschakeld' : 'D365 bronkolom'} relationship="label">
+        <Tooltip content={writable ? 'D365 sync enabled' : 'D365 source column'} relationship="label">
           {writable
             ? <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
             : <CloudRegular className={styles.indicatorIcon} />}
@@ -218,11 +218,11 @@ export default function PurchaseOrderColumnHeader({
         {labelWithWriteBack}
         <Menu>
           <MenuTrigger disableButtonEnhancement>
-            <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back-opties voor ${column.label}`} />
+            <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back options for ${column.label}`} />
           </MenuTrigger>
           <MenuPopover>
             <MenuList>
-              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>{writable ? 'Write-back uitzetten' : 'Write-back toestaan'}</MenuItem>
+              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>{writable ? 'Disable write-back' : 'Allow write-back'}</MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>
@@ -234,7 +234,7 @@ export default function PurchaseOrderColumnHeader({
     <div className={styles.header}>
       <span className={styles.labelWrap}>
         {showCustomTypeIndicator ? (
-          <Tooltip content={isFormulaColumn ? 'Formulekolom' : 'Eigen kolom'} relationship="label">
+          <Tooltip content={isFormulaColumn ? 'Formula column' : 'Custom column'} relationship="label">
             {renderCustomTypeIcon()}
           </Tooltip>
         ) : null}
@@ -261,15 +261,15 @@ export default function PurchaseOrderColumnHeader({
       <Dialog open={renameOpen} onOpenChange={(_, data) => !busy && setRenameOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Kolom hernoemen</DialogTitle>
+            <DialogTitle>Rename column</DialogTitle>
             <DialogContent>
-              <Field label="Naam" required validationState={error ? 'error' : 'none'} validationMessage={error || undefined}>
+              <Field label="Name" required validationState={error ? 'error' : 'none'} validationMessage={error || undefined}>
                 <Input value={label} onChange={(_, data) => setLabel(data.value)} />
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button appearance="secondary" onClick={() => setRenameOpen(false)} disabled={busy}>Annuleren</Button>
-              <Button appearance="primary" onClick={submitRename} disabled={busy}>{busy ? 'Opslaan...' : 'Opslaan'}</Button>
+              <Button appearance="secondary" onClick={() => setRenameOpen(false)} disabled={busy}>Cancel</Button>
+              <Button appearance="primary" onClick={submitRename} disabled={busy}>{busy ? 'Saving...' : 'Save'}</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>
@@ -278,14 +278,14 @@ export default function PurchaseOrderColumnHeader({
       <Dialog open={confirmOpen} onOpenChange={(_, data) => !busy && setConfirmOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Kolom verwijderen</DialogTitle>
+            <DialogTitle>Delete column</DialogTitle>
             <DialogContent>
               Delete column &quot;{column.label}&quot;? This permanently removes the column and all related values from SQL. This action cannot be undone.
               {error ? <div className={styles.error}>{error}</div> : null}
             </DialogContent>
             <DialogActions>
-              <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={busy}>Annuleren</Button>
-              <Button appearance="primary" onClick={submitRemove} disabled={busy}>{busy ? 'Verwijderen...' : 'Verwijderen'}</Button>
+              <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={busy}>Cancel</Button>
+              <Button appearance="primary" onClick={submitRemove} disabled={busy}>{busy ? 'Deleting...' : 'Delete'}</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>

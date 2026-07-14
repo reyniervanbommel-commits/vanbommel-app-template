@@ -89,28 +89,28 @@ function parseWorkbook(buffer) {
   try {
     wb = XLSX.read(buffer, { type: 'buffer', cellDates: true, cellFormula: false, cellHTML: false, dense: false });
   } catch (err) {
-    throw Object.assign(new Error('Kon het bestand niet lezen als Excel/CSV'), { status: 400 });
+    throw Object.assign(new Error('Could not read file as Excel/CSV'), { status: 400 });
   }
   const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw Object.assign(new Error('Het bestand bevat geen werkblad'), { status: 400 });
+  if (!sheetName) throw Object.assign(new Error('The file contains no worksheet'), { status: 400 });
   const sheet = wb.Sheets[sheetName];
   const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null, blankrows: false });
-  if (!matrix.length) throw Object.assign(new Error('Het werkblad is leeg'), { status: 400 });
+  if (!matrix.length) throw Object.assign(new Error('The worksheet is empty'), { status: 400 });
 
   const headerRow = matrix[0] || [];
   const colCount = Math.min(headerRow.length, MAX_COLUMNS);
-  if (colCount === 0) throw Object.assign(new Error('Geen kolommen gevonden in de kopregel'), { status: 400 });
+  if (colCount === 0) throw Object.assign(new Error('No columns found in the header row'), { status: 400 });
 
   const used = new Set();
   const columns = [];
   for (let c = 0; c < colCount; c += 1) {
-    const label = isBlank(headerRow[c]) ? `Kolom ${c + 1}` : String(headerRow[c]).trim();
+    const label = isBlank(headerRow[c]) ? `Column ${c + 1}` : String(headerRow[c]).trim();
     columns.push({ index: c, key: deriveColumnKey(headerRow[c], c, used), label });
   }
 
   const dataRows = matrix.slice(1);
   if (dataRows.length > MAX_ROWS) {
-    throw Object.assign(new Error(`Te veel rijen (${dataRows.length}); maximum is ${MAX_ROWS}`), { status: 400 });
+    throw Object.assign(new Error(`Too many rows (${dataRows.length}); maximum is ${MAX_ROWS}`), { status: 400 });
   }
 
   // Typedetectie per kolom over de ruwe waarden.
@@ -214,7 +214,7 @@ async function bulkInsertCacheRows(tx, tableId, rows, syncedAt) {
 // ---------------------------------------------------------------------------
 async function getExcelSourceId(pool) {
   const res = await pool.request().query(`SELECT id FROM dbo.tb_sources WHERE [key] = 'excel'`);
-  if (!res.recordset.length) throw Object.assign(new Error("Bron 'excel' ontbreekt; draai migratie 017"), { status: 500 });
+  if (!res.recordset.length) throw Object.assign(new Error("Source 'excel' is missing; run migration 017"), { status: 500 });
   return Number(res.recordset[0].id);
 }
 
@@ -348,7 +348,7 @@ async function deleteDataset(tableKey) {
   const pool = await getPool();
   const src = await pool.request().input('t', sql.BigInt, table.id)
     .query(`SELECT s.[key] AS source_key FROM dbo.tb_tables t INNER JOIN dbo.tb_sources s ON s.id = t.source_id WHERE t.id = @t`);
-  if (src.recordset[0]?.source_key !== 'excel') throw Object.assign(new Error('Alleen Excel-datasets kunnen verwijderd worden'), { status: 400 });
+  if (src.recordset[0]?.source_key !== 'excel') throw Object.assign(new Error('Only Excel datasets can be deleted'), { status: 400 });
 
   const tx = new sql.Transaction(pool);
   await tx.begin();
@@ -452,14 +452,14 @@ async function validateLink(params) {
 // ---------------------------------------------------------------------------
 async function publishLink({ mainTableKey, datasetTableKey, sourceScope, mainKeyField, datasetKeyField, fields }) {
   if (!mainTableKey || !datasetTableKey || !mainKeyField || !datasetKeyField) {
-    throw Object.assign(new Error('mainTableKey, datasetTableKey, mainKeyField en datasetKeyField zijn verplicht'), { status: 400 });
+    throw Object.assign(new Error('mainTableKey, datasetTableKey, mainKeyField and datasetKeyField are required'), { status: 400 });
   }
   const fieldMap = fields && typeof fields === 'object' ? fields : {};
-  if (!Object.keys(fieldMap).length) throw Object.assign(new Error('Kies minstens één kolom om te tonen'), { status: 400 });
+  if (!Object.keys(fieldMap).length) throw Object.assign(new Error('Select at least one column to display'), { status: 400 });
 
   const stats = await computeStats({ datasetTableKey, datasetKeyField, mainTableKey, sourceScope, mainKeyField });
   if (!stats.ok) {
-    throw Object.assign(new Error(`Publiceren geblokkeerd: ${stats.duplicates.count} dubbele sleutelwaarde(n) in de dataset`), { status: 400, details: stats.duplicates });
+    throw Object.assign(new Error(`Publishing blocked: ${stats.duplicates.count} duplicate key value(s) in the dataset`), { status: 400, details: stats.duplicates });
   }
 
   const datasetTable = await getTableByKey(datasetTableKey);
@@ -556,7 +556,7 @@ async function listLinks() {
 
 async function deleteLink(relationId) {
   const id = Number.parseInt(relationId, 10);
-  if (!Number.isFinite(id) || id <= 0) throw Object.assign(new Error('Ongeldig id'), { status: 400 });
+  if (!Number.isFinite(id) || id <= 0) throw Object.assign(new Error('Invalid id'), { status: 400 });
   const pool = await getPool();
   await pool.request().input('id', sql.BigInt, id)
     .query(`DELETE FROM dbo.tb_relations WHERE id = @id AND relation_role = 'lookup'`);

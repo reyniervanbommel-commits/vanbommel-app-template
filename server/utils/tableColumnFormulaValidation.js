@@ -45,17 +45,17 @@ function validateFormulaReferences(references, columns, ownKey = '') {
     const key = String(ref || '').toLowerCase();
     if (!key) continue;
     if (ownKeyLower && key === ownKeyLower) {
-      throw Object.assign(new Error(`Formule mag niet naar zichzelf verwijzen (${ownKey})`), { status: 400 });
+      throw Object.assign(new Error(`Formula cannot reference itself (${ownKey})`), { status: 400 });
     }
     const target = byKey.get(key);
     if (!target) {
-      throw Object.assign(new Error(`Onbekende kolomreferentie in formule: (${ref})`), { status: 400 });
+      throw Object.assign(new Error(`Unknown column reference in formula: (${ref})`), { status: 400 });
     }
     if (String(target.scope || '') !== 'master') {
-      throw Object.assign(new Error(`Formule mag alleen naar master-kolommen verwijzen: (${ref})`), { status: 400 });
+      throw Object.assign(new Error(`Formula may only reference master columns: (${ref})`), { status: 400 });
     }
     if (String(target.formulaExpr || '').trim()) {
-      throw Object.assign(new Error(`Formule mag niet verwijzen naar formulekolom: (${ref})`), { status: 400 });
+      throw Object.assign(new Error(`Formula cannot reference a formula column: (${ref})`), { status: 400 });
     }
   }
 }
@@ -71,7 +71,7 @@ function sampleValueForColumn(column) {
 function validateFormulaResultTypeCompatibility(expression, references, columns, resultType) {
   const cleanExpression = String(expression || '').trim();
   if (!cleanExpression) {
-    throw Object.assign(new Error('Formule is verplicht'), { status: 400 });
+    throw Object.assign(new Error('Formula is required'), { status: 400 });
   }
   const compiled = compileFormula(cleanExpression);
   const byKey = new Map((Array.isArray(columns) ? columns : []).map((column) => [
@@ -91,7 +91,7 @@ function validateFormulaResultTypeCompatibility(expression, references, columns,
   const result = evaluateCompiledFormula(compiled, sampleValues, { resultType });
   if (result.error) {
     throw Object.assign(
-      new Error(`Formule past niet bij resultaattype '${resultType}': ${result.error}`),
+      new Error(`Formula does not match result type '${resultType}': ${result.error}`),
       { status: 400 }
     );
   }

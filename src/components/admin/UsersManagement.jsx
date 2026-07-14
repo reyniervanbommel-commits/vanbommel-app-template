@@ -86,12 +86,12 @@ export default function UsersManagement() {
     getDisplayPermissions,
   } = useUsersManagement();
 
-  if (loading) return <Text>Laden...</Text>;
+  if (loading) return <Text>Loading...</Text>;
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Text size={600} weight="semibold">Gebruikersbeheer</Text>
+        <Text size={600} weight="semibold">User management</Text>
         <CreateUserDialog
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
@@ -100,7 +100,7 @@ export default function UsersManagement() {
       </div>
 
       <Input
-        placeholder="Zoeken op e-mail of rol..."
+        placeholder="Search by email or role..."
         value={searchTerm}
         onChange={(_, d) => setSearchTerm(d.value)}
         contentBefore={<Search24Regular />}
@@ -113,19 +113,19 @@ export default function UsersManagement() {
       {resetMessage && (
         <MessageBar intent="success">
           <MessageBarBody>{resetMessage}</MessageBarBody>
-          <Button appearance="subtle" size="small" onClick={() => setResetMessage('')}>Sluiten</Button>
+          <Button appearance="subtle" size="small" onClick={() => setResetMessage('')}>Close</Button>
         </MessageBar>
       )}
 
       <Table className={styles.table}>
         <TableHeader>
           <TableRow>
-            <TableHeaderCell>E-mail</TableHeaderCell>
-            <TableHeaderCell>Rol</TableHeaderCell>
+            <TableHeaderCell>Email</TableHeaderCell>
+            <TableHeaderCell>Role</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
-            <TableHeaderCell>Rechten</TableHeaderCell>
-            <TableHeaderCell>Pagina-toegang</TableHeaderCell>
-            <TableHeaderCell>Acties</TableHeaderCell>
+            <TableHeaderCell>Permissions</TableHeaderCell>
+            <TableHeaderCell>Page access</TableHeaderCell>
+            <TableHeaderCell>Actions</TableHeaderCell>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -141,23 +141,23 @@ export default function UsersManagement() {
                   <Badge appearance={user.role === ROLES.ADMIN ? 'filled' : 'outline'}>{user.role}</Badge>
                 </TableCell>
                 <TableCell>
-                  {user.is_locked && <Badge appearance="filled" color="danger">Geblokkeerd</Badge>}
-                  {!user.is_locked && <Badge appearance="outline" color="success">Actief</Badge>}
-                  {user.must_set_password && <Badge appearance="outline" color="warning">Wachtwoord instellen</Badge>}
-                  {user.mfa_required && <Badge appearance="filled" color="brand">MFA verplicht</Badge>}
-                  {user.mfa_enabled && <Badge appearance="outline" color="success">MFA actief</Badge>}
+                  {user.is_locked && <Badge appearance="filled" color="danger">Locked</Badge>}
+                  {!user.is_locked && <Badge appearance="outline" color="success">Active</Badge>}
+                  {user.must_set_password && <Badge appearance="outline" color="warning">Set password</Badge>}
+                  {user.mfa_required && <Badge appearance="filled" color="brand">MFA required</Badge>}
+                  {user.mfa_enabled && <Badge appearance="outline" color="success">MFA active</Badge>}
                 </TableCell>
                 <TableCell className={isUpdated ? styles.permUpdated : undefined}>
                   <div className={styles.permissionStateCell}>
                     {displayPermissions.length > 0 ? (
                       <>
                         <span className={styles.permissionOn}><CheckmarkCircle24Regular /></span>
-                        <Text size={200}>Ingeschakeld</Text>
+                        <Text size={200}>Enabled</Text>
                       </>
                     ) : (
                       <>
                         <span className={styles.permissionOff}><Circle24Regular /></span>
-                        <Text size={200}>Geen rechten</Text>
+                        <Text size={200}>No permissions</Text>
                       </>
                     )}
                   </div>
@@ -169,9 +169,9 @@ export default function UsersManagement() {
                     size="small"
                     className={styles.permissionsButton}
                     onClick={() => handleEditPermissions(user)}
-                    title="Rechten beheren"
+                    title="Manage permissions"
                   >
-                    Rechten
+                    Permissions
                   </Button>
                   {displayPermissions.length > 0 ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
@@ -182,7 +182,7 @@ export default function UsersManagement() {
                       ))}
                     </div>
                   ) : (
-                    <Text size={200} className={styles.noPerms}>Geen pagina-rechten</Text>
+                    <Text size={200} className={styles.noPerms}>No page permissions</Text>
                   )}
                 </TableCell>
                 <TableCell>
@@ -201,7 +201,7 @@ export default function UsersManagement() {
           {filteredUsers.length === 0 && (
             <TableRow>
               <TableCell colSpan={6}>
-                <Text className={styles.noPerms}>Geen gebruikers gevonden</Text>
+                <Text className={styles.noPerms}>No users found</Text>
               </TableCell>
             </TableRow>
           )}
@@ -218,17 +218,17 @@ export default function UsersManagement() {
       <Dialog open={deleteDialogOpen} onOpenChange={(_, d) => setDeleteDialogOpen(d.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Gebruiker verwijderen</DialogTitle>
+            <DialogTitle>Delete user</DialogTitle>
             <DialogContent>
-              Weet je zeker dat je <strong>{deleteDialogUser?.email}</strong> wilt verwijderen?
-              Dit kan niet ongedaan worden gemaakt.
+              Are you sure you want to delete <strong>{deleteDialogUser?.email}</strong>?
+              This cannot be undone.
             </DialogContent>
             <DialogActions>
               <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary">Annuleren</Button>
+                <Button appearance="secondary">Cancel</Button>
               </DialogTrigger>
               <Button appearance="primary" onClick={handleDeleteConfirm} style={{ backgroundColor: tokens.colorPaletteRedBackground3 }}>
-                Verwijderen
+                Delete
               </Button>
             </DialogActions>
           </DialogBody>

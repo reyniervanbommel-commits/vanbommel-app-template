@@ -24,7 +24,7 @@ export default function PurchaseOrderBulkEditDialog({
   onChooseBulk,
   onCloseSummary,
 }) {
-  const title = mode === 'summary' ? 'Bulkbewerking gestopt' : 'Meerdere rijen bijwerken?';
+  const title = mode === 'summary' ? 'Bulk edit stopped' : 'Update multiple rows?';
   return (
     <Dialog modalType="alert" open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
       <DialogSurface>
@@ -36,11 +36,11 @@ export default function PurchaseOrderBulkEditDialog({
             ) : (
               <>
                 <Text>
-                  Je hebt {selectedCount} zichtbare rijen geselecteerd voor kolom "{columnLabel}".
+                  You selected {selectedCount} visible rows for column "{columnLabel}".
                 </Text>
                 {busy ? (
                   <Text>
-                    <Spinner size="extra-tiny" /> Bijwerken bezig: {processedCount}/{selectedCount}
+                    <Spinner size="extra-tiny" /> Updating: {processedCount}/{selectedCount}
                   </Text>
                 ) : null}
               </>
@@ -49,15 +49,15 @@ export default function PurchaseOrderBulkEditDialog({
           <DialogActions>
             {mode === 'summary' ? (
               <Button appearance="primary" onClick={onCloseSummary}>
-                Sluiten
+                Close
               </Button>
             ) : (
               <>
                 <Button appearance="secondary" onClick={onChooseSingleCell} disabled={busy}>
-                  Alleen deze cel
+                  This cell only
                 </Button>
                 <Button appearance="primary" onClick={onChooseBulk} disabled={busy}>
-                  Toepassen op geselecteerde rijen
+                  Apply to selected rows
                 </Button>
               </>
             )}

@@ -37,7 +37,7 @@ function mapUserForSession(user) {
 
 function validatePasswordRules(password) {
   if (!password || password.length < 8) {
-    return { valid: false, error: 'Wachtwoord moet minimaal 8 tekens lang zijn' };
+    return { valid: false, error: 'Password must be at least 8 characters long' };
   }
   return { valid: true };
 }
@@ -62,8 +62,8 @@ async function applyProgressiveDelay(failedAttempts) {
 
 async function login(email, password) {
   const user = await getUserByEmail(email);
-  if (!user) throw new Error('E-mailadres of wachtwoord is onjuist');
-  if (user.is_locked) throw new Error('Account geblokkeerd. Vraag nieuw wachtwoord aan.');
+  if (!user) throw new Error('Email address or password is incorrect');
+  if (user.is_locked) throw new Error('Account locked. Request a new password.');
 
   if (user.must_set_password || !user.password_hash) {
     const bootstrapEmail = normalizeEmail(process.env.BOOTSTRAP_ADMIN_EMAIL || '');
@@ -91,8 +91,8 @@ async function login(email, password) {
       .input('attempts', sql.Int, newAttempts)
       .input('locked', sql.Bit, locked)
       .query('UPDATE dbo.users SET failed_attempts = @attempts, is_locked = @locked, updated_at = SYSUTCDATETIME() WHERE id = @id');
-    if (locked) throw new Error('Account geblokkeerd na 3 mislukte pogingen. Vraag nieuw wachtwoord aan.');
-    throw new Error('E-mailadres of wachtwoord is onjuist');
+    if (locked) throw new Error('Account locked after 3 failed attempts. Request a new password.');
+    throw new Error('Email address or password is incorrect');
   }
 
   const pool = await getPool();
@@ -138,7 +138,7 @@ async function resetPassword(token, password) {
     .query('SELECT * FROM dbo.password_reset_tokens WHERE token_hash = @hash AND expires_at > SYSUTCDATETIME() AND used_at IS NULL');
 
   const record = result.recordset[0];
-  if (!record) throw new Error('Resetlink is ongeldig of verlopen');
+  if (!record) throw new Error('Reset link is invalid or expired');
 
   await setPasswordForUser(record.user_id, password);
 

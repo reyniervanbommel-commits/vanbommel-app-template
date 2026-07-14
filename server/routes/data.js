@@ -148,7 +148,7 @@ router.get('/:tableKey', async (req, res, next) => {
         await dataService.refresh(tableKey);
         refreshed = true;
       } catch (refreshErr) {
-        refreshError = 'Verversen mislukt';
+        refreshError = 'Refresh failed';
       }
     }
     const data = await dataService.read({ tableKey, userId: req.user.id });
@@ -209,7 +209,7 @@ router.get('/:tableKey/columns', async (req, res, next) => {
   try {
     const scope = req.query.scope ? String(req.query.scope) : null;
     if (scope && !registry.SCOPES.includes(scope)) {
-      return res.status(400).json({ error: 'Ongeldige scope' });
+      return res.status(400).json({ error: 'Invalid scope' });
     }
     const table = await registry.getTableByKey(req.params.tableKey);
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
@@ -242,7 +242,7 @@ router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
     const resultType = String(req.body?.dataType || 'number').trim() || 'number';
     const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
     if (!normalized.expression) {
-      return res.status(400).json({ error: 'Formule is verplicht' });
+      return res.status(400).json({ error: 'Formula is required' });
     }
     const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
     columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
@@ -266,7 +266,7 @@ router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const hasFormulaPayload = req.body && (
       Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
       || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
@@ -299,7 +299,7 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
 router.delete('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const result = await columnsService.deactivateColumn(columnId, req.user.id);
     return res.json(result);
   } catch (err) {
@@ -311,7 +311,7 @@ router.delete('/:tableKey/columns/:id', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setColumnVisibility(columnId, Boolean(req.body?.visible), req.user.id);
     return res.json({ column });
   } catch (err) {
@@ -323,7 +323,7 @@ router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setVisibleAtDelete(columnId, Boolean(req.body?.visible), req.user.id);
     return res.json({ column });
   } catch (err) {
@@ -335,7 +335,7 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
 router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setWriteBackConfig(
       columnId,
       { writable: req.body?.writable, mechanism: req.body?.mechanism },
@@ -352,7 +352,7 @@ router.put('/:tableKey/value', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
     const id = toColumnId(columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
     const saved = await dataService.saveCustomValue(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value },
       req.user.id,
@@ -404,7 +404,7 @@ router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (re
 router.get('/:tableKey/history', async (req, res, next) => {
   try {
     const id = toColumnId(req.query.columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
     const history = await dataService.getCellHistory({
       tableKey: req.params.tableKey,
       columnId: id,
@@ -423,7 +423,7 @@ router.post('/:tableKey/correct', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
     const id = toColumnId(columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
     const result = await dataService.correctField(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
       req.user.id,

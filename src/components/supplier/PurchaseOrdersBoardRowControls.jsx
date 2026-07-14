@@ -25,7 +25,7 @@ function PurchaseOrdersBoardRowControls({
             className={styles.rowCheckbox}
             checked={selection.isSelected(selectionKey)}
             onChange={handleSelectionChange}
-            aria-label={`Selecteer order ${order.orderNumber}`}
+            aria-label={`Select order ${order.orderNumber}`}
           />
         ) : null}
         <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
@@ -36,7 +36,7 @@ function PurchaseOrdersBoardRowControls({
             className={styles.compactToggleButton}
             data-rowid={rowId}
             onClick={onToggleOrder}
-            aria-label={isExpanded ? `Sluit regels van order ${order.orderNumber}` : `Open regels van order ${order.orderNumber}`}
+            aria-label={isExpanded ? `Collapse lines for order ${order.orderNumber}` : `Expand lines for order ${order.orderNumber}`}
           >
             {isExpanded ? '-' : '+'}
           </Button>

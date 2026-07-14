@@ -24,7 +24,7 @@ function valuesEqual(left, right) {
 }
 
 function createBulkErrorMessage({ updated, skipped, notTried }) {
-  return `Bulkbewerking gestopt door een fout. Bijgewerkt: ${updated}. Overgeslagen (al gelijk): ${skipped}. Niet geprobeerd (na fout): ${notTried}.`;
+  return `Bulk edit stopped due to an error. Updated: ${updated}. Skipped (already equal): ${skipped}. Not attempted (after error): ${notTried}.`;
 }
 
 /**

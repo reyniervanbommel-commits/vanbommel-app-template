@@ -182,7 +182,7 @@ export default function PurchaseOrderWriteBackCell({
       savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch (err) {
       setStatus('error');
-      setError(err.message || 'Terugschrijven mislukt');
+      setError(err.message || 'Write-back failed');
       setLocal(toInputValue(value, column.dataType, treatAsDate)); // oude waarde terug
     }
   }, [local, value, column, onCorrect]);
@@ -246,7 +246,7 @@ export default function PurchaseOrderWriteBackCell({
       ) : (
         inputControl
       )}
-      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Terugschrijven" /> : null}
+      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Write back" /> : null}
       {status === 'saved' ? <span className={styles.saved}>✓</span> : null}
       {status === 'error' ? (
         <Tooltip content={error} relationship="label">

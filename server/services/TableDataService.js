@@ -98,7 +98,7 @@ function isRefreshRunning(tableKey) {
 
 async function startRefresh(tableKey) {
   const key = String(tableKey || '').trim();
-  if (!key) throw Object.assign(new Error('Ongeldige tabelkey'), { status: 400 });
+  if (!key) throw Object.assign(new Error('Invalid table key'), { status: 400 });
   if (refreshJobsByTable.has(key)) {
     return {
       started: false,
@@ -779,7 +779,7 @@ const FETCH_ADAPTERS = {
 function getFetchAdapter(table) {
   const adapter = FETCH_ADAPTERS[table.key];
   if (!adapter) {
-    throw Object.assign(new Error(`Geen fetch-adapter voor tabel '${table.key}' (komt in Fase B via SourceProvider)`), { status: 501 });
+    throw Object.assign(new Error(`No fetch adapter for table '${table.key}' (coming in Phase B via SourceProvider)`), { status: 501 });
   }
   return adapter;
 }
@@ -960,7 +960,7 @@ function ensureUniqueLookupDerivedKey(baseKey, usedKeys) {
     const withSuffix = sanitizeLookupDerivedKey(`${normalized}_${i}`) || `lookup_${i}`;
     if (!usedKeys.has(withSuffix.toLowerCase())) return withSuffix;
   }
-  throw new Error(`Kon geen unieke lookup-kolomkey maken voor '${baseKey}'`);
+  throw new Error(`Could not create a unique lookup column key for '${baseKey}'`);
 }
 
 function buildLookupFieldMap({ targetTableKey, targetFieldKeys, existingFields = {} }) {
@@ -1120,7 +1120,7 @@ function nextUniqueKey(baseKey, existingKeys) {
     const withSuffix = `${baseKey}_${i}`.slice(0, MAX_KEY_LENGTH);
     if (!existingKeys.has(withSuffix.toLowerCase())) return withSuffix;
   }
-  throw new Error(`Kon geen unieke key bepalen voor '${baseKey}'`);
+  throw new Error(`Could not determine a unique key for '${baseKey}'`);
 }
 
 function collectDiscoveredFields(records, level) {
@@ -1819,7 +1819,7 @@ async function refresh(tableKey, options = {}) {
     updateRefreshProgress(tableKey, {
       status: 'error',
       finishedAt: new Date().toISOString(),
-      error: err.message || 'Refresh mislukt',
+      error: err.message || 'Refresh failed',
     });
     throw err;
   }
@@ -2039,16 +2039,16 @@ function isFormulaColumn(column) {
 
 function assertCustomColumnWritable(column) {
   if (!column || column.source !== 'custom') {
-    throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
+    throw Object.assign(new Error('Only custom columns are editable'), { status: 400 });
   }
   if (String(column?.dataType || '').toLowerCase() === 'image') {
-    throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
+    throw Object.assign(new Error('Image columns are read-only'), { status: 400 });
   }
   if (String(column?.dataType || '').toLowerCase() === 'remarks') {
-    throw Object.assign(new Error('Remarks-kolommen ondersteunen geen directe waardewrites'), { status: 400 });
+    throw Object.assign(new Error('Remarks columns do not support direct value writes'), { status: 400 });
   }
   if (isFormulaColumn(column)) {
-    throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
+    throw Object.assign(new Error('Formula columns are read-only'), { status: 400 });
   }
 }
 
@@ -2066,7 +2066,7 @@ function compileMasterFormulaColumns(masterColumns) {
         return {
           column,
           compiled: null,
-          compileError: `Ongeldige formule: ${err?.message || 'Onbekende fout'}`,
+          compileError: `Invalid formula: ${err?.message || 'Unknown error'}`,
         };
       }
     });
@@ -2569,7 +2569,7 @@ async function getLastViewedAt(tableId) {
 }
 
 async function markViewed(userId, tableKey) {
-  if (!userId) throw Object.assign(new Error('Geen gebruiker'), { status: 401 });
+  if (!userId) throw Object.assign(new Error('No user'), { status: 401 });
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
   await pool.request()
@@ -2593,25 +2593,25 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
   if (!column || !column.isActive || column.tableId !== table.id) {
-    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+    throw Object.assign(new Error('Column not found'), { status: 404 });
   }
   assertCustomColumnWritable(column);
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
-  if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
+  if (!part || !record) throw Object.assign(new Error('partitionKey and recordKey are required'), { status: 400 });
   if (part.length > 32 || record.length > 128) {
-    throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+    throw Object.assign(new Error('partitionKey or recordKey is too long'), { status: 400 });
   }
   if (part.length > 32 || record.length > 128) {
-    throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+    throw Object.assign(new Error('partitionKey or recordKey is too long'), { status: 400 });
   }
-  if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+  if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey or recordKey is too long'), { status: 400 });
 
   let resolvedDetail = MASTER_DETAIL_KEY;
   if (column.scope === 'detail') {
     const dk = toNumberOrNull(detailKey);
-    if (dk === null) throw Object.assign(new Error('detailKey is verplicht voor een detail-kolom'), { status: 400 });
+    if (dk === null) throw Object.assign(new Error('detailKey is required for a detail column'), { status: 400 });
     resolvedDetail = dk;
   }
 
@@ -2620,23 +2620,23 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   if (!empty) {
     if (column.dataType === 'number') {
       valueNumber = toNumberOrNull(value);
-      if (valueNumber === null) throw Object.assign(new Error('Waarde moet een getal zijn'), { status: 400 });
+      if (valueNumber === null) throw Object.assign(new Error('Value must be a number'), { status: 400 });
     } else if (column.dataType === 'date') {
       valueDate = toDateOrNull(value);
-      if (valueDate === null) throw Object.assign(new Error('Waarde moet een datum zijn'), { status: 400 });
+      if (valueDate === null) throw Object.assign(new Error('Value must be a date'), { status: 400 });
     } else if (column.dataType === 'boolean') {
       valueBool = value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0;
     } else if (column.dataType === 'select') {
       const allowed = Array.isArray(column.options) ? column.options : [];
       const str = String(value);
-      if (allowed.length && !allowed.includes(str)) throw Object.assign(new Error('Waarde valt buiten de keuzelijst'), { status: 400 });
+      if (allowed.length && !allowed.includes(str)) throw Object.assign(new Error('Value is outside the choice list'), { status: 400 });
       valueText = str;
     } else if (column.dataType === 'status') {
       const { getAllowedStatusLabels } = require('../utils/statusColumnOptions');
       const allowed = getAllowedStatusLabels(column.options);
       const str = String(value ?? '').trim();
       if (str && allowed.length && !allowed.includes(str)) {
-        throw Object.assign(new Error('Waarde valt buiten de statuslabels'), { status: 400 });
+        throw Object.assign(new Error('Value is outside the status labels'), { status: 400 });
       }
       valueText = str || null;
     } else {
@@ -2789,9 +2789,9 @@ function normalizeExclusionRows(rows) {
 async function excludeRows({ tableKey, rows }, userId) {
   const table = await getTableByKey(tableKey);
   const normalized = normalizeExclusionRows(rows);
-  if (!normalized.length) throw Object.assign(new Error('Geen geldige rijen om te verwijderen'), { status: 400 });
+  if (!normalized.length) throw Object.assign(new Error('No valid rows to delete'), { status: 400 });
   if (normalized.length > MAX_EXCLUSION_BATCH) {
-    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+    throw Object.assign(new Error(`Maximum ${MAX_EXCLUSION_BATCH} rows at a time`), { status: 400 });
   }
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
@@ -2853,9 +2853,9 @@ async function excludeRows({ tableKey, rows }, userId) {
 async function includeRows({ tableKey, rows }, userId) {
   const table = await getTableByKey(tableKey);
   const normalized = normalizeExclusionRows(rows);
-  if (!normalized.length) throw Object.assign(new Error('Geen geldige rijen om terug te zetten'), { status: 400 });
+  if (!normalized.length) throw Object.assign(new Error('No valid rows to restore'), { status: 400 });
   if (normalized.length > MAX_EXCLUSION_BATCH) {
-    throw Object.assign(new Error(`Maximaal ${MAX_EXCLUSION_BATCH} rijen per keer`), { status: 400 });
+    throw Object.assign(new Error(`Maximum ${MAX_EXCLUSION_BATCH} rows at a time`), { status: 400 });
   }
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
@@ -2940,21 +2940,21 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
   if (!column || !column.isActive || column.tableId !== table.id) {
-    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+    throw Object.assign(new Error('Column not found'), { status: 404 });
   }
   if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
-    throw Object.assign(new Error('Deze kolom is niet ingesteld voor write-back naar D365'), { status: 400 });
+    throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
   }
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
-  if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
+  if (!part || !record) throw Object.assign(new Error('partitionKey and recordKey are required'), { status: 400 });
 
   const level = column.scope === 'detail' ? 'line' : 'header';
   let resolvedDetail = MASTER_DETAIL_KEY;
   if (column.scope === 'detail') {
     const dk = toNumberOrNull(detailKey);
-    if (dk === null) throw Object.assign(new Error('detailKey is verplicht voor een regel-kolom'), { status: 400 });
+    if (dk === null) throw Object.assign(new Error('detailKey is required for a line column'), { status: 400 });
     resolvedDetail = dk;
   }
 
@@ -2994,7 +2994,7 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   } catch (err) {
     await pool.request()
       .input('id', sql.BigInt, correctionId)
-      .input('err', sql.NVarChar(sql.MAX), err.message || 'Onbekende fout')
+      .input('err', sql.NVarChar(sql.MAX), err.message || 'Unknown error')
       .query("UPDATE dbo.tb_field_corrections SET status = 'failed', error = @err WHERE id = @id");
     throw err;
   }
@@ -3085,17 +3085,17 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
   if (!column || !column.isActive || column.tableId !== table.id) {
-    throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+    throw Object.assign(new Error('Column not found'), { status: 404 });
   }
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
-  if (!part || !record) throw Object.assign(new Error('partitionKey en recordKey zijn verplicht'), { status: 400 });
-  if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey of recordKey is te lang'), { status: 400 });
+  if (!part || !record) throw Object.assign(new Error('partitionKey and recordKey are required'), { status: 400 });
+  if (part.length > 32 || record.length > 128) throw Object.assign(new Error('partitionKey or recordKey is too long'), { status: 400 });
 
   let resolvedDetail = MASTER_DETAIL_KEY;
   if (column.scope === 'detail') {
     const dk = toNumberOrNull(detailKey);
-    if (dk === null) throw Object.assign(new Error('detailKey is verplicht voor een regel-kolom'), { status: 400 });
+    if (dk === null) throw Object.assign(new Error('detailKey is required for a line column'), { status: 400 });
     resolvedDetail = dk;
   }
 
@@ -3444,7 +3444,7 @@ async function saveTableDefaultFilter(tableId, rules) {
 async function saveSyncFilters(tableKey, rules) {
   const table = await getTableByKey(tableKey);
   if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
-    throw Object.assign(new Error('Deze tabel erft automatisch de Purchase Orders-filter en kan niet handmatig worden aangepast.'), { status: 400 });
+    throw Object.assign(new Error('This table automatically inherits the Purchase Orders filter and cannot be changed manually.'), { status: 400 });
   }
   const list = Array.isArray(rules) ? rules : [];
   const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
@@ -3461,7 +3461,7 @@ async function saveSyncFilters(tableKey, rules) {
 async function countSyncFilter(tableKey, rules) {
   const table = await getTableByKey(tableKey);
   if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
-    throw Object.assign(new Error('Deze tabel gebruikt automatisch de Purchase Orders-filter.'), { status: 400 });
+    throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
   }
   const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
   let result;

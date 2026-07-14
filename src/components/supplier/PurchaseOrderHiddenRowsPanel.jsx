@@ -78,7 +78,7 @@ const useStyles = makeStyles({
 function formatValue(value, dataType) {
   if (value === null || value === undefined || value === '') return '—';
   if (dataType === 'date' && typeof value === 'string' && value.length >= 10) return value.slice(0, 10);
-  if (typeof value === 'boolean') return value ? 'Ja' : 'Nee';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
@@ -104,14 +104,14 @@ function PurchaseOrderHiddenRowsPanel({ hiddenRows, columns = [], count, loading
         <Button appearance="subtle" size="small" icon={<EyeOffRegular />}>
           <span className={styles.trigger}>
             <Badge color="warning" appearance="tint">{count}</Badge>
-            verborgen in D365-filter
+            hidden in D365 filter
           </span>
         </Button>
       </PopoverTrigger>
       <PopoverSurface className={styles.surface}>
         <div className={styles.header}>
           <span className={styles.headerText}>
-            {count} verwijderde {count === 1 ? 'order valt' : 'orders vallen'} nog binnen de harde D365-filter.
+            {count} deleted {count === 1 ? 'order still falls' : 'orders still fall'} within the hard D365 filter.
           </span>
           <Button
             appearance="primary"
@@ -120,14 +120,14 @@ function PurchaseOrderHiddenRowsPanel({ hiddenRows, columns = [], count, loading
             onClick={handleRestoreAll}
             disabled={restoring || loading}
           >
-            Alles terugzetten
+            Restore all
           </Button>
         </div>
         <div className={styles.tableWrap}>
           {loading ? (
-            <div className={styles.empty}>Laden...</div>
+            <div className={styles.empty}>Loading...</div>
           ) : hiddenRows.length === 0 ? (
-            <div className={styles.empty}>Geen verborgen rijen.</div>
+            <div className={styles.empty}>No hidden rows.</div>
           ) : (
             <Table size="small">
               <TableHeader>
@@ -161,7 +161,7 @@ function PurchaseOrderHiddenRowsPanel({ hiddenRows, columns = [], count, loading
                         onClick={() => handleRestoreOne(row)}
                         disabled={restoring}
                       >
-                        Terugzetten
+                        Restore
                       </Button>
                     </TableCell>
                   </TableRow>

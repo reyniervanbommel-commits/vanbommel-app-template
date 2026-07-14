@@ -38,12 +38,12 @@ function UserSecurityActionsComponent({
         onChange={handleActionChange}
         contentAfter={<ChevronDown24Regular />}
       >
-        <option value="">Actie kiezen</option>
-        <option value="permissions">Rechten beheren</option>
-        <option value="lock-toggle">{user.is_locked ? 'Deblokkeren' : 'Blokkeren'}</option>
-        <option value="mfa-toggle">{user.mfa_required ? 'MFA optioneel maken' : 'MFA verplicht maken'}</option>
-        <option value="force-reset">Wachtwoord reset forceren</option>
-        <option value="remove">Gebruiker verwijderen</option>
+        <option value="">Choose action</option>
+        <option value="permissions">Manage permissions</option>
+        <option value="lock-toggle">{user.is_locked ? 'Unlock' : 'Lock'}</option>
+        <option value="mfa-toggle">{user.mfa_required ? 'Make MFA optional' : 'Require MFA'}</option>
+        <option value="force-reset">Force password reset</option>
+        <option value="remove">Delete user</option>
       </Select>
     </Field>
   );

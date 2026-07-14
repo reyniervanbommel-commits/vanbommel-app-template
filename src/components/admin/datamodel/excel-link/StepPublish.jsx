@@ -42,7 +42,7 @@ const useStyles = makeStyles({
 /**
  * Stap 4: valideren & publiceren.
  * - Publiceren disabled bij duplicaten (hard-fail) of terwijl bezig.
- * - Lage match (<50%) is een waarschuwing maar wel publiceerbaar.
+ * - Low match (<50%) is een waarschuwing maar wel publiceerbaar.
  */
 export default function StepPublish({
   fieldsMap,
@@ -72,13 +72,13 @@ export default function StepPublish({
   return (
     <div className={styles.root}>
       <div className={styles.section}>
-        <Text weight="semibold">Verrijkingskolommen ({fieldEntries.length})</Text>
+        <Text weight="semibold">Enrichment columns ({fieldEntries.length})</Text>
         <div className={styles.tableWrap}>
           <Table size="small">
             <TableHeader>
               <TableRow>
-                <TableHeaderCell>Kolom-sleutel</TableHeaderCell>
-                <TableHeaderCell>Bron (datasetkolom)</TableHeaderCell>
+                <TableHeaderCell>Column key</TableHeaderCell>
+                <TableHeaderCell>Source (dataset column)</TableHeaderCell>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -100,38 +100,38 @@ export default function StepPublish({
           icon={validating ? <Spinner size="tiny" /> : undefined}
           onClick={onValidate}
         >
-          {validating ? 'Valideren...' : 'Valideren'}
+          {validating ? 'Validating...' : 'Validate'}
         </Button>
         {published ? (
-          <Badge appearance="filled" color="success" size="large">Gepubliceerd</Badge>
+          <Badge appearance="filled" color="success" size="large">Published</Badge>
         ) : hasDuplicates ? (
-          <Badge appearance="filled" color="danger" size="large">Dubbele sleutels</Badge>
+          <Badge appearance="filled" color="danger" size="large">Duplicate keys</Badge>
         ) : isLowMatch ? (
-          <Badge appearance="filled" color="warning" size="large">Lage match</Badge>
+          <Badge appearance="filled" color="warning" size="large">Low match</Badge>
         ) : validation ? (
-          <Badge appearance="filled" color="success" size="large">Klaar</Badge>
+          <Badge appearance="filled" color="success" size="large">Ready</Badge>
         ) : null}
       </div>
 
       {validation ? (
         <div className={styles.section}>
           <div className={styles.row}>
-            <Text weight="semibold">Match-rate:</Text>
+            <Text weight="semibold">Match rate:</Text>
             <Badge appearance="tint" color={isLowMatch ? 'warning' : 'success'} size="small">{ratePct}</Badge>
             <span className={styles.muted}>
-              {(validation.matchRate?.matched ?? 0).toLocaleString('nl-NL')} van{' '}
-              {(validation.matchRate?.total ?? 0).toLocaleString('nl-NL')} sleutels gematcht
+              {(validation.matchRate?.matched ?? 0).toLocaleString('en-US')} of{' '}
+              {(validation.matchRate?.total ?? 0).toLocaleString('en-US')} keys matched
             </span>
           </div>
           {isLowMatch ? (
             <Text className={styles.muted} block>
-              Waarschuwing: minder dan de helft van de sleutels matcht. Publiceren blijft mogelijk,
-              maar controleer of het juiste sleutelveld gekozen is.
+              Warning: fewer than half of the keys match. Publishing is still allowed,
+              but verify that the correct key field was selected.
             </Text>
           ) : null}
 
           <div className={styles.row}>
-            <Text weight="semibold">Dubbele sleutels:</Text>
+            <Text weight="semibold">Duplicate keys:</Text>
             <Badge appearance="tint" color={hasDuplicates ? 'danger' : 'success'} size="small">
               {(validation.duplicates?.count ?? 0).toLocaleString('nl-NL')}
             </Badge>
@@ -139,15 +139,15 @@ export default function StepPublish({
           {hasDuplicates ? (
             <>
               <Text className={styles.muted} block>
-                Publiceren is geblokkeerd zolang de dataset dubbele sleutelwaarden bevat.
-                Voorbeelden: {(validation.duplicates?.examples || [])
+                Publishing is blocked while the dataset contains duplicate key values.
+                Examples: {(validation.duplicates?.examples || [])
                   .map((e) => `${e.value} (${e.count}×)`).join(', ') || '—'}
               </Text>
             </>
           ) : null}
         </div>
       ) : (
-        <Text className={styles.muted} block>Voer eerst een validatie uit voordat je publiceert.</Text>
+        <Text className={styles.muted} block>Run validation first before publishing.</Text>
       )}
 
       {actionError ? <Text className={styles.error} block>{actionError}</Text> : null}
@@ -159,11 +159,11 @@ export default function StepPublish({
           icon={publishing ? <Spinner size="tiny" /> : <CheckmarkCircleRegular />}
           onClick={onPublish}
         >
-          {publishing ? 'Publiceren...' : 'Publiceren'}
+          {publishing ? 'Publishing...' : 'Publish'}
         </Button>
         {published ? (
           <span className={styles.muted}>
-            Koppeling aangemaakt{publishResult?.relationId ? ` (relatie ${publishResult.relationId})` : ''}.
+            Link created{publishResult?.relationId ? ` (relatie ${publishResult.relationId})` : ''}.
           </span>
         ) : null}
       </div>

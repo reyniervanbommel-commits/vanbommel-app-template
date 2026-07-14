@@ -45,8 +45,8 @@ const useStyles = makeStyles({
 
 const AUTH_LABELS = {
   oauth_client_credentials: { label: 'OAuth2 client-credentials', color: 'success' },
-  static_bearer_token: { label: 'Statisch bearer token (legacy)', color: 'warning' },
-  none: { label: 'Niet geconfigureerd', color: 'danger' },
+  static_bearer_token: { label: 'Static bearer token (legacy)', color: 'warning' },
+  none: { label: 'Not configured', color: 'danger' },
 };
 
 const EMPTY_FORM = {
@@ -118,7 +118,7 @@ export default function AdminODataSettings() {
       const payload = { ...form };
       if (!payload.D365_ODATA_CLIENT_SECRET) delete payload.D365_ODATA_CLIENT_SECRET;
       await apiRequest('/admin/settings/odata', { method: 'POST', body: payload });
-      setFeedback('Instellingen opgeslagen in SQL (dbo.app_settings).');
+      setFeedback('Settings saved in SQL (dbo.app_settings).');
       await loadSettings();
     } catch (err) {
       setError(err.message);
@@ -134,7 +134,7 @@ export default function AdminODataSettings() {
   return (
     <div className={styles.root}>
       <div className={styles.pageHeader}>
-        <Text size={600} weight="semibold">OData-koppeling (D365)</Text>
+        <Text size={600} weight="semibold">OData connection (D365)</Text>
         <ODataInfoDialog />
       </div>
 
@@ -166,8 +166,8 @@ export default function AdminODataSettings() {
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Verbinding</Text>
-        <Field label="OData basis-URL">
+        <Text weight="semibold" className={styles.sectionTitle}>Connection</Text>
+        <Field label="OData base URL">
           <Input
             placeholder="https://vanbommel-acc.sandbox.operations.dynamics.com"
             value={form.D365_ODATA_BASE_URL}
@@ -185,7 +185,7 @@ export default function AdminODataSettings() {
           Lines are loaded from the related entity via <span className={styles.mono}>$expand=PurchaseOrderLines</span>.
           Line-level write-back targets <span className={styles.mono}>/data/PurchaseOrderLinesV2</span>.
         </Text>
-        <Field label="Bedrijfscode (company)">
+        <Field label="Company code">
           <Input placeholder="WHSL" value={form.D365_ODATA_COMPANY} onChange={handleChange('D365_ODATA_COMPANY')} />
         </Field>
         <Field label="Timeout (ms)">
@@ -194,7 +194,7 @@ export default function AdminODataSettings() {
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Authenticatie — OAuth2 client-credentials</Text>
+        <Text weight="semibold" className={styles.sectionTitle}>Authentication — OAuth2 client-credentials</Text>
         <Text className={styles.hint} block>
           Aanbevolen methode. De app haalt zelf een token op bij Azure AD en ververst het automatisch
           vóór expiry. Scope = basis-URL + <span className={styles.mono}>/.default</span>.
@@ -202,33 +202,33 @@ export default function AdminODataSettings() {
         <Field label="Tenant ID">
           <Input placeholder="00000000-0000-0000-0000-000000000000" value={form.D365_ODATA_TENANT_ID} onChange={handleChange('D365_ODATA_TENANT_ID')} />
         </Field>
-        <Field label="Client ID (app-registratie)">
+        <Field label="Client ID (app registration)">
           <Input placeholder="00000000-0000-0000-0000-000000000000" value={form.D365_ODATA_CLIENT_ID} onChange={handleChange('D365_ODATA_CLIENT_ID')} />
         </Field>
         <Field
           label="Client secret"
-          hint={secretSet.clientSecret ? 'Er is een secret ingesteld. Laat leeg om te behouden; vul in om te vervangen.' : 'Nog geen secret ingesteld.'}
+          hint={secretSet.clientSecret ? 'A secret is configured. Leave empty to keep it; enter a value to replace it.' : 'No secret configured yet.'}
         >
-          <Input type="password" placeholder={secretSet.clientSecret ? '•••••••• (ingesteld)' : 'Client secret'} value={form.D365_ODATA_CLIENT_SECRET} onChange={handleChange('D365_ODATA_CLIENT_SECRET')} />
+          <Input type="password" placeholder={secretSet.clientSecret ? '•••••••• (configured)' : 'Client secret'} value={form.D365_ODATA_CLIENT_SECRET} onChange={handleChange('D365_ODATA_CLIENT_SECRET')} />
         </Field>
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Cache-synchronisatie</Text>
+        <Text weight="semibold" className={styles.sectionTitle}>Cache sync</Text>
         <Text className={styles.hint} block>
           Controls cache limits and freshness. Purchase order filters are managed on the Data model tab.
         </Text>
-        <Field label="Max. aantal orders per sync (cap)">
+        <Field label="Max orders per sync (cap)">
           <Input type="number" placeholder="2000" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
         </Field>
-        <Field label="Cache verouderd na (minuten)">
+        <Field label="Cache stale after (minutes)">
           <Input type="number" placeholder="15" value={form.PO_CACHE_STALE_MINUTES} onChange={handleChange('PO_CACHE_STALE_MINUTES')} />
         </Field>
       </div>
 
       <div className={styles.actions}>
         <Button appearance="primary" icon={<Save24Regular />} onClick={handleSave} disabled={saving}>
-          {saving ? 'Opslaan...' : 'Opslaan in database'}
+          {saving ? 'Saving...' : 'Save to database'}
         </Button>
         {feedback && <Text className={styles.feedback}>{feedback}</Text>}
         {error && <Text className={styles.error}>{error}</Text>}

@@ -124,7 +124,7 @@ export default function DevPerfOverlay() {
 
   if (!open) {
     return (
-      <div className={styles.badge} onClick={() => setOpen(true)} title="Performance-HUD openen">
+      <div className={styles.badge} onClick={() => setOpen(true)} title="Open performance HUD">
         <TopSpeedRegular fontSize={14} color={tokens.colorBrandForeground1} />
         <span className={styles.badgeText}>
           {lastApi ? `${fmtMs(lastApi.ms)}` : 'PERF'}
@@ -141,38 +141,38 @@ export default function DevPerfOverlay() {
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Laadtijd (deze pagina)</div>
+        <div className={styles.sectionTitle}>Load time (this page)</div>
         {nav ? (
           <>
             <div className={styles.row}><span>TTFB</span><span className={styles.mono}>{fmtMs(nav.ttfb)}</span></div>
             <div className={styles.row}><span>DOMContentLoaded</span><span className={styles.mono}>{fmtMs(nav.domContentLoaded)}</span></div>
-            <div className={styles.row}><span>Volledig geladen</span><span className={styles.mono} style={{ color: durColor(nav.load) }}>{fmtMs(nav.load)}</span></div>
-            <div className={styles.row}><span>JS/CSS overgedragen</span><span className={styles.mono}>{transferKB != null ? `${transferKB} KB` : '—'}</span></div>
+            <div className={styles.row}><span>Fully loaded</span><span className={styles.mono} style={{ color: durColor(nav.load) }}>{fmtMs(nav.load)}</span></div>
+            <div className={styles.row}><span>JS/CSS transferred</span><span className={styles.mono}>{transferKB != null ? `${transferKB} KB` : '—'}</span></div>
           </>
         ) : (
-          <div className={styles.empty}>nog geen navigatie-timing…</div>
+          <div className={styles.empty}>no navigation timing yet…</div>
         )}
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Laatste D365-sync (server)</div>
+        <div className={styles.sectionTitle}>Latest D365 sync (server)</div>
         {syncMetrics ? (
           <>
-            <div className={styles.row}><span>Ophalen (D365)</span><span className={styles.mono} style={{ color: durColor(syncMetrics.fetchMs) }}>{fmtMs(syncMetrics.fetchMs)}</span></div>
-            <div className={styles.row}><span>Opslaan (SQL)</span><span className={styles.mono} style={{ color: durColor(syncMetrics.saveMs) }}>{fmtMs(syncMetrics.saveMs)}</span></div>
-            <div className={styles.row}><span>Totaal</span><span className={styles.mono}>{fmtMs(syncMetrics.totalMs)}</span></div>
-            <div className={styles.row}><span>Geschreven / overgeslagen</span><span className={styles.mono}>{syncMetrics.writtenOrders} / {syncMetrics.skippedOrders}</span></div>
+            <div className={styles.row}><span>Fetch (D365)</span><span className={styles.mono} style={{ color: durColor(syncMetrics.fetchMs) }}>{fmtMs(syncMetrics.fetchMs)}</span></div>
+            <div className={styles.row}><span>Save (SQL)</span><span className={styles.mono} style={{ color: durColor(syncMetrics.saveMs) }}>{fmtMs(syncMetrics.saveMs)}</span></div>
+            <div className={styles.row}><span>Total</span><span className={styles.mono}>{fmtMs(syncMetrics.totalMs)}</span></div>
+            <div className={styles.row}><span>Written / skipped</span><span className={styles.mono}>{syncMetrics.writtenOrders} / {syncMetrics.skippedOrders}</span></div>
             <div className={styles.row}><span>Orders/sec</span><span className={styles.mono}>{syncMetrics.ordersPerSec ?? '—'}</span></div>
           </>
         ) : (
-          <div className={styles.empty}>nog geen sync in dit serverproces…</div>
+          <div className={styles.empty}>no sync in this server process yet…</div>
         )}
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Recente API-calls ({timings.length})</div>
+        <div className={styles.sectionTitle}>Recent API calls ({timings.length})</div>
         {timings.length === 0 ? (
-          <div className={styles.empty}>nog geen calls</div>
+          <div className={styles.empty}>no calls yet</div>
         ) : (
           timings.slice(0, 12).map((t, i) => (
             <div className={styles.row} key={i}>

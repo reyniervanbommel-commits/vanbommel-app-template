@@ -14,7 +14,7 @@ export function usePurchaseOrderFormulaValidation() {
   const validateFormula = useCallback(async ({ formulaExpr, ownColumnKey = '', dataType = 'number' }) => {
     const cleanFormula = String(formulaExpr || '').trim();
     if (!cleanFormula) {
-      const message = 'Formule is verplicht';
+      const message = 'Formula is required';
       setFormulaValidation({
         status: 'invalid',
         message,
@@ -37,13 +37,13 @@ export function usePurchaseOrderFormulaValidation() {
       const normalizedExpression = String(result?.normalizedExpression || cleanFormula);
       setFormulaValidation({
         status: 'valid',
-        message: 'Formule is geldig.',
+        message: 'Formula is valid.',
         tip: '',
         normalizedExpression,
       });
       return { valid: true, normalizedExpression };
     } catch (err) {
-      const message = err?.message || 'Formule is ongeldig';
+      const message = err?.message || 'Formula is invalid';
       setFormulaValidation({
         status: 'invalid',
         message,

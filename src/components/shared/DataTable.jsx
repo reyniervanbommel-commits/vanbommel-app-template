@@ -184,7 +184,7 @@ function DataTable({ columns, items }) {
             className={mergeClasses(styles.cell, styles.emptyStateCell)}
             colSpan={Math.max(columns.length, 1)}
           >
-            Geen gegevens gevonden
+            No data found
           </TableCell>
         </TableRow>,
       ];

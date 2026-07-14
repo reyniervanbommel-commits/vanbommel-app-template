@@ -209,27 +209,27 @@ export default function PurchaseOrdersPageTopBar({
             <div className={styles.freshness}>
               {hasCache ? (
                 <>
-                  <Text size={200} className={styles.freshnessLabel}>Laatst ververst:</Text>
+                  <Text size={200} className={styles.freshnessLabel}>Last refreshed:</Text>
                   <Text size={200} weight="medium" className={styles.freshnessValue}>
-                    {relativeSynced || 'onbekend'}
+                    {relativeSynced || 'unknown'}
                   </Text>
                 </>
               ) : (
-                <Text size={200} className={styles.freshnessLabel}>Laatst ververst: onbekend</Text>
+                <Text size={200} className={styles.freshnessLabel}>Last refreshed: unknown</Text>
               )}
               {hasCache ? (
                 stale ? (
-                  <Badge color="warning" appearance="tint">Verouderd</Badge>
+                  <Badge color="warning" appearance="tint">Stale</Badge>
                 ) : (
-                  <Badge color="success" appearance="tint">Actueel</Badge>
+                  <Badge color="success" appearance="tint">Current</Badge>
                 )
               ) : (
-                <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+                <Badge color="warning" appearance="tint">Not synced yet</Badge>
               )}
             </div>
             <Divider vertical />
             <div className={styles.totalWrap}>
-              <Text size={200} className={styles.freshnessLabel}>Totaal</Text>
+              <Text size={200} className={styles.freshnessLabel}>Total</Text>
               <Badge appearance="outline" color="brand">{total}</Badge>
             </div>
           </div>

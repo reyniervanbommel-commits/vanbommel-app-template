@@ -21,7 +21,7 @@ const useStyles = makeStyles({
 
 /**
  * Admin tab "Data model": configureer kolommen en syncfilters per entiteit (PO, vendors, items),
- * plus een tab "Externe koppelingen" om een Excel als read-only verrijking te koppelen (#AB:162/#195).
+ * plus een tab "External links" om een Excel als read-only verrijking te koppelen (#AB:162/#195).
  */
 export default function AdminDataModel() {
   const styles = useStyles();
@@ -43,20 +43,20 @@ export default function AdminDataModel() {
         <Text size={600} weight="semibold" block>Data model</Text>
         <Text className={styles.intro} block>
           Configure columns and sync filters per D365 entity.
-          Use "Externe koppelingen" to publish Excel lookups as read-only enrichment columns.
+          Use "External links" to publish Excel lookups as read-only enrichment columns.
         </Text>
       </div>
 
       <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)}>
-        <Tab value="purchase-orders">Inkooporders</Tab>
-        <Tab value="vendors">Leveranciers</Tab>
-        <Tab value="items">Artikelen</Tab>
-        <Tab value="excel-links">Externe koppelingen</Tab>
+        <Tab value="purchase-orders">Purchase orders</Tab>
+        <Tab value="vendors">Vendors</Tab>
+        <Tab value="items">Itemen</Tab>
+        <Tab value="excel-links">External links</Tab>
       </TabList>
 
       {isDataEntityTab ? (
         selectedModel.loading ? (
-          <Spinner label="Data model laden..." />
+          <Spinner label="Loading data model..." />
         ) : (
           <>
             {selectedModel.error ? <Text className={styles.error} block>{selectedModel.error}</Text> : null}

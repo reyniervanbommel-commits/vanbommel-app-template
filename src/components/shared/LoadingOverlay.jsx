@@ -7,5 +7,5 @@ const useStyles = makeStyles({
 
 export default function LoadingOverlay({ label }) {
   const styles = useStyles();
-  return <div className={styles.overlay}><Spinner label={label || 'Laden...'} /></div>;
+  return <div className={styles.overlay}><Spinner label={label || 'Loading...'} /></div>;
 }

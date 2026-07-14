@@ -49,7 +49,7 @@ export default function AdminPage() {
       <aside className={styles.sidebar}>
         <SidebarNavItem
           icon={Person24Regular}
-          label="Gebruikers"
+          label="Users"
           active={adminTab === 'users'}
           onClick={handleTabUsers}
         />

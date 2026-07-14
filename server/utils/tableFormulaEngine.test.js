@@ -30,14 +30,14 @@ describe('tableFormulaEngine.evaluateCompiledFormula', () => {
     const compiled = compileFormula('(bekend)+(onbekend)');
     const res = evaluateCompiledFormula(compiled, { bekend: 1 }, { resultType: 'number' });
     expect(res.value).toBeNull();
-    expect(res.error).toContain('Onbekende kolomreferentie');
+    expect(res.error).toContain('Unknown column reference');
   });
 
   it('levert runtime-fout bij deling door nul', () => {
     const compiled = compileFormula('(a)/(b)');
     const res = evaluateCompiledFormula(compiled, { a: 12, b: 0 }, { resultType: 'number' });
     expect(res.value).toBeNull();
-    expect(res.error).toContain('Deling door nul');
+    expect(res.error).toContain('Division by zero');
   });
 
   it('behandelt lege operand als 0', () => {

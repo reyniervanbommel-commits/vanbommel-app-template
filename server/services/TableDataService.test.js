@@ -218,7 +218,7 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
     const values = { a: 10, b: 0 };
     const errors = applyFormulaColumnsToRowValues(values, formulas);
     expect(values.ratio).toBeNull();
-    expect(errors.ratio).toContain('Deling door nul');
+    expect(errors.ratio).toContain('Division by zero');
   });
 
   it('evalueert referenties hoofdletter-onafhankelijk', () => {

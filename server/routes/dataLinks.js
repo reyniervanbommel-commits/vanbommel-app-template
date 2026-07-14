@@ -17,7 +17,7 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_BYTES, files: 1 },
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_EXT.test(file.originalname || '')) {
-      return cb(Object.assign(new Error('Alleen .xlsx, .xls of .csv bestanden zijn toegestaan'), { status: 400 }));
+      return cb(Object.assign(new Error('Only .xlsx, .xls or .csv files are allowed'), { status: 400 }));
     }
     return cb(null, true);
   },
@@ -39,8 +39,8 @@ function uploadSingle(req, res, next) {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       const msg = err.code === 'LIMIT_FILE_SIZE'
-        ? `Bestand te groot (max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB)`
-        : `Upload-fout: ${err.message}`;
+        ? `File too large (max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB)`
+        : `Upload error: ${err.message}`;
       return res.status(400).json({ error: msg });
     }
     return res.status(err.status || 400).json({ error: err.message });
@@ -50,7 +50,7 @@ function uploadSingle(req, res, next) {
 // POST /api/data-links/datasets — upload + parse + snapshot (multipart: file, label)
 router.post('/datasets', uploadSingle, async (req, res, next) => {
   try {
-    if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'Geen bestand ontvangen' });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: 'No file received' });
     const dataset = await excelLink.createOrReplaceDataset(
       { label: req.body?.label, fileName: req.file.originalname, buffer: req.file.buffer },
       req.user.id,
@@ -69,7 +69,7 @@ router.post('/validate', async (req, res, next) => {
   try {
     const { datasetTableKey, datasetKeyField, mainTableKey, sourceScope, mainKeyField } = req.body || {};
     if (!datasetTableKey || !datasetKeyField || !mainTableKey || !mainKeyField) {
-      return res.status(400).json({ error: 'datasetTableKey, datasetKeyField, mainTableKey en mainKeyField zijn verplicht' });
+      return res.status(400).json({ error: 'datasetTableKey, datasetKeyField, mainTableKey and mainKeyField are required' });
     }
     return res.json(await excelLink.validateLink({ datasetTableKey, datasetKeyField, mainTableKey, sourceScope, mainKeyField }));
   } catch (err) { return next(err); }

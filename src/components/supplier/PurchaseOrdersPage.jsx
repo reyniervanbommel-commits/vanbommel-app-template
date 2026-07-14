@@ -137,13 +137,13 @@ export default function PurchaseOrdersPage() {
       if (!started) return;
       const finalProgress = await waitForCompletion();
       if (String(finalProgress?.status || '').toLowerCase() === 'error') {
-        setRefreshError(finalProgress?.error || 'D365 refresh mislukt');
+        setRefreshError(finalProgress?.error || 'D365 refresh failed');
         return;
       }
       await reloadAfterRefresh();
       await hiddenRows.reload();
     } catch (err) {
-      setRefreshError(err?.message || 'D365 refresh mislukt');
+      setRefreshError(err?.message || 'D365 refresh failed');
     } finally {
       await finishProgress();
       finishRefresh();

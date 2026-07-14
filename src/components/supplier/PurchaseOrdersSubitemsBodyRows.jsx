@@ -104,10 +104,10 @@ function renderLineCellContent({
   }
 
   const lineBadge = line?.isRemoved
-    ? <Badge appearance="tint" color="danger" size="small">verwijderd</Badge>
+    ? <Badge appearance="tint" color="danger" size="small">removed</Badge>
     : (line?.isNew
-      ? <Badge appearance="tint" color="success" size="small">nieuw</Badge>
-      : (line?.isChanged ? <Badge appearance="tint" color="warning" size="small">gewijzigd</Badge> : null));
+      ? <Badge appearance="tint" color="success" size="small">new</Badge>
+      : (line?.isChanged ? <Badge appearance="tint" color="warning" size="small">changed</Badge> : null));
 
   if (line?.isRemoved) {
     return (
@@ -161,7 +161,7 @@ function renderLineCellContent({
           options={column.options}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
-          ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
+          ariaLabel={`${column.label} for line ${line.lineNumber}`}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,

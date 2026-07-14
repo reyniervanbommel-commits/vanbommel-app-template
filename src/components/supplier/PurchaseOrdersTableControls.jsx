@@ -14,7 +14,6 @@ import {
 import {
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
-import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 
 const useStyles = makeStyles({
   controlHeaderCell: {
@@ -23,10 +22,9 @@ const useStyles = makeStyles({
     top: 0,
     left: 0,
     zIndex: 4,
-    width: purchaseOrderBoardControlColumnWidth,
-    minWidth: purchaseOrderBoardControlColumnWidth,
-    maxWidth: purchaseOrderBoardControlColumnWidth,
-    boxSizing: 'border-box',
+    width: '92px',
+    minWidth: '92px',
+    maxWidth: '92px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),
@@ -67,11 +65,7 @@ function PurchaseOrdersTableControls({
   const collapseSubitems = useCallback(() => onSetExpansion('groups', false), [onSetExpansion]);
 
   return (
-    <th
-      className={styles.controlHeaderCell}
-      data-board-control-column="true"
-      aria-label="Table display controls"
-    >
+    <th className={styles.controlHeaderCell} aria-label="Table display controls">
       <div className={styles.toolbar}>
         {selectionEnabled ? (
           <Checkbox

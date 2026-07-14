@@ -181,9 +181,9 @@ export default function EditableCell({
   }, []);
 
   const renderStatus = () => {
-    if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Opslaan" />;
+    if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Save" />;
     if (status === 'saved') return <span className={`${styles.status} ${styles.saved}`}>Opgeslagen</span>;
-    if (status === 'error') return <span className={`${styles.status} ${styles.errorText}`}>Mislukt</span>;
+    if (status === 'error') return <span className={`${styles.status} ${styles.errorText}`}>Failed</span>;
     return null;
   };
 

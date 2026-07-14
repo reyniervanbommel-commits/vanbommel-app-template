@@ -7,14 +7,14 @@ function requireSession(req, res, next) {
     req.user = req.session.user;
     return next();
   }
-  return res.status(401).json({ error: 'Niet geauthenticeerd' });
+  return res.status(401).json({ error: 'Not authenticated' });
 }
 
 function requireRole(role) {
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'Niet geauthenticeerd' });
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     if (req.user.role !== role && req.user.role !== ROLES.ADMIN) {
-      return res.status(403).json({ error: 'Geen toegang — ' + role + ' rol vereist' });
+      return res.status(403).json({ error: 'Access denied — ' + role + ' role required' });
     }
     return next();
   };
@@ -22,10 +22,10 @@ function requireRole(role) {
 
 function requireAnyRole(roles) {
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'Niet geauthenticeerd' });
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     if (req.user.role === ROLES.ADMIN) return next();
     if (!Array.isArray(roles) || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Geen toegang — onvoldoende rechten' });
+      return res.status(403).json({ error: 'Access denied — insufficient permissions' });
     }
     return next();
   };

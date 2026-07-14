@@ -66,7 +66,7 @@ export default function StepUpload({ dataset, uploading, uploadError, onUpload }
   return (
     <div className={styles.root}>
       <div className={styles.form}>
-        <Field label="Bestand (.xlsx, .xls of .csv)">
+        <Field label="File (.xlsx, .xls or .csv)">
           <div className={styles.fileRow}>
             <input
               ref={fileInputRef}
@@ -80,16 +80,16 @@ export default function StepUpload({ dataset, uploading, uploadError, onUpload }
               icon={<ArrowUploadRegular />}
               onClick={() => fileInputRef.current?.click()}
             >
-              Bestand kiezen
+              Choose file
             </Button>
-            <span className={styles.fileName}>{file ? file.name : 'Geen bestand gekozen'}</span>
+            <span className={styles.fileName}>{file ? file.name : 'No file chosen'}</span>
           </div>
         </Field>
 
-        <Field label="Weergavenaam">
+        <Field label="Display name">
           <Input
             value={label}
-            placeholder="Bijv. Leveranciersclassificatie 2026"
+            placeholder="e.g. Vendor classification 2026"
             onChange={(_, d) => setLabel(d.value)}
           />
         </Field>
@@ -101,7 +101,7 @@ export default function StepUpload({ dataset, uploading, uploadError, onUpload }
             icon={uploading ? <Spinner size="tiny" /> : undefined}
             onClick={() => onUpload(file, label)}
           >
-            {uploading ? 'Uploaden...' : 'Uploaden'}
+            {uploading ? 'Uploading...' : 'Upload'}
           </Button>
         </div>
 
@@ -113,20 +113,20 @@ export default function StepUpload({ dataset, uploading, uploadError, onUpload }
           <div className={styles.fileRow}>
             <Text weight="semibold">{dataset.label}</Text>
             <Badge appearance="tint" color="success" size="small">
-              {(dataset.rowCount || 0).toLocaleString('nl-NL')} rijen
+              {(dataset.rowCount || 0).toLocaleString('en-US')} rows
             </Badge>
             <Badge appearance="tint" color="informative" size="small">
-              {(dataset.columns?.length || 0)} kolommen
+              {(dataset.columns?.length || 0)} columns
             </Badge>
           </div>
           <div className={styles.tableWrap}>
             <Table size="small">
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell className={styles.headerCell}>Kolom</TableHeaderCell>
-                  <TableHeaderCell className={styles.headerCell}>Sleutel</TableHeaderCell>
+                  <TableHeaderCell className={styles.headerCell}>Column</TableHeaderCell>
+                  <TableHeaderCell className={styles.headerCell}>Key</TableHeaderCell>
                   <TableHeaderCell className={styles.headerCell}>Type</TableHeaderCell>
-                  <TableHeaderCell className={styles.headerCell}>Voorbeeldwaarden</TableHeaderCell>
+                  <TableHeaderCell className={styles.headerCell}>Sample values</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>

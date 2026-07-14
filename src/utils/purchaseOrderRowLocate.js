@@ -36,3 +36,6 @@ export function findOrderGroupContext(groupedRows, locateKey) {
 }
 
 export const ROW_LOCATE_HIGHLIGHT_MS = 2500;
+
+/** Yellow background applied to every cell when locating a row from remarks. */
+export const ROW_LOCATE_HIGHLIGHT_COLOR = '#fff4ce';

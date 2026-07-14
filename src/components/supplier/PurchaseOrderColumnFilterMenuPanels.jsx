@@ -88,7 +88,7 @@ export function FilterMenuSubPane({
   if (activeSubmenu === 'group') {
     content = (
       <>
-        <Text className={styles.subPaneTitle}>Categorie / groeperen</Text>
+        <Text className={styles.subPaneTitle}>Category / group</Text>
         <PurchaseOrderColumnGroupingSection
           column={column}
           isGroupingColumn={isGroupingColumn}

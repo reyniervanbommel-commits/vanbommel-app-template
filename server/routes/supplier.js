@@ -331,7 +331,7 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const pool = await getPool();
@@ -365,7 +365,7 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const settings = normalizeBoardSettings(req.body?.settings);
@@ -396,7 +396,7 @@ router.get('/board-views/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const pool = await getPool();
@@ -422,26 +422,26 @@ router.post('/board-views/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const name = normalizeViewName(req.body?.name);
     if (!name) {
-      return res.status(400).json({ error: 'Naam is verplicht' });
+      return res.status(400).json({ error: 'Name is required' });
     }
 
     const scope = String(req.body?.scope || 'personal');
     if (!VIEW_SCOPES.has(scope)) {
-      return res.status(400).json({ error: 'Ongeldige scope' });
+      return res.status(400).json({ error: 'Invalid scope' });
     }
     if (scope === 'global' && !isStaffUser(req.user)) {
-      return res.status(403).json({ error: 'Geen toegang — global views vereisen medewerker- of adminrol' });
+      return res.status(403).json({ error: 'Access denied — global views require employee or admin role' });
     }
 
     const viewState = normalizeViewState(req.body?.viewState);
     const viewStateJson = JSON.stringify(viewState);
     if (viewStateJson.length > MAX_VIEW_STATE_LENGTH) {
-      return res.status(400).json({ error: 'View-state is te groot' });
+      return res.status(400).json({ error: 'View state is too large' });
     }
 
     const isDefault = req.body?.isDefault === true;
@@ -473,7 +473,7 @@ router.post('/board-views/:boardKey', async (req, res, next) => {
     } catch (err) {
       await transaction.rollback();
       if (isUniqueViolation(err)) {
-        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+        return res.status(409).json({ error: 'A view with this name already exists' });
       }
       throw err;
     }
@@ -487,27 +487,27 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
     const viewId = Number(req.params.viewId);
     if (!Number.isInteger(viewId) || viewId <= 0) {
-      return res.status(400).json({ error: 'Ongeldige view id' });
+      return res.status(400).json({ error: 'Invalid view id' });
     }
 
     const pool = await getPool();
     const existing = await loadViewRow(pool, boardKey, viewId);
     if (!existing) {
-      return res.status(404).json({ error: 'View niet gevonden' });
+      return res.status(404).json({ error: 'View not found' });
     }
     if (!canManageView(req.user, existing)) {
-      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+      return res.status(403).json({ error: 'Access denied to this view' });
     }
 
     let nextName = existing.name;
     if (req.body?.name !== undefined) {
       nextName = normalizeViewName(req.body.name);
       if (!nextName) {
-        return res.status(400).json({ error: 'Naam is verplicht' });
+        return res.status(400).json({ error: 'Name is required' });
       }
     }
 
@@ -515,7 +515,7 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
     if (req.body?.viewState !== undefined) {
       nextViewStateJson = JSON.stringify(normalizeViewState(req.body.viewState));
       if (nextViewStateJson.length > MAX_VIEW_STATE_LENGTH) {
-        return res.status(400).json({ error: 'View-state is te groot' });
+        return res.status(400).json({ error: 'View state is too large' });
       }
     }
 
@@ -546,7 +546,7 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
     } catch (err) {
       await transaction.rollback();
       if (isUniqueViolation(err)) {
-        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+        return res.status(409).json({ error: 'A view with this name already exists' });
       }
       throw err;
     }
@@ -559,20 +559,20 @@ router.delete('/board-views/:boardKey/:viewId', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
     const viewId = Number(req.params.viewId);
     if (!Number.isInteger(viewId) || viewId <= 0) {
-      return res.status(400).json({ error: 'Ongeldige view id' });
+      return res.status(400).json({ error: 'Invalid view id' });
     }
 
     const pool = await getPool();
     const existing = await loadViewRow(pool, boardKey, viewId);
     if (!existing) {
-      return res.status(404).json({ error: 'View niet gevonden' });
+      return res.status(404).json({ error: 'View not found' });
     }
     if (!canManageView(req.user, existing)) {
-      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+      return res.status(403).json({ error: 'Access denied to this view' });
     }
 
     await pool.request()
@@ -589,7 +589,7 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ error: 'Ongeldige query-parameters', details: errors.array() });
+      return res.status(400).json({ error: 'Invalid query parameters', details: errors.array() });
     }
 
     const staffUser = isStaffUser(req.user);
@@ -597,10 +597,10 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
 
     if (!staffUser) {
       if (!supplierAccount) {
-        return res.status(400).json({ error: 'Supplier account ontbreekt voor huidige gebruiker' });
+        return res.status(400).json({ error: 'Supplier account is missing for the current user' });
       }
       if (!isValidSupplierAccount(supplierAccount)) {
-        return res.status(400).json({ error: 'Supplier account heeft ongeldig formaat' });
+        return res.status(400).json({ error: 'Supplier account has an invalid format' });
       }
     }
 

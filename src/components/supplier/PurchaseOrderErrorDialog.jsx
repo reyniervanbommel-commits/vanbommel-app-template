@@ -116,7 +116,7 @@ function PurchaseOrderErrorDialog({
               icon={<ArrowClockwiseRegular />}
               onClick={onRefresh}
               disabled={refreshing || !canRefresh}
-              title={canRefresh ? 'Probeer opnieuw te verversen' : 'Alleen admin kan verversen'}
+              title={canRefresh ? 'Try refreshing again' : 'Only admin can refresh'}
             >
               {refreshing ? 'Refreshing...' : 'Refresh data'}
             </Button>

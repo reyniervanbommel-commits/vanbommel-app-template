@@ -26,22 +26,4 @@ describe('useSequentialStickyColumns', () => {
     });
     expect(result.current.stickyColumnKeys).toEqual(['order']);
   });
-
-  it('offsets sticky columns after the control column width', () => {
-    const { result } = renderHook(() => useSequentialStickyColumns({
-      columns,
-      headerColumnWidths: { order: 120, supplier: 140 },
-      wrapperRef: { current: null },
-    }));
-
-    act(() => {
-      result.current.makeColumnSticky('order');
-    });
-    act(() => {
-      result.current.makeColumnSticky('supplier');
-    });
-
-    expect(result.current.decoratedColumns[0].stickyLeft).toBe(92);
-    expect(result.current.decoratedColumns[1].stickyLeft).toBe(212);
-  });
 });

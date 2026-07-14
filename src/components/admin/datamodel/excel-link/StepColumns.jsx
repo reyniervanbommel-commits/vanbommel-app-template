@@ -42,7 +42,7 @@ const useStyles = makeStyles({
 /**
  * Stap 3: kolommen kiezen. Aangevinkte dataset-kolommen worden read-only
  * verrijkingskolommen; per kolom kan de afgeleide kolom-key aangepast worden
- * (default = dataset-kolom-key). Sleutelveld zelf is uitgesloten (niet verrijken op eigen sleutel).
+ * (default = dataset-kolom-key). Keyveld zelf is uitgesloten (niet verrijken op eigen sleutel).
  */
 export default function StepColumns({
   dataset,
@@ -58,23 +58,23 @@ export default function StepColumns({
   return (
     <div className={styles.root}>
       <Text className={styles.intro} block>
-        Kies welke datasetkolommen als read-only verrijkingskolommen op de hoofdtabel verschijnen.
-        Het sleutelveld zelf hoeft niet gekozen te worden. Pas eventueel de kolom-sleutel aan.
+        Choose which dataset columns appear as read-only enrichment columns on the main table.
+        The key field itself does not need to be selected. Adjust the column key if needed.
       </Text>
       <div>
         <Badge appearance="tint" color="brand" size="small">
-          {selectedColumns.size} gekozen
+          {selectedColumns.size} selected
         </Badge>
       </div>
       <div className={styles.tableWrap}>
         <Table size="small">
           <TableHeader>
             <TableRow>
-              <TableHeaderCell className={styles.headerCell}>Gebruiken</TableHeaderCell>
-              <TableHeaderCell className={styles.headerCell}>Kolom</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Use</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Column</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Type</TableHeaderCell>
-              <TableHeaderCell className={styles.headerCell}>Voorbeeldwaarden</TableHeaderCell>
-              <TableHeaderCell className={styles.headerCell}>Kolom-sleutel</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Sample values</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>Column key</TableHeaderCell>
             </TableRow>
           </TableHeader>
           <TableBody>

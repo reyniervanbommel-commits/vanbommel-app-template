@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import {
-  areStickyOffsetsComplete,
-  computeStickyOffsetsFromWidths,
-  measureStickyOffsetsFromTable,
-} from '../utils/purchaseOrderStickyColumnOffsets';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+const CONTROL_COLUMN_WIDTH = 58;
+const FALLBACK_COLUMN_WIDTH = 80;
+
+function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
+  const explicit = Number(explicitWidths?.[columnKey]);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const measured = Number(measuredWidths?.[columnKey]);
+  if (Number.isFinite(measured) && measured > 0) return measured;
+  return FALLBACK_COLUMN_WIDTH;
+}
 
 export function useSequentialStickyColumns({
   columns,
@@ -15,7 +21,6 @@ export function useSequentialStickyColumns({
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
   const [uncontrolledStickyColumnKeys, setUncontrolledStickyColumnKeys] = useState([]);
   const [measuredStickyWidths, setMeasuredStickyWidths] = useState({});
-  const [measuredStickyOffsets, setMeasuredStickyOffsets] = useState({});
   const stickyColumnKeys = Array.isArray(controlledStickyColumnKeys)
     ? controlledStickyColumnKeys
     : uncontrolledStickyColumnKeys;
@@ -45,57 +50,15 @@ export function useSequentialStickyColumns({
     [stickyColumnKeys]
   );
 
-  const fallbackStickyOffsets = useMemo(
-    () => computeStickyOffsetsFromWidths(stickyColumnKeys, headerColumnWidths, measuredStickyWidths),
-    [stickyColumnKeys, headerColumnWidths, measuredStickyWidths]
-  );
-
-  useLayoutEffect(() => {
-    const wrapper = wrapperRef?.current;
-    if (!wrapper || !stickyColumnKeys.length) {
-      setMeasuredStickyOffsets({});
-      return undefined;
-    }
-
-    let frame = 0;
-    const measureOffsets = () => {
-      const table = wrapper.querySelector('table');
-      const nextOffsets = measureStickyOffsetsFromTable(table, stickyColumnKeys);
-      if (!nextOffsets) return;
-      setMeasuredStickyOffsets((current) => {
-        const changed = stickyColumnKeys.some((key) => current[key] !== nextOffsets[key]);
-        return changed ? nextOffsets : current;
-      });
-    };
-
-    const scheduleMeasure = () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        measureOffsets();
-      });
-    };
-
-    scheduleMeasure();
-    const table = wrapper.querySelector('table');
-    if (!table) return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-
-    const observer = new ResizeObserver(scheduleMeasure);
-    observer.observe(table);
-    return () => {
-      observer.disconnect();
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [stickyColumnKeys, headerColumnWidths, wrapperRef]);
-
   const stickyOffsetsByKey = useMemo(() => {
-    if (areStickyOffsetsComplete(measuredStickyOffsets, stickyColumnKeys)) {
-      return measuredStickyOffsets;
-    }
-    return fallbackStickyOffsets;
-  }, [fallbackStickyOffsets, measuredStickyOffsets, stickyColumnKeys]);
+    const offsets = {};
+    let left = CONTROL_COLUMN_WIDTH;
+    stickyColumnKeys.forEach((key) => {
+      offsets[key] = left;
+      left += pickColumnWidth(key, headerColumnWidths, measuredStickyWidths);
+    });
+    return offsets;
+  }, [stickyColumnKeys, headerColumnWidths, measuredStickyWidths]);
 
   const decoratedColumns = useMemo(
     () => safeColumns.map((column) => {

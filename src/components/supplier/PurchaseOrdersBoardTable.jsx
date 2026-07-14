@@ -177,7 +177,7 @@ function PurchaseOrdersBoardTable({
   }), [lineTotalColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
   if (!items.length) {
-    return <div className={styles.empty}>Geen gegevens gevonden</div>;
+    return <div className={styles.empty}>No data found</div>;
   }
   if (!processedItems.length) {
     return <div className={styles.empty}>No rows match the active filters</div>;

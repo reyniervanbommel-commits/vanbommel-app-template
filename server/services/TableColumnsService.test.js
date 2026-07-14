@@ -83,7 +83,7 @@ describe('TableColumnsService formula helpers', () => {
       { key: 'budget', scope: 'master', formulaExpr: null },
       { key: 'delta', scope: 'master', formulaExpr: '(a)+(b)' },
     ];
-    expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Onbekende kolomreferentie/i);
+    expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Unknown column reference/i);
     expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formulekolom/i);
   });
 
