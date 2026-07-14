@@ -140,11 +140,22 @@ describe('remarks components', () => {
     expect(onOpen).toHaveBeenLastCalledWith(cell);
   });
 
-  it('toont een plus in het wolkje zonder remarks', () => {
-    renderWithFluent(<RowRemarksBadge count={0} orderNumber="PO-2" onOpen={vi.fn()} />);
+  it('toont een plus-wolkje zonder remarks', () => {
+    const { container } = renderWithFluent(
+      <RowRemarksBadge count={0} orderNumber="PO-2" onOpen={vi.fn()} />
+    );
 
     expect(screen.getByRole('button', { name: /Add a remark for purchase order PO-2/ })).toBeTruthy();
-    expect(screen.getByText('+')).toBeTruthy();
-    expect(screen.queryByText('3')).toBeNull();
+    expect(container.querySelector('.remarks-badge-count')).toBeNull();
+    expect(container.querySelector('.remarks-badge-plus')).toBeTruthy();
+  });
+
+  it('toont No remarks cursief en grijs zonder latest remark', () => {
+    const { container } = renderWithFluent(
+      <RemarksLatestCell orderNumber="PO-3" summary={{ count: 0 }} onOpen={vi.fn()} />
+    );
+
+    expect(screen.getByRole('button', { name: /Open remarks for purchase order PO-3/ }).textContent).toBe('No remarks');
+    expect(container.querySelector('.remarks-latest-preview--empty')).toBeTruthy();
   });
 });

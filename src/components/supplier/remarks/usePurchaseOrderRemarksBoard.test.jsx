@@ -50,4 +50,35 @@ describe('usePurchaseOrderRemarksBoard', () => {
     act(() => result.current.panelProps.onClose());
     expect(result.current.panelProps.open).toBe(false);
   });
+
+  it('stuurt een locate request wanneer onLocateRow wordt aangeroepen', () => {
+    useRemarksSummary.mockReturnValue({
+      summaryByRow: new Map(),
+      loading: false,
+      error: '',
+      refresh: vi.fn(),
+      updateRow: vi.fn(),
+    });
+    const { result } = renderHook(() =>
+      usePurchaseOrderRemarksBoard({
+        enabled: true,
+        currentUser: { id: 1 },
+        columns: [],
+      })
+    );
+
+    act(() => {
+      result.current.tableState.open({ dataAreaId: 'USMF', orderNumber: 'PO-9' }, null, null);
+    });
+
+    act(() => {
+      result.current.panelProps.onLocateRow();
+    });
+
+    expect(result.current.tableState.locateRequest).toMatchObject({
+      partitionKey: 'USMF',
+      recordKey: 'PO-9',
+      seq: 1,
+    });
+  });
 });

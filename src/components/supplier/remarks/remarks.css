@@ -56,6 +56,32 @@
   line-height: 1.2;
 }
 
+.remarks-order-locate-button {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--colorBrandForeground1);
+  font: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.remarks-order-locate-button:hover {
+  color: var(--colorBrandForeground2);
+}
+
+.remarks-order-locate-button:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .remarks-close-button {
   min-width: 36px;
   min-height: 36px;
@@ -448,6 +474,7 @@
   font-weight: 600;
   line-height: 1;
   pointer-events: none;
+  z-index: 1;
 }
 
 .remarks-badge-count {
@@ -494,10 +521,11 @@
   background: transparent;
   text-align: left;
   overflow: hidden;
+  font: inherit;
 }
 
 .remarks-latest-cell--formatted,
-.remarks-latest-cell--formatted .remarks-latest-preview {
+.remarks-latest-cell--formatted .remarks-latest-preview:not(.remarks-latest-preview--empty) {
   color: #ffffff;
 }
 
@@ -505,6 +533,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: inherit;
+  font-style: italic;
+}
+
+.remarks-latest-preview--empty {
+  color: var(--colorNeutralForeground4);
+}
+
+.remarks-latest-cell--formatted .remarks-latest-preview--empty {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 @media (max-width: 599px) {

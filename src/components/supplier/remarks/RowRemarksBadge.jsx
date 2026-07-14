@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { tokens } from '@fluentui/react-components';
 import { Chat24Regular } from '@fluentui/react-icons';
+import './remarks.css';
 
 function RowRemarksBadge({ count = 0, onOpen, orderNumber = '', onFormattedBackground = false }) {
   const safeCount = Math.max(0, Number(count) || 0);

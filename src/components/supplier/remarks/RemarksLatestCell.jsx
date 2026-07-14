@@ -3,6 +3,7 @@ import { formatDateTime } from './remarksFormatters';
 
 function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackground = false }) {
   const latest = summary?.latest || null;
+  const isEmpty = !latest;
   const preview = latest?.bodyPreview || latest?.body || 'No remarks';
   const authorName = latest?.authorName || latest?.author?.displayName || 'Unknown user';
   const title = latest
@@ -24,7 +25,9 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackg
       title={title}
       onClick={handleOpen}
     >
-      <div className="remarks-latest-preview">{preview}</div>
+      <div className={`remarks-latest-preview${isEmpty ? ' remarks-latest-preview--empty' : ''}`}>
+        {preview}
+      </div>
     </button>
   );
 }

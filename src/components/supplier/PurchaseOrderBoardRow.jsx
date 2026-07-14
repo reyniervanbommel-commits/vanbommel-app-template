@@ -10,6 +10,7 @@ import { getColumnCellStyle, getFormattedCellContentStyle, getRowFormatControlCe
 import { evalFormatRules } from './columnFormatRuleUtils';
 import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
 import {
   getProductImageCellStyle,
   isProductImageColumn,
@@ -17,11 +18,14 @@ import {
 } from '../../utils/purchaseOrderProductImageColumn';
 import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
 
-function getOrderRowClassName(order, styles) {
-  if (order.removedInD365) return `${styles.itemRow} ${styles.removedRow}`;
-  if (order.isNew) return `${styles.itemRow} ${styles.newRow}`;
-  if (order.isChanged) return `${styles.itemRow} ${styles.changedRow}`;
-  return styles.itemRow;
+function getOrderRowClassName(order, styles, isLocated = false) {
+  const classes = [];
+  if (order.removedInD365) classes.push(styles.itemRow, styles.removedRow);
+  else if (order.isNew) classes.push(styles.itemRow, styles.newRow);
+  else if (order.isChanged) classes.push(styles.itemRow, styles.changedRow);
+  else classes.push(styles.itemRow);
+  if (isLocated) classes.push(styles.locateHighlight);
+  return classes.join(' ');
 }
 
 function resolveRowFormatColor(order, columns, formatRules) {
@@ -226,6 +230,8 @@ function PurchaseOrderBoardRow({
     [lines, order, rowId]
   );
   const remarkSummary = remarks?.summaryByRow?.get(rowKey(order.dataAreaId, order.orderNumber)) || null;
+  const locateKey = orderLocateKeyFromOrder(order);
+  const isLocated = layout.highlightedLocateKey === locateKey;
   const rowRemarks = useMemo(
     () => ({ summary: remarkSummary, open: remarks?.open }),
     [remarkSummary, remarks?.open]
@@ -245,7 +251,11 @@ function PurchaseOrderBoardRow({
 
   return (
     <React.Fragment>
-      <tr className={getOrderRowClassName(order, layout.styles)} style={rowStyle}>
+      <tr
+        className={getOrderRowClassName(order, layout.styles, isLocated)}
+        style={rowStyle}
+        data-locate-key={locateKey}
+      >
         <PurchaseOrderRowControls
           order={order}
           rowId={rowId}

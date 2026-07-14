@@ -74,6 +74,21 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
     }
   }, [handleSetAllBoardsExpanded, handleSetAllGroupsExpanded]);
 
+  const ensureGroupsExpanded = useCallback((groupKeys) => {
+    const keys = Array.isArray(groupKeys) ? groupKeys : [];
+    if (!keys.length) return;
+    setCollapsedGroups((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      keys.forEach((key) => {
+        if (!key || !next[key]) return;
+        next[key] = false;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   const tableActions = useMemo(
     () => ({
       onToggleGroup: handleToggleGroup,
@@ -86,6 +101,7 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
     collapsedGroups,
     expandedOrders,
     handleSetExpansion,
+    ensureGroupsExpanded,
     tableActions,
   };
 }

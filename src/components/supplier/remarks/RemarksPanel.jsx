@@ -19,6 +19,7 @@ function RemarksPanel({
   openerRef,
   tableKey = 'purchase-orders',
   summaryState = null,
+  onLocateRow = null,
 }) {
   const controller = usePurchaseOrderRemarksController({
     open,
@@ -53,6 +54,9 @@ function RemarksPanel({
     [partitionedAll.remarks]
   );
   const orderNumber = row?.recordKey || row?.orderNumber || '';
+  const handleLocateRow = useCallback(() => {
+    onLocateRow?.();
+  }, [onLocateRow]);
   const handleSubmitRemark = useCallback(
     async (body, columnId) => {
       const remark = await controller.remarks.createRemark(body, columnId);
@@ -87,7 +91,19 @@ function RemarksPanel({
           onClick={onClose}
         />
         <h2 ref={controller.headingRef} className="remarks-heading" tabIndex={-1}>
-          Purchase order {orderNumber}
+          Purchase order{' '}
+          {onLocateRow ? (
+            <button
+              type="button"
+              className="remarks-order-locate-button"
+              onClick={handleLocateRow}
+              aria-label={`Go to purchase order ${orderNumber} in table`}
+            >
+              {orderNumber}
+            </button>
+          ) : (
+            orderNumber
+          )}
           {initialColumn?.label ? <span className="remarks-header-context"> · {initialColumn.label}</span> : null}
         </h2>
       </header>

@@ -6,6 +6,7 @@ import {
 import {
   ArrowClockwiseRegular,
   CheckmarkRegular,
+  Chat24Regular,
   CloudRegular,
   EditRegular,
   FilterRegular,
@@ -139,6 +140,7 @@ export default function PurchaseOrderColumnHeader({
       case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Datumkolom" />;
       case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Yes/No column" />;
       case 'status': return <span className={styles.formulaTypeIcon} title="Status column">●</span>;
+      case 'remarks': return <Chat24Regular className={styles.customIcon} title="Remarks column" />;
       case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Keuzelijstkolom" />;
       case 'text':
       default: return <EditRegular className={styles.customIcon} title="Tekstkolom" />;

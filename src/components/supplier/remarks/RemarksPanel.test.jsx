@@ -91,4 +91,12 @@ describe('RemarksPanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(opener));
     opener.remove();
   });
+
+  it('roept onLocateRow aan wanneer op het PO-nummer wordt geklikt', async () => {
+    const onLocateRow = vi.fn();
+    renderPanel({ onLocateRow });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to purchase order PO-207 in table' }));
+    expect(onLocateRow).toHaveBeenCalledTimes(1);
+  });
 });

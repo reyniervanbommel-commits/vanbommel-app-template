@@ -8,6 +8,7 @@ import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBo
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardLinks';
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
+import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
 function PurchaseOrdersBoardTable({
   data,
   layout,
@@ -101,8 +102,16 @@ function PurchaseOrdersBoardTable({
     collapsedGroups,
     expandedOrders,
     handleSetExpansion,
+    ensureGroupsExpanded,
     tableActions,
   } = usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey });
+  const highlightedLocateKey = usePurchaseOrderRowLocate({
+    groupedRows,
+    collapsedGroups,
+    ensureGroupsExpanded,
+    tableWrapperRef: wrapperRef,
+    locateRequest: remarks?.locateRequest,
+  });
   const [cellContext, setCellContext] = useState(null);
   const openCellContextMenu = useCallback((target, cell) => {
     setCellContext({ target, ...cell });
@@ -148,8 +157,8 @@ function PurchaseOrdersBoardTable({
   });
   const colCount = columns.length + 1;
   const rowsData = useMemo(
-    () => ({ groupedRows, collapsedGroups, expandedOrders }),
-    [collapsedGroups, expandedOrders, groupedRows]
+    () => ({ groupedRows, collapsedGroups, expandedOrders, highlightedLocateKey }),
+    [collapsedGroups, expandedOrders, groupedRows, highlightedLocateKey]
   );
   const rowsLayout = useMemo(
     () => ({ columns: decoratedColumns, lineColumns, colCount }),

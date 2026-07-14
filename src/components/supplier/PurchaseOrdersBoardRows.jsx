@@ -4,6 +4,7 @@ import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import {
+  purchaseOrderBoardControlColumnWidth,
   purchaseOrderBoardRowHeight,
 } from './purchaseOrderBoardLayout';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
@@ -74,9 +75,9 @@ const useStyles = makeStyles({
     position: 'sticky',
     left: 0,
     zIndex: 3,
-    width: '92px',
-    minWidth: '92px',
-    maxWidth: '92px',
+    width: purchaseOrderBoardControlColumnWidth,
+    minWidth: purchaseOrderBoardControlColumnWidth,
+    maxWidth: purchaseOrderBoardControlColumnWidth,
     height: purchaseOrderBoardRowHeight,
     maxHeight: purchaseOrderBoardRowHeight,
     backgroundColor: tokens.colorNeutralBackground1,
@@ -149,6 +150,15 @@ const useStyles = makeStyles({
   },
   changedRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
+  },
+  locateHighlight: {
+    animationName: {
+      from: { boxShadow: `inset 0 0 0 2px ${tokens.colorStrokeFocus2}` },
+      to: { boxShadow: `inset 0 0 0 2px transparent` },
+    },
+    animationDuration: '0.75s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 3,
   },
   subitemsContainer: {
     backgroundColor: tokens.colorNeutralBackground1,
@@ -262,7 +272,8 @@ function PurchaseOrdersBoardRows({
     ...layout,
     styles,
     expandedOrders: data.expandedOrders,
-  }), [data.expandedOrders, layout, styles]);
+    highlightedLocateKey: data.highlightedLocateKey,
+  }), [data.expandedOrders, data.highlightedLocateKey, layout, styles]);
   const stableActions = useMemo(() => ({
     group: {
       onToggleGroup: actions.tableActions.onToggleGroup,

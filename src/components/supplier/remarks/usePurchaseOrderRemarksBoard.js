@@ -11,6 +11,8 @@ export function usePurchaseOrderRemarksBoard({
   tableKey = 'purchase-orders',
 }) {
   const [panelContext, setPanelContext] = useState(null);
+  const [locateRequest, setLocateRequest] = useState(null);
+  const locateSequenceRef = useRef(0);
   const openerRef = useRef(null);
   const summaryState = useRemarksSummary({ enabled, tableKey });
 
@@ -28,12 +30,23 @@ export function usePurchaseOrderRemarksBoard({
 
   const close = useCallback(() => setPanelContext(null), []);
 
+  const onLocateRow = useCallback(() => {
+    if (!panelContext?.row?.partitionKey || !panelContext?.row?.recordKey) return;
+    locateSequenceRef.current += 1;
+    setLocateRequest({
+      partitionKey: panelContext.row.partitionKey,
+      recordKey: panelContext.row.recordKey,
+      seq: locateSequenceRef.current,
+    });
+  }, [panelContext?.row]);
+
   const tableState = useMemo(
     () => ({
       summaryByRow: summaryState.summaryByRow,
       open,
+      locateRequest,
     }),
-    [open, summaryState.summaryByRow]
+    [locateRequest, open, summaryState.summaryByRow]
   );
 
   const panelProps = useMemo(
@@ -47,8 +60,9 @@ export function usePurchaseOrderRemarksBoard({
       openerRef,
       tableKey,
       summaryState,
+      onLocateRow,
     }),
-    [close, columns, currentUser, panelContext, summaryState, tableKey]
+    [close, columns, currentUser, onLocateRow, panelContext, summaryState, tableKey]
   );
 
   return useMemo(
