@@ -20,6 +20,7 @@ function PurchaseOrderDataCell({
     const hasFormattedBackground = Boolean(style?.backgroundColor);
     return {
       ...style,
+      boxSizing: 'border-box',
       position: isSticky ? 'sticky' : 'relative',
       ...(isSticky ? {
         left: `${stickyLeft}px`,

@@ -26,6 +26,7 @@ const useStyles = makeStyles({
     width: purchaseOrderBoardControlColumnWidth,
     minWidth: purchaseOrderBoardControlColumnWidth,
     maxWidth: purchaseOrderBoardControlColumnWidth,
+    boxSizing: 'border-box',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),
@@ -66,7 +67,11 @@ function PurchaseOrdersTableControls({
   const collapseSubitems = useCallback(() => onSetExpansion('groups', false), [onSetExpansion]);
 
   return (
-    <th className={styles.controlHeaderCell} aria-label="Table display controls">
+    <th
+      className={styles.controlHeaderCell}
+      data-board-control-column="true"
+      aria-label="Table display controls"
+    >
       <div className={styles.toolbar}>
         {selectionEnabled ? (
           <Checkbox

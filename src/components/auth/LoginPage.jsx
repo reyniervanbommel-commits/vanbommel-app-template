@@ -116,7 +116,7 @@ export default function LoginPage() {
         navigate('/');
       }
     } catch (err) {
-      setError(err.message || 'Inloggen mislukt. Controleer uw gegevens.');
+      setError(err.message || 'Sign-in failed. Check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -134,7 +134,7 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <Text className={styles.title} block>Inloggen</Text>
+          <Text className={styles.title} block>Sign in</Text>
           <Text className={styles.subtitle} block>{APP_DISPLAY_NAME}</Text>
         </div>
 
@@ -145,7 +145,7 @@ export default function LoginPage() {
         )}
 
         <form className={styles.form} onSubmit={handleSubmit} autoComplete="on">
-          <Field label="E-mailadres" required>
+          <Field label="Email address" required>
             <Input
               id="login-email"
               name="email"
@@ -156,7 +156,7 @@ export default function LoginPage() {
               disabled={loading}
             />
           </Field>
-          <Field label="Wachtwoord" required>
+          <Field label="Password" required>
             <Input
               id="login-password"
               name="password"
@@ -169,14 +169,14 @@ export default function LoginPage() {
           </Field>
 
           <div className={styles.actions}>
-            <Link to="/forgot-password">Wachtwoord vergeten?</Link>
+            <Link to="/forgot-password">Forgot password?</Link>
             <Button
               appearance="primary"
               type="submit"
               disabled={loading || !email || !password}
               icon={loading ? <Spinner size="tiny" /> : null}
             >
-              {loading ? 'Bezig...' : 'Inloggen'}
+              {loading ? 'Working...' : 'Sign in'}
             </Button>
           </div>
         </form>

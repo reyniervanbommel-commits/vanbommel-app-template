@@ -49,7 +49,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
   return (
     <div className={styles.appShell}>
       <div className={styles.content}>
-        <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Laden…" /></div>}>
+        <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/set-password" element={<SetPasswordPage />} />

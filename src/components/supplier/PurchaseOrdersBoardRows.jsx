@@ -86,7 +86,7 @@ const useStyles = makeStyles({
     ...shorthands.padding('0', '2px'),
     textAlign: 'center',
     boxSizing: 'border-box',
-    overflow: 'visible',
+    overflow: 'hidden',
     verticalAlign: 'middle',
   },
   controlCellInner: {
@@ -96,7 +96,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     height: '100%',
     maxHeight: purchaseOrderBoardRowHeight,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   rowControlsCluster: {
     display: 'inline-flex',

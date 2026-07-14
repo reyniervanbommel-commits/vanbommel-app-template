@@ -86,7 +86,7 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   );
 
   return (
-    <td className={styles.controlCell} style={controlCellStyle}>
+    <td className={styles.controlCell} style={controlCellStyle} data-board-control-column="true">
       <div className={styles.controlCellInner}>
         <div className={styles.rowControlsCluster}>
           {selection?.enabled ? (

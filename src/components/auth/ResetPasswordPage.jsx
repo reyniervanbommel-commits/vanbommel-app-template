@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (pw !== confirm) return setError('Wachtwoorden komen niet overeen');
+    if (pw !== confirm) return setError('Passwords do not match');
     setError('');
     setLoading(true);
     try {
@@ -39,12 +39,12 @@ export default function ResetPasswordPage() {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h2>Nieuw wachtwoord instellen</h2>
+        <h2>Set new password</h2>
         <form className={styles.form} onSubmit={handleSubmit}>
-          <Field label="Nieuw wachtwoord"><Input type="password" value={pw} onChange={e => setPw(e.target.value)} required /></Field>
-          <Field label="Bevestig wachtwoord"><Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required /></Field>
+          <Field label="New password"><Input type="password" value={pw} onChange={e => setPw(e.target.value)} required /></Field>
+          <Field label="Confirm password"><Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required /></Field>
           {error && <div className={styles.error}>{error}</div>}
-          <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Bezig...' : 'Instellen'}</Button>
+          <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Working...' : 'Set password'}</Button>
         </form>
       </div>
     </div>

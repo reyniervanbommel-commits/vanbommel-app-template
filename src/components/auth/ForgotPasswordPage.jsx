@@ -43,13 +43,13 @@ export default function ForgotPasswordPage() {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h2>Wachtwoord vergeten</h2>
+        <h2>Forgot password</h2>
         {sent ? (
           <div>
-            <div className={styles.success}>Als het e-mailadres bekend is, ontvang je een resetlink.</div>
+            <div className={styles.success}>If the email address is known, you will receive a reset link.</div>
             {devResetUrl && (
               <div className={styles.devBox}>
-                <strong>DEV:</strong> mail niet verstuurd. Gebruik deze resetlink:
+                <strong>DEV:</strong> email not sent. Use this reset link:
                 <br />
                 <a href={devResetUrl}>{devResetUrl}</a>
               </div>
@@ -57,13 +57,13 @@ export default function ForgotPasswordPage() {
             {!devResetUrl && devNotice && (
               <div className={styles.devBox}>{devNotice}</div>
             )}
-            <Button onClick={() => navigate('/login')} style={{ marginTop: '16px' }}>Terug naar inloggen</Button>
+            <Button onClick={() => navigate('/login')} style={{ marginTop: '16px' }}>Back to sign in</Button>
           </div>
         ) : (
           <form className={styles.form} onSubmit={handleSubmit}>
-            <Field label="E-mailadres"><Input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></Field>
-            <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Bezig...' : 'Resetlink versturen'}</Button>
-            <Button appearance="transparent" onClick={() => navigate('/login')}>Terug</Button>
+            <Field label="Email address"><Input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></Field>
+            <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Working...' : 'Send reset link'}</Button>
+            <Button appearance="transparent" onClick={() => navigate('/login')}>Back</Button>
           </form>
         )}
       </div>
