@@ -33,27 +33,60 @@ export function isRemarkActivity(item) {
   return item?.kind === 'remark' || item?.type === 'remark' || Boolean(item?.remark);
 }
 
+export function normalizeRemarkId(id) {
+  if (id == null || id === '') return id;
+  const stringId = String(id);
+  const colonIndex = stringId.indexOf(':');
+  const normalized = colonIndex >= 0 ? stringId.slice(colonIndex + 1) : stringId;
+  return /^\d+$/.test(normalized) ? Number(normalized) : normalized;
+}
+
+export function activityItemKey(item) {
+  const kind = item?.type || item?.kind || 'remark';
+  const id = item?.sourceId != null ? String(item.sourceId) : normalizeRemarkId(item?.id);
+  return `${kind}:${id ?? ''}`;
+}
+
 export function toRemark(item) {
-  return item?.remark || item;
+  if (!item) return item;
+  if (item.remark) {
+    return { ...item.remark, id: normalizeRemarkId(item.remark.id) };
+  }
+  if (item.type === 'remark' || item.kind === 'remark') {
+    return {
+      id: normalizeRemarkId(item.sourceId ?? item.id),
+      body: item.body,
+      isDeleted: item.isDeleted,
+      author: item.author
+        ?? (item.actor
+          ? { id: item.actor.id, displayName: item.actor.name || item.actor.displayName || null }
+          : null),
+      createdAt: item.createdAt,
+      column: item.column ?? (item.columnId ? { id: item.columnId, label: item.columnLabel } : null),
+      reactions: item.reactions ?? [],
+      canDelete: item.canDelete,
+    };
+  }
+  return { ...item, id: normalizeRemarkId(item.id) };
 }
 
 export function mergeNewest(current, incoming) {
   const seen = new Set();
   return [...incoming, ...current].filter((item) => {
-    const key = `${item?.type || item?.kind || 'remark'}:${item?.id}`;
-    if (seen.has(key)) return false;
+    const key = activityItemKey(item);
+    if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
 export function mergeOlder(current, incoming) {
-  const seen = new Set(current.map((item) => `${item?.type || item?.kind || 'remark'}:${item?.id}`));
+  const seen = new Set(current.map((item) => activityItemKey(item)));
   return [
     ...current,
     ...incoming.filter((item) => {
-      const key = `${item?.type || item?.kind || 'remark'}:${item?.id}`;
-      if (seen.has(key)) return false;
+      const key = activityItemKey(item);
+      if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
     }),

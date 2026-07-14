@@ -1,10 +1,6 @@
 import React, { memo } from 'react';
+import { formatHistoryValue } from '../../../utils/cellHistoryFormat';
 import { formatDateTime, getActivityTimestamp } from './remarksFormatters';
-
-function valueText(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  return String(value);
-}
 
 function sourceDetails(entry) {
   const source = String(entry?.source || entry?.type || 'change').toLowerCase();
@@ -18,8 +14,9 @@ function RowHistoryEntry({ entry }) {
   const source = sourceDetails(entry);
   const author = entry?.author?.displayName || entry?.user?.displayName || entry?.user?.name || 'System';
   const title = entry?.label || entry?.actionLabel || entry?.action || source.label;
-  const oldValue = valueText(entry?.oldValue);
-  const newValue = valueText(entry?.newValue);
+  const dataType = entry?.column?.dataType || entry?.dataType || null;
+  const oldValue = formatHistoryValue(entry?.oldValue, dataType);
+  const newValue = formatHistoryValue(entry?.newValue, dataType);
 
   return (
     <article className="history-entry" aria-label={`${source.label}: ${title}`}>

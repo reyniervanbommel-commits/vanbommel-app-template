@@ -7,6 +7,7 @@ import RemarkComposer from './RemarkComposer';
 import RemarkMessageCard from './RemarkMessageCard';
 import RemarkReactionBar from './RemarkReactionBar';
 import RemarksLatestCell from './RemarksLatestCell';
+import RowHistoryEntry from './RowHistoryEntry';
 import RowRemarksBadge from './RowRemarksBadge';
 
 function renderWithFluent(component) {
@@ -25,6 +26,32 @@ const REMARK = {
 describe('remarks components', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('formatteert ISO-datums in history als dd/mm/jjjj', () => {
+    renderWithFluent(
+      <RowHistoryEntry
+        entry={{
+          action: 'UPDATE',
+          columnLabel: 'Leverdatum',
+          oldValue: '2026-04-09T00:00:00.000Z',
+          newValue: '2026-04-09T12:00:00.000Z',
+          createdAt: '2026-07-14T08:06:00.000Z',
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('09/04/2026')).toHaveLength(2);
+    expect(screen.queryByText(/2026-04-09T/)).toBeNull();
+  });
+
+  it('gebruikt display_name uit de sessie voor de composer-avatar', () => {
+    renderWithFluent(
+      <RemarkComposer currentUser={{ display_name: 'Reynier van Bommel', email: 'reynier@example.com' }} onSubmit={vi.fn()} />
+    );
+
+    expect(screen.getByText('RB')).toBeTruthy();
+    expect(screen.queryByText('CU')).toBeNull();
   });
 
   it('behoudt de draft bij een mislukte submit en wist hem na succes', async () => {

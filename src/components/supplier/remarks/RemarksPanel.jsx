@@ -4,6 +4,7 @@ import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
 import RowActivityFeed from './RowActivityFeed';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
+import { layout } from '../../../styles/brandTokens';
 import './remarks.css';
 
 function renderColumnOption(column) {
@@ -85,10 +86,22 @@ function RemarksPanel({
     [controller.all, controller.remarks, controller.selectedTab]
   );
 
+  const panelStyle = useMemo(
+    () => ({
+      top: `${layout.headerHeight}px`,
+      height: `calc(100vh - ${layout.headerHeight}px)`,
+    }),
+    []
+  );
+
   if (!open) return null;
 
   return (
-    <aside className="remarks-side-panel" aria-label={`Remarks for purchase order ${orderNumber}`}>
+    <aside
+      className="remarks-side-panel"
+      style={panelStyle}
+      aria-label={`Remarks for purchase order ${orderNumber}`}
+    >
       <header className="remarks-panel-header">
         <Button
           className="remarks-close-button"

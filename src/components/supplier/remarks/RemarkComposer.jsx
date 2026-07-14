@@ -7,7 +7,11 @@ function RemarkComposer({ currentUser, column = null, onSubmit }) {
   const [submitError, setSubmitError] = useState('');
   const normalizedLength = draft.normalize('NFC').trim().length;
   const invalid = normalizedLength < 1 || normalizedLength > 2000;
-  const displayName = currentUser?.displayName || 'Current user';
+  const displayName =
+    currentUser?.display_name
+    || currentUser?.displayName
+    || currentUser?.email
+    || 'User';
 
   const handleChange = useCallback((event) => {
     setDraft(event.target.value);

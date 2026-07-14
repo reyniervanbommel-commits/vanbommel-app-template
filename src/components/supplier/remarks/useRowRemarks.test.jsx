@@ -75,6 +75,46 @@ describe('useRowRemarks', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('dedupliceert een net geplaatste remark wanneer polling dezelfde activity teruggeeft', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ items: [], total: 0, nextCursor: null })
+      .mockResolvedValueOnce({ items: [], totals: { remarks: 0, history: 0 }, newestCursor: 'new-1' })
+      .mockResolvedValueOnce({
+        remark: { id: 42, body: 'New remark', createdAt: '2026-07-14T09:47:00.000Z' },
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'remark:42',
+            type: 'remark',
+            sourceId: '42',
+            body: 'New remark',
+            createdAt: '2026-07-14T09:47:00.000Z',
+          },
+        ],
+        totals: { remarks: 1, history: 0 },
+        newestCursor: 'new-2',
+      });
+
+    const { result, unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.createRemark('New remark');
+    });
+    expect(result.current.items).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].id).toBe(42);
+    unmount();
+  });
+
   it('pauzeert polling wanneer het document verborgen is', async () => {
     apiRequest
       .mockResolvedValueOnce({ items: [], total: 0, nextCursor: null })

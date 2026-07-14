@@ -50,30 +50,32 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   return (
     <td className={styles.controlCell}>
       <div className={styles.controlCellInner}>
-        {selection?.enabled ? (
-          <Checkbox
-            className={styles.rowCheckbox}
-            checked={selection.isSelected(selectionKey)}
-            onChange={handleSelectionChange}
-            aria-label={`Select order ${order.orderNumber}`}
+        <div className={styles.rowControlsCluster}>
+          {selection?.enabled ? (
+            <Checkbox
+              className={styles.rowCheckbox}
+              checked={selection.isSelected(selectionKey)}
+              onChange={handleSelectionChange}
+              aria-label={`Select order ${order.orderNumber}`}
+            />
+          ) : null}
+          {hasLines ? (
+            <Button
+              size="small"
+              appearance="subtle"
+              className={styles.compactToggleButton}
+              data-rowid={rowId}
+              onClick={onToggleOrder}
+            >
+              {isExpanded ? '-' : '+'}
+            </Button>
+          ) : null}
+          <RowRemarksBadge
+            count={remarks?.summary?.count}
+            orderNumber={order.orderNumber}
+            onOpen={handleOpenRemarks}
           />
-        ) : null}
-        {hasLines ? (
-          <Button
-            size="small"
-            appearance="subtle"
-            className={styles.compactToggleButton}
-            data-rowid={rowId}
-            onClick={onToggleOrder}
-          >
-            {isExpanded ? '-' : '+'}
-          </Button>
-        ) : null}
-        <RowRemarksBadge
-          count={remarks?.summary?.count}
-          orderNumber={order.orderNumber}
-          onOpen={handleOpenRemarks}
-        />
+        </div>
         <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
       </div>
     </td>
