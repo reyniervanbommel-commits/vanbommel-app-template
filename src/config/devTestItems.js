@@ -64,6 +64,7 @@ export const devTestItems = [
       'Vendors and Items datamodel pages support refresh, sample preview and Excel export without errors',
       'No regression in existing PO flow: table loads, column toggles work, and write-back controls stay available only where allowed',
     ],
+  },
   {
     id: 'feature-sync-retained-orders',
     title: 'Sync-retained orders outside hard D365 filter',
@@ -73,6 +74,18 @@ export const devTestItems = [
       'Hiding a row clears retention; the PO is no longer fetched in phase 2',
       'Changing sync filters in Data model clears retained count',
       'Admin Data model shows retained order count when > 0',
+    ],
+  },
+  {
+    id: 'feature-203-d365-product-images',
+    title: 'Feature 203 - D365 product images (v1.14.137)',
+    checks: [
+      'The board shows a dedicated Image column on header rows and line rows',
+      'Each visible, non-removed line with an item number shows a product thumbnail in the Image column',
+      'The order header Image column shows the first visible item and +N for additional unique items',
+      'Clicking a thumbnail opens a popup with the large image and the item number below it',
+      'A missing product image stays empty without a broken-image icon',
+      'An unauthorized request to /api/media/product-image is rejected',
     ],
   },
 ];

@@ -1,12 +1,12 @@
-import React, { memo, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
-import useAxisLockedScroll from '../../hooks/useAxisLockedScroll';
-import { useSequentialStickyColumns } from '../../hooks/useSequentialStickyColumns';
+import { usePurchaseOrdersBoardLineLinks } from '../../hooks/usePurchaseOrdersBoardLineLinks';
+import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -63,48 +63,61 @@ const useStyles = makeStyles({
     textAlign: 'center',
   },
 });
-
 function PurchaseOrdersBoardTable({
-  items,
-  columns,
-  lineColumns,
-  boardView,
-  onSaveValue,
-  onRenameColumn,
-  onRemoveColumn,
-  onCorrect,
-  isAdmin,
-  onToggleWriteback,
-  onReorderHeaderColumn,
-  onReorderLineColumn,
-  headerColumnWidths = {},
-  lineColumnWidths = {},
-  headerColumnTextStyles = {},
-  headerColumnFormatRules = {},
-  lineColumnTextStyles = {},
-  lineColumnFormatRules = {},
-  onSaveHeaderColumnWidth,
-  onSaveLineColumnWidth,
-  onSaveHeaderColumnTextStyle,
-  onSaveHeaderColumnFormatRules,
-  onSaveLineColumnTextStyle,
-  onSaveLineColumnFormatRules,
-  onAddColumnRightOf,
-  onSetLineColumnTotal,
-  onPushLineTotalToHeader,
-  onPushLineValuesToHeader,
-  lineTotalColumns = [],
-  lineTotalHeaderLinks = [],
-  lineValueHeaderLinks = [],
-  editingColumnKey,
-  onEditingDone,
-  reorderingColumns = false,
+  boardData,
+  columnConfig,
+  cellActions: boardCellActions,
+  columnActions,
+  interactionState,
   selection,
 }) {
+  const { items, columns, lineColumns, boardView } = boardData;
+  const {
+    headerColumnWidths = {},
+    lineColumnWidths = {},
+    headerColumnTextStyles = {},
+    headerColumnFormatRules = {},
+    lineColumnTextStyles = {},
+    lineColumnFormatRules = {},
+    lineTotalColumns = [],
+    lineTotalHeaderLinks = [],
+    lineValueHeaderLinks = [],
+  } = columnConfig;
+  const {
+    onSaveValue,
+    onCorrect,
+    isAdmin,
+    onToggleWriteback,
+    onReorderHeaderColumn,
+    onReorderLineColumn,
+  } = boardCellActions;
+  const {
+    onRenameColumn,
+    onRemoveColumn,
+    onSaveHeaderColumnWidth,
+    onSaveLineColumnWidth,
+    onSaveHeaderColumnTextStyle,
+    onSaveHeaderColumnFormatRules,
+    onSaveLineColumnTextStyle,
+    onSaveLineColumnFormatRules,
+    onAddColumnRightOf,
+    onSetLineColumnTotal,
+    onPushLineTotalToHeader,
+    onPushLineValuesToHeader,
+  } = columnActions;
+  const {
+    editingColumnKey,
+    onEditingDone,
+    reorderingColumns = false,
+    stickyColumns = {},
+  } = interactionState;
   const styles = useStyles();
-  const wrapperRef = useRef(null);
-  useAxisLockedScroll(wrapperRef);
-  const { decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = useSequentialStickyColumns({ columns, headerColumnWidths, wrapperRef });
+  const { wrapperRef, decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = usePurchaseOrdersBoardStickyColumns({
+    columns,
+    headerColumnWidths,
+    stickyColumnKeys: stickyColumns.keys,
+    onStickyColumnKeysChange: stickyColumns.onChange,
+  });
   useEffect(() => {
     if (!editingColumnKey) return undefined;
     const timer = setTimeout(() => {
@@ -190,28 +203,11 @@ function PurchaseOrdersBoardTable({
     ]
   );
 
-  const linkedLineTotalByHeaderKey = useMemo(
-    () => (Array.isArray(lineTotalHeaderLinks)
-      ? lineTotalHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-        acc[link.headerColumnKey] = link.lineColumnKey;
-        return acc;
-      }, {})
-      : {}),
-    [lineTotalHeaderLinks]
-  );
-  const linkedLineValueByHeaderKey = useMemo(
-    () => (Array.isArray(lineValueHeaderLinks)
-      ? lineValueHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-      const lineColumn = lineColumns.find((lineColumnEntry) => lineColumnEntry.key === link.lineColumnKey);
-        if (!lineColumn) return acc;
-        acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
-        return acc;
-      }, {})
-      : {}),
-    [lineValueHeaderLinks, lineColumns]
-  );
+  const { linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey } = usePurchaseOrdersBoardLineLinks({
+    lineTotalHeaderLinks,
+    lineValueHeaderLinks,
+    lineColumns,
+  });
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
@@ -269,25 +265,27 @@ function PurchaseOrdersBoardTable({
           />
         </thead>
         <PurchaseOrdersBoardRows
-          groupedRows={groupedRows}
-          collapsedGroups={collapsedGroups}
-          expandedOrders={expandedOrders}
-          columns={decoratedColumns}
-          lineColumns={lineColumns}
-          headerColumnWidths={headerColumnWidths}
-          lineColumnWidths={lineColumnWidths}
-          headerColumnTextStyles={headerColumnTextStyles}
-          headerColumnFormatRules={headerColumnFormatRules}
-          lineColumnTextStyles={lineColumnTextStyles}
-          lineColumnFormatRules={lineColumnFormatRules}
-          onSaveLineColumnWidth={onSaveLineColumnWidth}
-          colCount={colCount}
-          tableActions={tableActions}
-          onClearGrouping={clearGrouping}
-          cellActions={cellActions}
-          lineTotalColumns={lineTotalColumns}
-          linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
-          linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+          boardData={{ groupedRows, collapsedGroups, expandedOrders }}
+          columnConfig={{
+            columns: decoratedColumns,
+            lineColumns,
+            headerColumnWidths,
+            lineColumnWidths,
+            headerColumnTextStyles,
+            headerColumnFormatRules,
+            lineColumnTextStyles,
+            lineColumnFormatRules,
+            lineTotalColumns,
+            linkedLineTotalByHeaderKey,
+            linkedLineValueByHeaderKey,
+          }}
+          tableConfig={{
+            colCount,
+            tableActions,
+            onClearGrouping: clearGrouping,
+            cellActions,
+            onSaveLineColumnWidth,
+          }}
           selection={selection}
           cellFilterActions={cellFilterActions}
         />

@@ -1,11 +1,14 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderImagePreviewDialog from './PurchaseOrderImagePreviewDialog';
+import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
 import { resolveImageUrl } from '../../utils/imageColumnUrl';
+import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
+import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
 
 const useStyles = makeStyles({
   removedText: {
@@ -47,7 +50,15 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
+function PurchaseOrderHeaderCellContent({
+  order,
+  column,
+  onSaveValue,
+  onCorrect,
+  linkedLineTotalMap,
+  linkedLineValueMap,
+  productImageLines = order.lines,
+}) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
@@ -59,36 +70,16 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const productImageSummary = useMemo(
+    () => getPurchaseOrderProductImageSummary(productImageLines),
+    [productImageLines]
+  );
 
-  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
-    const url = resolveImageUrl(column, order.values);
-    if (!url) return null;
-    const handleImageClick = () => setImageDialogOpen(true);
-    const handleImageDialogOpenChange = (open) => setImageDialogOpen(open);
-    const handleImageLoadError = (event) => { event.currentTarget.style.display = 'none'; };
-    return (
-      <>
-        <button type="button" className={styles.imageButton} onClick={handleImageClick}>
-          <img
-            key={url}
-            className={styles.image}
-            src={url}
-            alt={`${column.label} voor order ${order.orderNumber}`}
-            loading="lazy"
-            draggable={false}
-            onError={handleImageLoadError}
-          />
-        </button>
-        <PurchaseOrderImagePreviewDialog
-          open={imageDialogOpen}
-          onOpenChange={handleImageDialogOpenChange}
-          imageUrl={url}
-          column={column}
-          order={order}
-        />
-      </>
-    );
-  }
+  const handleImageClick = useCallback(() => setImageDialogOpen(true), []);
+  const handleImageDialogOpenChange = useCallback((open) => setImageDialogOpen(open), []);
+  const handleImageLoadError = useCallback((event) => {
+    event.currentTarget.style.display = 'none';
+  }, []);
 
   const handleSave = useCallback((value) => {
     onSaveValue({
@@ -113,6 +104,44 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
+  if (isProductImageColumn(column)) {
+    if (order.removedInD365 || !productImageSummary.firstItemNumber) return null;
+    return (
+      <PurchaseOrderProductImageCell
+        dataAreaId={order.dataAreaId}
+        itemNumber={productImageSummary.firstItemNumber}
+        additionalItemCount={productImageSummary.additionalItemCount}
+      />
+    );
+  }
+
+  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+    const url = resolveImageUrl(column, order.values);
+    if (!url) return null;
+    return (
+      <>
+        <button type="button" className={styles.imageButton} onClick={handleImageClick}>
+          <img
+            key={url}
+            className={styles.image}
+            src={url}
+            alt={`${column.label} for order ${order.orderNumber}`}
+            loading="lazy"
+            draggable={false}
+            onError={handleImageLoadError}
+          />
+        </button>
+        <PurchaseOrderImagePreviewDialog
+          open={imageDialogOpen}
+          onOpenChange={handleImageDialogOpenChange}
+          imageUrl={url}
+          column={column}
+          order={order}
+        />
+      </>
+    );
+  }
+
   if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     return (
       <span className={isChangedCell ? styles.changedCell : undefined}>
@@ -120,7 +149,7 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
-          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
+          ariaLabel={`${column.label} for order ${order.orderNumber}`}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -161,7 +190,7 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
-        {formulaError ? 'Formulefout' : display}
+        {formulaError ? 'Formula error' : display}
       </span>
     )
     : display;
@@ -169,7 +198,10 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
     ? <span className={styles.changedCell}>{rawDisplayNode}</span>
     : rawDisplayNode;
 
-  return order.removedInD365 ? <span className={styles.removedText}>{displayNode}</span> : displayNode;
+  const content = order.removedInD365
+    ? <span className={styles.removedText}>{displayNode}</span>
+    : displayNode;
+  return content;
 }
 
 export default memo(PurchaseOrderHeaderCellContent);

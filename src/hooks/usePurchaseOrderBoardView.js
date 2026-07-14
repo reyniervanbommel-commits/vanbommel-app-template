@@ -142,13 +142,20 @@ export function usePurchaseOrderBoardView({
   const exportFilterSortGrouping = useCallback(() => {
     const tableState = tableView.exportState();
     return {
+      activityFilter,
       filterByColumn: tableState.filterByColumn,
       sortState: tableState.sortState,
       grouping: grouping.exportState(),
     };
-  }, [tableView, grouping]);
+  }, [activityFilter, tableView, grouping]);
 
   const applyFilterSortGrouping = useCallback((state) => {
+    setActivityFilter(
+      [ACTIVITY_FILTER_ALL, ACTIVITY_FILTER_NEW, ACTIVITY_FILTER_CHANGED, ACTIVITY_FILTER_REMOVED]
+        .includes(state?.activityFilter)
+        ? state.activityFilter
+        : ACTIVITY_FILTER_ALL
+    );
     tableView.applyState({
       filterByColumn: state?.filterByColumn,
       sortState: state?.sortState,

@@ -75,11 +75,17 @@ describe('mapTbResponseToBoard', () => {
         partitionKey: 'nl01',
         recordKey: 'PO-1',
         values: { status: 'Open' },
+        historyByColumnId: { 101: true },
         isNew: 1,
         removedAtSource: true,
         syncRetained: false,
         detailCount: '2',
-        details: [{ detailKey: 10, values: { qty: 5 }, isRemoved: true }],
+        details: [{
+          detailKey: 10,
+          values: { qty: 5 },
+          historyByColumnId: { 201: true },
+          isRemoved: true,
+        }],
       }],
       meta: {
         columns: {
@@ -96,6 +102,7 @@ describe('mapTbResponseToBoard', () => {
       dataAreaId: 'nl01',
       orderNumber: 'PO-1',
       values: { status: 'Open' },
+      historyByColumnId: { 101: true },
       isNew: true,
       isChanged: false,
       removedInD365: true,
@@ -105,6 +112,7 @@ describe('mapTbResponseToBoard', () => {
     expect(order.lines).toEqual([{
       lineNumber: 10,
       values: { qty: 5 },
+      historyByColumnId: { 201: true },
       isNew: false,
       isChanged: false,
       isRemoved: true,

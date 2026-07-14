@@ -1,73 +1,87 @@
 # D365-productafbeeldingen (DevOps)
 
-**Doel:** Toon beveiligde D365-productafbeeldingen per inkooporderregel en als compacte orderheaderpreview, zonder directe Blob-toegang en zonder een D365 data entity.  
-**Referentie in repo:** [.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md](../../.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md)  
-**Tags:** d365; productafbeeldingen; backend; frontend; security; testing
+**Feature:** #203
+**Doel:** Toon beveiligde standaard D365-productafbeeldingen per inkooporderregel en als compacte orderheaderpreview.
+**Plan:** [.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md](../../.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md)
 
----
+## Dwingende scope: uitsluitend as-is
+
+Feature #203 vereist geen enkele wijziging in D365 F&O:
+
+- geen custom service of X++-code;
+- geen custom data entity;
+- geen custom security role, duty of privilege;
+- geen legal-entity-allowlist;
+- geen D365 package, configuratie of deployment;
+- geen productafbeelding-specifieke vrije URL of trusted-origin-setting.
+
+De app gebruikt uitsluitend de bestaande standaard data entity `EcoResReleasedProductDocumentAttachmentEntity`, die publiek doorgaans `ReleasedProductDocumentAttachments` heet. De vaste app-integratie is `/data/ReleasedProductDocumentAttachments` via de bestaande `D365ODataService.fetchEntityRecords`, bestaande OAuth-instellingen en bestaande `D365_ODATA_COMPANY`-scope.
 
 ## User story
 
-**Als** medewerker  
-**wil ik** bij elke inkooporderregel de D365-productafbeelding en op de orderheader een compacte preview zien  
-**zodat** ik artikelen sneller visueel kan herkennen zonder toegang tot D365 Blob Storage.
+**Als** medewerker
+**wil ik** bij elke inkooporderregel de standaard D365-productafbeelding en op de orderheader een compacte preview zien
+**zodat** ik artikelen sneller visueel kan herkennen zonder directe toegang tot D365 of Blob Storage.
 
----
+## Technisch contract
 
-## Acceptatiecriteria (definitie van "klaar")
+De browser roept alleen aan:
 
-1. Productafbeeldingen worden uitsluitend via een geauthenticeerde app-route opgehaald; de browser krijgt nooit D365-tokens, Blob-paden of Blob-credentials.
-2. Orderregels tonen een thumbnail op basis van `ItemNumber`; ontbrekende afbeeldingen blijven rustig leeg.
-3. De orderheader toont de thumbnail van het eerste zichtbare regelitem plus een `+N`-badge voor overige unieke items.
-4. Alleen JPEG, PNG en WebP tot maximaal 5 MB worden geserveerd.
-5. De route valideert invoer, beperkt toegang tot medewerker/admin en cachet succesvolle afbeeldingen maximaal 15 minuten.
-6. Versie, tests en DEV-browserchecklist zijn bijgewerkt.
+`GET /api/media/product-image?dataAreaId=<legalEntity>&itemNumber=<itemNumber>`
 
----
+De backend:
 
-## Wat is al gedaan (geen DevOps-tasks meer nodig tenzij verificatie)
+1. accepteert uitsluitend `dataAreaId` en `itemNumber`;
+2. gebruikt altijd het vaste standaard entity path;
+3. filtert op `ItemNumber`, naast de bestaande company-scope van `fetchEntityRecords`;
+4. selecteert `dataAreaId`, `ItemNumber`, `Attachment`, `FileType`, `IsProductImage`, `IsDefaultProductImage` en `AttachedDateTime`;
+5. kiest client-side uitsluitend de default product image; bij meerdere defaults wordt de nieuwste `AttachedDateTime` gebruikt;
+6. decodeert `Attachment` als Base64;
+7. accepteert alleen JPEG, PNG en WebP tot maximaal 5 MB;
+8. controleert dat `FileType` en magic bytes overeenkomen;
+9. cachet alleen succesvolle beelden maximaal 15 minuten.
 
-| Item | Locatie |
-|---|---|
-| OAuth client-credentials en token-cache voor D365 | `server/services/D365ODataService.js` |
-| Sessiebeveiliging, CSP en globale rate-limit | `server/server.js` |
-| Huidige externe image-kolom | `src/components/supplier/PurchaseOrderHeaderCellContent.jsx` |
-| Rendering orderregels | `src/components/supplier/PurchaseOrdersSubitemsBodyRows.jsx` |
+Er wordt geen vrije URL, entitynaam, document-id, Blob-pad of bestandsnaam vanuit de request geaccepteerd.
 
----
+## Security en statuscodes
 
-## Backlog — child User Stories
+- De route vereist een geldige sessie en de rol medewerker of admin.
+- De bestaande routespecifieke rate limiter blijft actief.
+- D365 OAuth-tokens en technische foutdetails blijven server-side.
+- `200`: geldige afbeelding met `Cache-Control: private, max-age=900`.
+- `204`: geen default record of geen bruikbare `Attachment`.
+- `400`: ongeldige of extra queryparameter.
+- `403`: niet-geautoriseerde rol.
+- `502`: standaardentiteit ontbreekt, OData faalt, of inhoud faalt MIME-, magic-byte- of groottelimieten.
+- Alle niet-succesresponses gebruiken `Cache-Control: no-store`.
 
-### Story A: D365 custom service voor productafbeeldingen (#204)
-**Beschrijving:** Lever een beveiligd custom-servicecontract op dat per legal entity en itemnummer de standaard D365-productafbeelding retourneert, zonder data entity of directe Blob-toegang.
+## UI en frontendrefactors
 
-**Acceptatiecriteria:**
-1. Een bekend item met JPEG-, PNG- of WebP-afbeelding retourneert `found: true`, toegestaan `contentType` en geldige Base64-data.
-2. Een bestaand item zonder afbeelding retourneert `found: false` zonder bestandsgegevens.
-3. Ongeldige legal entities of itemnummers geven geen documentdata terug.
-4. De app-registration heeft geen Blob Storage-credentials en geen directe Blob-toegang.
+- Elke zichtbare orderregel met `itemNumber` gebruikt de gedeelde thumbnailcomponent.
+- De orderheader gebruikt het eerste zichtbare regelitem en toont `+N` voor overige unieke itemnummers.
+- Ontbrekende of geweigerde media blijven rustig leeg zonder broken-image-weergave.
+- De bestaande externe image-kolom blijft werken.
+- De relevante componentopsplitsingen en board-hooks blijven behouden.
 
-### Story B: Beveiligde app-proxy voor productafbeeldingen (#205)
-**Beschrijving:** Haal de D365-service-response uitsluitend server-side op en lever veilige image-bytes aan de browser.
+## Acceptatiecriteria
 
-**Acceptatiecriteria:**
-1. `GET /api/media/product-image?dataAreaId=<legalEntity>&itemNumber=<itemNumber>` geeft voor een toegestaan beeld `200` plus `Cache-Control: private, max-age=900`.
-2. Onjuiste invoer, ontbrekend beeld, ontbrekende rechten en D365-fouten geven respectievelijk 400, 204, 403 en 502 zonder gevoelige informatie.
-3. De proxy accepteert geen vrije URL, `DocuRef`-ID of andere identifier dan legal entity en itemnummer.
-4. Een tweede request voor hetzelfde item binnen 15 minuten voert geen tweede D365-call uit.
+1. Geen artifact of configuratie vereist nieuwe inrichting of deployment in D365.
+2. Alleen de vaste standaard OData-entiteit wordt gebruikt.
+3. Defaultselectie gebeurt in de app op de standaard entity records.
+4. Alleen JPEG, PNG en WebP met correcte bytesignatuur en maximaal 5 MB worden geserveerd.
+5. Auth, rate limiting, cache, veilige statuscodes en foutmaskering zijn getest.
+6. De UI en relevante frontendrefactors blijven behouden.
+7. Appversie is `v1.14.136`; relevante tests, typecheck en build slagen.
 
-### Story C: Native productafbeeldingen in het inkooporderboard (#206)
-**Beschrijving:** Toon thumbnails per orderregel en de eerste zichtbare productthumbnail met unieke-items-badge op de orderheader; behoud bestaande externe image-kolommen.
+## Live metadata
 
-**Acceptatiecriteria:**
-1. Elke zichtbare, niet-verwijderde orderregel met een itemnummer toont de D365-thumbnail of blijft rustig leeg bij 204/fout.
-2. De header toont de afbeelding van het eerste zichtbare regelitem en badge `+N` met het correcte aantal overige unieke itemnummers.
-3. Een order zonder regelitems toont geen afbeelding en geen badge.
-4. Thumbnail en badge zijn via toetsenbord bruikbaar en hebben Nederlandse, beschrijvende toegankelijkheidslabels.
-5. De bestaande handmatige externe image-kolom blijft werken.
+Live metadata kon in de preview niet worden geverifieerd, omdat daar momenteel geen D365 base URL en OAuth client credentials zijn geconfigureerd. Dit is geen verzoek om D365 aan te passen. Zodra een bestaande omgeving wel is geconfigureerd, kan `scripts/d365/check-standard-product-images.mjs` read-only controleren welke standaard entity set gepubliceerd is. Het script toont geen token, client secret of volledige configuratiewaarde.
 
----
+## Buiten scope
 
-## Versie document
-
-Aangemaakt op basis van [.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md](../../.cursor/plans/dev_2026-07-13-d365-productafbeeldingen.plan.md); wijzig dit bestand bij nieuwe afspraken.
+- D365-development, custom modellen en deployment.
+- Nieuwe D365-rollen of allowlists.
+- Directe Blob Storage-toegang.
+- Supplier-toegang tot de media-route.
+- Uploaden, wijzigen of verwijderen van productdocumenten.
+- Commit, push of PR als onderdeel van deze scopecorrectie.

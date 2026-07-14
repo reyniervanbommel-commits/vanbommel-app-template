@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Badge, makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
+import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -30,25 +32,58 @@ function resolveLineRowFormatColor(line, lineColumns, columnFormatRules) {
   return '';
 }
 
-function renderLineCellContent({
+const PurchaseOrderLineCellContent = memo(function PurchaseOrderLineCellContent({
   line,
   column,
-  lineColumns,
+  isFirstColumn,
   order,
   onSaveValue,
   onCorrect,
   styles,
 }) {
   const rawValue = line.values?.[column.key];
-  const showLineBadge = column === lineColumns[0] && (line?.isNew || line?.isChanged || line?.isRemoved);
+  const showLineBadge = isFirstColumn && (line?.isNew || line?.isChanged || line?.isRemoved);
+  const itemNumber = line?.itemNumber ?? line?.values?.itemNumber;
+
+  if (isProductImageColumn(column)) {
+    if (line?.isRemoved) return null;
+    return (
+      <PurchaseOrderProductImageCell
+        dataAreaId={order.dataAreaId}
+        itemNumber={itemNumber}
+      />
+    );
+  }
+  const cellKeys = useMemo(() => ({
+    columnId: column.id,
+    dataAreaId: order.dataAreaId,
+    orderNumber: order.orderNumber,
+    lineNumber: line.lineNumber,
+  }), [column.id, line.lineNumber, order.dataAreaId, order.orderNumber]);
+  const handleSave = useCallback((value) => {
+    onSaveValue({
+      ...cellKeys,
+      columnKey: column.key,
+      value,
+    });
+  }, [cellKeys, column.key, onSaveValue]);
+  const handleCorrect = useCallback(({ value, basedOnValue }) => {
+    onCorrect({
+      ...cellKeys,
+      columnKey: column.key,
+      value,
+      basedOnValue,
+    });
+  }, [cellKeys, column.key, onCorrect]);
   const lineBadge = line?.isRemoved
     ? <Badge appearance="tint" color="danger" size="small">verwijderd</Badge>
     : (line?.isNew
       ? <Badge appearance="tint" color="success" size="small">nieuw</Badge>
       : (line?.isChanged ? <Badge appearance="tint" color="warning" size="small">gewijzigd</Badge> : null));
 
+  let content;
   if (line?.isRemoved) {
-    return (
+    content = (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <span className={styles.removedText}>
           {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
@@ -56,9 +91,8 @@ function renderLineCellContent({
         {showLineBadge ? lineBadge : null}
       </span>
     );
-  }
-  if (column.source === 'custom') {
-    return (
+  } else if (column.source === 'custom') {
+    content = (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <EditableCell
           dataType={column.dataType}
@@ -66,84 +100,64 @@ function renderLineCellContent({
           options={column.options}
           ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
-          cellKeys={{
-            columnId: column.id,
-            dataAreaId: order.dataAreaId,
-            orderNumber: order.orderNumber,
-            lineNumber: line.lineNumber,
-          }}
-          onSave={(value) =>
-            onSaveValue({
-              columnId: column.id,
-              columnKey: column.key,
-              dataAreaId: order.dataAreaId,
-              orderNumber: order.orderNumber,
-              lineNumber: line.lineNumber,
-              value,
-            })
-          }
+          cellKeys={cellKeys}
+          onSave={handleSave}
         />
         {showLineBadge ? lineBadge : null}
       </span>
     );
-  }
-  if (column.source === 'd365' && column.writableToD365 && onCorrect) {
-    return (
+  } else if (column.source === 'd365' && column.writableToD365 && onCorrect) {
+    content = (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
-          cellKeys={{
-            columnId: column.id,
-            dataAreaId: order.dataAreaId,
-            orderNumber: order.orderNumber,
-            lineNumber: line.lineNumber,
-          }}
-          onCorrect={({ value, basedOnValue }) =>
-            onCorrect({
-              columnId: column.id,
-              columnKey: column.key,
-              dataAreaId: order.dataAreaId,
-              orderNumber: order.orderNumber,
-              lineNumber: line.lineNumber,
-              value,
-              basedOnValue,
-            })
-          }
+          cellKeys={cellKeys}
+          onCorrect={handleCorrect}
         />
         {showLineBadge ? lineBadge : null}
       </span>
     );
-  }
-  return (
-    <span className={showLineBadge ? styles.statusWrap : undefined}>
-      <span className={line?.isRemoved ? styles.removedText : undefined}>
-        {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
+  } else {
+    content = (
+      <span className={showLineBadge ? styles.statusWrap : undefined}>
+        <span>
+          {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
+        </span>
+        {showLineBadge ? lineBadge : null}
       </span>
-      {showLineBadge ? lineBadge : null}
-    </span>
-  );
-}
+    );
+  }
+
+  return content;
+});
 
 export default function PurchaseOrdersSubitemsBodyRows({
   rowId,
   order,
   lineColumns,
   visibleLines,
-  columnWidths,
-  columnTextStyles,
-  columnFormatRules = {},
-  onSaveValue,
-  onCorrect,
-  subCellClassName,
-  noRowsCellClassName,
+  cellPresentation,
+  mutationActions,
+  classNames,
   cellFilterActions,
 }) {
   const styles = useStyles();
+  const {
+    columnWidths,
+    columnTextStyles,
+    columnFormatRules = {},
+  } = cellPresentation;
+  const { onSaveValue, onCorrect } = mutationActions;
+  const { subCell: subCellClassName, noRowsCell: noRowsCellClassName } = classNames;
   const effectiveColumnFormatRules = useMemo(
     () => normalizeColumnFormatRulesMap(columnFormatRules),
     [columnFormatRules]
+  );
+  const firstDataColumnKey = useMemo(
+    () => lineColumns.find((column) => !isProductImageColumn(column))?.key || '',
+    [lineColumns]
   );
   return (
     <tbody>
@@ -180,15 +194,15 @@ export default function PurchaseOrdersSubitemsBodyRows({
                 onApplyFilterFromCellValue={cellFilterActions?.applyFilterFromCellValue}
                 onClearColumnFilter={cellFilterActions?.clearColumnFilter}
               >
-                {renderLineCellContent({
-                  line,
-                  column,
-                  lineColumns,
-                  order,
-                  onSaveValue,
-                  onCorrect,
-                  styles,
-                })}
+                <PurchaseOrderLineCellContent
+                  line={line}
+                  column={column}
+                  isFirstColumn={column.key === firstDataColumnKey}
+                  order={order}
+                  onSaveValue={onSaveValue}
+                  onCorrect={onCorrect}
+                  styles={styles}
+                />
               </PurchaseOrderDataCell>
             );
           })}
