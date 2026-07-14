@@ -64,6 +64,18 @@ export const devTestItems = [
       'Vendors and Items datamodel pages support refresh, sample preview and Excel export without errors',
       'No regression in existing PO flow: table loads, column toggles work, and write-back controls stay available only where allowed',
     ],
+  },
+  {
+    id: 'feature-207-row-remarks-v1-14-132',
+    title: 'Feature 207 - Row remarks and complete row activity (v1.14.132)',
+    checks: [
+      'The remark badge, Remarks cell and cell context menu open the same panel for the selected purchase order',
+      'Remarks, reactions, soft delete and ownership rules work with two different employee accounts',
+      'History and All show D365 refreshes, custom edits, write-back states and row actions without duplicates',
+      'Older activity loads in stable chronological order and polling runs only while the visible panel is open',
+      'Keyboard navigation, Escape, focus restoration and narrow viewport behavior are accessible',
+    ],
+  },
   {
     id: 'feature-sync-retained-orders',
     title: 'Sync-retained orders outside hard D365 filter',

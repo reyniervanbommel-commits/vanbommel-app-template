@@ -1,0 +1,246 @@
+.remarks-drawer {
+  width: min(480px, 100vw);
+  max-width: 520px;
+}
+
+.remarks-panel,
+.remarks-feed,
+.remarks-composer,
+.remark-card,
+.history-entry {
+  display: flex;
+  flex-direction: column;
+}
+
+.remarks-panel,
+.remarks-feed {
+  gap: 12px;
+}
+
+.remarks-heading:focus {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+.remarks-heading {
+  margin: 0;
+  font-size: inherit;
+}
+
+.remarks-header-context,
+.remarks-meta,
+.remarks-muted,
+.history-meta {
+  color: var(--colorNeutralForeground3);
+  font-size: 12px;
+}
+
+.remarks-tabs {
+  margin-bottom: 4px;
+}
+
+.remarks-column-filter {
+  display: grid;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.remarks-column-filter select,
+.remarks-composer textarea {
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+}
+
+.remarks-column-filter select {
+  min-height: 32px;
+  padding: 4px 8px;
+}
+
+.remarks-composer {
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--colorNeutralBackground2);
+}
+
+.remarks-composer textarea {
+  min-height: 88px;
+  resize: vertical;
+  padding: 8px;
+}
+
+.remarks-composer-actions,
+.remark-card-header,
+.reaction-bar,
+.history-values,
+.remarks-state-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remarks-composer-actions,
+.remark-card-header {
+  justify-content: space-between;
+}
+
+.remarks-error {
+  color: var(--colorPaletteRedForeground1);
+}
+
+.remarks-state {
+  padding: 16px 4px;
+}
+
+.remarks-skeleton {
+  height: 72px;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--colorNeutralBackground3) 25%,
+    var(--colorNeutralBackground4) 50%,
+    var(--colorNeutralBackground3) 75%
+  );
+  background-size: 200% 100%;
+  animation: remarks-pulse 1.4s infinite;
+}
+
+@keyframes remarks-pulse {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.remark-card {
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 8px;
+  background: var(--colorNeutralBackground1);
+}
+
+.remark-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.remark-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.remark-tombstone {
+  margin: 0;
+  color: var(--colorNeutralForeground3);
+  font-style: italic;
+}
+
+.remark-column-tag,
+.history-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--colorNeutralBackground3);
+  font-size: 11px;
+}
+
+.reaction-bar {
+  flex-wrap: wrap;
+}
+
+.reaction-button[aria-pressed='true'] {
+  background: var(--colorBrandBackground2);
+  border-color: var(--colorBrandStroke1);
+}
+
+.day-separator {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 0;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-entry {
+  gap: 6px;
+  padding: 10px 0 10px 12px;
+  border-left: 2px solid var(--colorNeutralStroke1);
+}
+
+.history-title {
+  font-weight: 600;
+}
+
+.history-values {
+  min-width: 0;
+}
+
+.history-value {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remarks-badge-button,
+.remarks-latest-cell {
+  cursor: pointer;
+}
+
+.remarks-badge-button {
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+}
+
+.remarks-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--colorBrandBackground);
+  color: var(--colorNeutralForegroundOnBrand);
+  font-size: 11px;
+}
+
+.remarks-latest-cell {
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.remarks-latest-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .remarks-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remarks-skeleton {
+    animation: none;
+  }
+}

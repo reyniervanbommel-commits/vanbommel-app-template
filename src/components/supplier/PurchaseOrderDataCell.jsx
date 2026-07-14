@@ -1,84 +1,48 @@
-import React, { memo, useCallback } from 'react';
-import {
-  Menu,
-  MenuDivider,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  tokens,
-} from '@fluentui/react-components';
+import React, { memo, useCallback, useMemo } from 'react';
+import { tokens } from '@fluentui/react-components';
 import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
-import {
-  copyCellValueToClipboard,
-  isCellContextMenuDisabled,
-} from '../../utils/tableViewFilterUtils';
+import { isCellContextMenuDisabled } from '../../utils/tableViewFilterUtils';
 
 function PurchaseOrderDataCell({
-  column,
-  rawValue,
-  className,
-  style,
+  cell,
+  layout,
+  contextMenu,
   children,
-  filterByColumn,
-  onApplyFilterFromCellValue,
-  onClearColumnFilter,
-  linkedLineTotalKeys = {},
-  linkedLineValueKeys = {},
 }) {
-  const disabled = isCellContextMenuDisabled(column, { linkedLineTotalKeys, linkedLineValueKeys });
-  const activeFilter = filterByColumn?.[column.key];
+  const { column, rawValue } = cell;
+  const { className, style } = layout;
+  const disabled = isCellContextMenuDisabled(column);
+  const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
-  const stickyStyle = Number.isFinite(stickyLeft)
-    ? {
-      position: 'sticky',
+  const resolvedCellStyle = useMemo(() => ({
+    ...style,
+    position: Number.isFinite(stickyLeft) ? 'sticky' : 'relative',
+    ...(Number.isFinite(stickyLeft) ? {
       left: `${stickyLeft}px`,
       zIndex: 2,
       backgroundColor: tokens.colorNeutralBackground1,
-    }
-    : null;
-  const positionedCellStyle = { ...style, position: 'relative' };
-  const resolvedCellStyle = stickyStyle ? { ...positionedCellStyle, ...stickyStyle } : positionedCellStyle;
+    } : {}),
+  }), [stickyLeft, style]);
 
-  const handleFilterCell = useCallback(() => {
-    onApplyFilterFromCellValue?.(column.key, rawValue);
-  }, [column.key, onApplyFilterFromCellValue, rawValue]);
-
-  const handleClearFilter = useCallback(() => {
-    onClearColumnFilter?.(column.key);
-  }, [column.key, onClearColumnFilter]);
-
-  const handleCopyValue = useCallback(() => {
-    copyCellValueToClipboard(column, rawValue).catch(() => {});
-  }, [column, rawValue]);
-
-  if (disabled) {
-    return (
-      <td className={className} style={resolvedCellStyle}>
-        {children}
-      </td>
-    );
-  }
+  const handleContextMenu = useCallback((event) => {
+    if (disabled) return;
+    event.preventDefault();
+    contextMenu?.open?.(event.currentTarget, {
+      column,
+      rawValue,
+      filterActive,
+    });
+  }, [column, contextMenu, disabled, filterActive, rawValue]);
 
   return (
-    <Menu openOnContext>
-      <MenuTrigger disableButtonEnhancement>
-        <td className={className} style={resolvedCellStyle}>
-          {children}
-        </td>
-      </MenuTrigger>
-      <MenuPopover>
-        <MenuList>
-          <MenuItem onClick={handleFilterCell}>Filter column on this cell</MenuItem>
-          {filterActive ? (
-            <MenuItem onClick={handleClearFilter}>Clear column filter</MenuItem>
-          ) : null}
-          <MenuDivider />
-          <MenuItem onClick={handleCopyValue}>Copy cell value</MenuItem>
-        </MenuList>
-      </MenuPopover>
-    </Menu>
+    <td
+      className={className}
+      style={resolvedCellStyle}
+      onContextMenu={handleContextMenu}
+    >
+      {children}
+    </td>
   );
 }
 

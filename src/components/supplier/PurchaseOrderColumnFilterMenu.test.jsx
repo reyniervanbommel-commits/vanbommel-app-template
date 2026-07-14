@@ -30,6 +30,7 @@ function renderMenu(overrides = {}) {
     onSetGroupingColor: vi.fn(),
     columnFormatRuleSet: null,
     onSetColumnFormatRules,
+    onSetColumnTextStyle: vi.fn().mockResolvedValue(undefined),
     referenceColumns: [
       { key: 'amount', label: 'Amount' },
       { key: 'budget', label: 'Budget' },
@@ -142,5 +143,21 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
     openColumnMenu();
     expect(screen.queryAllByRole('button', { name: /Conditional formatting/i }).length).toBe(0);
+  });
+
+  it('verbergt niet-ondersteunde acties voor de vaste Remarks-kolom', async () => {
+    renderMenu({
+      column: { ...COLUMN, key: 'remarks', label: 'Remarks', dataType: 'remarks', source: 'custom' },
+      onRenameColumn: vi.fn(),
+      onRemoveColumn: vi.fn(),
+    });
+
+    openColumnMenu();
+    expect((await screen.findByTestId('column-type-label')).textContent).toBe('Remarks');
+    expect(screen.queryByRole('button', { name: /Rename column Remarks/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Conditional formatting/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
   });
 });

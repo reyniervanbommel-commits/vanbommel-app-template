@@ -110,6 +110,10 @@ function PurchaseOrderColumnFilterMenu({
   });
   const handleRenameValueChange = useCallback((_, data) => setRenameValue(data.value), [setRenameValue]);
   const formatReferenceColumns = useMemo(() => (Array.isArray(referenceColumns) ? referenceColumns : []).filter((refColumn) => refColumn?.key && refColumn.key !== column.key), [referenceColumns, column.key]);
+  const remarksAlreadyAdded = useMemo(
+    () => referenceColumns.some((refColumn) => refColumn?.dataType === 'remarks'),
+    [referenceColumns]
+  );
   useEffect(() => {
     if (open) {
       setDraft(getDraftFromFilter(column, filter));
@@ -194,6 +198,7 @@ function PurchaseOrderColumnFilterMenu({
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
         handleSecondaryValueChange={handleSecondaryValueChange} handleApply={handleApply} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
+        remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline} handleApplyTextStyle={handleApplyTextStyle} handleClearTextStyle={handleClearTextStyle}
         formatRulesDraft={formatRulesDraft} formatReferenceColumns={formatReferenceColumns} handleApplyFormatRules={handleApplyFormatRules}
