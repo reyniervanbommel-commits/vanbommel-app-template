@@ -1,3 +1,3 @@
-export const APP_VERSION = 'v1.14.137';
+export const APP_VERSION = 'v1.14.138';
 
 export const getVersionString = () => APP_VERSION;

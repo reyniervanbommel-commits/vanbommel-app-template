@@ -13,7 +13,7 @@ BEGIN
     ALTER TABLE dbo.po_columns DROP CONSTRAINT CK_po_columns_data_type;
   END;
 
-  ALTER TABLE dbo.po_columns WITH CHECK
+  ALTER TABLE dbo.po_columns WITH NOCHECK
     ADD CONSTRAINT CK_po_columns_data_type
     CHECK (data_type IN ('text','number','date','boolean','select','image'));
 END;
@@ -30,7 +30,7 @@ BEGIN
     ALTER TABLE dbo.tb_columns DROP CONSTRAINT CK_tb_columns_data_type;
   END;
 
-  ALTER TABLE dbo.tb_columns WITH CHECK
+  ALTER TABLE dbo.tb_columns WITH NOCHECK
     ADD CONSTRAINT CK_tb_columns_data_type
     CHECK (data_type IN ('text','number','date','boolean','select','image'));
 END;
