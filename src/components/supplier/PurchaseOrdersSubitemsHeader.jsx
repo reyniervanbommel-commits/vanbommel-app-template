@@ -1,10 +1,10 @@
 import React, { memo } from 'react';
-import { Text } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
-import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 
 function PurchaseOrdersSubitemsHeader({
   lineColumns,
@@ -54,20 +54,21 @@ function PurchaseOrdersSubitemsHeader({
               key={column.key}
               columnKey={column.key}
               width={columnWidths[column.key]}
+              minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
               className={[
                 styles.subHeaderCell,
-                !isSystemColumn && lineColumnDrag.canDrag ? styles.dragDropCell : '',
+                lineColumnDrag.canDrag ? styles.dragDropCell : '',
                 lineColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '',
                 lineColumnDrag.dropTargetKey === column.key && lineColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '',
                 lineColumnDrag.dropTargetKey === column.key && lineColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : '',
               ].filter(Boolean).join(' ')}
               onResizeEnd={onSaveColumnWidth}
-              {...(isSystemColumn ? {} : lineColumnDrag.getCellDragProps(column.key))}
+              {...lineColumnDrag.getCellDragProps(column.key)}
             >
               <div className={styles.headerCellContent}>
                 <div className={styles.headerCellLabel}>
                   {isSystemColumn ? (
-                    <Text weight="semibold">{column.label}</Text>
+                    <PurchaseOrderProductImageColumnHeader label={column.label} />
                   ) : (
                     <PurchaseOrderColumnHeader
                       column={column}

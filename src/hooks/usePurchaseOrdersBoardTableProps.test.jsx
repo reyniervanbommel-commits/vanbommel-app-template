@@ -6,8 +6,14 @@ describe('usePurchaseOrdersBoardTableProps', () => {
   it('groups board state into the six board-table contracts', () => {
     const pageState = {
       orders: [{ orderNumber: 'PO-1' }],
-      visibleHeaderColumns: [{ key: 'status' }],
-      lineColumns: [{ key: 'itemNumber' }],
+      visibleHeaderColumns: [
+        { key: '__productImage', label: 'Image', dataType: 'productImage' },
+        { key: 'status' },
+      ],
+      lineColumns: [
+        { key: '__productImage', label: 'Image', dataType: 'productImage' },
+        { key: 'itemNumber' },
+      ],
       headerColumnWidths: {},
       lineColumnWidths: {},
       headerColumnTextStyles: {},

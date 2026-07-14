@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   PRODUCT_IMAGE_COLUMN_KEY,
+  PRODUCT_IMAGE_MIN_COLUMN_WIDTH,
+  clampProductImageColumnWidth,
   createProductImageColumn,
+  extendDefaultColumnKeys,
   isProductImageColumn,
   mergeProductImageColumnWidths,
+  orderColumnsWithProductImage,
   withProductImageColumn,
 } from './purchaseOrderProductImageColumn';
 
@@ -24,7 +28,28 @@ describe('purchaseOrderProductImageColumn', () => {
     expect(withProductImageColumn(withImage, 'header')).toBe(withImage);
   });
 
+  it('extends default column keys with the product image key', () => {
+    expect(extendDefaultColumnKeys(['orderNumber'])).toEqual([
+      PRODUCT_IMAGE_COLUMN_KEY,
+      'orderNumber',
+    ]);
+  });
+
+  it('orders the product image column from saved column order', () => {
+    const ordered = orderColumnsWithProductImage(
+      [{ key: 'orderNumber', label: 'Order' }],
+      ['orderNumber', PRODUCT_IMAGE_COLUMN_KEY],
+      'header'
+    );
+    expect(ordered.map((column) => column.key)).toEqual(['orderNumber', PRODUCT_IMAGE_COLUMN_KEY]);
+  });
+
   it('applies a default width when none is configured', () => {
     expect(mergeProductImageColumnWidths({ orderNumber: 120 })[PRODUCT_IMAGE_COLUMN_KEY]).toBe(52);
+  });
+
+  it('allows a smaller minimum width for the image column', () => {
+    expect(clampProductImageColumnWidth(36)).toBe(36);
+    expect(clampProductImageColumnWidth(20)).toBe(PRODUCT_IMAGE_MIN_COLUMN_WIDTH);
   });
 });

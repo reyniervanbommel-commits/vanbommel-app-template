@@ -15,6 +15,13 @@ import {
   normalizeSelectedColumns,
   normalizeVisibleColumns,
 } from '../utils/boardColumnSettings';
+import {
+  PRODUCT_IMAGE_COLUMN_KEY,
+  applyProductImageColumnWidth,
+  createProductImageColumn,
+  extendDefaultColumnKeys,
+  mergeProductImageColumnWidths,
+} from '../utils/purchaseOrderProductImageColumn';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -424,7 +431,7 @@ export function usePurchaseOrdersPage() {
   // Onbekende keys (bv. verwijderde kolommen) worden genegeerd; nieuwe kolommen zijn
   // standaard zichtbaar en sluiten achteraan aan.
   const defaultHeaderKeys = useMemo(
-    () => headerColumns.map((column) => column.key),
+    () => extendDefaultColumnKeys(headerColumns.map((column) => column.key)),
     [headerColumns]
   );
 
@@ -443,12 +450,17 @@ export function usePurchaseOrdersPage() {
     const byKey = new Map(headerColumns.map((column) => [column.key, column]));
     const order = normalizeColumnOrder(columnOrder, defaultHeaderKeys);
     return order
-      .filter((key) => byKey.has(key) && effectiveVisibleKeys.includes(key))
-      .map((key) => byKey.get(key));
+      .filter((key) => {
+        if (key === PRODUCT_IMAGE_COLUMN_KEY) return true;
+        return byKey.has(key) && effectiveVisibleKeys.includes(key);
+      })
+      .map((key) => (key === PRODUCT_IMAGE_COLUMN_KEY
+        ? createProductImageColumn('header')
+        : byKey.get(key)));
   }, [headerColumns, columnOrder, defaultHeaderKeys, effectiveVisibleKeys]);
 
   const defaultLineKeys = useMemo(
-    () => lineColumns.map((column) => column.key),
+    () => extendDefaultColumnKeys(lineColumns.map((column) => column.key)),
     [lineColumns]
   );
 
@@ -456,8 +468,10 @@ export function usePurchaseOrdersPage() {
     const byKey = new Map(lineColumns.map((column) => [column.key, column]));
     const order = normalizeColumnOrder(lineColumnOrder, defaultLineKeys);
     return order
-      .filter((key) => byKey.has(key))
-      .map((key) => byKey.get(key));
+      .filter((key) => key === PRODUCT_IMAGE_COLUMN_KEY || byKey.has(key))
+      .map((key) => (key === PRODUCT_IMAGE_COLUMN_KEY
+        ? createProductImageColumn('line')
+        : byKey.get(key)));
   }, [lineColumns, lineColumnOrder, defaultLineKeys]);
 
   const effectiveLineTotalColumns = useMemo(
@@ -474,11 +488,15 @@ export function usePurchaseOrdersPage() {
   );
 
   const effectiveHeaderColumnWidths = useMemo(
-    () => normalizeColumnWidths(headerColumnWidths, defaultHeaderKeys),
+    () => mergeProductImageColumnWidths(
+      normalizeColumnWidths(headerColumnWidths, defaultHeaderKeys)
+    ),
     [headerColumnWidths, defaultHeaderKeys]
   );
   const effectiveLineColumnWidths = useMemo(
-    () => normalizeColumnWidths(lineColumnWidths, defaultLineKeys),
+    () => mergeProductImageColumnWidths(
+      normalizeColumnWidths(lineColumnWidths, defaultLineKeys)
+    ),
     [lineColumnWidths, defaultLineKeys]
   );
   const effectiveHeaderColumnTextStyles = useMemo(
@@ -663,18 +681,26 @@ export function usePurchaseOrdersPage() {
 
   const saveHeaderColumnWidth = useCallback(async (columnKey, width) => {
     if (!columnKey) return;
-    const nextHeaderWidths = normalizeColumnWidths(
-      { ...effectiveHeaderColumnWidths, [columnKey]: width },
-      defaultHeaderKeys
+    const nextHeaderWidths = applyProductImageColumnWidth(
+      columnKey,
+      width,
+      normalizeColumnWidths(
+        { ...effectiveHeaderColumnWidths, [columnKey]: width },
+        defaultHeaderKeys
+      )
     );
     await persistBoardSettings({ nextHeaderWidths });
   }, [effectiveHeaderColumnWidths, defaultHeaderKeys, persistBoardSettings]);
 
   const saveLineColumnWidth = useCallback(async (columnKey, width) => {
     if (!columnKey) return;
-    const nextLineWidths = normalizeColumnWidths(
-      { ...effectiveLineColumnWidths, [columnKey]: width },
-      defaultLineKeys
+    const nextLineWidths = applyProductImageColumnWidth(
+      columnKey,
+      width,
+      normalizeColumnWidths(
+        { ...effectiveLineColumnWidths, [columnKey]: width },
+        defaultLineKeys
+      )
     );
     await persistBoardSettings({ nextLineWidths });
   }, [effectiveLineColumnWidths, defaultLineKeys, persistBoardSettings]);

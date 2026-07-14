@@ -1,6 +1,12 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Badge, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
+import {
+  PRODUCT_IMAGE_HOVER_SCALE,
+  PRODUCT_IMAGE_THUMBNAIL_SIZE,
+} from '../../utils/purchaseOrderProductImageColumn';
+
+const hoverPreviewSize = PRODUCT_IMAGE_THUMBNAIL_SIZE * PRODUCT_IMAGE_HOVER_SCALE;
 
 const useStyles = makeStyles({
   root: {
@@ -11,8 +17,8 @@ const useStyles = makeStyles({
   },
   imageButton: {
     display: 'block',
-    width: '28px',
-    height: '28px',
+    width: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
+    height: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
     ...shorthands.padding(0),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusSmall,
@@ -25,6 +31,15 @@ const useStyles = makeStyles({
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+  },
+  hoverPreviewImage: {
+    display: 'block',
+    width: `${hoverPreviewSize}px`,
+    height: `${hoverPreviewSize}px`,
+    objectFit: 'cover',
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
   },
   badgeButton: {
     ...shorthands.padding(0),
@@ -68,25 +83,36 @@ function PurchaseOrderProductImageCell({ dataAreaId, itemNumber, additionalItemC
   if (!imageUrl) return null;
 
   const badgeLabel = `${additionalItemCount} additional unique items`;
+  const hoverPreview = (
+    <img
+      className={styles.hoverPreviewImage}
+      src={imageUrl}
+      alt=""
+      draggable={false}
+    />
+  );
+
   return (
     <>
       <span className={styles.root}>
         {imageAvailable ? (
-          <button
-            type="button"
-            className={styles.imageButton}
-            onClick={handleOpenDialog}
-            aria-label={`Show product image for ${normalizedItemNumber}`}
-          >
-            <img
-              className={styles.image}
-              src={imageUrl}
-              alt={`Product image for ${normalizedItemNumber}`}
-              loading="lazy"
-              draggable={false}
-              onError={handleImageError}
-            />
-          </button>
+          <Tooltip content={hoverPreview} relationship="description" positioning="above">
+            <button
+              type="button"
+              className={styles.imageButton}
+              onClick={handleOpenDialog}
+              aria-label={`Show product image for ${normalizedItemNumber}`}
+            >
+              <img
+                className={styles.image}
+                src={imageUrl}
+                alt={`Product image for ${normalizedItemNumber}`}
+                loading="lazy"
+                draggable={false}
+                onError={handleImageError}
+              />
+            </button>
+          </Tooltip>
         ) : null}
         {additionalItemCount > 0 ? (
           imageAvailable ? (

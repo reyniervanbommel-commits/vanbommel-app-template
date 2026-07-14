@@ -78,9 +78,12 @@ export const devTestItems = [
   },
   {
     id: 'feature-203-d365-product-images',
-    title: 'Feature 203 - D365 product images (v1.14.137)',
+    title: 'Feature 203 - D365 product images (v1.14.139)',
     checks: [
-      'The board shows a dedicated Image column on header rows and line rows',
+      'The board shows a dedicated Image column with a cloud icon in the header',
+      'Hovering a thumbnail shows a preview at 3x size before opening the popup',
+      'The Image column can be dragged to another position and stays in that order',
+      'The Image column can be resized narrower than regular columns',
       'Each visible, non-removed line with an item number shows a product thumbnail in the Image column',
       'The order header Image column shows the first visible item and +N for additional unique items',
       'Clicking a thumbnail opens a popup with the large image and the item number below it',

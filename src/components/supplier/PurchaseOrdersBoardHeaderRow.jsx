@@ -1,11 +1,12 @@
 import React from 'react';
-import { Text, tokens } from '@fluentui/react-components';
+import { tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
-import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -90,15 +91,16 @@ export default function PurchaseOrdersBoardHeaderRow({
             columnKey={column.key}
             data-col-key={column.key}
             width={headerColumnWidths[column.key]}
-            className={[styles.headerCell, !isSystemColumn && headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
+            minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
+            className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
             onResizeEnd={onSaveHeaderColumnWidth}
             cellStyle={stickyHeaderStyle}
-            {...(isSystemColumn ? {} : headerColumnDrag.getCellDragProps(column.key))}
+            {...headerColumnDrag.getCellDragProps(column.key)}
           >
             <div className={styles.headerCellContent}>
               <div className={styles.headerCellLabel}>
                 {isSystemColumn ? (
-                  <Text weight="semibold">{column.label}</Text>
+                  <PurchaseOrderProductImageColumnHeader label={column.label} />
                 ) : (
                   <PurchaseOrderColumnHeader
                     column={column}

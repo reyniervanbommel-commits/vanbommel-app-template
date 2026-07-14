@@ -1,8 +1,5 @@
 import { useMemo } from 'react';
-import {
-  mergeProductImageColumnWidths,
-  withProductImageColumn,
-} from '../utils/purchaseOrderProductImageColumn';
+import { mergeProductImageColumnWidths } from '../utils/purchaseOrderProductImageColumn';
 
 /**
  * Creates stable semantic prop groups for the purchase orders board.
@@ -24,8 +21,8 @@ export function usePurchaseOrdersBoardTableProps({
   return useMemo(() => ({
     boardData: {
       items: pageState.orders,
-      columns: withProductImageColumn(pageState.visibleHeaderColumns, 'header'),
-      lineColumns: withProductImageColumn(pageState.lineColumns, 'line'),
+      columns: pageState.visibleHeaderColumns,
+      lineColumns: pageState.lineColumns,
       boardView,
     },
     columnConfig: {
