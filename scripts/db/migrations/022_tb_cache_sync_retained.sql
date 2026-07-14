@@ -20,7 +20,9 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('dbo.tb_cache')
 )
 BEGIN
-  CREATE INDEX IX_tb_cache_retained
-    ON dbo.tb_cache(table_id, sync_retained)
-    WHERE scope = 'master' AND sync_retained = 1;
+  EXEC(N'
+    CREATE INDEX IX_tb_cache_retained
+      ON dbo.tb_cache(table_id, sync_retained)
+      WHERE scope = ''master'' AND sync_retained = 1;
+  ');
 END

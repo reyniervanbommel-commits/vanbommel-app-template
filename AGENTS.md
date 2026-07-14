@@ -72,3 +72,21 @@ Er is geen `lint`-script geconfigureerd; ESLint staat wel als devDependency.
 |------|--------|
 | E-mail | `admin@example.com` |
 | Wachtwoord | `Bootstrap123!` |
+
+### Azure DevOps MCP (cloud agents)
+
+De DevOps MCP staat in `.cursor/mcp.json` (server `Devops`). Cloud agents hebben **non-interactive** auth nodig.
+
+| Secret (Cursor Dashboard) | Beschrijving |
+|---------------------------|--------------|
+| `ADO_MCP_AUTH_TOKEN` | Azure DevOps PAT of bearer token — **verplicht** voor cloud agents |
+
+**Setup:**
+
+1. Voeg `ADO_MCP_AUTH_TOKEN` toe via [Cloud Agents → Secrets](https://cursor.com/dashboard/cloud-agents).
+2. Gebruik een PAT met scopes Work Items (Read & Write) en Project (Read).
+3. Herstart de cloud agent na het toevoegen van het secret.
+
+Lokaal: `.\refresh-ado-mcp-token.ps1 -PersistToUserEnv` (Azure CLI) of PAT handmatig zetten.
+
+Zie `MCP_DEVOPS_CURSOR_SETUP.md` voor volledige instructies.
