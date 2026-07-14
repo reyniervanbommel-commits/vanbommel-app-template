@@ -48,8 +48,6 @@ export function usePurchaseOrderColumnMenuFlags({
   const canToggleStickyAction = canPromoteToSticky || canUnstickSticky;
   const canAddColumn = typeof onAddColumnRightOf === 'function';
   const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
-  const canEditImageColumn = Boolean(canAddColumn && column.source === 'custom' && column.dataType === 'image');
-  const isImageColumn = column?.dataType === 'image';
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
 
   return {
@@ -68,8 +66,6 @@ export function usePurchaseOrderColumnMenuFlags({
     canToggleStickyAction,
     canAddColumn,
     canEditFormulaColumn,
-    canEditImageColumn,
-    isImageColumn,
     columnTypeMeta,
   };
 }

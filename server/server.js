@@ -37,16 +37,7 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-app.use(helmet({
-  contentSecurityPolicy: {
-    useDefaults: true,
-    directives: {
-      // Ticket #178: image-kolommen laden externe afbeeldingen via URL-template.
-      // We houden de rest van de CSP streng (defaults), en verruimen alleen img-src.
-      'img-src': ["'self'", 'data:', 'https:'],
-    },
-  },
-}));
+app.use(helmet());
 
 // Gzip/brotli-compressie op alle responses. De frontend-bundle en de board-JSON-payloads
 // zijn tekstueel en comprimeren ~4x; dit verkort de laadtijd fors zonder verdere ingrepen.

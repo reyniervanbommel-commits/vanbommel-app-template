@@ -39,8 +39,6 @@ export function renderColumnTypeIcon(typeKey) {
       return <CheckmarkRegular />;
     case 'select':
       return <TextBulletList20Regular />;
-    case 'image':
-      return <LinkRegular />;
     case 'connected':
       return <LinkRegular />;
     case 'formula':

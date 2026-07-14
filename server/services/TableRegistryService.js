@@ -9,7 +9,7 @@ const sql = require('mssql');
 const { getSqlPool } = require('../utils/sqlPool');
 
 const SCOPES = ['master', 'detail'];
-const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'image'];
+const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select'];
 
 function getPool() {
   return getSqlPool();

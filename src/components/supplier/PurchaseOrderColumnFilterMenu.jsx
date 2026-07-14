@@ -78,7 +78,7 @@ function PurchaseOrderColumnFilterMenu({
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
-  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canEditImageColumn, isImageColumn, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
@@ -136,11 +136,6 @@ function PurchaseOrderColumnFilterMenu({
     onAddColumnRightOf(column, { key: 'formula-edit' });
     setOpen(false);
   }, [canEditFormulaColumn, column, onAddColumnRightOf]);
-  const handleEditImageColumn = useCallback(() => {
-    if (!canEditImageColumn) return;
-    onAddColumnRightOf(column, { key: 'image-edit' });
-    setOpen(false);
-  }, [canEditImageColumn, column, onAddColumnRightOf]);
   const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApply, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
@@ -182,11 +177,11 @@ function PurchaseOrderColumnFilterMenu({
         </Button>
       </PopoverTrigger>
       <PurchaseOrderColumnFilterMenuPopoverContent
-        styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets} isImageColumn={isImageColumn}
+        styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets}
         activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu} canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback} showWritebackLocked={showWritebackLocked} handleToggleWriteback={handleToggleWriteback} writable={writable}
         canAddColumn={canAddColumn} canRenameColumn={canRenameColumn} handleRenameColumn={handleRenameColumn} canEditFormulaColumn={canEditFormulaColumn}
-        handleEditFormulaColumn={handleEditFormulaColumn} canEditImageColumn={canEditImageColumn} handleEditImageColumn={handleEditImageColumn}
+        handleEditFormulaColumn={handleEditFormulaColumn}
         canRemoveColumn={canRemoveColumn} handleRemoveColumn={handleRemoveColumn} canToggleLineTotal={canToggleLineTotal} isLineColumnSummed={isLineColumnSummed}
         handleToggleLineTotal={handleToggleLineTotal} canPushLineTotalToHeader={canPushLineTotalToHeader} handlePushLineTotalToHeader={handlePushLineTotalToHeader}
         canPushLineValuesToHeader={canPushLineValuesToHeader} handlePushLineValuesToHeader={handlePushLineValuesToHeader}

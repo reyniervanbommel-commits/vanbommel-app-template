@@ -36,7 +36,6 @@ export function buildFilterFromCellValue(column, rawValue) {
  */
 export function isCellContextMenuDisabled(column) {
   if (!column?.key) return true;
-  if (column.dataType === 'image') return true;
   return false;
 }
 

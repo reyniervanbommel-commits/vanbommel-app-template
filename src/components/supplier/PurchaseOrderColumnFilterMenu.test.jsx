@@ -130,13 +130,4 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
     expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
   });
-
-  it('verbergt Conditional formatting voor image-kolommen', async () => {
-    renderMenu({
-      column: { ...COLUMN, dataType: 'image', source: 'custom' },
-    });
-
-    openColumnMenu();
-    expect(screen.queryAllByRole('button', { name: /Conditional formatting/i }).length).toBe(0);
-  });
 });

@@ -236,14 +236,6 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
 });
 
 describe('TableDataService.assertCustomColumnWritable', () => {
-  it('weigert image-kolommen voor handmatige save', () => {
-    expect(() => assertCustomColumnWritable({
-      source: 'custom',
-      dataType: 'image',
-      formulaExpr: null,
-    })).toThrow(/read-only/i);
-  });
-
   it('weigert formulekolommen voor handmatige save', () => {
     expect(() => assertCustomColumnWritable({
       source: 'custom',

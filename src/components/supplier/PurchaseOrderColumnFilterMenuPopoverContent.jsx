@@ -7,7 +7,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   column,
   columnTypeMeta,
   connectionTargets,
-  isImageColumn,
   activeSubmenu,
   submenuTop,
   openSubmenu,
@@ -22,8 +21,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
-  canEditImageColumn,
-  handleEditImageColumn,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -79,12 +76,10 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         columnLabel={column.label}
         columnTypeMeta={columnTypeMeta}
         connectionTargets={connectionTargets}
-        showSortAndFilter={!isImageColumn}
-        showGrouping={!isImageColumn}
         activeSubmenu={activeSubmenu}
         openSubmenu={openSubmenu}
         canSetColumnTextStyle={canSetColumnTextStyle}
-        canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
+        canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback}
         showWritebackLocked={showWritebackLocked}
         handleToggleWriteback={handleToggleWriteback}
@@ -94,8 +89,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         handleRenameColumn={handleRenameColumn}
         canEditFormulaColumn={canEditFormulaColumn}
         handleEditFormulaColumn={handleEditFormulaColumn}
-        canEditImageColumn={canEditImageColumn}
-        handleEditImageColumn={handleEditImageColumn}
         canRemoveColumn={canRemoveColumn}
         handleRemoveColumn={handleRemoveColumn}
         canToggleLineTotal={canToggleLineTotal}

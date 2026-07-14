@@ -121,10 +121,6 @@ export default function PurchaseOrdersPage() {
     handleFormulaTypeSelection,
     formulaReferenceColumns,
     submitFormulaColumn,
-    imageDialogState,
-    closeImageDialog,
-    handleImageTypeSelection,
-    submitImageColumn,
   } = usePurchaseOrderFormulaDialogState({
     visibleHeaderColumns,
     addHeaderColumnAfter,
@@ -140,14 +136,13 @@ export default function PurchaseOrdersPage() {
     if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
       return;
     }
-    if (handleImageTypeSelection(sourceColumn, typeDef)) return;
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key) setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleImageTypeSelection]);
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection]);
 
   const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
@@ -292,7 +287,6 @@ export default function PurchaseOrdersPage() {
       )}
       <PurchaseOrdersPageDialogs
         formula={{ state: formulaDialogState, close: closeFormulaDialog, submit: submitFormulaColumn, availableColumns: formulaReferenceColumns, formatRules: headerColumnFormatRules }}
-        image={{ state: imageDialogState, close: closeImageDialog, submit: submitImageColumn, availableColumns: visibleHeaderColumns, sampleRowValues: boardView.processedItems?.[0]?.values || {} }}
         bulkEdit={bulkEdit}
       />
     </div>

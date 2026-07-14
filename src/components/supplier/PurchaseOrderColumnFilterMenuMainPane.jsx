@@ -34,8 +34,6 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
-  canEditImageColumn,
-  handleEditImageColumn,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -177,14 +175,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           <div className={styles.divider} />
         </>
       ) : null}
-      {canEditImageColumn ? (
-        <>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditImageColumn}>
-            {menuLabel(styles, <LinkRegular />, 'Plaatjekolom bewerken')}
-          </Button>
-          <div className={styles.divider} />
-        </>
-      ) : null}
+      <div className={styles.divider} />
       <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRemoveColumn} disabled={!canRemoveColumn}>
         {menuLabel(styles, <DeleteRegular />, 'Delete column')}
       </Button>

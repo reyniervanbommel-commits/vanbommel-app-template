@@ -29,8 +29,8 @@ describe('tableViewFilterUtils', () => {
     });
   });
 
-  it('disables context menu only for image columns', () => {
-    expect(isCellContextMenuDisabled({ key: 'photo', dataType: 'image' })).toBe(true);
+  it('disables context menu only when column key is missing', () => {
+    expect(isCellContextMenuDisabled({ dataType: 'text' })).toBe(true);
     expect(isCellContextMenuDisabled(
       { key: 'total', dataType: 'number' },
       { linkedLineTotalKeys: { total: 'qty' } }

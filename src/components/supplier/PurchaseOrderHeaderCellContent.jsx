@@ -1,11 +1,9 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
-import PurchaseOrderImagePreviewDialog from './PurchaseOrderImagePreviewDialog';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
-import { resolveImageUrl } from '../../utils/imageColumnUrl';
 
 const useStyles = makeStyles({
   removedText: {
@@ -27,24 +25,6 @@ const useStyles = makeStyles({
     paddingLeft: '6px',
     paddingRight: '6px',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    display: 'block',
-    borderRadius: 0,
-  },
-  imageButton: {
-    display: 'block',
-    width: 'calc(100% + 20px)',
-    height: '18px',
-    margin: '-2px -10px',
-    overflow: 'hidden',
-    border: 'none',
-    padding: 0,
-    backgroundColor: 'transparent',
-    cursor: 'zoom-in',
-  },
 });
 
 function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
@@ -58,37 +38,6 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
-  const [imageDialogOpen, setImageDialogOpen] = useState(false);
-
-  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
-    const url = resolveImageUrl(column, order.values);
-    if (!url) return null;
-    const handleImageClick = () => setImageDialogOpen(true);
-    const handleImageDialogOpenChange = (open) => setImageDialogOpen(open);
-    const handleImageLoadError = (event) => { event.currentTarget.style.display = 'none'; };
-    return (
-      <>
-        <button type="button" className={styles.imageButton} onClick={handleImageClick}>
-          <img
-            key={url}
-            className={styles.image}
-            src={url}
-            alt={`${column.label} voor order ${order.orderNumber}`}
-            loading="lazy"
-            draggable={false}
-            onError={handleImageLoadError}
-          />
-        </button>
-        <PurchaseOrderImagePreviewDialog
-          open={imageDialogOpen}
-          onOpenChange={handleImageDialogOpenChange}
-          imageUrl={url}
-          column={column}
-          order={order}
-        />
-      </>
-    );
-  }
 
   const handleSave = useCallback((value) => {
     onSaveValue({

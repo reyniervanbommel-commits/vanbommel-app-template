@@ -7,7 +7,6 @@ const {
   normalizeFormulaExpression,
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
-  validateImageOptions,
 } = require('./TableColumnsService');
 
 describe('TableColumnsService.resolveWriteback', () => {
@@ -108,49 +107,5 @@ describe('TableColumnsService formula helpers', () => {
       columns,
       'text'
     )).not.toThrow();
-  });
-});
-
-describe('TableColumnsService.validateImageOptions', () => {
-  it('accepteert geldige image-opties en normaliseert trims/transforms', () => {
-    const validated = validateImageOptions({
-      urlTemplate: ' https://cdn.example.com/img/{xxx}.png ',
-      sourceColumnKey: ' itemId ',
-      transforms: [
-        { type: 'trim' },
-        { type: 'replace', from: '-', to: '' },
-      ],
-    });
-    expect(validated).toEqual({
-      urlTemplate: 'https://cdn.example.com/img/{xxx}.png',
-      sourceColumnKey: 'itemId',
-      transforms: [
-        { type: 'trim' },
-        { type: 'replace', from: '-', to: '' },
-      ],
-    });
-  });
-
-  it('weigert onveilige of onvolledige templates', () => {
-    expect(() => validateImageOptions({
-      urlTemplate: 'javascript:alert(1)',
-      sourceColumnKey: 'itemId',
-    })).toThrow(/http/i);
-    expect(() => validateImageOptions({
-      urlTemplate: 'https://cdn.example.com/image.png',
-      sourceColumnKey: 'itemId',
-    })).toThrow(/\{xxx\}/i);
-  });
-
-  it('weigert ontbrekende sourceColumnKey of foutieve transforms', () => {
-    expect(() => validateImageOptions({
-      urlTemplate: 'https://cdn.example.com/{xxx}.png',
-      sourceColumnKey: '',
-    })).toThrow(/sourceColumnKey/i);
-    expect(() => validateImageOptions({
-      urlTemplate: 'https://cdn.example.com/{xxx}.png',
-      sourceColumnKey: 'itemId',
-      transforms: [{ type: 'substring', start: -1 }],
-    })).toThrow(/start/i);
   });
 });

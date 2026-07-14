@@ -9,7 +9,6 @@ import {
   CloudRegular,
   EditRegular,
   FilterRegular,
-  ImageRegular,
   LinkRegular,
   MoreVerticalRegular,
   NumberSymbolRegular,
@@ -140,7 +139,6 @@ export default function PurchaseOrderColumnHeader({
       case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Datumkolom" />;
       case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Ja/nee-kolom" />;
       case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Keuzelijstkolom" />;
-      case 'image': return <ImageRegular className={styles.customIcon} title="Plaatjekolom" />;
       case 'text':
       default: return <EditRegular className={styles.customIcon} title="Tekstkolom" />;
     }
