@@ -17,9 +17,22 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     ...shorthands.gap('12px'),
+    overflowX: 'hidden',
+    overflowY: 'hidden',
+    maxWidth: '100%',
+  },
+  imageFrame: {
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    display: 'flex',
+    justifyContent: 'center',
   },
   image: {
-    width: '100%',
+    display: 'block',
+    maxWidth: '100%',
+    width: 'auto',
+    height: 'auto',
     maxHeight: '420px',
     objectFit: 'contain',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
@@ -52,11 +65,13 @@ export default function PurchaseOrderProductImagePreviewDialog({
         <DialogBody>
           <DialogTitle>Product image</DialogTitle>
           <DialogContent className={styles.dialogContent}>
-            <img
-              className={styles.image}
-              src={imageUrl}
-              alt={`Product image for ${normalizedItemNumber}`}
-            />
+            <div className={styles.imageFrame}>
+              <img
+                className={styles.image}
+                src={imageUrl}
+                alt={`Product image for ${normalizedItemNumber}`}
+              />
+            </div>
             <Text className={styles.itemNumber}>{normalizedItemNumber}</Text>
           </DialogContent>
         </DialogBody>

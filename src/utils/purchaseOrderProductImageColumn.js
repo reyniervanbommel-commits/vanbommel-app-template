@@ -4,7 +4,7 @@ export const PRODUCT_IMAGE_COLUMN_KEY = '__productImage';
 export const DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH = 52;
 export const PRODUCT_IMAGE_MIN_COLUMN_WIDTH = 32;
 export const PRODUCT_IMAGE_THUMBNAIL_SIZE = 28;
-export const PRODUCT_IMAGE_HOVER_SCALE = 3;
+export const PRODUCT_IMAGE_HOVER_SCALE = 5;
 
 export function createProductImageColumn(level = 'header') {
   return {

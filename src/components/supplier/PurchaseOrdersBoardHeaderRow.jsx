@@ -3,6 +3,7 @@ import { tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
 import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
+import PurchaseOrderProductImageColumnMenu from './PurchaseOrderProductImageColumnMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
@@ -153,7 +154,16 @@ export default function PurchaseOrdersBoardHeaderRow({
                 stickyColumnCount={stickyColumnKeys.length}
                 onMakeColumnSticky={onMakeColumnSticky}
               />
-              ) : null}
+              ) : (
+                <PurchaseOrderProductImageColumnMenu
+                  columnKey={column.key}
+                  isStickyColumn={isStickyColumn}
+                  canPromoteToSticky={canPromoteToSticky}
+                  canUnstickSticky={isRightMostStickyColumn}
+                  stickyColumnCount={stickyColumnKeys.length}
+                  onMakeColumnSticky={onMakeColumnSticky}
+                />
+              )}
             </div>
           </ResizableTableHeaderCell>
         );

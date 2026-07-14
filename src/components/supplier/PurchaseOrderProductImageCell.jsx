@@ -24,7 +24,7 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusSmall,
     overflow: 'hidden',
     backgroundColor: 'transparent',
-    cursor: 'zoom-in',
+    cursor: 'pointer',
   },
   image: {
     display: 'block',
@@ -45,7 +45,7 @@ const useStyles = makeStyles({
     ...shorthands.padding(0),
     border: 'none',
     backgroundColor: 'transparent',
-    cursor: 'zoom-in',
+    cursor: 'pointer',
   },
 });
 
