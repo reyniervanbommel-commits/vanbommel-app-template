@@ -21,6 +21,8 @@ const {
   writeBackField,
 } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
+const trackChangesService = require('./TrackChangesService');
+const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
@@ -2338,6 +2340,91 @@ async function loadHistoryByCell(pool, tableId) {
 }
 
 // ---------------------------------------------------------------------------
+// Track changes — streepjes-patronen per cel, meeberekend in de board-read.
+// Bron v1: tb_cell_history (alleen custom tb_-kolommen). Eén query, alleen bij
+// ≥1 actieve kolom. Bucketing (week/session) volledig in SQL; JS bouwt alleen
+// de kant-en-klare 5-tekenstrings via buildMarkPattern.
+// ---------------------------------------------------------------------------
+async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
+  const empty = { trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} };
+  if (!Array.isArray(enabledColumns) || enabledColumns.length === 0) return empty;
+
+  const maxOffset = MARK_COUNT - 1;
+  const activeOffsetByColumnId = {};
+  const defaultPattern = {};
+  const request = pool.request().input('tableId', sql.BigInt, tableId);
+
+  // VALUES-join met per-kolom activatedAt (fresh start per kolom).
+  const valueRows = [];
+  enabledColumns.forEach((col, i) => {
+    const cId = 'tc_c' + i;
+    const aId = 'tc_a' + i;
+    request.input(cId, sql.BigInt, col.columnId);
+    request.input(aId, sql.DateTime2, col.activatedAt);
+    valueRows.push(`(@${cId}, @${aId})`);
+
+    let activeOffset;
+    if (mode === 'week') {
+      const weeks = Math.floor((Date.now() - col.activatedAt.getTime()) / (7 * 24 * 3600 * 1000));
+      activeOffset = Math.max(0, Math.min(weeks, maxOffset));
+    } else {
+      const n = boundaries.filter((b) => b.getTime() >= col.activatedAt.getTime()).length;
+      activeOffset = Math.max(0, Math.min(n - 1, maxOffset));
+    }
+    activeOffsetByColumnId[String(col.columnId)] = activeOffset;
+    defaultPattern[String(col.columnId)] = buildMarkPattern([], activeOffset);
+  });
+
+  let offsetExpr;
+  if (mode === 'week') {
+    offsetExpr = 'DATEDIFF(week, h.changed_at, SYSUTCDATETIME())';
+  } else {
+    if (!Array.isArray(boundaries) || boundaries.length === 0) {
+      return { trackMarksByCell: new Map(), activeOffsetByColumnId, defaultPattern };
+    }
+    const cases = boundaries.map((b, i) => {
+      const bId = 'tc_b' + i;
+      request.input(bId, sql.DateTime2, b);
+      return `WHEN h.changed_at >= @${bId} THEN ${i}`;
+    });
+    offsetExpr = `CASE ${cases.join(' ')} ELSE 99 END`;
+  }
+
+  const query = `
+    SELECT h.column_id, h.partition_key, h.record_key, h.detail_key, ${offsetExpr} AS mark_offset
+    FROM dbo.tb_cell_history h WITH (NOLOCK)
+    INNER JOIN (VALUES ${valueRows.join(', ')}) AS act(column_id, activated_at)
+      ON act.column_id = h.column_id
+    WHERE h.table_id = @tableId
+      AND h.changed_at >= act.activated_at
+    GROUP BY h.column_id, h.partition_key, h.record_key, h.detail_key, ${offsetExpr}
+    HAVING ${offsetExpr} BETWEEN 0 AND ${maxOffset}
+  `;
+  const result = await request.query(query);
+
+  const redByCellColumn = new Map();
+  for (const row of result.recordset) {
+    const cellKey = historyCellKey(row.partition_key, row.record_key, row.detail_key);
+    if (!redByCellColumn.has(cellKey)) redByCellColumn.set(cellKey, new Map());
+    const byCol = redByCellColumn.get(cellKey);
+    const colKey = String(row.column_id);
+    if (!byCol.has(colKey)) byCol.set(colKey, new Set());
+    byCol.get(colKey).add(Number(row.mark_offset));
+  }
+
+  const trackMarksByCell = new Map();
+  for (const [cellKey, byCol] of redByCellColumn) {
+    const patterns = {};
+    for (const [colKey, offsets] of byCol) {
+      patterns[colKey] = buildMarkPattern([...offsets], activeOffsetByColumnId[colKey]);
+    }
+    trackMarksByCell.set(cellKey, patterns);
+  }
+
+  return { trackMarksByCell, activeOffsetByColumnId, defaultPattern };
+}
+
+// ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
 async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
@@ -2352,6 +2439,22 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
   const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
   const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
+
+  // Track changes: config uit app_settings (in-memory gecached). Alleen bij ≥1 actieve kolom
+  // draait er een query; anders geen SQL en geen Server-Timing-metric tb_track_marks.
+  const trackConfig = await trackChangesService.getConfig();
+  const trackEnabledColumns = Object.entries(trackConfig.columns || {})
+    .map(([id, entry]) => ({ columnId: Number(id), activatedAt: new Date(entry.activatedAt) }))
+    .filter((c) => Number.isFinite(c.columnId) && !Number.isNaN(c.activatedAt.getTime()));
+  const trackActive = trackEnabledColumns.length > 0;
+  const trackMarksPromise = trackActive
+    ? time('tb_track_marks', async () => {
+        const boundaries = trackConfig.mode === 'session'
+          ? await trackChangesService.getSessionBoundaries()
+          : [];
+        return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries);
+      })
+    : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
     const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
@@ -2389,6 +2492,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     enrichment,
     { d365LedgerRows, hasLedgerWindow },
     historyByCell,
+    trackMarks,
   ] = await Promise.all([
     time('tb_read_cols', () => Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
@@ -2402,6 +2506,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     time('tb_lookups', () => loadLookupEnrichment(table)),
     ledgerPromise,
     historyByCellPromise,
+    trackMarksPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
@@ -2474,6 +2579,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
         detailKey: d.detail_key,
         values: detailValues,
         historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
+        trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)),
         isNew,
         isChanged,
         isRemoved,
@@ -2506,6 +2612,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
       values: masterValues,
       historyByColumnId: historyByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)) || {},
+      trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)),
       formulaErrors,
       details,
       detailCount: details.length,
@@ -2541,6 +2648,13 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
         master: [...masterCols, ...enrichment.masterCols],
         detail: [...detailCols, ...enrichment.detailCols],
       },
+      trackChanges: trackActive
+        ? {
+            mode: trackConfig.mode,
+            activeOffsetByColumnId: trackMarks.activeOffsetByColumnId,
+            defaultPattern: trackMarks.defaultPattern,
+          }
+        : null,
     },
     rows,
     total: rows.length,

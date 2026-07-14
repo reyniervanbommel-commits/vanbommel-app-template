@@ -4,6 +4,21 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'feature-213-track-changes-v1-15-0',
+    title: 'Feature 213 - Track changes op celniveau (v1.15.0)',
+    checks: [
+      'Admin sees an "Enable/Disable track changes" item in the column menu; non-admins do not',
+      'Enabled columns show a history indicator icon in the column header',
+      'A tracked, changed custom cell shows up to 5 marks at the bottom of the cell',
+      'Marks use red (changed), yellow (completed session/week without change) and grey (running/before activation)',
+      'Admin Settings > Track changes toggles Per session / Per week and stores the choice',
+      'In session mode the session roles selection is visible and saved; hidden in week mode',
+      'The legend shows colour AND text; the marks div has an aria-label (no tooltip in the cell)',
+      'With no active columns there are no extra marks and no tb_track_marks Server-Timing metric',
+      'The footer shows version v1.15.0',
+    ],
+  },
+  {
     id: 'feature-207-row-remarks-v1-14-142',
     title: 'Feature 207 - Row remarks, activity feed and panel UX (v1.14.142)',
     checks: [

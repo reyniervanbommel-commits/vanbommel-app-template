@@ -53,6 +53,8 @@ export function usePurchaseOrdersPage() {
   // Nieuw-detectie per gebruiker (#133)
   const [newCount, setNewCount] = useState(0);
   const [changedCount, setChangedCount] = useState(0);
+  // Track-changes-meta uit de board-read (null = feature globaal uit) (#AB:217)
+  const [trackChangesMeta, setTrackChangesMeta] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +91,7 @@ export function usePurchaseOrdersPage() {
     setTotal(Number(data?.total) || 0);
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
+    setTrackChangesMeta(data?.meta?.trackChanges ?? null);
     setCachedPurchaseOrdersView(data);
   }, []);
 
@@ -896,6 +899,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,
@@ -953,6 +957,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,

@@ -26,6 +26,8 @@ function PurchaseOrderColumnFilterMenu({
   groupingColor,
   isAdmin,
   onToggleWriteback,
+  onToggleTrackChanges,
+  trackChangesEnabled = false,
   onSetSortDirection,
   onSetOperator,
   onSetValue,
@@ -161,6 +163,12 @@ function PurchaseOrderColumnFilterMenu({
     onError: notifyError,
   });
   const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
+  const canToggleTrackChanges = Boolean(isAdmin && typeof onToggleTrackChanges === 'function' && column.source === 'custom');
+  const handleToggleTrackChanges = useCallback(() => {
+    if (!canToggleTrackChanges) return;
+    onToggleTrackChanges(column.id, !trackChangesEnabled);
+    closeMenu();
+  }, [canToggleTrackChanges, onToggleTrackChanges, column.id, trackChangesEnabled, closeMenu]);
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -184,6 +192,7 @@ function PurchaseOrderColumnFilterMenu({
         styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets}
         activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu} canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback} showWritebackLocked={showWritebackLocked} handleToggleWriteback={handleToggleWriteback} writable={writable}
+        canToggleTrackChanges={canToggleTrackChanges} trackChangesEnabled={trackChangesEnabled} handleToggleTrackChanges={handleToggleTrackChanges}
         canAddColumn={canAddColumn} canRenameColumn={canRenameColumn} handleRenameColumn={handleRenameColumn} canEditFormulaColumn={canEditFormulaColumn}
         handleEditFormulaColumn={handleEditFormulaColumn}
         canRemoveColumn={canRemoveColumn} handleRemoveColumn={handleRemoveColumn} canToggleLineTotal={canToggleLineTotal} isLineColumnSummed={isLineColumnSummed}

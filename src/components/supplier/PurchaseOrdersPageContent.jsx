@@ -1,8 +1,10 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
+import { TrackChangesContext } from './trackChangesContext';
+import { useTrackChanges } from '../../hooks/useTrackChanges';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -28,6 +30,18 @@ const useStyles = makeStyles({
 function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
   const { pageModel, boardView, bulkEdit } = tableContext;
+  const trackChangesMeta = pageModel.trackChangesMeta || null;
+
+  // Admin-toggle voor track-changes per kolom. Config-call is admin-only; laad alleen voor admins.
+  const { setColumnEnabled: setTrackColumnEnabled } = useTrackChanges({ autoLoad: tableContext.isAdmin });
+  const onToggleTrackChanges = useCallback(async (columnId, enabled) => {
+    await setTrackColumnEnabled(columnId, enabled);
+    await pageModel.reload();
+  }, [setTrackColumnEnabled, pageModel]);
+  const trackChangesActiveByColumnId = useMemo(
+    () => trackChangesMeta?.activeOffsetByColumnId || null,
+    [trackChangesMeta],
+  );
   const data = useMemo(() => ({
     items: pageModel.orders,
     columns: pageModel.visibleHeaderColumns,
@@ -91,12 +105,16 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     editingColumnKey: tableContext.editingColumnKey,
     onEditingDone: tableContext.handleEditingDone,
     reorderingColumns: pageModel.savingColumns,
+    onToggleTrackChanges,
+    trackChangesActiveByColumnId,
   }), [
     pageModel,
     tableContext.editingColumnKey,
     tableContext.handleAddColumnRightOf,
     tableContext.handleEditingDone,
     tableContext.isAdmin,
+    onToggleTrackChanges,
+    trackChangesActiveByColumnId,
   ]);
   const linkActions = useMemo(() => ({
     onSetLineColumnTotal: pageModel.setLineColumnTotal,
@@ -158,7 +176,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   return (
     <>
       <div className={styles.tableRegion}>
-        <PurchaseOrdersBoardTable {...table} />
+        <TrackChangesContext.Provider value={trackChangesMeta}>
+          <PurchaseOrdersBoardTable {...table} />
+        </TrackChangesContext.Provider>
       </div>
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>

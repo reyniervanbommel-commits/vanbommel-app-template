@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
+  Button, Input,
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
+import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import {
   ArrowClockwiseRegular,
   CheckmarkRegular,
@@ -10,6 +11,7 @@ import {
   CloudRegular,
   EditRegular,
   FilterRegular,
+  HistoryRegular,
   LinkRegular,
   MoreVerticalRegular,
   NumberSymbolRegular,
@@ -74,6 +76,9 @@ export default function PurchaseOrderColumnHeader({
   showConditionalFormattingIndicator = false,
   showSumIndicator = false,
   showConnectionIndicator = false,
+  showTrackChangesIndicator = false,
+  trackChangesEnabled = false,
+  onToggleTrackChanges,
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
@@ -127,6 +132,15 @@ export default function PurchaseOrderColumnHeader({
     setBusy(true); setError('');
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
+  const canToggleTrackChanges = Boolean(isAdmin && typeof onToggleTrackChanges === 'function' && column.source === 'custom');
+  const handleToggleTrackChanges = useCallback(() => {
+    if (onToggleTrackChanges) onToggleTrackChanges(column.id, !trackChangesEnabled);
+  }, [onToggleTrackChanges, column.id, trackChangesEnabled]);
+  const trackChangesIndicator = showTrackChangesIndicator ? (
+    <Tooltip content="Track changes actief" relationship="label">
+      <HistoryRegular className={styles.indicatorIcon} />
+    </Tooltip>
+  ) : null;
   const connectionIndicator = showConnectionIndicator ? (
     <Tooltip content="Connected column" relationship="label">
       <LinkRegular className={styles.indicatorIcon} />
@@ -174,6 +188,11 @@ export default function PurchaseOrderColumnHeader({
         <MenuList>
           <MenuItem onClick={openRename}>Rename</MenuItem>
           <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Delete</MenuItem>
+          {canToggleTrackChanges ? (
+            <MenuItem onClick={handleToggleTrackChanges}>
+              {trackChangesEnabled ? 'Track changes uitzetten' : 'Track changes aanzetten'}
+            </MenuItem>
+          ) : null}
         </MenuList>
       </MenuPopover>
     </Menu>
@@ -203,6 +222,7 @@ export default function PurchaseOrderColumnHeader({
             <NumberSymbolRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
+        {trackChangesIndicator}
         <span className={styles.labelText}>{column.label}</span>
       </span>
     );
@@ -254,42 +274,25 @@ export default function PurchaseOrderColumnHeader({
             <NumberSymbolRegular className={styles.indicatorIcon} />
           </Tooltip>
         ) : null}
+        {trackChangesIndicator}
         <span className={styles.labelText}>{column.label}</span>
       </span>
       {showActionsMenu ? columnOptionsMenu : null}
 
-      <Dialog open={renameOpen} onOpenChange={(_, data) => !busy && setRenameOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Rename column</DialogTitle>
-            <DialogContent>
-              <Field label="Name" required validationState={error ? 'error' : 'none'} validationMessage={error || undefined}>
-                <Input value={label} onChange={(_, data) => setLabel(data.value)} />
-              </Field>
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setRenameOpen(false)} disabled={busy}>Cancel</Button>
-              <Button appearance="primary" onClick={submitRename} disabled={busy}>{busy ? 'Saving...' : 'Save'}</Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      <Dialog open={confirmOpen} onOpenChange={(_, data) => !busy && setConfirmOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Delete column</DialogTitle>
-            <DialogContent>
-              Delete column &quot;{column.label}&quot;? This permanently removes the column and all related values from SQL. This action cannot be undone.
-              {error ? <div className={styles.error}>{error}</div> : null}
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setConfirmOpen(false)} disabled={busy}>Cancel</Button>
-              <Button appearance="primary" onClick={submitRemove} disabled={busy}>{busy ? 'Deleting...' : 'Delete'}</Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      <PurchaseOrderColumnHeaderDialogs
+        columnLabel={column.label}
+        errorClassName={styles.error}
+        renameOpen={renameOpen}
+        setRenameOpen={setRenameOpen}
+        label={label}
+        setLabel={setLabel}
+        submitRename={submitRename}
+        confirmOpen={confirmOpen}
+        setConfirmOpen={setConfirmOpen}
+        submitRemove={submitRemove}
+        busy={busy}
+        error={error}
+      />
     </div>
   );
 }

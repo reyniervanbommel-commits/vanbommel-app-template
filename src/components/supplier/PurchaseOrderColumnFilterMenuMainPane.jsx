@@ -8,6 +8,7 @@ import {
   DeleteRegular,
   EditRegular,
   FilterRegular,
+  HistoryRegular,
   LinkRegular,
   LockClosedRegular,
   NumberSymbolRegular,
@@ -29,6 +30,9 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   showWritebackLocked = false,
   handleToggleWriteback,
   writable,
+  canToggleTrackChanges = false,
+  trackChangesEnabled = false,
+  handleToggleTrackChanges,
   canAddColumn,
   canRenameColumn,
   handleRenameColumn,
@@ -157,6 +161,14 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
               <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
               {writable ? 'Disable sync' : 'Enable sync'}
             </span>
+          </Button>
+        </>
+      ) : null}
+      {canToggleTrackChanges ? (
+        <>
+          <div className={styles.divider} />
+          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleTrackChanges}>
+            {menuLabel(styles, <HistoryRegular />, trackChangesEnabled ? 'Track changes uitzetten' : 'Track changes aanzetten')}
           </Button>
         </>
       ) : null}

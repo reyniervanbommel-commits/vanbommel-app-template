@@ -113,6 +113,7 @@ describe('mapTbResponseToBoard', () => {
       lineNumber: 10,
       values: { qty: 5 },
       historyByColumnId: { 201: true },
+      trackMarksByColumnId: null,
       isNew: false,
       isChanged: false,
       isRemoved: true,

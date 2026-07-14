@@ -21,6 +21,8 @@ export default function PurchaseOrdersBoardHeaderRow({
   onRemoveColumn,
   isAdmin,
   onToggleWriteback,
+  onToggleTrackChanges,
+  trackChangesActiveByColumnId = null,
   editingColumnKey,
   onEditingDone,
   linkedLineTotalByHeaderKey,
@@ -75,6 +77,10 @@ export default function PurchaseOrdersBoardHeaderRow({
           const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedValueMeta.lineColumnKey)?.label || linkedValueMeta.lineColumnKey;
           connectionTargets.push(`Subitem column "${lineColumnLabel}" (values)`);
         }
+        const trackChangesEnabled = Boolean(
+          trackChangesActiveByColumnId
+          && Object.prototype.hasOwnProperty.call(trackChangesActiveByColumnId, String(column.id))
+        );
         const stickyLeft = Number(column?.stickyLeft);
         const isStickyColumn = Number.isFinite(stickyLeft);
         const canPromoteToSticky = column.key === firstNonStickyColumnKey;
@@ -116,6 +122,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                     showConditionalFormattingIndicator={hasActiveConditionalFormatting}
                     showSumIndicator={hasGroupSummary}
                     showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
+                    showTrackChangesIndicator={trackChangesEnabled}
                   />
                 )}
               </div>
@@ -129,6 +136,8 @@ export default function PurchaseOrdersBoardHeaderRow({
                 isGroupSummaryColumn={hasGroupSummary}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
+                onToggleTrackChanges={onToggleTrackChanges}
+                trackChangesEnabled={trackChangesEnabled}
                 onSetSortDirection={setSortDirection}
                 onSetOperator={setFilterOperator}
                 onSetValue={setFilterValue}
