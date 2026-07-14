@@ -302,7 +302,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
             return (
               <PurchaseOrderDataCell
                 key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
-                cell={{ column, rawValue, order }}
+                cell={{ column, rawValue, order, trackMarks: line.trackMarksByColumnId }}
                 layout={{
                   className: subCellClassName,
                   contentClassName: isImageColumn ? undefined : subCellContentClassName,

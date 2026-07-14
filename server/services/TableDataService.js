@@ -2354,6 +2354,31 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
   const defaultPattern = {};
   const request = pool.request().input('tableId', sql.BigInt, tableId);
 
+  // Week-mode: bereken de active-offset per kolom mét dezelfde kalender als de
+  // bucketing (SQL DATEDIFF(week, ...)). JS-datumrekenen met een vaste 7-daagse
+  // deling wijkt rond weekgrenzen/DATEFIRST af van DATEDIFF(week) en zou dan
+  // onterecht gele/grijze streepjes tonen. SQL is hier de bron van waarheid.
+  let weekOffsetByColumnId = null;
+  if (mode === 'week') {
+    const weekReq = pool.request();
+    const weekRows = [];
+    enabledColumns.forEach((col, i) => {
+      const cId = 'wc' + i;
+      const aId = 'wa' + i;
+      weekReq.input(cId, sql.BigInt, col.columnId);
+      weekReq.input(aId, sql.DateTime2, col.activatedAt);
+      weekRows.push(`(@${cId}, @${aId})`);
+    });
+    const weekResult = await weekReq.query(`
+      SELECT v.column_id, DATEDIFF(week, v.activated_at, SYSUTCDATETIME()) AS week_offset
+      FROM (VALUES ${weekRows.join(', ')}) AS v(column_id, activated_at)
+    `);
+    weekOffsetByColumnId = {};
+    for (const r of weekResult.recordset) {
+      weekOffsetByColumnId[String(r.column_id)] = Number(r.week_offset);
+    }
+  }
+
   // VALUES-join met per-kolom activatedAt (fresh start per kolom).
   const valueRows = [];
   enabledColumns.forEach((col, i) => {
@@ -2365,7 +2390,7 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
 
     let activeOffset;
     if (mode === 'week') {
-      const weeks = Math.floor((Date.now() - col.activatedAt.getTime()) / (7 * 24 * 3600 * 1000));
+      const weeks = weekOffsetByColumnId?.[String(col.columnId)] ?? 0;
       activeOffset = Math.max(0, Math.min(weeks, maxOffset));
     } else {
       const n = boundaries.filter((b) => b.getTime() >= col.activatedAt.getTime()).length;

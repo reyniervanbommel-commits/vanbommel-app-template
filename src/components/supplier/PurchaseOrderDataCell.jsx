@@ -11,17 +11,18 @@ function PurchaseOrderDataCell({
   contextMenu,
   children,
 }) {
-  const { column, rawValue, order } = cell;
+  const { column, rawValue, order, trackMarks } = cell;
   const { className, contentClassName, contentStyle, style } = layout;
   const trackMeta = useTrackChangesMeta();
+  const marksByColumnId = trackMarks ?? order?.trackMarksByColumnId;
   const trackPattern = useMemo(() => {
     if (!trackMeta) return null;
     const colId = column?.id;
     if (colId == null) return null;
     const active = Object.prototype.hasOwnProperty.call(trackMeta.activeOffsetByColumnId || {}, String(colId));
     if (!active) return null;
-    return order?.trackMarksByColumnId?.[colId] ?? trackMeta.defaultPattern?.[colId] ?? null;
-  }, [trackMeta, column?.id, order]);
+    return marksByColumnId?.[colId] ?? trackMeta.defaultPattern?.[colId] ?? null;
+  }, [trackMeta, column?.id, marksByColumnId]);
   const disabled = isCellContextMenuDisabled(column);
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
