@@ -118,7 +118,7 @@ describe('GET /api/media/product-image', () => {
 
     expect(result.status).toBe(502);
     expect(result.cacheControl).toBe('no-store');
-    expect(result.body.toString()).toContain('Productafbeelding is tijdelijk niet beschikbaar');
+    expect(result.body.toString()).toContain('Product image is temporarily unavailable');
     expect(result.body.toString()).not.toContain('abc123');
   });
 });

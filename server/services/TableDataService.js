@@ -1540,7 +1540,7 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
   }
   if (refreshFailures.length) {
     throw Object.assign(
-      new Error(`Lookup-doeltabellen niet volledig ververst (${refreshFailures.join('; ')})`),
+      new Error(`Lookup target tables were not fully refreshed (${refreshFailures.join('; ')})`),
       { status: 502 }
     );
   }

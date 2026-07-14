@@ -1,7 +1,7 @@
 # UI-tekst inventarisatie (NL → EN)
 
 Datum: 2026-07-14  
-Doel: alle gebruikerszichtbare teksten in de app op Engels brengen.
+Versie na vertaling: v1.14.174
 
 ## Status
 

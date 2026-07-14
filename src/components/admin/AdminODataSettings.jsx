@@ -196,8 +196,8 @@ export default function AdminODataSettings() {
       <div className={styles.section}>
         <Text weight="semibold" className={styles.sectionTitle}>Authentication — OAuth2 client-credentials</Text>
         <Text className={styles.hint} block>
-          Aanbevolen methode. De app haalt zelf een token op bij Azure AD en ververst het automatisch
-          vóór expiry. Scope = basis-URL + <span className={styles.mono}>/.default</span>.
+          Recommended method. The app fetches a token from Azure AD and refreshes it automatically
+          before expiry. Scope = base URL + <span className={styles.mono}>/.default</span>.
         </Text>
         <Field label="Tenant ID">
           <Input placeholder="00000000-0000-0000-0000-000000000000" value={form.D365_ODATA_TENANT_ID} onChange={handleChange('D365_ODATA_TENANT_ID')} />

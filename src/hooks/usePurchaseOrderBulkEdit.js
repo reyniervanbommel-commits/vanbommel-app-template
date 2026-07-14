@@ -158,7 +158,7 @@ export function usePurchaseOrderBulkEdit({
       return;
     }
 
-    const columnLabel = columnLabelByKey.get(payload.columnKey) || payload.columnKey || 'deze kolom';
+    const columnLabel = columnLabelByKey.get(payload.columnKey) || payload.columnKey || 'this column';
     const decision = await showDecisionDialog({ columnLabel, selectedCount: visibleSelectionCount });
     if (decision !== 'bulk') {
       await runSingleUpdate(mode, payload);

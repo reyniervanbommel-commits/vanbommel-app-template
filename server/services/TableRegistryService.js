@@ -99,7 +99,7 @@ async function fetchTableByKey(tableKey) {
     `);
   const row = result.recordset[0];
   if (!row || !row.is_active) {
-    throw Object.assign(new Error(`Tabel '${tableKey}' niet gevonden`), { status: 404 });
+    throw Object.assign(new Error(`Table '${tableKey}' not found`), { status: 404 });
   }
   return {
     id: Number(row.id),

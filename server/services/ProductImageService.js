@@ -63,12 +63,12 @@ function decodeImageContent(contentBase64) {
   const maxBase64Length = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
 
   if (encoded.length > maxBase64Length || !isValidBase64(encoded)) {
-    throw new ProductImageServiceError('D365 leverde ongeldige afbeeldingsdata');
+    throw new ProductImageServiceError('D365 returned invalid image data');
   }
 
   const image = Buffer.from(encoded, 'base64');
   if (!image.length || image.length > MAX_IMAGE_BYTES) {
-    throw new ProductImageServiceError('D365 leverde een te grote afbeelding');
+    throw new ProductImageServiceError('D365 returned an image that is too large');
   }
 
   return image;
@@ -180,14 +180,14 @@ function createProductImageService({
       return selectDefaultProductImage(result?.items);
     } catch (error) {
       if (error instanceof ProductImageServiceError) throw error;
-      throw new ProductImageServiceError('D365 standaard productafbeeldingsentiteit is niet beschikbaar');
+      throw new ProductImageServiceError('D365 default product image entity is unavailable');
     }
   }
 
   async function getProductImage(input) {
     const validInput = validateProductImageInput(input);
     if (!validInput) {
-      throw new ProductImageServiceError('Ongeldige productafbeeldingparameters', 400);
+      throw new ProductImageServiceError('Invalid product image parameters', 400);
     }
 
     const cacheKey = buildCacheKey(validInput);
@@ -199,12 +199,12 @@ function createProductImageService({
 
     const contentType = contentTypeFromFileType(record.FileType);
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-      throw new ProductImageServiceError('D365 leverde een niet-toegestaan afbeeldingstype');
+      throw new ProductImageServiceError('D365 returned a disallowed image type');
     }
 
     const content = decodeImageContent(record.Attachment);
     if (!hasMatchingMagicBytes(contentType, content)) {
-      throw new ProductImageServiceError('D365 afbeeldingsinhoud komt niet overeen met het bestandstype');
+      throw new ProductImageServiceError('D365 image content does not match the file type');
     }
 
     const image = {
