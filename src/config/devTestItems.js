@@ -78,10 +78,10 @@ export const devTestItems = [
   },
   {
     id: 'feature-203-d365-product-images',
-    title: 'Feature 203 - D365 product images (v1.14.141)',
+    title: 'Feature 203 - D365 product images (v1.14.142)',
     checks: [
       'The board shows a dedicated Image column with a cloud icon in the header',
-      'Thumbnails fill the full Image cell without extra padding',
+      'Thumbnails fill the Image cell width without increasing row height',
       'Hovering a thumbnail shows the full product image scaled proportionally at 5x',
       'The Image column can be made sticky via the column menu',
       'The Image column can be dragged to another position and stays in that order',

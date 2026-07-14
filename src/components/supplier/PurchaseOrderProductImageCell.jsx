@@ -2,8 +2,8 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
 import {
+  PRODUCT_IMAGE_CELL_HEIGHT,
   PRODUCT_IMAGE_HOVER_MAX_SIZE,
-  PRODUCT_IMAGE_THUMBNAIL_SIZE,
 } from '../../utils/purchaseOrderProductImageColumn';
 
 const useStyles = makeStyles({
@@ -11,16 +11,17 @@ const useStyles = makeStyles({
     display: 'block',
     position: 'relative',
     width: '100%',
-    height: '100%',
-    minHeight: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
+    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    overflow: 'hidden',
   },
   imageButton: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: '100%',
-    minHeight: `${PRODUCT_IMAGE_THUMBNAIL_SIZE}px`,
+    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
     ...shorthands.padding(0),
     ...shorthands.border('none'),
     borderRadius: 0,
@@ -32,6 +33,8 @@ const useStyles = makeStyles({
     display: 'block',
     width: '100%',
     height: '100%',
+    maxWidth: '100%',
+    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
     objectFit: 'contain',
   },
   hoverPreviewFrame: {

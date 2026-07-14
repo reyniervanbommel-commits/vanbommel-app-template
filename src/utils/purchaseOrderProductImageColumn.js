@@ -4,6 +4,7 @@ export const PRODUCT_IMAGE_COLUMN_KEY = '__productImage';
 export const DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH = 52;
 export const PRODUCT_IMAGE_MIN_COLUMN_WIDTH = 32;
 export const PRODUCT_IMAGE_THUMBNAIL_SIZE = 28;
+export const PRODUCT_IMAGE_CELL_HEIGHT = 32;
 export const PRODUCT_IMAGE_HOVER_SCALE = 5;
 export const PRODUCT_IMAGE_HOVER_MAX_SIZE = DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH * PRODUCT_IMAGE_HOVER_SCALE;
 
@@ -11,9 +12,11 @@ export function getProductImageCellStyle(baseStyle) {
   return {
     ...(baseStyle || {}),
     padding: 0,
-    height: '1px',
+    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
     verticalAlign: 'middle',
     overflow: 'hidden',
+    lineHeight: 0,
   };
 }
 

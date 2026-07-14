@@ -58,7 +58,8 @@ describe('purchaseOrderProductImageColumn', () => {
     expect(getProductImageCellStyle({ width: '52px' })).toMatchObject({
       width: '52px',
       padding: 0,
-      height: '1px',
+      height: '32px',
+      maxHeight: '32px',
     });
   });
 });
