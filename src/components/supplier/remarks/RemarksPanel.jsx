@@ -3,7 +3,7 @@ import { Button, Tab, TabList } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
 import RowActivityFeed from './RowActivityFeed';
-import RowHistoryTable from './RowHistoryTable';
+import RowHistoryFeed from './RowHistoryFeed';
 import { partitionActivityItems } from './historyTableModel';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
 import { layout } from '../../../styles/brandTokens';
@@ -119,7 +119,7 @@ function RemarksPanel({
           ) : null}
 
           {controller.selectedTab === 'history' ? (
-            <RowHistoryTable
+            <RowHistoryFeed
               items={controller.history.items}
               loading={controller.history.loading}
               error={controller.history.error}
@@ -153,7 +153,7 @@ function RemarksPanel({
                 />
               ) : null}
               {partitionedAll.history.length > 0 || activeFeed.loading || activeFeed.hasMore ? (
-                <RowHistoryTable
+                <RowHistoryFeed
                   items={partitionedAll.history}
                   loading={activeFeed.loading}
                   error={activeFeed.error}

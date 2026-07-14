@@ -3,7 +3,7 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import RowHistoryTable from './RowHistoryTable';
+import RowHistoryFeed from './RowHistoryFeed';
 
 const ITEMS = [
   {
@@ -28,10 +28,10 @@ const ITEMS = [
   },
 ];
 
-function renderTable(props) {
+function renderFeed(props) {
   return render(
     <FluentProvider theme={webLightTheme}>
-      <RowHistoryTable
+      <RowHistoryFeed
         items={ITEMS}
         loading={false}
         error=""
@@ -46,23 +46,24 @@ function renderTable(props) {
   );
 }
 
-describe('RowHistoryTable', () => {
-  it('rendert history als tabel met filterbare headers', () => {
-    renderTable({ useServerActionFilter: true, serverActionFilter: 'updated' });
+describe('RowHistoryFeed', () => {
+  it('renders history as a timeline with external filters', () => {
+    renderFeed({ useServerActionFilter: true, serverActionFilter: 'updated' });
 
-    expect(screen.getByRole('table', { name: 'Row history' })).toBeTruthy();
-    const table = screen.getByRole('table', { name: 'Row history' });
-    expect(table.querySelector('tbody .history-table-column')?.textContent).toBe('Leverdatum');
+    const feed = screen.getByLabelText('Row history');
+    expect(feed).toBeTruthy();
+    expect(feed.querySelector('.history-entry-title')?.textContent).toBe('Leverdatum');
     expect(screen.getAllByText('09/04/2026')).toHaveLength(2);
     expect(screen.getByLabelText('Filter by user')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('filtert client-side op user', () => {
-    renderTable();
+  it('filters client-side on user', () => {
+    renderFeed();
 
     fireEvent.change(screen.getByLabelText('Filter by user'), { target: { value: 'Taylor Buyer' } });
-    const table = screen.getByRole('table', { name: 'Row history' });
-    expect(table.querySelector('tbody .history-table-column')?.textContent).toBe('Status_1');
-    expect(table.querySelectorAll('tbody tr')).toHaveLength(1);
+    const feed = screen.getByLabelText('Row history');
+    expect(feed.querySelector('.history-entry-title')?.textContent).toBe('Status_1');
+    expect(feed.querySelectorAll('article')).toHaveLength(1);
   });
 });

@@ -3,11 +3,11 @@ import {
   Button,
   Input,
   makeStyles,
-  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
 import { AddRegular } from '@fluentui/react-icons';
+import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { STATUS_COLOR_PALETTE } from '../../utils/statusColumnUtils';
 
 const useStyles = makeStyles({
@@ -20,26 +20,6 @@ const useStyles = makeStyles({
   },
   labelInput: {
     width: '100%',
-  },
-  colorPalette: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(5, 24px)',
-    ...shorthands.gap('4px'),
-    justifyContent: 'start',
-  },
-  colorSwatch: {
-    width: '24px',
-    height: '24px',
-    ...shorthands.borderRadius('4px'),
-    ...shorthands.border('2px', 'solid', 'transparent'),
-    cursor: 'pointer',
-    ...shorthands.padding('0'),
-    ':hover': {
-      ...shorthands.borderColor(tokens.colorNeutralStroke1),
-    },
-  },
-  colorSwatchSelected: {
-    ...shorthands.borderColor(tokens.colorNeutralForeground1),
   },
   newLabelSection: {
     display: 'flex',
@@ -57,29 +37,6 @@ const useStyles = makeStyles({
     marginTop: '4px',
   },
 });
-
-function ColorPalette({ selectedColor, onSelect }) {
-  const styles = useStyles();
-  return (
-    <div className={styles.colorPalette} role="listbox" aria-label="Status color">
-      {STATUS_COLOR_PALETTE.slice(1).map((color) => (
-        <button
-          key={color}
-          type="button"
-          role="option"
-          aria-selected={selectedColor === color}
-          className={mergeClasses(
-            styles.colorSwatch,
-            selectedColor === color ? styles.colorSwatchSelected : undefined,
-          )}
-          style={{ backgroundColor: color }}
-          aria-label={`Pick color ${color}`}
-          onClick={() => onSelect(color)}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default function StatusLabelsEditor({
   draftOptions,
@@ -131,13 +88,14 @@ export default function StatusLabelsEditor({
               )));
             }}
           />
-          <ColorPalette
+          <ColorPalettePicker
             selectedColor={option.color}
             onSelect={(color) => {
               setDraftOptions((current) => current.map((entry, entryIndex) => (
                 entryIndex === index ? { ...entry, color } : entry
               )));
             }}
+            ariaLabel="Status color"
           />
         </div>
       ))}
@@ -150,7 +108,7 @@ export default function StatusLabelsEditor({
           onChange={(_, data) => setNewLabel(data.value)}
           onKeyDown={handleNewLabelKeyDown}
         />
-        <ColorPalette selectedColor={newColor} onSelect={setNewColor} />
+        <ColorPalettePicker selectedColor={newColor} onSelect={setNewColor} ariaLabel="Status color" />
         <Button
           appearance="subtle"
           size="small"

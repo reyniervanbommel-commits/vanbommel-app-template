@@ -17,6 +17,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { DeleteRegular } from '@fluentui/react-icons';
+import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { FORMAT_RULE_OPERATORS } from './columnFormatRuleUtils';
 
 const RULE_TARGET_LABELS = { cell: 'Cell', row: 'Row' };
@@ -51,7 +52,7 @@ const useStyles = makeStyles({
   },
   ruleRow: {
     display: 'grid',
-    gridTemplateColumns: '80px 120px minmax(150px, 220px) 112px 76px',
+    gridTemplateColumns: '80px 120px minmax(150px, 220px) 40px 76px',
     ...shorthands.gap('6px'),
     alignItems: 'center',
     '@media (max-width: 900px)': {
@@ -64,12 +65,6 @@ const useStyles = makeStyles({
   compactControl: {
     width: '100%',
     maxWidth: '220px',
-  },
-  colorInput: {
-    width: '100%',
-    maxWidth: '112px',
-    minWidth: '88px',
-    ...shorthands.padding('0'),
   },
   emptyState: {
     color: tokens.colorNeutralForeground3,
@@ -184,12 +179,11 @@ export default function PurchaseOrderColumnFormatRulesSection({
                         placeholder="Compare value"
                       />
                     )}
-                    <Input
-                      className={styles.colorInput}
-                      type="color"
-                      value={rule.color}
-                      onChange={(_, data) => updateFormatRule(rule.id, { color: data.value })}
-                      aria-label="Rule color"
+                    <ColorPalettePicker
+                      layout="compact"
+                      selectedColor={rule.color}
+                      onSelect={(color) => updateFormatRule(rule.id, { color })}
+                      ariaLabel="Rule color"
                     />
                     <Button
                       size="small"

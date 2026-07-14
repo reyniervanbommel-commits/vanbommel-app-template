@@ -14,12 +14,25 @@ export function useHistoryTableFilters(items) {
   const actionOptions = useMemo(() => uniqueSortedValues(rows, 'action'), [rows]);
   const columnOptions = useMemo(() => uniqueSortedValues(rows, 'column'), [rows]);
 
-  const filteredRows = useMemo(() => rows.filter((row) => {
-    if (userFilter && row.user !== userFilter) return false;
-    if (actionFilter && row.action !== actionFilter) return false;
-    if (columnFilter && row.column !== columnFilter) return false;
-    return true;
-  }), [actionFilter, columnFilter, rows, userFilter]);
+  const matchesClientFilters = useCallback(
+    (row) => {
+      if (userFilter && row.user !== userFilter) return false;
+      if (actionFilter && row.action !== actionFilter) return false;
+      if (columnFilter && row.column !== columnFilter) return false;
+      return true;
+    },
+    [actionFilter, columnFilter, userFilter]
+  );
+
+  const filteredRows = useMemo(
+    () => rows.filter(matchesClientFilters),
+    [matchesClientFilters, rows]
+  );
+
+  const filteredItems = useMemo(
+    () => (items || []).filter((entry) => matchesClientFilters(mapHistoryEntryToRow(entry))),
+    [items, matchesClientFilters]
+  );
 
   const resetClientFilters = useCallback(() => {
     setUserFilter('');
@@ -42,6 +55,7 @@ export function useHistoryTableFilters(items) {
   return useMemo(
     () => ({
       filteredRows,
+      filteredItems,
       userFilter,
       actionFilter,
       columnFilter,
@@ -58,6 +72,7 @@ export function useHistoryTableFilters(items) {
       actionOptions,
       columnFilter,
       columnOptions,
+      filteredItems,
       filteredRows,
       resetClientFilters,
       userFilter,

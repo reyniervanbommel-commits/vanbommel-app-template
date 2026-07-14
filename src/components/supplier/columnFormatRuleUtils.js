@@ -1,18 +1,11 @@
-import { normalizeStatusCompareKey } from '../../utils/statusColumnUtils';
+import { STATUS_COLOR_PALETTE, normalizeStatusCompareKey } from '../../utils/statusColumnUtils';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_]{1,64}$/;
 
 export const FORMAT_RULE_OPERATORS = ['=', '<>', '>', '<', '>=', '<='];
 export const FORMAT_RULE_TARGETS = ['cell', 'row'];
-export const FORMAT_RULE_COLOR_PALETTE = [
-  '#f4e6ed',
-  '#fde7e9',
-  '#fff4ce',
-  '#e7f4ea',
-  '#e6f4ff',
-  '#ede6ff',
-];
+export const FORMAT_RULE_COLOR_PALETTE = STATUS_COLOR_PALETTE.slice(1);
 
 function normalizeColumnKey(value) {
   const key = String(value || '').trim();
