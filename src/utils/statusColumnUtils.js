@@ -74,6 +74,33 @@ export function getStatusOptionByValue(value, options) {
   return normalized.find((option) => option.label === text || option.id === text) || null;
 }
 
+/** Stable compare key for conditional formatting after label renames. */
+export function normalizeStatusCompareKey(value, options) {
+  const normalized = normalizeStatusOptions(options);
+  const option = getStatusOptionByValue(value, normalized);
+  if (option) return `id:${option.id}`;
+  const slug = slugifyLabel(value);
+  const byId = normalized.find((entry) => entry.id === slug);
+  if (byId) return `id:${byId.id}`;
+  return `raw:${String(value ?? '').trim().toLowerCase()}`;
+}
+
+export function buildStatusLabelRenames(previousOptions, nextOptions) {
+  const previous = Array.isArray(previousOptions) && previousOptions.length
+    ? previousOptions.map((entry, index) => normalizeStatusOption(entry, index)).filter(Boolean)
+    : [];
+  const next = normalizeStatusOptions(nextOptions);
+  const nextById = new Map(next.map((option) => [option.id, option]));
+  const renames = [];
+  previous.forEach((oldOption) => {
+    const newOption = nextById.get(oldOption.id);
+    if (newOption && oldOption.label !== newOption.label) {
+      renames.push({ from: oldOption.label, to: newOption.label });
+    }
+  });
+  return renames;
+}
+
 export function resolveStatusCellColor(value, options) {
   const option = getStatusOptionByValue(value, options);
   if (option) return option.color;

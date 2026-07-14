@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Input, Spinner, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Input, Spinner, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
+import { getFormattedCellControlStyle } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: 0, width: '100%' },
@@ -23,6 +24,27 @@ const useStyles = makeStyles({
     pointerEvents: 'none',
     ...shorthands.border('0'),
     ...shorthands.padding('0'),
+  },
+});
+
+const useFormattedControlStyles = makeStyles({
+  formatted: {
+    backgroundColor: 'var(--cell-format-bg)',
+    '::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
   },
 });
 
@@ -107,8 +129,17 @@ export default function PurchaseOrderWriteBackCell({
   onCorrect,
   cellKeys,
   hasHistory = false,
+  cellBackgroundColor = '',
 }) {
   const styles = useStyles();
+  const formattedStyles = useFormattedControlStyles();
+  const formattedControlStyle = getFormattedCellControlStyle(cellBackgroundColor);
+  const formattedControlClassName = formattedControlStyle
+    ? mergeClasses(styles.input, formattedStyles.formatted)
+    : styles.input;
+  const formattedControlInlineStyle = formattedControlStyle
+    ? { ...formattedControlStyle, '--cell-format-bg': formattedControlStyle.backgroundColor }
+    : undefined;
   const [local, setLocal] = useState(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const [error, setError] = useState('');
@@ -161,7 +192,8 @@ export default function PurchaseOrderWriteBackCell({
   const inputControl = (
     <>
       <Input
-        className={styles.input}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         type={column.dataType === 'number' ? 'number' : 'text'}

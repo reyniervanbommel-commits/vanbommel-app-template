@@ -113,9 +113,19 @@ const useStyles = makeStyles({
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
   },
   subitemsContainer: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('10px', '8px', '10px', '46px'),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.padding('10px', '8px', '10px', '28px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+    position: 'relative',
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      left: '37px',
+      top: 0,
+      width: '2px',
+      height: '10px',
+      backgroundColor: '#c02f64',
+    },
   },
 });
 
@@ -130,8 +140,26 @@ function resolveRowFormatColor(order, columns, headerColumnFormatRules) {
   for (const column of Array.isArray(columns) ? columns : []) {
     const ruleSet = headerColumnFormatRules[column.key];
     if (!ruleSet || ruleSet.target !== 'row') continue;
-    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {});
+    const statusOptions = isStatusColumn(column) ? column.options : null;
+    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions);
     if (color) return color;
+  }
+  return '';
+}
+function resolveOrderCellBackground({
+  order,
+  column,
+  ruleSet,
+  rowFormatColor,
+}) {
+  const statusOptions = isStatusColumn(column) ? column.options : null;
+  const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
+    ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions)
+    : '';
+  if (cellFormatColor) return cellFormatColor;
+  if (!order.removedInD365 && rowFormatColor) return rowFormatColor;
+  if (isStatusColumn(column)) {
+    return resolveStatusCellColor(order?.values?.[column.key], column.options);
   }
   return '';
 }
@@ -224,7 +252,10 @@ function PurchaseOrdersBoardRows({
                     className={getOrderRowClassName(order, styles)}
                     style={!order.removedInD365 && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
                   >
-                    <td className={styles.controlCell}>
+                    <td
+                      className={styles.controlCell}
+                      style={!order.removedInD365 && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
+                    >
                       <div className={styles.controlCellInner}>
                         {selectionEnabled ? (
                           <Checkbox
@@ -250,22 +281,21 @@ function PurchaseOrdersBoardRows({
                     </td>
                     {columns.map((column) => {
                       const ruleSet = effectiveHeaderColumnFormatRules?.[column.key];
-                      const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
-                        ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {})
-                        : '';
-                      const rawValue = order?.values?.[column.key];
-                      const statusBackground = isStatusColumn(column) && !cellFormatColor
-                        ? resolveStatusCellColor(rawValue, column.options)
-                        : '';
+                      const cellBackground = resolveOrderCellBackground({
+                        order,
+                        column,
+                        ruleSet,
+                        rowFormatColor,
+                      });
                       const cellStyle = {
-                        ...getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellFormatColor || statusBackground),
+                        ...getColumnCellStyle(headerColumnWidths, headerColumnTextStyles, column.key, cellBackground),
                         ...(isStatusColumn(column) ? { padding: 0 } : {}),
                       };
                       return (
                         <PurchaseOrderDataCell
                           key={`${rowId}-${column.key}`}
                           column={column}
-                          rawValue={rawValue}
+                          rawValue={order?.values?.[column.key]}
                           className={styles.itemCell}
                           style={cellStyle}
                           filterByColumn={cellFilterActions?.filterByColumn}
@@ -277,6 +307,7 @@ function PurchaseOrdersBoardRows({
                           <PurchaseOrderHeaderCellContent
                             order={order}
                             column={column}
+                            cellBackgroundColor={cellBackground}
                             onSaveValue={cellActions.onSaveValue}
                             onCorrect={cellActions.onCorrect}
                             onUpdateStatusOptions={cellActions.onUpdateStatusOptions}

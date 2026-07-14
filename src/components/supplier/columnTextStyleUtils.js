@@ -33,3 +33,16 @@ export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey, ba
     ...(resolvedTextStyle || {}),
   };
 }
+
+/** Aligns inline edit controls with conditional formatting on the parent cell. */
+export function getFormattedCellControlStyle(cellBackgroundColor) {
+  const color = /^#[0-9a-fA-F]{6}$/.test(String(cellBackgroundColor || ''))
+    ? String(cellBackgroundColor).toLowerCase()
+    : '';
+  if (!color) return undefined;
+  return {
+    backgroundColor: color,
+    '--colorNeutralBackground1': color,
+    '--colorNeutralBackground2': color,
+  };
+}

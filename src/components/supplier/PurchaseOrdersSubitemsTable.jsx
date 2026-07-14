@@ -6,10 +6,11 @@ import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
-import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
+import { calculateLineColumnSum, filterSummableLineColumnKeys } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
+import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
 
 const useStyles = makeStyles({
   subTableWrapper: {
@@ -17,6 +18,7 @@ const useStyles = makeStyles({
     borderRadius: '6px',
     overflow: 'hidden',
     boxShadow: tokens.shadow2,
+    backgroundColor: tokens.colorNeutralBackground1,
   },
   subTable: {
     width: 'max-content',
@@ -29,9 +31,9 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground1,
     backgroundColor: tokens.colorNeutralBackground3,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -135,6 +137,7 @@ export default function PurchaseOrdersSubitemsTable({
   linkedLineValueByHeaderKey = {},
 }) {
   const styles = useStyles();
+  const connectorStyles = useSubitemConnectorStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
   const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
   const effectiveColumnWidths = useMemo(
@@ -159,7 +162,10 @@ export default function PurchaseOrdersSubitemsTable({
   const groupingColor = '';
   const noop = useCallback(() => {}, []);
   const visibleLines = useMemo(() => (Array.isArray(processedLines) ? processedLines : []), [processedLines]);
-  const summedColumnsSet = useMemo(() => new Set(summedLineColumnKeys), [summedLineColumnKeys]);
+  const summedColumnsSet = useMemo(
+    () => new Set(filterSummableLineColumnKeys(summedLineColumnKeys, lineColumns)),
+    [summedLineColumnKeys, lineColumns]
+  );
   const summedValuesByColumn = useMemo(() => lineColumns.reduce((acc, column) => {
     if (summedColumnsSet.has(column.key)) acc[column.key] = calculateLineColumnSum(visibleLines, column.key);
     return acc;
@@ -189,12 +195,14 @@ export default function PurchaseOrdersSubitemsTable({
     <div className={styles.subTableWrapper}>
     <table className={styles.subTable}>
       <colgroup>
+        <col style={{ width: '22px' }} />
         {lineColumns.map((column) => (
           <col key={`${column.key}-width`} style={{ width: `${effectiveColumnWidths[column.key]}px` }} />
         ))}
       </colgroup>
       <thead>
         <tr>
+          <th className={connectorStyles.connectorHeaderCell} aria-hidden="true" />
           {lineColumns.map((column) => {
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
             const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
@@ -278,6 +286,8 @@ export default function PurchaseOrdersSubitemsTable({
         isAdmin={isAdmin}
         subCellClassName={styles.subCell}
         noRowsCellClassName={styles.noRowsCell}
+        connectorStyles={connectorStyles}
+        hasTotalsRow={summedColumnsSet.size > 0}
         cellFilterActions={{
           filterByColumn,
           applyFilterFromCellValue,
@@ -291,6 +301,7 @@ export default function PurchaseOrdersSubitemsTable({
           summedColumnsSet={summedColumnsSet}
           summedValuesByColumn={summedValuesByColumn}
           totalsCellClassName={styles.totalsCell}
+          connectorTotalsCellClassName={connectorStyles.connectorTotalsCell}
         />
       ) : null}
     </table>

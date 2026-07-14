@@ -4,6 +4,7 @@ const {
   createDefaultStatusOptions,
   normalizeStatusOptions,
   getAllowedStatusLabels,
+  buildStatusLabelRenames,
 } = require('../utils/statusColumnOptions');
 
 describe('statusColumnOptions', () => {
@@ -31,5 +32,13 @@ describe('statusColumnOptions', () => {
 
   it('exposes allowed labels for validation', () => {
     expect(getAllowedStatusLabels([{ label: 'Open', color: '#579bfc' }])).toEqual(['Open']);
+  });
+
+  it('detects label renames by stable option id', () => {
+    const renames = buildStatusLabelRenames(
+      [{ id: 'done', label: 'Done', color: '#00c875' }],
+      [{ id: 'done', label: 'Completed', color: '#00c875' }],
+    );
+    expect(renames).toEqual([{ from: 'Done', to: 'Completed' }]);
   });
 });

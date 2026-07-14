@@ -38,6 +38,7 @@ function PurchaseOrderHeaderCellContent({
   isAdmin = false,
   linkedLineTotalMap,
   linkedLineValueMap,
+  cellBackgroundColor = '',
 }) {
   const styles = useStyles();
   const key = column.key;
@@ -99,11 +100,12 @@ function PurchaseOrderHeaderCellContent({
       );
     }
     return (
-      <span className={isChangedCell ? styles.changedCell : undefined}>
+      <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
         <EditableCell
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
+          cellBackgroundColor={cellBackgroundColor}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
@@ -120,10 +122,11 @@ function PurchaseOrderHeaderCellContent({
 
   if (column.source === 'd365' && column.writableToD365 && onCorrect) {
     return (
-      <span className={isChangedCell ? styles.changedCell : undefined}>
+      <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
+          cellBackgroundColor={cellBackgroundColor}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -149,7 +152,7 @@ function PurchaseOrderHeaderCellContent({
       </span>
     )
     : display;
-  const displayNode = isChangedCell
+  const displayNode = isChangedCell && !cellBackgroundColor
     ? <span className={styles.changedCell}>{rawDisplayNode}</span>
     : rawDisplayNode;
 

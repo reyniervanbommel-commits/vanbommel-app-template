@@ -3,6 +3,7 @@ import {
   Dropdown,
   Input,
   makeStyles,
+  mergeClasses,
   Option,
   shorthands,
   Spinner,
@@ -10,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import CellHistoryPopover from './CellHistoryPopover';
+import { getFormattedCellControlStyle } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   cell: {
@@ -51,6 +53,27 @@ const useStyles = makeStyles({
   },
 });
 
+const useFormattedControlStyles = makeStyles({
+  formatted: {
+    backgroundColor: 'var(--cell-format-bg)',
+    '::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+  },
+});
+
 // Normaliseert een datumwaarde naar yyyy-mm-dd voor de native date-input.
 function toDateInputValue(value) {
   if (!value) return '';
@@ -86,8 +109,17 @@ export default function EditableCell({
   ariaLabel,
   cellKeys,
   hasHistory = false,
+  cellBackgroundColor = '',
 }) {
   const styles = useStyles();
+  const formattedStyles = useFormattedControlStyles();
+  const formattedControlStyle = getFormattedCellControlStyle(cellBackgroundColor);
+  const formattedControlClassName = formattedControlStyle
+    ? mergeClasses(styles.control, formattedStyles.formatted)
+    : styles.control;
+  const formattedControlInlineStyle = formattedControlStyle
+    ? { ...formattedControlStyle, '--cell-format-bg': formattedControlStyle.backgroundColor }
+    : undefined;
   const [localValue, setLocalValue] = useState(dataType === 'date' ? toDateInputValue(value) : value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const savedTimerRef = useRef(null);
@@ -152,7 +184,8 @@ export default function EditableCell({
     const selectedText = localValue == null ? '' : String(localValue);
     control = (
       <Dropdown
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}
@@ -174,7 +207,8 @@ export default function EditableCell({
     control = (
       <>
         <Input
-          className={styles.control}
+          className={formattedControlClassName}
+          style={formattedControlInlineStyle}
           appearance="filled-lighter"
           size="small"
           type="text"
@@ -203,7 +237,8 @@ export default function EditableCell({
   } else if (dataType === 'number') {
     control = (
       <Input
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         type="number"
@@ -217,7 +252,8 @@ export default function EditableCell({
     // 'text' en fallback.
     control = (
       <Input
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}

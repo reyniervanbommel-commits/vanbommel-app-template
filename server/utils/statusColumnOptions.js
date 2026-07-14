@@ -75,11 +75,28 @@ function getAllowedStatusLabels(options) {
   return normalizeStatusOptions(options).map((option) => option.label);
 }
 
+function buildStatusLabelRenames(previousOptions, nextOptions) {
+  const previous = Array.isArray(previousOptions) && previousOptions.length
+    ? previousOptions.map((entry, index) => normalizeStatusOption(entry, index)).filter(Boolean)
+    : [];
+  const next = normalizeStatusOptions(nextOptions);
+  const nextById = new Map(next.map((option) => [option.id, option]));
+  const renames = [];
+  previous.forEach((oldOption) => {
+    const newOption = nextById.get(oldOption.id);
+    if (newOption && oldOption.label !== newOption.label) {
+      renames.push({ from: oldOption.label, to: newOption.label });
+    }
+  });
+  return renames;
+}
+
 module.exports = {
   HEX_COLOR_PATTERN,
   STATUS_COLOR_PALETTE,
   createDefaultStatusOptions,
   normalizeStatusOptions,
   getAllowedStatusLabels,
+  buildStatusLabelRenames,
   slugifyLabel,
 };

@@ -30,12 +30,13 @@ function PurchaseOrderDataCell({
   const activeFilter = filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
+  const stickyBackgroundColor = style?.backgroundColor || tokens.colorNeutralBackground1;
   const stickyStyle = Number.isFinite(stickyLeft)
     ? {
       position: 'sticky',
       left: `${stickyLeft}px`,
       zIndex: 2,
-      backgroundColor: tokens.colorNeutralBackground1,
+      backgroundColor: stickyBackgroundColor,
     }
     : null;
   const positionedCellStyle = { ...style, position: 'relative' };

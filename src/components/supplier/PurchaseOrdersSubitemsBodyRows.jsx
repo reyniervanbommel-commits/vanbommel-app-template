@@ -6,6 +6,7 @@ import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
+import { resolveSubitemConnectorCellClassName } from './purchaseOrderSubitemConnectorStyles';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 
@@ -26,9 +27,32 @@ function resolveLineRowFormatColor(line, lineColumns, columnFormatRules) {
   for (const column of Array.isArray(lineColumns) ? lineColumns : []) {
     const ruleSet = columnFormatRules[column.key];
     if (!ruleSet || ruleSet.target !== 'row') continue;
-    const color = evalFormatRules(line?.values?.[column.key], ruleSet, line?.values || {});
+    const statusOptions = isStatusColumn(column) ? column.options : null;
+    const color = evalFormatRules(line?.values?.[column.key], ruleSet, line?.values || {}, statusOptions);
     if (color) return color;
   }
+  return '';
+}
+
+function resolveLineCellBackground({
+  line,
+  column,
+  ruleSet,
+  rowFormatColor,
+  isChangedCell,
+}) {
+  const rawValue = line?.values?.[column.key];
+  const statusOptions = isStatusColumn(column) ? column.options : null;
+  const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
+    ? evalFormatRules(rawValue, ruleSet, line?.values || {}, statusOptions)
+    : '';
+  if (cellFormatColor) return cellFormatColor;
+  if (!line?.isRemoved && rowFormatColor) return rowFormatColor;
+  if (isStatusColumn(column)) {
+    return resolveStatusCellColor(rawValue, column.options);
+  }
+  if (line?.isRemoved) return '#f3f2f1';
+  if (isChangedCell) return '#fff4ce';
   return '';
 }
 
@@ -42,6 +66,7 @@ function renderLineCellContent({
   onUpdateStatusOptions,
   isAdmin = false,
   styles,
+  cellBackgroundColor = '',
 }) {
   const rawValue = line.values?.[column.key];
   const showLineBadge = column === lineColumns[0] && (line?.isNew || line?.isChanged || line?.isRemoved);
@@ -101,6 +126,7 @@ function renderLineCellContent({
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
+          cellBackgroundColor={cellBackgroundColor}
           ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
@@ -130,6 +156,7 @@ function renderLineCellContent({
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
+          cellBackgroundColor={cellBackgroundColor}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -177,6 +204,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
   isAdmin = false,
   subCellClassName,
   noRowsCellClassName,
+  connectorStyles,
+  hasTotalsRow = false,
   cellFilterActions,
 }) {
   const styles = useStyles();
@@ -188,29 +217,40 @@ export default function PurchaseOrdersSubitemsBodyRows({
     <tbody>
       {visibleLines.map((line, index) => {
         const rowFormatColor = resolveLineRowFormatColor(line, lineColumns, effectiveColumnFormatRules);
+        const connectorCellClassName = connectorStyles
+          ? resolveSubitemConnectorCellClassName({
+            index,
+            rowCount: visibleLines.length,
+            hasTotalsRow,
+            styles: connectorStyles,
+          })
+          : '';
         return (
         <tr
           key={`${rowId}-line-${line.lineNumber ?? index}`}
           style={!line?.isRemoved && rowFormatColor ? { backgroundColor: rowFormatColor } : undefined}
         >
+          {connectorCellClassName ? (
+            <td className={connectorCellClassName} aria-hidden="true" />
+          ) : null}
           {lineColumns.map((column) => {
             const rawValue = line.values?.[column.key];
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);
             const ruleSet = effectiveColumnFormatRules?.[column.key];
-            const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
-              ? evalFormatRules(rawValue, ruleSet, line?.values || {})
-              : '';
-            const statusBackground = isStatusColumn(column) && !cellFormatColor
-              ? resolveStatusCellColor(rawValue, column.options)
-              : '';
-            const fallbackBackground = line?.isRemoved ? '#f3f2f1' : (isChangedCell ? '#fff4ce' : '');
+            const cellBackground = resolveLineCellBackground({
+              line,
+              column,
+              ruleSet,
+              rowFormatColor,
+              isChangedCell,
+            });
             const cellStyle = {
               ...getColumnCellStyle(
                 columnWidths,
                 columnTextStyles,
                 column.key,
-                cellFormatColor || statusBackground || fallbackBackground
+                cellBackground
               ),
               ...(isStatusColumn(column) ? { padding: 0 } : {}),
             };
@@ -235,6 +275,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   onUpdateStatusOptions,
                   isAdmin,
                   styles,
+                  cellBackgroundColor: cellBackground,
                 })}
               </PurchaseOrderDataCell>
             );
@@ -244,6 +285,12 @@ export default function PurchaseOrdersSubitemsBodyRows({
       })}
       {!visibleLines.length ? (
         <tr>
+          {connectorStyles ? (
+            <td
+              className={`${connectorStyles.connectorCell} ${connectorStyles.connectorCellTrunkEnd}`}
+              aria-hidden="true"
+            />
+          ) : null}
           <td className={noRowsCellClassName} colSpan={lineColumns.length}>
             No lines match the active filters
           </td>

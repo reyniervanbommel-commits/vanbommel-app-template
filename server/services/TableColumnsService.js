@@ -20,7 +20,7 @@ const {
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
 } = require('../utils/tableColumnFormulaValidation');
-const { normalizeStatusOptions } = require('../utils/statusColumnOptions');
+const { normalizeStatusOptions, buildStatusLabelRenames } = require('../utils/statusColumnOptions');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -166,9 +166,11 @@ async function updateColumn(columnId, { label, options }, userId) {
   if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
 
   let optionsJson = existing.options ? JSON.stringify(existing.options) : null;
+  let normalizedStatusOptions = null;
   if (hasOptions) {
     if (existing.dataType === 'status') {
-      optionsJson = JSON.stringify(normalizeStatusOptions(options));
+      normalizedStatusOptions = normalizeStatusOptions(options);
+      optionsJson = JSON.stringify(normalizedStatusOptions);
     } else if (existing.dataType === 'select') {
       const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
       if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
@@ -179,6 +181,26 @@ async function updateColumn(columnId, { label, options }, userId) {
   }
 
   const pool = await getPool();
+
+  if (hasOptions && existing.dataType === 'status' && normalizedStatusOptions) {
+    const renames = buildStatusLabelRenames(existing.options, normalizedStatusOptions);
+    for (const rename of renames) {
+      await pool.request()
+        .input('columnId', sql.BigInt, columnId)
+        .input('oldLabel', sql.NVarChar(64), rename.from)
+        .input('newLabel', sql.NVarChar(64), rename.to)
+        .input('userId', sql.Int, userId || null)
+        .query(`
+          UPDATE dbo.tb_custom_values
+          SET value_text = @newLabel,
+              updated_by = @userId,
+              updated_at = SYSUTCDATETIME()
+          WHERE column_id = @columnId
+            AND value_text = @oldLabel
+        `);
+    }
+  }
+
   const result = await pool.request()
     .input('id', sql.BigInt, columnId)
     .input('label', sql.NVarChar(128), cleanLabel)

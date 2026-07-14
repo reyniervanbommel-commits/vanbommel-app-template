@@ -1,5 +1,5 @@
--- Migratie 021: datatype 'image' toestaan in po_columns en tb_columns (#AB:178).
--- Idempotent: drop + recreate van de CHECK-constraints met image toegevoegd.
+-- Migratie 023: datatype 'status' toestaan in po_columns en tb_columns.
+-- Idempotent: drop + recreate van de CHECK-constraints met status toegevoegd.
 
 IF OBJECT_ID('dbo.po_columns', 'U') IS NOT NULL
 BEGIN

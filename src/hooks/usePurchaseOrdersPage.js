@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
-import { normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
+import { migrateFormatRulesForStatusRenames, normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
+import { buildStatusLabelRenames } from '../utils/statusColumnUtils';
 import { mapTbColumnToBoard, mapTbResponseToBoard, scopeForLevel } from '../utils/purchaseOrdersBoardMapping';
+import { filterSummableLineColumnKeys, isSummableLineColumn } from '../utils/purchaseOrderTotals';
 import {
   arraysEqual,
   mergeColumnTextStyle,
@@ -409,10 +411,6 @@ export function usePurchaseOrdersPage() {
     await reloadColumns();
   }, [reloadColumns]);
 
-  const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
-    await renameColumn(columnId, columnLabel, { options });
-  }, [renameColumn]);
-
   // Admin: zet write-back aan/uit op een D365-kolom (#134).
   const toggleWriteback = useCallback(async (columnId, writable) => {
     // Fase 1 (#AB:170) leverde de tb_*-writeback-config; de guard uit #176 is vervangen door de echte call.
@@ -469,8 +467,11 @@ export function usePurchaseOrdersPage() {
   }, [lineColumns, lineColumnOrder, defaultLineKeys]);
 
   const effectiveLineTotalColumns = useMemo(
-    () => normalizeSelectedColumns(lineTotalColumns, defaultLineKeys),
-    [lineTotalColumns, defaultLineKeys]
+    () => filterSummableLineColumnKeys(
+      normalizeSelectedColumns(lineTotalColumns, defaultLineKeys),
+      lineColumns
+    ),
+    [lineTotalColumns, defaultLineKeys, lineColumns]
   );
   const effectiveLineTotalHeaderLinks = useMemo(
     () => normalizeLineTotalLinks(lineTotalHeaderLinks, defaultLineKeys, defaultHeaderKeys),
@@ -529,7 +530,10 @@ export function usePurchaseOrdersPage() {
     const normalizedHeaderFormatRules = normalizeColumnFormatRulesMap(nextHeaderFormatRules, defaultHeaderKeys);
     const normalizedLineTextStyles = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
     const normalizedLineFormatRules = normalizeColumnFormatRulesMap(nextLineFormatRules, defaultLineKeys);
-    const normalizedLineTotalColumns = normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys);
+    const normalizedLineTotalColumns = filterSummableLineColumnKeys(
+      normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys),
+      lineColumns
+    );
     const normalizedLineTotalHeaderLinks = normalizeLineTotalLinks(
       nextLineTotalHeaderLinks,
       defaultLineKeys
@@ -590,6 +594,49 @@ export function usePurchaseOrdersPage() {
     lineValueHeaderLinks,
     defaultHeaderKeys,
     defaultLineKeys,
+    lineColumns,
+  ]);
+
+  const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
+    const headerColumn = headerColumns.find((column) => column.id === columnId);
+    const lineColumn = lineColumns.find((column) => column.id === columnId);
+    const targetColumn = headerColumn || lineColumn;
+    const previousOptions = targetColumn?.options;
+    const columnKey = targetColumn?.key;
+    const renames = buildStatusLabelRenames(previousOptions, options);
+
+    await renameColumn(columnId, columnLabel, { options });
+
+    if (columnKey && renames.length) {
+      const persistPayload = {};
+      if (headerColumn) {
+        persistPayload.nextHeaderFormatRules = migrateFormatRulesForStatusRenames(
+          effectiveHeaderColumnFormatRules,
+          columnKey,
+          renames
+        );
+      }
+      if (lineColumn) {
+        persistPayload.nextLineFormatRules = migrateFormatRulesForStatusRenames(
+          effectiveLineColumnFormatRules,
+          columnKey,
+          renames
+        );
+      }
+      if (Object.keys(persistPayload).length) {
+        await persistBoardSettings(persistPayload);
+      }
+    }
+
+    await reload();
+  }, [
+    renameColumn,
+    reload,
+    headerColumns,
+    lineColumns,
+    effectiveHeaderColumnFormatRules,
+    effectiveLineColumnFormatRules,
+    persistBoardSettings,
   ]);
 
   const saveVisibleColumns = useCallback(async (nextVisibleKeys) => {
@@ -770,11 +817,13 @@ export function usePurchaseOrdersPage() {
   const setLineColumnTotal = useCallback(async (columnKey, enabled) => {
     const key = String(columnKey || '').trim();
     if (!key) return;
+    const column = lineColumns.find((entry) => entry.key === key);
+    if (enabled && !isSummableLineColumn(column)) return;
     const nextSet = new Set(effectiveLineTotalColumns);
     if (enabled) nextSet.add(key);
     else nextSet.delete(key);
     await persistBoardSettings({ nextLineTotalColumns: Array.from(nextSet) });
-  }, [effectiveLineTotalColumns, persistBoardSettings]);
+  }, [effectiveLineTotalColumns, lineColumns, persistBoardSettings]);
 
   const addLineTotalHeaderLink = useCallback(async ({ lineColumnKey, headerColumnKey }) => {
     const lineKey = String(lineColumnKey || '').trim();
