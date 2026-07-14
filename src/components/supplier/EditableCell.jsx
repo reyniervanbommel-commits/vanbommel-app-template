@@ -18,10 +18,14 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     minWidth: 0,
     width: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
   },
   control: {
     minWidth: 0,
     width: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
     color: tokens.colorBrandForeground1,
     '> input': {
       color: tokens.colorBrandForeground1,

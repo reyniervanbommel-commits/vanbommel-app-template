@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   Button,
   Checkbox,
@@ -22,9 +22,9 @@ const useStyles = makeStyles({
     top: 0,
     left: 0,
     zIndex: 4,
-    width: '58px',
-    minWidth: '58px',
-    maxWidth: '58px',
+    width: '92px',
+    minWidth: '92px',
+    maxWidth: '92px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),
@@ -57,6 +57,12 @@ function PurchaseOrdersTableControls({
   onToggleAll,
 }) {
   const styles = useStyles();
+  const expandAll = useCallback(() => onSetExpansion('all', true), [onSetExpansion]);
+  const expandGroups = useCallback(() => onSetExpansion('boards', true), [onSetExpansion]);
+  const expandSubitems = useCallback(() => onSetExpansion('groups', true), [onSetExpansion]);
+  const collapseAll = useCallback(() => onSetExpansion('all', false), [onSetExpansion]);
+  const collapseGroups = useCallback(() => onSetExpansion('boards', false), [onSetExpansion]);
+  const collapseSubitems = useCallback(() => onSetExpansion('groups', false), [onSetExpansion]);
 
   return (
     <th className={styles.controlHeaderCell} aria-label="Table display controls">
@@ -89,9 +95,9 @@ function PurchaseOrdersTableControls({
                 </MenuTrigger>
                 <MenuPopover>
                   <MenuList>
-                    <MenuItem onClick={() => onSetExpansion('all', true)}>All</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('boards', true)}>Groups</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('groups', true)}>Subitems</MenuItem>
+                    <MenuItem onClick={expandAll}>All</MenuItem>
+                    <MenuItem onClick={expandGroups}>Groups</MenuItem>
+                    <MenuItem onClick={expandSubitems}>Subitems</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
@@ -101,9 +107,9 @@ function PurchaseOrdersTableControls({
                 </MenuTrigger>
                 <MenuPopover>
                   <MenuList>
-                    <MenuItem onClick={() => onSetExpansion('all', false)}>All</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('boards', false)}>Groups</MenuItem>
-                    <MenuItem onClick={() => onSetExpansion('groups', false)}>Subitems</MenuItem>
+                    <MenuItem onClick={collapseAll}>All</MenuItem>
+                    <MenuItem onClick={collapseGroups}>Groups</MenuItem>
+                    <MenuItem onClick={collapseSubitems}>Subitems</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>

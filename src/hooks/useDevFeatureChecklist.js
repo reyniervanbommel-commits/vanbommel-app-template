@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  DEV_FEATURE_CHECKLIST_ITEMS,
-  DEV_FEATURE_CHECKLIST_VERSION,
-} from '../config/devFeatureChecklist';
+import { buildDevChecklistItems, devTestItems } from '../config/devTestItems';
+import { APP_VERSION } from '../config/version';
 
-const STORAGE_KEY = `vendorportal.dev-feature-checklist.${DEV_FEATURE_CHECKLIST_VERSION}`;
-const VALID_IDS = new Set(DEV_FEATURE_CHECKLIST_ITEMS.map((item) => item.id));
+const CHECKLIST_ITEMS = buildDevChecklistItems(devTestItems);
+const STORAGE_KEY = `vendorportal.dev-feature-checklist.${APP_VERSION}`;
+const VALID_IDS = new Set(CHECKLIST_ITEMS.map((item) => item.id));
 
 const normalizeCheckedIds = (value) => {
   if (!Array.isArray(value)) {
@@ -60,11 +59,11 @@ export default function useDevFeatureChecklist() {
 
   return useMemo(
     () => ({
-      items: DEV_FEATURE_CHECKLIST_ITEMS,
+      items: CHECKLIST_ITEMS,
       checkedIds,
       completedCount,
-      totalCount: DEV_FEATURE_CHECKLIST_ITEMS.length,
-      allCompleted: completedCount === DEV_FEATURE_CHECKLIST_ITEMS.length,
+      totalCount: CHECKLIST_ITEMS.length,
+      allCompleted: CHECKLIST_ITEMS.length > 0 && completedCount === CHECKLIST_ITEMS.length,
       toggleChecked,
       resetChecked,
     }),

@@ -1,19 +1,24 @@
 import { MAX_COLUMN_WIDTH, normalizeColumnOrder } from './boardColumnSettings';
+import {
+  PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX,
+  PURCHASE_ORDER_SUB_ROW_HEIGHT_PX,
+} from '../components/supplier/purchaseOrderBoardLayout';
 
 export const PRODUCT_IMAGE_COLUMN_KEY = '__productImage';
 export const DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH = 52;
 export const PRODUCT_IMAGE_MIN_COLUMN_WIDTH = 32;
 export const PRODUCT_IMAGE_THUMBNAIL_SIZE = 28;
-export const PRODUCT_IMAGE_CELL_HEIGHT = 32;
+export const PRODUCT_IMAGE_CELL_HEIGHT = PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX;
+export const PRODUCT_IMAGE_SUB_CELL_HEIGHT = PURCHASE_ORDER_SUB_ROW_HEIGHT_PX;
 export const PRODUCT_IMAGE_HOVER_SCALE = 5;
 export const PRODUCT_IMAGE_HOVER_MAX_SIZE = DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH * PRODUCT_IMAGE_HOVER_SCALE;
 
-export function getProductImageCellStyle(baseStyle) {
+export function getProductImageCellStyle(baseStyle, heightPx = PRODUCT_IMAGE_CELL_HEIGHT) {
   return {
     ...(baseStyle || {}),
     padding: 0,
-    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
-    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    height: `${heightPx}px`,
+    maxHeight: `${heightPx}px`,
     verticalAlign: 'middle',
     overflow: 'hidden',
     lineHeight: 0,

@@ -244,6 +244,14 @@ describe('TableDataService.assertCustomColumnWritable', () => {
     })).toThrow(/read-only/i);
   });
 
+  it('weigert directe custom-valuewrites naar Remarks', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      dataType: 'remarks',
+      formulaExpr: null,
+    })).toThrow(/directe waardewrites/i);
+  });
+
   it('weigert formulekolommen voor handmatige save', () => {
     expect(() => assertCustomColumnWritable({
       source: 'custom',

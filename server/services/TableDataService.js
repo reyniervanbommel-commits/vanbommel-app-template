@@ -2044,6 +2044,9 @@ function assertCustomColumnWritable(column) {
   if (String(column?.dataType || '').toLowerCase() === 'image') {
     throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
   }
+  if (String(column?.dataType || '').toLowerCase() === 'remarks') {
+    throw Object.assign(new Error('Remarks-kolommen ondersteunen geen directe waardewrites'), { status: 400 });
+  }
   if (isFormulaColumn(column)) {
     throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
   }

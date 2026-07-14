@@ -11,6 +11,7 @@ export const NEW_COLUMN_TYPES = [
   { key: 'date', label: 'Datum', dataType: 'date' },
   { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
   { key: 'image', label: 'Plaatje', dataType: 'image' },
+  { key: 'remarks', label: 'Remarks', dataType: 'remarks' },
   { key: 'formula', label: 'Formule', dataType: 'number' },
 ];
 
@@ -22,6 +23,7 @@ const COLUMN_TYPE_META = {
   boolean: { key: 'boolean', label: 'Yes/No' },
   select: { key: 'select', label: 'Select' },
   image: { key: 'image', label: 'Image' },
+  remarks: { key: 'remarks', label: 'Remarks' },
   formula: { key: 'formula', label: 'Formula' },
 };
 
