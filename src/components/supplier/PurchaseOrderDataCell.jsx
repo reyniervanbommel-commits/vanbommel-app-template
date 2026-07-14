@@ -9,7 +9,7 @@ function PurchaseOrderDataCell({
   contextMenu,
   children,
 }) {
-  const { column, rawValue } = cell;
+  const { column, rawValue, order } = cell;
   const { className, style } = layout;
   const disabled = isCellContextMenuDisabled(column);
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
@@ -32,8 +32,9 @@ function PurchaseOrderDataCell({
       column,
       rawValue,
       filterActive,
+      order,
     });
-  }, [column, contextMenu, disabled, filterActive, rawValue]);
+  }, [column, contextMenu, disabled, filterActive, order, rawValue]);
 
   return (
     <td

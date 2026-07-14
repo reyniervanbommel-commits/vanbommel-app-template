@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Button } from '@fluentui/react-components';
+import { Avatar, Button } from '@fluentui/react-components';
 
 function RemarkComposer({ currentUser, column = null, onSubmit }) {
   const [draft, setDraft] = useState('');
@@ -7,6 +7,7 @@ function RemarkComposer({ currentUser, column = null, onSubmit }) {
   const [submitError, setSubmitError] = useState('');
   const normalizedLength = draft.normalize('NFC').trim().length;
   const invalid = normalizedLength < 1 || normalizedLength > 2000;
+  const displayName = currentUser?.displayName || 'Current user';
 
   const handleChange = useCallback((event) => {
     setDraft(event.target.value);
@@ -33,10 +34,13 @@ function RemarkComposer({ currentUser, column = null, onSubmit }) {
 
   return (
     <form className="remarks-composer" onSubmit={handleSubmit}>
-      <label htmlFor="row-remark-composer">
-        Add a remark as <strong>{currentUser?.displayName || 'Current user'}</strong>
-        {column?.label ? <span className="remarks-muted"> · {column.label}</span> : null}
-      </label>
+      <div className="remarks-composer-user">
+        <Avatar name={displayName} size={32} color="colorful" aria-hidden="true" />
+        <label htmlFor="row-remark-composer" className="remarks-composer-label">
+          Add a remark
+          {column?.label ? <span className="remarks-muted"> · {column.label}</span> : null}
+        </label>
+      </div>
       <textarea
         id="row-remark-composer"
         value={draft}

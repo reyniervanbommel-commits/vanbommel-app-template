@@ -14,6 +14,22 @@ function badRequest(message) {
   return Object.assign(new Error(message), { status: 400 });
 }
 
+function parseActionFilter(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'all') return null;
+  if (normalized === 'updated') return 'updated';
+  throw badRequest('actionFilter must be updated or all');
+}
+
+function matchesUpdatedAction(action) {
+  return String(action || '').trim().toUpperCase() === 'UPDATE';
+}
+
+function actionFilterSql(actionExpression) {
+  return `(@actionFilter IS NULL OR @actionFilter <> 'updated' OR UPPER(ISNULL(${actionExpression}, '')) = 'UPDATE')`;
+}
+
 function parseLimit(value) {
   if (value === undefined || value === null || value === '') return DEFAULT_LIMIT;
   if (!/^\d+$/.test(String(value))) throw badRequest('limit must be an integer');
@@ -162,6 +178,7 @@ function buildQuery() {
       WHERE l.table_id=@tableId AND l.partition_key=@partitionKey AND l.record_key=@recordKey
         AND l.detail_key=-1 AND (l.source='D365' OR (l.source='USER' AND l.field_key IS NULL))
         AND (@columnId IS NULL OR c.id=@columnId)
+        AND ${actionFilterSql('l.action')}
       UNION ALL
       SELECT h.id, 'custom', 2, h.changed_at, h.action, c.[key], c.id, c.label,
         h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
@@ -172,6 +189,7 @@ function buildQuery() {
       LEFT JOIN dbo.users u ON u.id=h.changed_by
       WHERE h.table_id=@tableId AND h.partition_key=@partitionKey AND h.record_key=@recordKey
         AND h.detail_key=-1 AND (@columnId IS NULL OR h.column_id=@columnId)
+        AND ${actionFilterSql('h.action')}
       UNION ALL
       SELECT f.id, 'writeback', 1, f.created_at, 'correct', c.[key], c.id, c.label,
         f.old_value, NULL, NULL, NULL, f.new_value, NULL, NULL, NULL,
@@ -181,6 +199,7 @@ function buildQuery() {
       LEFT JOIN dbo.users u ON u.id=f.created_by
       WHERE f.table_id=@tableId AND f.partition_key=@partitionKey AND f.record_key=@recordKey
         AND f.detail_key=-1 AND (@columnId IS NULL OR f.column_id=@columnId)
+        AND (@actionFilter IS NULL OR @actionFilter <> 'updated')
       UNION ALL
       SELECT r.id, 'remark', 5, r.created_at, 'remark', NULL, r.column_id, c.label,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -212,7 +231,8 @@ function buildQuery() {
       CASE WHEN @afterAt IS NOT NULL THEN source_id END ASC;
     SELECT
       SUM(CASE WHEN activity_type='remark' AND is_deleted=0 THEN 1 ELSE 0 END) remarks,
-      SUM(CASE WHEN activity_type<>'remark' THEN 1 ELSE 0 END) history
+      SUM(CASE WHEN activity_type<>'remark' THEN 1 ELSE 0 END) history,
+      SUM(CASE WHEN activity_type<>'remark' AND UPPER(ISNULL(action, '')) = 'UPDATE' THEN 1 ELSE 0 END) history_updated
     FROM #activity;
     SELECT reactions.remark_id, reactions.emoji, COUNT_BIG(*) reaction_count,
       MAX(CASE WHEN reactions.user_id=@currentUserId THEN 1 ELSE 0 END) reacted_by_current_user
@@ -235,6 +255,7 @@ function createRowActivityService(deps = {}) {
     const { partition, record } = validateRowKeys(options.partitionKey, options.recordKey);
     const kind = options.kind || 'history';
     if (!['history', 'all'].includes(kind)) throw badRequest('kind must be history or all');
+    const actionFilter = parseActionFilter(options.actionFilter);
     if (options.cursor && options.afterCursor) throw badRequest('cursor and afterCursor cannot be combined');
     const limit = parseLimit(options.limit);
     const cursor = options.cursor ? decodeCursor(options.cursor, 'cursor') : null;
@@ -256,6 +277,7 @@ function createRowActivityService(deps = {}) {
       .input('recordKey', sql.NVarChar(128), record)
       .input('columnId', sql.BigInt, columnId)
       .input('includeRemarks', sql.Bit, kind === 'all')
+      .input('actionFilter', sql.NVarChar(16), actionFilter)
       .input('take', sql.Int, after ? limit : limit + 1)
       .input('cursorAt', sql.NVarChar(32), cursor?.at || null)
       .input('cursorRank', sql.Int, cursor?.r || null)
@@ -291,7 +313,11 @@ function createRowActivityService(deps = {}) {
     const totalsRow = result.recordsets?.[1]?.[0] || {};
     return {
       items,
-      totals: { remarks: Number(totalsRow.remarks || 0), history: Number(totalsRow.history || 0) },
+      totals: {
+        remarks: Number(totalsRow.remarks || 0),
+        history: Number(totalsRow.history || 0),
+        historyUpdated: Number(totalsRow.history_updated || 0),
+      },
       nextCursor: !after && hasMore && items.length ? encodeCursor(items[items.length - 1]) : null,
       newestCursor: items.length ? encodeCursor(items[0]) : (after ? options.afterCursor : null),
     };
@@ -309,5 +335,7 @@ module.exports = {
   enrichRemarkActivity,
   getRowActivity,
   mapActivityRow,
+  matchesUpdatedAction,
+  parseActionFilter,
   parseLimit,
 };

@@ -1,13 +1,6 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import {
-  Button,
-  DrawerBody,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  OverlayDrawer,
-  Tab,
-  TabList,
-} from '@fluentui/react-components';
+import { Button, Tab, TabList } from '@fluentui/react-components';
+import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
 import RowActivityFeed from './RowActivityFeed';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
@@ -28,6 +21,18 @@ function ColumnFilter({ columns, value, onChange }) {
       <select value={value} onChange={onChange}>
         <option value="">All columns</option>
         {columns.map(renderColumnOption)}
+      </select>
+    </label>
+  );
+}
+
+function HistoryActionFilter({ value, onChange }) {
+  return (
+    <label className="remarks-column-filter">
+      <span>Action</span>
+      <select value={value} onChange={onChange}>
+        <option value="updated">Updated</option>
+        <option value="all">All actions</option>
       </select>
     </label>
   );
@@ -65,8 +70,9 @@ function RemarksPanel({
     [controller.remarks.deleteRemark, controller.remarks.toggleReaction]
   );
   const remarkCount = controller.remarks.total || controller.selectedSummary?.count || 0;
-  const historyCount = Math.max(controller.history.totals.history || 0, controller.all.totals.history || 0);
+  const historyCount = controller.historyUpdatedCount;
   const showColumnFilter = controller.selectedTab !== 'remarks';
+  const showHistoryActionFilter = controller.selectedTab === 'history';
   const showComposer = controller.selectedTab !== 'history';
   const activeFeed = controller.selectedTab === 'history' ? controller.history : controller.all;
   const orderNumber = row?.recordKey || row?.orderNumber || '';
@@ -79,31 +85,24 @@ function RemarksPanel({
     [controller.all, controller.remarks, controller.selectedTab]
   );
 
+  if (!open) return null;
+
   return (
-    <OverlayDrawer
-      className="remarks-drawer"
-      open={open}
-      position="end"
-      onOpenChange={controller.handleDrawerOpenChange}
-    >
-      <DrawerHeader>
-        <DrawerHeaderTitle
-          heading={{
-            ref: controller.headingRef,
-            className: 'remarks-heading',
-            tabIndex: -1,
-          }}
-          action={
-            <Button appearance="subtle" aria-label="Close remarks panel" onClick={onClose}>
-              ×
-            </Button>
-          }
-        >
+    <aside className="remarks-side-panel" aria-label={`Remarks for purchase order ${orderNumber}`}>
+      <header className="remarks-panel-header">
+        <Button
+          className="remarks-close-button"
+          appearance="subtle"
+          aria-label="Close remarks panel"
+          icon={<Dismiss24Regular />}
+          onClick={onClose}
+        />
+        <h2 ref={controller.headingRef} className="remarks-heading" tabIndex={-1}>
           Purchase order {orderNumber}
           {initialColumn?.label ? <span className="remarks-header-context"> · {initialColumn.label}</span> : null}
-        </DrawerHeaderTitle>
-      </DrawerHeader>
-      <DrawerBody>
+        </h2>
+      </header>
+      <div className="remarks-panel-body">
         <div className="remarks-panel">
           <TabList className="remarks-tabs" selectedValue={controller.selectedTab} onTabSelect={controller.onTabSelect}>
             <Tab value="remarks">Remarks ({remarkCount})</Tab>
@@ -113,6 +112,13 @@ function RemarksPanel({
 
           {showColumnFilter ? (
             <ColumnFilter columns={columns} value={controller.columnId} onChange={controller.onColumnChange} />
+          ) : null}
+
+          {showHistoryActionFilter ? (
+            <HistoryActionFilter
+              value={controller.historyActionFilter}
+              onChange={controller.onHistoryActionFilterChange}
+            />
           ) : null}
 
           {showComposer ? (
@@ -151,8 +157,8 @@ function RemarksPanel({
             />
           )}
         </div>
-      </DrawerBody>
-    </OverlayDrawer>
+      </div>
+    </aside>
   );
 }
 

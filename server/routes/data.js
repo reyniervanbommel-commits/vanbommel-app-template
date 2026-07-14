@@ -123,6 +123,7 @@ router.get('/:tableKey/activity', async (req, res, next) => {
       recordKey: req.query.recordKey,
       kind: req.query.kind,
       columnId: req.query.columnId,
+      actionFilter: req.query.actionFilter,
       cursor: req.query.cursor,
       afterCursor: req.query.afterCursor,
       limit: req.query.limit,

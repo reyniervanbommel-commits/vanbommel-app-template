@@ -15,7 +15,7 @@ function responseFor(path) {
   if (path.includes('/remarks?')) return { items: [], total: 2, nextCursor: null };
   return {
     items: [],
-    totals: { remarks: 2, history: 4 },
+    totals: { remarks: 0, history: 4, historyUpdated: 2 },
     nextCursor: null,
     newestCursor: 'cursor-1',
   };
@@ -46,17 +46,19 @@ describe('RemarksPanel', () => {
     renderPanel();
 
     expect(await screen.findByRole('tab', { name: 'Remarks (2)' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'History (0)' })).toBeTruthy();
-    expect(screen.getByLabelText(/Add a remark as Taylor Buyer/)).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: /History \(\d+\)/ })).toBeTruthy();
+    expect(screen.getByLabelText('Add a remark')).toBeTruthy();
     expect(screen.queryByLabelText('Column')).toBeNull();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'History (0)' }));
+    const historyTab = screen.getByRole('tab', { name: /History \(\d+\)/ });
+    fireEvent.click(historyTab);
     expect(await screen.findByLabelText('Column')).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'History (4)' })).toBeTruthy());
+    expect(await screen.findByLabelText('Action')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'History (2)' })).toBeTruthy());
     expect(screen.getByText('No history has been recorded yet.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'All' }));
-    expect(await screen.findByLabelText(/Add a remark as Taylor Buyer/)).toBeTruthy();
+    expect(await screen.findByLabelText('Add a remark')).toBeTruthy();
   });
 
   it('sluit via de knop en herstelt focus naar de opener', async () => {

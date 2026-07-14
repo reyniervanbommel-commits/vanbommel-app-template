@@ -18,6 +18,8 @@ const {
   encodeCursor,
   enrichRemarkActivity,
   mapActivityRow,
+  matchesUpdatedAction,
+  parseActionFilter,
   parseLimit,
 } = require('./RowActivityService');
 Module._load = originalLoad;
@@ -51,7 +53,7 @@ function activityRow(overrides = {}) {
   };
 }
 
-function createHarness({ rows = [], totals = { remarks: 0, history: rows.length }, column = null } = {}) {
+function createHarness({ rows = [], totals = { remarks: 0, history: rows.length, historyUpdated: 0 }, column = null } = {}) {
   const calls = { inputs: {}, query: '' };
   const request = {
     input(name, _type, value) {
@@ -150,6 +152,14 @@ describe('RowActivityService formatters', () => {
     expect(parseLimit('1')).toBe(1);
     expect(parseLimit('100')).toBe(100);
   });
+
+  it('normalizes history action filters', () => {
+    expect(parseActionFilter('updated')).toBe('updated');
+    expect(parseActionFilter('all')).toBeNull();
+    expect(parseActionFilter()).toBeNull();
+    expect(matchesUpdatedAction('update')).toBe(true);
+    expect(matchesUpdatedAction('correct')).toBe(false);
+  });
 });
 
 describe('RowActivityService query', () => {
@@ -183,7 +193,7 @@ describe('RowActivityService query', () => {
     const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', limit: 2 });
 
     expect(result.items).toHaveLength(2);
-    expect(result.totals).toEqual({ remarks: 4, history: 12 });
+    expect(result.totals).toEqual({ remarks: 4, history: 12, historyUpdated: 0 });
     expect(decodeCursor(result.newestCursor).id).toBe('3');
     expect(decodeCursor(result.nextCursor).id).toBe('2');
     expect(harness.calls.inputs.take).toBe(3);
@@ -232,5 +242,17 @@ describe('RowActivityService query', () => {
     expect(harness.calls.query).toContain("l.source='D365' OR (l.source='USER' AND l.field_key IS NULL)");
     expect(harness.calls.query).toContain('l.detail_key=-1');
     expect(harness.calls.inputs.includeRemarks).toBe(false);
+  });
+
+  it('binds updated action filters and returns historyUpdated totals', async () => {
+    const harness = createHarness({
+      rows: [activityRow({ action: 'update' })],
+      totals: { remarks: 0, history: 1, history_updated: 1 },
+    });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, actionFilter: 'updated' });
+
+    expect(harness.calls.inputs.actionFilter).toBe('updated');
+    expect(harness.calls.query).toContain("UPPER(ISNULL(h.action, '')) = 'UPDATE'");
+    expect(result.totals.historyUpdated).toBe(1);
   });
 });

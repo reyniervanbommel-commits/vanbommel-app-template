@@ -5,7 +5,7 @@ import { mergeNewest, mergeOlder } from './remarksFormatters';
 const INITIAL_DELAY = 5000;
 const MAX_DELAY = 60000;
 
-function buildActivityPath({ tableKey, row, kind, columnId, cursor, afterCursor }) {
+function buildActivityPath({ tableKey, row, kind, columnId, cursor, afterCursor, actionFilter }) {
   const query = new URLSearchParams({
     partitionKey: row.partitionKey,
     recordKey: row.recordKey,
@@ -13,6 +13,7 @@ function buildActivityPath({ tableKey, row, kind, columnId, cursor, afterCursor 
     limit: '50',
   });
   if (columnId) query.set('columnId', String(columnId));
+  if (actionFilter) query.set('actionFilter', actionFilter);
   if (cursor) query.set('cursor', cursor);
   if (afterCursor) query.set('afterCursor', afterCursor);
   return `/data/${encodeURIComponent(tableKey)}/activity?${query.toString()}`;
@@ -21,9 +22,9 @@ function buildActivityPath({ tableKey, row, kind, columnId, cursor, afterCursor 
 /**
  * Loads one cursor-paginated row activity feed and polls visible open drawers for deltas.
  */
-export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }) {
+export function useRowActivity({ enabled, tableKey, row, kind, columnId = null, actionFilter = null }) {
   const [items, setItems] = useState([]);
-  const [totals, setTotals] = useState({ remarks: 0, history: 0 });
+  const [totals, setTotals] = useState({ remarks: 0, history: 0, historyUpdated: 0 });
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -55,9 +56,9 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
     setLoading(true);
     setError('');
     try {
-      const data = await request(buildActivityPath({ tableKey, row, kind, columnId }));
+      const data = await request(buildActivityPath({ tableKey, row, kind, columnId, actionFilter }));
       setItems(Array.isArray(data?.items) ? data.items : []);
-      setTotals(data?.totals || { remarks: 0, history: 0 });
+      setTotals(data?.totals || { remarks: 0, history: 0, historyUpdated: 0 });
       setNextCursor(data?.nextCursor || null);
       newestCursorRef.current = data?.newestCursor || null;
       backoffRef.current = INITIAL_DELAY;
@@ -68,7 +69,7 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
     } finally {
       setLoading(false);
     }
-  }, [columnId, enabled, kind, request, row, tableKey]);
+  }, [actionFilter, columnId, enabled, kind, request, row, tableKey]);
 
   const loadOlder = useCallback(async () => {
     if (!nextCursor || requestInFlightRef.current) return;
@@ -80,6 +81,7 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
           row,
           kind,
           columnId,
+          actionFilter,
           cursor: nextCursor,
         })
       );
@@ -91,7 +93,7 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
         setError(requestError?.message || 'Failed to load older activity');
       }
     }
-  }, [columnId, kind, nextCursor, request, row, tableKey, totals]);
+  }, [actionFilter, columnId, kind, nextCursor, request, row, tableKey, totals]);
 
   const retry = useCallback(() => {
     backoffRef.current = INITIAL_DELAY;
@@ -136,11 +138,12 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
             row,
             kind,
             columnId,
+            actionFilter,
             afterCursor: newestCursorRef.current,
           })
         );
         setItems((current) => mergeNewest(current, Array.isArray(data?.items) ? data.items : []));
-        setTotals(data?.totals || { remarks: 0, history: 0 });
+        setTotals(data?.totals || { remarks: 0, history: 0, historyUpdated: 0 });
         newestCursorRef.current = data?.newestCursor || newestCursorRef.current;
         backoffRef.current = INITIAL_DELAY;
         setError('');
@@ -167,7 +170,7 @@ export function useRowActivity({ enabled, tableKey, row, kind, columnId = null }
       controllersRef.current.clear();
       requestInFlightRef.current = false;
     };
-  }, [columnId, enabled, kind, request, row, tableKey]);
+  }, [actionFilter, columnId, enabled, kind, request, row, tableKey]);
 
   return useMemo(
     () => ({

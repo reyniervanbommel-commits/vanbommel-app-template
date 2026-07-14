@@ -31,7 +31,7 @@ describe('remarks components', () => {
     const onSubmit = vi.fn().mockRejectedValueOnce(new Error('Save failed')).mockResolvedValueOnce({ id: 1 });
     renderWithFluent(<RemarkComposer currentUser={{ displayName: 'Taylor' }} onSubmit={onSubmit} />);
 
-    const composer = screen.getByLabelText(/Add a remark as/);
+    const composer = screen.getByLabelText('Add a remark');
     fireEvent.change(composer, { target: { value: 'Needs follow-up' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add remark' }));
 
@@ -42,30 +42,25 @@ describe('remarks components', () => {
     await waitFor(() => expect(composer.value).toBe(''));
   });
 
-  it('toont uitsluitend whitelist-reacties met aria-pressed', () => {
+  it('toont uitsluitend whitelist-reacties achter een Like-knop', async () => {
+    const onToggle = vi.fn();
     renderWithFluent(
       <RemarkReactionBar
         remarkId={7}
-        reactions={[{ emoji: '👍', count: 2, reactedByCurrentUser: true }]}
-        onToggle={vi.fn()}
+        reactions={[{ emoji: '😊', count: 1, reactedByCurrentUser: false }]}
+        onToggle={onToggle}
       />
     );
 
-    const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(6);
-    expect(screen.getByRole('button', { name: 'Remove 👍 reaction' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.queryByText('🚀')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Like (1)' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Add 😊 reaction/ }));
+    await waitFor(() => expect(onToggle).toHaveBeenCalledWith(7, '😊', true));
   });
 
   it('schakelt reacties op een eigen remark toegankelijk uit', () => {
     renderWithFluent(<RemarkReactionBar remarkId={7} ownRemark reactions={[]} onToggle={vi.fn()} />);
 
-    expect(screen.getAllByRole('button')).toHaveLength(6);
-    expect(
-      screen.getByRole('button', {
-        name: '👍 reactions are unavailable on your own remark',
-      }).disabled
-    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'Reactions are unavailable on your own remark' }).disabled).toBe(true);
   });
 
   it('toont een inline fout wanneer een reactie niet kan worden opgeslagen', async () => {
@@ -77,7 +72,8 @@ describe('remarks components', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add 👍 reaction' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Like' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Add 😊 reaction/ }));
     expect((await screen.findByRole('alert')).textContent).toContain('Reaction failed');
   });
 

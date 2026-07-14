@@ -58,12 +58,6 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
             aria-label={`Select order ${order.orderNumber}`}
           />
         ) : null}
-        <RowRemarksBadge
-          count={remarks?.summary?.count}
-          orderNumber={order.orderNumber}
-          onOpen={handleOpenRemarks}
-        />
-        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
         {hasLines ? (
           <Button
             size="small"
@@ -75,6 +69,12 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
             {isExpanded ? '-' : '+'}
           </Button>
         ) : null}
+        <RowRemarksBadge
+          count={remarks?.summary?.count}
+          orderNumber={order.orderNumber}
+          onOpen={handleOpenRemarks}
+        />
+        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
       </div>
     </td>
   );
