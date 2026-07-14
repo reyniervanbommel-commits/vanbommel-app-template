@@ -20,7 +20,10 @@ const {
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
 } = require('../utils/tableColumnFormulaValidation');
-const { normalizeStatusOptions, buildStatusLabelRenames } = require('../utils/statusColumnOptions');
+const {
+  ensureRemarksColumn,
+  validateRemarksColumnRequest,
+} = require('./RemarksColumnService');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -70,13 +73,92 @@ function resolveWriteback({ writable, mechanism }) {
   return { writable: 1, mechanism: mech };
 }
 
+function badRequest(message) {
+  return Object.assign(new Error(message), { status: 400 });
+}
+
+function validateImageTransform(item, index) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw badRequest(`Transform #${index + 1} moet een object zijn`);
+  }
+  const type = String(item.type || '').trim();
+  switch (type) {
+    case 'trim':
+      return { type: 'trim' };
+    case 'remove':
+      if (typeof item.value !== 'string' || item.value.length === 0) {
+        throw badRequest("Transform 'remove' vereist een niet-lege string 'value'");
+      }
+      return { type: 'remove', value: item.value };
+    case 'replace':
+      if (typeof item.from !== 'string' || item.from.length === 0) {
+        throw badRequest("Transform 'replace' vereist een niet-lege string 'from'");
+      }
+      if (typeof item.to !== 'string') {
+        throw badRequest("Transform 'replace' vereist een string 'to'");
+      }
+      return { type: 'replace', from: item.from, to: item.to };
+    case 'substring': {
+      if (!Number.isInteger(item.start) || item.start < 0) {
+        throw badRequest("Transform 'substring' vereist een geheel getal 'start' >= 0");
+      }
+      const normalized = { type: 'substring', start: item.start };
+      if (item.end !== undefined && item.end !== null) {
+        if (!Number.isInteger(item.end)) {
+          throw badRequest("Transform 'substring' veld 'end' moet een geheel getal zijn");
+        }
+        normalized.end = item.end;
+      }
+      return normalized;
+    }
+    default:
+      throw badRequest(`Onbekend transform-type: ${type || 'leeg'}`);
+  }
+}
+
+function validateImageOptions(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw badRequest('Image-opties moeten een object zijn');
+  }
+  const { urlTemplate, sourceColumnKey, transforms } = options;
+  if (typeof urlTemplate !== 'string' || urlTemplate.trim().length === 0) {
+    throw badRequest('urlTemplate is verplicht');
+  }
+  const template = urlTemplate.trim();
+  if (!/^https?:\/\//i.test(template)) {
+    throw badRequest('urlTemplate moet beginnen met http:// of https://');
+  }
+  if (!template.includes('{xxx}')) {
+    throw badRequest('urlTemplate moet de placeholder {xxx} bevatten');
+  }
+  if (typeof sourceColumnKey !== 'string' || sourceColumnKey.trim().length === 0) {
+    throw badRequest('sourceColumnKey is verplicht');
+  }
+  let normalizedTransforms = [];
+  if (transforms !== undefined && transforms !== null) {
+    if (!Array.isArray(transforms)) {
+      throw badRequest('transforms moet een array zijn');
+    }
+    normalizedTransforms = transforms.map(validateImageTransform);
+  }
+  return {
+    urlTemplate: template,
+    sourceColumnKey: sourceColumnKey.trim(),
+    transforms: normalizedTransforms,
+  };
+}
 
 async function createColumn({ tableKey, scope, label, dataType, options = null, formulaExpr = null }, userId) {
   const table = await getTableByKey(tableKey);
-  const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
   if (!SCOPES.includes(scope)) throw Object.assign(new Error('Ongeldige scope (master of detail)'), { status: 400 });
   if (!DATA_TYPES.includes(dataType)) throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
+  if (dataType === 'remarks') {
+    validateRemarksColumnRequest({ scope, options, formulaExpr });
+    const pool = await getPool();
+    return ensureRemarksColumn({ pool, tableId: table.id, userId });
+  }
+  const cleanLabel = String(label || '').trim().slice(0, MAX_LABEL_LENGTH);
+  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
   const normalizedFormula = normalizeFormulaExpression(formulaExpr);
   const isFormulaColumn = Boolean(normalizedFormula.expression);
   if (isFormulaColumn && scope !== 'master') {
@@ -84,19 +166,43 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   }
 
   let optionsJson = null;
+  let normalizedImageOptions = null;
   if (dataType === 'select' && !isFormulaColumn) {
     const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
     if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
     optionsJson = JSON.stringify(list);
   }
-  if (dataType === 'status' && !isFormulaColumn) {
-    optionsJson = JSON.stringify(normalizeStatusOptions(options));
+  if (dataType === 'image') {
+    if (scope !== 'master') {
+      throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+    }
+    if (isFormulaColumn) {
+      throw Object.assign(new Error('Formulekolommen ondersteunen geen image-datatype'), { status: 400 });
+    }
+    normalizedImageOptions = validateImageOptions(options);
+    optionsJson = JSON.stringify(normalizedImageOptions);
   }
-  if (isFormulaColumn && (dataType === 'select' || dataType === 'status')) {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of status-datatype'), { status: 400 });
+  if (isFormulaColumn && dataType === 'select') {
+    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst-datatype'), { status: 400 });
   }
 
   const pool = await getPool();
+  if (dataType === 'image') {
+    const sourceCheck = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('sourceColumnKey', sql.NVarChar(64), normalizedImageOptions.sourceColumnKey)
+      .query(`
+        SELECT 1
+        FROM dbo.tb_columns
+        WHERE table_id = @tableId
+          AND scope = 'master'
+          AND [key] = @sourceColumnKey
+          AND is_active = 1
+      `);
+    if (!sourceCheck.recordset.length) {
+      throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+    }
+  }
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
   if (isFormulaColumn) {
     const masterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
@@ -135,6 +241,9 @@ async function renameColumn(columnId, label, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
   if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet hernoemd worden'), { status: 400 });
+  if (existing.dataType === 'remarks') {
+    throw Object.assign(new Error('De Remarks-kolom heeft een vaste naam'), { status: 400 });
+  }
 
   const pool = await getPool();
   const result = await pool.request()
@@ -144,74 +253,6 @@ async function renameColumn(columnId, label, userId) {
     .query(`
       UPDATE dbo.tb_columns
       SET label = @label, updated_by = @userId, updated_at = SYSUTCDATETIME()
-      ${COLUMN_OUTPUT}
-      WHERE id = @id
-    `);
-  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
-  return mapColumnRow(result.recordset[0]);
-}
-
-async function updateColumn(columnId, { label, options }, userId) {
-  const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
-  if (existing.source !== 'custom') throw Object.assign(new Error('Bronkolommen kunnen niet gewijzigd worden'), { status: 400 });
-
-  const hasLabel = label !== undefined;
-  const hasOptions = options !== undefined;
-  if (!hasLabel && !hasOptions) throw Object.assign(new Error('Geen wijzigingen opgegeven'), { status: 400 });
-
-  const cleanLabel = hasLabel
-    ? String(label || '').trim().slice(0, MAX_LABEL_LENGTH)
-    : String(existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
-  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
-
-  let optionsJson = existing.options ? JSON.stringify(existing.options) : null;
-  let normalizedStatusOptions = null;
-  if (hasOptions) {
-    if (existing.dataType === 'status') {
-      normalizedStatusOptions = normalizeStatusOptions(options);
-      optionsJson = JSON.stringify(normalizedStatusOptions);
-    } else if (existing.dataType === 'select') {
-      const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
-      if (!list.length) throw Object.assign(new Error('Een keuzelijst vereist minimaal één optie'), { status: 400 });
-      optionsJson = JSON.stringify(list);
-    } else {
-      throw Object.assign(new Error('Opties kunnen alleen voor select- of status-kolommen worden gewijzigd'), { status: 400 });
-    }
-  }
-
-  const pool = await getPool();
-
-  if (hasOptions && existing.dataType === 'status' && normalizedStatusOptions) {
-    const renames = buildStatusLabelRenames(existing.options, normalizedStatusOptions);
-    for (const rename of renames) {
-      await pool.request()
-        .input('columnId', sql.BigInt, columnId)
-        .input('oldLabel', sql.NVarChar(64), rename.from)
-        .input('newLabel', sql.NVarChar(64), rename.to)
-        .input('userId', sql.Int, userId || null)
-        .query(`
-          UPDATE dbo.tb_custom_values
-          SET value_text = @newLabel,
-              updated_by = @userId,
-              updated_at = SYSUTCDATETIME()
-          WHERE column_id = @columnId
-            AND value_text = @oldLabel
-        `);
-    }
-  }
-
-  const result = await pool.request()
-    .input('id', sql.BigInt, columnId)
-    .input('label', sql.NVarChar(128), cleanLabel)
-    .input('options', sql.NVarChar(sql.MAX), optionsJson)
-    .input('userId', sql.Int, userId || null)
-    .query(`
-      UPDATE dbo.tb_columns
-      SET label = @label,
-          options_json = @options,
-          updated_by = @userId,
-          updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
       WHERE id = @id
     `);
@@ -238,8 +279,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (!DATA_TYPES.includes(nextDataType)) {
     throw Object.assign(new Error('Ongeldig datatype'), { status: 400 });
   }
-  if (nextDataType === 'select' || nextDataType === 'status') {
-    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of status-datatype'), { status: 400 });
+  if (nextDataType === 'select' || nextDataType === 'image') {
+    throw Object.assign(new Error('Formulekolommen ondersteunen geen keuzelijst- of image-datatype'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
@@ -268,6 +309,66 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
           data_type = @dataType,
           options_json = NULL,
           formula_expr = @formulaExpr,
+          writable = 0,
+          write_mechanism = NULL,
+          updated_by = @userId,
+          updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
+async function updateImageColumn(columnId, { label, dataType, options }, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (existing.source !== 'custom') {
+    throw Object.assign(new Error('Alleen eigen kolommen kunnen als plaatje worden bewerkt'), { status: 400 });
+  }
+  if (existing.scope !== 'master') {
+    throw Object.assign(new Error('Image-kolommen zijn alleen toegestaan op master-niveau'), { status: 400 });
+  }
+  const cleanLabel = String(label || existing.label || '').trim().slice(0, MAX_LABEL_LENGTH);
+  if (!cleanLabel) throw Object.assign(new Error('Label is verplicht'), { status: 400 });
+
+  const nextDataType = String(dataType || existing.dataType || '').trim();
+  if (nextDataType !== 'image') {
+    throw Object.assign(new Error('Alleen image-datatype is toegestaan voor deze bewerking'), { status: 400 });
+  }
+
+  const normalizedImageOptions = validateImageOptions(options !== undefined ? options : existing.options);
+  if (normalizedImageOptions.sourceColumnKey === existing.key) {
+    throw Object.assign(new Error('sourceColumnKey mag niet naar dezelfde image-kolom verwijzen'), { status: 400 });
+  }
+
+  const pool = await getPool();
+  const sourceCheck = await pool.request()
+    .input('tableId', sql.BigInt, existing.tableId)
+    .input('sourceColumnKey', sql.NVarChar(64), normalizedImageOptions.sourceColumnKey)
+    .query(`
+      SELECT 1
+      FROM dbo.tb_columns
+      WHERE table_id = @tableId
+        AND scope = 'master'
+        AND [key] = @sourceColumnKey
+        AND is_active = 1
+    `);
+  if (!sourceCheck.recordset.length) {
+    throw Object.assign(new Error('sourceColumnKey verwijst niet naar een bestaande master-kolom'), { status: 400 });
+  }
+
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('label', sql.NVarChar(128), cleanLabel)
+    .input('options', sql.NVarChar(sql.MAX), JSON.stringify(normalizedImageOptions))
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET label = @label,
+          data_type = 'image',
+          options_json = @options,
+          formula_expr = NULL,
           writable = 0,
           write_mechanism = NULL,
           updated_by = @userId,
@@ -363,6 +464,9 @@ async function setVisibleAtDelete(columnId, flag, userId) {
 async function setWriteBackConfig(columnId, config, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Kolom niet gevonden'), { status: 404 });
+  if (existing.dataType === 'remarks') {
+    throw Object.assign(new Error('De Remarks-kolom is read-only'), { status: 400 });
+  }
   const { writable, mechanism } = resolveWriteback(config || {});
   const pool = await getPool();
   const result = await pool.request()
@@ -385,14 +489,17 @@ module.exports = {
   DATA_TYPES,
   slugify,
   resolveWriteback,
+  validateImageOptions,
+  ensureRemarksColumn,
+  validateRemarksColumnRequest,
   normalizeFormulaExpression,
   validateFormulaReferences,
   findDependentFormulaColumn,
   validateFormulaResultTypeCompatibility,
   createColumn,
   renameColumn,
-  updateColumn,
   updateFormulaColumn,
+  updateImageColumn,
   deactivateColumn,
   setColumnVisibility,
   setVisibleAtDelete,

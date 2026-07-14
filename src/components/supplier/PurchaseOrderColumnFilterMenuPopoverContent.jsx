@@ -49,6 +49,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleApply,
   handleClearFilter,
   handleAddType,
+  remarksAlreadyAdded,
   textStyleDraft,
   handleTextColorChange,
   handleToggleBold,
@@ -122,6 +123,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         activeSubmenu={activeSubmenu}
         submenuTop={submenuTop}
         handleAddType={handleAddType}
+        remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft}
         handleTextColorChange={handleTextColorChange}
         handleToggleBold={handleToggleBold}

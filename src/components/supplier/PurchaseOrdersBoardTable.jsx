@@ -1,107 +1,61 @@
-import React, { memo, useEffect, useMemo } from 'react';
-import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
+import { usePurchaseOrdersBoardTableStyles } from './purchaseOrdersBoardTableStyles';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
+import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardLinks';
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
-
-const useStyles = makeStyles({
-  wrapper: {
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    borderRadius: '8px',
-    backgroundColor: tokens.colorNeutralBackground1,
-    height: '100%',
-    minHeight: 0,
-    overflow: 'auto',
-    overflowX: 'scroll',
-    scrollbarGutter: 'stable',
-  },
-  table: {
-    width: 'max-content',
-    borderCollapse: 'separate',
-    borderSpacing: 0,
-    minWidth: '100%',
-    tableLayout: 'fixed',
-  },
-  headerCell: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    position: 'sticky',
-    top: 0,
-    zIndex: 2,
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('10px', '12px'),
-    textAlign: 'left',
-    fontWeight: tokens.fontWeightRegular,
-    fontSize: tokens.fontSizeBase300,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    ':hover [data-column-menu-trigger="true"]': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
-    ':focus-within [data-column-menu-trigger="true"]': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
-  },
-  dragDropCell: { cursor: 'grab' },
-  dragSourceCell: { opacity: 0.6 },
-  dropBeforeCell: { '::before': { content: '""', position: 'absolute', left: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
-  dropAfterCell: { '::after': { content: '""', position: 'absolute', right: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },
-  headerCellContent: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: 0, overflow: 'hidden', ...shorthands.gap('6px') },
-  headerCellLabel: {
-    flexGrow: 1,
-    minWidth: 0,
-  },
-  empty: {
-    ...shorthands.padding('16px'),
-    color: tokens.colorNeutralForeground3,
-    textAlign: 'center',
-  },
-});
 function PurchaseOrdersBoardTable({
-  items,
-  columns,
-  lineColumns,
-  boardView,
-  onSaveValue,
-  onRenameColumn,
-  onUpdateStatusOptions,
-  onRemoveColumn,
-  onCorrect,
-  isAdmin,
-  onToggleWriteback,
-  onReorderHeaderColumn,
-  onReorderLineColumn,
-  headerColumnWidths = {},
-  lineColumnWidths = {},
-  headerColumnTextStyles = {},
-  headerColumnFormatRules = {},
-  lineColumnTextStyles = {},
-  lineColumnFormatRules = {},
-  onSaveHeaderColumnWidth,
-  onSaveLineColumnWidth,
-  onSaveHeaderColumnTextStyle,
-  onSaveHeaderColumnFormatRules,
-  onSaveLineColumnTextStyle,
-  onSaveLineColumnFormatRules,
-  onAddColumnRightOf,
-  onSetLineColumnTotal,
-  onPushLineTotalToHeader,
-  onPushLineValuesToHeader,
-  lineTotalColumns = [],
-  lineTotalHeaderLinks = [],
-  lineValueHeaderLinks = [],
-  editingColumnKey,
-  onEditingDone,
-  reorderingColumns = false,
+  data,
+  layout,
+  formatting,
+  cellActions: pageCellActions,
+  columnActions,
+  linkActions,
   selection,
-  stickyColumns = {},
+  remarks,
 }) {
-  const styles = useStyles();
+  const { items, columns, lineColumns, boardView } = data;
+  const {
+    headerColumnWidths = {},
+    stickyColumns = {},
+  } = layout;
+  const {
+    headerColumnTextStyles = {},
+    headerColumnFormatRules = {},
+    lineColumnTextStyles = {},
+    lineColumnFormatRules = {},
+  } = formatting;
+  const {
+    onRenameColumn,
+    onRemoveColumn,
+    isAdmin,
+    onToggleWriteback,
+    onReorderHeaderColumn,
+    onReorderLineColumn,
+    onSaveHeaderColumnWidth,
+    onSaveLineColumnWidth,
+    onSaveHeaderColumnTextStyle,
+    onSaveHeaderColumnFormatRules,
+    onSaveLineColumnTextStyle,
+    onSaveLineColumnFormatRules,
+    onAddColumnRightOf,
+    editingColumnKey,
+    onEditingDone,
+    reorderingColumns = false,
+  } = columnActions;
+  const {
+    onSetLineColumnTotal,
+    onPushLineTotalToHeader,
+    onPushLineValuesToHeader,
+    lineTotalColumns = [],
+    lineTotalHeaderLinks = [],
+    lineValueHeaderLinks = [],
+  } = linkActions;
+  const styles = usePurchaseOrdersBoardTableStyles();
   const { wrapperRef, decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = usePurchaseOrdersBoardStickyColumns({
     columns,
     headerColumnWidths,
@@ -149,22 +103,28 @@ function PurchaseOrdersBoardTable({
     handleSetExpansion,
     tableActions,
   } = usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey });
-
-  const cellFilterActions = useMemo(
-    () => ({
-      filterByColumn,
-      applyFilterFromCellValue,
-      clearColumnFilter,
-    }),
-    [filterByColumn, applyFilterFromCellValue, clearColumnFilter]
-  );
+  const [cellContext, setCellContext] = useState(null);
+  const openCellContextMenu = useCallback((target, cell) => {
+    setCellContext({ target, ...cell });
+  }, []);
+  const closeCellContextMenu = useCallback(() => {
+    setCellContext(null);
+  }, []);
+  const contextMenu = useMemo(() => ({
+    filterByColumn,
+    open: openCellContextMenu,
+  }), [filterByColumn, openCellContextMenu]);
+  const contextMenuActions = useMemo(() => ({
+    applyFilter: applyFilterFromCellValue,
+    clearFilter: clearColumnFilter,
+    openRemarks: remarks?.open,
+    close: closeCellContextMenu,
+  }), [applyFilterFromCellValue, clearColumnFilter, closeCellContextMenu, remarks?.open]);
   const cellActions = useMemo(
     () => ({
-      onSaveValue,
+      ...pageCellActions,
       onRenameColumn,
-      onUpdateStatusOptions,
       onRemoveColumn,
-      onCorrect,
       isAdmin,
       onToggleWriteback,
       onReorderLineColumn,
@@ -176,47 +136,36 @@ function PurchaseOrdersBoardTable({
       onPushLineTotalToHeader,
       onPushLineValuesToHeader,
     }),
-    [
-      onSaveValue,
-      onRenameColumn,
-      onUpdateStatusOptions,
-      onRemoveColumn,
-      onCorrect,
-      isAdmin,
-      onToggleWriteback,
-      onReorderLineColumn,
-      onSaveLineColumnTextStyle,
-      onSaveLineColumnFormatRules,
-      reorderingColumns,
-      lineTotalColumns,
-      onSetLineColumnTotal,
-      onPushLineTotalToHeader,
-      onPushLineValuesToHeader,
-    ]
+    [columnActions, linkActions, pageCellActions]
   );
-
-  const linkedLineTotalByHeaderKey = useMemo(
-    () => (Array.isArray(lineTotalHeaderLinks)
-      ? lineTotalHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-        acc[link.headerColumnKey] = link.lineColumnKey;
-        return acc;
-      }, {})
-      : {}),
-    [lineTotalHeaderLinks]
+  const {
+    linkedLineTotalByHeaderKey,
+    linkedLineValueByHeaderKey,
+  } = usePurchaseOrdersBoardLinks({
+    lineColumns,
+    lineTotalHeaderLinks,
+    lineValueHeaderLinks,
+  });
+  const colCount = columns.length + 1;
+  const rowsData = useMemo(
+    () => ({ groupedRows, collapsedGroups, expandedOrders }),
+    [collapsedGroups, expandedOrders, groupedRows]
   );
-  const linkedLineValueByHeaderKey = useMemo(
-    () => (Array.isArray(lineValueHeaderLinks)
-      ? lineValueHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-      const lineColumn = lineColumns.find((lineColumnEntry) => lineColumnEntry.key === link.lineColumnKey);
-        if (!lineColumn) return acc;
-        acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
-        return acc;
-      }, {})
-      : {}),
-    [lineValueHeaderLinks, lineColumns]
+  const rowsLayout = useMemo(
+    () => ({ columns: decoratedColumns, lineColumns, colCount }),
+    [colCount, decoratedColumns, lineColumns]
   );
+  const rowsActions = useMemo(() => ({
+    tableActions,
+    onClearGrouping: clearGrouping,
+    onSaveLineColumnWidth,
+    cellActions,
+  }), [cellActions, clearGrouping, onSaveLineColumnWidth, tableActions]);
+  const rowsLinks = useMemo(() => ({
+    lineTotalColumns,
+    linkedLineTotalByHeaderKey,
+    linkedLineValueByHeaderKey,
+  }), [lineTotalColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
   if (!items.length) {
     return <div className={styles.empty}>Geen gegevens gevonden</div>;
@@ -225,13 +174,12 @@ function PurchaseOrdersBoardTable({
     return <div className={styles.empty}>No rows match the active filters</div>;
   }
 
-  const colCount = columns.length + 1;
-
   return (
-    <div className={styles.wrapper} ref={wrapperRef}>
-      <table className={styles.table}>
-        <thead>
-          <PurchaseOrdersBoardHeaderRow
+    <>
+      <div className={styles.wrapper} ref={wrapperRef}>
+        <table className={styles.table}>
+          <thead>
+            <PurchaseOrdersBoardHeaderRow
             styles={styles}
             selection={selection}
             onSetExpansion={handleSetExpansion}
@@ -271,33 +219,25 @@ function PurchaseOrdersBoardTable({
             stickyColumnKeys={stickyColumnKeys}
             firstNonStickyColumnKey={firstNonStickyColumnKey}
             onMakeColumnSticky={makeColumnSticky}
+            />
+          </thead>
+          <PurchaseOrdersBoardRows
+            data={rowsData}
+            layout={rowsLayout}
+            formatting={formatting}
+            actions={rowsActions}
+            links={rowsLinks}
+            selection={selection}
+            contextMenu={contextMenu}
+            remarks={remarks}
           />
-        </thead>
-        <PurchaseOrdersBoardRows
-          groupedRows={groupedRows}
-          collapsedGroups={collapsedGroups}
-          expandedOrders={expandedOrders}
-          columns={decoratedColumns}
-          lineColumns={lineColumns}
-          headerColumnWidths={headerColumnWidths}
-          lineColumnWidths={lineColumnWidths}
-          headerColumnTextStyles={headerColumnTextStyles}
-          headerColumnFormatRules={headerColumnFormatRules}
-          lineColumnTextStyles={lineColumnTextStyles}
-          lineColumnFormatRules={lineColumnFormatRules}
-          onSaveLineColumnWidth={onSaveLineColumnWidth}
-          colCount={colCount}
-          tableActions={tableActions}
-          onClearGrouping={clearGrouping}
-          cellActions={cellActions}
-          lineTotalColumns={lineTotalColumns}
-          linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
-          linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
-          selection={selection}
-          cellFilterActions={cellFilterActions}
-        />
-      </table>
-    </div>
+        </table>
+      </div>
+      <PurchaseOrderCellContextMenu
+        context={cellContext}
+        actions={contextMenuActions}
+      />
+    </>
   );
 }
 export default memo(PurchaseOrdersBoardTable);

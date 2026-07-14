@@ -20,9 +20,10 @@ export function usePurchaseOrderColumnMenuFlags({
   onMakeColumnSticky,
   isConnectedType,
 }) {
+  const isRemarksColumn = column?.dataType === 'remarks';
   const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
   const showWritebackLocked = Boolean(column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
-  const canRenameColumn = Boolean(column?.id && typeof onRenameColumn === 'function');
+  const canRenameColumn = Boolean(!isRemarksColumn && column?.id && typeof onRenameColumn === 'function');
   const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
   const isLineColumn = column.level === 'line';
   const isLineNumberColumn = isLineColumn && column.dataType === 'number';
@@ -31,8 +32,8 @@ export function usePurchaseOrderColumnMenuFlags({
   const canToggleGroupSummary = Boolean(isHeaderNumberColumn && typeof onSetGroupSummaryColumn === 'function');
   const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
-  const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
-  const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
+  const canSetColumnTextStyle = !isRemarksColumn && typeof onSetColumnTextStyle === 'function';
+  const canSetColumnFormatRules = !isRemarksColumn && typeof onSetColumnFormatRules === 'function';
   const canPromoteToSticky = Boolean(
     canMakeColumnSticky
     && !isStickyColumn
@@ -48,6 +49,8 @@ export function usePurchaseOrderColumnMenuFlags({
   const canToggleStickyAction = canPromoteToSticky || canUnstickSticky;
   const canAddColumn = typeof onAddColumnRightOf === 'function';
   const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
+  const canEditImageColumn = Boolean(canAddColumn && column.source === 'custom' && column.dataType === 'image');
+  const isImageColumn = column?.dataType === 'image' || isRemarksColumn;
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
 
   return {
@@ -66,6 +69,8 @@ export function usePurchaseOrderColumnMenuFlags({
     canToggleStickyAction,
     canAddColumn,
     canEditFormulaColumn,
+    canEditImageColumn,
+    isImageColumn,
     columnTypeMeta,
   };
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
@@ -10,7 +11,10 @@ import { calculateLineColumnSum, filterSummableLineColumnKeys } from '../../util
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
+
+import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
 const useStyles = makeStyles({
   subitemsLayout: {
@@ -100,10 +104,26 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
+    height: purchaseOrderSubRowHeight,
+    maxHeight: purchaseOrderSubRowHeight,
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
+    boxSizing: 'border-box',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+  },
+  subCellContent: {
+    display: 'block',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `calc(${purchaseOrderSubRowHeight} - 4px)`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    lineHeight: `calc(${purchaseOrderSubRowHeight} - 6px)`,
   },
   empty: {
     ...shorthands.padding('8px'),
@@ -126,7 +146,6 @@ export default function PurchaseOrdersSubitemsTable({
   columns,
   onSaveValue,
   onRenameColumn,
-  onUpdateStatusOptions,
   onRemoveColumn,
   onCorrect,
   isAdmin,
@@ -216,6 +235,7 @@ export default function PurchaseOrdersSubitemsTable({
         <tr>
           <th className={connectorStyles.connectorHeaderCell} aria-hidden="true" />
           {lineColumns.map((column) => {
+            const isSystemColumn = isProductImageColumn(column);
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
             const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
             const connectionTargets = lineColumnConnectionTargets[column.key] || [];
@@ -224,6 +244,7 @@ export default function PurchaseOrdersSubitemsTable({
               key={column.key}
               columnKey={column.key}
               width={effectiveColumnWidths[column.key]}
+              minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',
@@ -236,20 +257,25 @@ export default function PurchaseOrdersSubitemsTable({
             >
               <div className={styles.headerCellContent}>
                 <div className={styles.headerCellLabel}>
-                  <PurchaseOrderColumnHeader
-                    column={column}
-                    onRename={onRenameColumn}
-                    onRemove={onRemoveColumn}
-                    isAdmin={isAdmin}
-                    onToggleWriteback={onToggleWriteback}
-                    showActionsMenu={false}
-                    showFilterIndicator={hasActiveFilter}
-                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                    showSumIndicator={summedColumnsSet.has(column.key)}
-                    showConnectionIndicator={connectionTargets.length > 0}
-                  />
+                  {isSystemColumn ? (
+                    <PurchaseOrderProductImageColumnHeader label={column.label} />
+                  ) : (
+                    <PurchaseOrderColumnHeader
+                      column={column}
+                      onRename={onRenameColumn}
+                      onRemove={onRemoveColumn}
+                      isAdmin={isAdmin}
+                      onToggleWriteback={onToggleWriteback}
+                      showActionsMenu={false}
+                      showFilterIndicator={hasActiveFilter}
+                      showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                      showSumIndicator={summedColumnsSet.has(column.key)}
+                      showConnectionIndicator={connectionTargets.length > 0}
+                    />
+                  )}
                 </div>
-                <PurchaseOrderColumnFilterMenu
+                {!isSystemColumn ? (
+                  <PurchaseOrderColumnFilterMenu
                   column={column}
                   filter={filterByColumn[column.key]}
                   sortState={sortState}
@@ -278,6 +304,7 @@ export default function PurchaseOrdersSubitemsTable({
                   referenceColumns={lineColumns}
                   connectionTargets={connectionTargets}
                 />
+                ) : null}
               </div>
             </ResizableTableHeaderCell>
             );
@@ -294,9 +321,8 @@ export default function PurchaseOrdersSubitemsTable({
         columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
-        onUpdateStatusOptions={onUpdateStatusOptions}
-        isAdmin={isAdmin}
         subCellClassName={styles.subCell}
+        subCellContentClassName={styles.subCellContent}
         noRowsCellClassName={styles.noRowsCell}
         connectorStyles={connectorStyles}
         hasTotalsRow={summedColumnsSet.size > 0}

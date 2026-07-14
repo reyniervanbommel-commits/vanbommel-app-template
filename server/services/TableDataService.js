@@ -2041,6 +2041,12 @@ function assertCustomColumnWritable(column) {
   if (!column || column.source !== 'custom') {
     throw Object.assign(new Error('Alleen eigen kolommen zijn bewerkbaar'), { status: 400 });
   }
+  if (String(column?.dataType || '').toLowerCase() === 'image') {
+    throw Object.assign(new Error('Image-kolommen zijn read-only'), { status: 400 });
+  }
+  if (String(column?.dataType || '').toLowerCase() === 'remarks') {
+    throw Object.assign(new Error('Remarks-kolommen ondersteunen geen directe waardewrites'), { status: 400 });
+  }
   if (isFormulaColumn(column)) {
     throw Object.assign(new Error('Formulekolommen zijn read-only'), { status: 400 });
   }
@@ -2625,14 +2631,6 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
       const str = String(value);
       if (allowed.length && !allowed.includes(str)) throw Object.assign(new Error('Waarde valt buiten de keuzelijst'), { status: 400 });
       valueText = str;
-    } else if (column.dataType === 'status') {
-      const { getAllowedStatusLabels } = require('../utils/statusColumnOptions');
-      const allowed = getAllowedStatusLabels(column.options);
-      const str = String(value ?? '').trim();
-      if (str && allowed.length && !allowed.includes(str)) {
-        throw Object.assign(new Error('Waarde valt buiten de statuslabels'), { status: 400 });
-      }
-      valueText = str || null;
     } else {
       valueText = String(value);
     }

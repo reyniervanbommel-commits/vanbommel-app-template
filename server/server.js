@@ -17,6 +17,7 @@ const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
 const dataRouter = require('./routes/data');
 const dataLinksRouter = require('./routes/dataLinks');
+const { createMediaRouter } = require('./routes/media');
 const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
@@ -129,6 +130,7 @@ app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.E
 app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
+app.use('/api/media', createMediaRouter());
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

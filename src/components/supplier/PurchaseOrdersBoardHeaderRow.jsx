@@ -2,9 +2,12 @@ import React from 'react';
 import { tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
+import PurchaseOrderProductImageColumnMenu from './PurchaseOrderProductImageColumnMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -57,6 +60,7 @@ export default function PurchaseOrdersBoardHeaderRow({
         onToggleAll={selection?.onToggleAll}
       />
       {columns.map((column) => {
+        const isSystemColumn = isProductImageColumn(column);
         const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
         const hasGroupSummary = groupSummaryColumnKeys.includes(column.key);
@@ -88,6 +92,7 @@ export default function PurchaseOrdersBoardHeaderRow({
             columnKey={column.key}
             data-col-key={column.key}
             width={headerColumnWidths[column.key]}
+            minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
             className={[styles.headerCell, headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
             onResizeEnd={onSaveHeaderColumnWidth}
             cellStyle={stickyHeaderStyle}
@@ -95,22 +100,27 @@ export default function PurchaseOrdersBoardHeaderRow({
           >
             <div className={styles.headerCellContent}>
               <div className={styles.headerCellLabel}>
-                <PurchaseOrderColumnHeader
-                  column={column}
-                  onRename={onRenameColumn}
-                  onRemove={onRemoveColumn}
-                  isAdmin={isAdmin}
-                  onToggleWriteback={onToggleWriteback}
-                  showActionsMenu={false}
-                  autoEdit={editingColumnKey === column.key}
-                  onEditingDone={onEditingDone}
-                  showFilterIndicator={hasActiveFilter}
-                  showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                  showSumIndicator={hasGroupSummary}
-                  showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
-                />
+                {isSystemColumn ? (
+                  <PurchaseOrderProductImageColumnHeader label={column.label} />
+                ) : (
+                  <PurchaseOrderColumnHeader
+                    column={column}
+                    onRename={onRenameColumn}
+                    onRemove={onRemoveColumn}
+                    isAdmin={isAdmin}
+                    onToggleWriteback={onToggleWriteback}
+                    showActionsMenu={false}
+                    autoEdit={editingColumnKey === column.key}
+                    onEditingDone={onEditingDone}
+                    showFilterIndicator={hasActiveFilter}
+                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                    showSumIndicator={hasGroupSummary}
+                    showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
+                  />
+                )}
               </div>
-              <PurchaseOrderColumnFilterMenu
+              {!isSystemColumn ? (
+                <PurchaseOrderColumnFilterMenu
                 column={column}
                 filter={filterByColumn[column.key]}
                 sortState={sortState}
@@ -144,6 +154,16 @@ export default function PurchaseOrdersBoardHeaderRow({
                 stickyColumnCount={stickyColumnKeys.length}
                 onMakeColumnSticky={onMakeColumnSticky}
               />
+              ) : (
+                <PurchaseOrderProductImageColumnMenu
+                  columnKey={column.key}
+                  isStickyColumn={isStickyColumn}
+                  canPromoteToSticky={canPromoteToSticky}
+                  canUnstickSticky={isRightMostStickyColumn}
+                  stickyColumnCount={stickyColumnKeys.length}
+                  onMakeColumnSticky={onMakeColumnSticky}
+                />
+              )}
             </div>
           </ResizableTableHeaderCell>
         );

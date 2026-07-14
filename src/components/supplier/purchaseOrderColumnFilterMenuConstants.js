@@ -4,14 +4,14 @@ import {
   normalizeColumnFormatRuleSet,
 } from './columnFormatRuleUtils';
 
-import { createDefaultStatusOptions } from '../../utils/statusColumnUtils';
-
 export const NEW_COLUMN_TYPES = [
-  { key: 'status', label: 'Status', dataType: 'status', options: createDefaultStatusOptions() },
+  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
   { key: 'text', label: 'Tekst', dataType: 'text' },
   { key: 'number', label: 'Nummers', dataType: 'number' },
   { key: 'date', label: 'Datum', dataType: 'date' },
   { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
+  { key: 'image', label: 'Plaatje', dataType: 'image' },
+  { key: 'remarks', label: 'Remarks', dataType: 'remarks' },
   { key: 'formula', label: 'Formule', dataType: 'number' },
 ];
 
@@ -22,7 +22,8 @@ const COLUMN_TYPE_META = {
   date: { key: 'date', label: 'Date' },
   boolean: { key: 'boolean', label: 'Yes/No' },
   select: { key: 'select', label: 'Select' },
-  status: { key: 'status', label: 'Status' },
+  image: { key: 'image', label: 'Image' },
+  remarks: { key: 'remarks', label: 'Remarks' },
   formula: { key: 'formula', label: 'Formula' },
 };
 

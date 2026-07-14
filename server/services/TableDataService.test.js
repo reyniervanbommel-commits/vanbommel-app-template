@@ -236,6 +236,22 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
 });
 
 describe('TableDataService.assertCustomColumnWritable', () => {
+  it('weigert image-kolommen voor handmatige save', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      dataType: 'image',
+      formulaExpr: null,
+    })).toThrow(/read-only/i);
+  });
+
+  it('weigert directe custom-valuewrites naar Remarks', () => {
+    expect(() => assertCustomColumnWritable({
+      source: 'custom',
+      dataType: 'remarks',
+      formulaExpr: null,
+    })).toThrow(/directe waardewrites/i);
+  });
+
   it('weigert formulekolommen voor handmatige save', () => {
     expect(() => assertCustomColumnWritable({
       source: 'custom',

@@ -1,12 +1,16 @@
 'use strict';
 
 const {
+  DATA_TYPES,
+  ensureRemarksColumn,
   resolveWriteback,
   slugify,
   findDependentFormulaColumn,
   normalizeFormulaExpression,
   validateFormulaReferences,
   validateFormulaResultTypeCompatibility,
+  validateImageOptions,
+  validateRemarksColumnRequest,
 } = require('./TableColumnsService');
 
 describe('TableColumnsService.resolveWriteback', () => {
@@ -107,5 +111,130 @@ describe('TableColumnsService formula helpers', () => {
       columns,
       'text'
     )).not.toThrow();
+  });
+});
+
+describe('TableColumnsService.validateImageOptions', () => {
+  it('accepteert geldige image-opties en normaliseert trims/transforms', () => {
+    const validated = validateImageOptions({
+      urlTemplate: ' https://cdn.example.com/img/{xxx}.png ',
+      sourceColumnKey: ' itemId ',
+      transforms: [
+        { type: 'trim' },
+        { type: 'replace', from: '-', to: '' },
+      ],
+    });
+    expect(validated).toEqual({
+      urlTemplate: 'https://cdn.example.com/img/{xxx}.png',
+      sourceColumnKey: 'itemId',
+      transforms: [
+        { type: 'trim' },
+        { type: 'replace', from: '-', to: '' },
+      ],
+    });
+  });
+
+  it('weigert onveilige of onvolledige templates', () => {
+    expect(() => validateImageOptions({
+      urlTemplate: 'javascript:alert(1)',
+      sourceColumnKey: 'itemId',
+    })).toThrow(/http/i);
+    expect(() => validateImageOptions({
+      urlTemplate: 'https://cdn.example.com/image.png',
+      sourceColumnKey: 'itemId',
+    })).toThrow(/\{xxx\}/i);
+  });
+
+  it('weigert ontbrekende sourceColumnKey of foutieve transforms', () => {
+    expect(() => validateImageOptions({
+      urlTemplate: 'https://cdn.example.com/{xxx}.png',
+      sourceColumnKey: '',
+    })).toThrow(/sourceColumnKey/i);
+    expect(() => validateImageOptions({
+      urlTemplate: 'https://cdn.example.com/{xxx}.png',
+      sourceColumnKey: 'itemId',
+      transforms: [{ type: 'substring', start: -1 }],
+    })).toThrow(/start/i);
+  });
+});
+
+describe('TableColumnsService Remarks-contract', () => {
+  it('registreert remarks als geldig datatype met een vast mastercontract', () => {
+    expect(DATA_TYPES).toContain('remarks');
+    expect(validateRemarksColumnRequest({
+      scope: 'master',
+      options: null,
+      formulaExpr: null,
+    })).toMatchObject({
+      scope: 'master',
+      key: 'remarks',
+      label: 'Remarks',
+      source: 'custom',
+      dataType: 'remarks',
+    });
+  });
+
+  it('weigert detailscope, opties/imagepad en formules', () => {
+    expect(() => validateRemarksColumnRequest({ scope: 'detail' })).toThrow(/master/i);
+    expect(() => validateRemarksColumnRequest({ scope: 'master', options: {} })).toThrow(/imagepad/i);
+    expect(() => validateRemarksColumnRequest({
+      scope: 'master',
+      formulaExpr: '(amount)+(tax)',
+    })).toThrow(/formule/i);
+  });
+
+  it('ensure gebruikt één vergrendelde ensure/reactivate-query met het vaste contract', async () => {
+    const captured = {};
+    const request = {
+      input: vi.fn(function input(name, type, value) {
+        captured[name] = value;
+        return this;
+      }),
+      query: vi.fn(async (text) => {
+        captured.sql = text;
+        return {
+          recordset: [{
+            id: 8,
+            table_id: 7,
+            scope: 'master',
+            key: 'remarks',
+            label: 'Remarks',
+            source: 'custom',
+            source_field: null,
+            data_type: 'remarks',
+            options_json: null,
+            writable: 0,
+            write_mechanism: null,
+            is_default_visible: 1,
+            filterable: 0,
+            sortable: 0,
+            is_active: 1,
+            visible_at_delete: 0,
+            sort_order: 80,
+            formula_expr: null,
+          }],
+        };
+      }),
+    };
+
+    const column = await ensureRemarksColumn({
+      pool: { request: () => request },
+      tableId: 7,
+      userId: 12,
+    });
+
+    expect(captured).toMatchObject({ tableId: 7, userId: 12 });
+    expect(captured.sql).toMatch(/UPDLOCK, HOLDLOCK/);
+    expect(captured.sql).toMatch(/IF @remarksId IS NOT NULL[\s\S]+is_active = 1/);
+    expect(captured.sql).toMatch(/ELSE[\s\S]+INSERT INTO dbo\.tb_columns/);
+    expect(column).toMatchObject({
+      key: 'remarks',
+      label: 'Remarks',
+      dataType: 'remarks',
+      writable: false,
+      filterable: false,
+      sortable: false,
+      isActive: true,
+    });
   });
 });
