@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-const CONTROL_COLUMN_WIDTH = 58;
+import { PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX } from '../components/supplier/purchaseOrderBoardLayout';
 const FALLBACK_COLUMN_WIDTH = 80;
 
 function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
@@ -52,7 +51,7 @@ export function useSequentialStickyColumns({
 
   const stickyOffsetsByKey = useMemo(() => {
     const offsets = {};
-    let left = CONTROL_COLUMN_WIDTH;
+    let left = PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX;
     stickyColumnKeys.forEach((key) => {
       offsets[key] = left;
       left += pickColumnWidth(key, headerColumnWidths, measuredStickyWidths);

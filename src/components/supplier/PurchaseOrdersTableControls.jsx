@@ -14,6 +14,7 @@ import {
 import {
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
+import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 
 const useStyles = makeStyles({
   controlHeaderCell: {
@@ -22,9 +23,9 @@ const useStyles = makeStyles({
     top: 0,
     left: 0,
     zIndex: 4,
-    width: '92px',
-    minWidth: '92px',
-    maxWidth: '92px',
+    width: purchaseOrderBoardControlColumnWidth,
+    minWidth: purchaseOrderBoardControlColumnWidth,
+    maxWidth: purchaseOrderBoardControlColumnWidth,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),

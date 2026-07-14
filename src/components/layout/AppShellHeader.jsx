@@ -9,7 +9,7 @@ import {
 } from '@fluentui/react-components';
 import {
   Navigation24Regular,
-  Person24Regular,
+  Settings24Regular,
   WeatherMoon24Regular,
   WeatherSunny24Regular,
 } from '@fluentui/react-icons';
@@ -142,11 +142,11 @@ export default function AppShellHeader({
                     {canAccessAdmin && (
                       <Button
                         appearance="subtle"
-                        icon={<Person24Regular />}
+                        icon={<Settings24Regular />}
                         className={styles.menuButton}
                         onClick={handleAdminClick}
                       >
-                        Admin
+                        Settings
                       </Button>
                     )}
                     <Button

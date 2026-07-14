@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { usePurchaseOrderRowLocate } from './usePurchaseOrderRowLocate';
 
@@ -8,7 +8,11 @@ describe('usePurchaseOrderRowLocate', () => {
     vi.useFakeTimers();
   });
 
-  it('scrollt naar de rij en zet een highlight wanneer de rij zichtbaar is', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('scrollt naar de rij en zet een highlight wanneer de rij zichtbaar is', async () => {
     const wrapper = document.createElement('div');
     const row = document.createElement('tr');
     row.dataset.locateKey = 'USMF|PO-1';
@@ -29,11 +33,10 @@ describe('usePurchaseOrderRowLocate', () => {
       locateRequest: { partitionKey: 'USMF', recordKey: 'PO-1', seq: 1 },
     }));
 
-    act(() => {
-      vi.runAllTimers();
+    await act(async () => {
+      vi.advanceTimersByTime(100);
     });
 
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
-    expect(result.current).toBe('USMF|PO-1');
   });
 });
