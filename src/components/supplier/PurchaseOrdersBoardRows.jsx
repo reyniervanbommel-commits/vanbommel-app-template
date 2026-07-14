@@ -5,6 +5,7 @@ import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 import { getColumnCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
@@ -123,8 +124,8 @@ const useStyles = makeStyles({
       left: '37px',
       top: 0,
       width: '2px',
-      height: '10px',
-      backgroundColor: '#c02f64',
+      height: '12px',
+      backgroundColor: SUBITEM_CONNECTOR_COLOR,
     },
   },
 });

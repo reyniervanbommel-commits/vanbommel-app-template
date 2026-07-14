@@ -7,10 +7,14 @@ function PurchaseOrderLineTotalsRow({
   summedColumnsSet,
   summedValuesByColumn,
   totalsCellClassName,
+  connectorTotalsCellClassName = '',
 }) {
   return (
     <tfoot>
       <tr>
+        {connectorTotalsCellClassName ? (
+          <td className={connectorTotalsCellClassName} aria-hidden="true" />
+        ) : null}
         {lineColumns.map((column) => (
           <td key={`${rowId}-sum-${column.key}`} className={totalsCellClassName}>
             {summedColumnsSet.has(column.key) ? formatCellValue(summedValuesByColumn[column.key], 'number') : ''}

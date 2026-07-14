@@ -13,18 +13,29 @@ import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
 
 const useStyles = makeStyles({
-  subTableWrapper: {
+  subitemsLayout: {
     display: 'inline-block',
+    position: 'relative',
+  },
+  subTableCardBackdrop: {
+    position: 'absolute',
+    left: '22px',
+    top: 0,
+    right: 0,
+    bottom: 0,
     borderRadius: '6px',
-    overflow: 'hidden',
     boxShadow: tokens.shadow2,
     backgroundColor: tokens.colorNeutralBackground1,
+    zIndex: 0,
+    pointerEvents: 'none',
   },
   subTable: {
+    position: 'relative',
+    zIndex: 1,
     width: 'max-content',
     borderCollapse: 'collapse',
     tableLayout: 'fixed',
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: 'transparent',
   },
   subHeaderCell: {
     position: 'relative',
@@ -192,8 +203,9 @@ export default function PurchaseOrdersSubitemsTable({
   if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
 
   return (
-    <div className={styles.subTableWrapper}>
-    <table className={styles.subTable}>
+    <div className={styles.subitemsLayout}>
+      <div className={styles.subTableCardBackdrop} aria-hidden="true" />
+      <table className={styles.subTable}>
       <colgroup>
         <col style={{ width: '22px' }} />
         {lineColumns.map((column) => (
