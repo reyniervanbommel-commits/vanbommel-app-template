@@ -104,6 +104,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
   );
   const layout = useMemo(() => ({
     className: styles.itemCell,
+    contentClassName: styles.itemCellContent,
     style: getColumnCellStyle(
       formatting.headerColumnWidths,
       formatting.headerColumnTextStyles,

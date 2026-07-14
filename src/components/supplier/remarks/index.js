@@ -4,6 +4,7 @@ export { default as RemarkReactionBar } from './RemarkReactionBar';
 export { default as RemarksLatestCell } from './RemarksLatestCell';
 export { default as RemarksPanel } from './RemarksPanel';
 export { default as RowActivityFeed } from './RowActivityFeed';
+export { default as RowHistoryTable } from './RowHistoryTable';
 export { default as RowHistoryEntry } from './RowHistoryEntry';
 export { default as RowRemarksBadge } from './RowRemarksBadge';
 export { default as usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';

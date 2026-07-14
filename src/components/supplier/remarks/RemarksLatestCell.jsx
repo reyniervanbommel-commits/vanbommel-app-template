@@ -3,9 +3,11 @@ import { formatDateTime } from './remarksFormatters';
 
 function RemarksLatestCell({ summary, onOpen, orderNumber = '' }) {
   const latest = summary?.latest || null;
-  const count = Number(summary?.count) || 0;
   const preview = latest?.bodyPreview || latest?.body || 'No remarks';
   const authorName = latest?.authorName || latest?.author?.displayName || 'Unknown user';
+  const title = latest
+    ? `${preview} · ${authorName} · ${formatDateTime(latest.createdAt)}`
+    : preview;
 
   const handleOpen = useCallback(
     (event) => {
@@ -19,16 +21,10 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '' }) {
       type="button"
       className="remarks-latest-cell"
       aria-label={`Open remarks for purchase order ${orderNumber}`}
+      title={title}
       onClick={handleOpen}
     >
-      <div className="remarks-latest-preview" title={preview}>
-        {preview}
-      </div>
-      {latest ? (
-        <div className="remarks-meta">
-          {authorName} · {formatDateTime(latest.createdAt)} · {count}
-        </div>
-      ) : null}
+      <div className="remarks-latest-preview">{preview}</div>
     </button>
   );
 }

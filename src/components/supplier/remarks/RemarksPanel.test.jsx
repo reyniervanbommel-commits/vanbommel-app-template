@@ -48,12 +48,13 @@ describe('RemarksPanel', () => {
     expect(await screen.findByRole('tab', { name: 'Remarks (2)' })).toBeTruthy();
     expect(await screen.findByRole('tab', { name: /History \(\d+\)/ })).toBeTruthy();
     expect(screen.getByLabelText('Add a remark')).toBeTruthy();
-    expect(screen.queryByLabelText('Column')).toBeNull();
+    expect(screen.queryByLabelText('Filter by column')).toBeNull();
 
     const historyTab = screen.getByRole('tab', { name: /History \(\d+\)/ });
     fireEvent.click(historyTab);
-    expect(await screen.findByLabelText('Column')).toBeTruthy();
-    expect(await screen.findByLabelText('Action')).toBeTruthy();
+    expect(await screen.findByLabelText('Filter by column')).toBeTruthy();
+    expect(await screen.findByLabelText('Filter by action')).toBeTruthy();
+    expect(await screen.findByLabelText('Filter by user')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('tab', { name: 'History (2)' })).toBeTruthy());
     expect(screen.getByText('No history has been recorded yet.')).toBeTruthy();
 

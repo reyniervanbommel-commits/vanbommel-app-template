@@ -251,6 +251,118 @@
   white-space: nowrap;
 }
 
+.history-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-table-state {
+  padding: 16px 4px;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.history-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--colorNeutralBackground1);
+}
+
+.history-table th,
+.history-table td {
+  border: 1px solid var(--colorNeutralStroke2);
+  padding: 6px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.history-table th {
+  background: var(--colorNeutralBackground2);
+  font-weight: 600;
+}
+
+.history-table-filter-header {
+  min-width: 88px;
+}
+
+.history-table-header-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.history-table-header-label {
+  font-size: 11px;
+  color: var(--colorNeutralForeground2);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.history-table-header-select,
+.history-table-server-filter select {
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 4px;
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font-size: 11px;
+}
+
+.history-table tbody tr:nth-child(even) {
+  background: var(--colorNeutralBackground2);
+}
+
+.history-table-date {
+  white-space: nowrap;
+  width: 118px;
+}
+
+.history-table-action {
+  width: 72px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.history-table-column,
+.history-table-user {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-table-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-table-status {
+  width: 72px;
+}
+
+.history-table-empty {
+  padding: 16px 8px;
+  color: var(--colorNeutralForeground3);
+  text-align: center;
+}
+
+.history-table-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
 .remarks-badge-button,
 .remarks-latest-cell {
   cursor: pointer;
@@ -260,46 +372,62 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  min-height: 20px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  max-height: 18px;
   margin-left: -1px;
   padding: 0;
   border: 0;
   background: transparent;
+  flex-shrink: 0;
+  overflow: hidden;
+  line-height: 0;
 }
 
 .remarks-badge-icon-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 0;
+  flex-shrink: 0;
 }
 
 .remarks-badge-count {
   position: absolute;
-  top: -2px;
-  right: -4px;
+  top: 0;
+  right: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 10px;
-  height: 10px;
-  padding: 0;
+  min-width: 9px;
+  height: 9px;
+  padding: 0 1px;
   border: 1px solid var(--colorNeutralBackground1);
   border-radius: 999px;
   background: var(--colorBrandBackground);
   color: var(--colorNeutralForegroundOnBrand);
-  font-size: 7px;
-  line-height: 10px;
+  font-size: 6px;
+  line-height: 9px;
   box-shadow: var(--shadow2);
   pointer-events: none;
+  transform: translate(25%, -25%);
 }
 
 .remarks-latest-cell {
+  display: block;
   width: 100%;
-  padding: 6px;
+  height: 100%;
+  max-height: 100%;
+  padding: 0;
   border: 0;
   background: transparent;
   text-align: left;
+  overflow: hidden;
 }
 
 .remarks-latest-preview {

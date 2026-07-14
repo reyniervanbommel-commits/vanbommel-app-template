@@ -1,6 +1,7 @@
 // Testchecklist voor de DEV-omgeving. Leeg na een PROD-deploy (schone lei);
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
+// Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
     id: 'feature-196-admin-baseline-v1-0-7',
@@ -66,14 +67,16 @@ export const devTestItems = [
     ],
   },
   {
-    id: 'feature-207-row-remarks-v1-14-132',
-    title: 'Feature 207 - Row remarks and complete row activity (v1.14.132)',
+    id: 'feature-207-row-remarks-v1-14-142',
+    title: 'Feature 207 - Row remarks, activity feed and panel UX (v1.14.142)',
     checks: [
-      'The remark badge, Remarks cell and cell context menu open the same panel for the selected purchase order',
-      'Remarks, reactions, soft delete and ownership rules work with two different employee accounts',
-      'History and All show D365 refreshes, custom edits, write-back states and row actions without duplicates',
-      'Older activity loads in stable chronological order and polling runs only while the visible panel is open',
-      'Keyboard navigation, Escape, focus restoration and narrow viewport behavior are accessible',
+      'Remark badge, Remarks cell and cell context menu open the same panel with PO number in the header',
+      'Composer shows the signed-in user avatar (not CU) and new remarks do not duplicate after save',
+      'History tab shows an Excel-style table with filterable Action, Column and User headers',
+      'History dates and value changes display as dd/mm/yyyy instead of raw ISO timestamps',
+      'Board row height stays fixed when a remark count badge appears on the cloud icon',
+      'All board and sub-row cells truncate overflowing text without increasing row height',
+      'Remarks, reactions, soft delete, polling and keyboard focus work with two employee accounts',
     ],
   },
   {
@@ -88,3 +91,14 @@ export const devTestItems = [
     ],
   },
 ];
+
+/** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
+export function buildDevChecklistItems(items = devTestItems) {
+  return items.flatMap((feature) =>
+    (feature.checks || []).map((check, index) => ({
+      id: `${feature.id}--${index}`,
+      label: check,
+      title: feature.title,
+    }))
+  );
+}

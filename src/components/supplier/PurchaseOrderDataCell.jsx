@@ -10,7 +10,7 @@ function PurchaseOrderDataCell({
   children,
 }) {
   const { column, rawValue, order } = cell;
-  const { className, style } = layout;
+  const { className, contentClassName, style } = layout;
   const disabled = isCellContextMenuDisabled(column);
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
@@ -42,7 +42,7 @@ function PurchaseOrderDataCell({
       style={resolvedCellStyle}
       onContextMenu={handleContextMenu}
     >
-      {children}
+      <div className={contentClassName || undefined}>{children}</div>
     </td>
   );
 }

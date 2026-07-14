@@ -3,41 +3,11 @@ import { Button, Tab, TabList } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
 import RowActivityFeed from './RowActivityFeed';
+import RowHistoryTable from './RowHistoryTable';
+import { partitionActivityItems } from './historyTableModel';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
 import { layout } from '../../../styles/brandTokens';
 import './remarks.css';
-
-function renderColumnOption(column) {
-  return (
-    <option key={column.id} value={column.id}>
-      {column.label}
-    </option>
-  );
-}
-
-function ColumnFilter({ columns, value, onChange }) {
-  return (
-    <label className="remarks-column-filter">
-      <span>Column</span>
-      <select value={value} onChange={onChange}>
-        <option value="">All columns</option>
-        {columns.map(renderColumnOption)}
-      </select>
-    </label>
-  );
-}
-
-function HistoryActionFilter({ value, onChange }) {
-  return (
-    <label className="remarks-column-filter">
-      <span>Action</span>
-      <select value={value} onChange={onChange}>
-        <option value="updated">Updated</option>
-        <option value="all">All actions</option>
-      </select>
-    </label>
-  );
-}
 
 function RemarksPanel({
   open,
@@ -72,10 +42,16 @@ function RemarksPanel({
   );
   const remarkCount = controller.remarks.total || controller.selectedSummary?.count || 0;
   const historyCount = controller.historyUpdatedCount;
-  const showColumnFilter = controller.selectedTab !== 'remarks';
-  const showHistoryActionFilter = controller.selectedTab === 'history';
   const showComposer = controller.selectedTab !== 'history';
   const activeFeed = controller.selectedTab === 'history' ? controller.history : controller.all;
+  const partitionedAll = useMemo(
+    () => (controller.selectedTab === 'all' ? partitionActivityItems(activeFeed.items) : { remarks: [], history: [] }),
+    [activeFeed.items, controller.selectedTab]
+  );
+  const allRemarkItems = useMemo(
+    () => partitionedAll.remarks.map((item) => ({ ...item, kind: 'remark' })),
+    [partitionedAll.remarks]
+  );
   const orderNumber = row?.recordKey || row?.orderNumber || '';
   const handleSubmitRemark = useCallback(
     async (body, columnId) => {
@@ -123,17 +99,6 @@ function RemarksPanel({
             <Tab value="all">All</Tab>
           </TabList>
 
-          {showColumnFilter ? (
-            <ColumnFilter columns={columns} value={controller.columnId} onChange={controller.onColumnChange} />
-          ) : null}
-
-          {showHistoryActionFilter ? (
-            <HistoryActionFilter
-              value={controller.historyActionFilter}
-              onChange={controller.onHistoryActionFilterChange}
-            />
-          ) : null}
-
           {showComposer ? (
             <RemarkComposer currentUser={currentUser} column={initialColumn} onSubmit={handleSubmitRemark} />
           ) : null}
@@ -151,24 +116,62 @@ function RemarksPanel({
               remarkActions={remarkActions}
               olderLabel="Show older remarks"
             />
-          ) : (
-            <RowActivityFeed
-              items={activeFeed.items}
-              loading={activeFeed.loading}
-              error={activeFeed.error}
-              hasMore={activeFeed.hasMore}
-              emptyMessage={
-                controller.selectedTab === 'history'
-                  ? 'No history has been recorded yet.'
-                  : 'No activity has been recorded yet.'
-              }
-              currentUser={currentUser}
-              onLoadOlder={activeFeed.loadOlder}
-              onRetry={activeFeed.retry}
-              remarkActions={remarkActions}
-              olderLabel="Show older activity"
+          ) : null}
+
+          {controller.selectedTab === 'history' ? (
+            <RowHistoryTable
+              items={controller.history.items}
+              loading={controller.history.loading}
+              error={controller.history.error}
+              hasMore={controller.history.hasMore}
+              emptyMessage="No history has been recorded yet."
+              onLoadOlder={controller.history.loadOlder}
+              onRetry={controller.history.retry}
+              columns={columns}
+              serverColumnId={controller.columnId}
+              onServerColumnChange={controller.onColumnChange}
+              serverActionFilter={controller.historyActionFilter}
+              onServerActionFilterChange={controller.onHistoryActionFilterChange}
+              useServerActionFilter
             />
-          )}
+          ) : null}
+
+          {controller.selectedTab === 'all' ? (
+            <>
+              {allRemarkItems.length > 0 ? (
+                <RowActivityFeed
+                  items={allRemarkItems}
+                  loading={false}
+                  error=""
+                  hasMore={false}
+                  emptyMessage=""
+                  currentUser={currentUser}
+                  onLoadOlder={activeFeed.loadOlder}
+                  onRetry={activeFeed.retry}
+                  remarkActions={remarkActions}
+                  olderLabel="Show older activity"
+                />
+              ) : null}
+              {partitionedAll.history.length > 0 || activeFeed.loading || activeFeed.hasMore ? (
+                <RowHistoryTable
+                  items={partitionedAll.history}
+                  loading={activeFeed.loading}
+                  error={activeFeed.error}
+                  hasMore={activeFeed.hasMore}
+                  emptyMessage="No history has been recorded yet."
+                  onLoadOlder={activeFeed.loadOlder}
+                  onRetry={activeFeed.retry}
+                  columns={columns}
+                  serverColumnId={controller.columnId}
+                  onServerColumnChange={controller.onColumnChange}
+                />
+              ) : (
+                !activeFeed.loading && allRemarkItems.length === 0 ? (
+                  <div className="remarks-state">No activity has been recorded yet.</div>
+                ) : null
+              )}
+            </>
+          ) : null}
         </div>
       </div>
     </aside>

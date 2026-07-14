@@ -4,17 +4,20 @@ import { Badge, makeStyles, mergeClasses, tokens } from '@fluentui/react-compone
 const useStyles = makeStyles({
   compactRoundBadge: {
     borderRadius: tokens.borderRadiusCircular,
-    minWidth: '28px',
-    minHeight: '18px',
+    minWidth: '24px',
+    maxWidth: '100%',
+    minHeight: '16px',
+    maxHeight: '16px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: '6px',
-    paddingRight: '6px',
-    fontSize: '10px',
-    lineHeight: '10px',
+    paddingLeft: '4px',
+    paddingRight: '4px',
+    fontSize: '9px',
+    lineHeight: '9px',
     fontWeight: tokens.fontWeightSemibold,
     textTransform: 'lowercase',
+    flexShrink: 0,
   },
 });
 

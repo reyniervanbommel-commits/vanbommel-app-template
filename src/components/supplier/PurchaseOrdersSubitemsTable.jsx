@@ -11,6 +11,8 @@ import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 
+import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
+
 const useStyles = makeStyles({
   subTable: {
     width: 'max-content',
@@ -81,10 +83,26 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
+    height: purchaseOrderSubRowHeight,
+    maxHeight: purchaseOrderSubRowHeight,
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
+    boxSizing: 'border-box',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+  },
+  subCellContent: {
+    display: 'block',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `calc(${purchaseOrderSubRowHeight} - 4px)`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    lineHeight: `calc(${purchaseOrderSubRowHeight} - 6px)`,
   },
   empty: {
     ...shorthands.padding('8px'),
@@ -267,6 +285,7 @@ export default function PurchaseOrdersSubitemsTable({
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
         subCellClassName={styles.subCell}
+        subCellContentClassName={styles.subCellContent}
         noRowsCellClassName={styles.noRowsCell}
         cellFilterActions={{
           filterByColumn,

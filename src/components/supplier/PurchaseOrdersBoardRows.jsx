@@ -3,6 +3,18 @@ import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
+import {
+  purchaseOrderBoardRowHeight,
+} from './purchaseOrderBoardLayout';
+
+const fixedCellOverflow = {
+  boxSizing: 'border-box',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  verticalAlign: 'middle',
+};
+
 const useStyles = makeStyles({
   groupRowCell: {
     backgroundColor: '#f4e6ed',
@@ -64,23 +76,31 @@ const useStyles = makeStyles({
     width: '92px',
     minWidth: '92px',
     maxWidth: '92px',
+    height: purchaseOrderBoardRowHeight,
+    maxHeight: purchaseOrderBoardRowHeight,
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('1px', '2px'),
+    ...shorthands.padding('0', '2px'),
     textAlign: 'center',
-    verticalAlign: 'middle',
+    ...fixedCellOverflow,
   },
   controlCellInner: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     minWidth: 0,
+    height: '100%',
+    maxHeight: purchaseOrderBoardRowHeight,
+    overflow: 'hidden',
   },
   rowControlsCluster: {
     display: 'inline-flex',
     alignItems: 'center',
     ...shorthands.gap('0'),
+    flexShrink: 0,
+    maxHeight: '100%',
+    overflow: 'hidden',
   },
   rowCheckbox: {
     ...shorthands.padding('0'),
@@ -104,12 +124,22 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '10px'),
+    height: purchaseOrderBoardRowHeight,
+    maxHeight: purchaseOrderBoardRowHeight,
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
-    whiteSpace: 'nowrap',
+    ...fixedCellOverflow,
+  },
+  itemCellContent: {
+    display: 'block',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `calc(${purchaseOrderBoardRowHeight} - 4px)`,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    verticalAlign: 'middle',
+    whiteSpace: 'nowrap',
+    lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
   },
   newRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
