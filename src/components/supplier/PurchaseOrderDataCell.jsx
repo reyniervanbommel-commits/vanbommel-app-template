@@ -10,20 +10,24 @@ function PurchaseOrderDataCell({
   children,
 }) {
   const { column, rawValue, order } = cell;
-  const { className, contentClassName, style } = layout;
+  const { className, contentClassName, contentStyle, style } = layout;
   const disabled = isCellContextMenuDisabled(column);
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
-  const resolvedCellStyle = useMemo(() => ({
-    ...style,
-    position: Number.isFinite(stickyLeft) ? 'sticky' : 'relative',
-    ...(Number.isFinite(stickyLeft) ? {
-      left: `${stickyLeft}px`,
-      zIndex: 2,
-      backgroundColor: tokens.colorNeutralBackground1,
-    } : {}),
-  }), [stickyLeft, style]);
+  const resolvedCellStyle = useMemo(() => {
+    const isSticky = Number.isFinite(stickyLeft);
+    const hasFormattedBackground = Boolean(style?.backgroundColor);
+    return {
+      ...style,
+      position: isSticky ? 'sticky' : 'relative',
+      ...(isSticky ? {
+        left: `${stickyLeft}px`,
+        zIndex: 2,
+        ...(hasFormattedBackground ? {} : { backgroundColor: tokens.colorNeutralBackground1 }),
+      } : {}),
+    };
+  }, [stickyLeft, style]);
 
   const handleContextMenu = useCallback((event) => {
     if (disabled) return;
@@ -42,7 +46,7 @@ function PurchaseOrderDataCell({
       style={resolvedCellStyle}
       onContextMenu={handleContextMenu}
     >
-      <div className={contentClassName || undefined}>{children}</div>
+      <div className={contentClassName || undefined} style={contentStyle}>{children}</div>
     </td>
   );
 }

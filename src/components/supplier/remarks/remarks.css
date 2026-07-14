@@ -466,6 +466,11 @@
   overflow: hidden;
 }
 
+.remarks-latest-cell--formatted,
+.remarks-latest-cell--formatted .remarks-latest-preview {
+  color: #ffffff;
+}
+
 .remarks-latest-preview {
   overflow: hidden;
   text-overflow: ellipsis;

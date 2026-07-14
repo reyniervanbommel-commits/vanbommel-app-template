@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Input, Spinner, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
-import { getFormattedCellControlStyle } from './columnTextStyleUtils';
+import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: 0, width: '100%' },
@@ -44,6 +44,12 @@ const useFormattedControlStyles = makeStyles({
     },
     ':focus-within::before': {
       backgroundColor: 'var(--cell-format-bg)',
+    },
+  },
+  formattedText: {
+    color: FORMATTED_CELL_TEXT_COLOR,
+    '> input': {
+      color: FORMATTED_CELL_TEXT_COLOR,
     },
   },
 });
@@ -130,15 +136,23 @@ export default function PurchaseOrderWriteBackCell({
   cellKeys,
   hasHistory = false,
   cellBackgroundColor = '',
+  isConditionalFormat = false,
 }) {
   const styles = useStyles();
   const formattedStyles = useFormattedControlStyles();
-  const formattedControlStyle = getFormattedCellControlStyle(cellBackgroundColor);
-  const formattedControlClassName = formattedControlStyle
-    ? mergeClasses(styles.input, formattedStyles.formatted)
-    : styles.input;
+  const formattedControlStyle = cellBackgroundColor
+    ? getFormattedCellControlStyle(cellBackgroundColor, { useWhiteText: isConditionalFormat })
+    : undefined;
+  const formattedControlClassName = mergeClasses(
+    styles.input,
+    formattedControlStyle ? formattedStyles.formatted : undefined,
+    isConditionalFormat ? formattedStyles.formattedText : undefined,
+  );
   const formattedControlInlineStyle = formattedControlStyle
-    ? { ...formattedControlStyle, '--cell-format-bg': formattedControlStyle.backgroundColor }
+    ? {
+      ...formattedControlStyle,
+      '--cell-format-bg': formattedControlStyle.backgroundColor,
+    }
     : undefined;
   const [local, setLocal] = useState(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error

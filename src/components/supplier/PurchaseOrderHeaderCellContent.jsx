@@ -9,6 +9,7 @@ import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/p
 import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
 import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
 import { isStatusColumn } from '../../utils/statusColumnUtils';
+import { FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   removedText: {
@@ -42,6 +43,7 @@ function PurchaseOrderHeaderCellContent({
   linkedLineTotalMap,
   linkedLineValueMap,
   cellBackgroundColor = '',
+  isConditionalFormat = false,
   productImageLines = order.lines,
 }) {
   const styles = useStyles();
@@ -87,6 +89,8 @@ function PurchaseOrderHeaderCellContent({
     return onUpdateStatusOptions(column.id, options, column.label);
   }, [column.id, column.label, onUpdateStatusOptions]);
 
+  const formattedTextStyle = isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined;
+
   if (isProductImageColumn(column)) {
     if (order.removedInD365 || !productImageSummary.firstItemNumber) return null;
     return (
@@ -125,6 +129,7 @@ function PurchaseOrderHeaderCellContent({
           value={rawValue}
           options={column.options}
           cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
@@ -146,6 +151,7 @@ function PurchaseOrderHeaderCellContent({
           column={column}
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
           hasHistory={Boolean(order.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -174,8 +180,13 @@ function PurchaseOrderHeaderCellContent({
   const displayNode = isChangedCell && !cellBackgroundColor
     ? <span className={styles.changedCell}>{rawDisplayNode}</span>
     : rawDisplayNode;
+  const formattedDisplayNode = isConditionalFormat
+    ? <span style={formattedTextStyle}>{displayNode}</span>
+    : displayNode;
 
-  return order.removedInD365 ? <span className={styles.removedText}>{displayNode}</span> : displayNode;
+  return order.removedInD365
+    ? <span className={styles.removedText}>{formattedDisplayNode}</span>
+    : formattedDisplayNode;
 }
 
 export default memo(PurchaseOrderHeaderCellContent);

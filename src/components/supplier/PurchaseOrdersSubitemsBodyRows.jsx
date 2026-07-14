@@ -5,7 +5,7 @@ import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderDataCell from './PurchaseOrderDataCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
-import { getColumnCellStyle } from './columnTextStyleUtils';
+import { getColumnCellStyle, getFormattedCellContentStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 import { evalFormatRules, normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
 import { resolveSubitemConnectorCellClassName } from './purchaseOrderSubitemConnectorStyles';
@@ -57,14 +57,21 @@ function resolveLineCellBackground({
   const cellFormatColor = (!line?.isRemoved && ruleSet?.target === 'cell')
     ? evalFormatRules(rawValue, ruleSet, line?.values || {}, statusOptions)
     : '';
-  if (cellFormatColor) return cellFormatColor;
-  if (!line?.isRemoved && rowFormatColor) return rowFormatColor;
-  if (isStatusColumn(column)) {
-    return resolveStatusCellColor(rawValue, column.options);
+  if (cellFormatColor) {
+    return { backgroundColor: cellFormatColor, isConditionalFormat: true };
   }
-  if (line?.isRemoved) return '#f3f2f1';
-  if (isChangedCell) return '#fff4ce';
-  return '';
+  if (!line?.isRemoved && rowFormatColor) {
+    return { backgroundColor: rowFormatColor, isConditionalFormat: true };
+  }
+  if (isStatusColumn(column)) {
+    return {
+      backgroundColor: resolveStatusCellColor(rawValue, column.options),
+      isConditionalFormat: false,
+    };
+  }
+  if (line?.isRemoved) return { backgroundColor: '#f3f2f1', isConditionalFormat: false };
+  if (isChangedCell) return { backgroundColor: '#fff4ce', isConditionalFormat: false };
+  return { backgroundColor: '', isConditionalFormat: false };
 }
 
 function renderLineCellContent({
@@ -78,6 +85,7 @@ function renderLineCellContent({
   isAdmin = false,
   styles,
   cellBackgroundColor = '',
+  isConditionalFormat = false,
 }) {
   const rawValue = line.values?.[column.key];
   const firstDataColumn = lineColumns.find((entry) => !isProductImageColumn(entry));
@@ -151,6 +159,7 @@ function renderLineCellContent({
           value={rawValue}
           options={column.options}
           cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} voor regel ${line.lineNumber}`}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
@@ -181,6 +190,7 @@ function renderLineCellContent({
           column={column}
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
           hasHistory={Boolean(line.historyByColumnId?.[column.id])}
           cellKeys={{
             columnId: column.id,
@@ -206,7 +216,10 @@ function renderLineCellContent({
   }
   return (
     <span className={showLineBadge ? styles.statusWrap : undefined}>
-      <span className={line?.isRemoved ? styles.removedText : undefined}>
+      <span
+        className={line?.isRemoved ? styles.removedText : undefined}
+        style={isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined}
+      >
         {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
       </span>
       {showLineBadge ? lineBadge : null}
@@ -263,7 +276,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);
             const ruleSet = effectiveColumnFormatRules?.[column.key];
-            const cellBackground = resolveLineCellBackground({
+            const { backgroundColor: cellBackground, isConditionalFormat } = resolveLineCellBackground({
               line,
               column,
               ruleSet,
@@ -276,7 +289,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
               columnWidths,
               columnTextStyles,
               column.key,
-              cellBackground
+              cellBackground,
+              { useFormattedTextColor: isConditionalFormat }
             );
             const cellStyle = isImageColumn
               ? getProductImageCellStyle(baseCellStyle, PRODUCT_IMAGE_SUB_CELL_HEIGHT)
@@ -291,6 +305,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
                 layout={{
                   className: subCellClassName,
                   contentClassName: isImageColumn ? undefined : subCellContentClassName,
+                  contentStyle: getFormattedCellContentStyle(isConditionalFormat),
                   style: cellStyle,
                 }}
               >
@@ -305,6 +320,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   isAdmin,
                   styles,
                   cellBackgroundColor: cellBackground,
+                  isConditionalFormat,
                 })}
               </PurchaseOrderDataCell>
             );

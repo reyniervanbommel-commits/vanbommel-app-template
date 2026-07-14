@@ -6,7 +6,7 @@ import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
 import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
 import { RemarksLatestCell, RowRemarksBadge } from './remarks';
 import { rowKey } from './remarks/remarksFormatters';
-import { getColumnCellStyle } from './columnTextStyleUtils';
+import { getColumnCellStyle, getFormattedCellContentStyle, getRowFormatControlCellStyle } from './columnTextStyleUtils';
 import { evalFormatRules } from './columnFormatRuleUtils';
 import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
@@ -41,12 +41,19 @@ function resolveOrderCellBackground({ order, column, ruleSet, rowFormatColor }) 
   const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
     ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions)
     : '';
-  if (cellFormatColor) return cellFormatColor;
-  if (!order.removedInD365 && rowFormatColor) return rowFormatColor;
-  if (isStatusColumn(column)) {
-    return resolveStatusCellColor(order?.values?.[column.key], column.options);
+  if (cellFormatColor) {
+    return { backgroundColor: cellFormatColor, isConditionalFormat: true };
   }
-  return '';
+  if (!order.removedInD365 && rowFormatColor) {
+    return { backgroundColor: rowFormatColor, isConditionalFormat: true };
+  }
+  if (isStatusColumn(column)) {
+    return {
+      backgroundColor: resolveStatusCellColor(order?.values?.[column.key], column.options),
+      isConditionalFormat: false,
+    };
+  }
+  return { backgroundColor: '', isConditionalFormat: false };
 }
 
 const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
@@ -58,8 +65,14 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   selection,
   onToggleOrder,
   remarks,
+  rowFormatColor = '',
 }) {
   const selectionKey = resolveOrderSelectionKey(order, rowId);
+  const controlCellStyle = useMemo(
+    () => getRowFormatControlCellStyle(rowFormatColor),
+    [rowFormatColor]
+  );
+  const hasRowFormatColor = Boolean(controlCellStyle);
   const handleSelectionChange = useCallback(() => {
     selection?.toggle?.(selectionKey);
   }, [selection, selectionKey]);
@@ -69,7 +82,7 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   );
 
   return (
-    <td className={styles.controlCell}>
+    <td className={styles.controlCell} style={controlCellStyle}>
       <div className={styles.controlCellInner}>
         <div className={styles.rowControlsCluster}>
           {selection?.enabled ? (
@@ -95,6 +108,7 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
             count={remarks?.summary?.count}
             orderNumber={order.orderNumber}
             onOpen={handleOpenRemarks}
+            onFormattedBackground={hasRowFormatColor}
           />
         </div>
         <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
@@ -116,7 +130,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
 }) {
   const rawValue = order?.values?.[column.key];
   const ruleSet = formatting.headerColumnFormatRules[column.key];
-  const cellBackgroundColor = resolveOrderCellBackground({
+  const { backgroundColor: cellBackgroundColor, isConditionalFormat } = resolveOrderCellBackground({
     order,
     column,
     ruleSet,
@@ -134,11 +148,13 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
       formatting.headerColumnWidths,
       formatting.headerColumnTextStyles,
       column.key,
-      cellBackgroundColor
+      cellBackgroundColor,
+      { useFormattedTextColor: isConditionalFormat }
     );
     return {
       className: styles.itemCell,
       contentClassName: isImageColumn ? undefined : styles.itemCellContent,
+      contentStyle: getFormattedCellContentStyle(isConditionalFormat),
       style: isImageColumn
         ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
         : {
@@ -146,7 +162,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           ...(isStatus ? { padding: 0 } : {}),
         },
     };
-  }, [cellBackgroundColor, column.key, formatting, isImageColumn, isStatus, styles.itemCell, styles.itemCellContent]);
+  }, [cellBackgroundColor, column.key, formatting, isConditionalFormat, isImageColumn, isStatus, styles.itemCell, styles.itemCellContent]);
 
   return (
     <PurchaseOrderDataCell
@@ -159,6 +175,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           summary={remarks?.summary}
           orderNumber={order.orderNumber}
           onOpen={handleOpenRemarks}
+          onFormattedBackground={isConditionalFormat}
         />
       ) : (
         <PurchaseOrderHeaderCellContent
@@ -169,6 +186,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           onUpdateStatusOptions={actions.onUpdateStatusOptions}
           isAdmin={actions.isAdmin}
           cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
           linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
           productImageLines={order.lines}
@@ -237,6 +255,7 @@ function PurchaseOrderBoardRow({
           selection={selection}
           onToggleOrder={actions.onToggleOrder}
           remarks={rowRemarks}
+          rowFormatColor={rowFormatColor}
         />
         {layout.columns.map((column) => (
           <PurchaseOrderBoardCell

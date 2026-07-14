@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { formatDateTime } from './remarksFormatters';
 
-function RemarksLatestCell({ summary, onOpen, orderNumber = '' }) {
+function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackground = false }) {
   const latest = summary?.latest || null;
   const preview = latest?.bodyPreview || latest?.body || 'No remarks';
   const authorName = latest?.authorName || latest?.author?.displayName || 'Unknown user';
@@ -19,7 +19,7 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '' }) {
   return (
     <button
       type="button"
-      className="remarks-latest-cell"
+      className={`remarks-latest-cell${onFormattedBackground ? ' remarks-latest-cell--formatted' : ''}`}
       aria-label={`Open remarks for purchase order ${orderNumber}`}
       title={title}
       onClick={handleOpen}

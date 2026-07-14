@@ -88,4 +88,32 @@ describe('shared purchase-order cell context menu', () => {
       expect(screen.queryByText('Copy cell value')).toBeNull();
     });
   });
+
+  it('keeps conditional formatting background on sticky columns', () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <table>
+          <tbody>
+            <tr>
+              <PurchaseOrderDataCell
+                cell={{ column: { ...COLUMN, stickyLeft: 0 }, rawValue: 'Done' }}
+                layout={{
+                  className: 'cell',
+                  style: { backgroundColor: '#00c875', color: '#ffffff' },
+                }}
+              >
+                Done
+              </PurchaseOrderDataCell>
+            </tr>
+          </tbody>
+        </table>
+      </FluentProvider>
+    );
+
+    const cell = screen.getByText('Done').closest('td');
+    expect(cell.style.backgroundColor).toBe('rgb(0, 200, 117)');
+    expect(cell.style.color).toBe('rgb(255, 255, 255)');
+    expect(cell.style.position).toBe('sticky');
+    expect(cell.style.left).toBe('0px');
+  });
 });

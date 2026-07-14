@@ -11,7 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import CellHistoryPopover from './CellHistoryPopover';
-import { getFormattedCellControlStyle } from './columnTextStyleUtils';
+import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   cell: {
@@ -76,6 +76,15 @@ const useFormattedControlStyles = makeStyles({
       backgroundColor: 'var(--cell-format-bg)',
     },
   },
+  formattedText: {
+    color: FORMATTED_CELL_TEXT_COLOR,
+    '> input': {
+      color: FORMATTED_CELL_TEXT_COLOR,
+    },
+    '> button': {
+      color: FORMATTED_CELL_TEXT_COLOR,
+    },
+  },
 });
 
 // Normaliseert een datumwaarde naar yyyy-mm-dd voor de native date-input.
@@ -114,15 +123,23 @@ export default function EditableCell({
   cellKeys,
   hasHistory = false,
   cellBackgroundColor = '',
+  isConditionalFormat = false,
 }) {
   const styles = useStyles();
   const formattedStyles = useFormattedControlStyles();
-  const formattedControlStyle = getFormattedCellControlStyle(cellBackgroundColor);
-  const formattedControlClassName = formattedControlStyle
-    ? mergeClasses(styles.control, formattedStyles.formatted)
-    : styles.control;
+  const formattedControlStyle = cellBackgroundColor
+    ? getFormattedCellControlStyle(cellBackgroundColor, { useWhiteText: isConditionalFormat })
+    : undefined;
+  const formattedControlClassName = mergeClasses(
+    styles.control,
+    formattedControlStyle ? formattedStyles.formatted : undefined,
+    isConditionalFormat ? formattedStyles.formattedText : undefined,
+  );
   const formattedControlInlineStyle = formattedControlStyle
-    ? { ...formattedControlStyle, '--cell-format-bg': formattedControlStyle.backgroundColor }
+    ? {
+      ...formattedControlStyle,
+      '--cell-format-bg': formattedControlStyle.backgroundColor,
+    }
     : undefined;
   const [localValue, setLocalValue] = useState(dataType === 'date' ? toDateInputValue(value) : value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
