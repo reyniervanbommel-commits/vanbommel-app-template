@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
@@ -27,6 +27,20 @@ import {
 
 const BOARD_KEY = 'purchase-orders';
 
+// Optimistische track-change update: zet de meest rechter stip (huidige sessie/week,
+// offset 0 = laatste teken) direct op rood na een celwijziging, zonder board-herlaad.
+// Retourneert dezelfde map-referentie als er niets verandert (kolom niet getrackt).
+function withRightmostMarkRed(existingMarks, columnId, meta) {
+  const colKey = String(columnId);
+  const activeMap = meta?.activeOffsetByColumnId || {};
+  if (!Object.prototype.hasOwnProperty.call(activeMap, colKey)) return existingMarks;
+  const base = existingMarks?.[colKey] ?? meta?.defaultPattern?.[colKey];
+  if (typeof base !== 'string' || base.length === 0) return existingMarks;
+  const next = `${base.slice(0, -1)}r`;
+  if (next === existingMarks?.[colKey]) return existingMarks;
+  return { ...(existingMarks || {}), [colKey]: next };
+}
+
 // Board-cutover Fase 7 (#AB:176): endpoints van de generieke tb_*-laag versus de
 // oorspronkelijke po_*-laag. Shape-mapping zit in utils/purchaseOrdersBoardMapping.
 const DATA_BASE = '/data/purchase-orders';
@@ -53,6 +67,13 @@ export function usePurchaseOrdersPage() {
   // Nieuw-detectie per gebruiker (#133)
   const [newCount, setNewCount] = useState(0);
   const [changedCount, setChangedCount] = useState(0);
+  // Track-changes-meta uit de board-read (null = feature globaal uit) (#AB:217)
+  const [trackChangesMeta, setTrackChangesMeta] = useState(null);
+  // Ref zodat save/correct de actuele meta kunnen lezen zonder in hun deps te zitten.
+  const trackChangesMetaRef = useRef(null);
+  useEffect(() => {
+    trackChangesMetaRef.current = trackChangesMeta;
+  }, [trackChangesMeta]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +110,7 @@ export function usePurchaseOrdersPage() {
     setTotal(Number(data?.total) || 0);
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
+    setTrackChangesMeta(data?.meta?.trackChanges ?? null);
     setCachedPurchaseOrdersView(data);
   }, []);
 
@@ -262,6 +284,7 @@ export function usePurchaseOrdersPage() {
     const isLine = lineNumber !== null && lineNumber !== undefined;
 
     // Bewaar vorige state voor rollback.
+    const meta = trackChangesMetaRef.current;
     let previousOrders = null;
     setOrders((prev) => {
       previousOrders = prev;
@@ -274,12 +297,20 @@ export function usePurchaseOrdersPage() {
             ...order,
             lines: (order.lines || []).map((line) =>
               line.lineNumber === lineNumber
-                ? { ...line, values: { ...line.values, [columnKey]: value } }
+                ? {
+                    ...line,
+                    values: { ...line.values, [columnKey]: value },
+                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+                  }
                 : line
             ),
           };
         }
-        return { ...order, values: { ...order.values, [columnKey]: value } };
+        return {
+          ...order,
+          values: { ...order.values, [columnKey]: value },
+          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+        };
       });
     });
 
@@ -312,6 +343,7 @@ export function usePurchaseOrdersPage() {
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
     // Fase 3 (#AB:172): write-back naar D365 op tb_*. De guard uit #176 is vervangen door de echte call.
     const isLine = lineNumber !== null && lineNumber !== undefined;
+    const meta = trackChangesMetaRef.current;
     let previousOrders = null;
     setOrders((prev) => {
       previousOrders = prev;
@@ -321,11 +353,21 @@ export function usePurchaseOrdersPage() {
           return {
             ...order,
             lines: (order.lines || []).map((line) =>
-              line.lineNumber === lineNumber ? { ...line, values: { ...line.values, [columnKey]: value } } : line
+              line.lineNumber === lineNumber
+                ? {
+                    ...line,
+                    values: { ...line.values, [columnKey]: value },
+                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+                  }
+                : line
             ),
           };
         }
-        return { ...order, values: { ...order.values, [columnKey]: value } };
+        return {
+          ...order,
+          values: { ...order.values, [columnKey]: value },
+          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+        };
       });
     });
     try {
@@ -896,6 +938,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,
@@ -953,6 +996,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,

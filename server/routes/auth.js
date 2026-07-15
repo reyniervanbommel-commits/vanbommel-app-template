@@ -8,6 +8,7 @@ const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { getSqlPool } = require('../utils/sqlPool');
+const trackChangesService = require('../services/TrackChangesService');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -96,6 +97,7 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     req.session.loggedInAt = new Date().toISOString();
     await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
     await recordLoginAnalytics(result.user.id, req.sessionID);
+    await trackChangesService.recordSessionOnLogin(result.user.role);
     res.json({ user: result.user });
   } catch (err) {
     if (err.message.includes('incorrect') || err.message.includes('locked')) {
@@ -132,6 +134,7 @@ router.post('/set-password', async (req, res, next) => {
     req.session.loggedInAt = new Date().toISOString();
     await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
     await recordLoginAnalytics(user.id, req.sessionID);
+    await trackChangesService.recordSessionOnLogin(safeUser.role);
     res.json({ user: safeUser });
   } catch (err) {
     next(err);

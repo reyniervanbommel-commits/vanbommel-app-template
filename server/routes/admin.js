@@ -9,8 +9,10 @@ const { auditLog } = require('../middleware/auditLog');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
+const trackChangesService = require('../services/TrackChangesService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
 const { getSqlPool } = require('../utils/sqlPool');
+const { requireRole } = require('../middleware/auth');
 
 function getPool() {
   return getSqlPool();
@@ -342,6 +344,33 @@ router.patch('/settings/password-reset-email-template', async (req, res, next) =
     );
     res.json({ success: true, template });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Track changes settings (admin only) ────────────────────────────────────
+// De /api/admin-mount staat ook employees toe; deze route is bewust admin-only.
+
+router.get('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await trackChangesService.getConfig();
+    res.json({ config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await trackChangesService.saveConfig(req.body || {}, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_TRACK_CHANGES_SETTINGS', 'app_settings', null, {
+      mode: config.mode,
+      sessionRoles: config.sessionRoles,
+      columnCount: Object.keys(config.columns).length,
+    });
+    res.json({ success: true, config });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
   }
 });

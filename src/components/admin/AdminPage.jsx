@@ -6,6 +6,7 @@ import {
   CloudLink24Regular,
   Mail24Regular,
   Flowchart24Regular,
+  History24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
@@ -13,6 +14,7 @@ import UserAnalytics from './UserAnalytics';
 import AdminODataSettings from './AdminODataSettings';
 import { AdminDataModel } from './datamodel';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
+import AdminTrackChangesSettings from './AdminTrackChangesSettings';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
@@ -43,6 +45,7 @@ export default function AdminPage() {
   const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
   const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
+  const handleTabTrackChanges = useCallback(() => setAdminTab('track-changes'), []);
 
   return (
     <div className={styles.page}>
@@ -77,6 +80,12 @@ export default function AdminPage() {
           active={adminTab === 'mail-template'}
           onClick={handleTabMailTemplate}
         />
+        <SidebarNavItem
+          icon={History24Regular}
+          label="Track changes"
+          active={adminTab === 'track-changes'}
+          onClick={handleTabTrackChanges}
+        />
       </aside>
 
       <div className={styles.content}>
@@ -85,6 +94,7 @@ export default function AdminPage() {
         {adminTab === 'odata' && <AdminODataSettings />}
         {adminTab === 'datamodel' && <AdminDataModel />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
+        {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
       </div>
     </div>
   );

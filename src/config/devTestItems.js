@@ -4,6 +4,23 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'feature-213-track-changes-v1-17-3',
+    title: 'Feature 213 - Track changes op celniveau (v1.17.3)',
+    checks: [
+      'Admin Settings > Track changes shows ALL header + line columns (except lookup) in a table with a toggle per row',
+      'Turning a column on or changing granularity shows a reset warning; confirming restarts all tracking at 0 (shared start)',
+      'Turning a column off works via the Settings toggle without resetting the others',
+      'The board column menu no longer contains any track-changes option (fully centralised in Settings)',
+      'The session-roles section stays visible in week mode but is disabled (does not disappear)',
+      'A tracked, changed cell shows up to 8 dots at the bottom of the cell (also on subitem/line cells)',
+      'Editing a tracked cell turns the rightmost dot red immediately, without logging out/in first',
+      'Dots use red (changed), yellow (completed session/week without change) and grey (running/before activation)',
+      'All track-changes UI text is in English',
+      'With no active columns there are no extra marks and no tb_track_marks Server-Timing metric',
+      'The footer shows version v1.17.3',
+    ],
+  },
+  {
     id: 'feature-207-row-remarks-v1-14-142',
     title: 'Feature 207 - Row remarks, activity feed and panel UX (v1.14.142)',
     checks: [

@@ -3,6 +3,7 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
+import { TrackChangesContext } from './trackChangesContext';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -28,6 +29,13 @@ const useStyles = makeStyles({
 function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
   const { pageModel, boardView, bulkEdit } = tableContext;
+  const trackChangesMeta = pageModel.trackChangesMeta || null;
+
+  // Track-changes worden centraal in Settings beheerd; hier alleen de header-indicator.
+  const trackChangesActiveByColumnId = useMemo(
+    () => trackChangesMeta?.activeOffsetByColumnId || null,
+    [trackChangesMeta],
+  );
   const data = useMemo(() => ({
     items: pageModel.orders,
     columns: pageModel.visibleHeaderColumns,
@@ -91,12 +99,14 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     editingColumnKey: tableContext.editingColumnKey,
     onEditingDone: tableContext.handleEditingDone,
     reorderingColumns: pageModel.savingColumns,
+    trackChangesActiveByColumnId,
   }), [
     pageModel,
     tableContext.editingColumnKey,
     tableContext.handleAddColumnRightOf,
     tableContext.handleEditingDone,
     tableContext.isAdmin,
+    trackChangesActiveByColumnId,
   ]);
   const linkActions = useMemo(() => ({
     onSetLineColumnTotal: pageModel.setLineColumnTotal,
@@ -158,7 +168,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   return (
     <>
       <div className={styles.tableRegion}>
-        <PurchaseOrdersBoardTable {...table} />
+        <TrackChangesContext.Provider value={trackChangesMeta}>
+          <PurchaseOrdersBoardTable {...table} />
+        </TrackChangesContext.Provider>
       </div>
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>

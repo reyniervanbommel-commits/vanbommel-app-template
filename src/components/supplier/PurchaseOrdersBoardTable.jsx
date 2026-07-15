@@ -47,6 +47,7 @@ function PurchaseOrdersBoardTable({
     editingColumnKey,
     onEditingDone,
     reorderingColumns = false,
+    trackChangesActiveByColumnId = null,
   } = columnActions;
   const {
     onSetLineColumnTotal,
@@ -200,6 +201,7 @@ function PurchaseOrdersBoardTable({
             onRemoveColumn={onRemoveColumn}
             isAdmin={isAdmin}
             onToggleWriteback={onToggleWriteback}
+            trackChangesActiveByColumnId={trackChangesActiveByColumnId}
             editingColumnKey={editingColumnKey}
             onEditingDone={onEditingDone}
             linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}

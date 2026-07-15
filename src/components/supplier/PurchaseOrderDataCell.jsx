@@ -2,6 +2,8 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { tokens } from '@fluentui/react-components';
 import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 import { isCellContextMenuDisabled } from '../../utils/tableViewFilterUtils';
+import TrackChangeMarks from './TrackChangeMarks';
+import { useTrackChangesMeta } from './trackChangesContext';
 
 function PurchaseOrderDataCell({
   cell,
@@ -9,8 +11,18 @@ function PurchaseOrderDataCell({
   contextMenu,
   children,
 }) {
-  const { column, rawValue, order } = cell;
+  const { column, rawValue, order, trackMarks } = cell;
   const { className, contentClassName, contentStyle, style } = layout;
+  const trackMeta = useTrackChangesMeta();
+  const marksByColumnId = trackMarks ?? order?.trackMarksByColumnId;
+  const trackPattern = useMemo(() => {
+    if (!trackMeta) return null;
+    const colId = column?.id;
+    if (colId == null) return null;
+    const active = Object.prototype.hasOwnProperty.call(trackMeta.activeOffsetByColumnId || {}, String(colId));
+    if (!active) return null;
+    return marksByColumnId?.[colId] ?? trackMeta.defaultPattern?.[colId] ?? null;
+  }, [trackMeta, column?.id, marksByColumnId]);
   const disabled = isCellContextMenuDisabled(column);
   const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
@@ -48,6 +60,7 @@ function PurchaseOrderDataCell({
       onContextMenu={handleContextMenu}
     >
       <div className={contentClassName || undefined} style={contentStyle}>{children}</div>
+      {trackPattern ? <TrackChangeMarks pattern={trackPattern} mode={trackMeta?.mode} /> : null}
     </td>
   );
 }
