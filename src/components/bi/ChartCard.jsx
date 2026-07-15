@@ -16,7 +16,6 @@ const useStyles = makeStyles({
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     boxShadow: tokens.shadow4,
     minHeight: 0,
-    height: '100%',
   },
   rootInteractive: {
     cursor: 'pointer',

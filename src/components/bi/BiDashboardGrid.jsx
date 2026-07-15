@@ -7,7 +7,14 @@ const useStyles = makeStyles({
   grid: {
     display: 'grid',
     gridTemplateColumns: `repeat(${CHART_GRID_COLUMNS}, minmax(0, 1fr))`,
-    ...shorthands.gap('16px'),
+    columnGap: '16px',
+    rowGap: '16px',
+    alignItems: 'start',
+  },
+  cell: {
+    minWidth: 0,
+    minHeight: 0,
+    alignSelf: 'start',
   },
   empty: {
     ...shorthands.padding('48px'),
@@ -28,7 +35,7 @@ function BiDashboardGrid({
   return (
     <div className={styles.grid}>
       {charts.map((chart) => (
-        <div key={chart.id} style={chartGridStyle(chart)}>
+        <div key={chart.id} className={styles.cell} style={chartGridStyle(chart)}>
           <ChartCard
             chart={chart}
             series={resultsById[chart.id] || []}
