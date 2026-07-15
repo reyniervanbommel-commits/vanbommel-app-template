@@ -134,6 +134,9 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     ...fixedCellOverflow,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   itemCellContent: {
     display: 'block',
@@ -145,6 +148,9 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   newRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,

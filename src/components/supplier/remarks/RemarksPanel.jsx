@@ -91,7 +91,7 @@ function RemarksPanel({
           icon={<Dismiss24Regular />}
           onClick={onClose}
         />
-        <h2 ref={controller.headingRef} className="remarks-heading" tabIndex={-1}>
+        <h2 className="remarks-heading">
           Purchase order{' '}
           {onLocateRow ? (
             <button
@@ -117,7 +117,12 @@ function RemarksPanel({
           </TabList>
 
           {showComposer ? (
-            <RemarkComposer currentUser={currentUser} column={initialColumn} onSubmit={handleSubmitRemark} />
+            <RemarkComposer
+              currentUser={currentUser}
+              column={initialColumn}
+              onSubmit={handleSubmitRemark}
+              textareaRef={controller.composerRef}
+            />
           ) : null}
 
           {controller.selectedTab === 'remarks' ? (

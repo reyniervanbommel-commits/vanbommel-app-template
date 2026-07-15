@@ -145,9 +145,11 @@ export function usePurchaseOrderSavedViewState({
       ...(view?.viewState || {}),
       showHistoryIndicators: Boolean(enabled),
     };
-    await savedViews.updateView(view.id, { viewState: nextViewState });
     if (view.id === activeViewId) {
       setShowHistoryIndicators(Boolean(enabled));
+    }
+    await savedViews.updateView(view.id, { viewState: nextViewState });
+    if (view.id === activeViewId) {
       setSavedStateFingerprint(stableSerialize(nextViewState));
     }
   }, [activeViewId, savedViews]);

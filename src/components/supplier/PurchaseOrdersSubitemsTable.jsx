@@ -115,6 +115,9 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     verticalAlign: 'middle',
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   subCellContent: {
     display: 'block',
@@ -126,6 +129,9 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     lineHeight: `calc(${purchaseOrderSubRowHeight} - 6px)`,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   empty: {
     ...shorthands.padding('8px'),
