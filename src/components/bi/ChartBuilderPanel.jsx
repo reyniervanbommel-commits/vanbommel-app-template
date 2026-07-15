@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
   Button, Divider, Dropdown, Field, Input, makeStyles, mergeClasses, Option, shorthands, Text, tokens,
 } from '@fluentui/react-components';
@@ -78,7 +78,8 @@ function usesSeriesColor(type, config) {
 }
 
 export default function ChartBuilderPanel({
-  columns, chart, onSave, onCancel, onDraftChange, busy = false, variant = 'page',
+  columns, chart, onSave, onCancel, onDraftChange, onFlyoutActionsChange,
+  busy = false, variant = 'page',
 }) {
   const styles = useStyles();
   const isFlyout = variant === 'flyout';
@@ -113,6 +114,22 @@ export default function ChartBuilderPanel({
     if (!isValid || busy) return;
     onSave(builder.payload);
   }, [isValid, busy, onSave, builder.payload]);
+
+  useLayoutEffect(() => {
+    if (!isFlyout) {
+      onFlyoutActionsChange?.(null);
+      return undefined;
+    }
+    onFlyoutActionsChange?.(
+      <>
+        <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
+        <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
+          {busy ? 'Saving…' : 'Save chart'}
+        </Button>
+      </>,
+    );
+    return () => onFlyoutActionsChange?.(null);
+  }, [isFlyout, isValid, busy, handleSave, onCancel, onFlyoutActionsChange]);
 
   const fieldGridClass = mergeClasses(styles.fieldGrid, isFlyout && styles.fieldGridFlyout);
   const fieldClass = isFlyout ? styles.fieldNarrowFlyout : styles.fieldNarrow;
@@ -273,12 +290,14 @@ export default function ChartBuilderPanel({
 
         <ChartFilterEditor columns={columns} filters={config.filters} onChange={builder.setFilters} />
 
-        <div className={styles.actions}>
-          <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
-            {busy ? 'Saving…' : 'Save chart'}
-          </Button>
-        </div>
+        {!isFlyout ? (
+          <div className={styles.actions}>
+            <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
+            <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
+              {busy ? 'Saving…' : 'Save chart'}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

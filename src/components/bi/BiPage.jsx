@@ -45,6 +45,7 @@ export default function BiPage() {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [seeding, setSeeding] = useState(false);
+  const [flyoutActions, setFlyoutActions] = useState(null);
 
   const selectedChartId = useMemo(() => {
     if (!builderMode || builderMode === 'new') return 'draft';
@@ -231,7 +232,7 @@ export default function BiPage() {
       </div>
 
       {builderMode ? (
-        <ChartBuilderFlyout title={flyoutTitle} onClose={handleCancel}>
+        <ChartBuilderFlyout title={flyoutTitle} onClose={handleCancel} actions={flyoutActions}>
           <ChartBuilderPanel
             key={builderMode === 'new' ? 'new' : builderMode.id}
             columns={meta.columns}
@@ -239,6 +240,7 @@ export default function BiPage() {
             onSave={handleSave}
             onCancel={handleCancel}
             onDraftChange={handleDraftChange}
+            onFlyoutActionsChange={setFlyoutActions}
             busy={busy}
             variant="flyout"
           />

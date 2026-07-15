@@ -19,14 +19,24 @@ const useStyles = makeStyles({
   },
   header: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    flexDirection: 'column',
+    ...shorthands.gap('12px'),
     ...shorthands.padding('16px', '16px', '12px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     flexShrink: 0,
   },
+  headerTop: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('8px'),
+  },
   title: { fontSize: '16px', fontWeight: 600 },
+  actions: {
+    display: 'flex',
+    ...shorthands.gap('8px'),
+    justifyContent: 'flex-end',
+  },
   body: {
     flex: 1,
     minHeight: 0,
@@ -35,20 +45,23 @@ const useStyles = makeStyles({
   },
 });
 
-function ChartBuilderFlyout({ title, onClose, children }) {
+function ChartBuilderFlyout({ title, onClose, actions, children }) {
   const styles = useStyles();
 
   return (
     <aside className={styles.flyout} aria-label="Chart settings">
       <div className={styles.header}>
-        <Text className={styles.title}>{title}</Text>
-        <Button
-          appearance="subtle"
-          size="small"
-          icon={<DismissRegular />}
-          aria-label="Close chart settings"
-          onClick={onClose}
-        />
+        <div className={styles.headerTop}>
+          <Text className={styles.title}>{title}</Text>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<DismissRegular />}
+            aria-label="Close chart settings"
+            onClick={onClose}
+          />
+        </div>
+        {actions ? <div className={styles.actions}>{actions}</div> : null}
       </div>
       <div className={styles.body}>{children}</div>
     </aside>
