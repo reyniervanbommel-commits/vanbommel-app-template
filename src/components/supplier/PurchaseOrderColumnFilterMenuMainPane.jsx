@@ -5,6 +5,7 @@ import {
   ArrowClockwiseRegular,
   ArrowResetRegular,
   ArrowRightRegular,
+  ArrowBidirectionalLeftRightRegular,
   CalendarLtrRegular,
   DeleteRegular,
   EditRegular,
@@ -56,6 +57,8 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   canUnstickSticky = false,
   stickyColumnCount = 0,
   handleMakeColumnSticky,
+  canHideColumn = false,
+  handleHideColumn,
   setSortAsc,
   setSortDesc,
   clearSort,
@@ -146,6 +149,20 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
               <PurchaseOrderColumnFilterSubmenuButton styles={styles} name="group" label="Category / group" icon={<TextBulletList20Regular />} activeSubmenu={activeSubmenu} onOpenSubmenu={openSubmenu} />
             </>
           ) : null}
+        </>
+      ) : null}
+      {canHideColumn ? (
+        <>
+          <div className={styles.divider} />
+          <PurchaseOrderColumnFilterMenuButton
+            className={styles.sortButton}
+            appearance="subtle"
+            size="small"
+            closeSubmenu={closeSubmenu}
+            onClick={handleHideColumn}
+          >
+            {menuLabel(styles, <ArrowBidirectionalLeftRightRegular />, 'Hide column')}
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canSetColumnTextStyle ? (

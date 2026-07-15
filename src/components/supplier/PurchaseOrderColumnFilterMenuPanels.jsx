@@ -46,6 +46,7 @@ export function FilterMenuSubPane({
   if (activeSubmenu === 'add') {
     content = (
       <PurchaseOrderAddColumnPane
+        styles={styles}
         columnLevel={column?.level}
         remarksAlreadyAdded={remarksAlreadyAdded}
         onConfirm={handleAddType}

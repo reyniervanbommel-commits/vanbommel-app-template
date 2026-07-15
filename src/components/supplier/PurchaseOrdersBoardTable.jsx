@@ -9,6 +9,7 @@ import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardLinks';
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
+import { applyCollapsedColumnWidths } from '../../utils/collapsedColumnUtils';
 function PurchaseOrdersBoardTable({
   data,
   layout,
@@ -23,12 +24,15 @@ function PurchaseOrdersBoardTable({
   const {
     headerColumnWidths = {},
     stickyColumns = {},
+    collapsedHeaderColumnKeys = [],
+    collapsedLineColumnKeys = [],
   } = layout;
   const {
     headerColumnTextStyles = {},
     headerColumnFormatRules = {},
     lineColumnTextStyles = {},
     lineColumnFormatRules = {},
+    lineColumnWidths = {},
   } = formatting;
   const {
     onRenameColumn,
@@ -51,6 +55,8 @@ function PurchaseOrdersBoardTable({
     onEditingDone,
     reorderingColumns = false,
     trackChangesActiveByColumnId = null,
+    onToggleHeaderColumnCollapsed,
+    onToggleLineColumnCollapsed,
   } = columnActions;
   const {
     onSetLineColumnTotal,
@@ -61,9 +67,17 @@ function PurchaseOrdersBoardTable({
     lineValueHeaderLinks = [],
   } = linkActions;
   const styles = usePurchaseOrdersBoardTableStyles();
+  const effectiveHeaderColumnWidths = useMemo(
+    () => applyCollapsedColumnWidths(headerColumnWidths, collapsedHeaderColumnKeys),
+    [collapsedHeaderColumnKeys, headerColumnWidths]
+  );
+  const effectiveLineColumnWidths = useMemo(
+    () => applyCollapsedColumnWidths(lineColumnWidths, collapsedLineColumnKeys),
+    [collapsedLineColumnKeys, lineColumnWidths]
+  );
   const { wrapperRef, decoratedColumns, stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky } = usePurchaseOrdersBoardStickyColumns({
     columns,
-    headerColumnWidths,
+    headerColumnWidths: effectiveHeaderColumnWidths,
     stickyColumnKeys: stickyColumns.keys,
     onStickyColumnKeysChange: stickyColumns.onChange,
   });
@@ -171,15 +185,23 @@ function PurchaseOrdersBoardTable({
     [collapsedGroups, expandedOrders, groupedRows, highlightedLocateKey]
   );
   const rowsLayout = useMemo(
-    () => ({ columns: decoratedColumns, lineColumns, colCount }),
-    [colCount, decoratedColumns, lineColumns]
+    () => ({
+      columns: decoratedColumns,
+      lineColumns,
+      colCount,
+      collapsedHeaderColumnKeys,
+      collapsedLineColumnKeys,
+    }),
+    [colCount, collapsedHeaderColumnKeys, collapsedLineColumnKeys, decoratedColumns, lineColumns]
   );
   const rowsActions = useMemo(() => ({
     tableActions,
     onClearGrouping: clearGrouping,
     onSaveLineColumnWidth,
     cellActions,
-  }), [cellActions, clearGrouping, onSaveLineColumnWidth, tableActions]);
+    onToggleHeaderColumnCollapsed,
+    onToggleLineColumnCollapsed,
+  }), [cellActions, clearGrouping, onSaveLineColumnWidth, onToggleHeaderColumnCollapsed, onToggleLineColumnCollapsed, tableActions]);
   const rowsLinks = useMemo(() => ({
     lineTotalColumns,
     linkedLineTotalByHeaderKey,
@@ -204,7 +226,7 @@ function PurchaseOrdersBoardTable({
             onSetExpansion={handleSetExpansion}
             columns={decoratedColumns}
             headerColumnDrag={headerColumnDrag}
-            headerColumnWidths={headerColumnWidths}
+            headerColumnWidths={effectiveHeaderColumnWidths}
             onSaveHeaderColumnWidth={onSaveHeaderColumnWidth}
             onRenameColumn={onRenameColumn}
             onRemoveColumn={onRemoveColumn}
@@ -242,6 +264,8 @@ function PurchaseOrdersBoardTable({
             stickyColumnKeys={stickyColumnKeys}
             firstNonStickyColumnKey={firstNonStickyColumnKey}
             onMakeColumnSticky={makeColumnSticky}
+            collapsedColumnKeys={collapsedHeaderColumnKeys}
+            onToggleColumnCollapsed={onToggleHeaderColumnCollapsed}
             />
           </thead>
           <PurchaseOrdersBoardRows

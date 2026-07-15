@@ -51,7 +51,11 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     headerColumnWidths: pageModel.headerColumnWidths,
     lineColumnWidths: pageModel.lineColumnWidths,
     stickyColumns: tableContext.stickyColumns,
+    collapsedHeaderColumnKeys: pageModel.collapsedHeaderColumnKeys,
+    collapsedLineColumnKeys: pageModel.collapsedLineColumnKeys,
   }), [
+    pageModel.collapsedHeaderColumnKeys,
+    pageModel.collapsedLineColumnKeys,
     pageModel.headerColumnWidths,
     pageModel.lineColumnWidths,
     tableContext.stickyColumns,
@@ -107,6 +111,8 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onEditingDone: tableContext.handleEditingDone,
     reorderingColumns: pageModel.savingColumns,
     trackChangesActiveByColumnId,
+    onToggleHeaderColumnCollapsed: pageModel.toggleHeaderColumnCollapsed,
+    onToggleLineColumnCollapsed: pageModel.toggleLineColumnCollapsed,
   }), [
     pageModel,
     tableContext.editingColumnKey,

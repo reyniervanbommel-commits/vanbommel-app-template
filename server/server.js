@@ -63,6 +63,10 @@ app.use(cors({
 function shouldSkipGlobalRateLimit(req) {
   const requestPath = String(req.path || '').trim();
   if (requestPath === '/api/purchase-orders/refresh/progress') return true;
+  // Product-images zijn één request per uniek item; een beeld-zwaar bord vuurt er tientallen
+  // tegelijk af. Die vallen al onder de eigen media-limiter (zie routes/media.js), dus tel ze
+  // niet óók mee in de globale 100/min-limiet — anders zet één board-load de hele app op 429.
+  if (requestPath.startsWith('/api/media/')) return true;
   return /^\/api\/data\/[^/]+\/refresh\/progress$/.test(requestPath);
 }
 

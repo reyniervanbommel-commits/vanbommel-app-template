@@ -38,6 +38,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   canUnstickSticky,
   stickyColumnCount,
   handleMakeColumnSticky,
+  canHideColumn,
+  handleHideColumn,
   setSortAsc,
   setSortDesc,
   clearSort,
@@ -119,6 +121,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canUnstickSticky={canUnstickSticky}
         stickyColumnCount={stickyColumnCount}
         handleMakeColumnSticky={handleMakeColumnSticky}
+        canHideColumn={canHideColumn}
+        handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc}
         setSortDesc={setSortDesc}
         clearSort={clearSort}

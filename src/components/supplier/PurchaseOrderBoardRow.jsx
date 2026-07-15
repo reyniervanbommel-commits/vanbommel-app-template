@@ -17,6 +17,8 @@ import {
   PRODUCT_IMAGE_SUB_CELL_HEIGHT,
 } from '../../utils/purchaseOrderProductImageColumn';
 import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
+import PurchaseOrderCollapsedColumnCell from './PurchaseOrderCollapsedColumnCell';
+import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
 function getOrderRowClassName(order, styles) {
   const classes = [];
@@ -138,7 +140,15 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
   remarks,
   rowFormatColor,
   isLocated = false,
+  isCollapsed = false,
 }) {
+  if (isCollapsed) {
+    return (
+      <PurchaseOrderCollapsedColumnCell
+        columnKey={column.key}
+      />
+    );
+  }
   const rawValue = order?.values?.[column.key];
   const ruleSet = formatting.headerColumnFormatRules[column.key];
   const { backgroundColor: cellBackgroundColor, isConditionalFormat } = resolveOrderCellBackground({
@@ -260,8 +270,10 @@ function PurchaseOrderBoardRow({
     onSaveLineColumnWidth: actions.onSaveLineColumnWidth,
     lineTotalColumns: links.lineTotalColumns,
     headerColumns: layout.columns,
+    collapsedLineColumnKeys: layout.collapsedLineColumnKeys,
+    onToggleLineColumnCollapsed: actions.onToggleLineColumnCollapsed,
     ...links,
-  }), [actions.onSaveLineColumnWidth, formatting, layout, links]);
+  }), [actions.onSaveLineColumnWidth, actions.onToggleLineColumnCollapsed, formatting, layout, links]);
 
   return (
     <React.Fragment>
@@ -295,6 +307,7 @@ function PurchaseOrderBoardRow({
             remarks={rowRemarks}
             rowFormatColor={rowFormatColor}
             isLocated={isLocated}
+            isCollapsed={isColumnCollapsed(column.key, layout.collapsedHeaderColumnKeys)}
           />
         ))}
       </tr>

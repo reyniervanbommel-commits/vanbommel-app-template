@@ -15,6 +15,8 @@ import {
   isProductImageColumn,
   PRODUCT_IMAGE_SUB_CELL_HEIGHT,
 } from '../../utils/purchaseOrderProductImageColumn';
+import PurchaseOrderCollapsedColumnCell from './PurchaseOrderCollapsedColumnCell';
+import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -249,6 +251,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
   hasTotalsRow = false,
   cellFilterActions,
   showHistoryIndicators = true,
+  collapsedLineColumnKeys = [],
 }) {
   const styles = useStyles();
   const effectiveColumnFormatRules = useMemo(
@@ -276,6 +279,14 @@ export default function PurchaseOrdersSubitemsBodyRows({
             <td className={connectorCellClassName} aria-hidden="true" />
           ) : null}
           {lineColumns.map((column) => {
+            if (isColumnCollapsed(column.key, collapsedLineColumnKeys)) {
+              return (
+                <PurchaseOrderCollapsedColumnCell
+                  key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
+                  columnKey={column.key}
+                />
+              );
+            }
             const rawValue = line.values?.[column.key];
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);

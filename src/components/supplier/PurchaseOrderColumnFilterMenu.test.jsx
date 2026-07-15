@@ -170,4 +170,14 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
   });
+
+  it('toont Hide column in het kolommenu', async () => {
+    const onToggleColumnCollapsed = vi.fn();
+    renderMenu({ onToggleColumnCollapsed });
+    openColumnMenu();
+    const hideButton = await screen.findByRole('button', { name: /Hide column/i });
+    expect(hideButton).toBeTruthy();
+    fireEvent.click(hideButton);
+    expect(onToggleColumnCollapsed).toHaveBeenCalledWith('amount');
+  });
 });

@@ -13,6 +13,8 @@ import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
+import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
+import { applyCollapsedColumnWidths, isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
 import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
@@ -175,6 +177,8 @@ export default function PurchaseOrdersSubitemsTable({
   headerColumns = [],
   linkedLineTotalByHeaderKey = {},
   linkedLineValueByHeaderKey = {},
+  collapsedLineColumnKeys = [],
+  onToggleLineColumnCollapsed,
   showHistoryIndicators = true,
 }) {
   const styles = useStyles();
@@ -182,11 +186,14 @@ export default function PurchaseOrdersSubitemsTable({
   const lineColumns = Array.isArray(columns) ? columns : [];
   const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
   const effectiveColumnWidths = useMemo(
-    () => lineColumns.reduce((acc, column) => {
-      acc[column.key] = resolveLineColumnWidth(columnWidths, column.key);
-      return acc;
-    }, {}),
-    [lineColumns, columnWidths]
+    () => applyCollapsedColumnWidths(
+      lineColumns.reduce((acc, column) => {
+        acc[column.key] = resolveLineColumnWidth(columnWidths, column.key);
+        return acc;
+      }, {}),
+      collapsedLineColumnKeys
+    ),
+    [collapsedLineColumnKeys, lineColumns, columnWidths]
   );
   const {
     processedItems: processedLines,
@@ -250,6 +257,16 @@ export default function PurchaseOrdersSubitemsTable({
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
             const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
             const connectionTargets = lineColumnConnectionTargets[column.key] || [];
+            if (isColumnCollapsed(column.key, collapsedLineColumnKeys)) {
+              return (
+                <PurchaseOrderCollapsedColumnHeaderCell
+                  key={column.key}
+                  columnKey={column.key}
+                  columnLabel={column.label}
+                  onExpandColumn={onToggleLineColumnCollapsed}
+                />
+              );
+            }
             return (
             <ResizableTableHeaderCell
               key={column.key}
@@ -315,6 +332,7 @@ export default function PurchaseOrdersSubitemsTable({
                   onSetColumnFormatRules={onSaveColumnFormatRules}
                   referenceColumns={lineColumns}
                   connectionTargets={connectionTargets}
+                  onToggleColumnCollapsed={onToggleLineColumnCollapsed}
                 />
                 ) : null}
               </div>
@@ -346,6 +364,7 @@ export default function PurchaseOrdersSubitemsTable({
           clearColumnFilter,
         }}
         showHistoryIndicators={showHistoryIndicators}
+        collapsedLineColumnKeys={collapsedLineColumnKeys}
       />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow
@@ -355,6 +374,7 @@ export default function PurchaseOrdersSubitemsTable({
           summedValuesByColumn={summedValuesByColumn}
           totalsCellClassName={styles.totalsCell}
           connectorTotalsCellClassName={connectorStyles.connectorTotalsCell}
+          collapsedLineColumnKeys={collapsedLineColumnKeys}
         />
       ) : null}
     </table>

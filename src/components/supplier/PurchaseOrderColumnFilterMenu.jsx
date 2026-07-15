@@ -58,6 +58,7 @@ function PurchaseOrderColumnFilterMenu({
   isStickyActionEnabled = false,
   stickyColumnCount = 0,
   onMakeColumnSticky,
+  onToggleColumnCollapsed,
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -81,7 +82,7 @@ function PurchaseOrderColumnFilterMenu({
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
-  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, canHideColumn, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, onToggleColumnCollapsed, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
@@ -172,7 +173,7 @@ function PurchaseOrderColumnFilterMenu({
     onClose: closeMenu,
     onError: notifyError,
   });
-  const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
+  const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky, handleHideColumn } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, onToggleColumnCollapsed, setOpen });
   const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
 
   return (
@@ -209,7 +210,8 @@ function PurchaseOrderColumnFilterMenu({
         handleToggleLineTotal={handleToggleLineTotal} canPushLineTotalToHeader={canPushLineTotalToHeader} handlePushLineTotalToHeader={handlePushLineTotalToHeader}
         canPushLineValuesToHeader={canPushLineValuesToHeader} handlePushLineValuesToHeader={handlePushLineValuesToHeader}
         canMakeColumnSticky={canMakeColumnSticky} isStickyColumn={isStickyColumn} canPromoteToSticky={canPromoteToSticky} canUnstickSticky={canUnstickSticky}
-        stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
+        stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
+        setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
         handleSecondaryValueChange={handleSecondaryValueChange} handleApply={handleApply} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}

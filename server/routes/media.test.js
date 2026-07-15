@@ -56,7 +56,7 @@ describe('GET /api/media/product-image', () => {
 
     expect(result.status).toBe(200);
     expect(result.contentType).toContain('image/webp');
-    expect(result.cacheControl).toBe('private, max-age=900');
+    expect(result.cacheControl).toBe('private, max-age=86400');
     expect(result.body.equals(Buffer.from('webp-data'))).toBe(true);
     expect(result.productImageService.getProductImage).toHaveBeenCalledWith({
       dataAreaId: 'USMF',

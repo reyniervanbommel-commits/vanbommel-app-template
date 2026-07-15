@@ -285,6 +285,7 @@ function PurchaseOrdersBoardRows({
       onToggleOrder: actions.tableActions.onToggleOrder,
       onSaveLineColumnWidth: actions.onSaveLineColumnWidth,
       cellActions: actions.cellActions,
+      onToggleLineColumnCollapsed: actions.onToggleLineColumnCollapsed,
     },
   }), [actions, handleGroupSelection]);
 
