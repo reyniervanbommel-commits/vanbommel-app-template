@@ -167,6 +167,7 @@ export default function PurchaseOrdersSubitemsTable({
   headerColumns = [],
   linkedLineTotalByHeaderKey = {},
   linkedLineValueByHeaderKey = {},
+  showHistoryIndicators = true,
 }) {
   const styles = useStyles();
   const connectorStyles = useSubitemConnectorStyles();
@@ -336,6 +337,7 @@ export default function PurchaseOrdersSubitemsTable({
           applyFilterFromCellValue,
           clearColumnFilter,
         }}
+        showHistoryIndicators={showHistoryIndicators}
       />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow

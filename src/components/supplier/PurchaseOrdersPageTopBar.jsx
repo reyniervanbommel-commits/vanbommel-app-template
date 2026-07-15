@@ -115,6 +115,7 @@ export default function PurchaseOrdersPageTopBar({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
   } = savedViewsState;
   const {
     isStaff,
@@ -177,6 +178,7 @@ export default function PurchaseOrdersPageTopBar({
               onRenameView={handleRenameView}
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
+              onToggleShowHistory={handleToggleShowHistory}
             />
           </div>
         </div>

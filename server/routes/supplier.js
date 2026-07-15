@@ -219,6 +219,7 @@ function normalizeViewState(rawState) {
   });
 
   return {
+    showHistoryIndicators: input.showHistoryIndicators !== false,
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),

@@ -45,6 +45,7 @@ function PurchaseOrderHeaderCellContent({
   cellBackgroundColor = '',
   isConditionalFormat = false,
   productImageLines = order.lines,
+  showHistoryIndicators = true,
 }) {
   const styles = useStyles();
   const key = column.key;
@@ -56,6 +57,7 @@ function PurchaseOrderHeaderCellContent({
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
+  const showHistory = showHistoryIndicators !== false && Boolean(order.historyByColumnId?.[column.id]);
   const productImageSummary = useMemo(
     () => getPurchaseOrderProductImageSummary(productImageLines),
     [productImageLines]
@@ -113,7 +115,7 @@ function PurchaseOrderHeaderCellContent({
           onUpdateOptions={handleUpdateStatusOptions}
           isAdmin={isAdmin}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -132,7 +134,7 @@ function PurchaseOrderHeaderCellContent({
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -153,7 +155,7 @@ function PurchaseOrderHeaderCellContent({
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,

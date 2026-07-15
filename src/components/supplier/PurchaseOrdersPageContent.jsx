@@ -77,12 +77,14 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
     isStaff: tableContext.isStaff,
+    showHistoryIndicators: tableContext.showHistoryIndicators !== false,
   }), [
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
     pageModel.updateStatusOptions,
     tableContext.isAdmin,
     tableContext.isStaff,
+    tableContext.showHistoryIndicators,
   ]);
   const columnActions = useMemo(() => ({
     onRenameColumn: pageModel.renameColumn,
