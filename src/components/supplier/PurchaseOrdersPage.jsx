@@ -71,16 +71,23 @@ export default function PurchaseOrdersPage() {
   } = pageModel;
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
+  const isSupplier = user?.role === 'supplier';
   const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
-  const remarks = usePurchaseOrderRemarksBoard({ enabled: isStaff && !loading, currentUser: user, columns: visibleHeaderColumns });
+  const remarks = usePurchaseOrderRemarksBoard({
+    enabled: !loading,
+    currentUser: user,
+    columns: visibleHeaderColumns,
+    canCompose: isStaff,
+  });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
-  const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload });
+  const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });
   const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
     applyColumnLayout,
     boardView,
+    isSupplier,
   });
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
@@ -159,6 +166,7 @@ export default function PurchaseOrdersPage() {
     boardView,
     bulkEdit,
     isAdmin,
+    isStaff,
     handleAddColumnRightOf,
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
@@ -176,6 +184,7 @@ export default function PurchaseOrdersPage() {
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
     isAdmin,
+    isStaff,
     pageModel,
     remarks,
     setStickyColumnKeys,

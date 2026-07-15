@@ -69,6 +69,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   canToggleGroupSummary,
   isGroupSummaryColumn,
   handleToggleGroupSummary,
+  showGrouping = true,
+  showColumnMutations = true,
+  showSortAndFilter = true,
 }) {
   return (
     <PopoverSurface className={styles.surface}>
@@ -77,6 +80,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         columnLabel={column.label}
         columnTypeMeta={columnTypeMeta}
         connectionTargets={connectionTargets}
+        showGrouping={showGrouping}
+        showColumnMutations={showColumnMutations}
+        showSortAndFilter={showSortAndFilter}
         activeSubmenu={activeSubmenu}
         openSubmenu={openSubmenu}
         canSetColumnTextStyle={canSetColumnTextStyle}

@@ -21,16 +21,22 @@ import { ROLES } from '../../constants/roles';
 export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(ROLES.SUPPLIER);
+  const [vendorAccount, setVendorAccount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const isSupplier = role === ROLES.SUPPLIER;
 
   const handleSubmit = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      await apiRequest('/admin/users', { method: 'POST', body: { email, role } });
+      const body = { email, role };
+      if (isSupplier && vendorAccount.trim()) body.vendor_account = vendorAccount.trim();
+      await apiRequest('/admin/users', { method: 'POST', body });
       setEmail('');
       setRole(ROLES.SUPPLIER);
+      setVendorAccount('');
       onOpenChange(false);
       if (onUserCreated) onUserCreated();
     } catch (err) {
@@ -38,7 +44,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
     } finally {
       setLoading(false);
     }
-  }, [email, role, onOpenChange, onUserCreated]);
+  }, [email, role, isSupplier, vendorAccount, onOpenChange, onUserCreated]);
 
   const handleOpenChange = useCallback((_, data) => {
     onOpenChange(data.open);
@@ -76,6 +82,16 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
                 <option value={ROLES.ADMIN}>Admin</option>
               </Select>
             </Field>
+            {isSupplier && (
+              <Field label="Vendor account" hint="Only orders with this D365 vendor account are visible. Leave empty to use the email prefix.">
+                <Input
+                  value={vendorAccount}
+                  onChange={(e) => setVendorAccount(e.target.value)}
+                  placeholder="e.g. 1001"
+                  disabled={loading}
+                />
+              </Field>
+            )}
           </DialogContent>
         </DialogBody>
         <DialogActions>

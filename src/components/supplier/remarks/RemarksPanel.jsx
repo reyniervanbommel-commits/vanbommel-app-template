@@ -20,6 +20,7 @@ function RemarksPanel({
   tableKey = 'purchase-orders',
   summaryState = null,
   onLocateRow = null,
+  canCompose = true,
 }) {
   const controller = usePurchaseOrderRemarksController({
     open,
@@ -43,7 +44,7 @@ function RemarksPanel({
   );
   const remarkCount = controller.remarks.total || controller.selectedSummary?.count || 0;
   const historyCount = controller.historyUpdatedCount;
-  const showComposer = controller.selectedTab !== 'history';
+  const showComposer = canCompose && controller.selectedTab !== 'history';
   const activeFeed = controller.selectedTab === 'history' ? controller.history : controller.all;
   const partitionedAll = useMemo(
     () => (controller.selectedTab === 'all' ? partitionActivityItems(activeFeed.items) : { remarks: [], history: [] }),

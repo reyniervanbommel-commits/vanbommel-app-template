@@ -20,6 +20,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   onRenameColumn,
   onRemoveColumn,
   isAdmin,
+  isStaff = true,
   onToggleWriteback,
   trackChangesActiveByColumnId = null,
   editingColumnKey,
@@ -134,6 +135,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 groupingColor={groupingColorsByColumn[column.key] || '#f4e6ed'}
                 isGroupSummaryColumn={hasGroupSummary}
                 isAdmin={isAdmin}
+                isStaff={isStaff}
                 onToggleWriteback={onToggleWriteback}
                 onSetSortDirection={setSortDirection}
                 onSetOperator={setFilterOperator}

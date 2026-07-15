@@ -76,16 +76,19 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onCorrect: bulkEdit.handleCorrectField,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
+    isStaff: tableContext.isStaff,
   }), [
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
     pageModel.updateStatusOptions,
     tableContext.isAdmin,
+    tableContext.isStaff,
   ]);
   const columnActions = useMemo(() => ({
     onRenameColumn: pageModel.renameColumn,
     onRemoveColumn: pageModel.removeColumn,
     isAdmin: tableContext.isAdmin,
+    isStaff: tableContext.isStaff,
     onToggleWriteback: pageModel.toggleWriteback,
     onReorderHeaderColumn: pageModel.reorderHeaderColumn,
     onReorderLineColumn: pageModel.reorderLineColumn,
@@ -106,6 +109,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     tableContext.handleAddColumnRightOf,
     tableContext.handleEditingDone,
     tableContext.isAdmin,
+    tableContext.isStaff,
     trackChangesActiveByColumnId,
   ]);
   const linkActions = useMemo(() => ({

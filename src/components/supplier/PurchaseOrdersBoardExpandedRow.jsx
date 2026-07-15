@@ -42,6 +42,7 @@ function PurchaseOrdersBoardExpandedRow({
           onRemoveColumn={cellActions.onRemoveColumn}
           onCorrect={cellActions.onCorrect}
           isAdmin={cellActions.isAdmin}
+          isStaff={cellActions.isStaff}
           onToggleWriteback={cellActions.onToggleWriteback}
           onReorderColumn={cellActions.onReorderLineColumn}
           columnWidths={lineColumnWidths}

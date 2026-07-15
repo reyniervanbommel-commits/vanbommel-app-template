@@ -150,6 +150,7 @@ export default function PurchaseOrdersSubitemsTable({
   onUpdateStatusOptions,
   onCorrect,
   isAdmin,
+  isStaff = true,
   onToggleWriteback,
   onReorderColumn,
   columnWidths = {},
@@ -283,6 +284,7 @@ export default function PurchaseOrdersSubitemsTable({
                   groupingColumnKey={groupingColumnKey}
                   groupingColor={groupingColor}
                   isAdmin={isAdmin}
+                  isStaff={isStaff}
                   onToggleWriteback={onToggleWriteback}
                   onSetSortDirection={setSortDirection}
                   onSetOperator={setFilterOperator}

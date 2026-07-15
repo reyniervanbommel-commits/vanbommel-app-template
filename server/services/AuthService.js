@@ -28,6 +28,7 @@ function mapUserForSession(user) {
     email: user.email,
     display_name: user.display_name || null,
     role: normalizedRole,
+    vendor_account: user.vendor_account || null,
     mfa_enabled: Boolean(user.mfa_enabled),
     must_set_password: Boolean(user.must_set_password),
     is_locked: Boolean(user.is_locked),

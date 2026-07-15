@@ -83,8 +83,23 @@ describe('TableColumnsService formula helpers', () => {
       { key: 'budget', scope: 'master', formulaExpr: null },
       { key: 'delta', scope: 'master', formulaExpr: '(a)+(b)' },
     ];
-    expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw')).toThrow(/Unknown column reference/i);
-    expect(() => validateFormulaReferences(['delta'], columns, 'nieuw')).toThrow(/formula column/i);
+    expect(() => validateFormulaReferences(['onbekend'], columns, 'nieuw', 'master')).toThrow(/Unknown column reference/i);
+    expect(() => validateFormulaReferences(['delta'], columns, 'nieuw', 'master')).toThrow(/formula column/i);
+  });
+
+  it('weigert detail-referenties in master-formules', () => {
+    const columns = [
+      { key: 'quantity', scope: 'detail', formulaExpr: null },
+    ];
+    expect(() => validateFormulaReferences(['quantity'], columns, 'total', 'master')).toThrow(/master columns/i);
+  });
+
+  it('accepteert detail-referenties in detail-formules', () => {
+    const columns = [
+      { key: 'quantity', scope: 'detail', formulaExpr: null },
+      { key: 'receivedPurchaseQuantity', scope: 'detail', formulaExpr: null },
+    ];
+    expect(() => validateFormulaReferences(['quantity', 'receivedpurchasequantity'], columns, 'remainder', 'detail')).not.toThrow();
   });
 
   it('weigert formule met onjuist resultaattype', () => {

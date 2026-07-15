@@ -162,8 +162,8 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const normalizedFormula = normalizeFormulaExpression(formulaExpr);
   const isFormulaColumn = Boolean(normalizedFormula.expression);
-  if (isFormulaColumn && scope !== 'master') {
-    throw Object.assign(new Error('Formula columns are only allowed at master level'), { status: 400 });
+  if (isFormulaColumn && dataType === 'remarks') {
+    throw Object.assign(new Error('Formula columns do not support the Remarks data type'), { status: 400 });
   }
 
   let optionsJson = null;
@@ -209,12 +209,12 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   }
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
   if (isFormulaColumn) {
-    const masterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
-    validateFormulaReferences(normalizedFormula.references, masterColumns, key);
+    const scopeColumns = await listColumns({ tableId: table.id, scope, includeInactive: false });
+    validateFormulaReferences(normalizedFormula.references, scopeColumns, key, scope);
     validateFormulaResultTypeCompatibility(
       normalizedFormula.expression,
       normalizedFormula.references,
-      masterColumns,
+      scopeColumns,
       dataType
     );
   }
@@ -338,8 +338,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (existing.source !== 'custom') {
     throw Object.assign(new Error('Only custom columns can have a formula'), { status: 400 });
   }
-  if (existing.scope !== 'master') {
-    throw Object.assign(new Error('Only master columns can have a formula'), { status: 400 });
+  if (existing.scope !== 'master' && existing.scope !== 'detail') {
+    throw Object.assign(new Error('Only master or detail columns can have a formula'), { status: 400 });
   }
   if (!String(existing.formulaExpr || '').trim()) {
     throw Object.assign(new Error('This column is not a formula column'), { status: 400 });
@@ -359,12 +359,12 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
     throw Object.assign(new Error('Formula is required'), { status: 400 });
   }
 
-  const masterColumns = await listColumns({ tableId: existing.tableId, scope: 'master', includeInactive: false });
-  validateFormulaReferences(normalizedFormula.references, masterColumns, existing.key);
+  const scopeColumns = await listColumns({ tableId: existing.tableId, scope: existing.scope, includeInactive: false });
+  validateFormulaReferences(normalizedFormula.references, scopeColumns, existing.key, existing.scope);
   validateFormulaResultTypeCompatibility(
     normalizedFormula.expression,
     normalizedFormula.references,
-    masterColumns,
+    scopeColumns,
     nextDataType
   );
 
@@ -459,15 +459,16 @@ async function deactivateColumn(columnId, userId) {
   if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be deleted'), { status: 400 });
 
   const pool = await getPool();
-  if (existing.scope === 'master') {
+  if (existing.scope === 'master' || existing.scope === 'detail') {
     const formulaRows = await pool.request()
       .input('tableId', sql.BigInt, existing.tableId)
       .input('columnId', sql.BigInt, columnId)
+      .input('scope', sql.NVarChar(16), existing.scope)
       .query(`
         SELECT id, [key], label, formula_expr
         FROM dbo.tb_columns
         WHERE table_id = @tableId
-          AND scope = 'master'
+          AND scope = @scope
           AND is_active = 1
           AND source = 'custom'
           AND formula_expr IS NOT NULL

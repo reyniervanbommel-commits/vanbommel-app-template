@@ -22,6 +22,25 @@ function stableSerialize(value) {
   return JSON.stringify(normalizeForComparison(value));
 }
 
+function pickStartupView(views, isSupplier) {
+  const personalViews = views.filter((view) => view.scope === 'personal');
+  const vendorViews = views.filter((view) => view.scope === 'vendor');
+  const globalViews = views.filter((view) => view.scope === 'global');
+
+  if (isSupplier) {
+    return vendorViews.find((view) => view.isDefault)
+      || vendorViews[0]
+      || personalViews.find((view) => view.isDefault)
+      || personalViews[0]
+      || null;
+  }
+
+  return personalViews.find((view) => view.isDefault)
+    || globalViews.find((view) => view.isDefault)
+    || vendorViews.find((view) => view.isDefault)
+    || null;
+}
+
 /**
  * Bundelt saved-view state en handlers voor de purchase-order board.
  */
@@ -31,6 +50,7 @@ export function usePurchaseOrderSavedViewState({
   exportColumnLayout,
   applyColumnLayout,
   boardView,
+  isSupplier = false,
 }) {
   const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
   const [activeViewId, setActiveViewId] = useState(null);
@@ -117,15 +137,14 @@ export function usePurchaseOrderSavedViewState({
 
   useEffect(() => {
     if (autoAppliedRef.current) return;
-    if (savedViews.loading || loading || !orders.length) return;
+    const boardReady = !savedViews.loading && !loading && (isSupplier || orders.length > 0);
+    if (!boardReady) return;
     autoAppliedRef.current = true;
-    const personalDefault = savedViews.views.find((view) => view.scope === 'personal' && view.isDefault);
-    const globalDefault = savedViews.views.find((view) => view.scope === 'global' && view.isDefault);
-    const defaultView = personalDefault || globalDefault;
+    const defaultView = pickStartupView(savedViews.views, isSupplier);
     if (defaultView) {
       applyViewState(defaultView);
     }
-  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState]);
+  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState, isSupplier]);
 
   return useMemo(() => ({
     savedViews,

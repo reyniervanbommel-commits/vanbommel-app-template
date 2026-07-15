@@ -9,6 +9,7 @@ export function usePurchaseOrderRemarksBoard({
   currentUser,
   columns,
   tableKey = 'purchase-orders',
+  canCompose = true,
 }) {
   const [panelContext, setPanelContext] = useState(null);
   const [locateRequest, setLocateRequest] = useState(null);
@@ -61,8 +62,9 @@ export function usePurchaseOrderRemarksBoard({
       tableKey,
       summaryState,
       onLocateRow,
+      canCompose,
     }),
-    [close, columns, currentUser, onLocateRow, panelContext, summaryState, tableKey]
+    [canCompose, close, columns, currentUser, onLocateRow, panelContext, summaryState, tableKey]
   );
 
   return useMemo(

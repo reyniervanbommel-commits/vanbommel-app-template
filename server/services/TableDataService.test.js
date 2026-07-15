@@ -11,7 +11,10 @@ const {
   resolveConfiguredMaxItems,
   requiredMasterFieldsFromTable,
   compileMasterFormulaColumns,
+  compileFormulaColumns,
+  buildDetailFormulaEvaluationContext,
   applyFormulaColumnsToRowValues,
+  detailFormulaHasMissingSourceReference,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
@@ -232,6 +235,44 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
     const errors = applyFormulaColumnsToRowValues(values, formulas);
     expect(values.statusCheck).toBe('kleiner');
     expect(errors).toEqual({});
+  });
+
+  it('evalueert detail-formule voor deliver remainder wanneer ontvangen qty aanwezig is', () => {
+    const detailCols = [
+      { key: 'quantity', scope: 'detail', source: 'source', sourceField: 'OrderedPurchaseQuantity' },
+      { key: 'receivedPurchaseQuantity', scope: 'detail', source: 'source', sourceField: 'ReceivedPurchaseQuantity' },
+      { key: 'deliverRemainderApprox', scope: 'detail', source: 'custom', dataType: 'number', formulaExpr: '(quantity)-(receivedpurchasequantity)' },
+    ];
+    const formulas = compileFormulaColumns(detailCols);
+    const detailValues = { quantity: 10 };
+    const detailJson = { OrderedPurchaseQuantity: 10, ReceivedPurchaseQuantity: 3 };
+    const evalValues = buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, formulas);
+    const errors = applyFormulaColumnsToRowValues(detailValues, formulas, {
+      evaluationValues: evalValues,
+      detailCols,
+      strictMissingSourceRefs: true,
+    });
+    expect(detailValues.deliverRemainderApprox).toBe(7);
+    expect(errors).toEqual({});
+  });
+
+  it('laat deliver remainder leeg wanneer ontvangen qty ontbreekt in D365', () => {
+    const detailCols = [
+      { key: 'quantity', scope: 'detail', source: 'source', sourceField: 'OrderedPurchaseQuantity' },
+      { key: 'receivedPurchaseQuantity', scope: 'detail', source: 'source', sourceField: 'ReceivedPurchaseQuantity' },
+      { key: 'deliverRemainderApprox', scope: 'detail', source: 'custom', dataType: 'number', formulaExpr: '(quantity)-(receivedpurchasequantity)' },
+    ];
+    const formulas = compileFormulaColumns(detailCols);
+    const detailValues = { quantity: 10 };
+    const detailJson = { OrderedPurchaseQuantity: 10 };
+    const evalValues = buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, formulas);
+    expect(detailFormulaHasMissingSourceReference(formulas[0].compiled, evalValues, detailCols)).toBe(true);
+    applyFormulaColumnsToRowValues(detailValues, formulas, {
+      evaluationValues: evalValues,
+      detailCols,
+      strictMissingSourceRefs: true,
+    });
+    expect(detailValues.deliverRemainderApprox).toBeNull();
   });
 });
 

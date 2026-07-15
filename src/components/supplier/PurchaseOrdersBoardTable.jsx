@@ -34,6 +34,7 @@ function PurchaseOrdersBoardTable({
     onRenameColumn,
     onRemoveColumn,
     isAdmin,
+    isStaff = true,
     onToggleWriteback,
     onReorderHeaderColumn,
     onReorderLineColumn,
@@ -136,6 +137,7 @@ function PurchaseOrdersBoardTable({
       onRenameColumn,
       onRemoveColumn,
       isAdmin,
+      isStaff,
       onToggleWriteback,
       onReorderLineColumn,
       onSaveLineColumnTextStyle,
@@ -200,6 +202,7 @@ function PurchaseOrdersBoardTable({
             onRenameColumn={onRenameColumn}
             onRemoveColumn={onRemoveColumn}
             isAdmin={isAdmin}
+            isStaff={isStaff}
             onToggleWriteback={onToggleWriteback}
             trackChangesActiveByColumnId={trackChangesActiveByColumnId}
             editingColumnKey={editingColumnKey}

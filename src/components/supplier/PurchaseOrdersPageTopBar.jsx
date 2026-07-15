@@ -167,6 +167,7 @@ export default function PurchaseOrdersPageTopBar({
               views={savedViews.views}
               activeViewId={activeViewId}
               canManageGlobal={isStaff}
+              canManageViews={isStaff}
               saving={savedViews.saving}
               hasUnsavedChanges={hasUnsavedChanges}
               onApplyView={applyViewState}
@@ -191,12 +192,14 @@ export default function PurchaseOrdersPageTopBar({
               onRestore={hiddenRowsState.restoreRows}
             />
           ) : null}
-          <PurchaseOrderRefreshProgress
-            progress={refreshProgress}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            canRefresh={isAdmin}
-          />
+          {isStaff ? (
+            <PurchaseOrderRefreshProgress
+              progress={refreshProgress}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              canRefresh={isAdmin}
+            />
+          ) : null}
           {error ? (
             <div className={styles.errorIndicator}>
               <Badge color="danger" appearance="filled">Request failed</Badge>

@@ -2054,8 +2054,8 @@ function assertCustomColumnWritable(column) {
   }
 }
 
-function compileMasterFormulaColumns(masterColumns) {
-  return (Array.isArray(masterColumns) ? masterColumns : [])
+function compileFormulaColumns(columns) {
+  return (Array.isArray(columns) ? columns : [])
     .filter((column) => isFormulaColumn(column))
     .map((column) => {
       try {
@@ -2074,6 +2074,63 @@ function compileMasterFormulaColumns(masterColumns) {
     });
 }
 
+function compileMasterFormulaColumns(masterColumns) {
+  return compileFormulaColumns(masterColumns);
+}
+
+function buildFormulaEvaluationContext(rowValues, columns, compiledFormulas) {
+  const evalValues = withCaseInsensitiveKeys(rowValues);
+  const referencedKeys = new Set();
+  for (const item of Array.isArray(compiledFormulas) ? compiledFormulas : []) {
+    for (const ref of [...(item?.compiled?.references || [])]) {
+      referencedKeys.add(String(ref || '').toLowerCase());
+    }
+  }
+  for (const column of Array.isArray(columns) ? columns : []) {
+    const keyLower = String(column?.key || '').toLowerCase();
+    if (!keyLower || !referencedKeys.has(keyLower)) continue;
+    if (column.source !== 'source') continue;
+    const value = rowValues?.[column.key];
+    evalValues[column.key] = value;
+    evalValues[keyLower] = value;
+  }
+  return evalValues;
+}
+
+function buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, compiledDetailFormulas) {
+  const evalValues = withCaseInsensitiveKeys(detailValues);
+  const referencedKeys = new Set();
+  for (const item of Array.isArray(compiledDetailFormulas) ? compiledDetailFormulas : []) {
+    for (const ref of [...(item?.compiled?.references || [])]) {
+      referencedKeys.add(String(ref || '').toLowerCase());
+    }
+  }
+  for (const column of Array.isArray(detailCols) ? detailCols : []) {
+    const keyLower = String(column?.key || '').toLowerCase();
+    if (!keyLower || !referencedKeys.has(keyLower)) continue;
+    if (column.source !== 'source') continue;
+    const value = resolveSourceColumnValue(detailJson, column);
+    evalValues[column.key] = value;
+    evalValues[keyLower] = value;
+  }
+  return evalValues;
+}
+
+function detailFormulaHasMissingSourceReference(compiled, evaluationValues, detailCols) {
+  const references = [...(compiled?.references || [])];
+  if (!references.length) return false;
+  for (const ref of references) {
+    const refLower = String(ref || '').toLowerCase();
+    const column = (Array.isArray(detailCols) ? detailCols : []).find(
+      (entry) => String(entry?.key || '').toLowerCase() === refLower,
+    );
+    if (!column || column.source !== 'source' || !column.sourceField) continue;
+    const value = evaluationValues?.[column.key] ?? evaluationValues?.[refLower] ?? evaluationValues?.[ref];
+    if (value === null || value === undefined) return true;
+  }
+  return false;
+}
+
 function withCaseInsensitiveKeys(values) {
   const normalized = { ...(values || {}) };
   for (const [key, value] of Object.entries(values || {})) {
@@ -2085,21 +2142,37 @@ function withCaseInsensitiveKeys(values) {
   return normalized;
 }
 
-function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
+function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {}) {
   const formulaErrors = {};
-  const evaluationValues = withCaseInsensitiveKeys(masterValues);
-  for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
+  const {
+    evaluationValues: providedEvaluationValues = null,
+    detailCols = null,
+    strictMissingSourceRefs = false,
+  } = options;
+  const evaluationValues = providedEvaluationValues
+    ? withCaseInsensitiveKeys(providedEvaluationValues)
+    : withCaseInsensitiveKeys(rowValues);
+  for (const item of Array.isArray(compiledFormulas) ? compiledFormulas : []) {
     const formulaKey = item?.column?.key;
     if (!formulaKey) continue;
     if (item.compileError) {
-      masterValues[formulaKey] = null;
+      rowValues[formulaKey] = null;
       evaluationValues[formulaKey] = null;
       evaluationValues[String(formulaKey).toLowerCase()] = null;
       formulaErrors[formulaKey] = item.compileError;
       continue;
     }
+    if (
+      strictMissingSourceRefs
+      && detailFormulaHasMissingSourceReference(item.compiled, evaluationValues, detailCols)
+    ) {
+      rowValues[formulaKey] = null;
+      evaluationValues[formulaKey] = null;
+      evaluationValues[String(formulaKey).toLowerCase()] = null;
+      continue;
+    }
     const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
-    masterValues[formulaKey] = result.value;
+    rowValues[formulaKey] = result.value;
     evaluationValues[formulaKey] = result.value;
     evaluationValues[String(formulaKey).toLowerCase()] = result.value;
     if (result.error) formulaErrors[formulaKey] = result.error;
@@ -2465,7 +2538,7 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
-async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
+async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount' } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
 
@@ -2547,6 +2620,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     trackMarksPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -2600,6 +2674,17 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const detailJson = parseJson(d.data_json);
       const detailValues = valuesFor(detailCols, detailJson, detailCustom);
       applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
+      const detailFormulaEvalValues = buildDetailFormulaEvaluationContext(
+        detailValues,
+        detailJson,
+        detailCols,
+        compiledDetailFormulas,
+      );
+      const detailFormulaErrors = applyFormulaColumnsToRowValues(detailValues, compiledDetailFormulas, {
+        evaluationValues: detailFormulaEvalValues,
+        detailCols,
+        strictMissingSourceRefs: true,
+      });
       const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -2616,6 +2701,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       return {
         detailKey: d.detail_key,
         values: detailValues,
+        formulaErrors: detailFormulaErrors,
         historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
         trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)),
         isNew,
@@ -2657,6 +2743,22 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     };
   });
 
+  // Supplier-scoping: beperk de rijen tot de eigen leverancier. De admin kiest via een
+  // instelling op welke kolom gefilterd wordt (supplierFilterColumn); we vergelijken de
+  // afgeleide rijwaarde met het leveranciersaccount van de gebruiker (case-insensitief).
+  // Wanneer supplierAccount is meegegeven (ook een lege string) filteren we altijd — een
+  // supplier ziet dus nooit onbedoeld alle orders. Staff geeft null door en ziet alles.
+  let scopedRows = rows;
+  if (supplierAccount !== null) {
+    const wantedAccount = String(supplierAccount).trim().toLowerCase();
+    const filterKey = supplierFilterColumn || 'vendorAccount';
+    scopedRows = rows.filter((row) => (
+      String(row.values?.[filterKey] ?? '').trim().toLowerCase() === wantedAccount
+    ));
+    newCount = scopedRows.filter((row) => row.isNew).length;
+    changedCount = scopedRows.filter((row) => row.isChanged).length;
+  }
+
   const staleThresholdMinutes = await getStaleThresholdMinutes(table);
   const stale = table.cacheMode === 'never'
     ? false
@@ -2664,7 +2766,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
   let retentionMeta = { retainedCount: 0, retentionWarning: 'none' };
   if (table.key === 'purchase-orders') {
-    const retainedCount = rows.filter((row) => row.syncRetained).length;
+    const retainedCount = scopedRows.filter((row) => row.syncRetained).length;
     const retentionSettings = await time('tb_retention', () => getSyncRetentionSettings());
     retentionMeta = {
       retainedCount,
@@ -2694,8 +2796,8 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
           }
         : null,
     },
-    rows,
-    total: rows.length,
+    rows: scopedRows,
+    total: scopedRows.length,
     lastViewedAt: lastViewedAt ? new Date(lastViewedAt).toISOString() : null,
     newCount,
     changedCount,
@@ -3668,6 +3770,9 @@ module.exports = {
   requiredMasterFieldsFromTable,
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
+  compileFormulaColumns,
+  buildDetailFormulaEvaluationContext,
+  detailFormulaHasMissingSourceReference,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,

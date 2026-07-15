@@ -21,6 +21,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   columnTypeMeta,
   showSortAndFilter = true,
   showGrouping = true,
+  showColumnMutations = true,
   activeSubmenu,
   openSubmenu,
   canSetColumnTextStyle,
@@ -167,7 +168,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         </>
       ) : null}
       <div className={styles.divider} />
-      {canEditFormulaColumn ? (
+      {showColumnMutations && canEditFormulaColumn ? (
         <>
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditFormulaColumn}>
             {menuLabel(styles, <NumberSymbolRegular />, 'Edit formula column')}
@@ -175,10 +176,14 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           <div className={styles.divider} />
         </>
       ) : null}
-      <div className={styles.divider} />
-      <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRemoveColumn} disabled={!canRemoveColumn}>
-        {menuLabel(styles, <DeleteRegular />, 'Delete column')}
-      </Button>
+      {showColumnMutations && canRemoveColumn ? (
+        <>
+          <div className={styles.divider} />
+          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRemoveColumn}>
+            {menuLabel(styles, <DeleteRegular />, 'Delete column')}
+          </Button>
+        </>
+      ) : null}
       {canToggleLineTotal ? (
         <>
           <div className={styles.divider} />

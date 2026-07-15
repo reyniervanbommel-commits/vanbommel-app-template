@@ -3,6 +3,7 @@
 const sql = require('mssql');
 const { getPool, getTableByKey, getColumnById } = require('./TableRegistryService');
 const { time } = require('../utils/timing');
+const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -253,6 +254,11 @@ function createRowActivityService(deps = {}) {
 
   return async function getRowActivity(options = {}) {
     const { partition, record } = validateRowKeys(options.partitionKey, options.recordKey);
+    await assertSupplierPurchaseOrderRow(options.currentUser, {
+      tableKey: options.tableKey,
+      partitionKey: partition,
+      recordKey: record,
+    });
     const kind = options.kind || 'history';
     if (!['history', 'all'].includes(kind)) throw badRequest('kind must be history or all');
     const actionFilter = parseActionFilter(options.actionFilter);

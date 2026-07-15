@@ -88,12 +88,13 @@ export default function PurchaseOrderSavedViewDialog({
               {mode === 'create' && canManageGlobal ? (
                 <Field label="Visibility">
                   <RadioGroup
-                    layout="horizontal"
+                    layout="vertical"
                     value={scope}
                     onChange={(_, data) => setScope(data.value)}
                   >
                     <Radio value="personal" label="Personal" />
-                    <Radio value="global" label="Shared (iedereen)" />
+                    <Radio value="vendor" label="Vendor view (all suppliers)" />
+                    <Radio value="global" label="Shared (staff only)" />
                   </RadioGroup>
                 </Field>
               ) : null}

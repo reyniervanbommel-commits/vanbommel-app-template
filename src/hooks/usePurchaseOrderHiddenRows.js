@@ -10,7 +10,7 @@ const HIDDEN_BASE = BOARD_TB_SOURCE ? '/data/purchase-orders' : '/purchase-order
 // Haalt de verborgen (verwijderde) rijen op die nog binnen de harde D365-filter vallen,
 // en biedt "terugzetten" (include) aan. Na terugzetten wordt onRestored aangeroepen zodat
 // de aanroeper het overzicht kan herladen.
-export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
+export function usePurchaseOrderHiddenRows({ onRestored, enabled = true } = {}) {
   const [hiddenRows, setHiddenRows] = useState([]);
   const [columns, setColumns] = useState([]);
   const [count, setCount] = useState(0);
@@ -18,6 +18,13 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
   const [restoring, setRestoring] = useState(false);
 
   const reload = useCallback(async () => {
+    // Verborgen-rijen zijn een admin/employee-functie; suppliers hebben hier geen toegang toe.
+    if (!enabled) {
+      setHiddenRows([]);
+      setColumns([]);
+      setCount(0);
+      return;
+    }
     setLoading(true);
     try {
       const data = await apiRequest(`${HIDDEN_BASE}/rows/hidden-in-filter`);
@@ -37,7 +44,7 @@ export function usePurchaseOrderHiddenRows({ onRestored } = {}) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     reload();

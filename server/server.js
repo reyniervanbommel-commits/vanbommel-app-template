@@ -19,6 +19,7 @@ const dataRouter = require('./routes/data');
 const dataLinksRouter = require('./routes/dataLinks');
 const { createMediaRouter } = require('./routes/media');
 const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
+const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
@@ -127,7 +128,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 // Generieke Table Builder-data-API — het PO-board draait hier volledig op (po_*-laag verwijderd, #AB:177).
-app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
+// Staff (admin/employee) heeft volledige toegang; suppliers mogen uitsluitend hun eigen
+// purchase-orders lezen (rij-filter op leveranciersaccount in TableDataService.read).
+app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
 app.use('/api/media', createMediaRouter());
