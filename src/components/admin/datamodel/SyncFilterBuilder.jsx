@@ -53,7 +53,7 @@ const useStyles = makeStyles({
 function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
-  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items';
+  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items' || tableKey === 'product-receipt-lines';
   const isReadOnly = isInheritedTable || Boolean(syncFilter?.readOnly);
   const readOnlyMessage = String(syncFilter?.message || '').trim();
   const inheritedCompiled = String(

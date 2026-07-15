@@ -4,6 +4,20 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'feature-230-product-receipt-lines-v1-18-0',
+    title: 'Feature 230 - ProductReceiptLinesV2 datamodel (v1.18.0)',
+    checks: [
+      'Admin Data model has an Ontvangstregels tab with 8 columns and inherited sync filter hint',
+      'Sync now on Ontvangstregels fills tb_cache for product-receipt-lines',
+      'PO-board line rows show received and remaining quantities via lookup for a known PO',
+      'A PO line without a receipt shows empty received/remaining cells (not 0)',
+      'Deliver-remainder columns from the old formula approach no longer appear on the PO board',
+      'Admin can toggle visibility of product-receipt lookup columns on PO lines',
+      'Vendor-scoped user sees received/remaining columns read-only on PO lines',
+      'The footer shows version v1.18.0',
+    ],
+  },
+  {
     id: 'feature-213-track-changes-v1-17-3',
     title: 'Feature 213 - Track changes op celniveau (v1.17.3)',
     checks: [

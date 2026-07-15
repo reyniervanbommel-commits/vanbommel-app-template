@@ -29,10 +29,12 @@ export default function AdminDataModel() {
   const purchaseOrders = useDataModelAdmin('purchase-orders');
   const vendors = useDataModelAdmin('vendors');
   const items = useDataModelAdmin('items');
+  const productReceiptLines = useDataModelAdmin('product-receipt-lines');
   const modelByTab = {
     'purchase-orders': purchaseOrders,
     vendors,
     items,
+    'product-receipt-lines': productReceiptLines,
   };
   const selectedModel = modelByTab[selectedTab];
   const isDataEntityTab = Boolean(selectedModel);
@@ -51,6 +53,7 @@ export default function AdminDataModel() {
         <Tab value="purchase-orders">Purchase orders</Tab>
         <Tab value="vendors">Vendors</Tab>
         <Tab value="items">Itemen</Tab>
+        <Tab value="product-receipt-lines">Ontvangstregels</Tab>
         <Tab value="excel-links">External links</Tab>
       </TabList>
 

@@ -186,6 +186,9 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
     normalizedImageOptions = validateImageOptions(options);
     optionsJson = JSON.stringify(normalizedImageOptions);
   }
+  if (isFormulaColumn && scope !== 'master') {
+    throw Object.assign(new Error('Formula columns are only allowed at master level'), { status: 400 });
+  }
   if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image')) {
     throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
   }
@@ -210,7 +213,7 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
   if (isFormulaColumn) {
     const scopeColumns = await listColumns({ tableId: table.id, scope, includeInactive: false });
-    validateFormulaReferences(normalizedFormula.references, scopeColumns, key, scope);
+    validateFormulaReferences(normalizedFormula.references, scopeColumns, key);
     validateFormulaResultTypeCompatibility(
       normalizedFormula.expression,
       normalizedFormula.references,
@@ -338,8 +341,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (existing.source !== 'custom') {
     throw Object.assign(new Error('Only custom columns can have a formula'), { status: 400 });
   }
-  if (existing.scope !== 'master' && existing.scope !== 'detail') {
-    throw Object.assign(new Error('Only master or detail columns can have a formula'), { status: 400 });
+  if (existing.scope !== 'master') {
+    throw Object.assign(new Error('Only master columns can have a formula'), { status: 400 });
   }
   if (!String(existing.formulaExpr || '').trim()) {
     throw Object.assign(new Error('This column is not a formula column'), { status: 400 });
@@ -360,7 +363,7 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   }
 
   const scopeColumns = await listColumns({ tableId: existing.tableId, scope: existing.scope, includeInactive: false });
-  validateFormulaReferences(normalizedFormula.references, scopeColumns, existing.key, existing.scope);
+  validateFormulaReferences(normalizedFormula.references, scopeColumns, existing.key);
   validateFormulaResultTypeCompatibility(
     normalizedFormula.expression,
     normalizedFormula.references,
