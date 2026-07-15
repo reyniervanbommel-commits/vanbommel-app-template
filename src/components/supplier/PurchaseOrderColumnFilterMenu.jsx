@@ -163,7 +163,12 @@ function PurchaseOrderColumnFilterMenu({
     onError: notifyError,
   });
   const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, setOpen });
-  const canToggleTrackChanges = Boolean(isAdmin && typeof onToggleTrackChanges === 'function' && column.source === 'custom');
+  const canToggleTrackChanges = Boolean(
+    isAdmin
+    && typeof onToggleTrackChanges === 'function'
+    && column.id != null
+    && (column.source === 'custom' || column.source === 'd365')
+  );
   const handleToggleTrackChanges = useCallback(() => {
     if (!canToggleTrackChanges) return;
     onToggleTrackChanges(column.id, !trackChangesEnabled);

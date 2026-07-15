@@ -2341,7 +2341,8 @@ async function loadHistoryByCell(pool, tableId) {
 
 // ---------------------------------------------------------------------------
 // Track changes — streepjes-patronen per cel, meeberekend in de board-read.
-// Bron v1: tb_cell_history (alleen custom tb_-kolommen). Eén query, alleen bij
+// Bronnen: tb_cell_history (custom-kolommen) + tb_field_corrections met
+// status='applied' (write-back naar D365-kolommen). Eén query, alleen bij
 // ≥1 actieve kolom. Bucketing (week/session) volledig in SQL; JS bouwt alleen
 // de kant-en-klare 5-tekenstrings via buildMarkPattern.
 // ---------------------------------------------------------------------------
@@ -2402,7 +2403,7 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
 
   let offsetExpr;
   if (mode === 'week') {
-    offsetExpr = 'DATEDIFF(week, h.changed_at, SYSUTCDATETIME())';
+    offsetExpr = 'DATEDIFF(week, ch.changed_at, SYSUTCDATETIME())';
   } else {
     if (!Array.isArray(boundaries) || boundaries.length === 0) {
       return { trackMarksByCell: new Map(), activeOffsetByColumnId, defaultPattern };
@@ -2410,19 +2411,31 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
     const cases = boundaries.map((b, i) => {
       const bId = 'tc_b' + i;
       request.input(bId, sql.DateTime2, b);
-      return `WHEN h.changed_at >= @${bId} THEN ${i}`;
+      return `WHEN ch.changed_at >= @${bId} THEN ${i}`;
     });
     offsetExpr = `CASE ${cases.join(' ')} ELSE 99 END`;
   }
 
+  // Wijzigingen komen uit twee bronnen: tb_cell_history (custom-kolommen) en
+  // tb_field_corrections (write-back naar D365-kolommen). Alleen toegepaste
+  // correcties tellen; applied_at is het echte wijzigingsmoment (fallback created_at).
   const query = `
-    SELECT h.column_id, h.partition_key, h.record_key, h.detail_key, ${offsetExpr} AS mark_offset
-    FROM dbo.tb_cell_history h WITH (NOLOCK)
+    ;WITH changes AS (
+      SELECT h.column_id, h.partition_key, h.record_key, h.detail_key, h.changed_at
+      FROM dbo.tb_cell_history h WITH (NOLOCK)
+      WHERE h.table_id = @tableId
+      UNION ALL
+      SELECT f.column_id, f.partition_key, f.record_key, f.detail_key,
+             COALESCE(f.applied_at, f.created_at) AS changed_at
+      FROM dbo.tb_field_corrections f WITH (NOLOCK)
+      WHERE f.table_id = @tableId AND f.status = 'applied'
+    )
+    SELECT ch.column_id, ch.partition_key, ch.record_key, ch.detail_key, ${offsetExpr} AS mark_offset
+    FROM changes ch
     INNER JOIN (VALUES ${valueRows.join(', ')}) AS act(column_id, activated_at)
-      ON act.column_id = h.column_id
-    WHERE h.table_id = @tableId
-      AND h.changed_at >= act.activated_at
-    GROUP BY h.column_id, h.partition_key, h.record_key, h.detail_key, ${offsetExpr}
+      ON act.column_id = ch.column_id
+    WHERE ch.changed_at >= act.activated_at
+    GROUP BY ch.column_id, ch.partition_key, ch.record_key, ch.detail_key, ${offsetExpr}
     HAVING ${offsetExpr} BETWEEN 0 AND ${maxOffset}
   `;
   const result = await request.query(query);
