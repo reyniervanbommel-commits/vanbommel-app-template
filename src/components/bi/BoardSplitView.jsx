@@ -1,11 +1,14 @@
-import React, { lazy, Suspense, useMemo } from 'react';
+import React, { lazy, Suspense, useCallback, useMemo } from 'react';
 import { Badge, Button, makeStyles, shorthands, Spinner, tokens } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
+import { useAuth } from '../../context/AuthContext';
+import { useAppToast } from '../../hooks/useAppToast';
 import { useSplitPane } from './hooks/useSplitPane';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useBiMeta } from './hooks/useBiMeta';
 import { BOARD_KEY } from './biConstants';
+import { buildTableDataRevision } from './tableDataRevision';
 
 // Lazy zodat recharts pas in de bundle komt wanneer een staff-gebruiker het paneel opent.
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
@@ -42,11 +45,29 @@ const useStyles = makeStyles({
   },
 });
 
-export default function BoardSplitView({ filterByColumn, isStaff, children }) {
+export default function BoardSplitView({ filterByColumn, tableRows, isStaff, children }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const { notifyError } = useAppToast();
   const split = useSplitPane();
-  const { charts } = useBiCharts();
+  const { charts, updateChart } = useBiCharts();
   const meta = useBiMeta(BOARD_KEY);
+
+  const handleWidthChange = useCallback(async (chart, gridSpan) => {
+    if (Number(chart.userId) !== Number(user?.id)) return;
+    try {
+      await updateChart(chart.id, {
+        name: chart.name,
+        visibility: chart.visibility,
+        config: {
+          ...chart.config,
+          options: { ...(chart.config?.options || {}), gridSpan: Number(gridSpan) || 1 },
+        },
+      });
+    } catch (err) {
+      notifyError(err.message || 'Failed to update chart width');
+    }
+  }, [updateChart, user?.id, notifyError]);
 
   const selectedIdSet = useMemo(() => new Set(split.chartIds.map(String)), [split.chartIds]);
   const selectedCharts = useMemo(
@@ -54,10 +75,13 @@ export default function BoardSplitView({ filterByColumn, isStaff, children }) {
     [charts, selectedIdSet],
   );
 
+  const dataRevision = useMemo(() => buildTableDataRevision(tableRows), [tableRows]);
+
   // Grafieken erven de actieve tabelfilters (#AB:222). Alleen ophalen als het paneel open is.
   const { resultsById } = useChartData({
     charts: split.open ? selectedCharts : [],
     externalFilterByColumn: filterByColumn,
+    dataRevision,
   });
 
   const chartsWithSeries = useMemo(
@@ -90,6 +114,8 @@ export default function BoardSplitView({ filterByColumn, isStaff, children }) {
               availableCharts={chartsWithSeries}
               selectedIds={split.chartIds}
               onToggleChart={split.toggleChart}
+              onWidthChange={handleWidthChange}
+              currentUserId={user?.id}
               height={split.height}
               columns={meta.columns}
             />

@@ -5,7 +5,8 @@ import {
 } from '@fluentui/react-components';
 import { ChartMultipleRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
-import { stripWidthForSpan } from './biConstants';
+import ChartWidthSelect from './ChartWidthSelect';
+import { gridSpanStyle } from './biConstants';
 
 const useStyles = makeStyles({
   root: {
@@ -17,16 +18,17 @@ const useStyles = makeStyles({
   },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
   title: { fontWeight: 600, color: tokens.colorNeutralForeground2 },
-  strip: {
-    display: 'flex',
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
     ...shorthands.gap('12px'),
-    overflowX: 'auto',
-    overflowY: 'hidden',
+    overflowY: 'auto',
+    overflowX: 'hidden',
     flexGrow: 1,
     minHeight: 0,
+    alignContent: 'start',
   },
   card: {
-    flex: '0 0 auto',
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('4px'),
@@ -34,12 +36,31 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    minWidth: 0,
+    minHeight: 0,
   },
-  cardTitle: { fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('8px'),
+    minWidth: 0,
+  },
+  cardTitle: {
+    fontSize: '12px',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    minWidth: 0,
+    flexGrow: 1,
+  },
   empty: { color: tokens.colorNeutralForeground3, ...shorthands.padding('16px') },
 });
 
-function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height, columns = [] }) {
+function BiChartStrip({
+  availableCharts, selectedIds, onToggleChart, onWidthChange, currentUserId, height, columns = [],
+}) {
   const styles = useStyles();
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds]);
   const selectedCharts = useMemo(
@@ -47,8 +68,6 @@ function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height, col
     [availableCharts, selectedIdSet],
   );
 
-  // De series worden door BoardSplitView (via useChartData) meegegeven, zodat er per paneel
-  // maar één aggregate-read is en de grafieken de tabelfilters erven.
   const chartHeight = Math.max(120, (height || 280) - 70);
 
   return (
@@ -77,23 +96,33 @@ function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height, col
       </div>
 
       {selectedCharts.length ? (
-        <div className={styles.strip}>
-          {selectedCharts.map((chart) => (
-            <div
-              className={styles.card}
-              key={chart.id}
-              style={{ width: `${stripWidthForSpan(chart.config?.options?.gridSpan)}px` }}
-            >
-              <Text className={styles.cardTitle}>{chart.name}</Text>
-              <ChartRenderer
-                type={chart.config?.type}
-                series={chart.series || []}
-                config={chart.config}
-                columns={columns}
-                height={chartHeight}
-              />
-            </div>
-          ))}
+        <div className={styles.grid}>
+          {selectedCharts.map((chart) => {
+            const canManage = Number(chart.userId) === Number(currentUserId);
+            return (
+              <div
+                className={styles.card}
+                key={chart.id}
+                style={gridSpanStyle(chart.config?.options?.gridSpan)}
+              >
+                <div className={styles.cardHeader}>
+                  <Text className={styles.cardTitle} title={chart.name}>{chart.name}</Text>
+                  <ChartWidthSelect
+                    gridSpan={chart.config?.options?.gridSpan}
+                    disabled={!canManage || !onWidthChange}
+                    onChange={(gridSpan) => onWidthChange?.(chart, gridSpan)}
+                  />
+                </div>
+                <ChartRenderer
+                  type={chart.config?.type}
+                  series={chart.series || []}
+                  config={chart.config}
+                  columns={columns}
+                  height={chartHeight}
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className={styles.empty}>Select one or more charts to display alongside the table.</div>

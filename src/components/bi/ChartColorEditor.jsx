@@ -13,10 +13,10 @@ const useStyles = makeStyles({
     maxWidth: '320px',
   },
   label: { color: tokens.colorNeutralForeground2, fontWeight: 600, fontSize: '13px' },
-  itemLabel: { minWidth: 0, flexGrow: 1 },
+  itemLabel: { minWidth: 0, flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 });
 
-function ChartColorEditor({ items, colors, onChange }) {
+function ChartColorEditor({ items, colors, onChange, wide = false }) {
   const styles = useStyles();
 
   const handleSelect = useCallback((key, color) => {
@@ -29,8 +29,8 @@ function ChartColorEditor({ items, colors, onChange }) {
     <div className={styles.root}>
       <Text className={styles.label}>Colors</Text>
       {items.map((item, index) => (
-        <div className={styles.row} key={item.key}>
-          <Text className={styles.itemLabel}>{item.label}</Text>
+        <div className={styles.row} key={item.key} style={wide ? { maxWidth: '100%' } : undefined}>
+          <Text className={styles.itemLabel} title={item.label}>{item.label}</Text>
           <Field>
             <ColorPalettePicker
               layout="popover"

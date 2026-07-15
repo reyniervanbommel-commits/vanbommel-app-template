@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
 import ChartCard from './ChartCard';
+import { gridSpanStyle } from './biConstants';
 
 const useStyles = makeStyles({
   grid: {
@@ -14,11 +15,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
 });
-
-function gridSpanStyle(span) {
-  const safe = [1, 2, 3].includes(Number(span)) ? Number(span) : 1;
-  return { gridColumn: `span ${Math.min(safe * 4, 12)}` };
-}
 
 function BiDashboardGrid({
   charts, resultsById, loading, currentUserId, columns, selectedChartId, onEdit, onDelete,

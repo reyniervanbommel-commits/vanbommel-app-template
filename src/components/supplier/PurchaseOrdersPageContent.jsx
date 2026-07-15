@@ -4,6 +4,7 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
+import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 
@@ -115,6 +116,10 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     tableContext.handlePushLineTotalToHeader,
     tableContext.handlePushLineValuesToHeader,
   ]);
+  const tableDataRevision = useMemo(
+    () => buildTableDataRevision(pageModel.orders),
+    [pageModel.orders],
+  );
   const table = useMemo(() => ({
     data,
     layout,
@@ -162,7 +167,11 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
 
   return (
     <>
-      <BoardSplitView filterByColumn={boardView.filterByColumn} isStaff={isStaff}>
+      <BoardSplitView
+        filterByColumn={boardView.filterByColumn}
+        tableRows={pageModel.orders}
+        isStaff={isStaff}
+      >
         <PurchaseOrdersBoardTable {...table} />
       </BoardSplitView>
       <RemarksPanel {...tableContext.remarks.panelProps} />

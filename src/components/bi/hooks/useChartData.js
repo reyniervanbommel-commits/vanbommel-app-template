@@ -20,10 +20,11 @@ function filtersFromColumnMap(filterByColumn) {
  * @param {object} params
  * @param {Array<{id:number|string, config:object}>} params.charts
  * @param {object} [params.externalFilterByColumn] - actieve tabelfilters om te erven (split-screen).
+ * @param {string|number} [params.dataRevision] - fingerprint van tabeldata voor live refresh.
  * @param {string} [params.boardKey]
  * @returns {{ resultsById: Record<string, Array>, loading: boolean, error: string|null }}
  */
-export function useChartData({ charts, externalFilterByColumn, boardKey = BOARD_KEY }) {
+export function useChartData({ charts, externalFilterByColumn, dataRevision, boardKey = BOARD_KEY }) {
   const [resultsById, setResultsById] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -45,7 +46,10 @@ export function useChartData({ charts, externalFilterByColumn, boardKey = BOARD_
     };
   }, [charts, inheritedFilters]);
 
-  const payloadKey = useMemo(() => JSON.stringify({ payload, boardKey }), [payload, boardKey]);
+  const payloadKey = useMemo(
+    () => JSON.stringify({ payload, boardKey, dataRevision: dataRevision ?? null }),
+    [payload, boardKey, dataRevision],
+  );
 
   useEffect(() => {
     if (!payload.charts.length) {

@@ -80,6 +80,11 @@ export function stripWidthForSpan(gridSpan) {
   return 300;
 }
 
+export function gridSpanStyle(span) {
+  const safe = [1, 2, 3].includes(Number(span)) ? Number(span) : 1;
+  return { gridColumn: `span ${Math.min(safe * 4, 12)}` };
+}
+
 export function createEmptyChartConfig() {
   return {
     type: 'bar',

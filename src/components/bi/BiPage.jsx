@@ -38,22 +38,53 @@ export default function BiPage() {
   const { notifyError, notifySuccess } = useAppToast();
   const meta = useBiMeta(BOARD_KEY);
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
-  const { resultsById, loading: dataLoading } = useChartData({ charts });
   const seedStarters = useStarterCharts({ columns: meta.columns, createChart });
 
   const [builderMode, setBuilderMode] = useState(null); // null | 'new' | chart
+  const [draftPayload, setDraftPayload] = useState(null);
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [seeding, setSeeding] = useState(false);
 
   const selectedChartId = useMemo(() => {
-    if (!builderMode || builderMode === 'new') return null;
+    if (!builderMode || builderMode === 'new') return 'draft';
     return builderMode.id;
   }, [builderMode]);
 
-  const handleNew = useCallback(() => setBuilderMode('new'), []);
-  const handleEdit = useCallback((chart) => setBuilderMode(chart), []);
-  const handleCancel = useCallback(() => setBuilderMode(null), []);
+  const displayCharts = useMemo(() => {
+    if (!builderMode || !draftPayload) return charts;
+    if (builderMode === 'new') {
+      return [{
+        id: 'draft',
+        userId: user?.id,
+        name: draftPayload.name || 'New chart',
+        visibility: draftPayload.visibility,
+        config: draftPayload.config,
+      }, ...charts];
+    }
+    return charts.map((chart) => (
+      chart.id === builderMode.id
+        ? { ...chart, name: draftPayload.name, visibility: draftPayload.visibility, config: draftPayload.config }
+        : chart
+    ));
+  }, [charts, builderMode, draftPayload, user?.id]);
+
+  const { resultsById, loading: dataLoading } = useChartData({ charts: displayCharts });
+
+  const handleNew = useCallback(() => {
+    setDraftPayload(null);
+    setBuilderMode('new');
+  }, []);
+  const handleEdit = useCallback((chart) => {
+    if (String(chart.id) === 'draft') return;
+    setDraftPayload(null);
+    setBuilderMode(chart);
+  }, []);
+  const handleCancel = useCallback(() => {
+    setBuilderMode(null);
+    setDraftPayload(null);
+  }, []);
+  const handleDraftChange = useCallback((payload) => setDraftPayload(payload), []);
 
   const handleSave = useCallback(async (payload) => {
     setBusy(true);
@@ -66,6 +97,7 @@ export default function BiPage() {
         notifySuccess('Chart created');
       }
       setBuilderMode(null);
+      setDraftPayload(null);
     } catch (err) {
       notifyError(err.message || 'Failed to save chart');
     } finally {
@@ -80,6 +112,7 @@ export default function BiPage() {
       notifySuccess('Chart deleted');
       if (builderMode && builderMode !== 'new' && builderMode.id === pendingDelete.id) {
         setBuilderMode(null);
+        setDraftPayload(null);
       }
     } catch (err) {
       notifyError(err.message || 'Failed to delete chart');
@@ -103,11 +136,11 @@ export default function BiPage() {
   useEffect(() => {
     if (!builderMode) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setBuilderMode(null);
+      if (event.key === 'Escape') handleCancel();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [builderMode]);
+  }, [builderMode, handleCancel]);
 
   if (meta.loading || chartsLoading) {
     return <div className={styles.loading}><Spinner label="Loading BI…" /></div>;
@@ -126,7 +159,7 @@ export default function BiPage() {
           </MessageBar>
         ) : null}
 
-        {!charts.length ? (
+        {!charts.length && !builderMode ? (
           <MessageBar intent="info" className={styles.message}>
             <MessageBarBody>Start with a set of ready-made example charts.</MessageBarBody>
             <Button size="small" appearance="primary" onClick={handleSeed} disabled={seeding}>
@@ -136,12 +169,12 @@ export default function BiPage() {
         ) : null}
 
         <BiDashboardGrid
-          charts={charts}
+          charts={displayCharts}
           resultsById={resultsById}
           loading={dataLoading}
           currentUserId={user?.id}
           columns={meta.columns}
-          selectedChartId={selectedChartId}
+          selectedChartId={builderMode ? selectedChartId : null}
           onEdit={handleEdit}
           onDelete={setPendingDelete}
         />
@@ -155,6 +188,7 @@ export default function BiPage() {
             chart={builderMode === 'new' ? null : builderMode}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDraftChange={handleDraftChange}
             busy={busy}
             variant="flyout"
           />
