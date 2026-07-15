@@ -39,7 +39,7 @@ export const VISIBILITY_OPTIONS = [
   { key: 'shared', label: 'Shared' },
 ];
 
-/** Alleen bar/line: medium = 4 per rij, wide = 75% breedte. */
+/** Alleen bar/line: medium = 4 per rij, wide = 60% breedte. */
 export const CHART_SIZE_OPTIONS_BAR_LINE = [
   { key: CHART_SIZE_MEDIUM, label: 'Medium' },
   { key: CHART_SIZE_WIDE, label: 'Wide' },
@@ -92,7 +92,7 @@ function migrateStoredChartSize(config) {
   return null;
 }
 
-/** KPI=small (5/rij), pie=medium (4/rij), bar/line=medium|wide (keuze). */
+/** KPI=small, pie=medium, bar/line=medium|wide (keuze). */
 export function resolveChartSize(chart) {
   const config = chart?.config || chart;
   const type = config?.type || 'bar';
@@ -105,25 +105,36 @@ export function resolveChartSize(chart) {
   return CHART_SIZE_MEDIUM;
 }
 
-const GRID_SPAN_BY_SIZE = {
-  [CHART_SIZE_SMALL]: 12,
-  [CHART_SIZE_MEDIUM]: 15,
-  [CHART_SIZE_WIDE]: 45,
-};
+function resolveChartType(chart) {
+  const config = chart?.config || chart;
+  return config?.type || 'bar';
+}
+
+/** Grid-span op 60 kolommen; KPI/pie −30%, wide bar/line −20%. */
+export function resolveGridSpan(chart) {
+  const type = resolveChartType(chart);
+  const size = resolveChartSize(chart);
+  if (type === 'kpi') return 8;
+  if (type === 'pie') return 11;
+  if (size === CHART_SIZE_WIDE) return 36;
+  return 15;
+}
 
 export function chartGridStyle(chart) {
-  const size = typeof chart === 'string' ? chart : resolveChartSize(chart);
-  const span = GRID_SPAN_BY_SIZE[size] || GRID_SPAN_BY_SIZE[CHART_SIZE_MEDIUM];
-  return { gridColumn: `span ${span}` };
+  return { gridColumn: `span ${resolveGridSpan(chart)}` };
 }
 
 export function stripCardStyle(chart) {
+  const type = resolveChartType(chart);
   const size = resolveChartSize(chart);
   if (size === CHART_SIZE_WIDE) {
-    return { flex: '0 0 75%', minWidth: '480px', maxWidth: '75%' };
+    return { flex: '0 0 60%', minWidth: '384px', maxWidth: '60%' };
   }
   if (size === CHART_SIZE_SMALL) {
-    return { flex: '0 0 20%', minWidth: '200px', maxWidth: '20%' };
+    return { flex: '0 0 14%', minWidth: '140px', maxWidth: '14%' };
+  }
+  if (type === 'pie') {
+    return { flex: '0 0 17.5%', minWidth: '182px', maxWidth: '17.5%' };
   }
   return { flex: '0 0 25%', minWidth: '260px', maxWidth: '25%' };
 }
