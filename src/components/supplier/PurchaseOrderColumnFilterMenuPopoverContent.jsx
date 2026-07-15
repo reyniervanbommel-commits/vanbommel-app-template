@@ -40,6 +40,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   setSortDesc,
   clearSort,
   isDate,
+  isNumber,
   draft,
   operatorLabels,
   operatorEntries,
@@ -109,6 +110,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         setSortDesc={setSortDesc}
         clearSort={clearSort}
         isDate={isDate}
+        isNumber={isNumber}
         draft={draft}
         operatorLabels={operatorLabels}
         operatorEntries={operatorEntries}

@@ -18,6 +18,9 @@ const ForgotPasswordPage = lazy(() => import('./components/auth/ForgotPasswordPa
 const ResetPasswordPage = lazy(() => import('./components/auth/ResetPasswordPage'));
 const MfaPage = lazy(() => import('./components/auth/MfaPage'));
 const AdminPage = lazy(() => import('./components/admin/AdminPage'));
+const BiPage = lazy(() =>
+  import('./components/bi').then((m) => ({ default: m.BiPage })),
+);
 const PurchaseOrdersPage = lazy(() =>
   import('./components/supplier').then((m) => ({ default: m.PurchaseOrdersPage })),
 );
@@ -62,6 +65,16 @@ function AppInner({ isDarkMode, onToggleTheme }) {
               <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
                 <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <AdminPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/bi"
+            element={
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                  <BiPage />
                 </AppLayout>
               </AuthGuard>
             }

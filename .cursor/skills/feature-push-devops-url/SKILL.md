@@ -9,8 +9,8 @@ description: >-
 
 > **Vervangen door `develop-from-devops` modus `preview`.**
 
-Voer `develop-from-devops` uit met modus `preview`:
-- Branch aanmaken indien nodig (stap 3)
-- Push + preview URL op DevOps (stap 6)
+Voer `develop-from-devops` uit:
+- Na bouwen: modus **`build`** (stap 1–6, preview-URL **verplicht in chat**)
+- Alleen pushen: modus **`preview`** (stap 3 + 6)
 
 Zie: `.cursor/skills/develop-from-devops/SKILL.md`

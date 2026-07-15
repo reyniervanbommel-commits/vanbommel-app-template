@@ -3,6 +3,9 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
+import BoardSplitView from '../bi/BoardSplitView';
+import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../constants/roles';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -27,6 +30,8 @@ const useStyles = makeStyles({
 
 function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const data = useMemo(() => ({
     items: pageModel.orders,
@@ -157,9 +162,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
 
   return (
     <>
-      <div className={styles.tableRegion}>
+      <BoardSplitView filterByColumn={boardView.filterByColumn} isStaff={isStaff}>
         <PurchaseOrdersBoardTable {...table} />
-      </div>
+      </BoardSplitView>
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>
   );

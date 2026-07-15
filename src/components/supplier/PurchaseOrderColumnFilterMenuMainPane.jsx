@@ -53,6 +53,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   setSortDesc,
   clearSort,
   isDate,
+  isNumber,
   draft,
   operatorLabels,
   operatorEntries,
@@ -247,7 +248,16 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             {isDate && draft.operator === 'nextWeek' ? (
               <Text className={styles.hint}>Matches records in the next calendar week.</Text>
             ) : null}
-            {!isDate ? (
+            {isNumber && draft.operator === 'between' ? (
+              <>
+                <Input type="number" value={draft.value} onChange={handleValueChange} placeholder="From" />
+                <Input type="number" value={draft.secondaryValue} onChange={handleSecondaryValueChange} placeholder="To" />
+              </>
+            ) : null}
+            {isNumber && draft.operator !== 'between' ? (
+              <Input type="number" value={draft.value} onChange={handleValueChange} placeholder="Value" />
+            ) : null}
+            {!isDate && !isNumber ? (
               <Input value={draft.value} onChange={handleValueChange} placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'} />
             ) : null}
             <div className={styles.actionRow}>
