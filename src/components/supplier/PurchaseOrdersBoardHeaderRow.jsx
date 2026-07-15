@@ -21,7 +21,6 @@ export default function PurchaseOrdersBoardHeaderRow({
   onRemoveColumn,
   isAdmin,
   onToggleWriteback,
-  onToggleTrackChanges,
   trackChangesActiveByColumnId = null,
   editingColumnKey,
   onEditingDone,
@@ -136,8 +135,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                 isGroupSummaryColumn={hasGroupSummary}
                 isAdmin={isAdmin}
                 onToggleWriteback={onToggleWriteback}
-                onToggleTrackChanges={onToggleTrackChanges}
-                trackChangesEnabled={trackChangesEnabled}
                 onSetSortDirection={setSortDirection}
                 onSetOperator={setFilterOperator}
                 onSetValue={setFilterValue}

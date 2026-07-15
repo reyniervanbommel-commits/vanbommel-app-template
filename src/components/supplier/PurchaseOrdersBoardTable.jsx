@@ -47,7 +47,6 @@ function PurchaseOrdersBoardTable({
     editingColumnKey,
     onEditingDone,
     reorderingColumns = false,
-    onToggleTrackChanges,
     trackChangesActiveByColumnId = null,
   } = columnActions;
   const {
@@ -202,7 +201,6 @@ function PurchaseOrdersBoardTable({
             onRemoveColumn={onRemoveColumn}
             isAdmin={isAdmin}
             onToggleWriteback={onToggleWriteback}
-            onToggleTrackChanges={onToggleTrackChanges}
             trackChangesActiveByColumnId={trackChangesActiveByColumnId}
             editingColumnKey={editingColumnKey}
             onEditingDone={onEditingDone}

@@ -77,8 +77,6 @@ export default function PurchaseOrderColumnHeader({
   showSumIndicator = false,
   showConnectionIndicator = false,
   showTrackChangesIndicator = false,
-  trackChangesEnabled = false,
-  onToggleTrackChanges,
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
@@ -132,10 +130,6 @@ export default function PurchaseOrderColumnHeader({
     setBusy(true); setError('');
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
-  const canToggleTrackChanges = Boolean(isAdmin && typeof onToggleTrackChanges === 'function' && column.id != null && (column.source === 'custom' || column.source === 'd365'));
-  const handleToggleTrackChanges = useCallback(() => {
-    if (onToggleTrackChanges) onToggleTrackChanges(column.id, !trackChangesEnabled);
-  }, [onToggleTrackChanges, column.id, trackChangesEnabled]);
   const trackChangesIndicator = showTrackChangesIndicator ? (
     <Tooltip content="Track changes actief" relationship="label">
       <HistoryRegular className={styles.indicatorIcon} />
@@ -188,11 +182,6 @@ export default function PurchaseOrderColumnHeader({
         <MenuList>
           <MenuItem onClick={openRename}>Rename</MenuItem>
           <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Delete</MenuItem>
-          {canToggleTrackChanges && trackChangesEnabled ? (
-            <MenuItem onClick={handleToggleTrackChanges}>
-              Track changes uitzetten
-            </MenuItem>
-          ) : null}
         </MenuList>
       </MenuPopover>
     </Menu>

@@ -23,7 +23,7 @@ import { apiRequest } from '../../utils/api';
 import AdminTrackChangesColumns from './AdminTrackChangesColumns';
 
 const useStyles = makeStyles({
-  root: { maxWidth: '720px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
+  root: { maxWidth: '760px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
   section: {
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRadius('8px'),
@@ -47,15 +47,15 @@ const useStyles = makeStyles({
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
-  { value: 'employee', label: 'Medewerker' },
-  { value: 'supplier', label: 'Leverancier' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'supplier', label: 'Supplier' },
 ];
 
 const TABLE_KEY = 'purchase-orders';
 
 function formatDate(iso) {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('nl-NL');
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-GB');
 }
 
 export default function AdminTrackChangesSettings() {
@@ -86,12 +86,13 @@ export default function AdminTrackChangesSettings() {
       setColumnsError('');
       try {
         const data = await apiRequest(`/data/${TABLE_KEY}/columns`);
+        // Alle echte kolommen zijn trackbaar; alleen afgeleide lookup-kolommen uitsluiten.
         const list = (data.columns || [])
-          .filter((c) => c.id != null && (c.source === 'custom' || c.source === 'd365'))
+          .filter((c) => c.id != null && c.source !== 'lookup')
           .map((c) => ({ id: c.id, label: c.label, source: c.source, scope: c.scope }));
         if (!cancelled) setColumns(list);
       } catch (err) {
-        if (!cancelled) setColumnsError(err.message || 'Kon kolommen niet laden');
+        if (!cancelled) setColumnsError(err.message || 'Could not load columns');
       } finally {
         if (!cancelled) setColumnsLoading(false);
       }
@@ -137,10 +138,10 @@ export default function AdminTrackChangesSettings() {
       }
       await save({ mode, sessionRoles, columns: columnsMap });
       setFeedback(reset
-        ? 'Opgeslagen. Alle track changes zijn op 0 gezet; tracking start opnieuw.'
-        : 'Instellingen opgeslagen in SQL (dbo.app_settings).');
+        ? 'Saved. All track changes were reset to 0; tracking restarted.'
+        : 'Settings saved to SQL (dbo.app_settings).');
     } catch (err) {
-      setSaveError(err.message || 'Opslaan mislukt');
+      setSaveError(err.message || 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -154,53 +155,55 @@ export default function AdminTrackChangesSettings() {
     else doSave(false);
   }, [config.columns, config.mode, selectedIds, mode, doSave]);
 
-  if (loading) return <Spinner label="Instellingen laden..." />;
+  if (loading) return <Spinner label="Loading settings..." />;
+
+  const rolesDisabled = mode !== 'session';
 
   return (
     <div className={styles.root}>
       <Text size={600} weight="semibold">Track changes</Text>
       <Text className={styles.hint} block>
-        Kies hier centraal welke kolommen getrackt worden en de granulariteit. Onderin elke cel verschijnen
-        maximaal acht stippen met recente wijzigingen. Een kolom aanzetten of de granulariteit wijzigen zet
-        alle track changes op 0 en start opnieuw; een kolom uitzetten kan zonder reset.
+        Centrally choose which columns are tracked and the granularity. Each cell shows up to eight dots with
+        recent changes. Turning a column on or changing the granularity resets all track changes to 0 and
+        restarts tracking; turning a column off does not reset the others.
       </Text>
 
       <div className={styles.section}>
-        <Field label="Granulariteit">
+        <Field label="Granularity">
           <RadioGroup value={mode} onChange={handleModeChange} layout="horizontal">
-            <Radio value="session" label="Per sessie" />
-            <Radio value="week" label="Per week (ma–zo)" />
+            <Radio value="session" label="Per session" />
+            <Radio value="week" label="Per week (Mon–Sun)" />
           </RadioGroup>
         </Field>
         <Text className={styles.hint} block>
-          Per sessie: een nieuw venster start bij een login van een geselecteerde rol. Per week: elke
-          ISO-week (maandag–zondag) is een venster; er is dan geen sessie-registratie nodig.
+          Per session: a new window starts at a login of a selected role. Per week: every ISO week
+          (Monday–Sunday) is a window; no session registration is needed then.
         </Text>
       </div>
 
-      {mode === 'session' && (
-        <div className={styles.section}>
-          <Field label="Welke rollen starten een sessie?">
-            <div>
-              {ROLE_OPTIONS.map((role) => (
-                <Checkbox
-                  key={role.value}
-                  label={role.label}
-                  checked={sessionRoles.includes(role.value)}
-                  onChange={handleRoleToggle(role.value)}
-                />
-              ))}
-            </div>
-          </Field>
-          <Text className={styles.hint} block>
-            Alleen een login van een geselecteerde rol maakt een nieuwe sessie aan. Beperk dit tot intern
-            personeel zodat een sessie een betekenisvol venster blijft.
-          </Text>
-        </div>
-      )}
+      <div className={styles.section}>
+        <Field label="Which roles start a session?">
+          <div>
+            {ROLE_OPTIONS.map((role) => (
+              <Checkbox
+                key={role.value}
+                label={role.label}
+                disabled={rolesDisabled}
+                checked={sessionRoles.includes(role.value)}
+                onChange={handleRoleToggle(role.value)}
+              />
+            ))}
+          </div>
+        </Field>
+        <Text className={styles.hint} block>
+          {rolesDisabled
+            ? 'Only used in "Per session" mode. In week mode sessions are not registered, so this has no effect.'
+            : 'Only a login of a selected role creates a new session. Limit this to internal staff so a session stays a meaningful window.'}
+        </Text>
+      </div>
 
       <div className={styles.section}>
-        <Text weight="semibold">Kolommen met tracking ({selectedIds.size})</Text>
+        <Text weight="semibold">Tracked columns ({selectedIds.size})</Text>
         <AdminTrackChangesColumns
           columns={columns}
           selectedIds={selectedIds}
@@ -213,24 +216,24 @@ export default function AdminTrackChangesSettings() {
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold">Legenda</Text>
+        <Text weight="semibold">Legend</Text>
         <div className={styles.legendRow}>
           <span className={`${styles.swatch} ${styles.swatchRed}`} aria-hidden />
-          <Text>Rood — gewijzigd in die sessie/week</Text>
+          <Text>Red — changed in that session/week</Text>
         </div>
         <div className={styles.legendRow}>
           <span className={`${styles.swatch} ${styles.swatchYellow}`} aria-hidden />
-          <Text>Geel — afgeronde sessie/week zonder wijziging</Text>
+          <Text>Yellow — completed session/week without change</Text>
         </div>
         <div className={styles.legendRow}>
           <span className={`${styles.swatch} ${styles.swatchGrey}`} aria-hidden />
-          <Text>Grijs — lopende/toekomstige sessie/week of vóór activatie</Text>
+          <Text>Grey — running/future session/week or before activation</Text>
         </div>
       </div>
 
       <div className={styles.actions}>
         <Button appearance="primary" icon={<Save24Regular />} onClick={handleSaveClick} disabled={saving}>
-          {saving ? 'Opslaan...' : 'Opslaan'}
+          {saving ? 'Saving...' : 'Save'}
         </Button>
         {feedback && <Text className={styles.feedback}>{feedback}</Text>}
         {(saveError || error) && <Text className={styles.error}>{saveError || error}</Text>}
@@ -239,19 +242,19 @@ export default function AdminTrackChangesSettings() {
       <Dialog open={confirmOpen} onOpenChange={(_e, data) => setConfirmOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Track changes opnieuw starten?</DialogTitle>
+            <DialogTitle>Restart track changes?</DialogTitle>
             <DialogContent>
               <div className={styles.dialogWarn}>
                 <Warning24Regular className={styles.warnIcon} />
                 <Text>
-                  Je zet een kolom aan of wijzigt de granulariteit. Hierdoor worden <b>alle</b> track-changes
-                  stippen op 0 gezet en start het tracken voor alle kolommen opnieuw. Doorgaan?
+                  You are turning a column on or changing the granularity. This resets <b>all</b> track-change
+                  dots to 0 and restarts tracking for every column. Continue?
                 </Text>
               </div>
             </DialogContent>
             <DialogActions>
-              <Button appearance="secondary" onClick={() => setConfirmOpen(false)}>Annuleren</Button>
-              <Button appearance="primary" onClick={() => doSave(true)}>Ja, opnieuw starten</Button>
+              <Button appearance="secondary" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+              <Button appearance="primary" onClick={() => doSave(true)}>Yes, restart</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>

@@ -1,28 +1,33 @@
 import React from 'react';
-import { Checkbox, Spinner, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import {
+  Spinner,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+  Text,
+  makeStyles,
+  tokens,
+  shorthands,
+} from '@fluentui/react-components';
 
 const useStyles = makeStyles({
-  list: { display: 'flex', flexDirection: 'column', ...shorthands.gap('4px'), maxHeight: '320px', overflowY: 'auto' },
-  row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('12px') },
-  left: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), minWidth: 0 },
-  meta: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200, whiteSpace: 'nowrap' },
-  scope: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius('4px'),
-    ...shorthands.padding('0', '4px'),
-  },
+  scroll: { maxHeight: '340px', overflowY: 'auto', ...shorthands.borderRadius('6px'), ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2) },
+  since: { color: tokens.colorNeutralForeground3, whiteSpace: 'nowrap' },
+  muted: { color: tokens.colorNeutralForeground4 },
   empty: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
 function scopeLabel(scope) {
-  return scope === 'detail' ? 'regel' : 'hoofd';
+  return scope === 'detail' ? 'Line' : 'Header';
 }
 
 /**
- * AdminTrackChangesColumns — pure lijst met aanvinkbare kolommen voor track changes.
- * De view rendert alleen; state en opslaan zitten in de parent-Settings-component.
+ * AdminTrackChangesColumns — table with a tracking toggle per column.
+ * The view only renders; state and saving live in the parent Settings component.
  *
  * @param {{
  *   columns: Array<{ id: number|string, label: string, source: string, scope: string }>,
@@ -35,31 +40,46 @@ function scopeLabel(scope) {
  */
 export default function AdminTrackChangesColumns({ columns, selectedIds, trackedSince, loading, onToggle, formatDate }) {
   const styles = useStyles();
-  if (loading) return <Spinner size="tiny" label="Kolommen laden..." />;
-  if (!columns.length) return <Text className={styles.empty}>Geen trackbare kolommen gevonden.</Text>;
+  if (loading) return <Spinner size="tiny" label="Loading columns..." />;
+  if (!columns.length) return <Text className={styles.empty}>No trackable columns found.</Text>;
 
   return (
-    <div className={styles.list}>
-      {columns.map((col) => {
-        const id = String(col.id);
-        const checked = selectedIds.has(id);
-        const since = trackedSince[id];
-        return (
-          <div key={id} className={styles.row}>
-            <span className={styles.left}>
-              <Checkbox
-                checked={checked}
-                onChange={(_e, data) => onToggle(id, Boolean(data.checked))}
-                label={col.label || `#${id}`}
-              />
-              <span className={styles.scope}>{scopeLabel(col.scope)}</span>
-            </span>
-            {checked && since ? (
-              <span className={styles.meta}>sinds {formatDate(since)}</span>
-            ) : null}
-          </div>
-        );
-      })}
+    <div className={styles.scroll}>
+      <Table size="small" aria-label="Track changes columns">
+        <TableHeader>
+          <TableRow>
+            <TableHeaderCell>Column</TableHeaderCell>
+            <TableHeaderCell>Level</TableHeaderCell>
+            <TableHeaderCell>Tracking</TableHeaderCell>
+            <TableHeaderCell>Active since</TableHeaderCell>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {columns.map((col) => {
+            const id = String(col.id);
+            const checked = selectedIds.has(id);
+            const since = trackedSince[id];
+            return (
+              <TableRow key={id}>
+                <TableCell>{col.label || `#${id}`}</TableCell>
+                <TableCell>{scopeLabel(col.scope)}</TableCell>
+                <TableCell>
+                  <Switch
+                    checked={checked}
+                    onChange={(_e, data) => onToggle(id, Boolean(data.checked))}
+                    aria-label={`Track changes for ${col.label || id}`}
+                  />
+                </TableCell>
+                <TableCell>
+                  {checked && since
+                    ? <span className={styles.since}>{formatDate(since)}</span>
+                    : <span className={styles.muted}>—</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }

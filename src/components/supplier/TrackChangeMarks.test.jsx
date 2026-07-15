@@ -19,15 +19,15 @@ describe('TrackChangeMarks', () => {
   });
 
   it('renders one dot per mark with an accessible label', () => {
-    const { container } = renderMarks({ pattern: 'yyyyr', mode: 'session' });
+    const { container } = renderMarks({ pattern: 'yyyyyyyr', mode: 'session' });
     const node = container.querySelector('div[aria-label]');
     expect(node).not.toBeNull();
-    expect(node.getAttribute('aria-label')).toContain('sessie');
-    expect(node.querySelectorAll('span')).toHaveLength(5);
+    expect(node.getAttribute('aria-label')).toContain('session');
+    expect(node.querySelectorAll('span')).toHaveLength(8);
   });
 
   it('reports the number of changed buckets in week mode', () => {
-    const { container } = renderMarks({ pattern: 'rrggg', mode: 'week' });
+    const { container } = renderMarks({ pattern: 'rrgggggg', mode: 'week' });
     const node = container.querySelector('div[aria-label]');
     expect(node.getAttribute('aria-label')).toContain('2');
     expect(node.getAttribute('aria-label')).toContain('week');

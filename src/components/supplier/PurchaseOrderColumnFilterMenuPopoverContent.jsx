@@ -16,9 +16,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   showWritebackLocked,
   handleToggleWriteback,
   writable,
-  canToggleTrackChanges,
-  trackChangesEnabled,
-  handleToggleTrackChanges,
   canAddColumn,
   canRenameColumn,
   handleRenameColumn,
@@ -88,9 +85,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         showWritebackLocked={showWritebackLocked}
         handleToggleWriteback={handleToggleWriteback}
         writable={writable}
-        canToggleTrackChanges={canToggleTrackChanges}
-        trackChangesEnabled={trackChangesEnabled}
-        handleToggleTrackChanges={handleToggleTrackChanges}
         canAddColumn={canAddColumn}
         canRenameColumn={canRenameColumn}
         handleRenameColumn={handleRenameColumn}

@@ -1,10 +1,9 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
 import { TrackChangesContext } from './trackChangesContext';
-import { useTrackChanges } from '../../hooks/useTrackChanges';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -32,12 +31,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
 
-  // Admin-toggle voor track-changes per kolom. Config-call is admin-only; laad alleen voor admins.
-  const { setColumnEnabled: setTrackColumnEnabled } = useTrackChanges({ autoLoad: tableContext.isAdmin });
-  const onToggleTrackChanges = useCallback(async (columnId, enabled) => {
-    await setTrackColumnEnabled(columnId, enabled);
-    await pageModel.reload();
-  }, [setTrackColumnEnabled, pageModel]);
+  // Track-changes worden centraal in Settings beheerd; hier alleen de header-indicator.
   const trackChangesActiveByColumnId = useMemo(
     () => trackChangesMeta?.activeOffsetByColumnId || null,
     [trackChangesMeta],
@@ -105,7 +99,6 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     editingColumnKey: tableContext.editingColumnKey,
     onEditingDone: tableContext.handleEditingDone,
     reorderingColumns: pageModel.savingColumns,
-    onToggleTrackChanges,
     trackChangesActiveByColumnId,
   }), [
     pageModel,
@@ -113,7 +106,6 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     tableContext.handleAddColumnRightOf,
     tableContext.handleEditingDone,
     tableContext.isAdmin,
-    onToggleTrackChanges,
     trackChangesActiveByColumnId,
   ]);
   const linkActions = useMemo(() => ({

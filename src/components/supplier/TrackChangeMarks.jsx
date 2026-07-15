@@ -22,11 +22,11 @@ function TrackChangeMarks({ pattern, mode }) {
 
   const label = useMemo(() => {
     if (!marks) return '';
-    const bucket = mode === 'week' ? 'week' : 'sessie';
+    const bucket = mode === 'week' ? 'week' : 'session';
     const changed = marks.filter((m) => m === 'r').length;
     return changed > 0
-      ? `Gewijzigd in ${changed} recente ${bucket}${changed === 1 ? '' : 's'}`
-      : `Geen recente wijzigingen per ${bucket}`;
+      ? `Changed in ${changed} recent ${bucket}${changed === 1 ? '' : 's'}`
+      : `No recent changes per ${bucket}`;
   }, [marks, mode]);
 
   if (!marks) return null;
