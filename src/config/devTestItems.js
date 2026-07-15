@@ -4,8 +4,8 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-230-product-receipt-lines-v1-21-3',
-    title: 'Feature 230 - ProductReceiptLinesV2 datamodel (v1.21.3)',
+    id: 'feature-230-product-receipt-lines-v1-21-4',
+    title: 'Feature 230 - ProductReceiptLinesV2 datamodel (v1.21.4)',
     checks: [
       'Admin Data model has an Ontvangstregels tab with 8 columns and inherited sync filter hint',
       'Discover D365 fields button lists all entity columns including Ontvangstregels',
@@ -16,6 +16,25 @@ export const devTestItems = [
       'Deliver-remainder columns from the old formula approach no longer appear on the PO board',
       'Admin can toggle visibility of product-receipt lookup columns on PO lines',
       'Vendor-scoped user sees received/remaining columns read-only on PO lines',
+      'The footer shows version v1.21.4',
+    ],
+  },
+  {
+    id: 'feature-218-bi-tab-split-screen-v1-21-3',
+    title: 'Feature 218 - BI tab and split-screen charts (v1.21.3)',
+    checks: [
+      'BI nav item appears for admin/employee and is absent for supplier',
+      '/bi route is blocked for non-staff users',
+      'A new bar chart (dimension + measure + sum) can be built, saved private, and appears after reload',
+      'Chart name can be edited in the flyout header and saved',
+      'Save/Cancel buttons appear at the top of the chart flyout',
+      'Sharing a chart (shared) makes it visible to another staff user',
+      'Clicking a chart opens flyout without infinite loading; only that chart reloads on edit',
+      'KPI and pie charts are smaller; wide bar/line charts use 60% width',
+      'Split-screen charts fit page width without horizontal scrollbar',
+      'An active table filter is reflected in the split-screen chart data',
+      'Split-screen toggle opens a bottom panel with selected charts in one row',
+      'Starter charts render with real data on the BI page',
       'The footer shows version v1.21.3',
     ],
   },

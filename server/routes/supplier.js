@@ -167,9 +167,25 @@ function normalizeLineValueLinks(value) {
   }, []);
 }
 
+// Split-screen-paneel (#AB:222): open/dicht, hoogte en geselecteerde chart-ids. Leeft in
+// settings_json (geen extra SQL-kolom).
+function normalizeBiSplitPane(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const height = Number(value.height);
+  const chartIds = Array.isArray(value.chartIds)
+    ? Array.from(new Set(value.chartIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))).slice(0, 12)
+    : [];
+  return {
+    open: value.open === true,
+    height: Number.isFinite(height) ? Math.min(800, Math.max(120, Math.round(height))) : 280,
+    chartIds,
+  };
+}
+
 function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
+    biSplitPane: normalizeBiSplitPane(input.biSplitPane),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),

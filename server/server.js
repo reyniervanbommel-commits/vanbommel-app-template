@@ -16,6 +16,7 @@ const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
 const supplierRouter = require('./routes/supplier');
 const dataRouter = require('./routes/data');
+const biRouter = require('./routes/bi');
 const dataLinksRouter = require('./routes/dataLinks');
 const rccpRouter = require('./routes/rccp');
 const { rccpAccess } = require('./middleware/rccpAccess');
@@ -141,6 +142,8 @@ app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.E
 // Staff (admin/employee) heeft volledige toegang; suppliers mogen uitsluitend hun eigen
 // purchase-orders lezen (rij-filter op leveranciersaccount in TableDataService.read).
 app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
+// BI-grafieken (#AB:218/#AB:219) — v1 staff-only (admin/employee), geen supplier-scoping.
+app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), biRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
 app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);

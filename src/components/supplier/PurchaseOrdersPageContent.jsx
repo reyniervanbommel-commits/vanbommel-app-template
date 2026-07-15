@@ -3,6 +3,9 @@ import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
+import BoardSplitView from '../bi/BoardSplitView';
+import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 
 const useStyles = makeStyles({
@@ -28,6 +31,8 @@ const useStyles = makeStyles({
 
 function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
 
@@ -183,11 +188,17 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
 
   return (
     <>
-      <div className={styles.tableRegion}>
-        <TrackChangesContext.Provider value={trackChangesMeta}>
-          <PurchaseOrdersBoardTable {...table} />
-        </TrackChangesContext.Provider>
-      </div>
+      <BoardSplitView
+        filterByColumn={boardView.filterByColumn}
+        tableRows={pageModel.orders}
+        isStaff={isStaff}
+      >
+        <div className={styles.tableRegion}>
+          <TrackChangesContext.Provider value={trackChangesMeta}>
+            <PurchaseOrdersBoardTable {...table} />
+          </TrackChangesContext.Provider>
+        </div>
+      </BoardSplitView>
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>
   );

@@ -1,8 +1,8 @@
--- Migratie 023: datatype 'status' toestaan in po_columns en tb_columns.
--- Idempotent: alleen bijwerken als status nog niet in de CHECK staat.
--- Gebruikt NOCHECK zodat bestaande afwijkende rijen geen deploy blokkeren.
+-- Migratie 023: datatype 'status', 'remarks' en 'date_period' toestaan in po_columns en tb_columns.
+-- Idempotent: alleen bijwerken als de constraint nog niet up-to-date is.
+-- Gebruikt WITH NOCHECK + data-sanitatie om bestaande rijen niet te blokkeren.
 
-DECLARE @allowedTypes TABLE (data_type NVARCHAR(16));
+DECLARE @allowedTypes TABLE (data_type NVARCHAR(32));
 INSERT INTO @allowedTypes (data_type)
 VALUES ('text'), ('number'), ('date'), ('boolean'), ('select'), ('image'), ('status'), ('remarks'), ('date_period');
 
@@ -14,6 +14,7 @@ BEGIN
     WHERE cc.[name] = 'CK_po_columns_data_type'
       AND cc.parent_object_id = OBJECT_ID('dbo.po_columns')
       AND cc.definition LIKE '%status%'
+      AND cc.definition LIKE '%remarks%'
       AND cc.definition LIKE '%date_period%'
   )
   BEGIN
@@ -45,6 +46,7 @@ BEGIN
     WHERE cc.[name] = 'CK_tb_columns_data_type'
       AND cc.parent_object_id = OBJECT_ID('dbo.tb_columns')
       AND cc.definition LIKE '%status%'
+      AND cc.definition LIKE '%remarks%'
       AND cc.definition LIKE '%date_period%'
   )
   BEGIN
