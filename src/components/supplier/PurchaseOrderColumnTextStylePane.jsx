@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Input, Text } from '@fluentui/react-components';
+import { Button, Text } from '@fluentui/react-components';
+import ColorPalettePicker from '../shared/ColorPalettePicker';
 
 export default function PurchaseOrderColumnTextStylePane({
   styles,
@@ -15,16 +16,12 @@ export default function PurchaseOrderColumnTextStylePane({
   return (
     <>
       <Text className={styles.subPaneTitle}>Text style</Text>
-      <div className={styles.colorRow}>
-        <Input
-          className={styles.colorInput}
-          type="color"
-          value={textStyleDraft.textColor || '#000000'}
-          onChange={handleTextColorChange}
-          aria-label={`Select text color for ${columnLabel}`}
-        />
-        <Text>{(textStyleDraft.textColor || '#000000').toUpperCase()}</Text>
-      </div>
+      <ColorPalettePicker
+        layout="grid"
+        selectedColor={textStyleDraft.textColor || ''}
+        onSelect={handleTextColorChange}
+        ariaLabel={`Select text color for ${columnLabel}`}
+      />
       <div className={styles.formatButtons}>
         <Button
           className={styles.formatButton}
