@@ -1,24 +1,12 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { makeStyles, tokens, Text } from '@fluentui/react-components';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-
-// Herbruikbare recharts-wrapper voor bar/line/pie/kpi. Kleuren via Fluent-tokens (geen hardcoded hex),
-// zodat de grafieken automatisch meebewegen met light/dark theme. React.memo omdat dit component
-// vaak in een grid herhaald wordt en zware SVG's tekent.
-
-const PALETTE = [
-  tokens.colorBrandBackground,
-  tokens.colorPaletteGreenForeground1,
-  tokens.colorPalettePurpleForeground2,
-  tokens.colorPaletteYellowForeground1,
-  tokens.colorPaletteTealForeground2,
-  tokens.colorPaletteRedForeground1,
-  tokens.colorPaletteMarigoldForeground1,
-  tokens.colorPaletteBlueForeground2,
-];
+import {
+  defaultColorForIndex, resolveChartColor, resolveMeasures,
+} from './biConstants';
 
 const useStyles = makeStyles({
   root: { width: '100%', height: '100%', minHeight: 0 },
@@ -29,7 +17,7 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     height: '100%',
   },
-  kpiValue: { fontSize: '40px', fontWeight: 700, color: tokens.colorBrandForeground1, lineHeight: 1.1 },
+  kpiValue: { fontSize: '40px', fontWeight: 700, lineHeight: 1.1 },
   kpiLabel: { color: tokens.colorNeutralForeground3, marginTop: '4px' },
   empty: {
     display: 'flex',
@@ -45,9 +33,25 @@ function formatNumber(value) {
   return num.toLocaleString('nl-NL', { maximumFractionDigits: 2 });
 }
 
-function ChartRenderer({ type, series, height = 260 }) {
+function measureLabel(key, columns) {
+  return columns?.find((col) => col.key === key)?.label || key;
+}
+
+function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
   const styles = useStyles();
   const data = Array.isArray(series) ? series : [];
+  const measureKeys = useMemo(() => resolveMeasures(config || {}), [config]);
+  const colors = config?.options?.colors || {};
+
+  const effectiveMeasureKeys = useMemo(() => {
+    if (!measureKeys.length) return ['value'];
+    if (measureKeys.length === 1) {
+      const key = measureKeys[0];
+      const hasMeasureKey = data.some((row) => row[key] !== undefined);
+      return hasMeasureKey ? [key] : ['value'];
+    }
+    return measureKeys;
+  }, [measureKeys, data]);
 
   if (!data.length) {
     return <div className={styles.empty} style={{ height }}><Text>No data</Text></div>;
@@ -55,13 +59,17 @@ function ChartRenderer({ type, series, height = 260 }) {
 
   if (type === 'kpi') {
     const total = data.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+    const colorKey = measureKeys[0] || 'value';
+    const kpiColor = resolveChartColor(config, colorKey, 0);
     return (
       <div className={styles.kpi} style={{ height }}>
-        <span className={styles.kpiValue}>{formatNumber(total)}</span>
+        <span className={styles.kpiValue} style={{ color: kpiColor }}>{formatNumber(total)}</span>
         <Text className={styles.kpiLabel}>{data.length === 1 ? data[0].name : 'Total'}</Text>
       </div>
     );
   }
+
+  const pieColor = (entry, index) => colors[entry?.name] || defaultColorForIndex(index);
 
   return (
     <div className={styles.root} style={{ height }}>
@@ -72,7 +80,18 @@ function ChartRenderer({ type, series, height = 260 }) {
             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={formatNumber} />
-            <Line type="monotone" dataKey="value" stroke={PALETTE[0]} strokeWidth={2} dot={false} />
+            {effectiveMeasureKeys.length > 1 ? <Legend /> : null}
+            {effectiveMeasureKeys.map((key, index) => (
+              <Line
+                key={key}
+                type="monotone"
+                dataKey={key}
+                name={key === 'value' ? 'Value' : measureLabel(key, columns)}
+                stroke={resolveChartColor(config, measureKeys[index] || key, index)}
+                strokeWidth={2}
+                dot={false}
+              />
+            ))}
           </LineChart>
         ) : type === 'pie' ? (
           <PieChart>
@@ -80,7 +99,7 @@ function ChartRenderer({ type, series, height = 260 }) {
             <Legend />
             <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="75%">
               {data.map((entry, index) => (
-                <Cell key={entry.name} fill={PALETTE[index % PALETTE.length]} />
+                <Cell key={entry.name} fill={pieColor(entry, index)} />
               ))}
             </Pie>
           </PieChart>
@@ -90,7 +109,16 @@ function ChartRenderer({ type, series, height = 260 }) {
             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={formatNumber} />
-            <Bar dataKey="value" fill={PALETTE[0]} radius={[4, 4, 0, 0]} />
+            {effectiveMeasureKeys.length > 1 ? <Legend /> : null}
+            {effectiveMeasureKeys.map((key, index) => (
+              <Bar
+                key={key}
+                dataKey={key}
+                name={key === 'value' ? 'Value' : measureLabel(key, columns)}
+                fill={resolveChartColor(config, measureKeys[index] || key, index)}
+                radius={[4, 4, 0, 0]}
+              />
+            ))}
           </BarChart>
         )}
       </ResponsiveContainer>

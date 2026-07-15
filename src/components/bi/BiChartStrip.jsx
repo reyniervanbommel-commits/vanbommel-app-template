@@ -5,6 +5,7 @@ import {
 } from '@fluentui/react-components';
 import { ChartMultipleRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
+import { stripWidthForSpan } from './biConstants';
 
 const useStyles = makeStyles({
   root: {
@@ -25,7 +26,7 @@ const useStyles = makeStyles({
     minHeight: 0,
   },
   card: {
-    flex: '0 0 320px',
+    flex: '0 0 auto',
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('4px'),
@@ -38,7 +39,7 @@ const useStyles = makeStyles({
   empty: { color: tokens.colorNeutralForeground3, ...shorthands.padding('16px') },
 });
 
-function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height }) {
+function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height, columns = [] }) {
   const styles = useStyles();
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds]);
   const selectedCharts = useMemo(
@@ -78,9 +79,19 @@ function BiChartStrip({ availableCharts, selectedIds, onToggleChart, height }) {
       {selectedCharts.length ? (
         <div className={styles.strip}>
           {selectedCharts.map((chart) => (
-            <div className={styles.card} key={chart.id}>
+            <div
+              className={styles.card}
+              key={chart.id}
+              style={{ width: `${stripWidthForSpan(chart.config?.options?.gridSpan)}px` }}
+            >
               <Text className={styles.cardTitle}>{chart.name}</Text>
-              <ChartRenderer type={chart.config?.type} series={chart.series || []} height={chartHeight} />
+              <ChartRenderer
+                type={chart.config?.type}
+                series={chart.series || []}
+                config={chart.config}
+                columns={columns}
+                height={chartHeight}
+              />
             </div>
           ))}
         </div>

@@ -118,6 +118,7 @@ export default function BiPage() {
             resultsById={resultsById}
             loading={dataLoading}
             currentUserId={user?.id}
+            columns={meta.columns}
             onEdit={handleEdit}
             onDelete={setPendingDelete}
           />

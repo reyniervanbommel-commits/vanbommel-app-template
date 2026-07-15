@@ -4,15 +4,16 @@ import { aggregateCharts, matchesFilter } from './biAggregate.js';
 const columns = [
   { key: 'vendor', label: 'Vendor', dataType: 'text' },
   { key: 'amount', label: 'Amount', dataType: 'number' },
+  { key: 'qty', label: 'Qty', dataType: 'number' },
   { key: 'orderDate', label: 'Order date', dataType: 'date' },
   { key: 'status', label: 'Status', dataType: 'status' },
 ];
 
 const rows = [
-  { values: { vendor: 'A', amount: 100, orderDate: '2026-01-10', status: 'open' } },
-  { values: { vendor: 'A', amount: 50, orderDate: '2026-01-20', status: 'closed' } },
-  { values: { vendor: 'B', amount: 200, orderDate: '2026-02-05', status: 'open' } },
-  { values: { vendor: 'B', amount: 25, orderDate: '2026-02-15', status: 'open' } },
+  { values: { vendor: 'A', amount: 100, qty: 2, orderDate: '2026-01-10', status: 'open' } },
+  { values: { vendor: 'A', amount: 50, qty: 1, orderDate: '2026-01-20', status: 'closed' } },
+  { values: { vendor: 'B', amount: 200, qty: 4, orderDate: '2026-02-05', status: 'open' } },
+  { values: { vendor: 'B', amount: 25, qty: 1, orderDate: '2026-02-15', status: 'open' } },
 ];
 
 describe('biAggregate.matchesFilter (number parity met de tabel)', () => {
@@ -83,6 +84,34 @@ describe('biAggregate.aggregateCharts', () => {
       { name: '2026-01', value: 150 },
       { name: '2026-02', value: 225 },
     ]);
+  });
+
+  it('groepeert datum per week', () => {
+    const { results } = aggregateCharts({
+      rows,
+      columns,
+      charts: [{ type: 'line', dimension: 'orderDate', measure: 'amount', aggregation: 'sum', dateGrouping: 'week' }],
+    });
+    expect(results[0].series.length).toBeGreaterThan(0);
+    expect(results[0].series[0].name).toMatch(/^\d{4}-W\d{2}$/);
+  });
+
+  it('ondersteunt meerdere measures in één bar chart', () => {
+    const { results } = aggregateCharts({
+      rows,
+      columns,
+      charts: [{
+        type: 'bar',
+        dimension: 'vendor',
+        measures: ['amount', 'qty'],
+        aggregation: 'sum',
+      }],
+    });
+    const byVendor = Object.fromEntries(results[0].series.map((s) => [s.name, s]));
+    expect(byVendor.A.amount).toBe(150);
+    expect(byVendor.A.qty).toBe(3);
+    expect(byVendor.B.amount).toBe(225);
+    expect(byVendor.B.qty).toBe(5);
   });
 
   it('verwerkt meerdere charts in één call', () => {

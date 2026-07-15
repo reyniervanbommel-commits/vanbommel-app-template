@@ -23,7 +23,7 @@ const useStyles = makeStyles({
   loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('24px') },
 });
 
-function ChartCard({ chart, series, loading, canManage, onEdit, onDelete, height = 260 }) {
+function ChartCard({ chart, series, loading, columns, canManage, onEdit, onDelete, height = 260 }) {
   const styles = useStyles();
   return (
     <div className={styles.root}>
@@ -43,7 +43,7 @@ function ChartCard({ chart, series, loading, canManage, onEdit, onDelete, height
         {loading ? (
           <div className={styles.loading}><Spinner size="tiny" label="Loading…" /></div>
         ) : (
-          <ChartRenderer type={chart.config?.type} series={series} height={height} />
+          <ChartRenderer type={chart.config?.type} series={series} config={chart.config} columns={columns} height={height} />
         )}
       </div>
     </div>

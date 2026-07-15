@@ -5,7 +5,7 @@ import ChartCard from './ChartCard';
 const useStyles = makeStyles({
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
     ...shorthands.gap('16px'),
   },
   empty: {
@@ -15,7 +15,12 @@ const useStyles = makeStyles({
   },
 });
 
-function BiDashboardGrid({ charts, resultsById, loading, currentUserId, onEdit, onDelete }) {
+function gridSpanStyle(span) {
+  const safe = [1, 2, 3].includes(Number(span)) ? Number(span) : 1;
+  return { gridColumn: `span ${Math.min(safe * 4, 12)}` };
+}
+
+function BiDashboardGrid({ charts, resultsById, loading, currentUserId, columns, onEdit, onDelete }) {
   const styles = useStyles();
 
   if (!charts.length) {
@@ -25,15 +30,17 @@ function BiDashboardGrid({ charts, resultsById, loading, currentUserId, onEdit, 
   return (
     <div className={styles.grid}>
       {charts.map((chart) => (
-        <ChartCard
-          key={chart.id}
-          chart={chart}
-          series={resultsById[chart.id] || []}
-          loading={loading}
-          canManage={Number(chart.userId) === Number(currentUserId)}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        <div key={chart.id} style={gridSpanStyle(chart.config?.options?.gridSpan)}>
+          <ChartCard
+            chart={chart}
+            series={resultsById[chart.id] || []}
+            loading={loading}
+            columns={columns}
+            canManage={Number(chart.userId) === Number(currentUserId)}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </div>
       ))}
     </div>
   );

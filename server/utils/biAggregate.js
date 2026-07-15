@@ -9,7 +9,8 @@
 
 const AGGREGATIONS = Object.freeze(['sum', 'avg', 'count', 'min', 'max']);
 const CHART_TYPES = Object.freeze(['bar', 'line', 'pie', 'kpi']);
-const DATE_GROUPINGS = Object.freeze(['none', 'day', 'month', 'year']);
+const DATE_GROUPINGS = Object.freeze(['none', 'day', 'week', 'month', 'year']);
+const MAX_MEASURES = 5;
 const MAX_GROUPS = 200;
 
 function isDateType(dataType) {
@@ -107,6 +108,15 @@ function matchesFilter(rawValue, filter, dataType) {
   return textMatches(rawValue, filter);
 }
 
+function isoWeekLabel(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
 function groupLabelForDate(rawValue, grouping) {
   const time = parseDate(rawValue);
   if (time === null) return '(none)';
@@ -116,7 +126,16 @@ function groupLabelForDate(rawValue, grouping) {
   const dd = String(d.getDate()).padStart(2, '0');
   if (grouping === 'year') return `${yyyy}`;
   if (grouping === 'month') return `${yyyy}-${mm}`;
+  if (grouping === 'week') return isoWeekLabel(d);
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function resolveMeasures(config) {
+  if (!config || typeof config !== 'object') return [];
+  if (Array.isArray(config.measures) && config.measures.length) {
+    return config.measures.slice(0, MAX_MEASURES).filter(Boolean);
+  }
+  return config.measure ? [config.measure] : [];
 }
 
 function groupLabel(rawValue, column, dateGrouping) {
@@ -141,9 +160,10 @@ function applyAggregation(aggregation, acc) {
 // Bereken de series voor één chart-config over de (al gefilterde) dataset.
 function computeSeries(rows, columnByKey, config) {
   const dimensionCol = columnByKey.get(config.dimension) || null;
-  const measureCol = columnByKey.get(config.measure) || null;
+  const measureKeys = resolveMeasures(config);
   const aggregation = AGGREGATIONS.includes(config.aggregation) ? config.aggregation : 'sum';
   const dateGrouping = DATE_GROUPINGS.includes(config.dateGrouping) ? config.dateGrouping : 'none';
+  const multiMeasure = measureKeys.length > 1;
 
   const filters = Array.isArray(config.filters) ? config.filters : [];
   const groups = new Map();
@@ -159,11 +179,40 @@ function computeSeries(rows, columnByKey, config) {
     if (!keep) continue;
 
     const label = groupLabel(dimensionCol ? values[config.dimension] : '(all)', dimensionCol, dateGrouping);
-    if (!groups.has(label)) groups.set(label, { count: 0, sum: 0, min: null, max: null });
+    if (!groups.has(label)) {
+      groups.set(label, multiMeasure
+        ? Object.fromEntries(measureKeys.map((key) => [key, { count: 0, sum: 0, min: null, max: null }]))
+        : { count: 0, sum: 0, min: null, max: null });
+    }
     const acc = groups.get(label);
+
+    if (aggregation === 'count' || !measureKeys.length) {
+      const bucket = multiMeasure ? acc[measureKeys[0]] || acc : acc;
+      bucket.count += 1;
+      continue;
+    }
+
+    if (multiMeasure) {
+      for (const measureKey of measureKeys) {
+        const measureCol = columnByKey.get(measureKey) || null;
+        const bucket = acc[measureKey];
+        bucket.count += 1;
+        if (measureCol) {
+          const num = parseNumber(values[measureKey]);
+          if (num !== null) {
+            bucket.sum += num;
+            bucket.min = bucket.min === null ? num : Math.min(bucket.min, num);
+            bucket.max = bucket.max === null ? num : Math.max(bucket.max, num);
+          }
+        }
+      }
+      continue;
+    }
+
+    const measureCol = columnByKey.get(measureKeys[0]) || null;
     acc.count += 1;
     if (aggregation !== 'count' && measureCol) {
-      const num = parseNumber(values[config.measure]);
+      const num = parseNumber(values[measureKeys[0]]);
       if (num !== null) {
         acc.sum += num;
         acc.min = acc.min === null ? num : Math.min(acc.min, num);
@@ -172,16 +221,30 @@ function computeSeries(rows, columnByKey, config) {
     }
   }
 
-  let series = Array.from(groups.entries()).map(([name, acc]) => ({
-    name,
-    value: Math.round(applyAggregation(aggregation, acc) * 100) / 100,
-  }));
+  let series;
+  if (multiMeasure) {
+    series = Array.from(groups.entries()).map(([name, measureAccs]) => {
+      const point = { name };
+      measureKeys.forEach((measureKey) => {
+        const value = Math.round(applyAggregation(aggregation, measureAccs[measureKey]) * 100) / 100;
+        point[measureKey] = value;
+      });
+      point.value = point[measureKeys[0]] ?? 0;
+      return point;
+    });
+  } else {
+    series = Array.from(groups.entries()).map(([name, acc]) => ({
+      name,
+      value: Math.round(applyAggregation(aggregation, acc) * 100) / 100,
+    }));
+  }
 
   const sortByLabel = dimensionCol && isDateType(dimensionCol.dataType) && dateGrouping !== 'none';
   if (sortByLabel) {
     series.sort((a, b) => a.name.localeCompare(b.name));
   } else {
-    series.sort((a, b) => b.value - a.value);
+    const sortKey = multiMeasure ? measureKeys[0] : 'value';
+    series.sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
   }
   return series.slice(0, MAX_GROUPS);
 }
@@ -209,4 +272,5 @@ module.exports = {
   DATE_GROUPINGS,
   matchesFilter,
   aggregateCharts,
+  resolveMeasures,
 };

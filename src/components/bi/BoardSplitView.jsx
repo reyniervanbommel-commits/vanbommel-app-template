@@ -4,6 +4,8 @@ import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import { useSplitPane } from './hooks/useSplitPane';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
+import { useBiMeta } from './hooks/useBiMeta';
+import { BOARD_KEY } from './biConstants';
 
 // Lazy zodat recharts pas in de bundle komt wanneer een staff-gebruiker het paneel opent.
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
@@ -44,6 +46,7 @@ export default function BoardSplitView({ filterByColumn, isStaff, children }) {
   const styles = useStyles();
   const split = useSplitPane();
   const { charts } = useBiCharts();
+  const meta = useBiMeta(BOARD_KEY);
 
   const selectedIdSet = useMemo(() => new Set(split.chartIds.map(String)), [split.chartIds]);
   const selectedCharts = useMemo(
@@ -88,6 +91,7 @@ export default function BoardSplitView({ filterByColumn, isStaff, children }) {
               selectedIds={split.chartIds}
               onToggleChart={split.toggleChart}
               height={split.height}
+              columns={meta.columns}
             />
           </Suspense>
         </div>

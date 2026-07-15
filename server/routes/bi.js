@@ -10,7 +10,11 @@ const { body, param, validationResult } = require('express-validator');
 const dataService = require('../services/TableDataService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
-const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS } = require('../utils/biAggregate');
+const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS, resolveMeasures } = require('../utils/biAggregate');
+const { STATUS_COLOR_PALETTE } = require('../utils/statusColumnOptions');
+
+const SELECTABLE_CHART_COLORS = new Set(STATUS_COLOR_PALETTE.slice(1).map((c) => c.toLowerCase()));
+const GRID_SPANS = new Set([1, 2, 3]);
 
 const router = express.Router();
 
@@ -28,6 +32,21 @@ function validationError(req, res) {
 }
 
 // Server-side normalisatie/whitelist van een chart-config (defensief; nooit rauw vertrouwen).
+function normalizeOptions(rawOptions) {
+  const input = rawOptions && typeof rawOptions === 'object' ? rawOptions : {};
+  const gridSpan = GRID_SPANS.has(Number(input.gridSpan)) ? Number(input.gridSpan) : 1;
+  const colors = {};
+  if (input.colors && typeof input.colors === 'object') {
+    Object.entries(input.colors).forEach(([key, value]) => {
+      const color = String(value || '').toLowerCase();
+      if (SELECTABLE_CHART_COLORS.has(color)) {
+        colors[String(key).slice(0, 128)] = color;
+      }
+    });
+  }
+  return { gridSpan, colors };
+}
+
 function normalizeConfig(raw) {
   const input = raw && typeof raw === 'object' ? raw : {};
   const type = CHART_TYPES.includes(input.type) ? input.type : 'bar';
@@ -41,14 +60,20 @@ function normalizeConfig(raw) {
       secondaryValue: String(f?.secondaryValue === null || f?.secondaryValue === undefined ? '' : f.secondaryValue).slice(0, 200),
     })).filter((f) => f.columnKey && f.operator)
     : [];
+  const measures = Array.isArray(input.measures)
+    ? input.measures.slice(0, 5).map((m) => String(m || '').slice(0, 128)).filter(Boolean)
+    : [];
+  const measure = String(input.measure || '').slice(0, 128);
+  const resolvedMeasures = measures.length ? measures : (measure ? [measure] : []);
   return {
     type,
     dimension: String(input.dimension || '').slice(0, 128),
-    measure: String(input.measure || '').slice(0, 128),
+    measure: resolvedMeasures[0] || measure,
+    measures: resolvedMeasures,
     aggregation,
     dateGrouping,
     filters,
-    options: input.options && typeof input.options === 'object' ? input.options : {},
+    options: normalizeOptions(input.options),
   };
 }
 
