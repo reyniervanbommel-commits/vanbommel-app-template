@@ -13,14 +13,30 @@ const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
 function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
-    quantityColumnKey: 'orderedPurchaseQuantity',
-    categoryColumnKey: 'productCategory',
+    quantityColumnKey: 'quantity',
+    categoryColumnKey: 'itemNumber',
     vendorColumnKey: 'vendorAccount',
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
     periodMode: 'week',
   };
+}
+
+const LEGACY_COLUMN_KEY_MAP = Object.freeze({
+  orderedPurchaseQuantity: 'quantity',
+  productCategory: 'itemNumber',
+});
+
+function normalizeLegacyColumnKeys(config) {
+  const next = { ...config };
+  if (LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey]) {
+    next.quantityColumnKey = LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey];
+  }
+  if (LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey]) {
+    next.categoryColumnKey = LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey];
+  }
+  return next;
 }
 
 function normalizeStringArray(value) {
@@ -81,7 +97,8 @@ async function getConfig() {
   try {
     const parsed = JSON.parse(raw);
     const result = validateConfig(parsed);
-    return result.valid ? result.config : defaultConfig();
+    if (!result.valid) return defaultConfig();
+    return normalizeLegacyColumnKeys(result.config);
   } catch {
     return defaultConfig();
   }
@@ -101,6 +118,7 @@ async function saveConfig(raw, userId = null) {
 module.exports = {
   CONFIG_KEY,
   defaultConfig,
+  normalizeLegacyColumnKeys,
   validateConfig,
   getConfig,
   saveConfig,

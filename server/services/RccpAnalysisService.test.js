@@ -4,13 +4,14 @@ const {
   aggregatePoLoad,
   buildMatrixCells,
   cellKey,
+  extractVendorsFromRows,
 } = require('../services/RccpAnalysisService');
 
 describe('RccpAnalysisService', () => {
   const config = {
     dateColumnKey: 'requestedDeliveryDate',
-    quantityColumnKey: 'orderedPurchaseQuantity',
-    categoryColumnKey: 'productCategory',
+    quantityColumnKey: 'quantity',
+    categoryColumnKey: 'itemNumber',
     vendorColumnKey: 'vendorAccount',
     excludedStatuses: ['Canceled'],
     thresholds: { greenMax: 80, orangeMax: 100 },
@@ -26,16 +27,16 @@ describe('RccpAnalysisService', () => {
         {
           detailKey: '1',
           values: {
-            orderedPurchaseQuantity: 10,
-            productCategory: 'Knitwear',
+            quantity: 10,
+            itemNumber: 'Knitwear',
             requestedDeliveryDate: '2026-03-10T00:00:00.000Z',
           },
         },
         {
           detailKey: '2',
           values: {
-            orderedPurchaseQuantity: 5,
-            productCategory: 'Knitwear',
+            quantity: 5,
+            itemNumber: 'Knitwear',
             requestedDeliveryDate: '2026-03-10T00:00:00.000Z',
           },
         },
@@ -55,14 +56,14 @@ describe('RccpAnalysisService', () => {
       values: { vendorAccount: 'V001', status: 'Canceled' },
       details: [{
         detailKey: '1',
-        values: { orderedPurchaseQuantity: 8, productCategory: 'Knitwear' },
+        values: { quantity: 8, itemNumber: 'Knitwear' },
       }],
     }, {
       recordKey: 'PO-3',
       values: { vendorAccount: 'V001', status: 'Open' },
       details: [{
         detailKey: '1',
-        values: { orderedPurchaseQuantity: 4, productCategory: 'Knitwear' },
+        values: { quantity: 4, itemNumber: 'Knitwear' },
       }],
     }];
 
@@ -99,5 +100,15 @@ describe('RccpAnalysisService', () => {
     });
     expect(cells).toHaveLength(1);
     expect(cells[0].vendorAccount).toBe('V001');
+  });
+
+  it('extracts distinct sorted vendors from main table rows', () => {
+    const rows = [
+      { values: { vendorAccount: 'V002' } },
+      { values: { vendorAccount: 'V001' } },
+      { values: { vendorAccount: 'V002' } },
+      { values: { vendorAccount: '' } },
+    ];
+    expect(extractVendorsFromRows(rows, 'vendorAccount')).toEqual(['V001', 'V002']);
   });
 });

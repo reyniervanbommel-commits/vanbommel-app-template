@@ -10,9 +10,12 @@ import RccpKpiCards from './RccpKpiCards';
 import RccpMatrixTable from './RccpMatrixTable';
 import RccpChart from './RccpChart';
 import RccpMissingDateCard from './RccpMissingDateCard';
+import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
 import RccpCapacityEditor from './RccpCapacityEditor';
 import RccpImportDialog from './RccpImportDialog';
+import RccpVendorFilter from './RccpVendorFilter';
+import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
@@ -25,6 +28,9 @@ export default function RccpPageContent() {
   const { user } = useAuth();
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const [vendorAccount, setVendorAccount] = useState('');
+  const {
+    vendors, vendorColumnKey, loading: vendorsLoading, error: vendorsError,
+  } = useRccpVendorOptions();
   const {
     window, setWindow, analysis, loading, error, readOnly,
     categories, periods, cellMap, reload,
@@ -51,9 +57,14 @@ export default function RccpPageContent() {
 
       <div className={styles.toolbar}>
         {!isSupplier && (
-          <Field label="Vendor filter">
-            <Input value={vendorAccount} placeholder="All vendors" onChange={(e) => setVendorAccount(e.target.value)} />
-          </Field>
+          <RccpVendorFilter
+            value={vendorAccount}
+            onChange={setVendorAccount}
+            vendors={vendors}
+            vendorColumnKey={vendorColumnKey}
+            loading={vendorsLoading}
+            error={vendorsError}
+          />
         )}
         <Field label="From year"><Input type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} /></Field>
         <Field label="From week"><Input type="number" value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} /></Field>
@@ -71,6 +82,13 @@ export default function RccpPageContent() {
         <>
           <RccpKpiCards kpis={analysis.kpis} />
           <RccpChart chart={analysis.chart} />
+          {(analysis.kpis?.totalConfirmed === 0) && (
+            <RccpDiagnosticsCard
+              diagnostics={analysis.diagnostics}
+              config={analysis.config}
+              window={analysis.window}
+            />
+          )}
           <RccpMissingDateCard items={analysis.missingDates} />
           <RccpMatrixTable
             categories={categories}

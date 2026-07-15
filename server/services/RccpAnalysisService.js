@@ -45,78 +45,95 @@ function aggregatePoLoad(rows, config, window) {
   const confirmedByCell = new Map();
   const missingDates = [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
+  const diagnostics = {
+    orderCount: rows.length,
+    lineCount: 0,
+    excludedLines: 0,
+    missingVendorOrders: 0,
+    missingDateLines: 0,
+    outOfWindowLines: 0,
+    zeroQuantityLines: 0,
+    countedLines: 0,
+    totalConfirmedQty: 0,
+  };
 
   for (const row of rows) {
     const masterValues = row.values || {};
     const vendor = String(pickValue(masterValues, config.vendorColumnKey) || '').trim();
-    if (!vendor) continue;
+    if (!vendor) {
+      diagnostics.missingVendorOrders += 1;
+      continue;
+    }
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = Array.isArray(row.details) ? row.details : [];
 
-    if (!details.length) {
-      if (masterStatus && excludedSet.has(String(masterStatus).toLowerCase())) continue;
-      const qty = toNumber(pickValue(masterValues, config.quantityColumnKey));
-      const category = String(pickValue(masterValues, config.categoryColumnKey) || UNCLASSIFIED).trim() || UNCLASSIFIED;
-      let dateValue = pickValue(masterValues, config.dateColumnKey);
-      if (!dateValue) {
-        missingDates.push({
-          orderNumber: row.recordKey,
-          lineNumber: null,
-          vendorAccount: vendor,
-          quantity: qty,
-          dateFromHeader: true,
-        });
-        continue;
-      }
-      const year = getIsoWeekYear(dateValue);
-      const week = getIsoWeek(dateValue);
-      if (!year || !week) continue;
-      if (!isInWindow(year, week, window)) continue;
-      const key = cellKey(vendor, year, week, category);
-      confirmedByCell.set(key, (confirmedByCell.get(key) || 0) + qty);
-      continue;
-    }
-
-    for (const detail of details) {
-      if (detail.isRemoved) continue;
-      const lineValues = detail.values || {};
+    const processLine = (lineNumber, lineValues, dateFromHeaderDefault) => {
+      diagnostics.lineCount += 1;
       const status = pickValue(lineValues, 'status') ?? masterStatus;
-      if (status && excludedSet.has(String(status).toLowerCase())) continue;
+      if (status && excludedSet.has(String(status).toLowerCase())) {
+        diagnostics.excludedLines += 1;
+        return;
+      }
 
-      const qty = toNumber(pickValue(lineValues, config.quantityColumnKey) ?? pickValue(masterValues, config.quantityColumnKey));
+      const qty = toNumber(
+        pickValue(lineValues, config.quantityColumnKey) ?? pickValue(masterValues, config.quantityColumnKey),
+      );
       const category = String(
-        pickValue(lineValues, config.categoryColumnKey) ?? pickValue(masterValues, config.categoryColumnKey) ?? UNCLASSIFIED,
+        pickValue(lineValues, config.categoryColumnKey)
+          ?? pickValue(masterValues, config.categoryColumnKey)
+          ?? UNCLASSIFIED,
       ).trim() || UNCLASSIFIED;
 
       let dateValue = pickValue(lineValues, config.dateColumnKey);
-      let dateFromHeader = false;
+      let dateFromHeader = dateFromHeaderDefault;
       if (!dateValue) {
         dateValue = pickValue(masterValues, config.dateColumnKey);
         dateFromHeader = Boolean(dateValue);
       }
       if (!dateValue) {
+        diagnostics.missingDateLines += 1;
         missingDates.push({
           orderNumber: row.recordKey,
-          lineNumber: detail.detailKey,
+          lineNumber,
           vendorAccount: vendor,
           quantity: qty,
           dateFromHeader: false,
         });
-        continue;
+        return;
       }
 
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
-      if (!year || !week) continue;
-      if (!isInWindow(year, week, window)) continue;
+      if (!year || !week) return;
+      if (!isInWindow(year, week, window)) {
+        diagnostics.outOfWindowLines += 1;
+        return;
+      }
 
+      if (qty <= 0) {
+        diagnostics.zeroQuantityLines += 1;
+        return;
+      }
+
+      diagnostics.countedLines += 1;
+      diagnostics.totalConfirmedQty += qty;
       const key = cellKey(vendor, year, week, category);
       confirmedByCell.set(key, (confirmedByCell.get(key) || 0) + qty);
+    };
+
+    if (!details.length) {
+      processLine(null, masterValues, true);
+      continue;
+    }
+
+    for (const detail of details) {
+      if (detail.isRemoved) continue;
+      processLine(detail.detailKey, detail.values || {}, false);
     }
   }
 
-  return { confirmedByCell, missingDates };
+  return { confirmedByCell, missingDates, diagnostics };
 }
 
 function isInWindow(year, week, window) {
@@ -208,7 +225,7 @@ async function analyze({
     supplierAccount: supplierAccount || null,
   }));
 
-  const { confirmedByCell, missingDates } = aggregatePoLoad(poData.rows || [], config, window);
+  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poData.rows || [], config, window);
 
   const capacityRows = await time('rccp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,
@@ -235,6 +252,7 @@ async function analyze({
     missingDates: effectiveVendor
       ? missingDates.filter((m) => m.vendorAccount === effectiveVendor)
       : missingDates,
+    diagnostics,
     kpis: buildKpis(cells),
     chart: buildChartSeries(cells, periods),
   };
@@ -324,12 +342,36 @@ async function getDrillDown(params) {
   };
 }
 
+/** Distinct vendor values from PO master rows using the configured vendor column. */
+function extractVendorsFromRows(rows, vendorColumnKey) {
+  const vendors = new Set();
+  for (const row of rows || []) {
+    const vendor = String(pickValue(row.values, vendorColumnKey) || '').trim();
+    if (vendor) vendors.add(vendor);
+  }
+  return [...vendors].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+async function listMainTableVendors({ supplierAccount = null } = {}) {
+  const config = await settingsService.getConfig();
+  const poData = await time('rccp_vendor_list', () => tableDataService.read({
+    tableKey: PO_TABLE_KEY,
+    supplierAccount: supplierAccount || null,
+  }));
+  return {
+    vendorColumnKey: config.vendorColumnKey,
+    vendors: extractVendorsFromRows(poData.rows, config.vendorColumnKey),
+  };
+}
+
 module.exports = {
   UNCLASSIFIED,
   aggregatePoLoad,
   buildMatrixCells,
   analyze,
   getDrillDown,
+  listMainTableVendors,
+  extractVendorsFromRows,
   cellKey,
   parseCellKey,
 };
