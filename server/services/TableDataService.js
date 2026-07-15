@@ -560,9 +560,45 @@ function buildDetailLookupSourceValues(detailJson, recordKey, detailKey) {
   }
   const lineNumber = source.lineNumber ?? source.LineNumber ?? detailKey;
   if (lineNumber !== null && lineNumber !== undefined && String(lineNumber).trim() !== '') {
+    const normalizedLine = String(lineNumber).trim();
     source.lineNumber = lineNumber;
+    source.purchaseOrderLineNumber = normalizedLine;
   }
   return source;
+}
+
+function enrichLookupSourceFromCacheRow(targetTableKey, recordKey, parsed) {
+  const source = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+  if (String(targetTableKey || '').trim().toLowerCase() !== 'product-receipt-lines') {
+    return source;
+  }
+  const parts = String(recordKey || '').split('|').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return source;
+  if (!source.purchaseOrderNumber && parts[0]) {
+    source.purchaseOrderNumber = parts[0];
+  }
+  if (parts.length >= 2) {
+    const linePart = parts[1];
+    if (!source.purchaseOrderLineNumber) source.purchaseOrderLineNumber = linePart;
+    if (!source.lineNumber) source.lineNumber = linePart;
+  }
+  return source;
+}
+
+function ensureKeyFieldColumnsInProjection(activeColumns, allColumns, keyFields) {
+  const resultByKey = new Map((Array.isArray(activeColumns) ? activeColumns : []).map((column) => [column.key, column]));
+  const allSource = (Array.isArray(allColumns) ? allColumns : []).filter((column) => column.source === 'source');
+  for (const keyField of Array.isArray(keyFields) ? keyFields : []) {
+    if (/^dataareaid$/i.test(String(keyField || ''))) continue;
+    const normalizedKeyField = String(keyField || '').trim().toLowerCase();
+    if (!normalizedKeyField) continue;
+    const match = allSource.find((column) => (
+      String(column.sourceField || '').trim().toLowerCase() === normalizedKeyField
+      || String(column.key || '').trim().toLowerCase() === normalizedKeyField
+    ));
+    if (match) resultByKey.set(match.key, match);
+  }
+  return [...resultByKey.values()];
 }
 
 async function getInheritedPoLookupScopes(table) {
@@ -1748,12 +1784,23 @@ async function refresh(tableKey, options = {}) {
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
       getLookups(table.id),
     ]);
-    const masterSource = resolveLookupProjectionColumns({
-      activeColumns: masterCols,
-      allColumns: allMasterCols,
-      lookups: lookupDefs,
-      scope: 'master',
-    });
+    const masterSource = table.key === 'product-receipt-lines'
+      ? ensureKeyFieldColumnsInProjection(
+        resolveLookupProjectionColumns({
+          activeColumns: masterCols,
+          allColumns: allMasterCols,
+          lookups: lookupDefs,
+          scope: 'master',
+        }),
+        allMasterCols,
+        table.keyFields
+      )
+      : resolveLookupProjectionColumns({
+        activeColumns: masterCols,
+        allColumns: allMasterCols,
+        lookups: lookupDefs,
+        scope: 'master',
+      });
     const detailSource = resolveLookupProjectionColumns({
       activeColumns: detailCols,
       allColumns: allDetailCols,
@@ -2008,17 +2055,24 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   ]);
   const targetColumnsAll = targetColumnsRaw.filter((column) => column.source === 'source');
   const targetColumns = targetColumnsAll.filter((column) => column.isActive);
-  if (!targetColumns.length) return null;
+  const targetColByKeyAll = new Map(targetColumnsAll.map((c) => [c.key, c]));
   const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+  const configuredTargetKeys = [
+    ...new Set([
+      ...Object.values(isPlainObject(lk.fields) ? lk.fields : {}),
+      ...targetColumnsAll.map((column) => String(column.key || '').trim()),
+    ].filter(Boolean)),
+  ];
+  if (!configuredTargetKeys.length && !targetColumns.length) return null;
   const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
   const fieldMap = buildLookupFieldMap({
     targetTableKey: lk.targetTableKey,
-    targetFieldKeys: targetColumns.map((column) => column.key),
+    targetFieldKeys: configuredTargetKeys,
     existingFields: lk.fields,
   });
   const fieldEntries = Object.entries(fieldMap)
     .filter(([derivedKey, targetColKey]) => (
-      Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
+      Boolean(String(derivedKey || '').trim()) && targetColByKeyAll.has(String(targetColKey || '').trim())
     ))
     .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
   if (!fieldEntries.length) return null;
@@ -2026,7 +2080,8 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   const byKey = new Map();
   for (const r of cacheRes.recordset) {
     const parsed = parseJson(r.data_json);
-    const mapKey = buildLookupCacheKey(r.partition_key, parsed, {
+    const lookupSource = enrichLookupSourceFromCacheRow(lk.targetTableKey, r.record_key, parsed);
+    const mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
       ...lk,
       partitionless,
       sourceFieldKey: resolvedSourceField,
@@ -2034,7 +2089,9 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
     if (mapKey) byKey.set(mapKey, parsed);
   }
 
-  const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
+  const synthetic = fieldEntries
+    .filter(([, targetColKey]) => targetColByKey.has(targetColKey))
+    .map(([derivedKey, targetColKey]) => {
     const tc = targetColByKey.get(targetColKey);
     return {
       id: null,
@@ -3843,6 +3900,8 @@ module.exports = {
   resolveRecordKeys,
   buildLookupCacheKey,
   buildDetailLookupSourceValues,
+  enrichLookupSourceFromCacheRow,
+  ensureKeyFieldColumnsInProjection,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,

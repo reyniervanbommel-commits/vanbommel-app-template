@@ -17,6 +17,7 @@ const {
   resolveRecordKeys,
   buildLookupCacheKey,
   buildDetailLookupSourceValues,
+  enrichLookupSourceFromCacheRow,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
@@ -577,6 +578,7 @@ describe('TableDataService.buildDetailLookupSourceValues', () => {
       itemNumber: 'ART-1',
       purchaseOrderNumber: 'PO-100',
       lineNumber: 20,
+      purchaseOrderLineNumber: '20',
     });
   });
 
@@ -587,6 +589,23 @@ describe('TableDataService.buildDetailLookupSourceValues', () => {
     }, 'PO-100', 20);
     expect(source.purchaseOrderNumber).toBe('PO-200');
     expect(source.lineNumber).toBe(5);
+    expect(source.purchaseOrderLineNumber).toBe('5');
+  });
+});
+
+describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
+  it('vult composite sleutels aan vanuit record_key voor ontvangstregels', () => {
+    const source = enrichLookupSourceFromCacheRow(
+      'product-receipt-lines',
+      'PO-1|10',
+      { receivedPurchaseQuantity: 3 }
+    );
+    expect(source).toEqual({
+      receivedPurchaseQuantity: 3,
+      purchaseOrderNumber: 'PO-1',
+      purchaseOrderLineNumber: '10',
+      lineNumber: '10',
+    });
   });
 });
 
