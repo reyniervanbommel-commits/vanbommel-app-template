@@ -132,12 +132,7 @@ export default function PurchaseOrderColumnHeader({
     setBusy(true); setError('');
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
-  const canToggleTrackChanges = Boolean(
-    isAdmin
-    && typeof onToggleTrackChanges === 'function'
-    && column.id != null
-    && (column.source === 'custom' || column.source === 'd365')
-  );
+  const canToggleTrackChanges = Boolean(isAdmin && typeof onToggleTrackChanges === 'function' && column.id != null && (column.source === 'custom' || column.source === 'd365'));
   const handleToggleTrackChanges = useCallback(() => {
     if (onToggleTrackChanges) onToggleTrackChanges(column.id, !trackChangesEnabled);
   }, [onToggleTrackChanges, column.id, trackChangesEnabled]);
@@ -193,9 +188,9 @@ export default function PurchaseOrderColumnHeader({
         <MenuList>
           <MenuItem onClick={openRename}>Rename</MenuItem>
           <MenuItem onClick={() => { setError(''); setConfirmOpen(true); }}>Delete</MenuItem>
-          {canToggleTrackChanges ? (
+          {canToggleTrackChanges && trackChangesEnabled ? (
             <MenuItem onClick={handleToggleTrackChanges}>
-              {trackChangesEnabled ? 'Track changes uitzetten' : 'Track changes aanzetten'}
+              Track changes uitzetten
             </MenuItem>
           ) : null}
         </MenuList>

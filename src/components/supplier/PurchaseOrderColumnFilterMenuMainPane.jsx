@@ -164,11 +164,11 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           </Button>
         </>
       ) : null}
-      {canToggleTrackChanges ? (
+      {canToggleTrackChanges && trackChangesEnabled ? (
         <>
           <div className={styles.divider} />
           <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleTrackChanges}>
-            {menuLabel(styles, <HistoryRegular />, trackChangesEnabled ? 'Track changes uitzetten' : 'Track changes aanzetten')}
+            {menuLabel(styles, <HistoryRegular />, 'Track changes uitzetten')}
           </Button>
         </>
       ) : null}

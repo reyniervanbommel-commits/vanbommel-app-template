@@ -17,7 +17,7 @@ const { ALLOWED_ROLES } = require('../constants/roles');
 const CONFIG_KEY = 'TRACK_CHANGES_CONFIG';
 const VALID_MODES = Object.freeze(['session', 'week']);
 const DEFAULT_SESSION_ROLES = Object.freeze(['admin', 'employee']);
-const MAX_SESSION_BOUNDARIES = 5;
+const MAX_SESSION_BOUNDARIES = 8;
 
 function defaultConfig() {
   return { mode: 'session', sessionRoles: [...DEFAULT_SESSION_ROLES], columns: {} };
@@ -122,7 +122,7 @@ async function recordSessionOnLogin(userRole) {
 }
 
 /**
- * Laatste (max. 5) sessie-grenzen als Date[] (nieuwste eerst), voor de board-read.
+ * Laatste (max. 8) sessie-grenzen als Date[] (nieuwste eerst), voor de board-read.
  */
 async function getSessionBoundaries(limit = MAX_SESSION_BOUNDARIES) {
   const pool = await getSqlPool();

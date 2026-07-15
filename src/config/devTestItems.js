@@ -4,19 +4,19 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-213-track-changes-v1-16-0',
-    title: 'Feature 213 - Track changes op celniveau (v1.16.0)',
+    id: 'feature-213-track-changes-v1-17-0',
+    title: 'Feature 213 - Track changes op celniveau (v1.17.0)',
     checks: [
-      'Admin sees an "Enable/Disable track changes" item in the column menu on BOTH custom and D365 columns; non-admins do not',
-      'Enabling track changes on a D365 column shows red marks for applied write-back corrections',
-      'Enabled columns show a history indicator icon in the column header',
-      'A tracked, changed cell shows up to 5 dots at the bottom of the cell (also on subitem/line cells)',
+      'Admin Settings > Track changes lets you centrally select which columns are tracked (custom + D365)',
+      'Adding a column or changing the granularity shows a reset warning; confirming restarts all tracking at 0 (shared start)',
+      'Turning a column off works without resetting the others (Settings, or "Track changes uitzetten" in the board column menu)',
+      'The board column menu only offers "uitzetten" (turning on is centralised in Settings)',
+      'A tracked, changed cell shows up to 8 dots at the bottom of the cell (also on subitem/line cells)',
       'Dots use red (changed), yellow (completed session/week without change) and grey (running/before activation)',
-      'Admin Settings > Track changes toggles Per session / Per week and stores the choice',
       'In session mode the session roles selection is visible and saved; hidden in week mode',
       'The legend shows colour AND text; the marks div has an aria-label (no tooltip in the cell)',
       'With no active columns there are no extra marks and no tb_track_marks Server-Timing metric',
-      'The footer shows version v1.16.1',
+      'The footer shows version v1.17.0',
     ],
   },
   {

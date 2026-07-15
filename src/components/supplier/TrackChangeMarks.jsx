@@ -15,7 +15,7 @@ const COLOR_BY_MARK = {
   g: tokens.colorNeutralBackground5,
 };
 
-const DOT_SIZE = 5;
+const DOT_SIZE = 8;
 
 function TrackChangeMarks({ pattern, mode }) {
   const marks = typeof pattern === 'string' && pattern.length > 0 ? pattern.split('') : null;
@@ -43,7 +43,7 @@ function TrackChangeMarks({ pattern, mode }) {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '2px',
+        gap: '3px',
         pointerEvents: 'none',
       }}
     >

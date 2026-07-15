@@ -2,6 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Field,
   Radio,
   RadioGroup,
@@ -11,8 +17,10 @@ import {
   tokens,
   shorthands,
 } from '@fluentui/react-components';
-import { Save24Regular } from '@fluentui/react-icons';
+import { Save24Regular, Warning24Regular } from '@fluentui/react-icons';
 import { useTrackChanges } from '../../hooks/useTrackChanges';
+import { apiRequest } from '../../utils/api';
+import AdminTrackChangesColumns from './AdminTrackChangesColumns';
 
 const useStyles = makeStyles({
   root: { maxWidth: '720px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
@@ -33,9 +41,8 @@ const useStyles = makeStyles({
   swatchRed: { backgroundColor: tokens.colorPaletteRedBackground3 },
   swatchYellow: { backgroundColor: tokens.colorPaletteYellowBackground3 },
   swatchGrey: { backgroundColor: tokens.colorNeutralBackground5 },
-  columnList: { display: 'flex', flexDirection: 'column', ...shorthands.gap('6px') },
-  columnRow: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'center', fontSize: tokens.fontSizeBase200 },
-  mono: { fontFamily: tokens.fontFamilyMonospace },
+  dialogWarn: { display: 'flex', alignItems: 'flex-start', ...shorthands.gap('10px') },
+  warnIcon: { color: tokens.colorPaletteRedForeground1, flexShrink: 0 },
 });
 
 const ROLE_OPTIONS = [
@@ -43,6 +50,8 @@ const ROLE_OPTIONS = [
   { value: 'employee', label: 'Medewerker' },
   { value: 'supplier', label: 'Leverancier' },
 ];
+
+const TABLE_KEY = 'purchase-orders';
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -55,6 +64,11 @@ export default function AdminTrackChangesSettings() {
 
   const [mode, setMode] = useState('session');
   const [sessionRoles, setSessionRoles] = useState(['admin', 'employee']);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [columns, setColumns] = useState([]);
+  const [columnsLoading, setColumnsLoading] = useState(true);
+  const [columnsError, setColumnsError] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -62,12 +76,34 @@ export default function AdminTrackChangesSettings() {
   useEffect(() => {
     setMode(config.mode);
     setSessionRoles(Array.isArray(config.sessionRoles) ? config.sessionRoles : []);
+    setSelectedIds(new Set(Object.keys(config.columns || {})));
   }, [config]);
 
-  const trackedColumns = useMemo(
-    () => Object.entries(config.columns || {}).map(([id, entry]) => ({ id, activatedAt: entry.activatedAt })),
-    [config.columns],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setColumnsLoading(true);
+      setColumnsError('');
+      try {
+        const data = await apiRequest(`/data/${TABLE_KEY}/columns`);
+        const list = (data.columns || [])
+          .filter((c) => c.id != null && (c.source === 'custom' || c.source === 'd365'))
+          .map((c) => ({ id: c.id, label: c.label, source: c.source, scope: c.scope }));
+        if (!cancelled) setColumns(list);
+      } catch (err) {
+        if (!cancelled) setColumnsError(err.message || 'Kon kolommen niet laden');
+      } finally {
+        if (!cancelled) setColumnsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const trackedSince = useMemo(() => {
+    const map = {};
+    for (const [id, entry] of Object.entries(config.columns || {})) map[id] = entry.activatedAt;
+    return map;
+  }, [config.columns]);
 
   const handleModeChange = useCallback((_e, data) => {
     setMode(data.value);
@@ -79,19 +115,44 @@ export default function AdminTrackChangesSettings() {
     setSessionRoles((prev) => (data.checked ? [...new Set([...prev, role])] : prev.filter((r) => r !== role)));
   }, []);
 
-  const handleSave = useCallback(async () => {
+  const handleColumnToggle = useCallback((id, checked) => {
+    setFeedback('');
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const doSave = useCallback(async (reset) => {
     setSaving(true);
     setFeedback('');
     setSaveError('');
+    setConfirmOpen(false);
     try {
-      await save({ mode, sessionRoles, columns: config.columns || {} });
-      setFeedback('Instellingen opgeslagen in SQL (dbo.app_settings).');
+      const nowIso = new Date().toISOString();
+      const columnsMap = {};
+      for (const id of selectedIds) {
+        columnsMap[id] = { activatedAt: reset ? nowIso : (config.columns?.[id]?.activatedAt || nowIso) };
+      }
+      await save({ mode, sessionRoles, columns: columnsMap });
+      setFeedback(reset
+        ? 'Opgeslagen. Alle track changes zijn op 0 gezet; tracking start opnieuw.'
+        : 'Instellingen opgeslagen in SQL (dbo.app_settings).');
     } catch (err) {
       setSaveError(err.message || 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
-  }, [save, mode, sessionRoles, config.columns]);
+  }, [selectedIds, config.columns, save, mode, sessionRoles]);
+
+  const handleSaveClick = useCallback(() => {
+    const prevIds = Object.keys(config.columns || {});
+    const hasAdditions = [...selectedIds].some((id) => !prevIds.includes(id));
+    const modeChanged = mode !== config.mode;
+    if (hasAdditions || modeChanged) setConfirmOpen(true);
+    else doSave(false);
+  }, [config.columns, config.mode, selectedIds, mode, doSave]);
 
   if (loading) return <Spinner label="Instellingen laden..." />;
 
@@ -99,8 +160,9 @@ export default function AdminTrackChangesSettings() {
     <div className={styles.root}>
       <Text size={600} weight="semibold">Track changes</Text>
       <Text className={styles.hint} block>
-        Toon per kolom onderin elke cel maximaal vijf stippen met recente wijzigingen. Zet tracking per
-        kolom aan via het kolommenu op het board; hier bepaal je de granulariteit en wie een sessie start.
+        Kies hier centraal welke kolommen getrackt worden en de granulariteit. Onderin elke cel verschijnen
+        maximaal acht stippen met recente wijzigingen. Een kolom aanzetten of de granulariteit wijzigen zet
+        alle track changes op 0 en start opnieuw; een kolom uitzetten kan zonder reset.
       </Text>
 
       <div className={styles.section}>
@@ -138,6 +200,19 @@ export default function AdminTrackChangesSettings() {
       )}
 
       <div className={styles.section}>
+        <Text weight="semibold">Kolommen met tracking ({selectedIds.size})</Text>
+        <AdminTrackChangesColumns
+          columns={columns}
+          selectedIds={selectedIds}
+          trackedSince={trackedSince}
+          loading={columnsLoading}
+          onToggle={handleColumnToggle}
+          formatDate={formatDate}
+        />
+        {columnsError && <Text className={styles.error}>{columnsError}</Text>}
+      </div>
+
+      <div className={styles.section}>
         <Text weight="semibold">Legenda</Text>
         <div className={styles.legendRow}>
           <span className={`${styles.swatch} ${styles.swatchRed}`} aria-hidden />
@@ -153,29 +228,34 @@ export default function AdminTrackChangesSettings() {
         </div>
       </div>
 
-      <div className={styles.section}>
-        <Text weight="semibold">Kolommen met tracking aan ({trackedColumns.length})</Text>
-        {trackedColumns.length === 0 ? (
-          <Text className={styles.hint}>Nog geen kolommen. Zet tracking aan via het kolommenu op het board.</Text>
-        ) : (
-          <div className={styles.columnList}>
-            {trackedColumns.map((col) => (
-              <div key={col.id} className={styles.columnRow}>
-                <span className={styles.mono}>#{col.id}</span>
-                <span className={styles.hint}>actief sinds {formatDate(col.activatedAt)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className={styles.actions}>
-        <Button appearance="primary" icon={<Save24Regular />} onClick={handleSave} disabled={saving}>
+        <Button appearance="primary" icon={<Save24Regular />} onClick={handleSaveClick} disabled={saving}>
           {saving ? 'Opslaan...' : 'Opslaan'}
         </Button>
         {feedback && <Text className={styles.feedback}>{feedback}</Text>}
         {(saveError || error) && <Text className={styles.error}>{saveError || error}</Text>}
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={(_e, data) => setConfirmOpen(data.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Track changes opnieuw starten?</DialogTitle>
+            <DialogContent>
+              <div className={styles.dialogWarn}>
+                <Warning24Regular className={styles.warnIcon} />
+                <Text>
+                  Je zet een kolom aan of wijzigt de granulariteit. Hierdoor worden <b>alle</b> track-changes
+                  stippen op 0 gezet en start het tracken voor alle kolommen opnieuw. Doorgaan?
+                </Text>
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setConfirmOpen(false)}>Annuleren</Button>
+              <Button appearance="primary" onClick={() => doSave(true)}>Ja, opnieuw starten</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 }
