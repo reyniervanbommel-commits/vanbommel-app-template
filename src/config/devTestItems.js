@@ -4,6 +4,22 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'board-revision-cache-v1-20-0',
+    title: 'Board revision-check — snellere terugkeer main table (v1.20.0)',
+    checks: [
+      'Terug naar / binnen dezelfde sessie zonder datawijziging: geen GET /api/data/purchase-orders in Network, wel een korte GET …/revision',
+      'Na een D365-refresh triggert de volgende terugkeer wel een volledige read en updatet de UI',
+      'Na een cel-edit (eigen of door een collega) triggert de volgende terugkeer een volledige read',
+      'Na een rij verbergen/terugzetten triggert de volgende terugkeer een volledige read',
+      'Na het toevoegen/hernoemen/activeren van een kolom in Settings triggert de volgende terugkeer een volledige read',
+      'Eerste bezoek aan / (geen cache) toont de spinner + volledige read zoals voorheen',
+      'Suppliers zien alleen hun eigen orders: de revision is supplier-aware (geen false "unchanged")',
+      'Bij een falende revision-check (offline/500) volgt alsnog een volledige read (geen stille stale data)',
+      'Server-Timing metric tb_revision is zichtbaar in DevTools → Network → Timing',
+      'The footer shows version v1.20.0',
+    ],
+  },
+  {
     id: 'feature-224-rccp-v1-18-2',
     title: 'Feature 224 - RCCP capacity planning (v1.18.2)',
     checks: [
