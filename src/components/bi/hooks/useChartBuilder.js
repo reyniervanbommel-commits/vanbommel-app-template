@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  CHART_SIZE_MEDIUM, CHART_SIZE_SMALL, CHART_SIZE_WIDE,
   createEmptyChartConfig, resolveMeasures, supportsMultipleMeasures,
 } from '../biConstants';
 
@@ -35,9 +36,21 @@ export function useChartBuilder(chart, columns = []) {
   const setConfigField = useCallback((field, value) => {
     setState((prev) => {
       const nextConfig = { ...prev.config, [field]: value };
-      if (field === 'type' && !supportsMultipleMeasures(value)) {
-        nextConfig.measures = nextConfig.measures.slice(0, 1);
-        nextConfig.measure = nextConfig.measures[0] || '';
+      if (field === 'type') {
+        if (!supportsMultipleMeasures(value)) {
+          nextConfig.measures = nextConfig.measures.slice(0, 1);
+          nextConfig.measure = nextConfig.measures[0] || '';
+        }
+        if (value === 'kpi') {
+          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_SMALL };
+        } else if (value === 'pie') {
+          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_MEDIUM };
+        } else if (value === 'bar' || value === 'line') {
+          const size = nextConfig.options?.chartSize;
+          if (size !== CHART_SIZE_MEDIUM && size !== CHART_SIZE_WIDE) {
+            nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_MEDIUM };
+          }
+        }
       }
       if (field === 'dimension') {
         const col = columns.find((entry) => entry.key === value);
@@ -67,10 +80,16 @@ export function useChartBuilder(chart, columns = []) {
     }));
   }, []);
 
-  const setGridSpan = useCallback((gridSpan) => {
+  const setChartSize = useCallback((chartSize) => {
     setState((prev) => ({
       ...prev,
-      config: { ...prev.config, options: { ...prev.config.options, gridSpan: Number(gridSpan) || 1 } },
+      config: {
+        ...prev.config,
+        options: {
+          ...prev.config.options,
+          chartSize: chartSize === CHART_SIZE_WIDE ? CHART_SIZE_WIDE : CHART_SIZE_MEDIUM,
+        },
+      },
     }));
   }, []);
 
@@ -137,11 +156,11 @@ export function useChartBuilder(chart, columns = []) {
     setConfigField,
     setMeasures,
     setColors,
-    setGridSpan,
+    setChartSize,
     setFilters,
     loadFrom,
     reset,
   }), [state, measureColumns, dimensionColumn, isDateDimension, selectedMeasures, multiMeasureMode,
     colorItems, isValid, payload, setName, setVisibility, setConfigField, setMeasures, setColors,
-    setGridSpan, setFilters, loadFrom, reset]);
+    setChartSize, setFilters, loadFrom, reset]);
 }

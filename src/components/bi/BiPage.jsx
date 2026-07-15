@@ -13,7 +13,7 @@ import { useBiMeta } from './hooks/useBiMeta';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useStarterCharts } from './hooks/useStarterCharts';
-import { BOARD_KEY } from './biConstants';
+import { BOARD_KEY, createEmptyChartConfig } from './biConstants';
 
 const useStyles = makeStyles({
   pageLayout: {
@@ -40,7 +40,7 @@ export default function BiPage() {
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
   const seedStarters = useStarterCharts({ columns: meta.columns, createChart });
 
-  const [builderMode, setBuilderMode] = useState(null); // null | 'new' | chart
+  const [builderMode, setBuilderMode] = useState(null);
   const [draftPayload, setDraftPayload] = useState(null);
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -69,7 +69,57 @@ export default function BiPage() {
     ));
   }, [charts, builderMode, draftPayload, user?.id]);
 
-  const { resultsById, loading: dataLoading } = useChartData({ charts: displayCharts });
+  const savedChartsForFetch = useMemo(() => {
+    if (!builderMode) return charts;
+    if (builderMode === 'new') return charts;
+    return charts.filter((chart) => chart.id !== builderMode.id);
+  }, [charts, builderMode]);
+
+  const activeChartForFetch = useMemo(() => {
+    if (!builderMode) return null;
+    if (draftPayload) {
+      if (builderMode === 'new') {
+        return {
+          id: 'draft',
+          userId: user?.id,
+          name: draftPayload.name,
+          visibility: draftPayload.visibility,
+          config: draftPayload.config,
+        };
+      }
+      return {
+        ...builderMode,
+        name: draftPayload.name,
+        visibility: draftPayload.visibility,
+        config: draftPayload.config,
+      };
+    }
+    if (builderMode !== 'new') return builderMode;
+    return {
+      id: 'draft',
+      userId: user?.id,
+      name: 'New chart',
+      visibility: 'private',
+      config: createEmptyChartConfig(),
+    };
+  }, [builderMode, draftPayload, user?.id]);
+
+  const { resultsById: savedResults, loadingById: savedLoading } = useChartData({
+    charts: builderMode ? savedChartsForFetch : charts,
+  });
+  const { resultsById: activeResults, loadingById: activeLoading } = useChartData({
+    charts: activeChartForFetch ? [activeChartForFetch] : [],
+  });
+
+  const resultsById = useMemo(() => {
+    if (!builderMode) return savedResults;
+    return { ...savedResults, ...activeResults };
+  }, [builderMode, savedResults, activeResults]);
+
+  const loadingById = useMemo(() => {
+    if (!builderMode) return savedLoading;
+    return { ...savedLoading, ...activeLoading };
+  }, [builderMode, savedLoading, activeLoading]);
 
   const handleNew = useCallback(() => {
     setDraftPayload(null);
@@ -171,7 +221,7 @@ export default function BiPage() {
         <BiDashboardGrid
           charts={displayCharts}
           resultsById={resultsById}
-          loading={dataLoading}
+          loadingById={loadingById}
           currentUserId={user?.id}
           columns={meta.columns}
           selectedChartId={builderMode ? selectedChartId : null}

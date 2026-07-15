@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
 import { BOARD_KEY } from '../biConstants';
 
-// Zet het filterByColumn-object van de tabel om naar de filter-array die de aggregate-endpoint verwacht.
 function filtersFromColumnMap(filterByColumn) {
   if (!filterByColumn || typeof filterByColumn !== 'object') return [];
   return Object.entries(filterByColumn)
@@ -15,20 +14,20 @@ function filtersFromColumnMap(filterByColumn) {
     }));
 }
 
+function chartConfigKey(chart) {
+  return JSON.stringify(chart?.config || {});
+}
+
 /**
- * Haalt geaggregeerde series op voor meerdere charts in ÉÉN request (POST /api/bi/aggregate).
- * @param {object} params
- * @param {Array<{id:number|string, config:object}>} params.charts
- * @param {object} [params.externalFilterByColumn] - actieve tabelfilters om te erven (split-screen).
- * @param {string|number} [params.dataRevision] - fingerprint van tabeldata voor live refresh.
- * @param {string} [params.boardKey]
- * @returns {{ resultsById: Record<string, Array>, loading: boolean, error: string|null }}
+ * Haalt geaggregeerde series op voor charts via POST /api/bi/aggregate.
+ * @returns {{ resultsById, loadingById, loading, error }}
  */
 export function useChartData({ charts, externalFilterByColumn, dataRevision, boardKey = BOARD_KEY }) {
   const [resultsById, setResultsById] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [loadingById, setLoadingById] = useState({});
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
+  const cacheRef = useRef({ results: {}, configKeys: {} });
 
   const inheritedFilters = useMemo(
     () => filtersFromColumnMap(externalFilterByColumn),
@@ -43,6 +42,7 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
         ...chart.config,
         filters: [...(chart.config?.filters || []), ...inheritedFilters],
       })),
+      configKeys: list.map((chart) => chartConfigKey(chart)),
     };
   }, [charts, inheritedFilters]);
 
@@ -51,34 +51,86 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
     [payload, boardKey, dataRevision],
   );
 
+  const loading = useMemo(
+    () => Object.values(loadingById).some(Boolean),
+    [loadingById],
+  );
+
   useEffect(() => {
     if (!payload.charts.length) {
-      setResultsById({});
       return undefined;
     }
+
+    const dirtyIds = payload.ids.filter((id, index) => {
+      const prevKey = cacheRef.current.configKeys[id];
+      return prevKey !== payload.configKeys[index];
+    });
+
+    if (!dirtyIds.length) {
+      return undefined;
+    }
+
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     let active = true;
-    setLoading(true);
+
+    setLoadingById((prev) => {
+      const next = { ...prev };
+      dirtyIds.forEach((id) => { next[id] = true; });
+      return next;
+    });
     setError(null);
-    apiRequest('/bi/aggregate', { method: 'POST', body: { boardKey, charts: payload.charts } })
+
+    const dirtyIdSet = new Set(dirtyIds.map(String));
+    const fetchCharts = [];
+    const fetchIds = [];
+    payload.ids.forEach((id, index) => {
+      if (dirtyIdSet.has(String(id))) {
+        fetchIds.push(id);
+        fetchCharts.push(payload.charts[index]);
+      }
+    });
+
+    apiRequest('/bi/aggregate', { method: 'POST', body: { boardKey, charts: fetchCharts } })
       .then((data) => {
         if (!active || requestIdRef.current !== requestId) return;
-        const next = {};
-        (data.results || []).forEach((result, index) => {
-          next[payload.ids[index]] = result.series || [];
+        setResultsById((prev) => {
+          const next = { ...prev };
+          (data.results || []).forEach((result, index) => {
+            const id = fetchIds[index];
+            next[id] = result.series || [];
+            cacheRef.current.results[id] = next[id];
+            cacheRef.current.configKeys[id] = payload.configKeys[payload.ids.indexOf(id)];
+          });
+          return next;
         });
-        setResultsById(next);
       })
       .catch((err) => {
         if (!active) return;
         setError(err.message || 'Failed to load chart data');
       })
       .finally(() => {
-        if (active && requestIdRef.current === requestId) setLoading(false);
+        if (!active || requestIdRef.current !== requestId) return;
+        setLoadingById((prev) => {
+          const next = { ...prev };
+          dirtyIds.forEach((id) => { next[id] = false; });
+          return next;
+        });
       });
+
     return () => { active = false; };
   }, [payloadKey, boardKey, payload]);
 
-  return useMemo(() => ({ resultsById, loading, error }), [resultsById, loading, error]);
+  useEffect(() => {
+    if (!payload.charts.length) {
+      setResultsById({});
+      setLoadingById({});
+      cacheRef.current = { results: {}, configKeys: {} };
+    }
+  }, [payload.charts.length]);
+
+  return useMemo(
+    () => ({ resultsById, loadingById, loading, error }),
+    [resultsById, loadingById, loading, error],
+  );
 }

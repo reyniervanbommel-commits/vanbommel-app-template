@@ -53,7 +53,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
   const { charts, updateChart } = useBiCharts();
   const meta = useBiMeta(BOARD_KEY);
 
-  const handleWidthChange = useCallback(async (chart, gridSpan) => {
+  const handleWidthChange = useCallback(async (chart, chartSize) => {
     if (Number(chart.userId) !== Number(user?.id)) return;
     try {
       await updateChart(chart.id, {
@@ -61,11 +61,11 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
         visibility: chart.visibility,
         config: {
           ...chart.config,
-          options: { ...(chart.config?.options || {}), gridSpan: Number(gridSpan) || 1 },
+          options: { ...(chart.config?.options || {}), chartSize },
         },
       });
     } catch (err) {
-      notifyError(err.message || 'Failed to update chart width');
+      notifyError(err.message || 'Failed to update chart size');
     }
   }, [updateChart, user?.id, notifyError]);
 

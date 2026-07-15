@@ -8,8 +8,9 @@ import ChartColorEditor from './ChartColorEditor';
 import { useChartBuilder } from './hooks/useChartBuilder';
 import { useChartData } from './hooks/useChartData';
 import {
-  AGGREGATION_OPTIONS, CHART_TYPE_OPTIONS, CHART_WIDTH_OPTIONS,
-  DATE_GROUPING_OPTIONS, VISIBILITY_OPTIONS, resolveMeasures,
+  AGGREGATION_OPTIONS, CHART_SIZE_MEDIUM, CHART_SIZE_OPTIONS_BAR_LINE, CHART_SIZE_WIDE,
+  CHART_TYPE_OPTIONS, DATE_GROUPING_OPTIONS, SERIES_COLOR_KEY, VISIBILITY_OPTIONS,
+  resolveChartSize, resolveMeasures,
 } from './biConstants';
 
 const NONE_OPTION = { key: '__none__', label: 'None' };
@@ -64,10 +65,16 @@ const useStyles = makeStyles({
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
 
 function usesDimensionColors(type, config) {
-  if (type !== 'bar' && type !== 'pie') return false;
-  if (type === 'pie') return Boolean(config.dimension);
   const measures = resolveMeasures(config);
-  return measures.length <= 1;
+  if (measures.length > 1) return false;
+  if (type === 'pie') return Boolean(config.dimension);
+  if (type === 'bar' || type === 'line') return Boolean(config.dimension);
+  return false;
+}
+
+function usesSeriesColor(type, config) {
+  if (type !== 'bar' && type !== 'line') return false;
+  return resolveMeasures(config).length <= 1;
 }
 
 export default function ChartBuilderPanel({
@@ -85,7 +92,15 @@ export default function ChartBuilderPanel({
 
   const colorItems = useMemo(() => {
     if (usesDimensionColors(config.type, config)) {
-      return [...new Set(previewSeries.map((entry) => entry.name))].map((name) => ({ key: name, label: name }));
+      const segmentItems = [...new Set(previewSeries.map((entry) => entry.name))]
+        .map((name) => ({ key: name, label: name }));
+      if (usesSeriesColor(config.type, config)) {
+        return [{ key: SERIES_COLOR_KEY, label: 'Series color' }, ...segmentItems];
+      }
+      return segmentItems;
+    }
+    if (usesSeriesColor(config.type, config)) {
+      return [{ key: SERIES_COLOR_KEY, label: 'Series color' }, ...builder.colorItems];
     }
     return builder.colorItems;
   }, [config.type, config, previewSeries, builder.colorItems]);
@@ -134,17 +149,21 @@ export default function ChartBuilderPanel({
                 ))}
               </Dropdown>
             </Field>
-            <Field label="Chart width" className={fieldClass}>
-              <Dropdown
-                selectedOptions={[String(config.options?.gridSpan || 1)]}
-                value={findLabel(CHART_WIDTH_OPTIONS, config.options?.gridSpan || 1)}
-                onOptionSelect={(_, data) => builder.setGridSpan(data.optionValue)}
-              >
-                {CHART_WIDTH_OPTIONS.map((option) => (
-                  <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
-                ))}
-              </Dropdown>
-            </Field>
+            {(config.type === 'bar' || config.type === 'line') ? (
+              <Field label="Chart size" className={fieldClass}>
+                <Dropdown
+                  selectedOptions={[resolveChartSize({ config })]}
+                  value={findLabel(CHART_SIZE_OPTIONS_BAR_LINE, resolveChartSize({ config }))}
+                  onOptionSelect={(_, data) => builder.setChartSize(
+                    data.optionValue === CHART_SIZE_WIDE ? CHART_SIZE_WIDE : CHART_SIZE_MEDIUM,
+                  )}
+                >
+                  {CHART_SIZE_OPTIONS_BAR_LINE.map((option) => (
+                    <Option key={option.key} value={option.key} text={option.label}>{option.label}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+            ) : null}
           </div>
         </div>
 

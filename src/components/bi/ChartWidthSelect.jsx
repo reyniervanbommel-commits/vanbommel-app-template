@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { Dropdown, Option, makeStyles, shorthands } from '@fluentui/react-components';
-import { CHART_WIDTH_OPTIONS } from './biConstants';
+import { CHART_SIZE_MEDIUM, CHART_SIZE_OPTIONS_BAR_LINE } from './biConstants';
 
 const useStyles = makeStyles({
   root: { minWidth: '120px' },
@@ -8,12 +8,12 @@ const useStyles = makeStyles({
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
 
-function ChartWidthSelect({ gridSpan = 1, disabled = false, onChange, size = 'small' }) {
+function ChartWidthSelect({ chartSize = CHART_SIZE_MEDIUM, disabled = false, onChange, size = 'small' }) {
   const styles = useStyles();
-  const value = [1, 2, 3].includes(Number(gridSpan)) ? Number(gridSpan) : 1;
+  const value = chartSize === 'wide' ? 'wide' : CHART_SIZE_MEDIUM;
 
   const handleSelect = useCallback((_, data) => {
-    onChange(Number(data.optionValue) || 1);
+    onChange(data.optionValue === 'wide' ? 'wide' : CHART_SIZE_MEDIUM);
   }, [onChange]);
 
   return (
@@ -21,13 +21,13 @@ function ChartWidthSelect({ gridSpan = 1, disabled = false, onChange, size = 'sm
       className={styles.root}
       size={size}
       disabled={disabled}
-      selectedOptions={[String(value)]}
-      value={findLabel(CHART_WIDTH_OPTIONS, value)}
+      selectedOptions={[value]}
+      value={findLabel(CHART_SIZE_OPTIONS_BAR_LINE, value)}
       onOptionSelect={handleSelect}
-      aria-label="Chart width"
+      aria-label="Chart size"
     >
-      {CHART_WIDTH_OPTIONS.map((option) => (
-        <Option key={option.key} value={String(option.key)} text={option.label}>{option.label}</Option>
+      {CHART_SIZE_OPTIONS_BAR_LINE.map((option) => (
+        <Option key={option.key} value={option.key} text={option.label}>{option.label}</Option>
       ))}
     </Dropdown>
   );

@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
 import { makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
 import ChartCard from './ChartCard';
-import { gridSpanStyle } from './biConstants';
+import { CHART_GRID_COLUMNS, chartGridStyle } from './biConstants';
 
 const useStyles = makeStyles({
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
+    gridTemplateColumns: `repeat(${CHART_GRID_COLUMNS}, minmax(0, 1fr))`,
     ...shorthands.gap('16px'),
   },
   empty: {
@@ -17,7 +17,7 @@ const useStyles = makeStyles({
 });
 
 function BiDashboardGrid({
-  charts, resultsById, loading, currentUserId, columns, selectedChartId, onEdit, onDelete,
+  charts, resultsById, loadingById, currentUserId, columns, selectedChartId, onEdit, onDelete,
 }) {
   const styles = useStyles();
 
@@ -28,11 +28,11 @@ function BiDashboardGrid({
   return (
     <div className={styles.grid}>
       {charts.map((chart) => (
-        <div key={chart.id} style={gridSpanStyle(chart.config?.options?.gridSpan)}>
+        <div key={chart.id} style={chartGridStyle(chart)}>
           <ChartCard
             chart={chart}
             series={resultsById[chart.id] || []}
-            loading={loading}
+            loading={Boolean(loadingById[chart.id])}
             columns={columns}
             canManage={Number(chart.userId) === Number(currentUserId)}
             selected={Number(selectedChartId) === Number(chart.id)}

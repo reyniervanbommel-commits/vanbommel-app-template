@@ -4,6 +4,14 @@ import { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 
 export const BOARD_KEY = 'purchase-orders';
 
+export const CHART_GRID_COLUMNS = 60;
+
+export const CHART_SIZE_SMALL = 'small';
+export const CHART_SIZE_MEDIUM = 'medium';
+export const CHART_SIZE_WIDE = 'wide';
+
+export const SERIES_COLOR_KEY = '__series__';
+
 export const CHART_TYPE_OPTIONS = [
   { key: 'bar', label: 'Bar' },
   { key: 'line', label: 'Line' },
@@ -31,10 +39,10 @@ export const VISIBILITY_OPTIONS = [
   { key: 'shared', label: 'Shared' },
 ];
 
-export const CHART_WIDTH_OPTIONS = [
-  { key: 1, label: 'Compact' },
-  { key: 2, label: 'Standard' },
-  { key: 3, label: 'Wide' },
+/** Alleen bar/line: medium = 4 per rij, wide = 75% breedte. */
+export const CHART_SIZE_OPTIONS_BAR_LINE = [
+  { key: CHART_SIZE_MEDIUM, label: 'Medium' },
+  { key: CHART_SIZE_WIDE, label: 'Wide' },
 ];
 
 export const CHART_COLOR_PALETTE = SELECTABLE_STATUS_COLORS;
@@ -73,16 +81,51 @@ export function resolveChartColor(config, key, index = 0) {
   return defaultColorForIndex(index);
 }
 
-export function stripWidthForSpan(gridSpan) {
-  const span = Number(gridSpan) || 1;
-  if (span >= 3) return 560;
-  if (span >= 2) return 420;
-  return 300;
+function migrateStoredChartSize(config) {
+  const options = config?.options || {};
+  if ([CHART_SIZE_SMALL, CHART_SIZE_MEDIUM, CHART_SIZE_WIDE].includes(options.chartSize)) {
+    return options.chartSize;
+  }
+  const span = Number(options.gridSpan);
+  if (span >= 3) return CHART_SIZE_WIDE;
+  if (span >= 2) return CHART_SIZE_MEDIUM;
+  return null;
 }
 
-export function gridSpanStyle(span) {
-  const safe = [1, 2, 3].includes(Number(span)) ? Number(span) : 1;
-  return { gridColumn: `span ${Math.min(safe * 4, 12)}` };
+/** KPI=small (5/rij), pie=medium (4/rij), bar/line=medium|wide (keuze). */
+export function resolveChartSize(chart) {
+  const config = chart?.config || chart;
+  const type = config?.type || 'bar';
+  const stored = migrateStoredChartSize(config);
+  if (type === 'kpi') return CHART_SIZE_SMALL;
+  if (type === 'pie') return CHART_SIZE_MEDIUM;
+  if (type === 'bar' || type === 'line') {
+    return stored === CHART_SIZE_WIDE ? CHART_SIZE_WIDE : CHART_SIZE_MEDIUM;
+  }
+  return CHART_SIZE_MEDIUM;
+}
+
+const GRID_SPAN_BY_SIZE = {
+  [CHART_SIZE_SMALL]: 12,
+  [CHART_SIZE_MEDIUM]: 15,
+  [CHART_SIZE_WIDE]: 45,
+};
+
+export function chartGridStyle(chart) {
+  const size = typeof chart === 'string' ? chart : resolveChartSize(chart);
+  const span = GRID_SPAN_BY_SIZE[size] || GRID_SPAN_BY_SIZE[CHART_SIZE_MEDIUM];
+  return { gridColumn: `span ${span}` };
+}
+
+export function stripCardStyle(chart) {
+  const size = resolveChartSize(chart);
+  if (size === CHART_SIZE_WIDE) {
+    return { flex: '0 0 75%', minWidth: '480px', maxWidth: '75%' };
+  }
+  if (size === CHART_SIZE_SMALL) {
+    return { flex: '0 0 20%', minWidth: '200px', maxWidth: '20%' };
+  }
+  return { flex: '0 0 25%', minWidth: '260px', maxWidth: '25%' };
 }
 
 export function createEmptyChartConfig() {
@@ -95,7 +138,7 @@ export function createEmptyChartConfig() {
     dateGrouping: 'month',
     filters: [],
     options: {
-      gridSpan: 1,
+      chartSize: CHART_SIZE_MEDIUM,
       colors: {},
     },
   };

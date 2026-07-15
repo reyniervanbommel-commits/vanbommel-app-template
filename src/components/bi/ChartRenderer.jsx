@@ -4,8 +4,9 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import ChartAxisTick from './ChartAxisTick';
 import {
-  defaultColorForIndex, resolveChartColor, resolveMeasures,
+  defaultColorForIndex, resolveChartColor, resolveMeasures, SERIES_COLOR_KEY,
 } from './biConstants';
 
 const useStyles = makeStyles({
@@ -37,22 +38,16 @@ function measureLabel(key, columns) {
   return columns?.find((col) => col.key === key)?.label || key;
 }
 
-function truncateLabel(value, max = 18) {
-  const text = String(value ?? '');
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-function axisLayout(data) {
-  const maxLen = data.reduce((max, entry) => Math.max(max, String(entry.name ?? '').length), 0);
-  if (maxLen > 24) return { angle: -55, textAnchor: 'end', height: 96, bottom: 24 };
-  if (maxLen > 14) return { angle: -40, textAnchor: 'end', height: 72, bottom: 16 };
-  if (maxLen > 8) return { angle: -25, textAnchor: 'end', height: 52, bottom: 12 };
-  return { angle: 0, textAnchor: 'middle', height: 36, bottom: 8 };
-}
-
 function segmentColor(config, entry, index) {
   const colors = config?.options?.colors || {};
-  return colors[entry?.name] || defaultColorForIndex(index);
+  return colors[entry?.name] || colors[SERIES_COLOR_KEY] || defaultColorForIndex(index);
+}
+
+function seriesStrokeColor(config, index = 0) {
+  const colors = config?.options?.colors || {};
+  if (colors[SERIES_COLOR_KEY]) return colors[SERIES_COLOR_KEY];
+  const measureKeys = resolveMeasures(config || {});
+  return resolveChartColor(config, measureKeys[index] || 'value', index);
 }
 
 function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
@@ -70,8 +65,31 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
     return measureKeys;
   }, [measureKeys, data]);
 
-  const xAxis = useMemo(() => axisLayout(data), [data]);
-  const useSegmentColors = type === 'bar' && effectiveMeasureKeys.length === 1;
+  const useSegmentColors = (type === 'bar' || type === 'line') && effectiveMeasureKeys.length === 1;
+  const chartMargin = { top: 8, right: 16, bottom: 32, left: 0 };
+  const xAxisProps = {
+    dataKey: 'name',
+    interval: 0,
+    height: 36,
+    tick: <ChartAxisTick />,
+  };
+
+  const lineDot = useMemo(() => {
+    if (!useSegmentColors || type !== 'line') return false;
+    return (dotProps) => {
+      const { cx, cy, payload, index: dotIndex } = dotProps;
+      if (cx == null || cy == null) return null;
+      return (
+        <circle
+          key={`${payload?.name}-${dotIndex}`}
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill={segmentColor(config, payload, dotIndex)}
+        />
+      );
+    };
+  }, [useSegmentColors, type, config]);
 
   if (!data.length) {
     return <div className={styles.empty} style={{ height }}><Text>No data</Text></div>;
@@ -81,15 +99,14 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
     const total = data.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     const colorKey = measureKeys[0] || 'value';
     const kpiColor = resolveChartColor(config, colorKey, 0);
+    const kpiLabel = config?.dimension ? (data[0]?.name || 'Total') : 'Total';
     return (
       <div className={styles.kpi} style={{ height }}>
         <span className={styles.kpiValue} style={{ color: kpiColor }}>{formatNumber(total)}</span>
-        <Text className={styles.kpiLabel}>{data.length === 1 ? data[0].name : 'Total'}</Text>
+        <Text className={styles.kpiLabel}>{kpiLabel}</Text>
       </div>
     );
   }
-
-  const chartMargin = { top: 8, right: 16, bottom: xAxis.bottom, left: 0 };
 
   return (
     <div className={styles.root} style={{ height }}>
@@ -97,15 +114,7 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
         {type === 'line' ? (
           <LineChart data={data} margin={chartMargin}>
             <CartesianGrid strokeDasharray="3 3" stroke={tokens.colorNeutralStroke2} />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 10 }}
-              angle={xAxis.angle}
-              textAnchor={xAxis.textAnchor}
-              height={xAxis.height}
-              interval={0}
-              tickFormatter={truncateLabel}
-            />
+            <XAxis {...xAxisProps} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={formatNumber} labelFormatter={(label) => String(label)} />
             {effectiveMeasureKeys.length > 1 ? <Legend /> : null}
@@ -115,9 +124,9 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
                 type="monotone"
                 dataKey={key}
                 name={key === 'value' ? 'Value' : measureLabel(key, columns)}
-                stroke={resolveChartColor(config, measureKeys[index] || key, index)}
+                stroke={useSegmentColors ? seriesStrokeColor(config, index) : resolveChartColor(config, measureKeys[index] || key, index)}
                 strokeWidth={2}
-                dot={false}
+                dot={lineDot}
               />
             ))}
           </LineChart>
@@ -134,15 +143,7 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
         ) : (
           <BarChart data={data} margin={chartMargin}>
             <CartesianGrid strokeDasharray="3 3" stroke={tokens.colorNeutralStroke2} />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 10 }}
-              angle={xAxis.angle}
-              textAnchor={xAxis.textAnchor}
-              height={xAxis.height}
-              interval={0}
-              tickFormatter={truncateLabel}
-            />
+            <XAxis {...xAxisProps} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={formatNumber} labelFormatter={(label) => String(label)} />
             {effectiveMeasureKeys.length > 1 ? <Legend /> : null}

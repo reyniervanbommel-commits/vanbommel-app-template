@@ -6,7 +6,7 @@ import {
 import { ChartMultipleRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
 import ChartWidthSelect from './ChartWidthSelect';
-import { gridSpanStyle } from './biConstants';
+import { resolveChartSize, stripCardStyle } from './biConstants';
 
 const useStyles = makeStyles({
   root: {
@@ -18,15 +18,17 @@ const useStyles = makeStyles({
   },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
   title: { fontWeight: 600, color: tokens.colorNeutralForeground2 },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
+  strip: {
+    display: 'flex',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'stretch',
     ...shorthands.gap('12px'),
-    overflowY: 'auto',
-    overflowX: 'hidden',
+    overflowX: 'auto',
+    overflowY: 'hidden',
     flexGrow: 1,
     minHeight: 0,
-    alignContent: 'start',
+    scrollbarGutter: 'stable',
   },
   card: {
     display: 'flex',
@@ -36,8 +38,8 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    minWidth: 0,
     minHeight: 0,
+    flexShrink: 0,
   },
   cardHeader: {
     display: 'flex',
@@ -96,25 +98,29 @@ function BiChartStrip({
       </div>
 
       {selectedCharts.length ? (
-        <div className={styles.grid}>
+        <div className={styles.strip}>
           {selectedCharts.map((chart) => {
             const canManage = Number(chart.userId) === Number(currentUserId);
+            const chartType = chart.config?.type;
+            const showSizeSelect = chartType === 'bar' || chartType === 'line';
             return (
               <div
                 className={styles.card}
                 key={chart.id}
-                style={gridSpanStyle(chart.config?.options?.gridSpan)}
+                style={stripCardStyle(chart)}
               >
                 <div className={styles.cardHeader}>
                   <Text className={styles.cardTitle} title={chart.name}>{chart.name}</Text>
-                  <ChartWidthSelect
-                    gridSpan={chart.config?.options?.gridSpan}
-                    disabled={!canManage || !onWidthChange}
-                    onChange={(gridSpan) => onWidthChange?.(chart, gridSpan)}
-                  />
+                  {showSizeSelect ? (
+                    <ChartWidthSelect
+                      chartSize={resolveChartSize(chart)}
+                      disabled={!canManage || !onWidthChange}
+                      onChange={(chartSize) => onWidthChange?.(chart, chartSize)}
+                    />
+                  ) : null}
                 </div>
                 <ChartRenderer
-                  type={chart.config?.type}
+                  type={chartType}
                   series={chart.series || []}
                   config={chart.config}
                   columns={columns}
