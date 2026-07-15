@@ -18,12 +18,12 @@ describe('TrackChangeMarks', () => {
     expect(container.querySelector('div[aria-label]')).toBeNull();
   });
 
-  it('renders a single gradient node with an accessible label', () => {
+  it('renders one dot per mark with an accessible label', () => {
     const { container } = renderMarks({ pattern: 'yyyyr', mode: 'session' });
     const node = container.querySelector('div[aria-label]');
     expect(node).not.toBeNull();
     expect(node.getAttribute('aria-label')).toContain('sessie');
-    expect(node.style.backgroundImage).toContain('linear-gradient');
+    expect(node.querySelectorAll('span')).toHaveLength(5);
   });
 
   it('reports the number of changed buckets in week mode', () => {

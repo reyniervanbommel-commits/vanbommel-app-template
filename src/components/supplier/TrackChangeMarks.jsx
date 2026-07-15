@@ -2,9 +2,9 @@ import React, { memo, useMemo } from 'react';
 import { tokens } from '@fluentui/react-components';
 
 /**
- * TrackChangeMarks — pure weergave van maximaal vijf "track changes"-streepjes onderin een cel.
+ * TrackChangeMarks — pure weergave van maximaal vijf "track changes"-stippen onderin een cel.
  *
- * Eén DOM-node: een div met een linear-gradient van vijf segmenten. Geen Tooltip (deze cel wordt
+ * Eén wrapper-div met per bucket een gekleurde stip. Geen Tooltip (deze cel wordt
  * vaak herhaald); toegankelijkheid via title + aria-label als niet-kleur-cue.
  *
  * @param {{ pattern?: string, mode?: string }} props - pattern = 5-tekenstring van r/g/y.
@@ -15,22 +15,10 @@ const COLOR_BY_MARK = {
   g: tokens.colorNeutralBackground5,
 };
 
-const LABEL_BY_MARK = { r: 'gewijzigd', y: 'geen wijziging', g: 'geen wijziging' };
+const DOT_SIZE = 5;
 
 function TrackChangeMarks({ pattern, mode }) {
   const marks = typeof pattern === 'string' && pattern.length > 0 ? pattern.split('') : null;
-
-  const gradient = useMemo(() => {
-    if (!marks) return null;
-    const step = 100 / marks.length;
-    const stops = marks.map((mark, i) => {
-      const color = COLOR_BY_MARK[mark] || COLOR_BY_MARK.g;
-      const from = (step * i).toFixed(3);
-      const to = (step * (i + 1)).toFixed(3);
-      return `${color} ${from}%, ${color} ${to}%`;
-    });
-    return `linear-gradient(to right, ${stops.join(', ')})`;
-  }, [marks]);
 
   const label = useMemo(() => {
     if (!marks) return '';
@@ -41,7 +29,7 @@ function TrackChangeMarks({ pattern, mode }) {
       : `Geen recente wijzigingen per ${bucket}`;
   }, [marks, mode]);
 
-  if (!gradient) return null;
+  if (!marks) return null;
 
   return (
     <div
@@ -51,12 +39,26 @@ function TrackChangeMarks({ pattern, mode }) {
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: 0,
-        height: '3px',
-        backgroundImage: gradient,
+        bottom: '1px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '2px',
         pointerEvents: 'none',
       }}
-    />
+    >
+      {marks.map((mark, i) => (
+        <span
+          key={i}
+          style={{
+            width: `${DOT_SIZE}px`,
+            height: `${DOT_SIZE}px`,
+            borderRadius: '50%',
+            backgroundColor: COLOR_BY_MARK[mark] || COLOR_BY_MARK.g,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 

@@ -29,7 +29,7 @@ const useStyles = makeStyles({
   error: { color: tokens.colorPaletteRedForeground1 },
   actions: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'center', flexWrap: 'wrap' },
   legendRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('10px') },
-  swatch: { width: '16px', height: '16px', ...shorthands.borderRadius('3px'), flexShrink: 0 },
+  swatch: { width: '12px', height: '12px', ...shorthands.borderRadius('50%'), flexShrink: 0 },
   swatchRed: { backgroundColor: tokens.colorPaletteRedBackground3 },
   swatchYellow: { backgroundColor: tokens.colorPaletteYellowBackground3 },
   swatchGrey: { backgroundColor: tokens.colorNeutralBackground5 },
@@ -99,7 +99,7 @@ export default function AdminTrackChangesSettings() {
     <div className={styles.root}>
       <Text size={600} weight="semibold">Track changes</Text>
       <Text className={styles.hint} block>
-        Toon per kolom onderin elke cel maximaal vijf streepjes met recente wijzigingen. Zet tracking per
+        Toon per kolom onderin elke cel maximaal vijf stippen met recente wijzigingen. Zet tracking per
         kolom aan via het kolommenu op het board; hier bepaal je de granulariteit en wie een sessie start.
       </Text>
 
