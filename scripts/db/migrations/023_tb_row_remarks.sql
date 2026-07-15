@@ -17,7 +17,7 @@ BEGIN
   )
     ALTER TABLE dbo.tb_columns WITH NOCHECK
       ADD CONSTRAINT CK_tb_columns_data_type
-      CHECK (data_type IN ('text','number','date','boolean','select','image','remarks'));
+      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks','date_period'));
 END;
 
 IF OBJECT_ID('dbo.tb_row_remarks', 'U') IS NULL
