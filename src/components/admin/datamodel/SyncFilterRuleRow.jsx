@@ -13,6 +13,7 @@ import { OPERATOR_LABELS } from './FilterFieldPickerDialog';
 function operatorsForType(valueType) {
   if (valueType === 'text') return ['eq', 'ne', 'contains', 'notcontains', 'startswith', 'notstartswith', 'oneof'];
   if (valueType === 'enum') return ['eq', 'ne', 'oneof'];
+  if (valueType === 'date') return ['eq', 'ne', 'lt', 'gt'];
   return ['eq', 'ne', 'oneof'];
 }
 

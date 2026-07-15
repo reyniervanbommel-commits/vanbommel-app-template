@@ -19,12 +19,14 @@ describe('compileSyncRules (D365-syncfilters)', () => {
     const compiled = compileSyncRules([
       { field: 'LineAmount', operator: 'ge', value: '100', valueType: 'number' },
       { field: 'RequestedDeliveryDate', operator: 'ge', value: '2026-01-01', valueType: 'date' },
+      { field: 'KRFOriginCreatedDateTime', operator: 'lt', value: '2026-07-01', valueType: 'date' },
       { field: 'PurchaseOrderName', operator: 'contains', value: 'staal', valueType: 'text' },
     ]);
     expect(compiled).toContain('LineAmount ge 100');
     expect(compiled).toContain('RequestedDeliveryDate ge 2026-01-01T00:00:00.000Z');
+    expect(compiled).toContain('KRFOriginCreatedDateTime lt 2026-07-01T00:00:00.000Z');
     expect(compiled).toContain("contains(PurchaseOrderName,'staal')");
-    expect(compiled.split(' and ')).toHaveLength(3);
+    expect(compiled.split(' and ')).toHaveLength(4);
   });
 
   it('compileert line-level regels via any()-lambda', () => {

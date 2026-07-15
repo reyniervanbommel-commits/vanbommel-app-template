@@ -16,6 +16,8 @@ const {
   resolveSourceColumnValue,
   resolveRecordKeys,
   buildLookupCacheKey,
+  buildDetailLookupSourceValues,
+  usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
@@ -568,6 +570,26 @@ describe('TableDataService.buildLookupCacheKey', () => {
   });
 });
 
+describe('TableDataService.buildDetailLookupSourceValues', () => {
+  it('vult purchaseOrderNumber en lineNumber aan vanuit master/detail sleutels', () => {
+    const source = buildDetailLookupSourceValues({ itemNumber: 'ART-1' }, 'PO-100', 20);
+    expect(source).toEqual({
+      itemNumber: 'ART-1',
+      purchaseOrderNumber: 'PO-100',
+      lineNumber: 20,
+    });
+  });
+
+  it('behoudt bestaande json-waarden wanneer aanwezig', () => {
+    const source = buildDetailLookupSourceValues({
+      purchaseOrderNumber: 'PO-200',
+      lineNumber: 5,
+    }, 'PO-100', 20);
+    expect(source.purchaseOrderNumber).toBe('PO-200');
+    expect(source.lineNumber).toBe(5);
+  });
+});
+
 describe('TableDataService.applyLookups composite', () => {
   const compositeLookup = {
     sourceScope: 'detail',
@@ -587,17 +609,34 @@ describe('TableDataService.applyLookups composite', () => {
   };
 
   it('verrijkt PO-regels via composite fk_join lookup', () => {
-    const detailValues = { purchaseOrderNumber: 'PO-1', lineNumber: 10 };
-    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailValues);
+    const detailValues = { itemNumber: 'ART-1' };
+    const detailLookupSource = buildDetailLookupSourceValues(detailValues, 'PO-1', 10);
+    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailLookupSource);
     expect(detailValues.receivedPurchaseQuantity).toBe(3);
     expect(detailValues.remainingPurchaseQuantity).toBe(7);
   });
 
   it('laat kolommen leeg bij geen match (niet 0)', () => {
-    const detailValues = { purchaseOrderNumber: 'PO-2', lineNumber: 20 };
-    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailValues);
+    const detailValues = { itemNumber: 'ART-2' };
+    const detailLookupSource = buildDetailLookupSourceValues(detailValues, 'PO-2', 20);
+    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailLookupSource);
     expect(detailValues.receivedPurchaseQuantity).toBeNull();
     expect(detailValues.remainingPurchaseQuantity).toBeNull();
+  });
+});
+
+describe('TableDataService.usesMasterRecordKeysForInheritedLookup', () => {
+  it('gebruikt master record keys voor composite ontvangstregel-lookup', () => {
+    expect(usesMasterRecordKeysForInheritedLookup({
+      sourceScope: 'detail',
+      targetTableKey: 'product-receipt-lines',
+      joinKeys: [{ sourceKey: 'purchaseOrderNumber', targetKey: 'purchaseOrderNumber' }],
+    })).toBe(true);
+    expect(usesMasterRecordKeysForInheritedLookup({
+      sourceScope: 'detail',
+      targetTableKey: 'items',
+      sourceField: 'ItemNumber',
+    })).toBe(false);
   });
 });
 

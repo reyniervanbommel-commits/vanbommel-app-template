@@ -524,6 +524,47 @@ async function listDistinctCacheFieldValues({ tableId, scope, sourceField }) {
     .filter(Boolean);
 }
 
+async function listDistinctMasterRecordKeys(tableId) {
+  if (!tableId) return [];
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT DISTINCT LTRIM(RTRIM(record_key)) AS lookup_value
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId
+        AND scope = 'master'
+        AND detail_key = ${MASTER_DETAIL_KEY}
+        AND removed_at_source = 0
+        AND LTRIM(RTRIM(record_key)) <> ''
+    `);
+  return result.recordset
+    .map((row) => String(row.lookup_value || '').trim())
+    .filter(Boolean);
+}
+
+function usesMasterRecordKeysForInheritedLookup(lookup) {
+  const joinKeys = Array.isArray(lookup?.joinKeys) ? lookup.joinKeys : [];
+  return (
+    lookup?.sourceScope === 'detail'
+    && joinKeys.length > 0
+    && String(lookup?.targetTableKey || '').trim().toLowerCase() === 'product-receipt-lines'
+  );
+}
+
+function buildDetailLookupSourceValues(detailJson, recordKey, detailKey) {
+  const source = detailJson && typeof detailJson === 'object' ? { ...detailJson } : {};
+  const poNumber = source.purchaseOrderNumber ?? source.PurchaseOrderNumber ?? recordKey;
+  if (poNumber !== null && poNumber !== undefined && String(poNumber).trim()) {
+    source.purchaseOrderNumber = String(poNumber).trim();
+  }
+  const lineNumber = source.lineNumber ?? source.LineNumber ?? detailKey;
+  if (lineNumber !== null && lineNumber !== undefined && String(lineNumber).trim() !== '') {
+    source.lineNumber = lineNumber;
+  }
+  return source;
+}
+
 async function getInheritedPoLookupScopes(table) {
   const tableKey = String(table?.key || '').trim().toLowerCase();
   if (!INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey)) return [];
@@ -552,13 +593,15 @@ async function getInheritedPoLookupScopes(table) {
     const sourceScope = lookup.sourceScope === 'detail' ? 'detail' : 'master';
     const sourceColumns = sourceScope === 'detail' ? poDetailColumns : poMasterColumns;
     const resolvedSourceField = resolveLookupSourceKey(lookup, sourceColumns);
-    if (!resolvedSourceField) continue;
+    if (!resolvedSourceField && !usesMasterRecordKeysForInheritedLookup(lookup)) continue;
 
-    const sourceValues = await listDistinctCacheFieldValues({
-      tableId: purchaseOrdersTable.id,
-      scope: sourceScope,
-      sourceField: resolvedSourceField,
-    });
+    const sourceValues = usesMasterRecordKeysForInheritedLookup(lookup)
+      ? await listDistinctMasterRecordKeys(purchaseOrdersTable.id)
+      : await listDistinctCacheFieldValues({
+        tableId: purchaseOrdersTable.id,
+        scope: sourceScope,
+        sourceField: resolvedSourceField,
+      });
     if (!sourceValues.length) continue;
 
     if (!valuesByTargetField.has(targetField)) valuesByTargetField.set(targetField, new Set());
@@ -2690,8 +2733,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
       const detailJson = parseJson(d.data_json);
+      const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
       const detailValues = valuesFor(detailCols, detailJson, detailCustom);
-      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
+      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
       const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -3782,6 +3826,8 @@ module.exports = {
   resolveSourceColumnValue,
   resolveRecordKeys,
   buildLookupCacheKey,
+  buildDetailLookupSourceValues,
+  usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,

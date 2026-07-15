@@ -49,6 +49,8 @@ const useStyles = makeStyles({
 export const OPERATOR_LABELS = {
   eq: 'equals',
   ne: 'does not equal',
+  lt: 'before',
+  gt: 'after',
   contains: 'contains',
   notcontains: 'does not contain',
   startswith: 'starts with',
@@ -59,6 +61,7 @@ export const OPERATOR_LABELS = {
 function operatorsForType(valueType) {
   if (valueType === 'text') return ['eq', 'ne', 'contains', 'notcontains', 'startswith', 'notstartswith', 'oneof'];
   if (valueType === 'enum') return ['eq', 'ne', 'oneof'];
+  if (valueType === 'date') return ['eq', 'ne', 'lt', 'gt'];
   return ['eq', 'ne', 'oneof'];
 }
 
