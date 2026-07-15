@@ -35,8 +35,7 @@ function normalizeFormulaExpression(formulaExpr) {
   };
 }
 
-function validateFormulaReferences(references, columns, ownKey = '', scope = 'master') {
-  const normalizedScope = scope === 'detail' ? 'detail' : 'master';
+function validateFormulaReferences(references, columns, ownKey = '') {
   const byKey = new Map((Array.isArray(columns) ? columns : []).map((column) => [
     String(column?.key || '').toLowerCase(),
     column,
@@ -52,12 +51,8 @@ function validateFormulaReferences(references, columns, ownKey = '', scope = 'ma
     if (!target) {
       throw Object.assign(new Error(`Unknown column reference in formula: (${ref})`), { status: 400 });
     }
-    const targetScope = String(target.scope || 'master');
-    if (targetScope !== normalizedScope) {
-      throw Object.assign(
-        new Error(`Formula may only reference ${normalizedScope} columns: (${ref})`),
-        { status: 400 },
-      );
+    if (String(target.scope || 'master') !== 'master') {
+      throw Object.assign(new Error(`Formula may only reference master columns: (${ref})`), { status: 400 });
     }
     if (String(target.formulaExpr || '').trim()) {
       throw Object.assign(new Error(`Formula cannot reference a formula column: (${ref})`), { status: 400 });

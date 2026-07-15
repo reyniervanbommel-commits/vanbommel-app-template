@@ -232,12 +232,19 @@ router.post('/:tableKey/viewed', requireRole(ROLES.ADMIN), async (req, res, next
   }
 });
 
-// GET /api/data/:tableKey/columns?scope=&includeInactive=
+// GET /api/data/:tableKey/columns?scope=&includeInactive=&enriched=
 router.get('/:tableKey/columns', async (req, res, next) => {
   try {
     const scope = req.query.scope ? String(req.query.scope) : null;
     if (scope && !registry.SCOPES.includes(scope)) {
       return res.status(400).json({ error: 'Invalid scope' });
+    }
+    const enriched = req.query.enriched === '1' || req.query.enriched === 'true';
+    if (enriched && req.params.tableKey === 'purchase-orders') {
+      const defs = await dataService.getBoardColumnDefinitions(req.params.tableKey, { scope });
+      if (scope === 'master') return res.json({ columns: defs.master || [] });
+      if (scope === 'detail') return res.json({ columns: defs.detail || [] });
+      return res.json({ columns: [...(defs.master || []), ...(defs.detail || [])] });
     }
     const table = await registry.getTableByKey(req.params.tableKey);
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';

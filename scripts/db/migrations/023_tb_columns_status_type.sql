@@ -20,7 +20,9 @@ BEGIN
   BEGIN
     UPDATE dbo.po_columns
     SET data_type = 'text'
-    WHERE data_type NOT IN (SELECT data_type FROM @allowedTypes);
+    WHERE data_type IS NULL
+       OR LTRIM(RTRIM(data_type)) = ''
+       OR data_type NOT IN (SELECT data_type FROM @allowedTypes);
 
     IF EXISTS (
       SELECT 1
@@ -50,7 +52,9 @@ BEGIN
   BEGIN
     UPDATE dbo.tb_columns
     SET data_type = 'text'
-    WHERE data_type NOT IN (SELECT data_type FROM @allowedTypes);
+    WHERE data_type IS NULL
+       OR LTRIM(RTRIM(data_type)) = ''
+       OR data_type NOT IN (SELECT data_type FROM @allowedTypes);
 
     IF EXISTS (
       SELECT 1

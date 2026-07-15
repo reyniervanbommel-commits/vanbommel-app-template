@@ -91,15 +91,7 @@ describe('TableColumnsService formula helpers', () => {
     const columns = [
       { key: 'quantity', scope: 'detail', formulaExpr: null },
     ];
-    expect(() => validateFormulaReferences(['quantity'], columns, 'total', 'master')).toThrow(/master columns/i);
-  });
-
-  it('accepteert detail-referenties in detail-formules', () => {
-    const columns = [
-      { key: 'quantity', scope: 'detail', formulaExpr: null },
-      { key: 'receivedPurchaseQuantity', scope: 'detail', formulaExpr: null },
-    ];
-    expect(() => validateFormulaReferences(['quantity', 'receivedpurchasequantity'], columns, 'remainder', 'detail')).not.toThrow();
+    expect(() => validateFormulaReferences(['quantity'], columns, 'total')).toThrow(/master columns/i);
   });
 
   it('weigert formule met onjuist resultaattype', () => {

@@ -274,6 +274,19 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     }
   }, [adminBasePath, reload]);
 
+  const discoverFields = useCallback(async () => {
+    setTogglingKey('discover-fields');
+    setError('');
+    try {
+      await apiRequest(`${adminBasePath}/discover-fields`, { method: 'POST' });
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [adminBasePath, reload]);
+
   return useMemo(() => ({
     entities: data?.entities || [],
     relation: data?.relation || null,
@@ -289,10 +302,11 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     togglingKey,
     reload,
     syncNow,
+    discoverFields,
     toggleVisibility,
     toggleVisibleAtDelete,
     toggleWriteback,
     setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, setColumnToggleState, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, setColumnToggleState, deleteColumn]);
 }

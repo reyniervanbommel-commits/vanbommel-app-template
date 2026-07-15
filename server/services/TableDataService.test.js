@@ -13,10 +13,13 @@ const {
   requiredMasterFieldsFromTable,
   compileMasterFormulaColumns,
   compileFormulaColumns,
-  buildDetailFormulaEvaluationContext,
   applyFormulaColumnsToRowValues,
-  detailFormulaHasMissingSourceReference,
   resolveSourceColumnValue,
+  resolveRecordKeys,
+  buildLookupCacheKey,
+  buildDetailLookupSourceValues,
+  enrichLookupSourceFromCacheRow,
+  usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
@@ -291,44 +294,6 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
     const errors = applyFormulaColumnsToRowValues(values, formulas);
     expect(values.statusCheck).toBe('kleiner');
     expect(errors).toEqual({});
-  });
-
-  it('evalueert detail-formule voor deliver remainder wanneer ontvangen qty aanwezig is', () => {
-    const detailCols = [
-      { key: 'quantity', scope: 'detail', source: 'source', sourceField: 'OrderedPurchaseQuantity' },
-      { key: 'receivedPurchaseQuantity', scope: 'detail', source: 'source', sourceField: 'ReceivedPurchaseQuantity' },
-      { key: 'deliverRemainderApprox', scope: 'detail', source: 'custom', dataType: 'number', formulaExpr: '(quantity)-(receivedpurchasequantity)' },
-    ];
-    const formulas = compileFormulaColumns(detailCols);
-    const detailValues = { quantity: 10 };
-    const detailJson = { OrderedPurchaseQuantity: 10, ReceivedPurchaseQuantity: 3 };
-    const evalValues = buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, formulas);
-    const errors = applyFormulaColumnsToRowValues(detailValues, formulas, {
-      evaluationValues: evalValues,
-      detailCols,
-      strictMissingSourceRefs: true,
-    });
-    expect(detailValues.deliverRemainderApprox).toBe(7);
-    expect(errors).toEqual({});
-  });
-
-  it('laat deliver remainder leeg wanneer ontvangen qty ontbreekt in D365', () => {
-    const detailCols = [
-      { key: 'quantity', scope: 'detail', source: 'source', sourceField: 'OrderedPurchaseQuantity' },
-      { key: 'receivedPurchaseQuantity', scope: 'detail', source: 'source', sourceField: 'ReceivedPurchaseQuantity' },
-      { key: 'deliverRemainderApprox', scope: 'detail', source: 'custom', dataType: 'number', formulaExpr: '(quantity)-(receivedpurchasequantity)' },
-    ];
-    const formulas = compileFormulaColumns(detailCols);
-    const detailValues = { quantity: 10 };
-    const detailJson = { OrderedPurchaseQuantity: 10 };
-    const evalValues = buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, formulas);
-    expect(detailFormulaHasMissingSourceReference(formulas[0].compiled, evalValues, detailCols)).toBe(true);
-    applyFormulaColumnsToRowValues(detailValues, formulas, {
-      evaluationValues: evalValues,
-      detailCols,
-      strictMissingSourceRefs: true,
-    });
-    expect(detailValues.deliverRemainderApprox).toBeNull();
   });
 });
 
@@ -611,5 +576,147 @@ describe('TableDataService.buildLookupTargetAliases', () => {
     expect(aliases).toEqual({
       vendorGroupId: ['VendorGroupId', 'vendorGroup'],
     });
+  });
+});
+
+describe('TableDataService.resolveRecordKeys', () => {
+  it('bouwt een 3-veld recordKey met pipe-separated waarden', () => {
+    const keys = resolveRecordKeys(
+      { keyFields: ['dataAreaId', 'PurchaseOrderNumber', 'PurchaseOrderLineNumber'] },
+      { dataAreaId: 'whsl', PurchaseOrderNumber: 'PO-1', PurchaseOrderLineNumber: 10 },
+      'whsl',
+    );
+    expect(keys).toEqual({ partitionKey: 'whsl', recordKey: 'PO-1|10' });
+  });
+
+  it('normaliseert number en string naar dezelfde recordKey', () => {
+    const fromNumber = resolveRecordKeys(
+      { keyFields: ['dataAreaId', 'PurchaseOrderNumber', 'PurchaseOrderLineNumber'] },
+      { dataAreaId: 'whsl', PurchaseOrderNumber: 'PO-1', PurchaseOrderLineNumber: 10 },
+      'whsl',
+    );
+    const fromString = resolveRecordKeys(
+      { keyFields: ['dataAreaId', 'PurchaseOrderNumber', 'PurchaseOrderLineNumber'] },
+      { dataAreaId: 'whsl', PurchaseOrderNumber: 'PO-1', PurchaseOrderLineNumber: '10' },
+      'whsl',
+    );
+    expect(fromNumber.recordKey).toBe(fromString.recordKey);
+  });
+});
+
+describe('TableDataService.buildLookupCacheKey', () => {
+  const compositeLookup = {
+    joinKeys: [
+      { sourceKey: 'purchaseOrderNumber', targetKey: 'purchaseOrderNumber' },
+      { sourceKey: 'lineNumber', targetKey: 'purchaseOrderLineNumber' },
+    ],
+    partitionless: false,
+  };
+
+  it('bouwt een composite key voor PO-regel matching', () => {
+    const key = buildLookupCacheKey('whsl', {
+      purchaseOrderNumber: 'PO-1',
+      lineNumber: 10,
+    }, compositeLookup);
+    expect(key).toBe('whsl|PO-1|10');
+  });
+
+  it('geeft null terug wanneer een composite sleuteldeel ontbreekt', () => {
+    const key = buildLookupCacheKey('whsl', { purchaseOrderNumber: 'PO-1' }, compositeLookup);
+    expect(key).toBeNull();
+  });
+});
+
+describe('TableDataService.buildDetailLookupSourceValues', () => {
+  it('vult purchaseOrderNumber en lineNumber aan vanuit master/detail sleutels', () => {
+    const source = buildDetailLookupSourceValues({ itemNumber: 'ART-1' }, 'PO-100', 20);
+    expect(source).toEqual({
+      itemNumber: 'ART-1',
+      purchaseOrderNumber: 'PO-100',
+      lineNumber: 20,
+      purchaseOrderLineNumber: '20',
+    });
+  });
+
+  it('behoudt bestaande json-waarden wanneer aanwezig', () => {
+    const source = buildDetailLookupSourceValues({
+      purchaseOrderNumber: 'PO-200',
+      lineNumber: 5,
+    }, 'PO-100', 20);
+    expect(source.purchaseOrderNumber).toBe('PO-200');
+    expect(source.lineNumber).toBe(5);
+    expect(source.purchaseOrderLineNumber).toBe('5');
+  });
+});
+
+describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
+  it('vult composite sleutels aan vanuit record_key voor ontvangstregels', () => {
+    const source = enrichLookupSourceFromCacheRow(
+      'product-receipt-lines',
+      'PO-1|10',
+      { receivedPurchaseQuantity: 3 }
+    );
+    expect(source).toEqual({
+      receivedPurchaseQuantity: 3,
+      purchaseOrderNumber: 'PO-1',
+      purchaseOrderLineNumber: '10',
+      lineNumber: '10',
+    });
+  });
+});
+
+describe('TableDataService.applyLookups composite', () => {
+  const compositeLookup = {
+    sourceScope: 'detail',
+    sourceFieldKey: 'purchaseOrderNumber',
+    joinKeys: [
+      { sourceKey: 'purchaseOrderNumber', targetKey: 'purchaseOrderNumber' },
+      { sourceKey: 'lineNumber', targetKey: 'purchaseOrderLineNumber' },
+    ],
+    partitionless: false,
+    fieldEntries: [
+      ['receivedPurchaseQuantity', 'receivedPurchaseQuantity'],
+      ['remainingPurchaseQuantity', 'remainingPurchaseQuantity'],
+    ],
+    byKey: new Map([
+      ['whsl|PO-1|10', { receivedPurchaseQuantity: 3, remainingPurchaseQuantity: 7 }],
+    ]),
+  };
+
+  it('verrijkt PO-regels via composite fk_join lookup', () => {
+    const detailValues = { itemNumber: 'ART-1' };
+    const detailLookupSource = buildDetailLookupSourceValues(detailValues, 'PO-1', 10);
+    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailLookupSource);
+    expect(detailValues.receivedPurchaseQuantity).toBe(3);
+    expect(detailValues.remainingPurchaseQuantity).toBe(7);
+  });
+
+  it('laat kolommen leeg bij geen match (niet 0)', () => {
+    const detailValues = { itemNumber: 'ART-2' };
+    const detailLookupSource = buildDetailLookupSourceValues(detailValues, 'PO-2', 20);
+    applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailLookupSource);
+    expect(detailValues.receivedPurchaseQuantity).toBeNull();
+    expect(detailValues.remainingPurchaseQuantity).toBeNull();
+  });
+});
+
+describe('TableDataService.usesMasterRecordKeysForInheritedLookup', () => {
+  it('gebruikt master record keys voor composite ontvangstregel-lookup', () => {
+    expect(usesMasterRecordKeysForInheritedLookup({
+      sourceScope: 'detail',
+      targetTableKey: 'product-receipt-lines',
+      joinKeys: [{ sourceKey: 'purchaseOrderNumber', targetKey: 'purchaseOrderNumber' }],
+    })).toBe(true);
+    expect(usesMasterRecordKeysForInheritedLookup({
+      sourceScope: 'detail',
+      targetTableKey: 'items',
+      sourceField: 'ItemNumber',
+    })).toBe(false);
+  });
+});
+
+describe('TableDataService.FETCH_ADAPTERS', () => {
+  it('registreert product-receipt-lines op genericMasterD365Fetch', () => {
+    expect(typeof FETCH_ADAPTERS['product-receipt-lines']).toBe('function');
   });
 });

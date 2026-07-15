@@ -37,7 +37,7 @@ const MAX_BOARD_LINKS = 80;
 // staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
 // aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
 const SAVE_CHUNK_SIZE = 500;
-const INHERITED_PO_FILTER_TABLE_KEYS = new Set(['vendors', 'items']);
+const INHERITED_PO_FILTER_TABLE_KEYS = new Set(['vendors', 'items', 'product-receipt-lines']);
 const INHERITED_FILTER_CHUNK_SIZE = 20;
 const EMPTY_REFRESH_PROGRESS = Object.freeze({
   status: 'idle',
@@ -524,6 +524,83 @@ async function listDistinctCacheFieldValues({ tableId, scope, sourceField }) {
     .filter(Boolean);
 }
 
+async function listDistinctMasterRecordKeys(tableId) {
+  if (!tableId) return [];
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT DISTINCT LTRIM(RTRIM(record_key)) AS lookup_value
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId
+        AND scope = 'master'
+        AND detail_key = ${MASTER_DETAIL_KEY}
+        AND removed_at_source = 0
+        AND LTRIM(RTRIM(record_key)) <> ''
+    `);
+  return result.recordset
+    .map((row) => String(row.lookup_value || '').trim())
+    .filter(Boolean);
+}
+
+function usesMasterRecordKeysForInheritedLookup(lookup) {
+  const joinKeys = Array.isArray(lookup?.joinKeys) ? lookup.joinKeys : [];
+  return (
+    lookup?.sourceScope === 'detail'
+    && joinKeys.length > 0
+    && String(lookup?.targetTableKey || '').trim().toLowerCase() === 'product-receipt-lines'
+  );
+}
+
+function buildDetailLookupSourceValues(detailJson, recordKey, detailKey) {
+  const source = detailJson && typeof detailJson === 'object' ? { ...detailJson } : {};
+  const poNumber = source.purchaseOrderNumber ?? source.PurchaseOrderNumber ?? recordKey;
+  if (poNumber !== null && poNumber !== undefined && String(poNumber).trim()) {
+    source.purchaseOrderNumber = String(poNumber).trim();
+  }
+  const lineNumber = source.lineNumber ?? source.LineNumber ?? detailKey;
+  if (lineNumber !== null && lineNumber !== undefined && String(lineNumber).trim() !== '') {
+    const normalizedLine = String(lineNumber).trim();
+    source.lineNumber = lineNumber;
+    source.purchaseOrderLineNumber = normalizedLine;
+  }
+  return source;
+}
+
+function enrichLookupSourceFromCacheRow(targetTableKey, recordKey, parsed) {
+  const source = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+  if (String(targetTableKey || '').trim().toLowerCase() !== 'product-receipt-lines') {
+    return source;
+  }
+  const parts = String(recordKey || '').split('|').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return source;
+  if (!source.purchaseOrderNumber && parts[0]) {
+    source.purchaseOrderNumber = parts[0];
+  }
+  if (parts.length >= 2) {
+    const linePart = parts[1];
+    if (!source.purchaseOrderLineNumber) source.purchaseOrderLineNumber = linePart;
+    if (!source.lineNumber) source.lineNumber = linePart;
+  }
+  return source;
+}
+
+function ensureKeyFieldColumnsInProjection(activeColumns, allColumns, keyFields) {
+  const resultByKey = new Map((Array.isArray(activeColumns) ? activeColumns : []).map((column) => [column.key, column]));
+  const allSource = (Array.isArray(allColumns) ? allColumns : []).filter((column) => column.source === 'source');
+  for (const keyField of Array.isArray(keyFields) ? keyFields : []) {
+    if (/^dataareaid$/i.test(String(keyField || ''))) continue;
+    const normalizedKeyField = String(keyField || '').trim().toLowerCase();
+    if (!normalizedKeyField) continue;
+    const match = allSource.find((column) => (
+      String(column.sourceField || '').trim().toLowerCase() === normalizedKeyField
+      || String(column.key || '').trim().toLowerCase() === normalizedKeyField
+    ));
+    if (match) resultByKey.set(match.key, match);
+  }
+  return [...resultByKey.values()];
+}
+
 async function getInheritedPoLookupScopes(table) {
   const tableKey = String(table?.key || '').trim().toLowerCase();
   if (!INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey)) return [];
@@ -552,13 +629,15 @@ async function getInheritedPoLookupScopes(table) {
     const sourceScope = lookup.sourceScope === 'detail' ? 'detail' : 'master';
     const sourceColumns = sourceScope === 'detail' ? poDetailColumns : poMasterColumns;
     const resolvedSourceField = resolveLookupSourceKey(lookup, sourceColumns);
-    if (!resolvedSourceField) continue;
+    if (!resolvedSourceField && !usesMasterRecordKeysForInheritedLookup(lookup)) continue;
 
-    const sourceValues = await listDistinctCacheFieldValues({
-      tableId: purchaseOrdersTable.id,
-      scope: sourceScope,
-      sourceField: resolvedSourceField,
-    });
+    const sourceValues = usesMasterRecordKeysForInheritedLookup(lookup)
+      ? await listDistinctMasterRecordKeys(purchaseOrdersTable.id)
+      : await listDistinctCacheFieldValues({
+        tableId: purchaseOrdersTable.id,
+        scope: sourceScope,
+        sourceField: resolvedSourceField,
+      });
     if (!sourceValues.length) continue;
 
     if (!valuesByTargetField.has(targetField)) valuesByTargetField.set(targetField, new Set());
@@ -626,6 +705,10 @@ function buildD365SelectFields(requiredFields, columns) {
   return [...fields];
 }
 
+function normalizeLookupKeyPart(value) {
+  return String(value ?? '').trim();
+}
+
 function resolveRecordKeys(table, rawRecord, fallbackPartitionKey) {
   const keyFields = Array.isArray(table.keyFields) ? table.keyFields : [];
   const firstKey = keyFields[0];
@@ -633,10 +716,18 @@ function resolveRecordKeys(table, rawRecord, fallbackPartitionKey) {
   const firstValue = firstKey ? rawRecord?.[firstKey] : null;
   const secondValue = secondKey ? rawRecord?.[secondKey] : null;
 
+  if (firstKey && /^dataareaid$/i.test(firstKey) && keyFields.length > 2) {
+    const recordParts = keyFields.slice(1).map((field) => normalizeLookupKeyPart(rawRecord?.[field]));
+    return {
+      partitionKey: normalizeLookupKeyPart(firstValue || fallbackPartitionKey || ''),
+      recordKey: recordParts.join('|'),
+    };
+  }
+
   if (firstKey && /^dataareaid$/i.test(firstKey) && secondKey) {
     return {
-      partitionKey: String(firstValue || fallbackPartitionKey || '').trim(),
-      recordKey: String(secondValue || '').trim(),
+      partitionKey: normalizeLookupKeyPart(firstValue || fallbackPartitionKey || ''),
+      recordKey: normalizeLookupKeyPart(secondValue || ''),
     };
   }
 
@@ -724,7 +815,15 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
         for (const raw of Array.isArray(chunkResult.items) ? chunkResult.items : []) {
           const keys = resolveRecordKeys(table, raw, company);
           if (!keys.partitionKey || !keys.recordKey) continue;
-          dedupedRawByRecord.set(`${keys.partitionKey}|${keys.recordKey}`, raw);
+          const dedupeKey = `${keys.partitionKey}|${keys.recordKey}`;
+          if (tableKey === 'product-receipt-lines') {
+            const existing = dedupedRawByRecord.get(dedupeKey);
+            if (!existing || shouldReplaceProductReceiptRecord(existing, raw)) {
+              dedupedRawByRecord.set(dedupeKey, raw);
+            }
+          } else {
+            dedupedRawByRecord.set(dedupeKey, raw);
+          }
         }
         reportProgress();
       }
@@ -772,10 +871,28 @@ async function itemsFetch(table, context = {}) {
   return genericMasterD365Fetch(table, context);
 }
 
+function shouldReplaceProductReceiptRecord(existing, incoming) {
+  if (!existing) return true;
+  const existingDate = toDateOrNull(existing?.ProductReceiptDate);
+  const incomingDate = toDateOrNull(incoming?.ProductReceiptDate);
+  if (existingDate && incomingDate) {
+    if (incomingDate.getTime() > existingDate.getTime()) return true;
+    if (incomingDate.getTime() < existingDate.getTime()) return false;
+  } else if (incomingDate && !existingDate) {
+    return true;
+  } else if (!incomingDate && existingDate) {
+    return false;
+  }
+  const existingQty = Number(existing?.ReceivedPurchaseQuantity) || 0;
+  const incomingQty = Number(incoming?.ReceivedPurchaseQuantity) || 0;
+  return incomingQty >= existingQty;
+}
+
 const FETCH_ADAPTERS = {
   'purchase-orders': purchaseOrdersFetch,
   vendors: vendorsFetch,
   items: itemsFetch,
+  'product-receipt-lines': genericMasterD365Fetch,
 };
 
 function getFetchAdapter(table) {
@@ -1080,6 +1197,37 @@ function buildLookupDedupeSignature({ sourceScope, sourceFieldKey, targetTableKe
     String(sourceFieldKey || '').trim().toLowerCase(),
     String(targetTableKey || '').trim().toLowerCase(),
   ].join('|');
+}
+
+function buildLookupCacheKey(partitionKey, sourceValues, lookup) {
+  const joinKeys = Array.isArray(lookup?.joinKeys) ? lookup.joinKeys : [];
+  const partitionless = Boolean(lookup?.partitionless);
+  if (!joinKeys.length) {
+    const sourceField = String(lookup?.sourceFieldKey || lookup?.sourceField || '').trim();
+    const fkVal = sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)
+      ? sourceValues[sourceField]
+      : null;
+    if (fkVal === null || fkVal === undefined || fkVal === '') return null;
+    return partitionless
+      ? normalizeLookupKeyPart(fkVal)
+      : `${String(partitionKey || '').toLowerCase()}|${normalizeLookupKeyPart(fkVal)}`;
+  }
+
+  const parts = joinKeys.map(({ sourceKey, targetKey }) => {
+    const sourceField = String(sourceKey || '').trim();
+    const targetField = String(targetKey || '').trim();
+    if (sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)) {
+      return normalizeLookupKeyPart(sourceValues[sourceField]);
+    }
+    if (targetField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, targetField)) {
+      return normalizeLookupKeyPart(sourceValues[targetField]);
+    }
+    return '';
+  });
+  if (parts.some((part) => !part)) return null;
+  return partitionless
+    ? parts.join('|')
+    : `${String(partitionKey || '').toLowerCase()}|${parts.join('|')}`;
 }
 
 function toColumnLabelFromField(field) {
@@ -1636,12 +1784,23 @@ async function refresh(tableKey, options = {}) {
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
       getLookups(table.id),
     ]);
-    const masterSource = resolveLookupProjectionColumns({
-      activeColumns: masterCols,
-      allColumns: allMasterCols,
-      lookups: lookupDefs,
-      scope: 'master',
-    });
+    const masterSource = table.key === 'product-receipt-lines'
+      ? ensureKeyFieldColumnsInProjection(
+        resolveLookupProjectionColumns({
+          activeColumns: masterCols,
+          allColumns: allMasterCols,
+          lookups: lookupDefs,
+          scope: 'master',
+        }),
+        allMasterCols,
+        table.keyFields
+      )
+      : resolveLookupProjectionColumns({
+        activeColumns: masterCols,
+        allColumns: allMasterCols,
+        lookups: lookupDefs,
+        scope: 'master',
+      });
     const detailSource = resolveLookupProjectionColumns({
       activeColumns: detailCols,
       allColumns: allDetailCols,
@@ -1896,28 +2055,43 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   ]);
   const targetColumnsAll = targetColumnsRaw.filter((column) => column.source === 'source');
   const targetColumns = targetColumnsAll.filter((column) => column.isActive);
-  if (!targetColumns.length) return null;
+  const targetColByKeyAll = new Map(targetColumnsAll.map((c) => [c.key, c]));
   const targetColByKey = new Map(targetColumns.map((c) => [c.key, c]));
+  const configuredTargetKeys = [
+    ...new Set([
+      ...Object.values(isPlainObject(lk.fields) ? lk.fields : {}),
+      ...targetColumnsAll.map((column) => String(column.key || '').trim()),
+    ].filter(Boolean)),
+  ];
+  if (!configuredTargetKeys.length && !targetColumns.length) return null;
   const targetAliasesByKey = buildLookupTargetAliases(targetColumns, targetColumnsAll);
   const fieldMap = buildLookupFieldMap({
     targetTableKey: lk.targetTableKey,
-    targetFieldKeys: targetColumns.map((column) => column.key),
+    targetFieldKeys: configuredTargetKeys,
     existingFields: lk.fields,
   });
   const fieldEntries = Object.entries(fieldMap)
     .filter(([derivedKey, targetColKey]) => (
-      Boolean(String(derivedKey || '').trim()) && targetColByKey.has(String(targetColKey || '').trim())
+      Boolean(String(derivedKey || '').trim()) && targetColByKeyAll.has(String(targetColKey || '').trim())
     ))
     .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
   if (!fieldEntries.length) return null;
 
   const byKey = new Map();
   for (const r of cacheRes.recordset) {
-    const mapKey = partitionless ? String(r.record_key) : `${String(r.partition_key).toLowerCase()}|${r.record_key}`;
-    byKey.set(mapKey, parseJson(r.data_json));
+    const parsed = parseJson(r.data_json);
+    const lookupSource = enrichLookupSourceFromCacheRow(lk.targetTableKey, r.record_key, parsed);
+    const mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
+      ...lk,
+      partitionless,
+      sourceFieldKey: resolvedSourceField,
+    });
+    if (mapKey) byKey.set(mapKey, parsed);
   }
 
-  const synthetic = fieldEntries.map(([derivedKey, targetColKey]) => {
+  const synthetic = fieldEntries
+    .filter(([, targetColKey]) => targetColByKey.has(targetColKey))
+    .map(([derivedKey, targetColKey]) => {
     const tc = targetColByKey.get(targetColKey);
     return {
       id: null,
@@ -2007,17 +2181,9 @@ async function loadLookupEnrichment(table) {
 function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
   for (const lk of enrichedLookups) {
     if (lk.sourceScope !== scope) continue;
-    const sourceField = String(lk.sourceFieldKey || lk.sourceField || '').trim();
-    const fkVal = sourceField && valueBag && Object.prototype.hasOwnProperty.call(valueBag, sourceField)
-      ? valueBag[sourceField]
-      : (sourceField && sourceValues && Object.prototype.hasOwnProperty.call(sourceValues, sourceField)
-        ? sourceValues[sourceField]
-        : null);
-    const hasFk = fkVal !== null && fkVal !== undefined && fkVal !== '';
-    const lookupKey = lk.partitionless
-      ? String(fkVal).trim()
-      : `${String(partitionKey).toLowerCase()}|${String(fkVal).trim()}`;
-    const targetData = hasFk ? lk.byKey.get(lookupKey) : null;
+    const lookupSourceValues = sourceValues && typeof sourceValues === 'object' ? sourceValues : valueBag;
+    const lookupKey = buildLookupCacheKey(partitionKey, lookupSourceValues, lk);
+    const targetData = lookupKey ? lk.byKey.get(lookupKey) : null;
     for (const [derivedKey, targetColKey] of lk.fieldEntries) {
       let value = targetData && targetColKey in targetData ? targetData[targetColKey] : null;
       if ((value === null || value === undefined) && targetData && lk.targetAliasesByKey) {
@@ -2100,40 +2266,6 @@ function buildFormulaEvaluationContext(rowValues, columns, compiledFormulas) {
   return evalValues;
 }
 
-function buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, compiledDetailFormulas) {
-  const evalValues = withCaseInsensitiveKeys(detailValues);
-  const referencedKeys = new Set();
-  for (const item of Array.isArray(compiledDetailFormulas) ? compiledDetailFormulas : []) {
-    for (const ref of [...(item?.compiled?.references || [])]) {
-      referencedKeys.add(String(ref || '').toLowerCase());
-    }
-  }
-  for (const column of Array.isArray(detailCols) ? detailCols : []) {
-    const keyLower = String(column?.key || '').toLowerCase();
-    if (!keyLower || !referencedKeys.has(keyLower)) continue;
-    if (column.source !== 'source') continue;
-    const value = resolveSourceColumnValue(detailJson, column);
-    evalValues[column.key] = value;
-    evalValues[keyLower] = value;
-  }
-  return evalValues;
-}
-
-function detailFormulaHasMissingSourceReference(compiled, evaluationValues, detailCols) {
-  const references = [...(compiled?.references || [])];
-  if (!references.length) return false;
-  for (const ref of references) {
-    const refLower = String(ref || '').toLowerCase();
-    const column = (Array.isArray(detailCols) ? detailCols : []).find(
-      (entry) => String(entry?.key || '').toLowerCase() === refLower,
-    );
-    if (!column || column.source !== 'source' || !column.sourceField) continue;
-    const value = evaluationValues?.[column.key] ?? evaluationValues?.[refLower] ?? evaluationValues?.[ref];
-    if (value === null || value === undefined) return true;
-  }
-  return false;
-}
-
 function withCaseInsensitiveKeys(values) {
   const normalized = { ...(values || {}) };
   for (const [key, value] of Object.entries(values || {})) {
@@ -2147,11 +2279,7 @@ function withCaseInsensitiveKeys(values) {
 
 function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {}) {
   const formulaErrors = {};
-  const {
-    evaluationValues: providedEvaluationValues = null,
-    detailCols = null,
-    strictMissingSourceRefs = false,
-  } = options;
+  const { evaluationValues: providedEvaluationValues = null } = options;
   const evaluationValues = providedEvaluationValues
     ? withCaseInsensitiveKeys(providedEvaluationValues)
     : withCaseInsensitiveKeys(rowValues);
@@ -2163,15 +2291,6 @@ function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {
       evaluationValues[formulaKey] = null;
       evaluationValues[String(formulaKey).toLowerCase()] = null;
       formulaErrors[formulaKey] = item.compileError;
-      continue;
-    }
-    if (
-      strictMissingSourceRefs
-      && detailFormulaHasMissingSourceReference(item.compiled, evaluationValues, detailCols)
-    ) {
-      rowValues[formulaKey] = null;
-      evaluationValues[formulaKey] = null;
-      evaluationValues[String(formulaKey).toLowerCase()] = null;
       continue;
     }
     const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
@@ -2626,7 +2745,6 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     trackMarksPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
-  const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -2678,19 +2796,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
       const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
       const detailJson = parseJson(d.data_json);
+      const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
       const detailValues = valuesFor(detailCols, detailJson, detailCustom);
-      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
-      const detailFormulaEvalValues = buildDetailFormulaEvaluationContext(
-        detailValues,
-        detailJson,
-        detailCols,
-        compiledDetailFormulas,
-      );
-      const detailFormulaErrors = applyFormulaColumnsToRowValues(detailValues, compiledDetailFormulas, {
-        evaluationValues: detailFormulaEvalValues,
-        detailCols,
-        strictMissingSourceRefs: true,
-      });
+      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
       const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -2707,7 +2815,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
       return {
         detailKey: d.detail_key,
         values: detailValues,
-        formulaErrors: detailFormulaErrors,
+        formulaErrors: {},
         historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
         trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)),
         isNew,
@@ -3577,6 +3685,21 @@ function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
   };
 }
 
+// Board-kolomdefinities inclusief lookup-verrijking (zelfde set als de board-read).
+async function getBoardColumnDefinitions(tableKey, { scope = null } = {}) {
+  const table = await getTableByKey(tableKey);
+  const enrichment = await loadLookupEnrichment(table);
+  const scopes = scope && ['master', 'detail'].includes(scope) ? [scope] : ['master', 'detail'];
+  const result = { master: [], detail: [] };
+  await Promise.all(scopes.map(async (entryScope) => {
+    const cols = await listColumns({ tableId: table.id, scope: entryScope, includeInactive: false });
+    result[entryScope] = entryScope === 'master'
+      ? [...cols, ...enrichment.masterCols]
+      : [...cols, ...enrichment.detailCols];
+  }));
+  return result;
+}
+
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -3833,6 +3956,7 @@ module.exports = {
   correctField,
   getCellHistory,
   getDataModel,
+  getBoardColumnDefinitions,
   discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,
@@ -3854,10 +3978,14 @@ module.exports = {
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
   compileFormulaColumns,
-  buildDetailFormulaEvaluationContext,
-  detailFormulaHasMissingSourceReference,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
+  resolveRecordKeys,
+  buildLookupCacheKey,
+  buildDetailLookupSourceValues,
+  enrichLookupSourceFromCacheRow,
+  ensureKeyFieldColumnsInProjection,
+  usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
