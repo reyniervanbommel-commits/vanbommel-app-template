@@ -3,21 +3,39 @@
 
 IF OBJECT_ID('dbo.tb_columns', 'U') IS NOT NULL
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM sys.check_constraints
-    WHERE [name] = 'CK_tb_columns_data_type'
-      AND parent_object_id = OBJECT_ID('dbo.tb_columns')
-  )
-    ALTER TABLE dbo.tb_columns DROP CONSTRAINT CK_tb_columns_data_type;
-
   IF NOT EXISTS (
-    SELECT 1 FROM sys.check_constraints
-    WHERE [name] = 'CK_tb_columns_data_type'
-      AND parent_object_id = OBJECT_ID('dbo.tb_columns')
+    SELECT 1
+    FROM sys.check_constraints cc
+    WHERE cc.[name] = 'CK_tb_columns_data_type'
+      AND cc.parent_object_id = OBJECT_ID('dbo.tb_columns')
+      AND cc.definition LIKE '%remarks%'
+      AND cc.definition LIKE '%status%'
   )
-    ALTER TABLE dbo.tb_columns WITH NOCHECK
-      ADD CONSTRAINT CK_tb_columns_data_type
-      CHECK (data_type IN ('text','number','date','boolean','select','image','remarks'));
+  BEGIN
+    UPDATE dbo.tb_columns
+    SET data_type = 'text'
+    WHERE data_type IS NULL
+       OR LTRIM(RTRIM(data_type)) = ''
+       OR data_type NOT IN ('text','number','date','boolean','select','image','status','remarks');
+
+    IF EXISTS (
+      SELECT 1
+      FROM sys.check_constraints
+      WHERE [name] = 'CK_tb_columns_data_type'
+        AND parent_object_id = OBJECT_ID('dbo.tb_columns')
+    )
+      ALTER TABLE dbo.tb_columns DROP CONSTRAINT CK_tb_columns_data_type;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.check_constraints
+      WHERE [name] = 'CK_tb_columns_data_type'
+        AND parent_object_id = OBJECT_ID('dbo.tb_columns')
+    )
+      ALTER TABLE dbo.tb_columns WITH NOCHECK
+        ADD CONSTRAINT CK_tb_columns_data_type
+        CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
+  END;
 END;
 
 IF OBJECT_ID('dbo.tb_row_remarks', 'U') IS NULL
