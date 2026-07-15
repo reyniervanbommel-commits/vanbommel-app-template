@@ -124,6 +124,8 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
   itemCell: {
+    '--po-cell-padding-y': '2px',
+    '--po-cell-padding-x': '10px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '10px'),

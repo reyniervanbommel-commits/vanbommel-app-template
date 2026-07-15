@@ -11,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import CellHistoryPopover from './CellHistoryPopover';
+import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
 import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
@@ -22,6 +23,7 @@ const useStyles = makeStyles({
     width: '100%',
     maxHeight: '100%',
     overflow: 'hidden',
+    position: 'relative',
   },
   control: {
     minWidth: 0,
@@ -35,15 +37,6 @@ const useStyles = makeStyles({
     '> button': {
       color: tokens.colorBrandForeground1,
     },
-  },
-  hiddenDatePicker: {
-    position: 'absolute',
-    width: '1px',
-    height: '1px',
-    opacity: 0,
-    pointerEvents: 'none',
-    ...shorthands.border('0'),
-    ...shorthands.padding('0'),
   },
   status: {
     fontSize: tokens.fontSizeBase200,
@@ -143,8 +136,9 @@ export default function EditableCell({
     : undefined;
   const [localValue, setLocalValue] = useState(dataType === 'date' ? toDateInputValue(value) : value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimerRef = useRef(null);
-  const datePickerRef = useRef(null);
+  const dateAnchorRef = useRef(null);
 
   useEffect(() => {
     setLocalValue(dataType === 'date' ? toDateInputValue(value) : value);
@@ -173,12 +167,13 @@ export default function EditableCell({
   }, [dataType, onSave, value]);
 
   const openDatePicker = useCallback(() => {
-    const picker = datePickerRef.current;
-    if (!picker) return;
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-    }
+    setCalendarOpen(true);
   }, []);
+
+  const onCalendarSelect = useCallback((nextValue) => {
+    setLocalValue(nextValue);
+    commit(nextValue);
+  }, [commit]);
 
   const renderStatus = () => {
     if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Save" />;
@@ -227,31 +222,27 @@ export default function EditableCell({
   } else if (dataType === 'date') {
     control = (
       <>
-        <Input
-          className={formattedControlClassName}
-          style={formattedControlInlineStyle}
-          appearance="filled-lighter"
-          size="small"
-          type="text"
-          inputMode="numeric"
-          aria-label={ariaLabel}
-          value={localValue == null ? '' : String(localValue)}
-          onChange={(_, data) => setLocalValue(data.value)}
-          onBlur={() => commit(normalizeDateValue(localValue))}
-          onDoubleClick={openDatePicker}
-        />
-        <input
-          ref={datePickerRef}
-          type="date"
-          tabIndex={-1}
-          aria-hidden="true"
-          className={styles.hiddenDatePicker}
+        <div ref={dateAnchorRef} style={{ minWidth: 0, width: '100%' }}>
+          <Input
+            className={formattedControlClassName}
+            style={formattedControlInlineStyle}
+            appearance="filled-lighter"
+            size="small"
+            type="text"
+            inputMode="numeric"
+            aria-label={ariaLabel}
+            value={localValue == null ? '' : String(localValue)}
+            onChange={(_, data) => setLocalValue(data.value)}
+            onBlur={() => commit(normalizeDateValue(localValue))}
+            onDoubleClick={openDatePicker}
+          />
+        </div>
+        <WeekNumberCalendarPopover
+          open={calendarOpen}
+          onOpenChange={setCalendarOpen}
           value={toDateInputValue(localValue)}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setLocalValue(nextValue);
-            commit(nextValue);
-          }}
+          onSelect={onCalendarSelect}
+          positioningTarget={dateAnchorRef}
         />
       </>
     );

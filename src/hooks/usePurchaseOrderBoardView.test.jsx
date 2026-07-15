@@ -61,8 +61,34 @@ describe('usePurchaseOrderTableView saved-view serialisatie', () => {
 });
 
 describe('usePurchaseOrderBoardView linked line sortering', () => {
+  it('resets activity filter when matching rows disappear (e.g. after mark as seen)', () => {
+    const itemsWithNew = [
+      { orderNumber: 'PO-1', dataAreaId: 'nl', isNew: true, values: { status: 'Open' } },
+    ];
+    const { result, rerender } = renderHook(
+      ({ items }) => usePurchaseOrderBoardView({ items, columns: COLUMNS }),
+      { initialProps: { items: itemsWithNew } }
+    );
+
+    act(() => {
+      result.current.toggleActivityFilter('new');
+    });
+    expect(result.current.activityFilter).toBe('new');
+    expect(result.current.processedItems).toHaveLength(1);
+
+    rerender({
+      items: [{ orderNumber: 'PO-1', dataAreaId: 'nl', isNew: false, values: { status: 'Open' } }],
+    });
+    expect(result.current.activityFilter).toBe('all');
+    expect(result.current.processedItems).toHaveLength(1);
+  });
+
   it('round-trips the activity filter as part of a saved view', () => {
-    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+    const itemsWithNew = [
+      { orderNumber: 'PO-1', dataAreaId: 'nl', isNew: true, values: { status: 'Open' } },
+      { orderNumber: 'PO-2', dataAreaId: 'nl', values: { status: 'Afgerond' } },
+    ];
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: itemsWithNew, columns: COLUMNS }));
 
     act(() => {
       result.current.toggleActivityFilter('new');

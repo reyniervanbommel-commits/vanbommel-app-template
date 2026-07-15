@@ -6,8 +6,9 @@ import {
   Switch,
   makeStyles,
   shorthands,
+  tokens,
 } from '@fluentui/react-components';
-import { CheckmarkRegular } from '@fluentui/react-icons';
+import { CheckmarkRegular, ClockRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   viewMenuItem: {
@@ -28,8 +29,21 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  historyControl: {
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    ...shorthands.gap('4px'),
+  },
+  historyIcon: {
+    fontSize: '14px',
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+  },
   historySwitch: {
     flexShrink: 0,
+    transform: 'scale(0.72)',
+    transformOrigin: 'center center',
   },
 });
 
@@ -69,15 +83,17 @@ export function SavedViewMenuItem({
         <span className={styles.viewMenuItemLabel}>
           {view.name}{view.isDefault ? ' (default)' : ''}
         </span>
-        <Switch
-          className={styles.historySwitch}
-          checked={showHistory}
-          disabled={!canToggleHistory}
-          aria-label="Show history indicators"
-          title="Show history indicators"
-          onClick={handleSwitchClick}
-          onChange={handleToggleHistory}
-        />
+        <span className={styles.historyControl} title="Show history indicators">
+          <ClockRegular className={styles.historyIcon} aria-hidden />
+          <Switch
+            className={styles.historySwitch}
+            checked={showHistory}
+            disabled={!canToggleHistory}
+            aria-label="Show history indicators"
+            onClick={handleSwitchClick}
+            onChange={handleToggleHistory}
+          />
+        </span>
       </span>
     </MenuItem>
   );

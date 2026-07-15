@@ -101,6 +101,8 @@ const useStyles = makeStyles({
     },
   },
   subCell: {
+    '--po-cell-padding-y': '2px',
+    '--po-cell-padding-x': '8px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),

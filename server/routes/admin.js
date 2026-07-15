@@ -14,6 +14,7 @@ const rccpSettingsService = require('../services/RccpSettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { requireRole } = require('../middleware/auth');
+const { getAppBaseUrl } = require('../utils/appEnvironment');
 
 function getPool() {
   return getSqlPool();
@@ -62,7 +63,7 @@ router.post('/users', async (req, res, next) => {
       .input('vendorAccount', sql.NVarChar, normalizeVendorAccount(vendor_account))
       .query('INSERT INTO dbo.users (email, role, display_name, vendor_account) OUTPUT INSERTED.* VALUES (@email, @role, @displayName, @vendorAccount)');
     const newUser = result.recordset[0];
-    const setPasswordUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/set-password?email=' + encodeURIComponent(newUser.email);
+    const setPasswordUrl = getAppBaseUrl() + '/set-password?email=' + encodeURIComponent(newUser.email);
     await emailService.sendInviteEmail(newUser.email, setPasswordUrl).catch(() => {});
     await auditLog(req.user.id, req.user.email, 'CREATE_USER', 'users', newUser.id, { email: newUser.email, role: newUser.role });
     res.status(201).json({ user: newUser });
@@ -117,7 +118,7 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
 
     const resetResult = await authService.requestPasswordReset(user.email);
     if (resetResult.success) {
-      const resetUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/reset-password?token=' + resetResult.token;
+      const resetUrl = getAppBaseUrl() + '/reset-password?token=' + resetResult.token;
       await emailService.sendPasswordResetEmail(user.email, resetUrl).catch(() => {});
     }
     await auditLog(req.user.id, req.user.email, 'FORCE_RESET', 'users', id, {});

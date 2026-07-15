@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../utils/purchaseOrderTotals';
@@ -118,6 +118,15 @@ export function usePurchaseOrderBoardView({
   const toggleActivityFilter = useCallback((nextFilter) => {
     setActivityFilter((prev) => (prev === nextFilter ? ACTIVITY_FILTER_ALL : nextFilter));
   }, []);
+
+  // Na "Mark as seen" of een D365-refresh verdwijnen new/changed/removed-flags, maar het
+  // activity-filter kan nog actief zijn — de activity-bar verdwijnt dan ook, waardoor het
+  // bord leeg lijkt ("No rows match the active filters") zonder zichtbare reset-knop.
+  useEffect(() => {
+    if (activityFilter === ACTIVITY_FILTER_ALL) return;
+    const hasMatches = itemsWithLinkedValues.some(matchesActivityFilter);
+    if (!hasMatches) setActivityFilter(ACTIVITY_FILTER_ALL);
+  }, [activityFilter, itemsWithLinkedValues, matchesActivityFilter]);
 
   const filteredItems = useMemo(
     () => (activityFilter === ACTIVITY_FILTER_ALL ? itemsWithLinkedValues : itemsWithLinkedValues.filter(matchesActivityFilter)),

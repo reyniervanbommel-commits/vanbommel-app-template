@@ -28,8 +28,8 @@ const useStyles = makeStyles({
   },
   trigger: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: 'calc(-1 * var(--po-cell-padding-y, 0px))',
+    right: 'calc(-1 * var(--po-cell-padding-x, 0px))',
     zIndex: 2,
     width: '9px',
     height: '9px',

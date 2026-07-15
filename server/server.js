@@ -25,6 +25,10 @@ const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
+const {
+  DEFAULT_LOCAL_APP_ORIGIN,
+  useSecureSessionCookies,
+} = require('./utils/appEnvironment');
 
 // Robuustheid: een transiente fout buiten de request-keten (bv. een 'error'-event van de
 // MSSQL-connection-pool of session-store bij een korte DB-hapering) zou anders een
@@ -49,7 +53,7 @@ app.use(compression());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173'];
+  : [DEFAULT_LOCAL_APP_ORIGIN];
 
 app.use(cors({
   origin: allowedOrigins,
@@ -95,7 +99,7 @@ app.use(session({
   name: process.env.SESSION_COOKIE_NAME || 'vendorportal.sid',
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: useSecureSessionCookies(),
     sameSite: 'lax',
     maxAge: parseInt(process.env.SESSION_TTL_HOURS || '8') * 60 * 60 * 1000,
   },
