@@ -36,7 +36,7 @@ export default function PurchaseOrderAddColumnPane({
   const addableTypes = useMemo(
     () => (columnLevel === 'header'
       ? NEW_COLUMN_TYPES
-      : NEW_COLUMN_TYPES.filter((type) => !['image', 'remarks'].includes(type.dataType))),
+      : NEW_COLUMN_TYPES.filter((type) => !['image', 'remarks', 'date_wm'].includes(type.key))),
     [columnLevel]
   );
 

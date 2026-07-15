@@ -5,6 +5,11 @@ import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  isDatePeriodColumn,
+  normalizeDatePeriodDisplayMode,
+  resolveDatePeriodCellValue,
+} from '../../utils/datePeriodColumnUtils';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
 import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
 import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
@@ -46,6 +51,7 @@ function PurchaseOrderHeaderCellContent({
   isConditionalFormat = false,
   productImageLines = order.lines,
   showHistoryIndicators = true,
+  datePeriodDisplayModes = {},
 }) {
   const styles = useStyles();
   const key = column.key;
@@ -105,7 +111,21 @@ function PurchaseOrderHeaderCellContent({
     );
   }
 
-  if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+  if (isDatePeriodColumn(column)) {
+    const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
+    const display = resolveDatePeriodCellValue(column, order?.values, displayMode) || '-';
+    const displayNode = isChangedCell && !cellBackgroundColor
+      ? <span className={styles.changedCell}>{display}</span>
+      : display;
+    const formattedDisplayNode = isConditionalFormat
+      ? <span style={formattedTextStyle}>{displayNode}</span>
+      : displayNode;
+    return order.removedInD365
+      ? <span className={styles.removedText}>{formattedDisplayNode}</span>
+      : formattedDisplayNode;
+  }
+
+  if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     if (isStatusColumn(column)) {
       return (
         <StatusCell

@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../utils/purchaseOrderTotals';
+import {
+  isDatePeriodColumn,
+  normalizeDatePeriodDisplayMode,
+  resolveDatePeriodCellValue,
+  resolveDatePeriodSourceKey,
+} from '../utils/datePeriodColumnUtils';
 
 const ACTIVITY_FILTER_ALL = 'all';
 const ACTIVITY_FILTER_NEW = 'new';
@@ -21,6 +27,7 @@ export function usePurchaseOrderBoardView({
   lineColumns = [],
   lineTotalHeaderLinks = [],
   lineValueHeaderLinks = [],
+  datePeriodDisplayModes = {},
 }) {
   const [activityFilter, setActivityFilter] = useState(ACTIVITY_FILTER_ALL);
   const linkedLineTotalByHeaderKey = useMemo(
@@ -81,6 +88,36 @@ export function usePurchaseOrderBoardView({
     });
   }, [items, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
+  const datePeriodColumns = useMemo(
+    () => (Array.isArray(columns) ? columns : []).filter(isDatePeriodColumn),
+    [columns]
+  );
+
+  const itemsWithDerivedDatePeriods = useMemo(() => {
+    if (!datePeriodColumns.length) return itemsWithLinkedValues;
+
+    return itemsWithLinkedValues.map((order) => {
+      let nextValues = order?.values || {};
+      let changed = false;
+
+      datePeriodColumns.forEach((column) => {
+        const sourceKey = resolveDatePeriodSourceKey(column);
+        if (!sourceKey) return;
+        const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
+        const derived = resolveDatePeriodCellValue(column, nextValues, displayMode) || null;
+        if (nextValues[column.key] === derived) return;
+        if (!changed) {
+          nextValues = { ...nextValues };
+          changed = true;
+        }
+        nextValues[column.key] = derived;
+      });
+
+      if (!changed) return order;
+      return { ...order, values: nextValues };
+    });
+  }, [datePeriodColumns, datePeriodDisplayModes, itemsWithLinkedValues]);
+
   const hasNewData = useCallback((order) => (
     Boolean(order?.isNew)
     || (Array.isArray(order?.lines) && order.lines.some((line) => line?.isNew))
@@ -108,12 +145,12 @@ export function usePurchaseOrderBoardView({
     return true;
   }, [activityFilter, hasChangedData, hasNewData, hasRemovedData]);
 
-  const activityCounts = useMemo(() => itemsWithLinkedValues.reduce((acc, order) => {
+  const activityCounts = useMemo(() => itemsWithDerivedDatePeriods.reduce((acc, order) => {
     if (hasNewData(order)) acc.newCount += 1;
     if (hasChangedData(order)) acc.changedCount += 1;
     if (hasRemovedData(order)) acc.removedCount += 1;
     return acc;
-  }, { newCount: 0, changedCount: 0, removedCount: 0 }), [itemsWithLinkedValues, hasChangedData, hasNewData, hasRemovedData]);
+  }, { newCount: 0, changedCount: 0, removedCount: 0 }), [itemsWithDerivedDatePeriods, hasChangedData, hasNewData, hasRemovedData]);
 
   const toggleActivityFilter = useCallback((nextFilter) => {
     setActivityFilter((prev) => (prev === nextFilter ? ACTIVITY_FILTER_ALL : nextFilter));
@@ -124,13 +161,13 @@ export function usePurchaseOrderBoardView({
   // bord leeg lijkt ("No rows match the active filters") zonder zichtbare reset-knop.
   useEffect(() => {
     if (activityFilter === ACTIVITY_FILTER_ALL) return;
-    const hasMatches = itemsWithLinkedValues.some(matchesActivityFilter);
+    const hasMatches = itemsWithDerivedDatePeriods.some(matchesActivityFilter);
     if (!hasMatches) setActivityFilter(ACTIVITY_FILTER_ALL);
-  }, [activityFilter, itemsWithLinkedValues, matchesActivityFilter]);
+  }, [activityFilter, itemsWithDerivedDatePeriods, matchesActivityFilter]);
 
   const filteredItems = useMemo(
-    () => (activityFilter === ACTIVITY_FILTER_ALL ? itemsWithLinkedValues : itemsWithLinkedValues.filter(matchesActivityFilter)),
-    [activityFilter, itemsWithLinkedValues, matchesActivityFilter]
+    () => (activityFilter === ACTIVITY_FILTER_ALL ? itemsWithDerivedDatePeriods : itemsWithDerivedDatePeriods.filter(matchesActivityFilter)),
+    [activityFilter, itemsWithDerivedDatePeriods, matchesActivityFilter]
   );
 
   const tableView = usePurchaseOrderTableView({ items: filteredItems, columns });

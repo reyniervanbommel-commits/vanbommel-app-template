@@ -72,10 +72,13 @@ export function formatCellValue(value, dataType, columnMeta = '') {
   const resolvedColumnKey = typeof columnMeta === 'string' ? columnMeta : columnMeta?.columnKey || '';
   const resolvedColumnLabel = typeof columnMeta === 'string' ? '' : columnMeta?.columnLabel || '';
   const normalizedDate = tryFormatAsDdMmYyyy(value);
+  const normalizedDataType = String(dataType || '').trim().toLowerCase();
   if (
     isDateType(dataType)
-    || (isLikelyDateColumn(resolvedColumnKey, resolvedColumnLabel) && normalizedDate)
-    || (looksLikeIsoDateString(value) && normalizedDate)
+    || (normalizedDataType !== 'date_period'
+      && isLikelyDateColumn(resolvedColumnKey, resolvedColumnLabel)
+      && normalizedDate)
+    || (normalizedDataType !== 'date_period' && looksLikeIsoDateString(value) && normalizedDate)
   ) {
     return normalizedDate || String(value);
   }

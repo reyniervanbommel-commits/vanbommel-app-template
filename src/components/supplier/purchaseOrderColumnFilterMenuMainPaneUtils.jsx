@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ArrowClockwiseRegular,
+  CalendarLtrRegular,
   CheckmarkRegular,
   EditRegular,
   LinkRegular,
@@ -35,6 +36,8 @@ export function renderColumnTypeIcon(typeKey) {
       return <NumberSymbolRegular />;
     case 'date':
       return <ArrowClockwiseRegular />;
+    case 'date_period':
+      return <CalendarLtrRegular />;
     case 'boolean':
       return <CheckmarkRegular />;
     case 'select':

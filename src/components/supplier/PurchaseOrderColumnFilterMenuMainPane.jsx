@@ -1,10 +1,11 @@
-import React from 'react';
-import { Button, Dropdown, Input, Option, Popover, PopoverSurface, PopoverTrigger, Text } from '@fluentui/react-components';
+import React, { useCallback } from 'react';
+import { Dropdown, Input, Option, Popover, PopoverSurface, PopoverTrigger, Text } from '@fluentui/react-components';
 import {
   AddRegular,
   ArrowClockwiseRegular,
   ArrowResetRegular,
   ArrowRightRegular,
+  CalendarLtrRegular,
   DeleteRegular,
   EditRegular,
   FilterRegular,
@@ -14,6 +15,7 @@ import {
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterSubmenuButton from './PurchaseOrderColumnFilterSubmenuButton';
+import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 import { menuLabel, renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
@@ -24,6 +26,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   showColumnMutations = true,
   activeSubmenu,
   openSubmenu,
+  closeSubmenu,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
   canToggleWriteback,
@@ -35,6 +38,9 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
+  canConfigureDatePeriodDisplay,
+  datePeriodDisplayMode,
+  onSelectDatePeriodDisplayMode,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -74,21 +80,25 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   const stickyActionDisabled = !canPromoteToSticky && !canUnstickSticky;
   const stickyLabelClassName = `${styles.menuItemContent} ${stickyActionDisabled ? styles.menuItemContentDisabled : ''}`.trim();
   const stickyIconClassName = `${styles.menuItemIcon} ${stickyActionDisabled ? styles.menuItemIconDisabled : ''}`.trim();
+  const handleFilterRowMouseEnter = useCallback(() => {
+    closeSubmenu?.();
+  }, [closeSubmenu]);
 
   return (
     <div className={styles.mainPane}>
       <div className={styles.titleRow}>
         <span className={styles.titleLabelWrap}>
           {canRenameColumn ? (
-            <Button
+            <PurchaseOrderColumnFilterMenuButton
               className={styles.titleLabelButton}
               appearance="transparent"
               size="small"
+              closeSubmenu={closeSubmenu}
               onClick={handleRenameColumn}
               aria-label={`Rename column ${columnLabel}`}
             >
               <Text className={styles.fieldTitle}>{columnLabel}</Text>
-            </Button>
+            </PurchaseOrderColumnFilterMenuButton>
           ) : (
             <Text className={styles.fieldTitle}>{columnLabel}</Text>
           )}
@@ -104,7 +114,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           {normalizedConnectionTargets.length ? (
             <Popover positioning="below-end">
               <PopoverTrigger disableButtonEnhancement>
-                <Button className={styles.typeMetaConnectionButton} appearance="transparent" size="small" icon={<LinkRegular />} aria-label={`Show connected columns for ${columnLabel}`} />
+                <PurchaseOrderColumnFilterMenuButton className={styles.typeMetaConnectionButton} appearance="transparent" size="small" closeSubmenu={closeSubmenu} icon={<LinkRegular />} aria-label={`Show connected columns for ${columnLabel}`} />
               </PopoverTrigger>
               <PopoverSurface className={styles.typeMetaConnectionSurface}>
                 <Text className={styles.fieldTitle}>Connected columns</Text>
@@ -120,15 +130,15 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       {showSortAndFilter ? (
         <>
           <div className={styles.sortActions}>
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortAsc}>
+            <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={setSortAsc}>
               {menuLabel(styles, <ArrowRightRegular />, 'Sort A to Z')}
-            </Button>
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={setSortDesc}>
+            </PurchaseOrderColumnFilterMenuButton>
+            <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={setSortDesc}>
               {menuLabel(styles, <ArrowClockwiseRegular />, 'Sort Z to A')}
-            </Button>
-            <Button className={styles.sortButton} appearance="subtle" size="small" onClick={clearSort}>
+            </PurchaseOrderColumnFilterMenuButton>
+            <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={clearSort}>
               {menuLabel(styles, <ArrowResetRegular />, 'Clear sort')}
-            </Button>
+            </PurchaseOrderColumnFilterMenuButton>
           </div>
           {showGrouping ? (
             <>
@@ -153,12 +163,38 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       {canToggleWriteback ? (
         <>
           <div className={styles.divider} />
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleWriteback}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <img src="/d365-sync-cloud.png" alt="" style={{ width: '14px', height: '14px', objectFit: 'contain' }} />
               {writable ? 'Disable sync' : 'Enable sync'}
             </span>
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
+        </>
+      ) : null}
+      {canConfigureDatePeriodDisplay ? (
+        <>
+          <div className={styles.divider} />
+          <Text className={styles.subPaneTitle}>Display as</Text>
+          <PurchaseOrderColumnFilterMenuButton
+            className={styles.sortButton}
+            appearance="subtle"
+            size="small"
+            closeSubmenu={closeSubmenu}
+            aria-pressed={datePeriodDisplayMode !== 'month'}
+            onClick={() => onSelectDatePeriodDisplayMode('week')}
+          >
+            {menuLabel(styles, <CalendarLtrRegular />, 'Week number')}
+          </PurchaseOrderColumnFilterMenuButton>
+          <PurchaseOrderColumnFilterMenuButton
+            className={styles.sortButton}
+            appearance="subtle"
+            size="small"
+            closeSubmenu={closeSubmenu}
+            aria-pressed={datePeriodDisplayMode === 'month'}
+            onClick={() => onSelectDatePeriodDisplayMode('month')}
+          >
+            {menuLabel(styles, <CalendarLtrRegular />, 'Month name')}
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canAddColumn ? (
@@ -170,51 +206,52 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       <div className={styles.divider} />
       {showColumnMutations && canEditFormulaColumn ? (
         <>
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleEditFormulaColumn}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleEditFormulaColumn}>
             {menuLabel(styles, <NumberSymbolRegular />, 'Edit formula column')}
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
           <div className={styles.divider} />
         </>
       ) : null}
       {showColumnMutations && canRemoveColumn ? (
         <>
           <div className={styles.divider} />
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleRemoveColumn}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleRemoveColumn}>
             {menuLabel(styles, <DeleteRegular />, 'Delete column')}
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canToggleLineTotal ? (
         <>
           <div className={styles.divider} />
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handleToggleLineTotal}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleLineTotal}>
             {menuLabel(styles, <NumberSymbolRegular />, isLineColumnSummed ? 'Disable total row sum' : 'Enable total row sum')}
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canPushLineTotalToHeader ? (
         <>
           <div className={styles.divider} />
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineTotalToHeader}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handlePushLineTotalToHeader}>
             {menuLabel(styles, <LinkRegular />, 'Push total to header column')}
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canPushLineValuesToHeader ? (
         <>
           <div className={styles.divider} />
-          <Button className={styles.sortButton} appearance="subtle" size="small" onClick={handlePushLineValuesToHeader}>
+          <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handlePushLineValuesToHeader}>
             {menuLabel(styles, <LinkRegular />, 'Push values to header column')}
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {canMakeColumnSticky ? (
         <>
           <div className={styles.divider} />
-          <Button
+          <PurchaseOrderColumnFilterMenuButton
             className={styles.sortButton}
             appearance="subtle"
             size="small"
+            closeSubmenu={closeSubmenu}
             onClick={handleMakeColumnSticky}
             disabled={stickyActionDisabled}
           >
@@ -224,14 +261,14 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
               </span>
               <span>{stickyMenuText}</span>
             </span>
-          </Button>
+          </PurchaseOrderColumnFilterMenuButton>
         </>
       ) : null}
       {showSortAndFilter ? (
         <>
           <div className={styles.divider} />
           <Text className={styles.fieldTitle}>{menuLabel(styles, <FilterRegular />, 'Filter')}</Text>
-          <div className={styles.filterRow}>
+          <div className={styles.filterRow} onMouseEnter={handleFilterRowMouseEnter}>
             <Dropdown selectedOptions={[draft.operator]} value={operatorLabels[draft.operator]} onOptionSelect={handleOperatorSelect}>
               {operatorEntries.map(([key, label]) => (
                 <Option key={key} value={key} text={label}>{label}</Option>
@@ -256,8 +293,8 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
               <Input value={draft.value} onChange={handleValueChange} placeholder={draft.operator === 'oneOf' ? 'Value1, Value2, Value3' : 'Value'} />
             ) : null}
             <div className={styles.actionRow}>
-              <Button size="small" appearance="primary" onClick={handleApply}>Apply</Button>
-              <Button size="small" appearance="secondary" onClick={handleClearFilter}>Clear</Button>
+              <PurchaseOrderColumnFilterMenuButton size="small" appearance="primary" closeSubmenu={closeSubmenu} onClick={handleApply}>Apply</PurchaseOrderColumnFilterMenuButton>
+              <PurchaseOrderColumnFilterMenuButton size="small" appearance="secondary" closeSubmenu={closeSubmenu} onClick={handleClearFilter}>Clear</PurchaseOrderColumnFilterMenuButton>
             </div>
           </div>
         </>

@@ -38,6 +38,8 @@ function PurchaseOrderColumnFilterMenu({
   isGroupSummaryColumn = false,
   onSetGroupSummaryColumn,
   onAddColumnRightOf,
+  datePeriodDisplayMode,
+  onSetDatePeriodDisplayMode,
   onRenameColumn,
   onRemoveColumn,
   isLineColumnSummed = false,
@@ -79,7 +81,7 @@ function PurchaseOrderColumnFilterMenu({
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
   const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
-  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
@@ -131,6 +133,10 @@ function PurchaseOrderColumnFilterMenu({
     setActiveSubmenu(name);
     setSubmenuTop(event?.currentTarget?.offsetTop || 0);
   }, []);
+  const closeSubmenu = useCallback(() => {
+    setActiveSubmenu('none');
+    setSubmenuTop(0);
+  }, []);
   const handleAddType = useCallback((typeDef) => {
     onAddColumnRightOf(column, typeDef);
     setActiveSubmenu('none');
@@ -141,6 +147,11 @@ function PurchaseOrderColumnFilterMenu({
     onAddColumnRightOf(column, { key: 'formula-edit' });
     setOpen(false);
   }, [canEditFormulaColumn, column, onAddColumnRightOf]);
+  const handleSelectDatePeriodDisplayMode = useCallback((displayMode) => {
+    if (!canConfigureDatePeriodDisplay || typeof onSetDatePeriodDisplayMode !== 'function') return;
+    onSetDatePeriodDisplayMode(column.key, displayMode);
+    setActiveSubmenu('none');
+  }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
   const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApply, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
@@ -183,13 +194,16 @@ function PurchaseOrderColumnFilterMenu({
       </PopoverTrigger>
       <PurchaseOrderColumnFilterMenuPopoverContent
         styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets}
-        activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu}
+        activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu} closeSubmenu={closeSubmenu}
         showGrouping={isStaff && !readOnlyColumnMenu}
         showColumnMutations={isStaff}
         showSortAndFilter={!readOnlyColumnMenu}
         canSetColumnTextStyle={canSetColumnTextStyle} canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback} showWritebackLocked={showWritebackLocked} handleToggleWriteback={handleToggleWriteback} writable={writable}
         canAddColumn={canAddColumn} canRenameColumn={canRenameColumn} handleRenameColumn={handleRenameColumn} canEditFormulaColumn={canEditFormulaColumn}
+        canConfigureDatePeriodDisplay={canConfigureDatePeriodDisplay}
+        datePeriodDisplayMode={datePeriodDisplayMode}
+        onSelectDatePeriodDisplayMode={handleSelectDatePeriodDisplayMode}
         handleEditFormulaColumn={handleEditFormulaColumn}
         canRemoveColumn={canRemoveColumn} handleRemoveColumn={handleRemoveColumn} canToggleLineTotal={canToggleLineTotal} isLineColumnSummed={isLineColumnSummed}
         handleToggleLineTotal={handleToggleLineTotal} canPushLineTotalToHeader={canPushLineTotalToHeader} handlePushLineTotalToHeader={handlePushLineTotalToHeader}

@@ -43,6 +43,8 @@ export default function PurchaseOrdersBoardHeaderRow({
   setGroupingBarColor,
   setGroupSummaryColumn,
   onAddColumnRightOf,
+  datePeriodDisplayModes = {},
+  onSetDatePeriodDisplayMode,
   headerColumnTextStyles,
   onSaveHeaderColumnTextStyle,
   headerColumnFormatRules = {},
@@ -147,6 +149,8 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetGroupingColor={setGroupingBarColor}
                 onSetGroupSummaryColumn={setGroupSummaryColumn}
                 onAddColumnRightOf={onAddColumnRightOf}
+                datePeriodDisplayMode={datePeriodDisplayModes[column.key]}
+                onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}
                 onRenameColumn={onRenameColumn}
                 onRemoveColumn={onRemoveColumn}
                 columnTextStyle={headerColumnTextStyles[column.key]}

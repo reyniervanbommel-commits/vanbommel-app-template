@@ -205,6 +205,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
           productImageLines={order.lines}
           showHistoryIndicators={actions.showHistoryIndicators}
+          datePeriodDisplayModes={actions.datePeriodDisplayModes}
         />
       )}
     </PurchaseOrderDataCell>

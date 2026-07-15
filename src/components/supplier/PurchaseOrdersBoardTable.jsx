@@ -45,6 +45,8 @@ function PurchaseOrdersBoardTable({
     onSaveLineColumnTextStyle,
     onSaveLineColumnFormatRules,
     onAddColumnRightOf,
+    datePeriodDisplayModes = {},
+    onSetDatePeriodDisplayMode,
     editingColumnKey,
     onEditingDone,
     reorderingColumns = false,
@@ -77,7 +79,11 @@ function PurchaseOrdersBoardTable({
     }, 240);
     return () => clearTimeout(timer);
   }, [editingColumnKey, columns]);
-  const fallbackBoardView = usePurchaseOrderBoardView({ items, columns: decoratedColumns });
+  const fallbackBoardView = usePurchaseOrderBoardView({
+    items,
+    columns: decoratedColumns,
+    datePeriodDisplayModes,
+  });
   const resolvedBoardView = boardView || fallbackBoardView;
   const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
   const {
@@ -134,6 +140,7 @@ function PurchaseOrdersBoardTable({
   const cellActions = useMemo(
     () => ({
       ...pageCellActions,
+      datePeriodDisplayModes,
       onRenameColumn,
       onRemoveColumn,
       isAdmin,
@@ -225,6 +232,8 @@ function PurchaseOrdersBoardTable({
             setGroupingBarColor={setGroupingBarColor}
             setGroupSummaryColumn={setGroupSummaryColumn}
             onAddColumnRightOf={onAddColumnRightOf}
+            datePeriodDisplayModes={datePeriodDisplayModes}
+            onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}
             headerColumnTextStyles={headerColumnTextStyles}
             onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}
             headerColumnFormatRules={headerColumnFormatRules}
