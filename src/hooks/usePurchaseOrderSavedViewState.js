@@ -56,6 +56,7 @@ export function usePurchaseOrderSavedViewState({
   const [activeViewId, setActiveViewId] = useState(null);
   const [savedStateFingerprint, setSavedStateFingerprint] = useState(null);
   const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
+  const [showHistoryIndicators, setShowHistoryIndicators] = useState(true);
   const autoAppliedRef = useRef(false);
   const activeView = useMemo(
     () => savedViews.views.find((view) => view.id === activeViewId) || null,
@@ -63,12 +64,13 @@ export function usePurchaseOrderSavedViewState({
   );
 
   const buildCurrentViewState = useCallback(() => ({
+    showHistoryIndicators,
     columns: {
       ...exportColumnLayout(),
       stickyColumnKeys,
     },
     table: boardView.exportFilterSortGrouping(),
-  }), [exportColumnLayout, boardView, stickyColumnKeys]);
+  }), [exportColumnLayout, boardView, stickyColumnKeys, showHistoryIndicators]);
 
   const buildCurrentFingerprint = useCallback(
     () => stableSerialize(buildCurrentViewState()),
@@ -85,6 +87,7 @@ export function usePurchaseOrderSavedViewState({
     applyColumnLayout(state.columns);
     setStickyColumnKeys(Array.isArray(state.columns?.stickyColumnKeys) ? state.columns.stickyColumnKeys : []);
     boardView.applyFilterSortGrouping(state.table);
+    setShowHistoryIndicators(state.showHistoryIndicators !== false);
     setActiveViewId(view?.id ?? null);
     setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
   }, [applyColumnLayout, boardView]);
@@ -94,6 +97,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearSort();
     boardView.clearGrouping();
     boardView.clearGroupSummaries();
+    setShowHistoryIndicators(true);
     setActiveViewId(null);
     setSavedStateFingerprint(null);
   }, [boardView]);
@@ -130,10 +134,23 @@ export function usePurchaseOrderSavedViewState({
   const handleDeleteView = useCallback(async (view) => {
     await savedViews.deleteView(view.id);
     if (view.id === activeViewId) {
+      setShowHistoryIndicators(true);
       setActiveViewId(null);
       setSavedStateFingerprint(null);
     }
   }, [savedViews, activeViewId]);
+
+  const handleToggleShowHistory = useCallback(async (view, enabled) => {
+    const nextViewState = {
+      ...(view?.viewState || {}),
+      showHistoryIndicators: Boolean(enabled),
+    };
+    await savedViews.updateView(view.id, { viewState: nextViewState });
+    if (view.id === activeViewId) {
+      setShowHistoryIndicators(Boolean(enabled));
+      setSavedStateFingerprint(stableSerialize(nextViewState));
+    }
+  }, [activeViewId, savedViews]);
 
   useEffect(() => {
     if (autoAppliedRef.current) return;
@@ -156,7 +173,9 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
     hasUnsavedChanges,
+    showHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   }), [
@@ -169,7 +188,9 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
     hasUnsavedChanges,
+    showHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   ]);

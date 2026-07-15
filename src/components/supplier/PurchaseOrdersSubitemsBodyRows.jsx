@@ -86,8 +86,10 @@ function renderLineCellContent({
   styles,
   cellBackgroundColor = '',
   isConditionalFormat = false,
+  showHistoryIndicators = true,
 }) {
   const rawValue = line.values?.[column.key];
+  const showHistory = showHistoryIndicators !== false && Boolean(line.historyByColumnId?.[column.id]);
   const firstDataColumn = lineColumns.find((entry) => !isProductImageColumn(entry));
   const showLineBadge = column === firstDataColumn && (line?.isNew || line?.isChanged || line?.isRemoved);
   const itemNumber = line?.itemNumber ?? line?.values?.itemNumber;
@@ -128,7 +130,7 @@ function renderLineCellContent({
             options={column.options}
             isAdmin={isAdmin}
             ariaLabel={`${column.label} for line ${line.lineNumber}`}
-            hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+            hasHistory={showHistory}
             cellKeys={{
               columnId: column.id,
               dataAreaId: order.dataAreaId,
@@ -162,7 +164,7 @@ function renderLineCellContent({
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} for line ${line.lineNumber}`}
-          hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -192,7 +194,7 @@ function renderLineCellContent({
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
-          hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -246,6 +248,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
   connectorStyles,
   hasTotalsRow = false,
   cellFilterActions,
+  showHistoryIndicators = true,
 }) {
   const styles = useStyles();
   const effectiveColumnFormatRules = useMemo(
@@ -322,6 +325,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   styles,
                   cellBackgroundColor: cellBackground,
                   isConditionalFormat,
+                  showHistoryIndicators,
                 })}
               </PurchaseOrderDataCell>
             );

@@ -59,6 +59,7 @@ function PurchaseOrdersBoardExpandedRow({
           headerColumns={headerColumns}
           linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
           linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+          showHistoryIndicators={cellActions.showHistoryIndicators}
         />
       </td>
     </tr>

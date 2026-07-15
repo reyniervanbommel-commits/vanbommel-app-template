@@ -81,7 +81,7 @@ export default function PurchaseOrdersPage() {
   });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });
-  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -175,6 +175,7 @@ export default function PurchaseOrdersPage() {
     tableSelection,
     remarks,
     stickyColumns: { keys: stickyColumnKeys, onChange: setStickyColumnKeys },
+    showHistoryIndicators,
   }), [
     boardView,
     bulkEdit,
@@ -188,6 +189,7 @@ export default function PurchaseOrdersPage() {
     pageModel,
     remarks,
     setStickyColumnKeys,
+    showHistoryIndicators,
     stickyColumnKeys,
     tableSelection,
   ]);
@@ -205,6 +207,7 @@ export default function PurchaseOrdersPage() {
           handleRenameView,
           handleSetDefault,
           handleDeleteView,
+          handleToggleShowHistory,
         }}
         headerState={{
           isStaff,
