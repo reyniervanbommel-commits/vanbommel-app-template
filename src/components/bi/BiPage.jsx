@@ -13,7 +13,7 @@ import { useBiMeta } from './hooks/useBiMeta';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useStarterCharts } from './hooks/useStarterCharts';
-import { BOARD_KEY, createEmptyChartConfig } from './biConstants';
+import { BOARD_KEY } from './biConstants';
 
 const useStyles = makeStyles({
   pageLayout: {
@@ -45,7 +45,7 @@ export default function BiPage() {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [seeding, setSeeding] = useState(false);
-  const [flyoutActions, setFlyoutActions] = useState(null);
+  const [flyoutChrome, setFlyoutChrome] = useState({ actions: null, nameField: null });
 
   const selectedChartId = useMemo(() => {
     if (!builderMode || builderMode === 'new') return 'draft';
@@ -70,57 +70,23 @@ export default function BiPage() {
     ));
   }, [charts, builderMode, draftPayload, user?.id]);
 
-  const savedChartsForFetch = useMemo(() => {
-    if (!builderMode) return charts;
-    if (builderMode === 'new') return charts;
-    return charts.filter((chart) => chart.id !== builderMode.id);
-  }, [charts, builderMode]);
-
-  const activeChartForFetch = useMemo(() => {
-    if (!builderMode) return null;
-    if (draftPayload) {
-      if (builderMode === 'new') {
-        return {
-          id: 'draft',
-          userId: user?.id,
-          name: draftPayload.name,
-          visibility: draftPayload.visibility,
-          config: draftPayload.config,
-        };
-      }
-      return {
-        ...builderMode,
-        name: draftPayload.name,
-        visibility: draftPayload.visibility,
+  const chartsForFetch = useMemo(() => {
+    if (!builderMode || !draftPayload) return charts;
+    if (builderMode === 'new') {
+      return [{
+        id: 'draft',
+        userId: user?.id,
         config: draftPayload.config,
-      };
+      }, ...charts];
     }
-    if (builderMode !== 'new') return builderMode;
-    return {
-      id: 'draft',
-      userId: user?.id,
-      name: 'New chart',
-      visibility: 'private',
-      config: createEmptyChartConfig(),
-    };
-  }, [builderMode, draftPayload, user?.id]);
+    return charts.map((chart) => (
+      chart.id === builderMode.id
+        ? { ...chart, config: draftPayload.config }
+        : chart
+    ));
+  }, [charts, builderMode, draftPayload, user?.id]);
 
-  const { resultsById: savedResults, loadingById: savedLoading } = useChartData({
-    charts: builderMode ? savedChartsForFetch : charts,
-  });
-  const { resultsById: activeResults, loadingById: activeLoading } = useChartData({
-    charts: activeChartForFetch ? [activeChartForFetch] : [],
-  });
-
-  const resultsById = useMemo(() => {
-    if (!builderMode) return savedResults;
-    return { ...savedResults, ...activeResults };
-  }, [builderMode, savedResults, activeResults]);
-
-  const loadingById = useMemo(() => {
-    if (!builderMode) return savedLoading;
-    return { ...savedLoading, ...activeLoading };
-  }, [builderMode, savedLoading, activeLoading]);
+  const { resultsById, loadingById } = useChartData({ charts: chartsForFetch });
 
   const handleNew = useCallback(() => {
     setDraftPayload(null);
@@ -232,7 +198,12 @@ export default function BiPage() {
       </div>
 
       {builderMode ? (
-        <ChartBuilderFlyout title={flyoutTitle} onClose={handleCancel} actions={flyoutActions}>
+        <ChartBuilderFlyout
+          title={flyoutTitle}
+          onClose={handleCancel}
+          actions={flyoutChrome.actions}
+          nameField={flyoutChrome.nameField}
+        >
           <ChartBuilderPanel
             key={builderMode === 'new' ? 'new' : builderMode.id}
             columns={meta.columns}
@@ -240,7 +211,7 @@ export default function BiPage() {
             onSave={handleSave}
             onCancel={handleCancel}
             onDraftChange={handleDraftChange}
-            onFlyoutActionsChange={setFlyoutActions}
+            onFlyoutChromeChange={setFlyoutChrome}
             busy={busy}
             variant="flyout"
           />

@@ -26,7 +26,7 @@ const useStyles = makeStyles({
   placeholder: { color: tokens.colorNeutralForeground3 },
 });
 
-function ChartMeasureMultiSelect({ columns, selectedKeys, onChange, disabled = false }) {
+function ChartMeasureMultiSelect({ columns, selectedKeys, onChange, disabled = false, size = 'medium' }) {
   const styles = useStyles();
   const selectedSet = new Set(selectedKeys || []);
 
@@ -48,6 +48,7 @@ function ChartMeasureMultiSelect({ columns, selectedKeys, onChange, disabled = f
           <Button
             className={styles.trigger}
             appearance="outline"
+            size={size}
             icon={<ChevronDownRegular />}
             iconPosition="after"
             disabled={disabled}

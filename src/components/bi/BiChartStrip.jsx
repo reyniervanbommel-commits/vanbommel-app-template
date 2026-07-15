@@ -6,7 +6,7 @@ import {
 import { ChartMultipleRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
 import ChartWidthSelect from './ChartWidthSelect';
-import { resolveChartSize, stripCardStyle } from './biConstants';
+import { resolveChartSize, stripFlexStyle } from './biConstants';
 
 const useStyles = makeStyles({
   root: {
@@ -15,6 +15,7 @@ const useStyles = makeStyles({
     ...shorthands.gap('8px'),
     minHeight: 0,
     height: '100%',
+    width: '100%',
   },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
   title: { fontWeight: 600, color: tokens.colorNeutralForeground2 },
@@ -23,33 +24,32 @@ const useStyles = makeStyles({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     alignItems: 'stretch',
-    ...shorthands.gap('12px'),
-    overflowX: 'auto',
-    overflowY: 'hidden',
+    ...shorthands.gap('8px'),
+    overflow: 'hidden',
     flexGrow: 1,
     minHeight: 0,
-    scrollbarGutter: 'stable',
+    width: '100%',
   },
   card: {
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('4px'),
-    ...shorthands.padding('8px'),
+    ...shorthands.padding('6px'),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     minHeight: 0,
-    flexShrink: 0,
+    minWidth: 0,
   },
   cardHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('6px'),
     minWidth: 0,
   },
   cardTitle: {
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -57,6 +57,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     flexGrow: 1,
   },
+  chartWrap: { flex: 1, minHeight: 0, minWidth: 0 },
   empty: { color: tokens.colorNeutralForeground3, ...shorthands.padding('16px') },
 });
 
@@ -70,7 +71,7 @@ function BiChartStrip({
     [availableCharts, selectedIdSet],
   );
 
-  const chartHeight = Math.max(120, (height || 280) - 70);
+  const chartHeight = Math.max(100, (height || 280) - 64);
 
   return (
     <div className={styles.root}>
@@ -107,7 +108,7 @@ function BiChartStrip({
               <div
                 className={styles.card}
                 key={chart.id}
-                style={stripCardStyle(chart)}
+                style={stripFlexStyle(chart, selectedCharts)}
               >
                 <div className={styles.cardHeader}>
                   <Text className={styles.cardTitle} title={chart.name}>{chart.name}</Text>
@@ -119,13 +120,15 @@ function BiChartStrip({
                     />
                   ) : null}
                 </div>
-                <ChartRenderer
-                  type={chartType}
-                  series={chart.series || []}
-                  config={chart.config}
-                  columns={columns}
-                  height={chartHeight}
-                />
+                <div className={styles.chartWrap}>
+                  <ChartRenderer
+                    type={chartType}
+                    series={chart.series || []}
+                    config={chart.config}
+                    columns={columns}
+                    height={chartHeight}
+                  />
+                </div>
               </div>
             );
           })}

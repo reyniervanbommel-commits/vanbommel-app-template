@@ -38,8 +38,8 @@ function BiDashboardGrid({
         <div key={chart.id} className={styles.cell} style={chartGridStyle(chart)}>
           <ChartCard
             chart={chart}
-            series={resultsById[chart.id] || []}
-            loading={Boolean(loadingById[chart.id])}
+            series={resultsById[String(chart.id)] || []}
+            loading={Boolean(loadingById[String(chart.id)]) && !(resultsById[String(chart.id)]?.length)}
             columns={columns}
             canManage={Number(chart.userId) === Number(currentUserId)}
             selected={Number(selectedChartId) === Number(chart.id)}

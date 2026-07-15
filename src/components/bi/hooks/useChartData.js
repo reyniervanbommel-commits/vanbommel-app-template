@@ -18,6 +18,10 @@ function chartConfigKey(chart) {
   return JSON.stringify(chart?.config || {});
 }
 
+function chartIdKey(id) {
+  return String(id);
+}
+
 /**
  * Haalt geaggregeerde series op voor charts via POST /api/bi/aggregate.
  * @returns {{ resultsById, loadingById, loading, error }}
@@ -62,7 +66,8 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
     }
 
     const dirtyIds = payload.ids.filter((id, index) => {
-      const prevKey = cacheRef.current.configKeys[id];
+      const key = chartIdKey(id);
+      const prevKey = cacheRef.current.configKeys[key];
       return prevKey !== payload.configKeys[index];
     });
 
@@ -72,20 +77,21 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    let active = true;
+    const dirtyKeys = dirtyIds.map(chartIdKey);
 
     setLoadingById((prev) => {
       const next = { ...prev };
-      dirtyIds.forEach((id) => { next[id] = true; });
+      dirtyKeys.forEach((id) => { next[id] = true; });
       return next;
     });
     setError(null);
 
-    const dirtyIdSet = new Set(dirtyIds.map(String));
+    const dirtyKeySet = new Set(dirtyKeys);
     const fetchCharts = [];
     const fetchIds = [];
     payload.ids.forEach((id, index) => {
-      if (dirtyIdSet.has(String(id))) {
+      const key = chartIdKey(id);
+      if (dirtyKeySet.has(key)) {
         fetchIds.push(id);
         fetchCharts.push(payload.charts[index]);
       }
@@ -93,32 +99,33 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
 
     apiRequest('/bi/aggregate', { method: 'POST', body: { boardKey, charts: fetchCharts } })
       .then((data) => {
-        if (!active || requestIdRef.current !== requestId) return;
+        if (requestIdRef.current !== requestId) return;
         setResultsById((prev) => {
           const next = { ...prev };
           (data.results || []).forEach((result, index) => {
             const id = fetchIds[index];
-            next[id] = result.series || [];
-            cacheRef.current.results[id] = next[id];
-            cacheRef.current.configKeys[id] = payload.configKeys[payload.ids.indexOf(id)];
+            const key = chartIdKey(id);
+            next[key] = result.series || [];
+            cacheRef.current.results[key] = next[key];
+            const payloadIndex = payload.ids.findIndex((entry) => chartIdKey(entry) === key);
+            cacheRef.current.configKeys[key] = payload.configKeys[payloadIndex];
           });
           return next;
         });
       })
       .catch((err) => {
-        if (!active) return;
+        if (requestIdRef.current !== requestId) return;
         setError(err.message || 'Failed to load chart data');
       })
       .finally(() => {
-        if (!active || requestIdRef.current !== requestId) return;
         setLoadingById((prev) => {
           const next = { ...prev };
-          dirtyIds.forEach((id) => { next[id] = false; });
+          dirtyKeys.forEach((id) => { next[id] = false; });
           return next;
         });
       });
 
-    return () => { active = false; };
+    return undefined;
   }, [payloadKey, boardKey, payload]);
 
   useEffect(() => {

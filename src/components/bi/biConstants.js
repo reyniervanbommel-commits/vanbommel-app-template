@@ -124,6 +124,19 @@ export function chartGridStyle(chart) {
   return { gridColumn: `span ${resolveGridSpan(chart)}` };
 }
 
+export function stripFlexStyle(chart, charts = []) {
+  const list = Array.isArray(charts) ? charts : [];
+  const weight = resolveGridSpan(chart);
+  const total = list.reduce((sum, entry) => sum + resolveGridSpan(entry), 0) || weight;
+  return {
+    flex: `${weight} 1 0`,
+    minWidth: 0,
+    maxWidth: 'none',
+    overflow: 'hidden',
+  };
+}
+
+/** @deprecated Alleen voor backwards compatibility; split view gebruikt stripFlexStyle. */
 export function stripCardStyle(chart) {
   const type = resolveChartType(chart);
   const size = resolveChartSize(chart);

@@ -23,8 +23,8 @@ const useStyles = makeStyles({
     width: '100%',
   },
   shellFlyout: {
-    ...shorthands.gap('16px'),
-    ...shorthands.padding('16px', '0', '0'),
+    ...shorthands.gap('10px'),
+    ...shorthands.padding('10px', '0', '0'),
   },
   panel: {
     display: 'flex',
@@ -36,11 +36,13 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow8,
   },
   panelFlyout: {
+    ...shorthands.gap('10px'),
     ...shorthands.padding('0'),
     boxShadow: 'none',
     ...shorthands.borderRadius(0),
   },
   section: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
+  sectionFlyout: { ...shorthands.gap('6px') },
   sectionTitle: {
     fontSize: '12px',
     fontWeight: 600,
@@ -48,6 +50,7 @@ const useStyles = makeStyles({
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
+  sectionTitleFlyout: { fontSize: '10px', letterSpacing: '0.06em' },
   fieldGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
@@ -55,11 +58,21 @@ const useStyles = makeStyles({
   },
   fieldGridFlyout: {
     gridTemplateColumns: '1fr',
+    ...shorthands.gap('8px'),
+  },
+  fieldGridFlyoutPair: {
+    gridTemplateColumns: '1fr 1fr',
+    ...shorthands.gap('8px'),
   },
   fieldNarrow: { maxWidth: '320px' },
   fieldNarrowFlyout: { maxWidth: '100%' },
+  fieldCompact: {
+    '& label': { fontSize: '11px' },
+    '& .fui-Field__hint': { fontSize: '10px' },
+  },
   actions: { display: 'flex', ...shorthands.gap('8px'), justifyContent: 'flex-end' },
   title: { fontSize: '18px', fontWeight: 600 },
+  dividerFlyout: { marginTop: '2px', marginBottom: '2px' },
 });
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
@@ -78,11 +91,12 @@ function usesSeriesColor(type, config) {
 }
 
 export default function ChartBuilderPanel({
-  columns, chart, onSave, onCancel, onDraftChange, onFlyoutActionsChange,
+  columns, chart, onSave, onCancel, onDraftChange, onFlyoutChromeChange,
   busy = false, variant = 'page',
 }) {
   const styles = useStyles();
   const isFlyout = variant === 'flyout';
+  const controlSize = isFlyout ? 'small' : 'medium';
   const builder = useChartBuilder(chart, columns);
   const { config, measureColumns, isDateDimension, isValid, multiMeasureMode, selectedMeasures } = builder;
   const countMode = config.aggregation === 'count';
@@ -115,24 +129,48 @@ export default function ChartBuilderPanel({
     onSave(builder.payload);
   }, [isValid, busy, onSave, builder.payload]);
 
+  const handleNameChange = useCallback((_, data) => {
+    builder.setName(data.value);
+  }, [builder]);
+
   useLayoutEffect(() => {
     if (!isFlyout) {
-      onFlyoutActionsChange?.(null);
+      onFlyoutChromeChange?.({ actions: null, nameField: null });
       return undefined;
     }
-    onFlyoutActionsChange?.(
-      <>
-        <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
-        <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
-          {busy ? 'Saving…' : 'Save chart'}
-        </Button>
-      </>,
-    );
-    return () => onFlyoutActionsChange?.(null);
-  }, [isFlyout, isValid, busy, handleSave, onCancel, onFlyoutActionsChange]);
+    onFlyoutChromeChange?.({
+      nameField: (
+        <Input
+          size="small"
+          value={builder.name}
+          onChange={handleNameChange}
+          placeholder="Chart name"
+          aria-label="Chart name"
+        />
+      ),
+      actions: (
+        <>
+          <Button size="small" appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button size="small" appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
+            {busy ? 'Saving…' : 'Save chart'}
+          </Button>
+        </>
+      ),
+    });
+    return () => onFlyoutChromeChange?.({ actions: null, nameField: null });
+  }, [isFlyout, isValid, busy, handleSave, onCancel, onFlyoutChromeChange, builder.name, handleNameChange]);
 
-  const fieldGridClass = mergeClasses(styles.fieldGrid, isFlyout && styles.fieldGridFlyout);
-  const fieldClass = isFlyout ? styles.fieldNarrowFlyout : styles.fieldNarrow;
+  const fieldGridClass = mergeClasses(
+    styles.fieldGrid,
+    isFlyout && styles.fieldGridFlyout,
+    isFlyout && (config.type === 'bar' || config.type === 'line') && styles.fieldGridFlyoutPair,
+  );
+  const fieldClass = mergeClasses(
+    isFlyout ? styles.fieldNarrowFlyout : styles.fieldNarrow,
+    isFlyout && styles.fieldCompact,
+  );
+  const sectionClass = mergeClasses(styles.section, isFlyout && styles.sectionFlyout);
+  const sectionTitleClass = mergeClasses(styles.sectionTitle, isFlyout && styles.sectionTitleFlyout);
 
   const dimensionLabel = columns.find((col) => col.key === config.dimension)?.label
     || (config.dimension ? config.dimension : NONE_OPTION.label);
@@ -145,18 +183,22 @@ export default function ChartBuilderPanel({
       <div className={mergeClasses(styles.panel, isFlyout && styles.panelFlyout)}>
         {!isFlyout ? <Text className={styles.title}>{chart ? 'Edit chart' : 'New chart'}</Text> : null}
 
-        <div className={styles.section}>
-          <Text className={styles.sectionTitle}>Details</Text>
+        <div className={sectionClass}>
+          {!isFlyout ? <Text className={sectionTitleClass}>Details</Text> : null}
           <div className={fieldGridClass}>
-            <Field label="Name" required className={fieldClass}>
-              <Input
-                value={builder.name}
-                onChange={(_, data) => builder.setName(data.value)}
-                placeholder="Chart name"
-              />
-            </Field>
+            {!isFlyout ? (
+              <Field label="Name" required className={fieldClass}>
+                <Input
+                  size={controlSize}
+                  value={builder.name}
+                  onChange={handleNameChange}
+                  placeholder="Chart name"
+                />
+              </Field>
+            ) : null}
             <Field label="Visibility" className={fieldClass}>
               <Dropdown
+                size={controlSize}
                 selectedOptions={[builder.visibility]}
                 value={findLabel(VISIBILITY_OPTIONS, builder.visibility)}
                 onOptionSelect={(_, data) => builder.setVisibility(data.optionValue)}
@@ -169,6 +211,7 @@ export default function ChartBuilderPanel({
             {(config.type === 'bar' || config.type === 'line') ? (
               <Field label="Chart size" className={fieldClass}>
                 <Dropdown
+                  size={controlSize}
                   selectedOptions={[resolveChartSize({ config })]}
                   value={findLabel(CHART_SIZE_OPTIONS_BAR_LINE, resolveChartSize({ config }))}
                   onOptionSelect={(_, data) => builder.setChartSize(
@@ -184,13 +227,14 @@ export default function ChartBuilderPanel({
           </div>
         </div>
 
-        <Divider />
+        <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
 
-        <div className={styles.section}>
-          <Text className={styles.sectionTitle}>Chart setup</Text>
+        <div className={sectionClass}>
+          <Text className={sectionTitleClass}>Chart setup</Text>
           <div className={fieldGridClass}>
             <Field label="Type" className={fieldClass}>
               <Dropdown
+                size={controlSize}
                 selectedOptions={[config.type]}
                 value={findLabel(CHART_TYPE_OPTIONS, config.type)}
                 onOptionSelect={(_, data) => builder.setConfigField('type', data.optionValue)}
@@ -203,6 +247,7 @@ export default function ChartBuilderPanel({
 
             <Field label="Aggregation" className={fieldClass}>
               <Dropdown
+                size={controlSize}
                 selectedOptions={[config.aggregation]}
                 value={findLabel(AGGREGATION_OPTIONS, config.aggregation)}
                 onOptionSelect={(_, data) => builder.setConfigField('aggregation', data.optionValue)}
@@ -215,6 +260,7 @@ export default function ChartBuilderPanel({
 
             <Field label={config.type === 'kpi' ? 'Dimension (optional)' : 'Dimension'} className={fieldClass}>
               <Dropdown
+                size={controlSize}
                 selectedOptions={config.dimension ? [config.dimension] : [NONE_OPTION.key]}
                 value={dimensionLabel}
                 onOptionSelect={(_, data) => {
@@ -232,6 +278,7 @@ export default function ChartBuilderPanel({
             {isDateDimension ? (
               <Field label="Date grouping" className={fieldClass}>
                 <Dropdown
+                  size={controlSize}
                   selectedOptions={[config.dateGrouping]}
                   value={findLabel(DATE_GROUPING_OPTIONS, config.dateGrouping)}
                   onOptionSelect={(_, data) => builder.setConfigField('dateGrouping', data.optionValue)}
@@ -249,11 +296,13 @@ export default function ChartBuilderPanel({
                   columns={measureColumns}
                   selectedKeys={selectedMeasures}
                   onChange={builder.setMeasures}
+                  size={controlSize}
                 />
               </div>
             ) : (
               <Field label="Value (measure)" hint={countMode ? 'Not used with Count' : undefined} className={fieldClass}>
                 <Dropdown
+                  size={controlSize}
                   disabled={countMode}
                   selectedOptions={config.measure ? [config.measure] : [NONE_OPTION.key]}
                   value={countMode ? NONE_OPTION.label : measureLabel}
@@ -272,23 +321,23 @@ export default function ChartBuilderPanel({
           </div>
         </div>
 
-        <Divider />
-
         {colorItems.length ? (
           <>
-            <div className={styles.section}>
+            <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
+            <div className={sectionClass}>
               <ChartColorEditor
                 items={colorItems}
                 colors={config.options?.colors || {}}
                 onChange={builder.setColors}
                 wide={isFlyout}
+                compact={isFlyout}
               />
             </div>
-            <Divider />
           </>
         ) : null}
 
-        <ChartFilterEditor columns={columns} filters={config.filters} onChange={builder.setFilters} />
+        <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
+        <ChartFilterEditor columns={columns} filters={config.filters} onChange={builder.setFilters} compact={isFlyout} />
 
         {!isFlyout ? (
           <div className={styles.actions}>

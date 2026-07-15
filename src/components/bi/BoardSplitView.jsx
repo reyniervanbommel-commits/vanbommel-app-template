@@ -85,7 +85,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
   });
 
   const chartsWithSeries = useMemo(
-    () => charts.map((chart) => ({ ...chart, series: resultsById[chart.id] || [] })),
+    () => charts.map((chart) => ({ ...chart, series: resultsById[String(chart.id)] || [] })),
     [charts, resultsById],
   );
 

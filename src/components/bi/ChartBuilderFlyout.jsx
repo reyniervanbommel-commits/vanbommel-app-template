@@ -4,7 +4,7 @@ import { DismissRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   flyout: {
-    width: '400px',
+    width: '340px',
     flexShrink: 0,
     display: 'flex',
     flexDirection: 'column',
@@ -20,39 +20,49 @@ const useStyles = makeStyles({
   header: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('12px'),
-    ...shorthands.padding('16px', '16px', '12px'),
+    ...shorthands.gap('8px'),
+    ...shorthands.padding('12px', '12px', '10px'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     flexShrink: 0,
   },
   headerTop: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     ...shorthands.gap('8px'),
   },
-  title: { fontSize: '16px', fontWeight: 600 },
+  nameWrap: { flex: 1, minWidth: 0 },
+  title: { fontSize: '11px', fontWeight: 600, color: tokens.colorNeutralForeground3, marginBottom: '4px' },
   actions: {
     display: 'flex',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('6px'),
     justifyContent: 'flex-end',
   },
   body: {
     flex: 1,
     minHeight: 0,
     overflowY: 'auto',
-    ...shorthands.padding('0', '16px', '16px'),
+    ...shorthands.padding('0', '12px', '12px'),
   },
 });
 
-function ChartBuilderFlyout({ title, onClose, actions, children }) {
+function ChartBuilderFlyout({ title, onClose, actions, nameField, children }) {
   const styles = useStyles();
 
   return (
     <aside className={styles.flyout} aria-label="Chart settings">
       <div className={styles.header}>
         <div className={styles.headerTop}>
-          <Text className={styles.title}>{title}</Text>
+          <div className={styles.nameWrap}>
+            {nameField ? (
+              <>
+                <Text className={styles.title}>Chart name</Text>
+                {nameField}
+              </>
+            ) : (
+              <Text className={styles.title}>{title}</Text>
+            )}
+          </div>
           <Button
             appearance="subtle"
             size="small"

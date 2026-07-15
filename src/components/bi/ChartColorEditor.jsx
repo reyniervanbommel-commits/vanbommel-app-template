@@ -16,7 +16,7 @@ const useStyles = makeStyles({
   itemLabel: { minWidth: 0, flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 });
 
-function ChartColorEditor({ items, colors, onChange, wide = false }) {
+function ChartColorEditor({ items, colors, onChange, wide = false, compact = false }) {
   const styles = useStyles();
 
   const handleSelect = useCallback((key, color) => {
@@ -27,10 +27,18 @@ function ChartColorEditor({ items, colors, onChange, wide = false }) {
 
   return (
     <div className={styles.root}>
-      <Text className={styles.label}>Colors</Text>
+      <Text className={styles.label} style={compact ? { fontSize: '10px' } : undefined}>Colors</Text>
       {items.map((item, index) => (
-        <div className={styles.row} key={item.key} style={wide ? { maxWidth: '100%' } : undefined}>
-          <Text className={styles.itemLabel} title={item.label}>{item.label}</Text>
+        <div
+          className={styles.row}
+          key={item.key}
+          style={wide ? { maxWidth: '100%' } : undefined}
+        >
+          <Text
+            className={styles.itemLabel}
+            title={item.label}
+            style={compact ? { fontSize: '11px' } : undefined}
+          >{item.label}</Text>
           <Field>
             <ColorPalettePicker
               layout="popover"

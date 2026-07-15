@@ -20,8 +20,9 @@ function operatorsForColumn(column) {
   return TEXT_FILTER_OPERATORS;
 }
 
-function ChartFilterEditor({ columns, filters, onChange }) {
+function ChartFilterEditor({ columns, filters, onChange, compact = false }) {
   const styles = useStyles();
+  const controlSize = compact ? 'small' : 'medium';
   const columnByKey = new Map(columns.map((col) => [col.key, col]));
 
   const addFilter = useCallback(() => {
@@ -44,7 +45,7 @@ function ChartFilterEditor({ columns, filters, onChange }) {
 
   return (
     <div className={styles.root}>
-      <Text className={styles.label}>Filters</Text>
+      <Text className={styles.label} style={compact ? { fontSize: '10px' } : undefined}>Filters</Text>
       {(filters || []).map((filter, index) => {
         const column = columnByKey.get(filter.columnKey);
         const operatorLabels = operatorsForColumn(column);
@@ -53,6 +54,7 @@ function ChartFilterEditor({ columns, filters, onChange }) {
           <div className={styles.row} key={`${filter.columnKey}-${index}`}>
             <Dropdown
               className={styles.grow}
+              size={controlSize}
               selectedOptions={[filter.columnKey]}
               value={column?.label || ''}
               onOptionSelect={(_, data) => {
@@ -66,6 +68,7 @@ function ChartFilterEditor({ columns, filters, onChange }) {
               {columns.map((col) => (<Option key={col.key} value={col.key} text={col.label}>{col.label}</Option>))}
             </Dropdown>
             <Dropdown
+              size={controlSize}
               selectedOptions={[filter.operator]}
               value={operatorLabels[filter.operator] || ''}
               onOptionSelect={(_, data) => updateFilter(index, { operator: data.optionValue })}
@@ -77,6 +80,7 @@ function ChartFilterEditor({ columns, filters, onChange }) {
             {filter.operator !== 'nextWeek' ? (
               <Input
                 className={styles.grow}
+                size={controlSize}
                 type={inputType}
                 value={filter.value}
                 placeholder="Value"
@@ -86,6 +90,7 @@ function ChartFilterEditor({ columns, filters, onChange }) {
             {filter.operator === 'between' ? (
               <Input
                 className={styles.grow}
+                size={controlSize}
                 type={inputType}
                 value={filter.secondaryValue}
                 placeholder="To"
