@@ -142,6 +142,20 @@ router.get('/:tableKey/activity', async (req, res, next) => {
   }
 });
 
+// GET /api/data/:tableKey/revision — lichtgewicht "is het board gewijzigd?"-token.
+// Statisch pad, dus geregistreerd vóór GET /:tableKey (anders vangt de tableKey-route 'revision' op).
+router.get('/:tableKey/revision', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const result = await dataService.getRevision({ tableKey, userId: req.user.id, supplierAccount });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {
