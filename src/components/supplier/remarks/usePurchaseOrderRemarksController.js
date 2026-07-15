@@ -17,7 +17,7 @@ function buildHistoryTotalsPath({ tableKey, row, columnId }) {
 }
 
 /**
- * Coordinates panel tabs, row-scoped hooks, column filtering and focus restoration.
+ * Coordinates panel tabs, row-scoped hooks, column filtering and focus on the composer.
  */
 export function usePurchaseOrderRemarksController({
   open,
@@ -32,7 +32,7 @@ export function usePurchaseOrderRemarksController({
   const [columnId, setColumnId] = useState(initialColumn?.id || '');
   const [historyActionFilter, setHistoryActionFilter] = useState('updated');
   const [historyUpdatedCount, setHistoryUpdatedCount] = useState(0);
-  const headingRef = useRef(null);
+  const composerRef = useRef(null);
   const restoreFocusRef = useRef(null);
   const localSummary = useRemarksSummary({ enabled: !summaryState && open, tableKey });
   const summary = summaryState || localSummary;
@@ -118,7 +118,7 @@ export function usePurchaseOrderRemarksController({
     setSelectedTab('remarks');
     setColumnId(initialColumn?.id || '');
     setHistoryActionFilter('updated');
-    const focusFrame = window.requestAnimationFrame(() => headingRef.current?.focus());
+    const focusFrame = window.requestAnimationFrame(() => composerRef.current?.focus());
     return () => {
       window.cancelAnimationFrame(focusFrame);
       const restoreTarget = openerRef?.current || restoreFocusRef.current;
@@ -140,7 +140,7 @@ export function usePurchaseOrderRemarksController({
       onTabSelect,
       onColumnChange,
       onHistoryActionFilterChange,
-      headingRef,
+      composerRef,
       remarks,
       history,
       all,

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { getColumnTypeMeta } from '../components/supplier/purchaseOrderColumnFilterMenuConstants';
+import { isDatePeriodColumn } from '../utils/datePeriodColumnUtils';
 
 export function usePurchaseOrderColumnMenuFlags({
   column,
@@ -19,6 +20,7 @@ export function usePurchaseOrderColumnMenuFlags({
   isStickyColumn,
   isStickyActionEnabled,
   onMakeColumnSticky,
+  onToggleColumnCollapsed,
   isConnectedType,
 }) {
   const isRemarksColumn = column?.dataType === 'remarks';
@@ -55,6 +57,13 @@ export function usePurchaseOrderColumnMenuFlags({
   const canAddColumn = staffMenu && typeof onAddColumnRightOf === 'function';
   const canEditFormulaColumn = Boolean(staffMenu && canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
   const canEditImageColumn = Boolean(staffMenu && canAddColumn && column.source === 'custom' && column.dataType === 'image');
+  const canConfigureDatePeriodDisplay = Boolean(staffMenu && isDatePeriodColumn(column));
+  const canHideColumn = Boolean(
+    staffMenu
+    && !isImageColumn
+    && column?.key
+    && typeof onToggleColumnCollapsed === 'function'
+  );
   const readOnlyColumnMenu = isImageColumn;
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
 
@@ -75,6 +84,8 @@ export function usePurchaseOrderColumnMenuFlags({
     canAddColumn,
     canEditFormulaColumn,
     canEditImageColumn,
+    canConfigureDatePeriodDisplay,
+    canHideColumn,
     isImageColumn,
     readOnlyColumnMenu,
     columnTypeMeta,

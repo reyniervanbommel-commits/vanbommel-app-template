@@ -9,6 +9,7 @@ const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { getSqlPool } = require('../utils/sqlPool');
 const trackChangesService = require('../services/TrackChangesService');
+const { getAppBaseUrl, isDevLikeApp } = require('../utils/appEnvironment');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -147,20 +148,19 @@ router.post('/forgot-password', strictLimiter, async (req, res, next) => {
     const result = await authService.requestPasswordReset(email);
 
     const response = { success: true, message: 'If the email address is known, you will receive a reset link.' };
-    const isProduction = process.env.NODE_ENV === 'production';
 
     if (result.success) {
-      const resetUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/reset-password?token=' + result.token;
+      const resetUrl = getAppBaseUrl() + '/reset-password?token=' + result.token;
       const emailResult = await emailService.sendPasswordResetEmail(result.user.email, resetUrl).catch(() => ({ skipped: true }));
 
       // DEV-fallback: zonder werkende mail (bv. ACS niet ingericht) geven we de resetlink
       // direct terug in de response zodat lokaal/DEV testen mogelijk is. Nooit in productie.
       const mailSkipped = emailResult && emailResult.skipped;
-      if (!isProduction && mailSkipped) {
+      if (isDevLikeApp() && mailSkipped) {
         response.devResetUrl = resetUrl;
         response.devNotice = 'DEV: email not sent, use this reset link directly.';
       }
-    } else if (!isProduction) {
+    } else if (isDevLikeApp()) {
       // Alleen in DEV: maak expliciet waarom er geen link is (account bestaat nog niet).
       response.devNotice = 'DEV: no account found for this email address. Run migrations (npm run migrate:db) or create the account.';
     }

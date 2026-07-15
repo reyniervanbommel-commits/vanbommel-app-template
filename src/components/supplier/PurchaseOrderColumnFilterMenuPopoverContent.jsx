@@ -10,6 +10,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   activeSubmenu,
   submenuTop,
   openSubmenu,
+  closeSubmenu,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
   canToggleWriteback,
@@ -21,6 +22,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
+  canConfigureDatePeriodDisplay,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -36,6 +38,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   canUnstickSticky,
   stickyColumnCount,
   handleMakeColumnSticky,
+  canHideColumn,
+  handleHideColumn,
   setSortAsc,
   setSortDesc,
   clearSort,
@@ -72,6 +76,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   showGrouping = true,
   showColumnMutations = true,
   showSortAndFilter = true,
+  datePeriodDisplayMode,
+  onSelectDatePeriodDisplayMode,
 }) {
   return (
     <PopoverSurface className={styles.surface}>
@@ -85,6 +91,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         showSortAndFilter={showSortAndFilter}
         activeSubmenu={activeSubmenu}
         openSubmenu={openSubmenu}
+        closeSubmenu={closeSubmenu}
         canSetColumnTextStyle={canSetColumnTextStyle}
         canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback}
@@ -95,6 +102,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canRenameColumn={canRenameColumn}
         handleRenameColumn={handleRenameColumn}
         canEditFormulaColumn={canEditFormulaColumn}
+        canConfigureDatePeriodDisplay={canConfigureDatePeriodDisplay}
+        datePeriodDisplayMode={datePeriodDisplayMode}
+        onSelectDatePeriodDisplayMode={onSelectDatePeriodDisplayMode}
         handleEditFormulaColumn={handleEditFormulaColumn}
         canRemoveColumn={canRemoveColumn}
         handleRemoveColumn={handleRemoveColumn}
@@ -111,6 +121,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canUnstickSticky={canUnstickSticky}
         stickyColumnCount={stickyColumnCount}
         handleMakeColumnSticky={handleMakeColumnSticky}
+        canHideColumn={canHideColumn}
+        handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc}
         setSortDesc={setSortDesc}
         clearSort={clearSort}

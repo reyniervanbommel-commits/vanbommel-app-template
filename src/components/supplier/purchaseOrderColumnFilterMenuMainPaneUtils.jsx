@@ -1,8 +1,10 @@
 import React from 'react';
 import {
-  ArrowClockwiseRegular,
+  CalendarLtrRegular,
+  Chat20Regular,
   CheckmarkRegular,
   EditRegular,
+  Image20Regular,
   LinkRegular,
   NumberSymbolRegular,
   TextBulletList20Regular,
@@ -34,13 +36,19 @@ export function renderColumnTypeIcon(typeKey) {
     case 'number':
       return <NumberSymbolRegular />;
     case 'date':
-      return <ArrowClockwiseRegular />;
+    case 'date_period':
+    case 'date_wm':
+      return <CalendarLtrRegular />;
     case 'boolean':
       return <CheckmarkRegular />;
     case 'select':
       return <TextBulletList20Regular />;
     case 'status':
-      return <span style={{ fontWeight: 700 }}>●</span>;
+      return <TextBulletList20Regular />;
+    case 'image':
+      return <Image20Regular />;
+    case 'remarks':
+      return <Chat20Regular />;
     case 'connected':
       return <LinkRegular />;
     case 'formula':

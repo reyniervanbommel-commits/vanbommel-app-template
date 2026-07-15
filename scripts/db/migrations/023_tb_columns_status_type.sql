@@ -4,7 +4,7 @@
 
 DECLARE @allowedTypes TABLE (data_type NVARCHAR(16));
 INSERT INTO @allowedTypes (data_type)
-VALUES ('text'), ('number'), ('date'), ('boolean'), ('select'), ('image'), ('status'), ('remarks');
+VALUES ('text'), ('number'), ('date'), ('boolean'), ('select'), ('image'), ('status'), ('remarks'), ('date_period');
 
 IF OBJECT_ID('dbo.po_columns', 'U') IS NOT NULL
 BEGIN
@@ -14,6 +14,7 @@ BEGIN
     WHERE cc.[name] = 'CK_po_columns_data_type'
       AND cc.parent_object_id = OBJECT_ID('dbo.po_columns')
       AND cc.definition LIKE '%status%'
+      AND cc.definition LIKE '%date_period%'
   )
   BEGIN
     UPDATE dbo.po_columns
@@ -32,7 +33,7 @@ BEGIN
 
     ALTER TABLE dbo.po_columns WITH NOCHECK
       ADD CONSTRAINT CK_po_columns_data_type
-      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
+      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks','date_period'));
   END;
 END;
 
@@ -44,6 +45,7 @@ BEGIN
     WHERE cc.[name] = 'CK_tb_columns_data_type'
       AND cc.parent_object_id = OBJECT_ID('dbo.tb_columns')
       AND cc.definition LIKE '%status%'
+      AND cc.definition LIKE '%date_period%'
   )
   BEGIN
     UPDATE dbo.tb_columns
@@ -62,6 +64,6 @@ BEGIN
 
     ALTER TABLE dbo.tb_columns WITH NOCHECK
       ADD CONSTRAINT CK_tb_columns_data_type
-      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
+      CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks','date_period'));
   END;
 END;

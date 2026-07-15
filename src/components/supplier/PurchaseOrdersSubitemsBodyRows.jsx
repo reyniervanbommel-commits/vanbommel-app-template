@@ -15,6 +15,8 @@ import {
   isProductImageColumn,
   PRODUCT_IMAGE_SUB_CELL_HEIGHT,
 } from '../../utils/purchaseOrderProductImageColumn';
+import PurchaseOrderCollapsedColumnCell from './PurchaseOrderCollapsedColumnCell';
+import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
 const useStyles = makeStyles({
   statusWrap: {
@@ -86,8 +88,10 @@ function renderLineCellContent({
   styles,
   cellBackgroundColor = '',
   isConditionalFormat = false,
+  showHistoryIndicators = true,
 }) {
   const rawValue = line.values?.[column.key];
+  const showHistory = showHistoryIndicators !== false && Boolean(line.historyByColumnId?.[column.id]);
   const firstDataColumn = lineColumns.find((entry) => !isProductImageColumn(entry));
   const showLineBadge = column === firstDataColumn && (line?.isNew || line?.isChanged || line?.isRemoved);
   const itemNumber = line?.itemNumber ?? line?.values?.itemNumber;
@@ -128,7 +132,7 @@ function renderLineCellContent({
             options={column.options}
             isAdmin={isAdmin}
             ariaLabel={`${column.label} for line ${line.lineNumber}`}
-            hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+            hasHistory={showHistory}
             cellKeys={{
               columnId: column.id,
               dataAreaId: order.dataAreaId,
@@ -162,7 +166,7 @@ function renderLineCellContent({
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} for line ${line.lineNumber}`}
-          hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -192,7 +196,7 @@ function renderLineCellContent({
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
-          hasHistory={Boolean(line.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -246,6 +250,8 @@ export default function PurchaseOrdersSubitemsBodyRows({
   connectorStyles,
   hasTotalsRow = false,
   cellFilterActions,
+  showHistoryIndicators = true,
+  collapsedLineColumnKeys = [],
 }) {
   const styles = useStyles();
   const effectiveColumnFormatRules = useMemo(
@@ -273,6 +279,14 @@ export default function PurchaseOrdersSubitemsBodyRows({
             <td className={connectorCellClassName} aria-hidden="true" />
           ) : null}
           {lineColumns.map((column) => {
+            if (isColumnCollapsed(column.key, collapsedLineColumnKeys)) {
+              return (
+                <PurchaseOrderCollapsedColumnCell
+                  key={`${rowId}-${line.lineNumber ?? index}-${column.key}`}
+                  columnKey={column.key}
+                />
+              );
+            }
             const rawValue = line.values?.[column.key];
             const changedFieldKeys = Array.isArray(line?.changedFieldKeys) ? line.changedFieldKeys : [];
             const isChangedCell = !line?.isRemoved && !line?.isNew && changedFieldKeys.includes(column.key);
@@ -322,6 +336,7 @@ export default function PurchaseOrdersSubitemsBodyRows({
                   styles,
                   cellBackgroundColor: cellBackground,
                   isConditionalFormat,
+                  showHistoryIndicators,
                 })}
               </PurchaseOrderDataCell>
             );

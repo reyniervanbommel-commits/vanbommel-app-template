@@ -6,8 +6,10 @@ import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageCo
 import PurchaseOrderProductImageColumnMenu from './PurchaseOrderProductImageColumnMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
+import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
+import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -43,6 +45,8 @@ export default function PurchaseOrdersBoardHeaderRow({
   setGroupingBarColor,
   setGroupSummaryColumn,
   onAddColumnRightOf,
+  datePeriodDisplayModes = {},
+  onSetDatePeriodDisplayMode,
   headerColumnTextStyles,
   onSaveHeaderColumnTextStyle,
   headerColumnFormatRules = {},
@@ -51,6 +55,8 @@ export default function PurchaseOrdersBoardHeaderRow({
   stickyColumnKeys = [],
   firstNonStickyColumnKey = '',
   onMakeColumnSticky,
+  collapsedColumnKeys = [],
+  onToggleColumnCollapsed,
 }) {
   return (
     <tr>
@@ -92,6 +98,18 @@ export default function PurchaseOrdersBoardHeaderRow({
             zIndex: 3,
           }
           : undefined;
+        const isCollapsed = isColumnCollapsed(column.key, collapsedColumnKeys);
+        if (isCollapsed) {
+          return (
+            <PurchaseOrderCollapsedColumnHeaderCell
+              key={column.key}
+              columnKey={column.key}
+              columnLabel={column.label}
+              cellStyle={stickyHeaderStyle}
+              onExpandColumn={onToggleColumnCollapsed}
+            />
+          );
+        }
         return (
           <ResizableTableHeaderCell
             key={column.key}
@@ -147,6 +165,8 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetGroupingColor={setGroupingBarColor}
                 onSetGroupSummaryColumn={setGroupSummaryColumn}
                 onAddColumnRightOf={onAddColumnRightOf}
+                datePeriodDisplayMode={datePeriodDisplayModes[column.key]}
+                onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}
                 onRenameColumn={onRenameColumn}
                 onRemoveColumn={onRemoveColumn}
                 columnTextStyle={headerColumnTextStyles[column.key]}
@@ -161,6 +181,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 isStickyActionEnabled={canToggleStickyAction}
                 stickyColumnCount={stickyColumnKeys.length}
                 onMakeColumnSticky={onMakeColumnSticky}
+                onToggleColumnCollapsed={onToggleColumnCollapsed}
               />
               ) : (
                 <PurchaseOrderProductImageColumnMenu

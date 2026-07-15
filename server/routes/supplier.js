@@ -182,6 +182,8 @@ function normalizeBoardSettings(rawSettings) {
     lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
     lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
     lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
+    collapsedHeaderColumnKeys: normalizeStringArray(input.collapsedHeaderColumnKeys),
+    collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
   };
 }
 
@@ -219,6 +221,7 @@ function normalizeViewState(rawState) {
   });
 
   return {
+    showHistoryIndicators: input.showHistoryIndicators !== false,
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),
@@ -233,6 +236,8 @@ function normalizeViewState(rawState) {
       lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
       lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
+      collapsedHeaderColumnKeys: normalizeStringArray(columns.collapsedHeaderColumnKeys),
+      collapsedLineColumnKeys: normalizeStringArray(columns.collapsedLineColumnKeys),
     },
     table: {
       activityFilter: VIEW_ACTIVITY_FILTERS.has(table.activityFilter) ? table.activityFilter : 'all',

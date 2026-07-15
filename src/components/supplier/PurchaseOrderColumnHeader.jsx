@@ -6,6 +6,7 @@ import {
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import {
   ArrowClockwiseRegular,
+  CalendarLtrRegular,
   CheckmarkRegular,
   Chat24Regular,
   CloudRegular,
@@ -146,6 +147,7 @@ export default function PurchaseOrderColumnHeader({
     switch (customTypeKey) {
       case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Number column" />;
       case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Date column" />;
+      case 'date_period': return <CalendarLtrRegular className={styles.customIcon} title="Date W/M column" />;
       case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Yes/No column" />;
       case 'status': return <span className={styles.formulaTypeIcon} title="Status column">●</span>;
       case 'remarks': return <Chat24Regular className={styles.customIcon} title="Remarks column" />;

@@ -9,6 +9,7 @@ export const NEW_COLUMN_TYPES = [
   { key: 'text', label: 'Text', dataType: 'text' },
   { key: 'number', label: 'Numbers', dataType: 'number' },
   { key: 'date', label: 'Date', dataType: 'date' },
+  { key: 'date_wm', label: 'Date W/M', dataType: 'date_period' },
   { key: 'boolean', label: 'Yes/No', dataType: 'boolean' },
   { key: 'image', label: 'Image', dataType: 'image' },
   { key: 'remarks', label: 'Remarks', dataType: 'remarks' },
@@ -26,6 +27,7 @@ const COLUMN_TYPE_META = {
   image: { key: 'image', label: 'Image' },
   remarks: { key: 'remarks', label: 'Remarks' },
   formula: { key: 'formula', label: 'Formula' },
+  date_period: { key: 'date_period', label: 'Date W/M' },
 };
 
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;

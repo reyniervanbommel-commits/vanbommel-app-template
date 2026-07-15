@@ -26,6 +26,8 @@ function PurchaseOrdersBoardExpandedRow({
     headerColumns,
     linkedLineTotalByHeaderKey,
     linkedLineValueByHeaderKey,
+    collapsedLineColumnKeys = [],
+    onToggleLineColumnCollapsed,
   } = tableConfig;
 
   return (
@@ -59,6 +61,9 @@ function PurchaseOrdersBoardExpandedRow({
           headerColumns={headerColumns}
           linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
           linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+          collapsedLineColumnKeys={collapsedLineColumnKeys}
+          onToggleLineColumnCollapsed={onToggleLineColumnCollapsed}
+          showHistoryIndicators={cellActions.showHistoryIndicators}
         />
       </td>
     </tr>

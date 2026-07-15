@@ -13,6 +13,7 @@ import { usePurchaseOrderHiddenRows } from '../../hooks/usePurchaseOrderHiddenRo
 import { usePurchaseOrdersHeaderLinkActions } from '../../hooks/usePurchaseOrdersHeaderLinkActions';
 import { usePurchaseOrderBulkEdit } from '../../hooks/usePurchaseOrderBulkEdit';
 import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrderFormulaDialogState';
+import { usePurchaseOrderDatePeriodDialogState } from '../../hooks/usePurchaseOrderDatePeriodDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 
@@ -68,11 +69,20 @@ export default function PurchaseOrdersPage() {
     addLineValueHeaderLink,
     exportColumnLayout,
     applyColumnLayout,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
   } = pageModel;
   const isAdmin = user?.role === 'admin';
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
   const isSupplier = user?.role === 'supplier';
-  const boardView = usePurchaseOrderBoardView({ items: orders, columns: visibleHeaderColumns, lineColumns, lineTotalHeaderLinks, lineValueHeaderLinks });
+  const boardView = usePurchaseOrderBoardView({
+    items: orders,
+    columns: visibleHeaderColumns,
+    lineColumns,
+    lineTotalHeaderLinks,
+    lineValueHeaderLinks,
+    datePeriodDisplayModes,
+  });
   const remarks = usePurchaseOrderRemarksBoard({
     enabled: !loading,
     currentUser: user,
@@ -81,7 +91,7 @@ export default function PurchaseOrdersPage() {
   });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });
-  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -97,10 +107,6 @@ export default function PurchaseOrdersPage() {
     handleFormulaTypeSelection,
     formulaReferenceColumns,
     submitFormulaColumn,
-    imageDialogState,
-    closeImageDialog,
-    handleImageTypeSelection,
-    submitImageColumn,
   } = usePurchaseOrderFormulaDialogState({
     visibleHeaderColumns,
     addHeaderColumnAfter,
@@ -110,20 +116,34 @@ export default function PurchaseOrdersPage() {
     saveHeaderColumnFormatRules,
     setEditingColumnKey,
   });
+  const {
+    datePeriodDialogState,
+    closeDatePeriodDialog,
+    handleDatePeriodTypeSelection,
+    dateSourceColumns,
+    submitDatePeriodColumn,
+  } = usePurchaseOrderDatePeriodDialogState({
+    availableColumns: visibleHeaderColumns,
+    addHeaderColumnAfter,
+    setEditingColumnKey,
+    setDatePeriodDisplayMode,
+  });
   const bulkEdit = usePurchaseOrderBulkEdit({ visibleHeaderColumns, visibleOrders: boardView.processedItems, selection, saveValue, correctField });
 
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
     if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
       return;
     }
-    if (handleImageTypeSelection(sourceColumn, typeDef)) return;
+    if (handleDatePeriodTypeSelection(sourceColumn, typeDef)) {
+      return;
+    }
     const created = await addHeaderColumnAfter(sourceColumn.key, {
       label: typeDef.label,
       dataType: typeDef.dataType,
       options: typeDef.options,
     });
     if (created?.key && typeDef.dataType !== 'remarks') setEditingColumnKey(created.key);
-  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleImageTypeSelection]);
+  }, [addHeaderColumnAfter, handleFormulaTypeSelection, handleDatePeriodTypeSelection]);
 
   const { handlePushLineTotalToHeader, handlePushLineValuesToHeader } = usePurchaseOrdersHeaderLinkActions({
     lineTotalHeaderLinks,
@@ -168,6 +188,8 @@ export default function PurchaseOrdersPage() {
     isAdmin,
     isStaff,
     handleAddColumnRightOf,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
     editingColumnKey,
@@ -175,6 +197,7 @@ export default function PurchaseOrdersPage() {
     tableSelection,
     remarks,
     stickyColumns: { keys: stickyColumnKeys, onChange: setStickyColumnKeys },
+    showHistoryIndicators,
   }), [
     boardView,
     bulkEdit,
@@ -183,11 +206,14 @@ export default function PurchaseOrdersPage() {
     handleEditingDone,
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     isAdmin,
     isStaff,
     pageModel,
     remarks,
     setStickyColumnKeys,
+    showHistoryIndicators,
     stickyColumnKeys,
     tableSelection,
   ]);
@@ -205,6 +231,7 @@ export default function PurchaseOrdersPage() {
           handleRenameView,
           handleSetDefault,
           handleDeleteView,
+          handleToggleShowHistory,
         }}
         headerState={{
           isStaff,
@@ -246,7 +273,7 @@ export default function PurchaseOrdersPage() {
       <PurchaseOrdersPageContent status={contentStatus} tableContext={tableContext} />
       <PurchaseOrdersPageDialogs
         formula={{ state: formulaDialogState, close: closeFormulaDialog, submit: submitFormulaColumn, availableColumns: formulaReferenceColumns, formatRules: headerColumnFormatRules }}
-        image={{ state: imageDialogState, close: closeImageDialog, submit: submitImageColumn, availableColumns: visibleHeaderColumns, sampleRowValues: boardView.processedItems?.[0]?.values || {} }}
+        datePeriod={{ state: datePeriodDialogState, close: closeDatePeriodDialog, submit: submitDatePeriodColumn, dateSourceColumns }}
         bulkEdit={bulkEdit}
       />
     </div>

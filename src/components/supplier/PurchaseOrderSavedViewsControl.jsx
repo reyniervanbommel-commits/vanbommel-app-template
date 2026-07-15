@@ -25,6 +25,7 @@ import {
   TableRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
+import { SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
   trigger: {
@@ -86,34 +87,6 @@ const useStyles = makeStyles({
 
 const NO_VIEW_LABEL = 'All orders (no view)';
 
-function SavedViewMenuItem({ view, activeViewId, onApplyView }) {
-  const isActive = view.id === activeViewId;
-  return (
-    <MenuItem
-      icon={isActive ? <CheckmarkRegular /> : undefined}
-      onClick={() => onApplyView(view)}
-    >
-      {view.name}{view.isDefault ? ' (default)' : ''}
-    </MenuItem>
-  );
-}
-
-function SavedViewScopeGroup({ title, views, activeViewId, onApplyView }) {
-  if (!views.length) return null;
-  return (
-    <MenuGroup>
-      <MenuGroupHeader>{title}</MenuGroupHeader>
-      {views.map((view) => (
-        <SavedViewMenuItem
-          key={view.id}
-          view={view}
-          activeViewId={activeViewId}
-          onApplyView={onApplyView}
-        />
-      ))}
-    </MenuGroup>
-  );
-}
 /**
  * View picker: switch views first, then manage the active view, then create/delete.
  * Suppliers only see the view list (canManageViews=false).
@@ -133,6 +106,7 @@ export default function PurchaseOrderSavedViewsControl({
   onRenameView,
   onSetDefault,
   onDeleteView,
+  onToggleShowHistory = () => {},
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -198,18 +172,24 @@ export default function PurchaseOrderSavedViewsControl({
               views={vendorViews}
               activeViewId={activeViewId}
               onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
             />
             <SavedViewScopeGroup
               title="Shared"
               views={globalViews}
               activeViewId={activeViewId}
               onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
             />
             <SavedViewScopeGroup
               title="Personal"
               views={personalViews}
               activeViewId={activeViewId}
               onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
             />
             {!hasSavedViews ? (
               <div className={styles.empty}>No saved views yet</div>

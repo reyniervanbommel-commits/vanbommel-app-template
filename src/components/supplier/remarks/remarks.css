@@ -44,11 +44,6 @@
   gap: 12px;
 }
 
-.remarks-heading:focus {
-  outline: 2px solid var(--colorStrokeFocus2);
-  outline-offset: 2px;
-}
-
 .remarks-heading {
   margin: 0;
   font-size: 20px;
@@ -146,6 +141,10 @@
   min-height: 88px;
   resize: vertical;
   padding: 8px;
+}
+
+.remarks-composer textarea:focus {
+  outline: none;
 }
 
 .remarks-composer-actions,

@@ -10,13 +10,14 @@ BEGIN
       AND cc.parent_object_id = OBJECT_ID('dbo.tb_columns')
       AND cc.definition LIKE '%remarks%'
       AND cc.definition LIKE '%status%'
+      AND cc.definition LIKE '%date_period%'
   )
   BEGIN
     UPDATE dbo.tb_columns
     SET data_type = 'text'
     WHERE data_type IS NULL
        OR LTRIM(RTRIM(data_type)) = ''
-       OR data_type NOT IN ('text','number','date','boolean','select','image','status','remarks');
+       OR data_type NOT IN ('text','number','date','boolean','select','image','status','remarks','date_period');
 
     IF EXISTS (
       SELECT 1
@@ -34,7 +35,7 @@ BEGIN
     )
       ALTER TABLE dbo.tb_columns WITH NOCHECK
         ADD CONSTRAINT CK_tb_columns_data_type
-        CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks'));
+        CHECK (data_type IN ('text','number','date','boolean','select','image','status','remarks','date_period'));
   END;
 END;
 

@@ -31,7 +31,10 @@ function createGetProductImageHandler({ productImageService, timeFn = time }) {
         return res.status(204).end();
       }
 
-      res.set('Cache-Control', 'private, max-age=900');
+      // Productbeelden wijzigen zelden; een lange private browser-cache (1 dag) zorgt dat een
+      // terugkeer naar het bord geen losse image-requests meer afvuurt (minder "flitsen" + minder
+      // rate-limit-druk). De server-side cache in ProductImageService dekt de eerste koude fetch.
+      res.set('Cache-Control', 'private, max-age=86400');
       return res.type(image.contentType).send(image.content);
     } catch {
       res.set('Cache-Control', 'no-store');
@@ -43,8 +46,11 @@ function createGetProductImageHandler({ productImageService, timeFn = time }) {
 function createMediaRouter({
   productImageService = createProductImageService(),
   rateLimiter = rateLimit({
+    // Een beeld-zwaar bord laadt bij de eerste paint tientallen product-images (één request per
+    // uniek item). 60/min was te krap → sommige thumbnails kregen 429 en "flitsten" later of
+    // verdwenen. 300/min dekt een grote eerste laadbeurt; daarna serveert de browser-cache (1 dag).
     windowMs: 60 * 1000,
-    max: 60,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
   }),

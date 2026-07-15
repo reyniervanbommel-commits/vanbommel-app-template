@@ -25,6 +25,7 @@ const {
   validateRemarksColumnRequest,
 } = require('./RemarksColumnService');
 const { normalizeStatusOptions, buildStatusLabelRenames } = require('../utils/statusColumnOptions');
+const { validateDatePeriodOptions } = require('../utils/datePeriodColumn');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -168,6 +169,7 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
 
   let optionsJson = null;
   let normalizedImageOptions = null;
+  let normalizedDatePeriodOptions = null;
   if (dataType === 'select' && !isFormulaColumn) {
     const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
     if (!list.length) throw Object.assign(new Error('A choice list requires at least one option'), { status: 400 });
@@ -189,11 +191,41 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   if (isFormulaColumn && scope !== 'master') {
     throw Object.assign(new Error('Formula columns are only allowed at master level'), { status: 400 });
   }
-  if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image')) {
-    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
+  if (dataType === 'date_period') {
+    if (isFormulaColumn) {
+      throw Object.assign(new Error('Formula columns do not support date period data type'), { status: 400 });
+    }
+    normalizedDatePeriodOptions = validateDatePeriodOptions(options);
+    optionsJson = JSON.stringify({
+      sourceColumnKey: normalizedDatePeriodOptions.sourceColumnKey,
+    });
+  }
+  if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image' || dataType === 'date_period')) {
+    throw Object.assign(new Error('Formula columns do not support choice list, status, image or date period data types'), { status: 400 });
   }
 
   const pool = await getPool();
+  if (dataType === 'date_period') {
+    const sourceCheck = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('scope', sql.NVarChar(16), scope)
+      .input('sourceColumnKey', sql.NVarChar(64), normalizedDatePeriodOptions.sourceColumnKey)
+      .query(`
+        SELECT data_type
+        FROM dbo.tb_columns
+        WHERE table_id = @tableId
+          AND scope = @scope
+          AND [key] = @sourceColumnKey
+          AND is_active = 1
+      `);
+    if (!sourceCheck.recordset.length) {
+      throw Object.assign(new Error('sourceColumnKey does not reference an existing column in this scope'), { status: 400 });
+    }
+    const sourceDataType = String(sourceCheck.recordset[0]?.data_type || '').trim().toLowerCase();
+    if (sourceDataType !== 'date') {
+      throw Object.assign(new Error('sourceColumnKey must reference a date column'), { status: 400 });
+    }
+  }
   if (dataType === 'image') {
     const sourceCheck = await pool.request()
       .input('tableId', sql.BigInt, table.id)
@@ -354,8 +386,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (!DATA_TYPES.includes(nextDataType)) {
     throw Object.assign(new Error('Invalid data type'), { status: 400 });
   }
-  if (nextDataType === 'select' || nextDataType === 'status' || nextDataType === 'image') {
-    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
+  if (nextDataType === 'select' || nextDataType === 'status' || nextDataType === 'image' || nextDataType === 'date_period') {
+    throw Object.assign(new Error('Formula columns do not support choice list, status, image or date period data types'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
@@ -566,6 +598,7 @@ module.exports = {
   slugify,
   resolveWriteback,
   validateImageOptions,
+  validateDatePeriodOptions,
   ensureRemarksColumn,
   validateRemarksColumnRequest,
   normalizeFormulaExpression,

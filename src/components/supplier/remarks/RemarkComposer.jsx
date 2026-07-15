@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useState } from 'react';
 import { Avatar, Button } from '@fluentui/react-components';
 
-function RemarkComposer({ currentUser, column = null, onSubmit }) {
+function RemarkComposer({ currentUser, column = null, onSubmit, textareaRef = null }) {
   const [draft, setDraft] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -47,6 +47,7 @@ function RemarkComposer({ currentUser, column = null, onSubmit }) {
       </div>
       <textarea
         id="row-remark-composer"
+        ref={textareaRef}
         value={draft}
         maxLength={2000}
         disabled={submitting}
