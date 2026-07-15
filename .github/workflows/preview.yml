@@ -37,7 +37,7 @@ jobs:
         run: |
           BRANCH="${GITHUB_REF_NAME}"
           # Verwijder feature/ prefix en normaliseer
-          SLUG=$(echo "$BRANCH" | sed 's|feature/||' | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | sed 's/-$//' | cut -c1-24)
+          SLUG=$(echo "$BRANCH" | sed 's|feature/||' | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | cut -c1-24 | sed 's/-$//')
           APP_NAME="preview-${SLUG}"
           echo "app_name=${APP_NAME}" >> $GITHUB_OUTPUT
           echo "image_tag=preview-${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
@@ -147,7 +147,7 @@ jobs:
         id: set-name
         run: |
           BRANCH="${{ github.event.pull_request.head.ref }}"
-          SLUG=$(echo "$BRANCH" | sed 's|feature/||' | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | sed 's/-$//' | cut -c1-24)
+          SLUG=$(echo "$BRANCH" | sed 's|feature/||' | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | cut -c1-24 | sed 's/-$//')
           APP_NAME="preview-${SLUG}"
           echo "app_name=${APP_NAME}" >> $GITHUB_OUTPUT
 
