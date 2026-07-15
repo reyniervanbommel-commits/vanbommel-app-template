@@ -139,7 +139,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       </div>
       <Text className={styles.hint} block>
         Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
-        network traffic and sync time. Only fields that currently contain data are selectable.
+        network traffic and sync time. Use Discover D365 fields to register all entity columns first.
       </Text>
       {retentionHint ? (
         <Text className={styles.hint} block>

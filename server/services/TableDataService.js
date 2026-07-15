@@ -3547,6 +3547,21 @@ function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
   };
 }
 
+// Board-kolomdefinities inclusief lookup-verrijking (zelfde set als de board-read).
+async function getBoardColumnDefinitions(tableKey, { scope = null } = {}) {
+  const table = await getTableByKey(tableKey);
+  const enrichment = await loadLookupEnrichment(table);
+  const scopes = scope && ['master', 'detail'].includes(scope) ? [scope] : ['master', 'detail'];
+  const result = { master: [], detail: [] };
+  await Promise.all(scopes.map(async (entryScope) => {
+    const cols = await listColumns({ tableId: table.id, scope: entryScope, includeInactive: false });
+    result[entryScope] = entryScope === 'master'
+      ? [...cols, ...enrichment.masterCols]
+      : [...cols, ...enrichment.detailCols];
+  }));
+  return result;
+}
+
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -3803,6 +3818,7 @@ module.exports = {
   correctField,
   getCellHistory,
   getDataModel,
+  getBoardColumnDefinitions,
   discoverSourceFields,
   saveSyncFilters,
   countSyncFilter,

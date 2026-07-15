@@ -25,7 +25,7 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
   const hasAvailableFields = availableFieldCount > 0;
   const pickerDisabledReason = hasAvailableFields
     ? ''
-    : 'No fields with sampled values for this level yet. Run Sync now first.';
+    : 'No fields registered for this level yet. Run Discover D365 fields or Sync now first.';
 
   return (
     <div className={styles.ruleRow}>

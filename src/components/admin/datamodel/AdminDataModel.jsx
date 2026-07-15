@@ -82,6 +82,7 @@ export default function AdminDataModel() {
               onToggleWriteback={selectedModel.toggleWriteback}
               onSetColumnToggleState={selectedModel.setColumnToggleState}
               onDeleteColumn={selectedModel.deleteColumn}
+              onDiscoverFields={selectedModel.discoverFields}
             />
           </>
         )

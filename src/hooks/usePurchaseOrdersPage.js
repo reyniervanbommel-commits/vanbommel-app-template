@@ -4,7 +4,11 @@ import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../uti
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
 import { migrateFormatRulesForStatusRenames, normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
 import { buildStatusLabelRenames } from '../utils/statusColumnUtils';
-import { mapTbColumnToBoard, mapTbResponseToBoard, scopeForLevel } from '../utils/purchaseOrdersBoardMapping';
+import {
+  mapTbColumnToBoard,
+  mapTbResponseToBoard,
+  scopeForLevel,
+} from '../utils/purchaseOrdersBoardMapping';
 import { filterSummableLineColumnKeys, isSummableLineColumn } from '../utils/purchaseOrderTotals';
 import {
   arraysEqual,
@@ -388,24 +392,47 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
+  const resolveColumnScopeById = useCallback((columnId) => {
+    if (headerColumns.some((column) => column.id === columnId)) return 'master';
+    if (lineColumns.some((column) => column.id === columnId)) return 'detail';
+    return null;
+  }, [headerColumns, lineColumns]);
+
   // Herlaadt alleen de kolomdefinities (na toevoegen/hernoemen/verwijderen).
-  const reloadColumns = useCallback(async () => {
-    const [headerData, lineData] = BOARD_TB_SOURCE
-      ? await Promise.all([
-          apiRequest(`${DATA_BASE}/columns?scope=master`),
-          apiRequest(`${DATA_BASE}/columns?scope=detail`),
-        ])
-      : await Promise.all([
-          apiRequest('/purchase-orders/columns?level=header'),
-          apiRequest('/purchase-orders/columns?level=line'),
-        ]);
+  const reloadColumns = useCallback(async ({ scopes = ['master', 'detail'] } = {}) => {
+    const scopeSet = new Set(scopes);
     if (BOARD_TB_SOURCE) {
-      setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns.map(mapTbColumnToBoard) : []);
-      setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns.map(mapTbColumnToBoard) : []);
+      const requests = [];
+      if (scopeSet.has('master')) {
+        requests.push(
+          apiRequest(`${DATA_BASE}/columns?scope=master&enriched=1`)
+            .then((data) => ({ kind: 'master', columns: data?.columns }))
+        );
+      }
+      if (scopeSet.has('detail')) {
+        requests.push(
+          apiRequest(`${DATA_BASE}/columns?scope=detail&enriched=1`)
+            .then((data) => ({ kind: 'detail', columns: data?.columns }))
+        );
+      }
+      const results = await Promise.all(requests);
+      results.forEach((result) => {
+        const mapped = Array.isArray(result.columns) ? result.columns.map(mapTbColumnToBoard) : [];
+        if (result.kind === 'master') setHeaderColumns(mapped);
+        else setLineColumns(mapped);
+      });
       return;
     }
-    setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns : []);
-    setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns : []);
+    const [headerData, lineData] = await Promise.all([
+      scopeSet.has('master') ? apiRequest('/purchase-orders/columns?level=header') : Promise.resolve(null),
+      scopeSet.has('detail') ? apiRequest('/purchase-orders/columns?level=line') : Promise.resolve(null),
+    ]);
+    if (headerData) {
+      setHeaderColumns(Array.isArray(headerData?.columns) ? headerData.columns : []);
+    }
+    if (lineData) {
+      setLineColumns(Array.isArray(lineData?.columns) ? lineData.columns : []);
+    }
   }, []);
 
   const addColumn = useCallback(async ({ label, level, dataType, options, formulaExpr }) => {
@@ -422,7 +449,7 @@ export function usePurchaseOrdersPage() {
     if (formulaExpr !== undefined && BOARD_TB_SOURCE) {
       await reload();
     } else {
-      await reloadColumns();
+      await reloadColumns({ scopes: [scopeForLevel(level)] });
     }
     return res?.column || null;
   }, [reload, reloadColumns]);
@@ -457,8 +484,9 @@ export function usePurchaseOrdersPage() {
       body.label = label;
     }
     await apiRequest(`${boardBase()}/columns/${id}`, { method: 'PATCH', body });
-    await reloadColumns();
-  }, [reloadColumns]);
+    const scope = resolveColumnScopeById(id);
+    await reloadColumns({ scopes: scope ? [scope] : ['master', 'detail'] });
+  }, [reloadColumns, resolveColumnScopeById]);
 
   // Admin: zet write-back aan/uit op een D365-kolom (#134).
   const toggleWriteback = useCallback(async (columnId, writable) => {
@@ -467,13 +495,15 @@ export function usePurchaseOrdersPage() {
       method: 'PATCH',
       body: { writable, mechanism: 'patch' },
     });
-    await reloadColumns();
-  }, [reloadColumns]);
+    const scope = resolveColumnScopeById(columnId);
+    await reloadColumns({ scopes: scope ? [scope] : ['master', 'detail'] });
+  }, [reloadColumns, resolveColumnScopeById]);
 
   const removeColumn = useCallback(async (id) => {
     await apiRequest(`${boardBase()}/columns/${id}`, { method: 'DELETE' });
-    await reloadColumns();
-  }, [reloadColumns]);
+    const scope = resolveColumnScopeById(id);
+    await reloadColumns({ scopes: scope ? [scope] : ['master', 'detail'] });
+  }, [reloadColumns, resolveColumnScopeById]);
 
   // Past board-settings (zichtbaarheid/volgorde) toe op de dynamische header-kolommen.
   // Onbekende keys (bv. verwijderde kolommen) worden genegeerd; nieuwe kolommen zijn

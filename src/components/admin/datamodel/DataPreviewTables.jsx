@@ -1,6 +1,21 @@
 import React, { memo, useCallback, useMemo } from 'react';
+import { Button, Text, makeStyles, tokens } from '@fluentui/react-components';
+import { SearchRegular } from '@fluentui/react-icons';
 import { exportSingleRowToExcel } from '../../../utils/excelExport';
 import EntityConfigTable from './EntityConfigTable';
+
+const useStyles = makeStyles({
+  discoverRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  discoverHint: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+});
 
 function buildSections({ tableKey, entities, columns, previewTables }) {
   const headerEntity = (entities || []).find((entity) => entity.id === 'header');
@@ -59,7 +74,9 @@ function DataPreviewTables({
   onToggleWriteback,
   onDeleteColumn,
   onSetColumnToggleState,
+  onDiscoverFields,
 }) {
+  const styles = useStyles();
   const handleExportExcel = useCallback(({ sheetName, fileName, columnNames, rowValues }) => {
     exportSingleRowToExcel({
       sheetName,
@@ -79,6 +96,21 @@ function DataPreviewTables({
 
   return (
     <>
+      {typeof onDiscoverFields === 'function' ? (
+        <div className={styles.discoverRow}>
+          <Button
+            appearance="secondary"
+            icon={<SearchRegular />}
+            onClick={onDiscoverFields}
+            disabled={togglingKey === 'discover-fields'}
+          >
+            Discover D365 fields
+          </Button>
+          <Text className={styles.discoverHint}>
+            Haalt alle beschikbare velden uit de D365-entiteit op en voegt ontbrekende kolommen toe (standaard verborgen).
+          </Text>
+        </div>
+      ) : null}
       {sections.map((section) => (
         <EntityConfigTable
           key={section.scope}
