@@ -38,6 +38,16 @@ router.get('/settings', async (req, res, next) => {
   }
 });
 
+router.get('/vendors', async (req, res, next) => {
+  try {
+    const supplierAccount = resolveSupplierAccount(req);
+    const data = await analysisService.listMainTableVendors({ supplierAccount });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/capacity', async (req, res, next) => {
   try {
     const vendorAccount = resolveVendorQuery(req);
