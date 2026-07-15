@@ -26,9 +26,9 @@ const useStyles = makeStyles({
   },
   surface: {
     ...shorthands.padding('10px'),
-    width: '288px',
-    maxWidth: '288px',
+    width: 'max-content',
     boxSizing: 'border-box',
+    overflow: 'visible',
   },
   header: {
     display: 'flex',
@@ -41,31 +41,43 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
   },
   grid: {
-    width: '268px',
-    borderCollapse: 'collapse',
-    tableLayout: 'fixed',
+    display: 'grid',
+    gridTemplateColumns: '36px repeat(7, 32px)',
+    columnGap: '2px',
+    rowGap: '2px',
+    alignItems: 'center',
   },
-  headCell: {
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
+  weekHeader: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground1,
     textAlign: 'center',
-    ...shorthands.padding('4px', '0'),
     fontWeight: tokens.fontWeightSemibold,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.borderRadius('4px'),
+    ...shorthands.padding('4px', '0'),
   },
-  weekCell: {
-    fontSize: tokens.fontSizeBase100,
+  dayHeader: {
+    fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
-    width: '28px',
-    ...shorthands.padding('2px'),
+    fontWeight: tokens.fontWeightSemibold,
+    ...shorthands.padding('4px', '0'),
   },
-  dayCell: {
+  weekNumber: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground1,
     textAlign: 'center',
-    ...shorthands.padding('2px'),
+    fontWeight: tokens.fontWeightSemibold,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.borderRadius('4px'),
+    minHeight: '28px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayButton: {
-    minWidth: '28px',
-    width: '28px',
+    minWidth: '32px',
+    width: '32px',
     height: '28px',
     ...shorthands.padding('0'),
     fontSize: tokens.fontSizeBase200,
@@ -174,6 +186,7 @@ export default function WeekNumberCalendarPopover({
       onOpenChange={handleOpenChange}
       positioning="below-start"
       trapFocus
+      withArrow
     >
       <PopoverTrigger disableButtonEnhancement>
         <span
@@ -206,43 +219,42 @@ export default function WeekNumberCalendarPopover({
             onClick={goNextMonth}
           />
         </div>
-        <table className={styles.grid} role="grid" aria-label="Calendar">
-          <thead>
-            <tr>
-              <th className={styles.headCell} scope="col" aria-label="Week">Wk</th>
-              {WEEKDAY_LABELS.map((label) => (
-                <th key={label} className={styles.headCell} scope="col">{label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {weeks.map((week) => (
-              <tr key={`${viewYear}-${viewMonth}-w${week.weekNumber}-${week.days[0].getDate()}`}>
-                <td className={styles.weekCell}>{week.weekNumber}</td>
-                {week.days.map((date) => {
-                  const isOutside = date.getMonth() !== viewMonth;
-                  const isSelected = sameCalendarDay(date, selected);
-                  const isToday = sameCalendarDay(date, today);
-                  return (
-                    <td key={formatIsoDate(date)} className={styles.dayCell}>
-                      <Button
-                        appearance={isSelected ? 'primary' : 'subtle'}
-                        size="small"
-                        className={dayButtonClass(isOutside, isToday, isSelected)}
-                        aria-label={formatIsoDate(date)}
-                        aria-current={isToday ? 'date' : undefined}
-                        aria-pressed={isSelected}
-                        onClick={() => handleSelectDay(date)}
-                      >
-                        {date.getDate()}
-                      </Button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className={styles.grid} role="grid" aria-label="Calendar">
+          <div className={styles.weekHeader} role="columnheader" aria-label="Week">
+            Wk
+          </div>
+          {WEEKDAY_LABELS.map((label) => (
+            <div key={label} className={styles.dayHeader} role="columnheader">
+              {label}
+            </div>
+          ))}
+          {weeks.map((week) => (
+            <React.Fragment key={`${viewYear}-${viewMonth}-w${week.weekNumber}-${week.days[0].getDate()}`}>
+              <div className={styles.weekNumber} role="rowheader" aria-label={`Week ${week.weekNumber}`}>
+                {week.weekNumber}
+              </div>
+              {week.days.map((date) => {
+                const isOutside = date.getMonth() !== viewMonth;
+                const isSelected = sameCalendarDay(date, selected);
+                const isToday = sameCalendarDay(date, today);
+                return (
+                  <Button
+                    key={formatIsoDate(date)}
+                    appearance={isSelected ? 'primary' : 'subtle'}
+                    size="small"
+                    className={dayButtonClass(isOutside, isToday, isSelected)}
+                    aria-label={formatIsoDate(date)}
+                    aria-current={isToday ? 'date' : undefined}
+                    aria-pressed={isSelected}
+                    onClick={() => handleSelectDay(date)}
+                  >
+                    {date.getDate()}
+                  </Button>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
         <div className={styles.footer}>
           <Button appearance="transparent" size="small" onClick={goToday}>
             Today
