@@ -158,7 +158,6 @@ export default function PurchaseOrderWriteBackCell({
   const [error, setError] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimer = useRef(null);
-  const dateAnchorRef = useRef(null);
   const isDate = isDateLikeColumn(column, value);
 
   useEffect(() => {
@@ -204,34 +203,41 @@ export default function PurchaseOrderWriteBackCell({
     }
   }, [value, column]);
 
-  const inputControl = (
-    <>
-      <div ref={dateAnchorRef} style={{ minWidth: 0, width: '100%' }}>
-        <Input
-          className={formattedControlClassName}
-          style={formattedControlInlineStyle}
-          appearance="filled-lighter"
-          size="small"
-          type={column.dataType === 'number' ? 'number' : 'text'}
-          inputMode={isDate ? 'numeric' : undefined}
-          value={local}
-          aria-label={`${column.label} (write back to D365)`}
-          onChange={(_, data) => setLocal(data.value)}
-          onBlur={() => commit(local)}
-          onKeyDown={onKeyDown}
-          onDoubleClick={isDate ? openDatePicker : undefined}
-        />
-      </div>
-      {isDate ? (
-        <WeekNumberCalendarPopover
-          open={calendarOpen}
-          onOpenChange={setCalendarOpen}
-          value={toCalendarValue(local)}
-          onSelect={onCalendarSelect}
-          positioningTarget={dateAnchorRef}
-        />
-      ) : null}
-    </>
+  const inputControl = isDate ? (
+    <WeekNumberCalendarPopover
+      open={calendarOpen}
+      onOpenChange={setCalendarOpen}
+      value={toCalendarValue(local)}
+      onSelect={onCalendarSelect}
+    >
+      <Input
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
+        appearance="filled-lighter"
+        size="small"
+        type="text"
+        inputMode="numeric"
+        value={local}
+        aria-label={`${column.label} (write back to D365)`}
+        onChange={(_, data) => setLocal(data.value)}
+        onBlur={() => commit(local)}
+        onKeyDown={onKeyDown}
+        onDoubleClick={openDatePicker}
+      />
+    </WeekNumberCalendarPopover>
+  ) : (
+    <Input
+      className={formattedControlClassName}
+      style={formattedControlInlineStyle}
+      appearance="filled-lighter"
+      size="small"
+      type={column.dataType === 'number' ? 'number' : 'text'}
+      value={local}
+      aria-label={`${column.label} (write back to D365)`}
+      onChange={(_, data) => setLocal(data.value)}
+      onBlur={() => commit(local)}
+      onKeyDown={onKeyDown}
+    />
   );
 
   return (

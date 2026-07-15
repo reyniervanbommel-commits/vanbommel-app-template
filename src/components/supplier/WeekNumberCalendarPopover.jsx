@@ -19,18 +19,16 @@ import {
 } from './weekNumberCalendarUtils';
 
 const useStyles = makeStyles({
-  trigger: {
-    position: 'absolute',
-    width: '1px',
-    height: '1px',
-    opacity: 0,
-    pointerEvents: 'none',
-    ...shorthands.border('0'),
-    ...shorthands.padding('0'),
+  triggerWrap: {
+    display: 'block',
+    minWidth: 0,
+    width: '100%',
   },
   surface: {
     ...shorthands.padding('10px'),
-    minWidth: '280px',
+    width: '288px',
+    maxWidth: '288px',
+    boxSizing: 'border-box',
   },
   header: {
     display: 'flex',
@@ -43,7 +41,7 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
   },
   grid: {
-    width: '100%',
+    width: '268px',
     borderCollapse: 'collapse',
     tableLayout: 'fixed',
   },
@@ -96,7 +94,7 @@ export default function WeekNumberCalendarPopover({
   onOpenChange,
   value,
   onSelect,
-  positioningTarget,
+  children,
 }) {
   const styles = useStyles();
   const selected = useMemo(() => parseIsoDate(value), [value]);
@@ -152,11 +150,16 @@ export default function WeekNumberCalendarPopover({
     onOpenChange(Boolean(data.open));
   }, [onOpenChange]);
 
-  const positioning = useMemo(() => {
-    const target = positioningTarget?.current || positioningTarget || undefined;
-    if (!target) return 'below';
-    return { target, position: 'below', align: 'start' };
-  }, [positioningTarget, open]);
+  const handleTriggerClick = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  const handleTriggerDoubleClick = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenChange(true);
+  }, [onOpenChange]);
 
   const dayButtonClass = useCallback((isOutside, isToday, isSelected) => {
     const parts = [styles.dayButton];
@@ -169,11 +172,17 @@ export default function WeekNumberCalendarPopover({
     <Popover
       open={open}
       onOpenChange={handleOpenChange}
-      positioning={positioning}
+      positioning="below-start"
       trapFocus
     >
       <PopoverTrigger disableButtonEnhancement>
-        <span className={styles.trigger} aria-hidden="true" />
+        <span
+          className={styles.triggerWrap}
+          onClick={handleTriggerClick}
+          onDoubleClick={handleTriggerDoubleClick}
+        >
+          {children}
+        </span>
       </PopoverTrigger>
       <PopoverSurface className={styles.surface} aria-label="Date picker with week numbers">
         <div className={styles.header}>

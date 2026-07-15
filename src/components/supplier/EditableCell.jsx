@@ -138,7 +138,6 @@ export default function EditableCell({
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimerRef = useRef(null);
-  const dateAnchorRef = useRef(null);
 
   useEffect(() => {
     setLocalValue(dataType === 'date' ? toDateInputValue(value) : value);
@@ -221,30 +220,26 @@ export default function EditableCell({
     );
   } else if (dataType === 'date') {
     control = (
-      <>
-        <div ref={dateAnchorRef} style={{ minWidth: 0, width: '100%' }}>
-          <Input
-            className={formattedControlClassName}
-            style={formattedControlInlineStyle}
-            appearance="filled-lighter"
-            size="small"
-            type="text"
-            inputMode="numeric"
-            aria-label={ariaLabel}
-            value={localValue == null ? '' : String(localValue)}
-            onChange={(_, data) => setLocalValue(data.value)}
-            onBlur={() => commit(normalizeDateValue(localValue))}
-            onDoubleClick={openDatePicker}
-          />
-        </div>
-        <WeekNumberCalendarPopover
-          open={calendarOpen}
-          onOpenChange={setCalendarOpen}
-          value={toDateInputValue(localValue)}
-          onSelect={onCalendarSelect}
-          positioningTarget={dateAnchorRef}
+      <WeekNumberCalendarPopover
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        value={toDateInputValue(localValue)}
+        onSelect={onCalendarSelect}
+      >
+        <Input
+          className={formattedControlClassName}
+          style={formattedControlInlineStyle}
+          appearance="filled-lighter"
+          size="small"
+          type="text"
+          inputMode="numeric"
+          aria-label={ariaLabel}
+          value={localValue == null ? '' : String(localValue)}
+          onChange={(_, data) => setLocalValue(data.value)}
+          onBlur={() => commit(normalizeDateValue(localValue))}
+          onDoubleClick={openDatePicker}
         />
-      </>
+      </WeekNumberCalendarPopover>
     );
   } else if (dataType === 'number') {
     control = (

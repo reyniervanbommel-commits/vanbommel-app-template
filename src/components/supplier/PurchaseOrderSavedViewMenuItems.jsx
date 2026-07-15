@@ -33,17 +33,20 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     flexShrink: 0,
-    ...shorthands.gap('4px'),
+    ...shorthands.gap('0'),
   },
   historyIcon: {
     fontSize: '14px',
     color: tokens.colorNeutralForeground3,
     flexShrink: 0,
+    marginLeft: '4px',
+    marginRight: '-2px',
   },
   historySwitch: {
     flexShrink: 0,
     transform: 'scale(0.72)',
     transformOrigin: 'center center',
+    marginLeft: '-6px',
   },
 });
 
