@@ -20,7 +20,9 @@ function gridSpanStyle(span) {
   return { gridColumn: `span ${Math.min(safe * 4, 12)}` };
 }
 
-function BiDashboardGrid({ charts, resultsById, loading, currentUserId, columns, onEdit, onDelete }) {
+function BiDashboardGrid({
+  charts, resultsById, loading, currentUserId, columns, selectedChartId, onEdit, onDelete,
+}) {
   const styles = useStyles();
 
   if (!charts.length) {
@@ -37,6 +39,7 @@ function BiDashboardGrid({ charts, resultsById, loading, currentUserId, columns,
             loading={loading}
             columns={columns}
             canManage={Number(chart.userId) === Number(currentUserId)}
+            selected={Number(selectedChartId) === Number(chart.id)}
             onEdit={onEdit}
             onDelete={onDelete}
           />

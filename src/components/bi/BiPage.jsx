@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
   makeStyles, MessageBar, MessageBarBody, shorthands, Spinner,
@@ -8,6 +8,7 @@ import { useAppToast } from '../../hooks/useAppToast';
 import BiToolbar from './BiToolbar';
 import BiDashboardGrid from './BiDashboardGrid';
 import ChartBuilderPanel from './ChartBuilderPanel';
+import ChartBuilderFlyout from './ChartBuilderFlyout';
 import { useBiMeta } from './hooks/useBiMeta';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
@@ -15,7 +16,18 @@ import { useStarterCharts } from './hooks/useStarterCharts';
 import { BOARD_KEY } from './biConstants';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', minHeight: 0 },
+  pageLayout: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    ...shorthands.gap('16px'),
+    minHeight: 0,
+  },
+  dashboardArea: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  },
   loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('48px') },
   message: { marginBottom: '12px' },
 });
@@ -33,6 +45,11 @@ export default function BiPage() {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [seeding, setSeeding] = useState(false);
+
+  const selectedChartId = useMemo(() => {
+    if (!builderMode || builderMode === 'new') return null;
+    return builderMode.id;
+  }, [builderMode]);
 
   const handleNew = useCallback(() => setBuilderMode('new'), []);
   const handleEdit = useCallback((chart) => setBuilderMode(chart), []);
@@ -61,12 +78,15 @@ export default function BiPage() {
     try {
       await deleteChart(pendingDelete.id);
       notifySuccess('Chart deleted');
+      if (builderMode && builderMode !== 'new' && builderMode.id === pendingDelete.id) {
+        setBuilderMode(null);
+      }
     } catch (err) {
       notifyError(err.message || 'Failed to delete chart');
     } finally {
       setPendingDelete(null);
     }
-  }, [pendingDelete, deleteChart, notifySuccess, notifyError]);
+  }, [pendingDelete, deleteChart, notifySuccess, notifyError, builderMode]);
 
   const handleSeed = useCallback(async () => {
     setSeeding(true);
@@ -80,50 +100,66 @@ export default function BiPage() {
     }
   }, [seedStarters, notifySuccess, notifyError]);
 
+  useEffect(() => {
+    if (!builderMode) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setBuilderMode(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [builderMode]);
+
   if (meta.loading || chartsLoading) {
     return <div className={styles.loading}><Spinner label="Loading BI…" /></div>;
   }
 
-  return (
-    <div className={styles.root}>
-      <BiToolbar chartCount={charts.length} onNewChart={handleNew} onRefresh={reload} />
+  const flyoutTitle = builderMode === 'new' ? 'New chart' : 'Edit chart';
 
-      {error ? (
-        <MessageBar intent="error" className={styles.message}>
-          <MessageBarBody>{error}</MessageBarBody>
-        </MessageBar>
-      ) : null}
+  return (
+    <div className={styles.pageLayout}>
+      <div className={styles.dashboardArea}>
+        <BiToolbar chartCount={charts.length} onNewChart={handleNew} onRefresh={reload} />
+
+        {error ? (
+          <MessageBar intent="error" className={styles.message}>
+            <MessageBarBody>{error}</MessageBarBody>
+          </MessageBar>
+        ) : null}
+
+        {!charts.length ? (
+          <MessageBar intent="info" className={styles.message}>
+            <MessageBarBody>Start with a set of ready-made example charts.</MessageBarBody>
+            <Button size="small" appearance="primary" onClick={handleSeed} disabled={seeding}>
+              {seeding ? 'Adding…' : 'Add starter charts'}
+            </Button>
+          </MessageBar>
+        ) : null}
+
+        <BiDashboardGrid
+          charts={charts}
+          resultsById={resultsById}
+          loading={dataLoading}
+          currentUserId={user?.id}
+          columns={meta.columns}
+          selectedChartId={selectedChartId}
+          onEdit={handleEdit}
+          onDelete={setPendingDelete}
+        />
+      </div>
 
       {builderMode ? (
-        <ChartBuilderPanel
-          key={builderMode === 'new' ? 'new' : builderMode.id}
-          columns={meta.columns}
-          chart={builderMode === 'new' ? null : builderMode}
-          onSave={handleSave}
-          onCancel={handleCancel}
-          busy={busy}
-        />
-      ) : (
-        <>
-          {!charts.length ? (
-            <MessageBar intent="info" className={styles.message}>
-              <MessageBarBody>Start with a set of ready-made example charts.</MessageBarBody>
-              <Button size="small" appearance="primary" onClick={handleSeed} disabled={seeding}>
-                {seeding ? 'Adding…' : 'Add starter charts'}
-              </Button>
-            </MessageBar>
-          ) : null}
-          <BiDashboardGrid
-            charts={charts}
-            resultsById={resultsById}
-            loading={dataLoading}
-            currentUserId={user?.id}
+        <ChartBuilderFlyout title={flyoutTitle} onClose={handleCancel}>
+          <ChartBuilderPanel
+            key={builderMode === 'new' ? 'new' : builderMode.id}
             columns={meta.columns}
-            onEdit={handleEdit}
-            onDelete={setPendingDelete}
+            chart={builderMode === 'new' ? null : builderMode}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            busy={busy}
+            variant="flyout"
           />
-        </>
-      )}
+        </ChartBuilderFlyout>
+      ) : null}
 
       <Dialog open={Boolean(pendingDelete)} onOpenChange={(_, data) => { if (!data.open) setPendingDelete(null); }}>
         <DialogSurface>

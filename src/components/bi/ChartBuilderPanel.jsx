@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import {
-  Button, Divider, Dropdown, Field, Input, makeStyles, Option, shorthands, Text, tokens,
+  Button, Divider, Dropdown, Field, Input, makeStyles, mergeClasses, Option, shorthands, Text, tokens,
 } from '@fluentui/react-components';
 import ChartFilterEditor from './ChartFilterEditor';
 import ChartRenderer from './ChartRenderer';
@@ -18,7 +18,11 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('20px'),
-    maxWidth: '760px',
+    width: '100%',
+  },
+  shellFlyout: {
+    ...shorthands.gap('16px'),
+    ...shorthands.padding('16px', '0', '0'),
   },
   panel: {
     display: 'flex',
@@ -28,6 +32,11 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     boxShadow: tokens.shadow8,
+  },
+  panelFlyout: {
+    ...shorthands.padding('0'),
+    boxShadow: 'none',
+    ...shorthands.borderRadius(0),
   },
   section: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
   sectionTitle: {
@@ -42,7 +51,11 @@ const useStyles = makeStyles({
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
     ...shorthands.gap('12px'),
   },
+  fieldGridFlyout: {
+    gridTemplateColumns: '1fr',
+  },
   fieldNarrow: { maxWidth: '320px' },
+  fieldNarrowFlyout: { maxWidth: '100%' },
   preview: {
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
@@ -55,8 +68,11 @@ const useStyles = makeStyles({
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
 
-export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, busy = false }) {
+export default function ChartBuilderPanel({
+  columns, chart, onSave, onCancel, busy = false, variant = 'page',
+}) {
   const styles = useStyles();
+  const isFlyout = variant === 'flyout';
   const builder = useChartBuilder(chart, columns);
   const { config, measureColumns, isDateDimension, isValid, multiMeasureMode, selectedMeasures } = builder;
   const countMode = config.aggregation === 'count';
@@ -77,22 +93,25 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
     onSave(builder.payload);
   }, [isValid, busy, onSave, builder.payload]);
 
+  const fieldGridClass = mergeClasses(styles.fieldGrid, isFlyout && styles.fieldGridFlyout);
+  const fieldClass = isFlyout ? styles.fieldNarrowFlyout : styles.fieldNarrow;
+
   return (
-    <div className={styles.shell}>
-      <div className={styles.panel}>
-        <Text className={styles.title}>{chart ? 'Edit chart' : 'New chart'}</Text>
+    <div className={mergeClasses(styles.shell, isFlyout && styles.shellFlyout)}>
+      <div className={mergeClasses(styles.panel, isFlyout && styles.panelFlyout)}>
+        {!isFlyout ? <Text className={styles.title}>{chart ? 'Edit chart' : 'New chart'}</Text> : null}
 
         <div className={styles.section}>
           <Text className={styles.sectionTitle}>Details</Text>
-          <div className={styles.fieldGrid}>
-            <Field label="Name" required className={styles.fieldNarrow}>
+          <div className={fieldGridClass}>
+            <Field label="Name" required className={fieldClass}>
               <Input
                 value={builder.name}
                 onChange={(_, data) => builder.setName(data.value)}
                 placeholder="Chart name"
               />
             </Field>
-            <Field label="Visibility" className={styles.fieldNarrow}>
+            <Field label="Visibility" className={fieldClass}>
               <Dropdown
                 selectedOptions={[builder.visibility]}
                 value={findLabel(VISIBILITY_OPTIONS, builder.visibility)}
@@ -103,7 +122,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
                 ))}
               </Dropdown>
             </Field>
-            <Field label="Chart width" className={styles.fieldNarrow}>
+            <Field label="Chart width" className={fieldClass}>
               <Dropdown
                 selectedOptions={[String(config.options?.gridSpan || 1)]}
                 value={findLabel(CHART_WIDTH_OPTIONS, config.options?.gridSpan || 1)}
@@ -121,8 +140,8 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
 
         <div className={styles.section}>
           <Text className={styles.sectionTitle}>Chart setup</Text>
-          <div className={styles.fieldGrid}>
-            <Field label="Type" className={styles.fieldNarrow}>
+          <div className={fieldGridClass}>
+            <Field label="Type" className={fieldClass}>
               <Dropdown
                 selectedOptions={[config.type]}
                 value={findLabel(CHART_TYPE_OPTIONS, config.type)}
@@ -134,7 +153,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
               </Dropdown>
             </Field>
 
-            <Field label="Aggregation" className={styles.fieldNarrow}>
+            <Field label="Aggregation" className={fieldClass}>
               <Dropdown
                 selectedOptions={[config.aggregation]}
                 value={findLabel(AGGREGATION_OPTIONS, config.aggregation)}
@@ -146,7 +165,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
               </Dropdown>
             </Field>
 
-            <Field label={config.type === 'kpi' ? 'Dimension (optional)' : 'Dimension'} className={styles.fieldNarrow}>
+            <Field label={config.type === 'kpi' ? 'Dimension (optional)' : 'Dimension'} className={fieldClass}>
               <Dropdown
                 selectedOptions={[config.dimension]}
                 value={columns.find((col) => col.key === config.dimension)?.label || ''}
@@ -159,7 +178,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
             </Field>
 
             {isDateDimension ? (
-              <Field label="Date grouping" className={styles.fieldNarrow}>
+              <Field label="Date grouping" className={fieldClass}>
                 <Dropdown
                   selectedOptions={[config.dateGrouping]}
                   value={findLabel(DATE_GROUPING_OPTIONS, config.dateGrouping)}
@@ -173,7 +192,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
             ) : null}
 
             {multiMeasureMode && !countMode ? (
-              <div className={styles.fieldNarrow}>
+              <div className={fieldClass}>
                 <ChartMeasureMultiSelect
                   columns={measureColumns}
                   selectedKeys={selectedMeasures}
@@ -181,7 +200,7 @@ export default function ChartBuilderPanel({ columns, chart, onSave, onCancel, bu
                 />
               </div>
             ) : (
-              <Field label="Value (measure)" hint={countMode ? 'Not used with Count' : undefined} className={styles.fieldNarrow}>
+              <Field label="Value (measure)" hint={countMode ? 'Not used with Count' : undefined} className={fieldClass}>
                 <Dropdown
                   disabled={countMode}
                   selectedOptions={[config.measure]}
