@@ -4,19 +4,21 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-224-rccp-v1-18-0',
-    title: 'Feature 224 - RCCP capacity planning (v1.18.0)',
+    id: 'feature-224-rccp-v1-18-2',
+    title: 'Feature 224 - RCCP capacity planning (v1.18.2)',
     checks: [
       'The /rccp page loads for admin, employee and supplier roles',
+      'Vendor filter is a dropdown with vendors from the configured main-table vendor column',
+      'Confirmed load (red chart line) uses the admin-selected quantity column from Settings > RCCP',
       'The matrix shows category rows and ISO week columns with available/confirmed/util% and color + text status',
       'Cells with available=0 and confirmed>0 show red Unplanned (never grey N/A)',
+      'Load diagnostics card appears when confirmed load is zero and explains missing dates or week range issues',
       'PO load is calculated live from purchase orders using the configured columns',
-      'PO lines without a delivery date appear in the warning card and are excluded from load',
       'Admin can configure date/quantity/category/vendor columns and thresholds on Settings > RCCP',
       'Capacity can be added manually and imported via Excel template with preview and commit',
       'Clicking a matrix cell opens drill-down with order, line, item, quantity, date and status',
       'Suppliers see read-only RCCP for their own vendor only; write actions are disabled',
-      'The footer shows version v1.18.0',
+      'The footer shows version v1.18.2',
     ],
   },
   {
