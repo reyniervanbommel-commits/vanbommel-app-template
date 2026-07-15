@@ -143,6 +143,10 @@
   padding: 8px;
 }
 
+.remarks-composer textarea:focus {
+  outline: none;
+}
+
 .remarks-composer-actions,
 .remark-card-header,
 .reaction-bar,
