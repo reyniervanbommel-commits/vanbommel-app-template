@@ -1,24 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
-import { buildFilterFromCellValue } from '../utils/tableViewFilterUtils';
+import {
+  buildFilterFromCellValue,
+  columnValueMatchesFilter,
+  hasActiveFilter,
+  isDateColumn,
+  resolveFilterModel,
+  DATE_FILTER_OPERATORS as DATE_OPS,
+  NUMBER_FILTER_OPERATORS as NUMBER_OPS,
+  TEXT_FILTER_OPERATORS as TEXT_OPS,
+} from '../utils/tableViewFilterUtils';
 
-export const TEXT_FILTER_OPERATORS = {
-  equals: 'equals',
-  contains: 'contains',
-  notContains: 'does not contain',
-  startsWith: 'starts with',
-  notStartsWith: 'does not start with',
-  oneOf: 'one of',
-};
-
-export const DATE_FILTER_OPERATORS = {
-  equals: 'equals',
-  before: 'before',
-  after: 'after',
-  between: 'between',
-  inNextWeeks: 'in the next xx weeks',
-  inNextDays: 'in the next xx days',
-  nextWeek: 'next week',
-};
+// Re-export zodat bestaande imports vanaf deze hook blijven werken.
+export const TEXT_FILTER_OPERATORS = TEXT_OPS;
+export const DATE_FILTER_OPERATORS = DATE_OPS;
+export const NUMBER_FILTER_OPERATORS = NUMBER_OPS;
 
 const SORT_DIRECTIONS = {
   none: 'none',
@@ -26,142 +21,19 @@ const SORT_DIRECTIONS = {
   desc: 'desc',
 };
 
-function isDateColumn(column) {
-  return column?.dataType === 'date';
-}
-
 function normalizeText(value) {
   if (value === null || value === undefined) return '';
   return String(value).trim().toLowerCase();
 }
 
-function parseOneOfValues(value) {
-  return String(value || '')
-    .split(',')
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function parseDateValue(value) {
   if (!value) return null;
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.getTime();
-}
-
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-}
-
-function startOfNextWeek() {
-  const now = new Date();
-  const day = now.getDay();
-  const daysUntilMonday = ((8 - day) % 7) || 7;
-  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMonday);
-  return target.getTime();
-}
-
-function resolveFilterModel(column, filter) {
-  const isDate = isDateColumn(column);
-  if (isDate) {
-    return {
-      operator: filter?.operator || 'before',
-      value: filter?.value || '',
-      secondaryValue: filter?.secondaryValue || '',
-    };
-  }
-  return {
-    operator: filter?.operator || 'contains',
-    value: filter?.value || '',
-    secondaryValue: '',
-  };
-}
-
-function hasActiveFilter(column, filter) {
-  if (!filter) return false;
-  if (isDateColumn(column)) {
-    if (filter.operator === 'nextWeek') return true;
-    if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
-    if (filter.operator === 'equals' && filter.value === '') return true;
-    return Boolean(filter.value);
-  }
-  if (filter.operator === 'equals' && filter.value === '') return true;
-  return Boolean(filter.value);
-}
-
-function dateMatchesFilter(rawValue, filter) {
-  const rowTime = parseDateValue(rawValue);
-  if (rowTime === null) return false;
-
-  if (filter.operator === 'before') {
-    const target = parseDateValue(filter.value);
-    return target !== null ? rowTime < target : true;
-  }
-  if (filter.operator === 'after') {
-    const target = parseDateValue(filter.value);
-    return target !== null ? rowTime > target : true;
-  }
-  if (filter.operator === 'between') {
-    const from = parseDateValue(filter.value);
-    const to = parseDateValue(filter.secondaryValue);
-    if (from === null || to === null) return true;
-    const lower = Math.min(from, to);
-    const upper = Math.max(from, to);
-    return rowTime >= lower && rowTime <= upper;
-  }
-  if (filter.operator === 'inNextWeeks') {
-    const count = Number(filter.value);
-    if (!Number.isFinite(count) || count <= 0) return true;
-    const start = startOfToday();
-    const end = start + (count * 7 * 24 * 60 * 60 * 1000);
-    return rowTime >= start && rowTime <= end;
-  }
-  if (filter.operator === 'inNextDays') {
-    const count = Number(filter.value);
-    if (!Number.isFinite(count) || count <= 0) return true;
-    const start = startOfToday();
-    const end = start + (count * 24 * 60 * 60 * 1000);
-    return rowTime >= start && rowTime <= end;
-  }
-  if (filter.operator === 'nextWeek') {
-    const weekStart = startOfNextWeek();
-    const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000);
-    return rowTime >= weekStart && rowTime < weekEnd;
-  }
-  if (filter.operator === 'equals') {
-    const target = parseDateValue(filter.value);
-    if (target === null) return rowTime === null;
-    const rowDate = new Date(rowTime);
-    const targetDate = new Date(target);
-    return rowDate.getFullYear() === targetDate.getFullYear()
-      && rowDate.getMonth() === targetDate.getMonth()
-      && rowDate.getDate() === targetDate.getDate();
-  }
-  return true;
-}
-
-function textMatchesFilter(rawValue, filter) {
-  const normalized = normalizeText(rawValue);
-  const query = normalizeText(filter.value);
-
-  if (!query && filter.operator !== 'oneOf' && filter.operator !== 'equals') return true;
-  if (filter.operator === 'equals') return normalized === query;
-  if (filter.operator === 'contains') return normalized.includes(query);
-  if (filter.operator === 'notContains') return !normalized.includes(query);
-  if (filter.operator === 'startsWith') return normalized.startsWith(query);
-  if (filter.operator === 'notStartsWith') return !normalized.startsWith(query);
-  if (filter.operator === 'oneOf') {
-    const options = parseOneOfValues(filter.value);
-    if (!options.length) return true;
-    return options.includes(normalized);
-  }
-  return true;
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
 }
 
 function compareValues(a, b, column) {
-  const isDate = isDateColumn(column);
-  if (isDate) {
+  if (isDateColumn(column)) {
     const left = parseDateValue(a);
     const right = parseDateValue(b);
     if (left === null && right === null) return 0;
@@ -329,10 +201,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
       ? items.filter((order) => {
         return activeFilters.every(([column, filter]) => {
           const rawValue = order?.values?.[column.key];
-          if (isDateColumn(column)) {
-            return dateMatchesFilter(rawValue, filter);
-          }
-          return textMatchesFilter(rawValue, filter);
+          return columnValueMatchesFilter(column, rawValue, filter);
         });
       })
       : items;

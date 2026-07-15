@@ -43,8 +43,14 @@ export function isDateColumn(column) {
   return column?.dataType === 'date';
 }
 
+export function isNumberColumn(column) {
+  return column?.dataType === 'number';
+}
+
 function getDefaultOperator(column) {
-  return isDateColumn(column) ? 'before' : 'contains';
+  if (isDateColumn(column)) return 'before';
+  if (isNumberColumn(column)) return 'equals';
+  return 'contains';
 }
 
 export function getDraftFromFilter(column, filter) {
@@ -62,6 +68,10 @@ export function isColumnFilterActive(column, filter) {
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
     if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
+  }
+  if (isNumberColumn(column)) {
+    if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
+    return filter.value !== '' && filter.value !== null && filter.value !== undefined;
   }
   if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);

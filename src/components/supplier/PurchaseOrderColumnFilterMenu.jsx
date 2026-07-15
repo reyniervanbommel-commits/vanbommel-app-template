@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Popover, PopoverTrigger } from '@fluentui/react-components';
-import { DATE_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
+import { DATE_FILTER_OPERATORS, NUMBER_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
 import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesMenuDraft';
 import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
@@ -16,6 +16,7 @@ import {
   getDraftFromFilter,
   isColumnFilterActive,
   isDateColumn,
+  isNumberColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
 
 function PurchaseOrderColumnFilterMenu({
@@ -67,6 +68,7 @@ function PurchaseOrderColumnFilterMenu({
   const [submenuTop, setSubmenuTop] = useState(0);
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
   const isDate = isDateColumn(column);
+  const isNumber = isNumberColumn(column);
   const groupingColumnKeys = useMemo(
     () => String(groupingColumnKey || '')
       .split(',')
@@ -75,7 +77,11 @@ function PurchaseOrderColumnFilterMenu({
     [groupingColumnKey]
   );
   const isGroupingColumn = groupingColumnKeys.includes(column.key);
-  const operatorLabels = isDate ? DATE_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
+  const operatorLabels = isDate
+    ? DATE_FILTER_OPERATORS
+    : isNumber
+      ? NUMBER_FILTER_OPERATORS
+      : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
   const filterActive = isColumnFilterActive(column, filter);
@@ -156,7 +162,6 @@ function PurchaseOrderColumnFilterMenu({
   const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApply, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
-    isDate,
     onSetSortDirection,
     onSetOperator,
     onSetValue,
@@ -212,7 +217,7 @@ function PurchaseOrderColumnFilterMenu({
         canMakeColumnSticky={canMakeColumnSticky} isStickyColumn={isStickyColumn} canPromoteToSticky={canPromoteToSticky} canUnstickSticky={canUnstickSticky}
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
-        isDate={isDate} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
+        isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
         handleSecondaryValueChange={handleSecondaryValueChange} handleApply={handleApply} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
