@@ -10,6 +10,7 @@ const { parsePaginationParams, buildPaginationMeta } = require('../utils/paginat
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
 const trackChangesService = require('../services/TrackChangesService');
+const rccpSettingsService = require('../services/RccpSettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { requireRole } = require('../middleware/auth');
@@ -410,6 +411,32 @@ router.put('/supplier-filter-column', async (req, res, next) => {
     await auditLog(req.user.id, req.user.email, 'UPDATE_SUPPLIER_FILTER_COLUMN', 'app_settings', null, { columnKey });
     res.json({ success: true, columnKey });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ─── RCCP settings (admin only) ─────────────────────────────────────────────
+
+router.get('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await rccpSettingsService.getConfig();
+    res.json({ config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await rccpSettingsService.saveConfig(req.body || {}, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_RCCP_SETTINGS', 'app_settings', null, {
+      dateColumnKey: config.dateColumnKey,
+      quantityColumnKey: config.quantityColumnKey,
+      categoryColumnKey: config.categoryColumnKey,
+    });
+    res.json({ success: true, config });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
   }
 });
