@@ -26,10 +26,10 @@ import {
 import { usePurchaseOrderFormulaValidation } from '../../hooks/usePurchaseOrderFormulaValidation';
 
 const FORMULA_RESULT_TYPES = [
-  { value: 'number', label: 'Getal' },
-  { value: 'text', label: 'Tekst' },
-  { value: 'date', label: 'Datum' },
-  { value: 'boolean', label: 'Ja/nee' },
+  { value: 'number', label: 'Number' },
+  { value: 'text', label: 'Text' },
+  { value: 'date', label: 'Date' },
+  { value: 'boolean', label: 'Yes/No' },
 ];
 
 const DATA_TYPE_LABELS = Object.fromEntries(FORMULA_RESULT_TYPES.map((type) => [type.value, type.label]));
@@ -90,7 +90,7 @@ export default function PurchaseOrderFormulaColumnDialog({
 
   useEffect(() => {
     if (!open) return;
-    setLabel(String(initialValue?.label || '').trim() || 'Nieuwe formule');
+    setLabel(String(initialValue?.label || '').trim() || 'New formula');
     setResultType(initialValue?.dataType || 'number');
     setFormulaExpr(initialValue?.formulaExpr || '');
     const initialRules = Array.isArray(initialFormatRuleSet?.rules) ? initialFormatRuleSet.rules : [];
@@ -108,7 +108,7 @@ export default function PurchaseOrderFormulaColumnDialog({
     resetFormulaValidation();
   }, [open, initialValue, initialFormatRuleSet, resetFormulaValidation]);
 
-  const dialogTitle = initialValue ? 'Formulekolom bewerken' : 'Formulekolom toevoegen';
+  const dialogTitle = initialValue ? 'Edit formula column' : 'Add formula column';
   const sourceLabel = String(sourceColumn?.label || '').trim();
   const sourceKey = String(sourceColumn?.key || '').trim();
 
@@ -146,11 +146,11 @@ export default function PurchaseOrderFormulaColumnDialog({
     const cleanLabel = String(label || '').trim();
     const cleanFormula = String(formulaExpr || '').trim();
     if (!cleanLabel) {
-      setError('Geef een naam op voor de formulekolom.');
+      setError('Enter a name for the formula column.');
       return;
     }
     if (!cleanFormula) {
-      setError('Geef een formule op.');
+      setError('Enter a formula.');
       return;
     }
     const validation = await validateFormula({
@@ -159,7 +159,7 @@ export default function PurchaseOrderFormulaColumnDialog({
       dataType: resultType,
     });
     if (!validation.valid) {
-      setError('Formule controle mislukt. Pas de formule aan met de tip.');
+      setError('Formula validation failed. Adjust the formula using the tip.');
       return;
     }
     const normalizedFormatRuleSet = normalizeColumnFormatRuleSet({
@@ -181,7 +181,7 @@ export default function PurchaseOrderFormulaColumnDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      setError(err?.message || 'Formule opslaan mislukt.');
+      setError(err?.message || 'Failed to save formula.');
     } finally {
       setSaving(false);
     }
@@ -195,18 +195,18 @@ export default function PurchaseOrderFormulaColumnDialog({
           <DialogContent>
             <div className={styles.form}>
               <Text className={styles.helperText}>
-                Nieuwe kolom komt rechts van: {sourceLabel || '-'} {sourceKey ? `(${sourceKey})` : ''}
+                New column will appear to the right of: {sourceLabel || '-'} {sourceKey ? `(${sourceKey})` : ''}
               </Text>
 
-              <Field label="Naam" required>
+              <Field label="Name" required>
                 <Input
                   value={label}
                   onChange={(_, data) => setLabel(data.value)}
-                  placeholder="Bijv. Verschil budget"
+                  placeholder="e.g. Budget difference"
                 />
               </Field>
 
-              <Field label="Resultaattype" required>
+              <Field label="Result type" required>
                 <Dropdown
                   value={DATA_TYPE_LABELS[resultType]}
                   selectedOptions={[resultType]}
@@ -220,7 +220,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </Dropdown>
               </Field>
 
-              <Field label="Formule" required hint="Voorbeeld: ALS((a)>(b);'Fout';(a)+(b))">
+              <Field label="Formula" required hint="Example: ALS((a)>(b);'Fout';(a)+(b))">
                 <Textarea
                   value={formulaExpr}
                   onChange={(_, data) => {
@@ -237,7 +237,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                     onClick={() => validateFormula({ formulaExpr, ownColumnKey: initialValue?.key, dataType: resultType })}
                     disabled={saving || formulaValidation.status === 'checking'}
                   >
-                    {formulaValidation.status === 'checking' ? 'Controleren...' : 'Check formule'}
+                    {formulaValidation.status === 'checking' ? 'Checking...' : 'Check formula'}
                   </Button>
                   {formulaValidation.status === 'valid' ? (
                     <Text className={styles.validText}>{formulaValidation.message}</Text>
@@ -246,7 +246,7 @@ export default function PurchaseOrderFormulaColumnDialog({
               </Field>
 
               <div className={styles.pickerWrap}>
-                <Text weight="semibold">Kolomreferenties</Text>
+                <Text weight="semibold">Column references</Text>
                 <div className={styles.refButtons}>
                   {referenceColumns.map((column) => (
                     <Button
@@ -279,10 +279,10 @@ export default function PurchaseOrderFormulaColumnDialog({
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-              Annuleren
+              Cancel
             </Button>
             <Button appearance="primary" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Opslaan...' : 'Opslaan'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </DialogBody>

@@ -11,39 +11,45 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  formatHistoryDate,
+  formatHistoryStatus,
+  formatHistoryValue,
+  historyStatusColor,
+} from '../../utils/cellHistoryFormat';
 
 const useStyles = makeStyles({
   wrapper: {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     width: '100%',
     maxWidth: '100%',
+    overflow: 'visible',
   },
   trigger: {
     position: 'absolute',
-    top: '0',
-    right: '0',
-    zIndex: 2,
-    minWidth: '16px',
-    width: '16px',
-    height: '16px',
+    top: 'calc(-1 * var(--po-cell-padding-y, 0px))',
+    right: 'calc(-1 * var(--po-cell-padding-x, 0px))',
+    zIndex: 5,
+    width: '9px',
+    height: '9px',
     ...shorthands.padding('0'),
     ...shorthands.border('0'),
-    backgroundColor: '#a7d8f0',
-    clipPath: 'polygon(0 0, 100% 0, 100% 100%)',
+    backgroundColor: tokens.colorNeutralStroke2,
+    clipPath: 'polygon(100% 0, 0 0, 100% 100%)',
     cursor: 'pointer',
     transformOrigin: 'top right',
     transitionProperty: 'background-color, transform',
     transitionDuration: '120ms',
     transitionTimingFunction: 'ease',
     ':hover': {
-      backgroundColor: '#72bde3',
-      transform: 'scale(1.15)',
+      backgroundColor: tokens.colorNeutralForeground3,
+      transform: 'scale(1.1)',
     },
     ':focus-visible': {
-      backgroundColor: '#72bde3',
-      outlineColor: '#3089b8',
+      backgroundColor: tokens.colorNeutralForeground3,
+      outlineColor: tokens.colorBrandStroke1,
       outlineStyle: 'solid',
       outlineWidth: '2px',
     },
@@ -108,23 +114,6 @@ const useStyles = makeStyles({
   },
 });
 
-function formatHistoryDate(value) {
-  const formatted = formatCellValue(value, 'date');
-  return formatted === '-' ? '—' : formatted;
-}
-
-function formatValue(value, dataType) {
-  if (value === null || value === undefined || value === '') return '—';
-  const isDate = /^(date|datetime|date-time)$/i.test(String(dataType || ''));
-  const isIsoDate = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(value.trim());
-  if (isDate || isIsoDate) return formatHistoryDate(value);
-  if (dataType === 'boolean') return value === 1 || value === true || value === '1' ? 'Yes' : 'No';
-  return String(value);
-}
-
-const STATUS_LABEL = { pending: 'Pending', applied: 'Applied', failed: 'Failed' };
-const STATUS_COLOR = { pending: 'warning', applied: 'success', failed: 'danger' };
-
 function HistoryRow({ entry, dataType, styles }) {
   const userLabel = entry.user?.name || entry.user?.email || 'Unknown user';
   return (
@@ -136,17 +125,17 @@ function HistoryRow({ entry, dataType, styles }) {
         </Tooltip>
       </td>
       <td className={`${styles.cell} ${styles.valueCell}`}>
-        {entry.action === 'insert' ? '—' : formatValue(entry.oldValue, dataType)}
+        {entry.action === 'insert' ? '—' : formatHistoryValue(entry.oldValue, dataType)}
       </td>
-      <td className={`${styles.cell} ${styles.valueCell}`}>{formatValue(entry.newValue, dataType)}</td>
+      <td className={`${styles.cell} ${styles.valueCell}`}>{formatHistoryValue(entry.newValue, dataType)}</td>
       <td className={styles.cell}>
         <div className={styles.statusList}>
           {entry.source === 'writeback' ? (
             <Badge appearance="tint" size="small">D365</Badge>
           ) : null}
           {entry.status ? (
-            <Badge appearance="tint" size="small" color={STATUS_COLOR[entry.status] || 'informative'}>
-              {STATUS_LABEL[entry.status] || entry.status}
+            <Badge appearance="tint" size="small" color={historyStatusColor(entry.status)}>
+              {formatHistoryStatus(entry.status)}
             </Badge>
           ) : null}
           {!entry.status && entry.source !== 'writeback' ? '—' : null}

@@ -37,10 +37,10 @@ function PurchaseOrderChangeActivityBar({
           type="button"
           onClick={() => toggleActivityFilter('new')}
           className={styles.filterBadgeButton}
-          title={activityFilter === 'new' ? 'Toon alles' : 'Filter op nieuwe regels'}
+          title={activityFilter === 'new' ? 'Show all' : 'Filter new lines'}
         >
           <Badge color="success" appearance={activityFilter === 'new' ? 'filled' : 'tint'}>
-            {newCount} nieuw
+            {newCount} new
           </Badge>
         </button>
       ) : null}
@@ -49,10 +49,10 @@ function PurchaseOrderChangeActivityBar({
           type="button"
           onClick={() => toggleActivityFilter('changed')}
           className={styles.filterBadgeButton}
-          title={activityFilter === 'changed' ? 'Toon alles' : 'Filter op gewijzigde regels'}
+          title={activityFilter === 'changed' ? 'Show all' : 'Filter changed lines'}
         >
           <Badge color="warning" appearance={activityFilter === 'changed' ? 'filled' : 'tint'}>
-            {changedCount} gewijzigd
+            {changedCount} changed
           </Badge>
         </button>
       ) : null}
@@ -61,10 +61,10 @@ function PurchaseOrderChangeActivityBar({
           type="button"
           onClick={() => toggleActivityFilter('removed')}
           className={styles.filterBadgeButton}
-          title={activityFilter === 'removed' ? 'Toon alles' : 'Filter op verwijderde regels'}
+          title={activityFilter === 'removed' ? 'Show all' : 'Filter removed lines'}
         >
           <Badge color="danger" appearance={activityFilter === 'removed' ? 'filled' : 'tint'}>
-            {removedCount} verwijderd
+            {removedCount} removed
           </Badge>
         </button>
       ) : null}
@@ -74,9 +74,9 @@ function PurchaseOrderChangeActivityBar({
         icon={<CheckmarkRegular />}
         onClick={markViewed}
         disabled={markingViewed || !canMarkViewed}
-        title={canMarkViewed ? 'Markeer wijzigingen als gezien' : 'Alleen admin kan afvinken'}
+        title={canMarkViewed ? 'Mark changes as seen' : 'Only admin can mark as seen'}
       >
-        {markingViewed ? 'Bezig...' : 'Markeer als gezien'}
+        {markingViewed ? 'Working...' : 'Mark as seen'}
       </Button>
     </div>
   );

@@ -16,6 +16,8 @@ export function useUsersManagement() {
   const [permDialogOpen, setPermDialogOpen] = useState(false);
   const [deleteDialogUser, setDeleteDialogUser] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [vendorDialogUser, setVendorDialogUser] = useState(null);
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const [recentlyUpdatedUserId, setRecentlyUpdatedUserId] = useState(null);
   const [resetMessage, setResetMessage] = useState('');
 
@@ -38,7 +40,7 @@ export function useUsersManagement() {
       }));
       setUserPermissions(permissionsMap);
     } catch (err) {
-      setError(err.message || 'Gebruikers laden mislukt');
+      setError(err.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export function useUsersManagement() {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { is_locked: !isLocked } });
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Gebruiker bijwerken mislukt');
+      setError(err.message || 'Failed to update user');
     }
   }, [loadUsers]);
 
@@ -69,17 +71,17 @@ export function useUsersManagement() {
       await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { mfa_required: !isRequired } });
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'MFA-instelling bijwerken mislukt');
+      setError(err.message || 'Failed to update MFA setting');
     }
   }, [loadUsers]);
 
   const handleForceReset = useCallback(async (userId) => {
     try {
       await apiRequest(`/admin/users/${userId}/force-reset`, { method: 'POST', body: {} });
-      setResetMessage('Wachtwoord-reset e-mail is verstuurd.');
+      setResetMessage('Password reset email has been sent.');
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Reset versturen mislukt');
+      setError(err.message || 'Failed to send reset');
     }
   }, [loadUsers]);
 
@@ -91,7 +93,7 @@ export function useUsersManagement() {
       setDeleteDialogUser(null);
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Gebruiker verwijderen mislukt');
+      setError(err.message || 'Failed to delete user');
       setDeleteDialogOpen(false);
     }
   }, [deleteDialogUser, loadUsers]);
@@ -105,6 +107,18 @@ export function useUsersManagement() {
     setPermDialogUser(user);
     setPermDialogOpen(true);
   }, []);
+
+  const handleEditVendorAccount = useCallback((user) => {
+    setVendorDialogUser(user);
+    setVendorDialogOpen(true);
+  }, []);
+
+  const handleVendorAccountSave = useCallback(async (userId, vendorAccount) => {
+    await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { vendor_account: vendorAccount } });
+    await loadUsers();
+    setRecentlyUpdatedUserId(userId);
+    setTimeout(() => setRecentlyUpdatedUserId(null), 2000);
+  }, [loadUsers]);
 
   const handlePermissionsSaved = useCallback(() => {
     const userId = permDialogUser?.id;
@@ -139,6 +153,9 @@ export function useUsersManagement() {
     deleteDialogUser,
     deleteDialogOpen,
     setDeleteDialogOpen,
+    vendorDialogUser,
+    vendorDialogOpen,
+    setVendorDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -149,6 +166,8 @@ export function useUsersManagement() {
     handleDeleteClick,
     handleDeleteConfirm,
     handleEditPermissions,
+    handleEditVendorAccount,
+    handleVendorAccountSave,
     handlePermissionsSaved,
     getDisplayPermissions,
   };

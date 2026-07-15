@@ -48,7 +48,7 @@ function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh, canRefr
         icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
         onClick={onRefresh}
         disabled={refreshing || !canRefresh}
-        title={canRefresh ? 'Ververs data uit D365' : 'Alleen admin kan verversen'}
+        title={canRefresh ? 'Refresh data from D365' : 'Only admin can refresh'}
       >
         {refreshing
           ? `D365F&O ${counters.fetchCounter} | Save ${counters.saveCounter}`

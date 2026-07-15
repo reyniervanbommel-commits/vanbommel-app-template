@@ -1,11 +1,20 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
+import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
-import PurchaseOrderImagePreviewDialog from './PurchaseOrderImagePreviewDialog';
+import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  isDatePeriodColumn,
+  normalizeDatePeriodDisplayMode,
+  resolveDatePeriodCellValue,
+} from '../../utils/datePeriodColumnUtils';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
-import { resolveImageUrl } from '../../utils/imageColumnUrl';
+import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
+import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
+import { isStatusColumn } from '../../utils/statusColumnUtils';
+import { FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   removedText: {
@@ -27,27 +36,23 @@ const useStyles = makeStyles({
     paddingLeft: '6px',
     paddingRight: '6px',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    display: 'block',
-    borderRadius: 0,
-  },
-  imageButton: {
-    display: 'block',
-    width: 'calc(100% + 20px)',
-    height: '18px',
-    margin: '-2px -10px',
-    overflow: 'hidden',
-    border: 'none',
-    padding: 0,
-    backgroundColor: 'transparent',
-    cursor: 'zoom-in',
-  },
 });
 
-function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect, linkedLineTotalMap, linkedLineValueMap }) {
+function PurchaseOrderHeaderCellContent({
+  order,
+  column,
+  onSaveValue,
+  onCorrect,
+  onUpdateStatusOptions,
+  isAdmin = false,
+  linkedLineTotalMap,
+  linkedLineValueMap,
+  cellBackgroundColor = '',
+  isConditionalFormat = false,
+  productImageLines = order.lines,
+  showHistoryIndicators = true,
+  datePeriodDisplayModes = {},
+}) {
   const styles = useStyles();
   const key = column.key;
   const rawValue = order.values?.[key];
@@ -58,37 +63,11 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
-  const [imageDialogOpen, setImageDialogOpen] = useState(false);
-
-  if (column.source === 'custom' && column.dataType === 'image' && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
-    const url = resolveImageUrl(column, order.values);
-    if (!url) return null;
-    const handleImageClick = () => setImageDialogOpen(true);
-    const handleImageDialogOpenChange = (open) => setImageDialogOpen(open);
-    const handleImageLoadError = (event) => { event.currentTarget.style.display = 'none'; };
-    return (
-      <>
-        <button type="button" className={styles.imageButton} onClick={handleImageClick}>
-          <img
-            key={url}
-            className={styles.image}
-            src={url}
-            alt={`${column.label} voor order ${order.orderNumber}`}
-            loading="lazy"
-            draggable={false}
-            onError={handleImageLoadError}
-          />
-        </button>
-        <PurchaseOrderImagePreviewDialog
-          open={imageDialogOpen}
-          onOpenChange={handleImageDialogOpenChange}
-          imageUrl={url}
-          column={column}
-          order={order}
-        />
-      </>
-    );
-  }
+  const showHistory = showHistoryIndicators !== false && Boolean(order.historyByColumnId?.[column.id]);
+  const productImageSummary = useMemo(
+    () => getPurchaseOrderProductImageSummary(productImageLines),
+    [productImageLines]
+  );
 
   const handleSave = useCallback((value) => {
     onSaveValue({
@@ -113,15 +92,69 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
-  if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+  const handleUpdateStatusOptions = useCallback((options) => {
+    if (typeof onUpdateStatusOptions !== 'function') return Promise.resolve();
+    return onUpdateStatusOptions(column.id, options, column.label);
+  }, [column.id, column.label, onUpdateStatusOptions]);
+
+  const formattedTextStyle = isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined;
+
+  if (isProductImageColumn(column)) {
+    if (order.removedInD365 || !productImageSummary.firstItemNumber) return null;
     return (
-      <span className={isChangedCell ? styles.changedCell : undefined}>
+      <PurchaseOrderProductImageCell
+        dataAreaId={order.dataAreaId}
+        itemNumber={productImageSummary.firstItemNumber}
+        additionalItemCount={productImageSummary.additionalItemCount}
+        isConditionalFormat={isConditionalFormat}
+      />
+    );
+  }
+
+  if (isDatePeriodColumn(column)) {
+    const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
+    const display = resolveDatePeriodCellValue(column, order?.values, displayMode) || '-';
+    const displayNode = isChangedCell && !cellBackgroundColor
+      ? <span className={styles.changedCell}>{display}</span>
+      : display;
+    const formattedDisplayNode = isConditionalFormat
+      ? <span style={formattedTextStyle}>{displayNode}</span>
+      : displayNode;
+    return order.removedInD365
+      ? <span className={styles.removedText}>{formattedDisplayNode}</span>
+      : formattedDisplayNode;
+  }
+
+  if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+    if (isStatusColumn(column)) {
+      return (
+        <StatusCell
+          value={rawValue}
+          options={column.options}
+          onSave={handleSave}
+          onUpdateOptions={handleUpdateStatusOptions}
+          isAdmin={isAdmin}
+          ariaLabel={`${column.label} for order ${order.orderNumber}`}
+          hasHistory={showHistory}
+          cellKeys={{
+            columnId: column.id,
+            dataAreaId: order.dataAreaId,
+            orderNumber: order.orderNumber,
+            lineNumber: null,
+          }}
+        />
+      );
+    }
+    return (
+      <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
         <EditableCell
           dataType={column.dataType}
           value={rawValue}
           options={column.options}
-          ariaLabel={`${column.label} voor order ${order.orderNumber}`}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
+          ariaLabel={`${column.label} for order ${order.orderNumber}`}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -136,11 +169,13 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
 
   if (column.source === 'd365' && column.writableToD365 && onCorrect) {
     return (
-      <span className={isChangedCell ? styles.changedCell : undefined}>
+      <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
         <PurchaseOrderWriteBackCell
           column={column}
           value={rawValue}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -161,15 +196,20 @@ function PurchaseOrderHeaderCellContent({ order, column, onSaveValue, onCorrect,
   const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>
-        {formulaError ? 'Formulefout' : display}
+        {formulaError ? 'Formula error' : display}
       </span>
     )
     : display;
-  const displayNode = isChangedCell
+  const displayNode = isChangedCell && !cellBackgroundColor
     ? <span className={styles.changedCell}>{rawDisplayNode}</span>
     : rawDisplayNode;
+  const formattedDisplayNode = isConditionalFormat
+    ? <span style={formattedTextStyle}>{displayNode}</span>
+    : displayNode;
 
-  return order.removedInD365 ? <span className={styles.removedText}>{displayNode}</span> : displayNode;
+  return order.removedInD365
+    ? <span className={styles.removedText}>{formattedDisplayNode}</span>
+    : formattedDisplayNode;
 }
 
 export default memo(PurchaseOrderHeaderCellContent);

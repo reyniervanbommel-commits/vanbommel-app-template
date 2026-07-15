@@ -3,6 +3,7 @@ import {
   Dropdown,
   Input,
   makeStyles,
+  mergeClasses,
   Option,
   shorthands,
   Spinner,
@@ -10,6 +11,8 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import CellHistoryPopover from './CellHistoryPopover';
+import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
+import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
   cell: {
@@ -18,10 +21,15 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     minWidth: 0,
     width: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
+    position: 'relative',
   },
   control: {
     minWidth: 0,
     width: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
     color: tokens.colorBrandForeground1,
     '> input': {
       color: tokens.colorBrandForeground1,
@@ -29,15 +37,6 @@ const useStyles = makeStyles({
     '> button': {
       color: tokens.colorBrandForeground1,
     },
-  },
-  hiddenDatePicker: {
-    position: 'absolute',
-    width: '1px',
-    height: '1px',
-    opacity: 0,
-    pointerEvents: 'none',
-    ...shorthands.border('0'),
-    ...shorthands.padding('0'),
   },
   status: {
     fontSize: tokens.fontSizeBase200,
@@ -48,6 +47,36 @@ const useStyles = makeStyles({
   },
   errorText: {
     color: tokens.colorPaletteRedForeground1,
+  },
+});
+
+const useFormattedControlStyles = makeStyles({
+  formatted: {
+    backgroundColor: 'var(--cell-format-bg)',
+    '::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+  },
+  formattedText: {
+    color: FORMATTED_CELL_TEXT_COLOR,
+    '> input': {
+      color: FORMATTED_CELL_TEXT_COLOR,
+    },
+    '> button': {
+      color: FORMATTED_CELL_TEXT_COLOR,
+    },
   },
 });
 
@@ -86,12 +115,29 @@ export default function EditableCell({
   ariaLabel,
   cellKeys,
   hasHistory = false,
+  cellBackgroundColor = '',
+  isConditionalFormat = false,
 }) {
   const styles = useStyles();
+  const formattedStyles = useFormattedControlStyles();
+  const formattedControlStyle = cellBackgroundColor
+    ? getFormattedCellControlStyle(cellBackgroundColor, { useWhiteText: isConditionalFormat })
+    : undefined;
+  const formattedControlClassName = mergeClasses(
+    styles.control,
+    formattedControlStyle ? formattedStyles.formatted : undefined,
+    isConditionalFormat ? formattedStyles.formattedText : undefined,
+  );
+  const formattedControlInlineStyle = formattedControlStyle
+    ? {
+      ...formattedControlStyle,
+      '--cell-format-bg': formattedControlStyle.backgroundColor,
+    }
+    : undefined;
   const [localValue, setLocalValue] = useState(dataType === 'date' ? toDateInputValue(value) : value);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimerRef = useRef(null);
-  const datePickerRef = useRef(null);
 
   useEffect(() => {
     setLocalValue(dataType === 'date' ? toDateInputValue(value) : value);
@@ -120,17 +166,18 @@ export default function EditableCell({
   }, [dataType, onSave, value]);
 
   const openDatePicker = useCallback(() => {
-    const picker = datePickerRef.current;
-    if (!picker) return;
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-    }
+    setCalendarOpen(true);
   }, []);
 
+  const onCalendarSelect = useCallback((nextValue) => {
+    setLocalValue(nextValue);
+    commit(nextValue);
+  }, [commit]);
+
   const renderStatus = () => {
-    if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Opslaan" />;
+    if (status === 'saving') return <Spinner size="extra-tiny" aria-label="Save" />;
     if (status === 'saved') return <span className={`${styles.status} ${styles.saved}`}>Opgeslagen</span>;
-    if (status === 'error') return <span className={`${styles.status} ${styles.errorText}`}>Mislukt</span>;
+    if (status === 'error') return <span className={`${styles.status} ${styles.errorText}`}>Failed</span>;
     return null;
   };
 
@@ -152,7 +199,8 @@ export default function EditableCell({
     const selectedText = localValue == null ? '' : String(localValue);
     control = (
       <Dropdown
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}
@@ -172,9 +220,15 @@ export default function EditableCell({
     );
   } else if (dataType === 'date') {
     control = (
-      <>
+      <WeekNumberCalendarPopover
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        value={toDateInputValue(localValue)}
+        onSelect={onCalendarSelect}
+      >
         <Input
-          className={styles.control}
+          className={formattedControlClassName}
+          style={formattedControlInlineStyle}
           appearance="filled-lighter"
           size="small"
           type="text"
@@ -185,25 +239,13 @@ export default function EditableCell({
           onBlur={() => commit(normalizeDateValue(localValue))}
           onDoubleClick={openDatePicker}
         />
-        <input
-          ref={datePickerRef}
-          type="date"
-          tabIndex={-1}
-          aria-hidden="true"
-          className={styles.hiddenDatePicker}
-          value={toDateInputValue(localValue)}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setLocalValue(nextValue);
-            commit(nextValue);
-          }}
-        />
-      </>
+      </WeekNumberCalendarPopover>
     );
   } else if (dataType === 'number') {
     control = (
       <Input
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         type="number"
@@ -217,7 +259,8 @@ export default function EditableCell({
     // 'text' en fallback.
     control = (
       <Input
-        className={styles.control}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
         aria-label={ariaLabel}

@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { NEW_COLUMN_TYPES } from './purchaseOrderColumnFilterMenuConstants';
+import { renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 
 const useStyles = makeStyles({
   subPaneTitle: {
@@ -10,30 +11,59 @@ const useStyles = makeStyles({
   typeButton: {
     justifyContent: 'flex-start',
   },
+  typeButtonContent: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
 });
 
-export default function PurchaseOrderAddColumnPane({ columnLevel = 'header', onConfirm }) {
-  const styles = useStyles();
+const AddColumnTypeButton = memo(function AddColumnTypeButton({ type, styles, disabled, onConfirm }) {
+  const localStyles = useStyles();
+  const handleClick = useCallback(() => onConfirm(type), [onConfirm, type]);
+  return (
+    <Button
+      className={localStyles.typeButton}
+      appearance="subtle"
+      size="small"
+      disabled={disabled}
+      onClick={handleClick}
+    >
+      <span className={localStyles.typeButtonContent}>
+        <span className={styles.menuItemIcon} aria-hidden>
+          {renderColumnTypeIcon(type.key)}
+        </span>
+        <span>{disabled ? `${type.label} · Already added` : type.label}</span>
+      </span>
+    </Button>
+  );
+});
+
+export default function PurchaseOrderAddColumnPane({
+  styles,
+  columnLevel = 'header',
+  remarksAlreadyAdded = false,
+  onConfirm,
+}) {
+  const localStyles = useStyles();
   const addableTypes = useMemo(
     () => (columnLevel === 'header'
       ? NEW_COLUMN_TYPES
-      : NEW_COLUMN_TYPES.filter((type) => type.dataType !== 'image')),
+      : NEW_COLUMN_TYPES.filter((type) => !['image', 'remarks', 'date_wm'].includes(type.key))),
     [columnLevel]
   );
 
   return (
     <>
-      <Text className={styles.subPaneTitle}>Kolomtype</Text>
+      <Text className={localStyles.subPaneTitle}>Column type</Text>
       {addableTypes.map((type) => (
-        <Button
+        <AddColumnTypeButton
           key={type.key}
-          className={styles.typeButton}
-          appearance="subtle"
-          size="small"
-          onClick={() => onConfirm(type)}
-        >
-          {type.label}
-        </Button>
+          type={type}
+          styles={styles}
+          disabled={type.dataType === 'remarks' && remarksAlreadyAdded}
+          onConfirm={onConfirm}
+        />
       ))}
     </>
   );

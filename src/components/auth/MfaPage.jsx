@@ -35,12 +35,12 @@ export default function MfaPage() {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h2>Twee-factor verificatie</h2>
-        <p>Voer je authenticator-code in.</p>
+        <h2>Two-factor verification</h2>
+        <p>Enter your authenticator code.</p>
         <form className={styles.form} onSubmit={handleSubmit}>
           <Field label="Code"><Input value={code} onChange={e => setCode(e.target.value)} maxLength={6} required /></Field>
           {error && <div className={styles.error}>{error}</div>}
-          <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Controleren...' : 'Verifiëren'}</Button>
+          <Button appearance="primary" type="submit" disabled={loading}>{loading ? 'Checking...' : 'Verify'}</Button>
         </form>
       </div>
     </div>

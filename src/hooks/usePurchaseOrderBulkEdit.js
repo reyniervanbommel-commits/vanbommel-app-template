@@ -24,7 +24,7 @@ function valuesEqual(left, right) {
 }
 
 function createBulkErrorMessage({ updated, skipped, notTried }) {
-  return `Bulkbewerking gestopt door een fout. Bijgewerkt: ${updated}. Overgeslagen (al gelijk): ${skipped}. Niet geprobeerd (na fout): ${notTried}.`;
+  return `Bulk edit stopped due to an error. Updated: ${updated}. Skipped (already equal): ${skipped}. Not attempted (after error): ${notTried}.`;
 }
 
 /**
@@ -158,7 +158,7 @@ export function usePurchaseOrderBulkEdit({
       return;
     }
 
-    const columnLabel = columnLabelByKey.get(payload.columnKey) || payload.columnKey || 'deze kolom';
+    const columnLabel = columnLabelByKey.get(payload.columnKey) || payload.columnKey || 'this column';
     const decision = await showDecisionDialog({ columnLabel, selectedCount: visibleSelectionCount });
     if (decision !== 'bulk') {
       await runSingleUpdate(mode, payload);

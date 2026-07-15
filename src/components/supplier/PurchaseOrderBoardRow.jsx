@@ -1,0 +1,324 @@
+import React, { memo, useCallback, useMemo } from 'react';
+import { Button, Checkbox } from '@fluentui/react-components';
+import PurchaseOrderDataCell from './PurchaseOrderDataCell';
+import PurchaseOrderHeaderCellContent from './PurchaseOrderHeaderCellContent';
+import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
+import PurchaseOrdersBoardExpandedRow from './PurchaseOrdersBoardExpandedRow';
+import { RemarksLatestCell, RowRemarksBadge } from './remarks';
+import { rowKey } from './remarks/remarksFormatters';
+import { getColumnCellStyle, getFormattedCellContentStyle, getRowFormatControlCellStyle } from './columnTextStyleUtils';
+import { evalFormatRules } from './columnFormatRuleUtils';
+import { isStatusColumn, resolveStatusCellColor } from '../../utils/statusColumnUtils';
+import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { orderLocateKeyFromOrder, ROW_LOCATE_HIGHLIGHT_COLOR } from '../../utils/purchaseOrderRowLocate';
+import {
+  getProductImageCellStyle,
+  isProductImageColumn,
+  PRODUCT_IMAGE_SUB_CELL_HEIGHT,
+} from '../../utils/purchaseOrderProductImageColumn';
+import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
+import PurchaseOrderCollapsedColumnCell from './PurchaseOrderCollapsedColumnCell';
+import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+
+function getOrderRowClassName(order, styles) {
+  const classes = [];
+  if (order.removedInD365) classes.push(styles.itemRow, styles.removedRow);
+  else if (order.isNew) classes.push(styles.itemRow, styles.newRow);
+  else if (order.isChanged) classes.push(styles.itemRow, styles.changedRow);
+  else classes.push(styles.itemRow);
+  return classes.join(' ');
+}
+
+function resolveRowFormatColor(order, columns, formatRules) {
+  if (order?.removedInD365) return '';
+  for (const column of columns) {
+    const ruleSet = formatRules[column.key];
+    if (ruleSet?.target !== 'row') continue;
+    const statusOptions = isStatusColumn(column) ? column.options : null;
+    const color = evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions);
+    if (color) return color;
+  }
+  return '';
+}
+
+function resolveOrderCellBackground({ order, column, ruleSet, rowFormatColor }) {
+  const statusOptions = isStatusColumn(column) ? column.options : null;
+  const cellFormatColor = (!order.removedInD365 && ruleSet?.target === 'cell')
+    ? evalFormatRules(order?.values?.[column.key], ruleSet, order?.values || {}, statusOptions)
+    : '';
+  if (cellFormatColor) {
+    return { backgroundColor: cellFormatColor, isConditionalFormat: true };
+  }
+  if (!order.removedInD365 && rowFormatColor) {
+    return { backgroundColor: rowFormatColor, isConditionalFormat: true };
+  }
+  if (isStatusColumn(column)) {
+    return {
+      backgroundColor: resolveStatusCellColor(order?.values?.[column.key], column.options),
+      isConditionalFormat: false,
+    };
+  }
+  return { backgroundColor: '', isConditionalFormat: false };
+}
+
+const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
+  order,
+  rowId,
+  hasLines,
+  isExpanded,
+  styles,
+  selection,
+  onToggleOrder,
+  remarks,
+  rowFormatColor = '',
+  isLocated = false,
+}) {
+  const selectionKey = resolveOrderSelectionKey(order, rowId);
+  const controlCellStyle = useMemo(
+    () => (isLocated
+      ? { backgroundColor: ROW_LOCATE_HIGHLIGHT_COLOR, zIndex: 5 }
+      : getRowFormatControlCellStyle(rowFormatColor)),
+    [isLocated, rowFormatColor]
+  );
+  const hasRowFormatColor = Boolean(controlCellStyle);
+  const handleSelectionChange = useCallback(() => {
+    selection?.toggle?.(selectionKey);
+  }, [selection, selectionKey]);
+  const handleOpenRemarks = useCallback(
+    (target) => remarks?.open?.(order, null, target),
+    [order, remarks]
+  );
+
+  const controlCellClassName = isLocated
+    ? `${styles.controlCell} ${styles.locateHighlightControlCell}`
+    : styles.controlCell;
+
+  return (
+    <td className={controlCellClassName} style={controlCellStyle}>
+      <div className={styles.controlCellInner}>
+        <div className={styles.rowControlsCluster}>
+          {selection?.enabled ? (
+            <Checkbox
+              className={styles.rowCheckbox}
+              checked={selection.isSelected(selectionKey)}
+              onChange={handleSelectionChange}
+              aria-label={`Select order ${order.orderNumber}`}
+            />
+          ) : null}
+          {hasLines ? (
+            <Button
+              size="small"
+              appearance="subtle"
+              className={styles.compactToggleButton}
+              data-rowid={rowId}
+              onClick={onToggleOrder}
+            >
+              {isExpanded ? '-' : '+'}
+            </Button>
+          ) : null}
+          <RowRemarksBadge
+            count={remarks?.summary?.count}
+            orderNumber={order.orderNumber}
+            onOpen={handleOpenRemarks}
+            onFormattedBackground={hasRowFormatColor}
+          />
+        </div>
+        <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
+      </div>
+    </td>
+  );
+});
+
+const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
+  order,
+  column,
+  styles,
+  formatting,
+  actions,
+  links,
+  contextMenu,
+  remarks,
+  rowFormatColor,
+  isLocated = false,
+  isCollapsed = false,
+}) {
+  if (isCollapsed) {
+    return (
+      <PurchaseOrderCollapsedColumnCell
+        columnKey={column.key}
+      />
+    );
+  }
+  const rawValue = order?.values?.[column.key];
+  const ruleSet = formatting.headerColumnFormatRules[column.key];
+  const { backgroundColor: cellBackgroundColor, isConditionalFormat } = resolveOrderCellBackground({
+    order,
+    column,
+    ruleSet,
+    rowFormatColor,
+  });
+  const cell = useMemo(() => ({ column, rawValue, order }), [column, order, rawValue]);
+  const isImageColumn = isProductImageColumn(column);
+  const isStatus = isStatusColumn(column);
+  const handleOpenRemarks = useCallback(
+    (target) => remarks?.open?.(order, column, target),
+    [column, order, remarks]
+  );
+  const layout = useMemo(() => {
+    const highlightBackground = isLocated ? ROW_LOCATE_HIGHLIGHT_COLOR : cellBackgroundColor;
+    const useFormattedText = isLocated ? false : isConditionalFormat;
+    const baseStyle = getColumnCellStyle(
+      formatting.headerColumnWidths,
+      formatting.headerColumnTextStyles,
+      column.key,
+      highlightBackground,
+      { useFormattedTextColor: useFormattedText }
+    );
+    return {
+      className: styles.itemCell,
+      contentClassName: isImageColumn ? undefined : styles.itemCellContent,
+      contentStyle: getFormattedCellContentStyle(useFormattedText),
+      style: isImageColumn
+        ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
+        : {
+          ...baseStyle,
+          ...(isStatus ? { padding: 0 } : {}),
+        },
+      isLocated,
+    };
+  }, [cellBackgroundColor, column.key, formatting, isConditionalFormat, isImageColumn, isLocated, isStatus, styles.itemCell, styles.itemCellContent]);
+
+  return (
+    <PurchaseOrderDataCell
+      cell={cell}
+      layout={layout}
+      contextMenu={contextMenu}
+    >
+      {column.dataType === 'remarks' ? (
+        <RemarksLatestCell
+          summary={remarks?.summary}
+          orderNumber={order.orderNumber}
+          onOpen={handleOpenRemarks}
+          onFormattedBackground={isConditionalFormat}
+        />
+      ) : (
+        <PurchaseOrderHeaderCellContent
+          order={order}
+          column={column}
+          onSaveValue={actions.onSaveValue}
+          onCorrect={actions.onCorrect}
+          onUpdateStatusOptions={actions.onUpdateStatusOptions}
+          isAdmin={actions.isAdmin}
+          cellBackgroundColor={cellBackgroundColor}
+          isConditionalFormat={isConditionalFormat}
+          linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
+          linkedLineValueMap={links.linkedLineValueByHeaderKey}
+          productImageLines={order.lines}
+          showHistoryIndicators={actions.showHistoryIndicators}
+          datePeriodDisplayModes={actions.datePeriodDisplayModes}
+        />
+      )}
+    </PurchaseOrderDataCell>
+  );
+});
+
+function PurchaseOrderBoardRow({
+  entry,
+  layout,
+  formatting,
+  actions,
+  links,
+  selection,
+  contextMenu,
+  remarks,
+}) {
+  const { order, rowId } = entry;
+  const lines = Array.isArray(order.lines) ? order.lines : [];
+  const hasLines = lines.length > 0;
+  const isExpanded = Boolean(layout.expandedOrders[rowId]);
+  const rowFormatColor = resolveRowFormatColor(
+    order,
+    layout.columns,
+    formatting.headerColumnFormatRules
+  );
+  const locateKey = orderLocateKeyFromOrder(order);
+  const isLocated = layout.highlightedLocateKey === locateKey;
+  const rowStyle = useMemo(
+    () => {
+      if (isLocated) return { backgroundColor: ROW_LOCATE_HIGHLIGHT_COLOR };
+      if (!order.removedInD365 && rowFormatColor) return { backgroundColor: rowFormatColor };
+      return undefined;
+    },
+    [isLocated, order.removedInD365, rowFormatColor]
+  );
+  const expandedRowData = useMemo(
+    () => ({ rowId, order, lines }),
+    [lines, order, rowId]
+  );
+  const remarkSummary = remarks?.summaryByRow?.get(rowKey(order.dataAreaId, order.orderNumber)) || null;
+  const rowRemarks = useMemo(
+    () => ({ summary: remarkSummary, open: remarks?.open }),
+    [remarkSummary, remarks?.open]
+  );
+  const expandedTableConfig = useMemo(() => ({
+    colCount: layout.colCount,
+    styles: layout.styles,
+    lineColumns: layout.lineColumns,
+    lineColumnWidths: formatting.lineColumnWidths,
+    lineColumnTextStyles: formatting.lineColumnTextStyles,
+    lineColumnFormatRules: formatting.lineColumnFormatRules,
+    onSaveLineColumnWidth: actions.onSaveLineColumnWidth,
+    lineTotalColumns: links.lineTotalColumns,
+    headerColumns: layout.columns,
+    collapsedLineColumnKeys: layout.collapsedLineColumnKeys,
+    onToggleLineColumnCollapsed: actions.onToggleLineColumnCollapsed,
+    ...links,
+  }), [actions.onSaveLineColumnWidth, actions.onToggleLineColumnCollapsed, formatting, layout, links]);
+
+  return (
+    <React.Fragment>
+      <tr
+        className={getOrderRowClassName(order, layout.styles)}
+        style={rowStyle}
+        data-locate-key={locateKey}
+      >
+        <PurchaseOrderRowControls
+          order={order}
+          rowId={rowId}
+          hasLines={hasLines}
+          isExpanded={isExpanded}
+          styles={layout.styles}
+          selection={selection}
+          onToggleOrder={actions.onToggleOrder}
+          remarks={rowRemarks}
+          rowFormatColor={rowFormatColor}
+          isLocated={isLocated}
+        />
+        {layout.columns.map((column) => (
+          <PurchaseOrderBoardCell
+            key={`${rowId}-${column.key}`}
+            order={order}
+            column={column}
+            styles={layout.styles}
+            formatting={formatting}
+            actions={actions.cellActions}
+            links={links}
+            contextMenu={contextMenu}
+            remarks={rowRemarks}
+            rowFormatColor={rowFormatColor}
+            isLocated={isLocated}
+            isCollapsed={isColumnCollapsed(column.key, layout.collapsedHeaderColumnKeys)}
+          />
+        ))}
+      </tr>
+      <PurchaseOrdersBoardExpandedRow
+        expanded={hasLines && isExpanded}
+        rowData={expandedRowData}
+        tableConfig={expandedTableConfig}
+        cellActions={actions.cellActions}
+      />
+    </React.Fragment>
+  );
+}
+
+export default memo(PurchaseOrderBoardRow);

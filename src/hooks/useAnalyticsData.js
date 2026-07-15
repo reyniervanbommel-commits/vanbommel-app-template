@@ -58,10 +58,10 @@ export function useAnalyticsData() {
       const failedResults = analyticsResults.filter((result) => result.status === 'rejected');
       if (failedResults.length === analyticsResults.length) {
         const firstFailure = failedResults[0];
-        setError(firstFailure.reason?.message || 'Analytics laden mislukt');
+        setError(firstFailure.reason?.message || 'Failed to load analytics');
       }
     } catch (err) {
-      setError(err.message || 'Analytics laden mislukt');
+      setError(err.message || 'Failed to load analytics');
     } finally {
       setLoading(false);
     }

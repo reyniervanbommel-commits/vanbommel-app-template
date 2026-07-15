@@ -51,11 +51,11 @@ const useStyles = makeStyles({
 
 const FIELDS = [
   {
-    name: 'OData basis-URL',
-    description: 'De root-URL van je Dynamics 365 Finance & Operations omgeving.',
+    name: 'OData base URL',
+    description: 'The root URL of your Dynamics 365 Finance & Operations environment.',
     where: [
-      'LCS (Lifecycle Services) → je project → Omgeving → Environment details → Environment URL',
-      'Of in D365: Help (?) → Info → Environment URL',
+      'LCS (Lifecycle Services) → your project → Environment → Environment details → Environment URL',
+      'Or in D365: Help (?) → Info → Environment URL',
     ],
     example: 'https://contoso.operations.dynamics.com',
   },
@@ -63,54 +63,54 @@ const FIELDS = [
     name: 'Purchase Orders path (headers entity)',
     description: 'This path points to the header entity. Order lines are loaded through the relation via $expand=PurchaseOrderLines.',
     where: [
-      'Microsoft Learn: zoek op "PurchaseOrderHeadersV2 entity" voor de juiste entiteitnaam',
-      'Test in browser: {basis-URL}/data/PurchaseOrderHeadersV2?$top=1&$expand=PurchaseOrderLines (met geldig token)',
-      'Line write-back gebruikt de line-entiteit /data/PurchaseOrderLinesV2',
+      'Microsoft Learn: search for "PurchaseOrderHeadersV2 entity" for the correct entity name',
+      'Test in browser: {base URL}/data/PurchaseOrderHeadersV2?$top=1&$expand=PurchaseOrderLines (with valid token)',
+      'Line write-back uses the line entity /data/PurchaseOrderLinesV2',
     ],
     example: '/data/PurchaseOrderHeadersV2',
   },
   {
-    name: 'Bedrijfscode (company)',
-    description: 'De code van de juridische entiteit (dataAreaId) waarvoor orders worden opgehaald.',
+    name: 'Company code',
+    description: 'The legal entity code (dataAreaId) used to fetch orders.',
     where: [
-      'D365 → Organisatiebeheer → Juridische entiteiten → kolom Naam / ID',
-      'Vaak een korte code zoals usmf, nl01 of fvb',
+      'D365 → Organization administration → Legal entities → Name / ID column',
+      'Often a short code such as usmf, nl01 or fvb',
     ],
     example: 'WHSL',
   },
   {
     name: 'Timeout (ms)',
-    description: 'Maximale wachttijd voor een OData-verzoek in milliseconden.',
-    where: ['Laat leeg voor standaard (20000 ms). Verhoog bij trage omgevingen.'],
+    description: 'Maximum wait time for an OData request in milliseconds.',
+    where: ['Leave empty for default (20000 ms). Increase for slow environments.'],
     example: '20000',
   },
   {
-    name: 'OAuth2 client-credentials (aanbevolen)',
-    description: 'De app authenticeert server-to-server bij Azure AD en ververst het token automatisch vóór expiry. Hiervoor zijn Tenant ID, Client ID en Client secret nodig.',
+    name: 'OAuth2 client-credentials (recommended)',
+    description: 'The app authenticates server-to-server with Azure AD and refreshes the token automatically before expiry. This requires Tenant ID, Client ID and Client secret.',
     where: [
-      'Azure Portal → App registrations → jouw app (bv. VBO-OData-VendorApp-DEV)',
-      'Tenant ID + Client ID staan op het Overzicht; Secret onder Certificates & secrets',
-      'De app moet in D365 gekoppeld zijn: System administration → Setup → Microsoft Entra ID applications',
-      'Scope wordt automatisch {basis-URL}/.default',
+      'Azure Portal → App registrations → your app (e.g. VBO-OData-VendorApp-DEV)',
+      'Tenant ID + Client ID are on Overview; Secret is under Certificates & secrets',
+      'The app must be linked in D365: System administration → Setup → Microsoft Entra ID applications',
+      'Scope is automatically {base URL}/.default',
     ],
-    example: 'Tenant ID / Client ID = GUID, Secret = geheim',
+    example: 'Tenant ID / Client ID = GUID, Secret = secret',
   },
   {
-    name: 'Cache-synchronisatie (scope + cap)',
-    description: 'Bepaalt welke orders in de SQL-cache komen. Een scope-filter voorkomt dat de volledige (trage) dataset wordt opgehaald; de cap is een vangnet.',
+    name: 'Cache sync (scope + cap)',
+    description: 'Determines which orders are stored in the SQL cache. A scope filter prevents fetching the full (slow) dataset; the cap is a safety net.',
     where: [
-      'Scope-filter = ruwe OData $filter, bijv. op status of datum',
-      'Max. aantal orders = harde bovengrens per sync (standaard 2000)',
-      'Cache verouderd na = minuten vóór een automatische lazy-refresh',
+      'Scope filter = raw OData $filter, e.g. on status or date',
+      'Max orders = hard upper limit per sync (default 2000)',
+      'Cache stale after = minutes before an automatic lazy refresh',
     ],
     example: "PurchaseOrderStatus ne ...'Canceled'",
   },
   {
     name: 'Bearer token (legacy fallback)',
-    description: 'Handmatig Azure AD token. Alleen gebruikt als er géén client-credentials zijn ingesteld. Verloopt na ~60 minuten — gebruik bij voorkeur OAuth2 hierboven.',
+    description: 'Manual Azure AD token. Only used when client credentials are not configured. Expires after ~60 minutes — prefer OAuth2 above.',
     where: [
-      'Tijdelijk via Azure CLI: az account get-access-token --resource {basis-URL}',
-      'Laat leeg zodra client-credentials werken',
+      'Temporary via Azure CLI: az account get-access-token --resource {base URL}',
+      'Leave empty once client credentials work',
     ],
     example: 'eyJ0eXAiOiJKV1QiLCJhbGciOi...',
   },
@@ -130,19 +130,19 @@ export default function ODataInfoDialog() {
         appearance="subtle"
         icon={<Info24Regular />}
         onClick={handleOpen}
-        aria-label="Uitleg OData-instellingen"
+        aria-label="OData settings help"
       >
-        Hulp
+        Help
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogSurface style={{ maxWidth: '560px' }}>
           <DialogBody>
-            <DialogTitle>OData-koppeling instellen</DialogTitle>
+            <DialogTitle>Configure OData connection</DialogTitle>
             <DialogContent>
               <Text className={styles.intro} block>
-                Vul onderstaande velden in om purchase orders uit Dynamics 365 te laden.
-                Instellingen worden opgeslagen in de database (tabel app_settings), niet in .env.
+                Fill in the fields below to load purchase orders from Dynamics 365.
+                Settings are saved in the database (app_settings table), not in .env.
               </Text>
 
               {FIELDS.map((field) => (
@@ -161,12 +161,12 @@ export default function ODataInfoDialog() {
               ))}
 
               <Text className={styles.note} block>
-                Na opslaan: ga naar Purchase orders en klik Vernieuwen om te testen.
-                Bij foutmelding &quot;D365_ODATA_BASE_URL ontbreekt&quot; is de basis-URL nog leeg.
+                After saving: go to Purchase orders and click Refresh to test.
+                If you see &quot;D365_ODATA_BASE_URL is missing&quot;, the base URL is still empty.
               </Text>
             </DialogContent>
             <DialogActions>
-              <Button appearance="primary" onClick={handleClose}>Begrepen</Button>
+              <Button appearance="primary" onClick={handleClose}>Got it</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>

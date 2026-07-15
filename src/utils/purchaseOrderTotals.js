@@ -22,6 +22,15 @@ export function calculateLineColumnSum(lines, columnKey) {
   }, 0);
 }
 
+export function isSummableLineColumn(column) {
+  return Boolean(column && column.dataType === 'number');
+}
+
+export function filterSummableLineColumnKeys(columnKeys, lineColumns) {
+  const byKey = new Map((Array.isArray(lineColumns) ? lineColumns : []).map((column) => [column.key, column]));
+  return (Array.isArray(columnKeys) ? columnKeys : []).filter((key) => isSummableLineColumn(byKey.get(key)));
+}
+
 export function calculateLineColumnValues(lines, columnKey, lineDataType = 'text') {
   if (!Array.isArray(lines) || !columnKey) return '-';
   const uniqueValues = [];

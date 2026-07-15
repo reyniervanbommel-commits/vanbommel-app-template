@@ -105,6 +105,21 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(await screen.findByText('Preview text')).toBeTruthy();
   });
 
+  it('sluit het submenu wanneer de gebruiker over een item zonder submenu hovert', async () => {
+    renderMenu();
+    openColumnMenu();
+    const textStyleButton = await screen.findByRole('button', { name: /Text style/i });
+    fireEvent.mouseEnter(textStyleButton);
+    expect(await screen.findByText('Preview text')).toBeTruthy();
+
+    const sortButton = await screen.findByRole('button', { name: /Sort A to Z/i });
+    fireEvent.mouseEnter(sortButton);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Preview text')).toBeNull();
+    });
+  });
+
   it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
     const { onSetColumnFormatRules } = renderMenu();
 
@@ -125,7 +140,7 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     renderMenu({ onSetGroupSummaryColumn });
 
     openColumnMenu();
-    fireEvent.click(await screen.findByRole('button', { name: /Categorie \/ groeperen/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Show sum in group header/i }));
 
     expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
@@ -138,5 +153,31 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
     openColumnMenu();
     expect(screen.queryAllByRole('button', { name: /Conditional formatting/i }).length).toBe(0);
+  });
+
+  it('verbergt niet-ondersteunde acties voor de vaste Remarks-kolom', async () => {
+    renderMenu({
+      column: { ...COLUMN, key: 'remarks', label: 'Remarks', dataType: 'remarks', source: 'custom' },
+      onRenameColumn: vi.fn(),
+      onRemoveColumn: vi.fn(),
+    });
+
+    openColumnMenu();
+    expect((await screen.findByTestId('column-type-label')).textContent).toBe('Remarks');
+    expect(screen.queryByRole('button', { name: /Rename column Remarks/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Conditional formatting/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
+  });
+
+  it('toont Hide column in het kolommenu', async () => {
+    const onToggleColumnCollapsed = vi.fn();
+    renderMenu({ onToggleColumnCollapsed });
+    openColumnMenu();
+    const hideButton = await screen.findByRole('button', { name: /Hide column/i });
+    expect(hideButton).toBeTruthy();
+    fireEvent.click(hideButton);
+    expect(onToggleColumnCollapsed).toHaveBeenCalledWith('amount');
   });
 });

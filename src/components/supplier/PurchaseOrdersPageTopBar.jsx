@@ -115,6 +115,7 @@ export default function PurchaseOrdersPageTopBar({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
   } = savedViewsState;
   const {
     isStaff,
@@ -167,6 +168,7 @@ export default function PurchaseOrdersPageTopBar({
               views={savedViews.views}
               activeViewId={activeViewId}
               canManageGlobal={isStaff}
+              canManageViews={isStaff}
               saving={savedViews.saving}
               hasUnsavedChanges={hasUnsavedChanges}
               onApplyView={applyViewState}
@@ -176,6 +178,7 @@ export default function PurchaseOrdersPageTopBar({
               onRenameView={handleRenameView}
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
+              onToggleShowHistory={handleToggleShowHistory}
             />
           </div>
         </div>
@@ -191,12 +194,14 @@ export default function PurchaseOrdersPageTopBar({
               onRestore={hiddenRowsState.restoreRows}
             />
           ) : null}
-          <PurchaseOrderRefreshProgress
-            progress={refreshProgress}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            canRefresh={isAdmin}
-          />
+          {isStaff ? (
+            <PurchaseOrderRefreshProgress
+              progress={refreshProgress}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              canRefresh={isAdmin}
+            />
+          ) : null}
           {error ? (
             <div className={styles.errorIndicator}>
               <Badge color="danger" appearance="filled">Request failed</Badge>
@@ -209,27 +214,27 @@ export default function PurchaseOrdersPageTopBar({
             <div className={styles.freshness}>
               {hasCache ? (
                 <>
-                  <Text size={200} className={styles.freshnessLabel}>Laatst ververst:</Text>
+                  <Text size={200} className={styles.freshnessLabel}>Last refreshed:</Text>
                   <Text size={200} weight="medium" className={styles.freshnessValue}>
-                    {relativeSynced || 'onbekend'}
+                    {relativeSynced || 'unknown'}
                   </Text>
                 </>
               ) : (
-                <Text size={200} className={styles.freshnessLabel}>Laatst ververst: onbekend</Text>
+                <Text size={200} className={styles.freshnessLabel}>Last refreshed: unknown</Text>
               )}
               {hasCache ? (
                 stale ? (
-                  <Badge color="warning" appearance="tint">Verouderd</Badge>
+                  <Badge color="warning" appearance="tint">Stale</Badge>
                 ) : (
-                  <Badge color="success" appearance="tint">Actueel</Badge>
+                  <Badge color="success" appearance="tint">Current</Badge>
                 )
               ) : (
-                <Badge color="warning" appearance="tint">Nog niet gesynchroniseerd</Badge>
+                <Badge color="warning" appearance="tint">Not synced yet</Badge>
               )}
             </div>
             <Divider vertical />
             <div className={styles.totalWrap}>
-              <Text size={200} className={styles.freshnessLabel}>Totaal</Text>
+              <Text size={200} className={styles.freshnessLabel}>Total</Text>
               <Badge appearance="outline" color="brand">{total}</Badge>
             </div>
           </div>

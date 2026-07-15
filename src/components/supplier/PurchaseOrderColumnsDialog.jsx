@@ -58,7 +58,7 @@ export default function PurchaseOrderColumnsDialog({
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Kolommen beheren</DialogTitle>
+          <DialogTitle>Manage columns</DialogTitle>
           <DialogContent>
             <div className={styles.list}>
               {columnOptions.map((column) => (
@@ -74,14 +74,14 @@ export default function PurchaseOrderColumnsDialog({
           <DialogActions>
             <Button appearance="subtle" onClick={handleReset}>Reset</Button>
             <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-              Annuleren
+              Cancel
             </Button>
             <Button
               appearance="primary"
               onClick={handleSave}
               disabled={saving || localVisible.length === 0}
             >
-              {saving ? 'Opslaan...' : 'Opslaan'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </DialogBody>

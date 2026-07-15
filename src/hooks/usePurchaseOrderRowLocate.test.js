@@ -1,0 +1,102 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { usePurchaseOrderRowLocate } from './usePurchaseOrderRowLocate';
+
+describe('usePurchaseOrderRowLocate', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('scrollt naar de rij en zet een highlight wanneer de rij zichtbaar is', async () => {
+    const wrapper = document.createElement('div');
+    const row = document.createElement('tr');
+    row.dataset.locateKey = 'USMF|PO-1';
+    row.scrollIntoView = vi.fn();
+    wrapper.appendChild(row);
+
+    const groupedRows = [{
+      groupKey: 'all-rows',
+      ancestorGroupKeys: [],
+      entries: [{ order: { dataAreaId: 'USMF', orderNumber: 'PO-1' } }],
+    }];
+
+    renderHook(() => usePurchaseOrderRowLocate({
+      groupedRows,
+      collapsedGroups: {},
+      ensureGroupsExpanded: vi.fn(),
+      tableWrapperRef: { current: wrapper },
+      locateRequest: { partitionKey: 'USMF', recordKey: 'PO-1', seq: 1 },
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  it('scrollt niet opnieuw wanneer groupedRows wijzigt zonder nieuwe locate-klik', async () => {
+    const wrapper = document.createElement('div');
+    const row = document.createElement('tr');
+    row.dataset.locateKey = 'USMF|PO-1';
+    row.scrollIntoView = vi.fn();
+    wrapper.appendChild(row);
+
+    const initialGroupedRows = [{
+      groupKey: 'all-rows',
+      ancestorGroupKeys: [],
+      entries: [{ order: { dataAreaId: 'USMF', orderNumber: 'PO-1', values: { status: 'Open' } } }],
+    }];
+
+    const locateRequest = { partitionKey: 'USMF', recordKey: 'PO-1', seq: 1 };
+
+    const { rerender } = renderHook(
+      (props) => usePurchaseOrderRowLocate(props),
+      {
+        initialProps: {
+          groupedRows: initialGroupedRows,
+          collapsedGroups: {},
+          ensureGroupsExpanded: vi.fn(),
+          tableWrapperRef: { current: wrapper },
+          locateRequest,
+        },
+      }
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(row.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    const updatedGroupedRows = [{
+      ...initialGroupedRows[0],
+      entries: [{
+        order: {
+          dataAreaId: 'USMF',
+          orderNumber: 'PO-1',
+          values: { status: 'Confirmed' },
+        },
+      }],
+    }];
+
+    rerender({
+      groupedRows: updatedGroupedRows,
+      collapsedGroups: {},
+      ensureGroupsExpanded: vi.fn(),
+      tableWrapperRef: { current: wrapper },
+      locateRequest,
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(row.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+});

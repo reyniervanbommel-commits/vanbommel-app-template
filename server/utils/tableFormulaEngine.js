@@ -17,7 +17,7 @@ const TOKEN_TYPES = {
 
 class FormulaSyntaxError extends Error {
   constructor(message, position = null) {
-    super(position === null ? message : `${message} (positie ${position})`);
+    super(position === null ? message : `${message} (position ${position})`);
     this.name = 'FormulaSyntaxError';
     this.position = position;
   }
@@ -84,7 +84,7 @@ function tokenize(input) {
         j += 1;
       }
       if (j >= text.length || text[j] !== "'") {
-        throw new FormulaSyntaxError('String-literal is niet afgesloten', i);
+        throw new FormulaSyntaxError('String literal is not closed', i);
       }
       tokens.push({ type: TOKEN_TYPES.STRING, value: out, position: i });
       i = j + 1;
@@ -99,12 +99,12 @@ function tokenize(input) {
         j += 1;
       }
       if (dotCount > 1) {
-        throw new FormulaSyntaxError('Ongeldig getal', i);
+        throw new FormulaSyntaxError('Invalid number', i);
       }
       const raw = text.slice(i, j);
       const num = Number(raw);
       if (!Number.isFinite(num)) {
-        throw new FormulaSyntaxError('Ongeldig getal', i);
+        throw new FormulaSyntaxError('Invalid number', i);
       }
       tokens.push({ type: TOKEN_TYPES.NUMBER, value: num, position: i });
       i = j;
@@ -119,11 +119,11 @@ function tokenize(input) {
       continue;
     }
 
-    throw new FormulaSyntaxError(`Onbekend teken '${ch}'`, i);
+    throw new FormulaSyntaxError(`Unknown character '${ch}'`, i);
   }
 
   if (tokens.length > MAX_TOKENS) {
-    throw new FormulaSyntaxError(`Formule bevat te veel tokens (max ${MAX_TOKENS})`);
+    throw new FormulaSyntaxError(`Formula contains too many tokens (max ${MAX_TOKENS})`);
   }
   tokens.push({ type: TOKEN_TYPES.EOF, value: '', position: text.length });
   return tokens;
@@ -144,10 +144,10 @@ function createParser(tokens) {
   function consume(type = null, value = null) {
     const token = current();
     if (type && token.type !== type) {
-      throw new FormulaSyntaxError(`Verwacht ${type}, kreeg ${token.type}`, token.position);
+      throw new FormulaSyntaxError(`Expected ${type}, got ${token.type}`, token.position);
     }
     if (value && token.value !== value) {
-      throw new FormulaSyntaxError(`Verwacht '${value}', kreeg '${token.value}'`, token.position);
+      throw new FormulaSyntaxError(`Expected '${value}', got '${token.value}'`, token.position);
     }
     pos += 1;
     return token;
@@ -224,12 +224,12 @@ function createParser(tokens) {
         consume(TOKEN_TYPES.RPAREN);
         return { type: 'call', name: ident.toUpperCase(), args };
       }
-      throw new FormulaSyntaxError(`Onbekende identifier '${ident}'`, token.position);
+      throw new FormulaSyntaxError(`Unknown identifier '${ident}'`, token.position);
     }
     if (token.type === TOKEN_TYPES.LPAREN) {
       parenDepth += 1;
       if (parenDepth > MAX_EVAL_DEPTH) {
-        throw new FormulaSyntaxError(`Nesting te diep (max ${MAX_EVAL_DEPTH})`, token.position);
+        throw new FormulaSyntaxError(`Nesting too deep (max ${MAX_EVAL_DEPTH})`, token.position);
       }
       consume(TOKEN_TYPES.LPAREN);
       if (current().type === TOKEN_TYPES.IDENT && peek().type === TOKEN_TYPES.RPAREN) {
@@ -243,7 +243,7 @@ function createParser(tokens) {
       parenDepth -= 1;
       return expr;
     }
-    throw new FormulaSyntaxError(`Onverwachte token '${token.type}'`, token.position);
+    throw new FormulaSyntaxError(`Unexpected token '${token.type}'`, token.position);
   }
 
   return {
@@ -258,14 +258,14 @@ function createParser(tokens) {
 function normalizeFormulaInput(expression) {
   let normalized = String(expression || '').trim();
   if (!normalized) {
-    throw new FormulaSyntaxError('Formule is verplicht');
+    throw new FormulaSyntaxError('Formula is required');
   }
   if (normalized.length > MAX_FORMULA_LENGTH) {
-    throw new FormulaSyntaxError(`Formule is te lang (max ${MAX_FORMULA_LENGTH} tekens)`);
+    throw new FormulaSyntaxError(`Formula is too long (max ${MAX_FORMULA_LENGTH} characters)`);
   }
   if (normalized.startsWith('=')) normalized = normalized.slice(1).trim();
   if (!normalized) {
-    throw new FormulaSyntaxError('Formule is verplicht');
+    throw new FormulaSyntaxError('Formula is required');
   }
   return normalized;
 }
@@ -306,15 +306,15 @@ function toDateOrNull(value) {
   return d;
 }
 
-function toNumericOperand(value, label = 'Waarde') {
+function toNumericOperand(value, label = 'Value') {
   if (value === null || value === undefined || value === '') return 0;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error(`${label} is geen geldig getal`);
+    if (!Number.isFinite(value)) throw new Error(`${label} is not a valid number`);
     return value;
   }
   if (typeof value === 'boolean') return value ? 1 : 0;
   if (typeof value === 'string' && isNumericString(value)) return Number(value.trim());
-  throw new Error(`${label} kan niet als getal worden gebruikt`);
+  throw new Error(`${label} cannot be used as a number`);
 }
 
 function toBoolean(value) {
@@ -339,7 +339,7 @@ function compareValues(left, right, op) {
   if (leftDate && rightDate) {
     cmp = leftDate.getTime() - rightDate.getTime();
   } else if (isNumericString(String(left ?? '')) || isNumericString(String(right ?? '')) || left === null || left === undefined || right === null || right === undefined || typeof left === 'number' || typeof right === 'number' || typeof left === 'boolean' || typeof right === 'boolean') {
-    cmp = toNumericOperand(left, 'Linkerwaarde') - toNumericOperand(right, 'Rechterwaarde');
+    cmp = toNumericOperand(left, 'Left value') - toNumericOperand(right, 'Right value');
   } else {
     const leftText = left === null || left === undefined ? '' : String(left);
     const rightText = right === null || right === undefined ? '' : String(right);
@@ -352,7 +352,7 @@ function compareValues(left, right, op) {
   if (op === '<') return cmp < 0;
   if (op === '>=') return cmp >= 0;
   if (op === '<=') return cmp <= 0;
-  throw new Error(`Onbekende comparator '${op}'`);
+  throw new Error(`Unknown comparator '${op}'`);
 }
 
 function daysBetween(startDate, endDate) {
@@ -367,28 +367,28 @@ function addDays(date, amount) {
 }
 
 function evalNode(node, rowValues, depth = 0) {
-  if (!node || typeof node !== 'object') throw new Error('Ongeldige formule-node');
-  if (depth > MAX_EVAL_DEPTH) throw new Error(`Evaluatie te diep (max ${MAX_EVAL_DEPTH})`);
+  if (!node || typeof node !== 'object') throw new Error('Invalid formula node');
+  if (depth > MAX_EVAL_DEPTH) throw new Error(`Evaluation too deep (max ${MAX_EVAL_DEPTH})`);
 
   if (node.type === 'number') return node.value;
   if (node.type === 'string') return node.value;
   if (node.type === 'ref') {
     const key = String(node.key);
     if (!Object.prototype.hasOwnProperty.call(rowValues || {}, key)) {
-      throw new Error(`Onbekende kolomreferentie '${key}'`);
+      throw new Error(`Unknown column reference '${key}'`);
     }
     return rowValues[key];
   }
   if (node.type === 'unary') {
     const value = evalNode(node.argument, rowValues, depth + 1);
     if (node.op === '+') return toNumericOperand(value, 'Unary plus');
-    if (node.op === '-') return -toNumericOperand(value, 'Unary min');
-    throw new Error(`Onbekende unary operator '${node.op}'`);
+    if (node.op === '-') return -toNumericOperand(value, 'Unary minus');
+    throw new Error(`Unknown unary operator '${node.op}'`);
   }
   if (node.type === 'call') {
-    if (node.name !== 'ALS') throw new Error(`Onbekende functie '${node.name}'`);
+    if (node.name !== 'ALS') throw new Error(`Unknown function '${node.name}'`);
     if (!Array.isArray(node.args) || node.args.length !== 3) {
-      throw new Error('ALS verwacht precies 3 argumenten');
+      throw new Error('IF expects exactly 3 arguments');
     }
     const condition = evalNode(node.args[0], rowValues, depth + 1);
     return toBoolean(condition)
@@ -415,30 +415,30 @@ function evalNode(node, rowValues, depth = 0) {
       if (rightDate && !leftDate && node.op === '+') {
         return addDays(rightDate, toNumericOperand(left));
       }
-      const leftNumber = toNumericOperand(left, 'Linker operand');
-      const rightNumber = toNumericOperand(right, 'Rechter operand');
+      const leftNumber = toNumericOperand(left, 'Left operand');
+      const rightNumber = toNumericOperand(right, 'Right operand');
       return node.op === '+' ? leftNumber + rightNumber : leftNumber - rightNumber;
     }
 
     if (node.op === '*') {
-      return toNumericOperand(left, 'Linker operand') * toNumericOperand(right, 'Rechter operand');
+      return toNumericOperand(left, 'Left operand') * toNumericOperand(right, 'Right operand');
     }
     if (node.op === '/') {
-      const divisor = toNumericOperand(right, 'Rechter operand');
-      if (divisor === 0) throw new Error('Deling door nul');
-      return toNumericOperand(left, 'Linker operand') / divisor;
+      const divisor = toNumericOperand(right, 'Right operand');
+      if (divisor === 0) throw new Error('Division by zero');
+      return toNumericOperand(left, 'Left operand') / divisor;
     }
-    throw new Error(`Onbekende operator '${node.op}'`);
+    throw new Error(`Unknown operator '${node.op}'`);
   }
-  throw new Error(`Onbekend node-type '${node.type}'`);
+  throw new Error(`Unknown node type '${node.type}'`);
 }
 
 function castResult(value, resultType = 'text') {
-  if (resultType === 'number') return toNumericOperand(value, 'Resultaat');
+  if (resultType === 'number') return toNumericOperand(value, 'Result');
   if (resultType === 'boolean') return toBoolean(value);
   if (resultType === 'date') {
     const date = toDateOrNull(value);
-    if (!date) throw new Error('Resultaat is geen geldige datum');
+    if (!date) throw new Error('Result is not a valid date');
     return date.toISOString();
   }
   if (value === null || value === undefined) return '';
@@ -447,7 +447,7 @@ function castResult(value, resultType = 'text') {
 
 function evaluateCompiledFormula(compiled, rowValues = {}, options = {}) {
   if (!compiled || !compiled.ast) {
-    return { value: null, error: 'Formule is niet gecompileerd' };
+    return { value: null, error: 'Formula is not compiled' };
   }
   try {
     const rawValue = evalNode(compiled.ast, rowValues, 0);
@@ -456,7 +456,7 @@ function evaluateCompiledFormula(compiled, rowValues = {}, options = {}) {
   } catch (err) {
     return {
       value: null,
-      error: err && err.message ? err.message : 'Fout tijdens formule-evaluatie',
+      error: err && err.message ? err.message : 'Error during formula evaluation',
     };
   }
 }

@@ -10,7 +10,7 @@ const useStyles = makeStyles({
 export default function AuthGuard({ children, allowedRoles }) {
   const styles = useStyles();
   const { isAuthenticated, loading, user } = useAuth();
-  if (loading) return <Spinner label="Laden..." className={styles.loading} />;
+  if (loading) return <Spinner label="Loading..." className={styles.loading} />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
     return <Navigate to="/" replace />;

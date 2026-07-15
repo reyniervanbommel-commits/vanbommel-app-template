@@ -45,9 +45,9 @@ export default function StepKeys({
 
   return (
     <div className={styles.root}>
-      <Field label="Hoofdtabel">
+      <Field label="Main table">
         <Dropdown
-          placeholder="Kies een hoofdtabel"
+          placeholder="Choose a main table"
           value={mainTableLabel}
           selectedOptions={mainTableKey ? [mainTableKey] : []}
           onOptionSelect={(_, d) => onMainTableKey(d.optionValue)}
@@ -58,23 +58,23 @@ export default function StepKeys({
         </Dropdown>
       </Field>
 
-      <Field label="Bereik (scope)">
+      <Field label="Scope">
         <RadioGroup
           layout="horizontal"
           value={sourceScope}
           onChange={(_, d) => onSourceScope(d.value)}
         >
-          <Radio value="master" label="Hoofdrij (master)" />
-          <Radio value="detail" label="Detailrij (detail)" disabled={Boolean(selectedMainTable) && !hasDetail} />
+          <Radio value="master" label="Header row (master)" />
+          <Radio value="detail" label="Detail row (detail)" disabled={Boolean(selectedMainTable) && !hasDetail} />
         </RadioGroup>
         <Text className={styles.hint} block>
-          Bepaalt op welk niveau van de hoofdtabel de verrijkingskolommen worden gekoppeld.
+          Determines at which level of the main table enrichment columns are linked.
         </Text>
       </Field>
 
-      <Field label="Sleutelveld hoofdtabel">
+      <Field label="Keyveld hoofdtabel">
         <Dropdown
-          placeholder={selectedMainTable ? 'Kies een sleutelveld' : 'Kies eerst een hoofdtabel'}
+          placeholder={selectedMainTable ? 'Choose a key field' : 'Choose a main table first'}
           disabled={!selectedMainTable}
           value={mainKeyLabel}
           selectedOptions={mainKeyField ? [mainKeyField] : []}
@@ -86,9 +86,9 @@ export default function StepKeys({
         </Dropdown>
       </Field>
 
-      <Field label="Sleutelveld dataset">
+      <Field label="Keyveld dataset">
         <Dropdown
-          placeholder={dataset ? 'Kies een sleutelveld' : 'Upload eerst een bestand'}
+          placeholder={dataset ? 'Choose a key field' : 'Upload a file first'}
           disabled={!dataset}
           value={datasetKeyLabel}
           selectedOptions={datasetKeyField ? [datasetKeyField] : []}
@@ -99,7 +99,7 @@ export default function StepKeys({
           ))}
         </Dropdown>
         <Text className={styles.hint} block>
-          De waarden in dit datasetveld worden gematcht op het gekozen sleutelveld van de hoofdtabel.
+          Values in this dataset field are matched against the selected key field of the main table.
         </Text>
       </Field>
     </div>

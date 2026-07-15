@@ -7,17 +7,154 @@
 const express = require('express');
 const dataService = require('../services/TableDataService');
 const columnsService = require('../services/TableColumnsService');
+const remarksService = require('../services/RowRemarksService');
+const { getRowActivity } = require('../services/RowActivityService');
 const registry = require('../services/TableRegistryService');
-const { requireRole } = require('../middleware/auth');
+const {
+  normalizeActive,
+  normalizeBody,
+  normalizeCursor,
+  normalizeEmoji,
+  normalizeLimit,
+  normalizeOptionalColumnId,
+  normalizePositiveId,
+  normalizeRowIdentity,
+  normalizeTableKey,
+} = require('../services/RowRemarksValidation');
+const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
+const { getSupplierAccount } = require('../utils/supplierScope');
+const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
+const settingsService = require('../services/SettingsService');
+
+// Instelling die bepaalt op welke master-kolom het supplier-filter matcht (admin-instelbaar).
+const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
+const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
 
 const router = express.Router();
+
+function remarksActor(req) {
+  return { id: req.user?.id, role: req.user?.role };
+}
 
 function toColumnId(raw) {
   if (!/^\d+$/.test(String(raw || '').trim())) return null;
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
 }
+
+// GET /api/data/:tableKey/remarks/summary — actieve remarktellers per masterrij.
+router.get('/:tableKey/remarks/summary', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const rows = await remarksService.summarizeRemarks(tableKey, remarksActor(req));
+    return res.json({ rows });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/remarks — stabiel cursor-gepagineerde remarks, inclusief tombstones.
+router.get('/:tableKey/remarks', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const row = normalizeRowIdentity(req.query.partitionKey, req.query.recordKey);
+    normalizeCursor(req.query.cursor);
+    const limit = normalizeLimit(req.query.limit);
+    return res.json(await remarksService.listRemarks(
+      { tableKey, ...row, cursor: req.query.cursor || null, limit },
+      remarksActor(req),
+    ));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
+router.post('/:tableKey/remarks', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const body = normalizeBody(req.body?.body);
+    const columnId = normalizeOptionalColumnId(req.body?.columnId);
+    const remark = await remarksService.addRemark(
+      { tableKey, ...row, body, columnId },
+      remarksActor(req),
+    );
+    return res.status(201).json({ remark });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
+router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const id = normalizePositiveId(req.params.id, 'remarkId');
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const remark = await remarksService.deleteRemark(
+      { tableKey, id, ...row },
+      remarksActor(req),
+    );
+    return res.json({ remark });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/data/:tableKey/remarks/:id/reaction — atomische, idempotente reaction-toggle.
+router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const id = normalizePositiveId(req.params.id, 'remarkId');
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    const emoji = normalizeEmoji(req.body?.emoji);
+    const active = normalizeActive(req.body?.active);
+    const reactions = await remarksService.setReaction(
+      { tableKey, id, ...row, emoji, active },
+      remarksActor(req),
+    );
+    return res.json({ reactions });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/activity — row history of gecombineerde remarks/activity-feed.
+router.get('/:tableKey/activity', async (req, res, next) => {
+  try {
+    const activity = await getRowActivity({
+      tableKey: normalizeTableKey(req.params.tableKey),
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+      kind: req.query.kind,
+      columnId: req.query.columnId,
+      actionFilter: req.query.actionFilter,
+      cursor: req.query.cursor,
+      afterCursor: req.query.afterCursor,
+      limit: req.query.limit,
+      currentUser: remarksActor(req),
+    });
+    return res.json(activity);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/revision — lichtgewicht "is het board gewijzigd?"-token.
+// Statisch pad, dus geregistreerd vóór GET /:tableKey (anders vangt de tableKey-route 'revision' op).
+router.get('/:tableKey/revision', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const result = await dataService.getRevision({ tableKey, userId: req.user.id, supplierAccount });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
@@ -32,10 +169,17 @@ router.get('/:tableKey', async (req, res, next) => {
         await dataService.refresh(tableKey);
         refreshed = true;
       } catch (refreshErr) {
-        refreshError = 'Verversen mislukt';
+        refreshError = 'Refresh failed';
       }
     }
-    const data = await dataService.read({ tableKey, userId: req.user.id });
+    // Suppliers zien uitsluitend hun eigen orders: geef het leveranciersaccount + de
+    // admin-gekozen filterkolom door zodat de read de rijen filtert. Staff geeft null door.
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const supplierFilterColumn = isSupplier
+      ? await settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN)
+      : DEFAULT_SUPPLIER_FILTER_COLUMN;
+    const data = await dataService.read({ tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn });
     return res.json({ ...data, refreshed, refreshError });
   } catch (err) {
     return next(err);
@@ -88,12 +232,19 @@ router.post('/:tableKey/viewed', requireRole(ROLES.ADMIN), async (req, res, next
   }
 });
 
-// GET /api/data/:tableKey/columns?scope=&includeInactive=
+// GET /api/data/:tableKey/columns?scope=&includeInactive=&enriched=
 router.get('/:tableKey/columns', async (req, res, next) => {
   try {
     const scope = req.query.scope ? String(req.query.scope) : null;
     if (scope && !registry.SCOPES.includes(scope)) {
-      return res.status(400).json({ error: 'Ongeldige scope' });
+      return res.status(400).json({ error: 'Invalid scope' });
+    }
+    const enriched = req.query.enriched === '1' || req.query.enriched === 'true';
+    if (enriched && req.params.tableKey === 'purchase-orders') {
+      const defs = await dataService.getBoardColumnDefinitions(req.params.tableKey, { scope });
+      if (scope === 'master') return res.json({ columns: defs.master || [] });
+      if (scope === 'detail') return res.json({ columns: defs.detail || [] });
+      return res.json({ columns: [...(defs.master || []), ...(defs.detail || [])] });
     }
     const table = await registry.getTableByKey(req.params.tableKey);
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
@@ -122,18 +273,19 @@ router.post('/:tableKey/columns', async (req, res, next) => {
 router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
   try {
     const table = await registry.getTableByKey(req.params.tableKey);
+    const scope = String(req.body?.scope || 'master').trim() === 'detail' ? 'detail' : 'master';
     const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
     const resultType = String(req.body?.dataType || 'number').trim() || 'number';
     const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
     if (!normalized.expression) {
-      return res.status(400).json({ error: 'Formule is verplicht' });
+      return res.status(400).json({ error: 'Formula is required' });
     }
-    const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
-    columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    const scopeColumns = await registry.listColumns({ tableId: table.id, scope, includeInactive: false });
+    columnsService.validateFormulaReferences(normalized.references, scopeColumns, ownColumnKey, scope);
     columnsService.validateFormulaResultTypeCompatibility(
       normalized.expression,
       normalized.references,
-      masterColumns,
+      scopeColumns,
       resultType
     );
     return res.json({
@@ -150,12 +302,12 @@ router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
-    const hasImagePayload = req.body && Object.prototype.hasOwnProperty.call(req.body, 'options');
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const hasFormulaPayload = req.body && (
       Object.prototype.hasOwnProperty.call(req.body, 'formulaExpr')
-      || (Object.prototype.hasOwnProperty.call(req.body, 'dataType') && !hasImagePayload)
+      || Object.prototype.hasOwnProperty.call(req.body, 'dataType')
     );
+    const hasOptionsPayload = req.body && Object.prototype.hasOwnProperty.call(req.body, 'options');
     const column = hasFormulaPayload
       ? await columnsService.updateFormulaColumn(
         columnId,
@@ -166,17 +318,13 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
         },
         req.user.id,
       )
-      : hasImagePayload
-        ? await columnsService.updateImageColumn(
+      : hasOptionsPayload
+        ? await columnsService.updateColumn(
           columnId,
-          {
-            label: req.body?.label,
-            dataType: req.body?.dataType,
-            options: req.body?.options,
-          },
+          { label: req.body?.label, options: req.body?.options },
           req.user.id,
         )
-      : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
+        : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);
@@ -187,7 +335,7 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
 router.delete('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const result = await columnsService.deactivateColumn(columnId, req.user.id);
     return res.json(result);
   } catch (err) {
@@ -199,7 +347,7 @@ router.delete('/:tableKey/columns/:id', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setColumnVisibility(columnId, Boolean(req.body?.visible), req.user.id);
     return res.json({ column });
   } catch (err) {
@@ -211,7 +359,7 @@ router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
 router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setVisibleAtDelete(columnId, Boolean(req.body?.visible), req.user.id);
     return res.json({ column });
   } catch (err) {
@@ -223,7 +371,7 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
 router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
-    if (!columnId) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setWriteBackConfig(
       columnId,
       { writable: req.body?.writable, mechanism: req.body?.mechanism },
@@ -240,7 +388,7 @@ router.put('/:tableKey/value', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
     const id = toColumnId(columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
     const saved = await dataService.saveCustomValue(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value },
       req.user.id,
@@ -292,7 +440,12 @@ router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (re
 router.get('/:tableKey/history', async (req, res, next) => {
   try {
     const id = toColumnId(req.query.columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+    });
     const history = await dataService.getCellHistory({
       tableKey: req.params.tableKey,
       columnId: id,
@@ -311,7 +464,7 @@ router.post('/:tableKey/correct', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
     const id = toColumnId(columnId);
-    if (!id) return res.status(400).json({ error: 'Ongeldig kolom-id' });
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
     const result = await dataService.correctField(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
       req.user.id,

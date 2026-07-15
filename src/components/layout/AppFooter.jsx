@@ -19,5 +19,5 @@ const useStyles = makeStyles({
 
 export default function AppFooter() {
   const styles = useStyles();
-  return <footer className={styles.footer}>Versie {APP_VERSION}</footer>;
+  return <footer className={styles.footer}>Version {APP_VERSION}</footer>;
 }

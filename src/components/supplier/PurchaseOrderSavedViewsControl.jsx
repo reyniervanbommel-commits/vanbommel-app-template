@@ -14,11 +14,18 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import {
+  ArrowSyncRegular,
+  CheckmarkRegular,
   ChevronDownRegular,
-  SaveRegular,
+  DeleteRegular,
+  EditRegular,
   EyeRegular,
+  SaveRegular,
+  StarRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
+import { SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
   trigger: {
@@ -29,7 +36,6 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  // D365-stijl: grote viewnaam als paginatitel, zonder rand.
   titleTrigger: {
     maxWidth: '420px',
     minWidth: 0,
@@ -61,11 +67,8 @@ const useStyles = makeStyles({
     fontSize: '18px',
     lineHeight: '1',
   },
-  updateActionLabel: {
-    color: tokens.colorBrandForeground1,
-    fontWeight: tokens.fontWeightSemibold,
-  },
   menuPopover: {
+    minWidth: '240px',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
   empty: {
@@ -73,20 +76,26 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  updateActionLabel: {
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  deleteAction: {
+    color: tokens.colorPaletteRedForeground1,
+  },
 });
 
-const NO_VIEW_LABEL = 'Alle orders (geen view)';
+const NO_VIEW_LABEL = 'All orders (no view)';
 
 /**
- * D365-achtige view-control voor de Purchase Orders toolbar: kies/pas een view toe,
- * sla de huidige state op als nieuwe view, of beheer (bijwerken/hernoemen/standaard/
- * verwijderen) de actieve view. Personal-views zijn altijd beheerbaar door de eigenaar;
- * global-views alleen wanneer canManageGlobal true is (admin/employee).
+ * View picker: switch views first, then manage the active view, then create/delete.
+ * Suppliers only see the view list (canManageViews=false).
  */
 export default function PurchaseOrderSavedViewsControl({
   views,
   activeViewId,
   canManageGlobal,
+  canManageViews = true,
   saving,
   hasUnsavedChanges = false,
   titleMode = false,
@@ -97,19 +106,22 @@ export default function PurchaseOrderSavedViewsControl({
   onRenameView,
   onSetDefault,
   onDeleteView,
+  onToggleShowHistory = () => {},
 }) {
   const styles = useStyles();
-  const [dialogMode, setDialogMode] = useState(null); // 'create' | 'rename' | null
+  const [dialogMode, setDialogMode] = useState(null);
 
   const personalViews = useMemo(() => views.filter((view) => view.scope === 'personal'), [views]);
+  const vendorViews = useMemo(() => views.filter((view) => view.scope === 'vendor'), [views]);
   const globalViews = useMemo(() => views.filter((view) => view.scope === 'global'), [views]);
+  const hasSavedViews = personalViews.length + vendorViews.length + globalViews.length > 0;
 
   const activeView = useMemo(
     () => views.find((view) => view.id === activeViewId) || null,
     [views, activeViewId]
   );
 
-  const activeCanManage = activeView
+  const activeCanManage = canManageViews && activeView
     ? (activeView.scope === 'personal' || canManageGlobal)
     : false;
 
@@ -122,7 +134,7 @@ export default function PurchaseOrderSavedViewsControl({
     await onRenameView(activeView, name);
   }, [activeView, onRenameView]);
 
-  const triggerLabel = activeView ? activeView.name : (titleMode ? 'Alle orders' : NO_VIEW_LABEL);
+  const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
 
   return (
     <>
@@ -155,73 +167,90 @@ export default function PurchaseOrderSavedViewsControl({
         </MenuTrigger>
         <MenuPopover className={styles.menuPopover}>
           <MenuList>
-            {activeView && activeCanManage ? (
-              <>
-                <MenuItem onClick={() => onUpdateActive(activeView)}>
-                  <span className={styles.updateActionLabel}>Huidige view bijwerken</span>
-                </MenuItem>
-                <MenuDivider />
-              </>
+            <SavedViewScopeGroup
+              title="Vendor"
+              views={vendorViews}
+              activeViewId={activeViewId}
+              onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
+            />
+            <SavedViewScopeGroup
+              title="Shared"
+              views={globalViews}
+              activeViewId={activeViewId}
+              onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
+            />
+            <SavedViewScopeGroup
+              title="Personal"
+              views={personalViews}
+              activeViewId={activeViewId}
+              onApplyView={onApplyView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal={canManageGlobal}
+            />
+            {!hasSavedViews ? (
+              <div className={styles.empty}>No saved views yet</div>
             ) : null}
-
+            <MenuDivider />
             <MenuItem
-              icon={!activeView ? <span aria-hidden>✓</span> : undefined}
+              icon={!activeView ? <CheckmarkRegular /> : <TableRegular />}
               onClick={onResetView}
             >
               {NO_VIEW_LABEL}
             </MenuItem>
 
-            {personalViews.length ? (
-              <MenuGroup>
-                <MenuGroupHeader>Persoonlijk</MenuGroupHeader>
-                {personalViews.map((view) => (
-                  <MenuItem
-                    key={view.id}
-                    icon={view.id === activeViewId ? <span aria-hidden>✓</span> : undefined}
-                    onClick={() => onApplyView(view)}
-                  >
-                    {view.name}{view.isDefault ? ' (standaard)' : ''}
-                  </MenuItem>
-                ))}
-              </MenuGroup>
-            ) : null}
-
-            {globalViews.length ? (
-              <MenuGroup>
-                <MenuGroupHeader>Gedeeld</MenuGroupHeader>
-                {globalViews.map((view) => (
-                  <MenuItem
-                    key={view.id}
-                    icon={view.id === activeViewId ? <span aria-hidden>✓</span> : undefined}
-                    onClick={() => onApplyView(view)}
-                  >
-                    {view.name}{view.isDefault ? ' (standaard)' : ''}
-                  </MenuItem>
-                ))}
-              </MenuGroup>
-            ) : null}
-
-            {!personalViews.length && !globalViews.length ? (
-              <div className={styles.empty}>Nog geen opgeslagen views</div>
-            ) : null}
-
-            <MenuDivider />
-
-            <MenuItem icon={<SaveRegular />} onClick={() => setDialogMode('create')}>
-              Opslaan als nieuwe view…
-            </MenuItem>
-            {activeView && activeCanManage ? (
+            {activeCanManage ? (
               <>
-                <MenuItem onClick={() => setDialogMode('rename')}>
-                  Hernoemen…
-                </MenuItem>
-                {!activeView.isDefault ? (
-                  <MenuItem onClick={() => onSetDefault(activeView)}>
-                    Als standaard instellen
+                <MenuDivider />
+                <MenuGroup>
+                  <MenuGroupHeader>Manage view</MenuGroupHeader>
+                  {hasUnsavedChanges ? (
+                    <MenuItem
+                      icon={<ArrowSyncRegular />}
+                      onClick={() => onUpdateActive(activeView)}
+                    >
+                      <span className={styles.updateActionLabel}>Update current view</span>
+                    </MenuItem>
+                  ) : null}
+                  <MenuItem
+                    icon={<EditRegular />}
+                    onClick={() => setDialogMode('rename')}
+                  >
+                    Rename…
                   </MenuItem>
-                ) : null}
-                <MenuItem onClick={() => onDeleteView(activeView)}>
-                  Verwijderen
+                  {!activeView.isDefault ? (
+                    <MenuItem
+                      icon={<StarRegular />}
+                      onClick={() => onSetDefault(activeView)}
+                    >
+                      Set as default
+                    </MenuItem>
+                  ) : null}
+                </MenuGroup>
+              </>
+            ) : null}
+
+            {canManageViews ? (
+              <>
+                <MenuDivider />
+                <MenuItem icon={<SaveRegular />} onClick={() => setDialogMode('create')}>
+                  Save as new view…
+                </MenuItem>
+              </>
+            ) : null}
+
+            {activeCanManage ? (
+              <>
+                <MenuDivider />
+                <MenuItem
+                  icon={<DeleteRegular className={styles.deleteAction} />}
+                  className={styles.deleteAction}
+                  onClick={() => onDeleteView(activeView)}
+                >
+                  Delete view
                 </MenuItem>
               </>
             ) : null}
@@ -229,14 +258,16 @@ export default function PurchaseOrderSavedViewsControl({
         </MenuPopover>
       </Menu>
 
-      <PurchaseOrderSavedViewDialog
-        open={dialogMode !== null}
-        mode={dialogMode || 'create'}
-        canManageGlobal={canManageGlobal}
-        initialName={dialogMode === 'rename' && activeView ? activeView.name : ''}
-        onOpenChange={(next) => setDialogMode(next ? dialogMode : null)}
-        onSubmit={dialogMode === 'rename' ? handleRename : handleSaveAsNew}
-      />
+      {canManageViews ? (
+        <PurchaseOrderSavedViewDialog
+          open={dialogMode !== null}
+          mode={dialogMode || 'create'}
+          canManageGlobal={canManageGlobal}
+          initialName={dialogMode === 'rename' && activeView ? activeView.name : ''}
+          onOpenChange={(next) => setDialogMode(next ? dialogMode : null)}
+          onSubmit={dialogMode === 'rename' ? handleRename : handleSaveAsNew}
+        />
+      ) : null}
     </>
   );
 }

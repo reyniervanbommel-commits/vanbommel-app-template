@@ -12,7 +12,7 @@
 - React 18 + Vite + Fluent UI v9 (`@fluentui/react-components`)
 - Express + MSSQL (`mssql`) met session-based custom auth
 - Azure Container Apps (dev / prod)
-- Dutch UI labels throughout
+- **English UI** — all user-visible text (buttons, labels, errors, tooltips, aria-labels) in English; see `.cursor/rules/app-taal.mdc`
 
 ## Belangrijkste scripts
 
@@ -51,9 +51,16 @@ Tabelnamen: `users`, `sessions`, `password_reset_tokens`, `mfa_backup_codes`, `a
 - `[RESOURCE_GROUP]` — Azure resource group
 - `[REGISTRY]` — Azure Container Registry naam
 
+## App language (UI)
+
+- Develop the app in **English** — buttons, labels, placeholders, error messages, tooltips, aria-labels, empty states, dialogs.
+- Never add Dutch (or other) user-facing strings in `src/` or in API responses shown in the UI.
+- When refactoring existing Dutch labels, convert them to English.
+- Full rules: `.cursor/rules/app-taal.mdc`
+
 ## Cursor rules
 
-`.cursor/rules/` bevat: code-kwaliteit, versiebeheer, data-en-security, fluentui-valkuilen.
+`.cursor/rules/` bevat: app-taal, code-kwaliteit, versiebeheer, data-en-security, fluentui-valkuilen.
 
 ## Performance / timing (verplicht bij nieuwe code)
 

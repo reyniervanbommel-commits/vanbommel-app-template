@@ -13,6 +13,7 @@ export function FilterMenuSubPane({
   activeSubmenu,
   submenuTop,
   handleAddType,
+  remarksAlreadyAdded,
   textStyleDraft,
   handleTextColorChange,
   handleToggleBold,
@@ -43,7 +44,14 @@ export function FilterMenuSubPane({
   let content = null;
 
   if (activeSubmenu === 'add') {
-    content = <PurchaseOrderAddColumnPane columnLevel={column?.level} onConfirm={handleAddType} />;
+    content = (
+      <PurchaseOrderAddColumnPane
+        styles={styles}
+        columnLevel={column?.level}
+        remarksAlreadyAdded={remarksAlreadyAdded}
+        onConfirm={handleAddType}
+      />
+    );
   }
   if (activeSubmenu === 'textStyle') {
     content = (
@@ -81,7 +89,7 @@ export function FilterMenuSubPane({
   if (activeSubmenu === 'group') {
     content = (
       <>
-        <Text className={styles.subPaneTitle}>Categorie / groeperen</Text>
+        <Text className={styles.subPaneTitle}>Category / group</Text>
         <PurchaseOrderColumnGroupingSection
           column={column}
           isGroupingColumn={isGroupingColumn}

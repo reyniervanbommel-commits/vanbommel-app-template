@@ -9,7 +9,7 @@ async function apiRequest(path, options) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Verzoek mislukt');
+  if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
 

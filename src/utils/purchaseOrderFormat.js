@@ -72,10 +72,13 @@ export function formatCellValue(value, dataType, columnMeta = '') {
   const resolvedColumnKey = typeof columnMeta === 'string' ? columnMeta : columnMeta?.columnKey || '';
   const resolvedColumnLabel = typeof columnMeta === 'string' ? '' : columnMeta?.columnLabel || '';
   const normalizedDate = tryFormatAsDdMmYyyy(value);
+  const normalizedDataType = String(dataType || '').trim().toLowerCase();
   if (
     isDateType(dataType)
-    || (isLikelyDateColumn(resolvedColumnKey, resolvedColumnLabel) && normalizedDate)
-    || (looksLikeIsoDateString(value) && normalizedDate)
+    || (normalizedDataType !== 'date_period'
+      && isLikelyDateColumn(resolvedColumnKey, resolvedColumnLabel)
+      && normalizedDate)
+    || (normalizedDataType !== 'date_period' && looksLikeIsoDateString(value) && normalizedDate)
   ) {
     return normalizedDate || String(value);
   }
@@ -89,7 +92,7 @@ export function formatCellValue(value, dataType, columnMeta = '') {
   }
 
   if (dataType === 'boolean') {
-    return value ? 'Ja' : 'Nee';
+    return value ? 'Yes' : 'No';
   }
 
   return String(value);
@@ -106,9 +109,9 @@ export function formatSyncedAt(syncedAt) {
   const diffMs = Date.now() - parsed.getTime();
   const diffMin = Math.round(diffMs / 60000);
 
-  if (diffMin < 1) return 'zojuist';
-  if (diffMin < 60) return `${diffMin} min geleden`;
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
   const diffHour = Math.round(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} uur geleden`;
+  if (diffHour < 24) return `${diffHour} hours ago`;
   return NL_DATETIME.format(parsed);
 }

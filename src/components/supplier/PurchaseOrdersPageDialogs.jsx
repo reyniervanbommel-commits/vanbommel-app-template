@@ -1,9 +1,9 @@
 import React from 'react';
 import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
-import PurchaseOrderImageColumnDialog from './PurchaseOrderImageColumnDialog';
+import PurchaseOrderDatePeriodColumnDialog from './PurchaseOrderDatePeriodColumnDialog';
 import PurchaseOrderBulkEditDialog from './PurchaseOrderBulkEditDialog';
 
-export default function PurchaseOrdersPageDialogs({ formula, image, bulkEdit }) {
+export default function PurchaseOrdersPageDialogs({ formula, datePeriod, bulkEdit }) {
   return (
     <>
       <PurchaseOrderFormulaColumnDialog
@@ -15,14 +15,12 @@ export default function PurchaseOrdersPageDialogs({ formula, image, bulkEdit }) 
         initialValue={formula.state.editingColumn}
         initialFormatRuleSet={formula.state.editingColumn?.key ? formula.formatRules[formula.state.editingColumn.key] : null}
       />
-      <PurchaseOrderImageColumnDialog
-        open={image.state.open}
-        onOpenChange={(open) => !open && image.close()}
-        onSubmit={image.submit}
-        sourceColumn={image.state.sourceColumn}
-        availableColumns={image.availableColumns}
-        initialValue={image.state.editingColumn}
-        sampleRowValues={image.sampleRowValues}
+      <PurchaseOrderDatePeriodColumnDialog
+        open={datePeriod.state.open}
+        onOpenChange={(open) => !open && datePeriod.close()}
+        onSubmit={datePeriod.submit}
+        sourceColumn={datePeriod.state.sourceColumn}
+        dateSourceColumns={datePeriod.dateSourceColumns}
       />
       <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
     </>

@@ -21,24 +21,30 @@ import { ROLES } from '../../constants/roles';
 export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(ROLES.SUPPLIER);
+  const [vendorAccount, setVendorAccount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const isSupplier = role === ROLES.SUPPLIER;
 
   const handleSubmit = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      await apiRequest('/admin/users', { method: 'POST', body: { email, role } });
+      const body = { email, role };
+      if (isSupplier && vendorAccount.trim()) body.vendor_account = vendorAccount.trim();
+      await apiRequest('/admin/users', { method: 'POST', body });
       setEmail('');
       setRole(ROLES.SUPPLIER);
+      setVendorAccount('');
       onOpenChange(false);
       if (onUserCreated) onUserCreated();
     } catch (err) {
-      setError(err.message || 'Gebruiker aanmaken mislukt');
+      setError(err.message || 'Failed to create user');
     } finally {
       setLoading(false);
     }
-  }, [email, role, onOpenChange, onUserCreated]);
+  }, [email, role, isSupplier, vendorAccount, onOpenChange, onUserCreated]);
 
   const handleOpenChange = useCallback((_, data) => {
     onOpenChange(data.open);
@@ -48,11 +54,11 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger disableButtonEnhancement>
         <Button appearance="primary" icon={<PersonAdd24Regular />}>
-          Gebruiker aanmaken
+          Create user
         </Button>
       </DialogTrigger>
       <DialogSurface>
-        <DialogTitle>Nieuwe gebruiker</DialogTitle>
+        <DialogTitle>New user</DialogTitle>
         <DialogBody>
           {error && (
             <MessageBar intent="error" style={{ marginBottom: '16px' }}>
@@ -60,7 +66,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
             </MessageBar>
           )}
           <DialogContent>
-            <Field label="E-mailadres" required>
+            <Field label="Email address" required>
               <Input
                 type="email"
                 value={email}
@@ -69,21 +75,31 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
                 disabled={loading}
               />
             </Field>
-            <Field label="Rol">
+            <Field label="Role">
               <Select value={role} onChange={(e) => setRole(e.target.value)} disabled={loading}>
                 <option value={ROLES.SUPPLIER}>Supplier</option>
                 <option value={ROLES.EMPLOYEE}>Employee</option>
                 <option value={ROLES.ADMIN}>Admin</option>
               </Select>
             </Field>
+            {isSupplier && (
+              <Field label="Vendor account" hint="Only orders with this D365 vendor account are visible. Leave empty to use the email prefix.">
+                <Input
+                  value={vendorAccount}
+                  onChange={(e) => setVendorAccount(e.target.value)}
+                  placeholder="e.g. 1001"
+                  disabled={loading}
+                />
+              </Field>
+            )}
           </DialogContent>
         </DialogBody>
         <DialogActions>
           <DialogTrigger disableButtonEnhancement>
-            <Button appearance="secondary" disabled={loading}>Annuleren</Button>
+            <Button appearance="secondary" disabled={loading}>Cancel</Button>
           </DialogTrigger>
           <Button appearance="primary" onClick={handleSubmit} disabled={loading || !email}>
-            {loading ? 'Bezig...' : 'Aanmaken'}
+            {loading ? 'Working...' : 'Create'}
           </Button>
         </DialogActions>
       </DialogSurface>

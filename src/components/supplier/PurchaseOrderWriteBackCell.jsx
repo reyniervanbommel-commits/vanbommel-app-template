@@ -1,10 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Input, Spinner, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { Input, Spinner, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
+import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
+import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 
 const useStyles = makeStyles({
-  cell: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px'), minWidth: 0, width: '100%' },
+  cell: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
+    minWidth: 0,
+    width: '100%',
+    position: 'relative',
+  },
   input: {
     minWidth: 0,
     width: '100%',
@@ -15,14 +24,32 @@ const useStyles = makeStyles({
   },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase300, whiteSpace: 'nowrap' },
   errIcon: { color: tokens.colorPaletteRedForeground1 },
-  hiddenDatePicker: {
-    position: 'absolute',
-    width: '1px',
-    height: '1px',
-    opacity: 0,
-    pointerEvents: 'none',
-    ...shorthands.border('0'),
-    ...shorthands.padding('0'),
+});
+
+const useFormattedControlStyles = makeStyles({
+  formatted: {
+    backgroundColor: 'var(--cell-format-bg)',
+    '::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':hover::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+    ':focus-within::before': {
+      backgroundColor: 'var(--cell-format-bg)',
+    },
+  },
+  formattedText: {
+    color: FORMATTED_CELL_TEXT_COLOR,
+    '> input': {
+      color: FORMATTED_CELL_TEXT_COLOR,
+    },
   },
 });
 
@@ -89,7 +116,7 @@ function toInputValue(value, dataType, treatAsDate = false) {
   return String(value);
 }
 
-function toHiddenDatePickerValue(value) {
+function toCalendarValue(value) {
   const normalized = normalizeDateValue(value);
   const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : '';
@@ -107,13 +134,30 @@ export default function PurchaseOrderWriteBackCell({
   onCorrect,
   cellKeys,
   hasHistory = false,
+  cellBackgroundColor = '',
+  isConditionalFormat = false,
 }) {
   const styles = useStyles();
+  const formattedStyles = useFormattedControlStyles();
+  const formattedControlStyle = cellBackgroundColor
+    ? getFormattedCellControlStyle(cellBackgroundColor, { useWhiteText: isConditionalFormat })
+    : undefined;
+  const formattedControlClassName = mergeClasses(
+    styles.input,
+    formattedControlStyle ? formattedStyles.formatted : undefined,
+    isConditionalFormat ? formattedStyles.formattedText : undefined,
+  );
+  const formattedControlInlineStyle = formattedControlStyle
+    ? {
+      ...formattedControlStyle,
+      '--cell-format-bg': formattedControlStyle.backgroundColor,
+    }
+    : undefined;
   const [local, setLocal] = useState(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const [error, setError] = useState('');
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimer = useRef(null);
-  const datePickerRef = useRef(null);
   const isDate = isDateLikeColumn(column, value);
 
   useEffect(() => {
@@ -137,18 +181,19 @@ export default function PurchaseOrderWriteBackCell({
       savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
     } catch (err) {
       setStatus('error');
-      setError(err.message || 'Terugschrijven mislukt');
+      setError(err.message || 'Write-back failed');
       setLocal(toInputValue(value, column.dataType, treatAsDate)); // oude waarde terug
     }
   }, [local, value, column, onCorrect]);
 
   const openDatePicker = useCallback(() => {
-    const picker = datePickerRef.current;
-    if (!picker) return;
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-    }
+    setCalendarOpen(true);
   }, []);
+
+  const onCalendarSelect = useCallback((nextValue) => {
+    setLocal(toDisplayDateValue(nextValue));
+    commit(nextValue);
+  }, [commit]);
 
   const onKeyDown = useCallback((e) => {
     if (e.key === 'Enter') e.currentTarget.blur();
@@ -158,37 +203,41 @@ export default function PurchaseOrderWriteBackCell({
     }
   }, [value, column]);
 
-  const inputControl = (
-    <>
+  const inputControl = isDate ? (
+    <WeekNumberCalendarPopover
+      open={calendarOpen}
+      onOpenChange={setCalendarOpen}
+      value={toCalendarValue(local)}
+      onSelect={onCalendarSelect}
+    >
       <Input
-        className={styles.input}
+        className={formattedControlClassName}
+        style={formattedControlInlineStyle}
         appearance="filled-lighter"
         size="small"
-        type={column.dataType === 'number' ? 'number' : 'text'}
-        inputMode={isDate ? 'numeric' : undefined}
+        type="text"
+        inputMode="numeric"
         value={local}
-        aria-label={`${column.label} (terugschrijven naar D365)`}
+        aria-label={`${column.label} (write back to D365)`}
         onChange={(_, data) => setLocal(data.value)}
         onBlur={() => commit(local)}
         onKeyDown={onKeyDown}
-        onDoubleClick={isDate ? openDatePicker : undefined}
+        onDoubleClick={openDatePicker}
       />
-      {isDate ? (
-        <input
-          ref={datePickerRef}
-          type="date"
-          tabIndex={-1}
-          aria-hidden="true"
-          className={styles.hiddenDatePicker}
-          value={toHiddenDatePickerValue(local)}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setLocal(toDisplayDateValue(nextValue));
-            commit(nextValue);
-          }}
-        />
-      ) : null}
-    </>
+    </WeekNumberCalendarPopover>
+  ) : (
+    <Input
+      className={formattedControlClassName}
+      style={formattedControlInlineStyle}
+      appearance="filled-lighter"
+      size="small"
+      type={column.dataType === 'number' ? 'number' : 'text'}
+      value={local}
+      aria-label={`${column.label} (write back to D365)`}
+      onChange={(_, data) => setLocal(data.value)}
+      onBlur={() => commit(local)}
+      onKeyDown={onKeyDown}
+    />
   );
 
   return (
@@ -200,7 +249,7 @@ export default function PurchaseOrderWriteBackCell({
       ) : (
         inputControl
       )}
-      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Terugschrijven" /> : null}
+      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Write back" /> : null}
       {status === 'saved' ? <span className={styles.saved}>✓</span> : null}
       {status === 'error' ? (
         <Tooltip content={error} relationship="label">

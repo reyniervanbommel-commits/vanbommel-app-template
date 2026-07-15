@@ -2,30 +2,55 @@ import React, { useCallback, useMemo } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import PurchaseOrdersSubitemsBodyRows from './PurchaseOrdersSubitemsBodyRows';
 import PurchaseOrderLineTotalsRow from './PurchaseOrderLineTotalsRow';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
-import { calculateLineColumnSum } from '../../utils/purchaseOrderTotals';
+import { calculateLineColumnSum, filterSummableLineColumnKeys } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
+import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
+import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
+import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
+import { applyCollapsedColumnWidths, isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+
+import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
 const useStyles = makeStyles({
+  subitemsLayout: {
+    display: 'inline-block',
+    position: 'relative',
+  },
+  subTableCardBackdrop: {
+    position: 'absolute',
+    left: '22px',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: '6px',
+    boxShadow: tokens.shadow2,
+    backgroundColor: tokens.colorNeutralBackground1,
+    zIndex: 0,
+    pointerEvents: 'none',
+  },
   subTable: {
+    position: 'relative',
+    zIndex: 1,
     width: 'max-content',
     borderCollapse: 'collapse',
     tableLayout: 'fixed',
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: 'transparent',
   },
   subHeaderCell: {
     position: 'relative',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground1,
     backgroundColor: tokens.colorNeutralBackground3,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -78,13 +103,37 @@ const useStyles = makeStyles({
     },
   },
   subCell: {
+    '--po-cell-padding-y': '2px',
+    '--po-cell-padding-x': '8px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '8px'),
+    height: purchaseOrderSubRowHeight,
+    maxHeight: purchaseOrderSubRowHeight,
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground1,
+    boxSizing: 'border-box',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
+  },
+  subCellContent: {
+    display: 'block',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `calc(${purchaseOrderSubRowHeight} - 4px)`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    lineHeight: `calc(${purchaseOrderSubRowHeight} - 6px)`,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   empty: {
     ...shorthands.padding('8px'),
@@ -108,8 +157,10 @@ export default function PurchaseOrdersSubitemsTable({
   onSaveValue,
   onRenameColumn,
   onRemoveColumn,
+  onUpdateStatusOptions,
   onCorrect,
   isAdmin,
+  isStaff = true,
   onToggleWriteback,
   onReorderColumn,
   columnWidths = {},
@@ -126,16 +177,23 @@ export default function PurchaseOrdersSubitemsTable({
   headerColumns = [],
   linkedLineTotalByHeaderKey = {},
   linkedLineValueByHeaderKey = {},
+  collapsedLineColumnKeys = [],
+  onToggleLineColumnCollapsed,
+  showHistoryIndicators = true,
 }) {
   const styles = useStyles();
+  const connectorStyles = useSubitemConnectorStyles();
   const lineColumns = Array.isArray(columns) ? columns : [];
   const lineColumnDrag = useColumnReorderDrag({ onReorder: onReorderColumn, disabled: reorderBusy });
   const effectiveColumnWidths = useMemo(
-    () => lineColumns.reduce((acc, column) => {
-      acc[column.key] = resolveLineColumnWidth(columnWidths, column.key);
-      return acc;
-    }, {}),
-    [lineColumns, columnWidths]
+    () => applyCollapsedColumnWidths(
+      lineColumns.reduce((acc, column) => {
+        acc[column.key] = resolveLineColumnWidth(columnWidths, column.key);
+        return acc;
+      }, {}),
+      collapsedLineColumnKeys
+    ),
+    [collapsedLineColumnKeys, lineColumns, columnWidths]
   );
   const {
     processedItems: processedLines,
@@ -152,7 +210,10 @@ export default function PurchaseOrdersSubitemsTable({
   const groupingColor = '';
   const noop = useCallback(() => {}, []);
   const visibleLines = useMemo(() => (Array.isArray(processedLines) ? processedLines : []), [processedLines]);
-  const summedColumnsSet = useMemo(() => new Set(summedLineColumnKeys), [summedLineColumnKeys]);
+  const summedColumnsSet = useMemo(
+    () => new Set(filterSummableLineColumnKeys(summedLineColumnKeys, lineColumns)),
+    [summedLineColumnKeys, lineColumns]
+  );
   const summedValuesByColumn = useMemo(() => lineColumns.reduce((acc, column) => {
     if (summedColumnsSet.has(column.key)) acc[column.key] = calculateLineColumnSum(visibleLines, column.key);
     return acc;
@@ -176,26 +237,42 @@ export default function PurchaseOrdersSubitemsTable({
     return next;
   }, [headerColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
 
-  if (!lineColumns.length) return <div className={styles.empty}>Geen regelkolommen geconfigureerd.</div>;
+  if (!lineColumns.length) return <div className={styles.empty}>No line columns configured.</div>;
 
   return (
-    <table className={styles.subTable}>
+    <div className={styles.subitemsLayout}>
+      <div className={styles.subTableCardBackdrop} aria-hidden="true" />
+      <table className={styles.subTable}>
       <colgroup>
+        <col style={{ width: '22px' }} />
         {lineColumns.map((column) => (
           <col key={`${column.key}-width`} style={{ width: `${effectiveColumnWidths[column.key]}px` }} />
         ))}
       </colgroup>
       <thead>
         <tr>
+          <th className={connectorStyles.connectorHeaderCell} aria-hidden="true" />
           {lineColumns.map((column) => {
+            const isSystemColumn = isProductImageColumn(column);
             const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
             const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(columnFormatRules[column.key]);
             const connectionTargets = lineColumnConnectionTargets[column.key] || [];
+            if (isColumnCollapsed(column.key, collapsedLineColumnKeys)) {
+              return (
+                <PurchaseOrderCollapsedColumnHeaderCell
+                  key={column.key}
+                  columnKey={column.key}
+                  columnLabel={column.label}
+                  onExpandColumn={onToggleLineColumnCollapsed}
+                />
+              );
+            }
             return (
             <ResizableTableHeaderCell
               key={column.key}
               columnKey={column.key}
               width={effectiveColumnWidths[column.key]}
+              minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',
@@ -208,26 +285,32 @@ export default function PurchaseOrdersSubitemsTable({
             >
               <div className={styles.headerCellContent}>
                 <div className={styles.headerCellLabel}>
-                  <PurchaseOrderColumnHeader
-                    column={column}
-                    onRename={onRenameColumn}
-                    onRemove={onRemoveColumn}
-                    isAdmin={isAdmin}
-                    onToggleWriteback={onToggleWriteback}
-                    showActionsMenu={false}
-                    showFilterIndicator={hasActiveFilter}
-                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                    showSumIndicator={summedColumnsSet.has(column.key)}
-                    showConnectionIndicator={connectionTargets.length > 0}
-                  />
+                  {isSystemColumn ? (
+                    <PurchaseOrderProductImageColumnHeader label={column.label} />
+                  ) : (
+                    <PurchaseOrderColumnHeader
+                      column={column}
+                      onRename={onRenameColumn}
+                      onRemove={onRemoveColumn}
+                      isAdmin={isAdmin}
+                      onToggleWriteback={onToggleWriteback}
+                      showActionsMenu={false}
+                      showFilterIndicator={hasActiveFilter}
+                      showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                      showSumIndicator={summedColumnsSet.has(column.key)}
+                      showConnectionIndicator={connectionTargets.length > 0}
+                    />
+                  )}
                 </div>
-                <PurchaseOrderColumnFilterMenu
+                {!isSystemColumn ? (
+                  <PurchaseOrderColumnFilterMenu
                   column={column}
                   filter={filterByColumn[column.key]}
                   sortState={sortState}
                   groupingColumnKey={groupingColumnKey}
                   groupingColor={groupingColor}
                   isAdmin={isAdmin}
+                  isStaff={isStaff}
                   onToggleWriteback={onToggleWriteback}
                   onSetSortDirection={setSortDirection}
                   onSetOperator={setFilterOperator}
@@ -249,7 +332,9 @@ export default function PurchaseOrdersSubitemsTable({
                   onSetColumnFormatRules={onSaveColumnFormatRules}
                   referenceColumns={lineColumns}
                   connectionTargets={connectionTargets}
+                  onToggleColumnCollapsed={onToggleLineColumnCollapsed}
                 />
+                ) : null}
               </div>
             </ResizableTableHeaderCell>
             );
@@ -266,13 +351,20 @@ export default function PurchaseOrdersSubitemsTable({
         columnFormatRules={columnFormatRules}
         onSaveValue={onSaveValue}
         onCorrect={onCorrect}
+        onUpdateStatusOptions={onUpdateStatusOptions}
+        isAdmin={isAdmin}
         subCellClassName={styles.subCell}
+        subCellContentClassName={styles.subCellContent}
         noRowsCellClassName={styles.noRowsCell}
+        connectorStyles={connectorStyles}
+        hasTotalsRow={summedColumnsSet.size > 0}
         cellFilterActions={{
           filterByColumn,
           applyFilterFromCellValue,
           clearColumnFilter,
         }}
+        showHistoryIndicators={showHistoryIndicators}
+        collapsedLineColumnKeys={collapsedLineColumnKeys}
       />
       {summedColumnsSet.size ? (
         <PurchaseOrderLineTotalsRow
@@ -281,8 +373,11 @@ export default function PurchaseOrdersSubitemsTable({
           summedColumnsSet={summedColumnsSet}
           summedValuesByColumn={summedValuesByColumn}
           totalsCellClassName={styles.totalsCell}
+          connectorTotalsCellClassName={connectorStyles.connectorTotalsCell}
+          collapsedLineColumnKeys={collapsedLineColumnKeys}
         />
       ) : null}
     </table>
+    </div>
   );
 }

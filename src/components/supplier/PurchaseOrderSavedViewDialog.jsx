@@ -53,7 +53,7 @@ export default function PurchaseOrderSavedViewDialog({
   const handleSubmit = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError('Geef een naam op.');
+      setError('Enter a name.');
       return;
     }
     setSaving(true);
@@ -62,13 +62,13 @@ export default function PurchaseOrderSavedViewDialog({
       await onSubmit({ name: trimmed, scope, isDefault });
       onOpenChange(false);
     } catch (err) {
-      setError(err.message || 'Opslaan mislukt.');
+      setError(err.message || 'Save failed.');
     } finally {
       setSaving(false);
     }
   }, [name, scope, isDefault, onSubmit, onOpenChange]);
 
-  const title = mode === 'rename' ? 'View hernoemen' : 'Opslaan als nieuwe view';
+  const title = mode === 'rename' ? 'Rename view' : 'Save as new view';
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
@@ -77,23 +77,24 @@ export default function PurchaseOrderSavedViewDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogContent>
             <div className={styles.form}>
-              <Field label="Naam" required>
+              <Field label="Name" required>
                 <Input
                   value={name}
                   onChange={(_, data) => setName(data.value)}
-                  placeholder="Bijv. Openstaand deze week"
+                  placeholder="e.g. Open this week"
                 />
               </Field>
 
               {mode === 'create' && canManageGlobal ? (
-                <Field label="Zichtbaarheid">
+                <Field label="Visibility">
                   <RadioGroup
-                    layout="horizontal"
+                    layout="vertical"
                     value={scope}
                     onChange={(_, data) => setScope(data.value)}
                   >
-                    <Radio value="personal" label="Persoonlijk" />
-                    <Radio value="global" label="Gedeeld (iedereen)" />
+                    <Radio value="personal" label="Personal" />
+                    <Radio value="vendor" label="Vendor view (all suppliers)" />
+                    <Radio value="global" label="Shared (staff only)" />
                   </RadioGroup>
                 </Field>
               ) : null}
@@ -102,7 +103,7 @@ export default function PurchaseOrderSavedViewDialog({
                 <Checkbox
                   checked={isDefault}
                   onChange={(_, data) => setIsDefault(Boolean(data.checked))}
-                  label="Als standaard-view instellen"
+                  label="Set as default view"
                 />
               ) : null}
 
@@ -111,10 +112,10 @@ export default function PurchaseOrderSavedViewDialog({
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-              Annuleren
+              Cancel
             </Button>
             <Button appearance="primary" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Opslaan...' : 'Opslaan'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </DialogBody>

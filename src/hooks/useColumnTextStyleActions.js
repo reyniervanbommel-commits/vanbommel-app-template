@@ -19,8 +19,10 @@ export function useColumnTextStyleActions({
     }
   }, [open, columnTextStyle]);
 
-  const handleTextColorChange = useCallback((event) => {
-    const nextColor = String(event.target.value || '').toLowerCase();
+  const handleTextColorChange = useCallback((nextColorOrEvent) => {
+    const nextColor = typeof nextColorOrEvent === 'string'
+      ? nextColorOrEvent
+      : String(nextColorOrEvent?.target?.value || '').toLowerCase();
     setTextStyleDraft((prev) => ({ ...prev, textColor: HEX_COLOR_PATTERN.test(nextColor) ? nextColor : '' }));
   }, []);
 

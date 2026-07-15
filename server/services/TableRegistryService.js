@@ -9,7 +9,7 @@ const sql = require('mssql');
 const { getSqlPool } = require('../utils/sqlPool');
 
 const SCOPES = ['master', 'detail'];
-const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'image'];
+const DATA_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'image', 'remarks', 'status', 'date_period'];
 
 function getPool() {
   return getSqlPool();
@@ -99,7 +99,7 @@ async function fetchTableByKey(tableKey) {
     `);
   const row = result.recordset[0];
   if (!row || !row.is_active) {
-    throw Object.assign(new Error(`Tabel '${tableKey}' niet gevonden`), { status: 404 });
+    throw Object.assign(new Error(`Table '${tableKey}' not found`), { status: 404 });
   }
   return {
     id: Number(row.id),
@@ -169,7 +169,7 @@ async function getLookups(tableId) {
   const result = await pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
-      SELECT id, source_scope, source_field, target_table_key, target_key_field, lookup_fields_json
+      SELECT id, source_scope, source_field, target_table_key, target_key_field, join_keys_json, lookup_fields_json
       FROM dbo.tb_relations
       WHERE table_id = @tableId AND relation_role = 'lookup'
     `);
@@ -179,6 +179,7 @@ async function getLookups(tableId) {
     sourceField: r.source_field || null,
     targetTableKey: r.target_table_key || null,
     targetKeyField: r.target_key_field || null,
+    joinKeys: r.join_keys_json ? safeJson(r.join_keys_json) : [],
     fields: r.lookup_fields_json ? safeJson(r.lookup_fields_json) : {},
   })).filter((l) => l.sourceField && l.targetTableKey);
 }

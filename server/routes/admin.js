@@ -9,11 +9,22 @@ const { auditLog } = require('../middleware/auditLog');
 const { parsePaginationParams, buildPaginationMeta } = require('../utils/pagination');
 const { ROLES, isAllowedRole } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
+const trackChangesService = require('../services/TrackChangesService');
+const rccpSettingsService = require('../services/RccpSettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
 const { getSqlPool } = require('../utils/sqlPool');
+const { requireRole } = require('../middleware/auth');
+const { getAppBaseUrl } = require('../utils/appEnvironment');
 
 function getPool() {
   return getSqlPool();
+}
+
+// Leveranciersaccount normaliseren: getrimd, max 64 tekens, lege waarde -> null.
+function normalizeVendorAccount(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed.slice(0, 64) : null;
 }
 
 router.get('/users', async (req, res, next) => {
@@ -28,7 +39,7 @@ router.get('/users', async (req, res, next) => {
     const result = await pool.request()
       .input('offset', sql.Int, offset)
       .input('pageSize', sql.Int, pageSize)
-      .query('SELECT id, email, display_name, role, must_set_password, is_locked, mfa_enabled, mfa_required, last_login, created_at FROM dbo.users ORDER BY created_at DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY');
+      .query('SELECT id, email, display_name, role, vendor_account, must_set_password, is_locked, mfa_enabled, mfa_required, last_login, created_at FROM dbo.users ORDER BY created_at DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY');
 
     res.json({ users: result.recordset, meta: buildPaginationMeta(total, page, pageSize) });
   } catch (err) {
@@ -38,20 +49,21 @@ router.get('/users', async (req, res, next) => {
 
 router.post('/users', async (req, res, next) => {
   try {
-    const { email, role, display_name } = req.body;
-    if (!email) return res.status(400).json({ error: 'E-mailadres is vereist' });
+    const { email, role, display_name, vendor_account } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email address is required' });
     const normalizedRole = authService.normalizeRole(role || ROLES.SUPPLIER);
     if (!isAllowedRole(normalizedRole)) {
-      return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+      return res.status(400).json({ error: 'Invalid role specified' });
     }
     const pool = await getPool();
     const result = await pool.request()
       .input('email', sql.NVarChar, authService.normalizeEmail(email))
       .input('role', sql.NVarChar, normalizedRole)
       .input('displayName', sql.NVarChar, display_name || null)
-      .query('INSERT INTO dbo.users (email, role, display_name) OUTPUT INSERTED.* VALUES (@email, @role, @displayName)');
+      .input('vendorAccount', sql.NVarChar, normalizeVendorAccount(vendor_account))
+      .query('INSERT INTO dbo.users (email, role, display_name, vendor_account) OUTPUT INSERTED.* VALUES (@email, @role, @displayName, @vendorAccount)');
     const newUser = result.recordset[0];
-    const setPasswordUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/set-password?email=' + encodeURIComponent(newUser.email);
+    const setPasswordUrl = getAppBaseUrl() + '/set-password?email=' + encodeURIComponent(newUser.email);
     await emailService.sendInviteEmail(newUser.email, setPasswordUrl).catch(() => {});
     await auditLog(req.user.id, req.user.email, 'CREATE_USER', 'users', newUser.id, { email: newUser.email, role: newUser.role });
     res.status(201).json({ user: newUser });
@@ -63,7 +75,7 @@ router.post('/users', async (req, res, next) => {
 router.patch('/users/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role, is_locked, mfa_required } = req.body;
+    const { role, is_locked, mfa_required, vendor_account } = req.body;
     const pool = await getPool();
     const setClauses = [];
     const request = pool.request().input('id', sql.Int, parseInt(id));
@@ -71,19 +83,23 @@ router.patch('/users/:id', async (req, res, next) => {
     if (role !== undefined) {
       const normalizedRole = authService.normalizeRole(role);
       if (!isAllowedRole(normalizedRole)) {
-        return res.status(400).json({ error: 'Ongeldige rol opgegeven' });
+        return res.status(400).json({ error: 'Invalid role specified' });
       }
       setClauses.push('role = @role');
       request.input('role', sql.NVarChar, normalizedRole);
     }
     if (is_locked !== undefined) { setClauses.push('is_locked = @locked'); request.input('locked', sql.Bit, is_locked ? 1 : 0); }
     if (mfa_required !== undefined) { setClauses.push('mfa_required = @mfaRequired'); request.input('mfaRequired', sql.Bit, mfa_required ? 1 : 0); }
+    if (vendor_account !== undefined) {
+      setClauses.push('vendor_account = @vendorAccount');
+      request.input('vendorAccount', sql.NVarChar, normalizeVendorAccount(vendor_account));
+    }
 
-    if (!setClauses.length) return res.status(400).json({ error: 'Geen velden opgegeven' });
+    if (!setClauses.length) return res.status(400).json({ error: 'No fields specified' });
     setClauses.push('updated_at = SYSUTCDATETIME()');
 
-    const result = await request.query('UPDATE dbo.users SET ' + setClauses.join(', ') + ' OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.is_locked, INSERTED.mfa_required WHERE id = @id');
-    if (!result.recordset.length) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    const result = await request.query('UPDATE dbo.users SET ' + setClauses.join(', ') + ' OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.vendor_account, INSERTED.is_locked, INSERTED.mfa_required WHERE id = @id');
+    if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
 
     await auditLog(req.user.id, req.user.email, 'UPDATE_USER', 'users', id, req.body);
     res.json({ user: result.recordset[0] });
@@ -98,11 +114,11 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
     const pool = await getPool();
     const userResult = await pool.request().input('id', sql.Int, parseInt(id)).query('SELECT * FROM dbo.users WHERE id = @id');
     const user = userResult.recordset[0];
-    if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const resetResult = await authService.requestPasswordReset(user.email);
     if (resetResult.success) {
-      const resetUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/reset-password?token=' + resetResult.token;
+      const resetUrl = getAppBaseUrl() + '/reset-password?token=' + resetResult.token;
       await emailService.sendPasswordResetEmail(user.email, resetUrl).catch(() => {});
     }
     await auditLog(req.user.id, req.user.email, 'FORCE_RESET', 'users', id, {});
@@ -115,12 +131,12 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
 router.delete('/users/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'Je kunt je eigen account niet verwijderen' });
+    if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
     const pool = await getPool();
     const result = await pool.request()
       .input('id', sql.Int, parseInt(id))
       .query('DELETE FROM dbo.users OUTPUT DELETED.email WHERE id = @id');
-    if (!result.recordset.length) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
     await auditLog(req.user.id, req.user.email, 'DELETE_USER', 'users', id, { email: result.recordset[0].email });
     res.json({ success: true });
   } catch (err) {
@@ -342,6 +358,86 @@ router.patch('/settings/password-reset-email-template', async (req, res, next) =
     );
     res.json({ success: true, template });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Track changes settings (admin only) ────────────────────────────────────
+// De /api/admin-mount staat ook employees toe; deze route is bewust admin-only.
+
+router.get('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await trackChangesService.getConfig();
+    res.json({ config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await trackChangesService.saveConfig(req.body || {}, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_TRACK_CHANGES_SETTINGS', 'app_settings', null, {
+      mode: config.mode,
+      sessionRoles: config.sessionRoles,
+      columnCount: Object.keys(config.columns).length,
+    });
+    res.json({ success: true, config });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+// ─── Supplier filter column (admin only) ────────────────────────────────────
+// Bepaalt op welke purchase-orders master-kolom het supplier-filter matcht.
+
+const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
+const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
+
+router.get('/supplier-filter-column', async (req, res, next) => {
+  try {
+    const columnKey = await settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN);
+    res.json({ columnKey: columnKey || DEFAULT_SUPPLIER_FILTER_COLUMN });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/supplier-filter-column', async (req, res, next) => {
+  try {
+    const columnKey = String(req.body?.columnKey || '').trim();
+    if (!columnKey) return res.status(400).json({ error: 'columnKey is required' });
+    await settingsService.set(SUPPLIER_FILTER_COLUMN_KEY, columnKey, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_SUPPLIER_FILTER_COLUMN', 'app_settings', null, { columnKey });
+    res.json({ success: true, columnKey });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── RCCP settings (admin only) ─────────────────────────────────────────────
+
+router.get('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await rccpSettingsService.getConfig();
+    res.json({ config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const config = await rccpSettingsService.saveConfig(req.body || {}, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_RCCP_SETTINGS', 'app_settings', null, {
+      dateColumnKey: config.dateColumnKey,
+      quantityColumnKey: config.quantityColumnKey,
+      categoryColumnKey: config.categoryColumnKey,
+    });
+    res.json({ success: true, config });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
   }
 });

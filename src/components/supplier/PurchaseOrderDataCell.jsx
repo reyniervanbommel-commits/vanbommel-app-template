@@ -1,84 +1,67 @@
-import React, { memo, useCallback } from 'react';
-import {
-  Menu,
-  MenuDivider,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  tokens,
-} from '@fluentui/react-components';
+import React, { memo, useCallback, useMemo } from 'react';
+import { tokens } from '@fluentui/react-components';
 import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
-import {
-  copyCellValueToClipboard,
-  isCellContextMenuDisabled,
-} from '../../utils/tableViewFilterUtils';
+import { isCellContextMenuDisabled } from '../../utils/tableViewFilterUtils';
+import TrackChangeMarks from './TrackChangeMarks';
+import { useTrackChangesMeta } from './trackChangesContext';
 
 function PurchaseOrderDataCell({
-  column,
-  rawValue,
-  className,
-  style,
+  cell,
+  layout,
+  contextMenu,
   children,
-  filterByColumn,
-  onApplyFilterFromCellValue,
-  onClearColumnFilter,
-  linkedLineTotalKeys = {},
-  linkedLineValueKeys = {},
 }) {
-  const disabled = isCellContextMenuDisabled(column, { linkedLineTotalKeys, linkedLineValueKeys });
-  const activeFilter = filterByColumn?.[column.key];
+  const { column, rawValue, order, trackMarks } = cell;
+  const { className, contentClassName, contentStyle, style } = layout;
+  const trackMeta = useTrackChangesMeta();
+  const marksByColumnId = trackMarks ?? order?.trackMarksByColumnId;
+  const trackPattern = useMemo(() => {
+    if (!trackMeta) return null;
+    const colId = column?.id;
+    if (colId == null) return null;
+    const active = Object.prototype.hasOwnProperty.call(trackMeta.activeOffsetByColumnId || {}, String(colId));
+    if (!active) return null;
+    return marksByColumnId?.[colId] ?? trackMeta.defaultPattern?.[colId] ?? null;
+  }, [trackMeta, column?.id, marksByColumnId]);
+  const disabled = isCellContextMenuDisabled(column);
+  const activeFilter = contextMenu?.filterByColumn?.[column.key];
   const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
-  const stickyStyle = Number.isFinite(stickyLeft)
-    ? {
-      position: 'sticky',
-      left: `${stickyLeft}px`,
-      zIndex: 2,
-      backgroundColor: tokens.colorNeutralBackground1,
-    }
-    : null;
-  const positionedCellStyle = { ...style, position: 'relative' };
-  const resolvedCellStyle = stickyStyle ? { ...positionedCellStyle, ...stickyStyle } : positionedCellStyle;
+  const isLocated = Boolean(layout?.isLocated);
+  const resolvedCellStyle = useMemo(() => {
+    const isSticky = Number.isFinite(stickyLeft);
+    const hasBackground = Boolean(style?.backgroundColor);
+    return {
+      ...style,
+      position: isSticky ? 'sticky' : 'relative',
+      ...(isSticky ? {
+        left: `${stickyLeft}px`,
+        zIndex: isLocated ? 4 : 2,
+        ...(hasBackground ? {} : { backgroundColor: tokens.colorNeutralBackground1 }),
+      } : {}),
+    };
+  }, [isLocated, stickyLeft, style]);
 
-  const handleFilterCell = useCallback(() => {
-    onApplyFilterFromCellValue?.(column.key, rawValue);
-  }, [column.key, onApplyFilterFromCellValue, rawValue]);
-
-  const handleClearFilter = useCallback(() => {
-    onClearColumnFilter?.(column.key);
-  }, [column.key, onClearColumnFilter]);
-
-  const handleCopyValue = useCallback(() => {
-    copyCellValueToClipboard(column, rawValue).catch(() => {});
-  }, [column, rawValue]);
-
-  if (disabled) {
-    return (
-      <td className={className} style={resolvedCellStyle}>
-        {children}
-      </td>
-    );
-  }
+  const handleContextMenu = useCallback((event) => {
+    if (disabled) return;
+    event.preventDefault();
+    contextMenu?.open?.(event.currentTarget, {
+      column,
+      rawValue,
+      filterActive,
+      order,
+    });
+  }, [column, contextMenu, disabled, filterActive, order, rawValue]);
 
   return (
-    <Menu openOnContext>
-      <MenuTrigger disableButtonEnhancement>
-        <td className={className} style={resolvedCellStyle}>
-          {children}
-        </td>
-      </MenuTrigger>
-      <MenuPopover>
-        <MenuList>
-          <MenuItem onClick={handleFilterCell}>Filter column on this cell</MenuItem>
-          {filterActive ? (
-            <MenuItem onClick={handleClearFilter}>Clear column filter</MenuItem>
-          ) : null}
-          <MenuDivider />
-          <MenuItem onClick={handleCopyValue}>Copy cell value</MenuItem>
-        </MenuList>
-      </MenuPopover>
-    </Menu>
+    <td
+      className={className}
+      style={resolvedCellStyle}
+      onContextMenu={handleContextMenu}
+    >
+      <div className={contentClassName || undefined} style={contentStyle}>{children}</div>
+      {trackPattern ? <TrackChangeMarks pattern={trackPattern} mode={trackMeta?.mode} /> : null}
+    </td>
   );
 }
 

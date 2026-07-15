@@ -2,11 +2,11 @@ import { getFormulaValidationTip } from './purchaseOrderFormulaValidationTips';
 
 describe('purchaseOrderFormulaValidationTips', () => {
   it('geeft haakjes-tip bij parsefout', () => {
-    expect(getFormulaValidationTip('Verwacht EOF, kreeg SEMI')).toContain('haakjes');
+    expect(getFormulaValidationTip('Expected EOF, got SEMI')).toContain('parentheses');
   });
 
   it('geeft kolom-picker tip bij onbekende referentie', () => {
-    expect(getFormulaValidationTip('Onbekende kolomreferentie in formule: (foo)')).toContain('kolom-picker');
+    expect(getFormulaValidationTip('Unknown column reference in formula: (foo)')).toContain('column picker');
   });
 
   it('geeft lege string bij lege foutmelding', () => {
@@ -14,6 +14,6 @@ describe('purchaseOrderFormulaValidationTips', () => {
   });
 
   it('geeft resultaattype-tip bij typefout', () => {
-    expect(getFormulaValidationTip("Formule past niet bij resultaattype 'number'")).toContain('resultaattype');
+    expect(getFormulaValidationTip("Formula does not match result type 'number'")).toContain('result type');
   });
 });

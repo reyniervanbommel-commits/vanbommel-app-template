@@ -27,11 +27,11 @@ const useStyles = makeStyles({
 
 // Datatypes met Nederlandse labels; value komt overeen met het API-contract.
 const DATA_TYPES = [
-  { value: 'text', label: 'Tekst' },
-  { value: 'number', label: 'Getal' },
-  { value: 'date', label: 'Datum' },
-  { value: 'boolean', label: 'Ja/nee' },
-  { value: 'select', label: 'Keuzelijst' },
+  { value: 'text', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'boolean', label: 'Yes/No' },
+  { value: 'select', label: 'Choice list' },
 ];
 
 const DATA_TYPE_LABELS = Object.fromEntries(DATA_TYPES.map((t) => [t.value, t.label]));
@@ -62,7 +62,7 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
   const handleSubmit = useCallback(async () => {
     const trimmedLabel = label.trim();
     if (!trimmedLabel) {
-      setError('Geef een kolomnaam op.');
+      setError('Enter a column name.');
       return;
     }
     let options;
@@ -72,7 +72,7 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
         .map((opt) => opt.trim())
         .filter(Boolean);
       if (!options.length) {
-        setError('Geef minimaal één optie op voor een keuzelijst.');
+        setError('Enter at least one option for a choice list.');
         return;
       }
     }
@@ -82,7 +82,7 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
       await onAdd({ label: trimmedLabel, level, dataType, options });
       onOpenChange(false);
     } catch (err) {
-      setError(err.message || 'Kolom toevoegen mislukt.');
+      setError(err.message || 'Failed to add column.');
     } finally {
       setSaving(false);
     }
@@ -92,29 +92,29 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Kolom toevoegen</DialogTitle>
+          <DialogTitle>Add column</DialogTitle>
           <DialogContent>
             <div className={styles.form}>
-              <Field label="Naam" required>
+              <Field label="Name" required>
                 <Input
                   value={label}
                   onChange={(_, data) => setLabel(data.value)}
-                  placeholder="Bijv. Opmerking"
+                  placeholder="e.g. Comment"
                 />
               </Field>
 
-              <Field label="Niveau">
+              <Field label="Level">
                 <RadioGroup
                   layout="horizontal"
                   value={level}
                   onChange={(_, data) => setLevel(data.value)}
                 >
                   <Radio value="header" label="Order (header)" />
-                  <Radio value="line" label="Regel (line)" />
+                  <Radio value="line" label="Line" />
                 </RadioGroup>
               </Field>
 
-              <Field label="Datatype">
+              <Field label="Data type">
                 <Dropdown
                   value={DATA_TYPE_LABELS[dataType]}
                   selectedOptions={[dataType]}
@@ -130,13 +130,13 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
 
               {dataType === 'select' ? (
                 <Field
-                  label="Opties (komma-gescheiden)"
-                  hint="Bijv. Open, In behandeling, Afgerond"
+                  label="Options (comma-separated)"
+                  hint="e.g. Open, In progress, Completed"
                 >
                   <Input
                     value={optionsText}
                     onChange={(_, data) => setOptionsText(data.value)}
-                    placeholder="Optie 1, Optie 2, Optie 3"
+                    placeholder="Option 1, Option 2, Option 3"
                   />
                 </Field>
               ) : null}
@@ -146,10 +146,10 @@ export default function PurchaseOrderAddColumnDialog({ open, onOpenChange, onAdd
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-              Annuleren
+              Cancel
             </Button>
             <Button appearance="primary" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Toevoegen...' : 'Toevoegen'}
+              {saving ? 'Adding...' : 'Add'}
             </Button>
           </DialogActions>
         </DialogBody>

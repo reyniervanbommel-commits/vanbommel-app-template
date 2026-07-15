@@ -51,7 +51,7 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
       const data = await apiRequest(`/admin/users/${user.id}/permissions`);
       setPermissions((Array.isArray(data) ? data : []).map((p) => p.page_name));
     } catch {
-      setError('Rechten laden mislukt');
+      setError('Failed to load permissions');
     } finally {
       setLoading(false);
     }
@@ -84,7 +84,7 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
       onSaved();
       setTimeout(() => onOpenChange(false), 1200);
     } catch (err) {
-      setError(err.message || 'Rechten opslaan mislukt');
+      setError(err.message || 'Failed to save permissions');
     } finally {
       setSaving(false);
     }
@@ -100,7 +100,7 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Rechten voor {user.email}</DialogTitle>
+          <DialogTitle>Permissions for {user.email}</DialogTitle>
           <DialogContent>
             {error && (
               <MessageBar intent="error" style={{ marginBottom: '8px' }}>
@@ -109,11 +109,11 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
             )}
             {success && (
               <MessageBar intent="success" style={{ marginBottom: '8px' }}>
-                <MessageBarBody>Rechten opgeslagen</MessageBarBody>
+                <MessageBarBody>Permissions saved</MessageBarBody>
               </MessageBar>
             )}
             {loading ? (
-              <Text>Laden...</Text>
+              <Text>Loading...</Text>
             ) : (
               <div className={styles.permissionsList}>
                 {PAGE_PERMISSIONS.map((page) => (
@@ -131,7 +131,7 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
           </DialogContent>
           <DialogActions>
             <DialogTrigger disableButtonEnhancement>
-              <Button appearance="secondary">Annuleren</Button>
+              <Button appearance="secondary">Cancel</Button>
             </DialogTrigger>
             <Button
               appearance="primary"
@@ -139,7 +139,7 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
               onClick={handleSave}
               disabled={saving || loading}
             >
-              {saving ? 'Opslaan...' : 'Opslaan'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </DialogBody>

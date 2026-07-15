@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
 import { getColumnTypeMeta } from '../components/supplier/purchaseOrderColumnFilterMenuConstants';
+import { isDatePeriodColumn } from '../utils/datePeriodColumnUtils';
 
 export function usePurchaseOrderColumnMenuFlags({
   column,
   isAdmin,
+  isStaff = true,
   onToggleWriteback,
   onRenameColumn,
   onRemoveColumn,
@@ -18,38 +20,51 @@ export function usePurchaseOrderColumnMenuFlags({
   isStickyColumn,
   isStickyActionEnabled,
   onMakeColumnSticky,
+  onToggleColumnCollapsed,
   isConnectedType,
 }) {
-  const canToggleWriteback = Boolean(isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
-  const showWritebackLocked = Boolean(column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
-  const canRenameColumn = Boolean(column?.id && typeof onRenameColumn === 'function');
-  const canRemoveColumn = Boolean(column.source === 'custom' && typeof onRemoveColumn === 'function');
+  const isRemarksColumn = column?.dataType === 'remarks';
+  const isImageColumn = column?.dataType === 'image' || isRemarksColumn;
+  const staffMenu = isStaff !== false;
+  const canToggleWriteback = Boolean(staffMenu && isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
+  const showWritebackLocked = Boolean(staffMenu && column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
+  const canRenameColumn = Boolean(staffMenu && !isRemarksColumn && !isImageColumn && column?.id && typeof onRenameColumn === 'function');
+  const canRemoveColumn = Boolean(staffMenu && column.source === 'custom' && typeof onRemoveColumn === 'function');
   const isLineColumn = column.level === 'line';
   const isLineNumberColumn = isLineColumn && column.dataType === 'number';
   const isHeaderNumberColumn = column.level !== 'line' && column.dataType === 'number';
-  const canToggleLineTotal = Boolean(isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
-  const canToggleGroupSummary = Boolean(isHeaderNumberColumn && typeof onSetGroupSummaryColumn === 'function');
-  const canPushLineTotalToHeader = Boolean(isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
-  const canPushLineValuesToHeader = Boolean(isLineColumn && typeof onPushLineValuesToHeader === 'function');
-  const canSetColumnTextStyle = typeof onSetColumnTextStyle === 'function';
-  const canSetColumnFormatRules = typeof onSetColumnFormatRules === 'function';
+  const canToggleLineTotal = Boolean(staffMenu && isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
+  const canToggleGroupSummary = Boolean(staffMenu && isHeaderNumberColumn && typeof onSetGroupSummaryColumn === 'function');
+  const canPushLineTotalToHeader = Boolean(staffMenu && isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
+  const canPushLineValuesToHeader = Boolean(staffMenu && isLineColumn && typeof onPushLineValuesToHeader === 'function');
+  const canSetColumnTextStyle = staffMenu && !isRemarksColumn && !isImageColumn && typeof onSetColumnTextStyle === 'function';
+  const canSetColumnFormatRules = staffMenu && !isRemarksColumn && !isImageColumn && typeof onSetColumnFormatRules === 'function';
   const canPromoteToSticky = Boolean(
-    canMakeColumnSticky
+    staffMenu
+    && canMakeColumnSticky
     && !isStickyColumn
     && isStickyActionEnabled
     && typeof onMakeColumnSticky === 'function'
   );
   const canUnstickSticky = Boolean(
-    canMakeColumnSticky
+    staffMenu
+    && canMakeColumnSticky
     && isStickyColumn
     && isStickyActionEnabled
     && typeof onMakeColumnSticky === 'function'
   );
   const canToggleStickyAction = canPromoteToSticky || canUnstickSticky;
-  const canAddColumn = typeof onAddColumnRightOf === 'function';
-  const canEditFormulaColumn = Boolean(canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
-  const canEditImageColumn = Boolean(canAddColumn && column.source === 'custom' && column.dataType === 'image');
-  const isImageColumn = column?.dataType === 'image';
+  const canAddColumn = staffMenu && typeof onAddColumnRightOf === 'function';
+  const canEditFormulaColumn = Boolean(staffMenu && canAddColumn && column.source === 'custom' && String(column.formulaExpr || '').trim());
+  const canEditImageColumn = Boolean(staffMenu && canAddColumn && column.source === 'custom' && column.dataType === 'image');
+  const canConfigureDatePeriodDisplay = Boolean(staffMenu && isDatePeriodColumn(column));
+  const canHideColumn = Boolean(
+    staffMenu
+    && !isImageColumn
+    && column?.key
+    && typeof onToggleColumnCollapsed === 'function'
+  );
+  const readOnlyColumnMenu = isImageColumn;
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
 
   return {
@@ -69,7 +84,10 @@ export function usePurchaseOrderColumnMenuFlags({
     canAddColumn,
     canEditFormulaColumn,
     canEditImageColumn,
+    canConfigureDatePeriodDisplay,
+    canHideColumn,
     isImageColumn,
+    readOnlyColumnMenu,
     columnTypeMeta,
   };
 }

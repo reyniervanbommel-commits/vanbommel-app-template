@@ -7,6 +7,9 @@ description: >-
 
 # Push to Preview (deprecated)
 
-> **Vervangen door `develop-from-devops` modus `preview`.**
+> **Vervangen door `develop-from-devops`.**
+
+Na bouwen: modus **`build`** — altijd t/m preview-URL in chat (stap 6).
+Alleen pushen: modus **`preview`**.
 
 Zie: `.cursor/skills/develop-from-devops/SKILL.md`

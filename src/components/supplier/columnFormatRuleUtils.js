@@ -1,16 +1,11 @@
+import { STATUS_COLOR_PALETTE, normalizeStatusCompareKey } from '../../utils/statusColumnUtils';
+
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_]{1,64}$/;
 
 export const FORMAT_RULE_OPERATORS = ['=', '<>', '>', '<', '>=', '<='];
 export const FORMAT_RULE_TARGETS = ['cell', 'row'];
-export const FORMAT_RULE_COLOR_PALETTE = [
-  '#f4e6ed',
-  '#fde7e9',
-  '#fff4ce',
-  '#e7f4ea',
-  '#e6f4ff',
-  '#ede6ff',
-];
+export const FORMAT_RULE_COLOR_PALETTE = STATUS_COLOR_PALETTE.slice(1);
 
 function normalizeColumnKey(value) {
   const key = String(value || '').trim();
@@ -94,7 +89,18 @@ function toNumericOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function compareValues(left, right, op) {
+function compareValues(left, right, op, statusOptions) {
+  if (statusOptions) {
+    const leftKey = normalizeStatusCompareKey(left, statusOptions);
+    const rightKey = normalizeStatusCompareKey(right, statusOptions);
+    if (leftKey.startsWith('id:') && rightKey.startsWith('id:')) {
+      return compareScalarValues(leftKey.slice(3), rightKey.slice(3), op);
+    }
+  }
+  return compareScalarValues(left, right, op);
+}
+
+function compareScalarValues(left, right, op) {
   const leftDate = toDateOrNull(left);
   const rightDate = toDateOrNull(right);
   if (leftDate && rightDate) {
@@ -132,7 +138,7 @@ function compareValues(left, right, op) {
   return false;
 }
 
-export function evalFormatRules(resultValue, ruleSet, rowValues = {}) {
+export function evalFormatRules(resultValue, ruleSet, rowValues = {}, statusOptions = null) {
   if (resultValue === null || resultValue === undefined) return null;
   const normalizedRuleSet = normalizeColumnFormatRuleSet(ruleSet);
   if (!normalizedRuleSet || !normalizedRuleSet.rules.length) return null;
@@ -141,7 +147,27 @@ export function evalFormatRules(resultValue, ruleSet, rowValues = {}) {
       ? rowValues?.[rule.valueRef]
       : rule.value;
     if (rule.valueRef && (rightValue === undefined || rightValue === null || rightValue === '')) continue;
-    if (compareValues(resultValue, rightValue, rule.op)) return rule.color;
+    if (compareValues(resultValue, rightValue, rule.op, statusOptions)) return rule.color;
   }
   return null;
+}
+
+export function migrateFormatRulesForStatusRenames(rulesMap, columnKey, renames) {
+  if (!rulesMap || typeof rulesMap !== 'object' || !Array.isArray(renames) || !renames.length) {
+    return rulesMap;
+  }
+  const key = String(columnKey || '').trim();
+  if (!key || !rulesMap[key]) return rulesMap;
+  const renameMap = new Map(renames.map(({ from, to }) => [from, to]));
+  const ruleSet = normalizeColumnFormatRuleSet(rulesMap[key]);
+  if (!ruleSet) return rulesMap;
+  const rules = ruleSet.rules.map((rule) => {
+    if (rule.valueRef || !Object.prototype.hasOwnProperty.call(rule, 'value')) return rule;
+    const nextValue = renameMap.get(rule.value);
+    return nextValue !== undefined ? { ...rule, value: nextValue } : rule;
+  });
+  return {
+    ...rulesMap,
+    [key]: { ...ruleSet, rules },
+  };
 }

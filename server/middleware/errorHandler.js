@@ -1,10 +1,12 @@
 'use strict';
 
+const { isProductionApp } = require('../utils/appEnvironment');
+
 function errorHandler(err, req, res, _next) {
   console.error('[ErrorHandler]', err.message);
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
-    error: process.env.NODE_ENV === 'production' ? 'Er is een fout opgetreden' : err.message,
+    error: isProductionApp() ? 'An error occurred' : err.message,
   });
 }
 

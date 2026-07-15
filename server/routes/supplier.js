@@ -4,8 +4,8 @@ const express = require('express');
 const sql = require('mssql');
 const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
-const { ROLES } = require('../constants/roles');
 const { getSqlPool } = require('../utils/sqlPool');
+const { getSupplierAccount, isStaffUser } = require('../utils/supplierScope');
 
 const router = express.Router();
 
@@ -21,21 +21,8 @@ const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
-function getSupplierAccount(user) {
-  const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
-  if (explicitAccount) return String(explicitAccount).trim();
-
-  const userEmail = (user && user.email) || '';
-  const emailPrefix = userEmail.split('@')[0];
-  return String(emailPrefix || '').trim();
-}
-
 function isValidSupplierAccount(value) {
   return SUPPLIER_ACCOUNT_PATTERN.test(String(value || ''));
-}
-
-function isStaffUser(user) {
-  return user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
 }
 
 function getPool() {
@@ -180,9 +167,25 @@ function normalizeLineValueLinks(value) {
   }, []);
 }
 
+// Split-screen-paneel (#AB:222): open/dicht, hoogte en geselecteerde chart-ids. Leeft in
+// settings_json (geen extra SQL-kolom).
+function normalizeBiSplitPane(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const height = Number(value.height);
+  const chartIds = Array.isArray(value.chartIds)
+    ? Array.from(new Set(value.chartIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))).slice(0, 12)
+    : [];
+  return {
+    open: value.open === true,
+    height: Number.isFinite(height) ? Math.min(800, Math.max(120, Math.round(height))) : 280,
+    chartIds,
+  };
+}
+
 function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
+    biSplitPane: normalizeBiSplitPane(input.biSplitPane),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
@@ -195,12 +198,14 @@ function normalizeBoardSettings(rawSettings) {
     lineTotalColumns: normalizeStringArray(input.lineTotalColumns),
     lineTotalHeaderLinks: normalizeLineTotalLinks(input.lineTotalHeaderLinks),
     lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
+    collapsedHeaderColumnKeys: normalizeStringArray(input.collapsedHeaderColumnKeys),
+    collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
   };
 }
 
 // --- Saved views (opgeslagen filter/sort/grouping + kolomlayout per board) ---
 
-const VIEW_SCOPES = new Set(['personal', 'global']);
+const VIEW_SCOPES = new Set(['personal', 'global', 'vendor']);
 const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
 const MAX_VIEW_NAME = 120;
 const MAX_VIEW_STATE_LENGTH = 100000;
@@ -232,6 +237,7 @@ function normalizeViewState(rawState) {
   });
 
   return {
+    showHistoryIndicators: input.showHistoryIndicators !== false,
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),
@@ -246,6 +252,8 @@ function normalizeViewState(rawState) {
       lineTotalColumns: normalizeStringArray(columns.lineTotalColumns),
       lineTotalHeaderLinks: normalizeLineTotalLinks(columns.lineTotalHeaderLinks),
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
+      collapsedHeaderColumnKeys: normalizeStringArray(columns.collapsedHeaderColumnKeys),
+      collapsedLineColumnKeys: normalizeStringArray(columns.collapsedLineColumnKeys),
     },
     table: {
       activityFilter: VIEW_ACTIVITY_FILTERS.has(table.activityFilter) ? table.activityFilter : 'all',
@@ -300,6 +308,11 @@ async function unsetDefaultView(transaction, boardKey, scope, userId) {
       UPDATE dbo.po_saved_views SET is_default = 0
       WHERE board_key = @boardKey AND scope = 'personal' AND user_id = @userId AND is_default = 1
     `);
+  } else if (scope === 'vendor') {
+    await request.query(`
+      UPDATE dbo.po_saved_views SET is_default = 0
+      WHERE board_key = @boardKey AND scope = 'vendor' AND is_default = 1
+    `);
   } else {
     await request.query(`
       UPDATE dbo.po_saved_views SET is_default = 0
@@ -321,9 +334,9 @@ async function loadViewRow(pool, boardKey, viewId) {
 }
 
 // True als de huidige gebruiker deze view mag bewerken/verwijderen:
-// personal → alleen de eigenaar, global → alleen staff (admin/employee).
+// personal → alleen de eigenaar; global/vendor → alleen staff (admin/employee).
 function canManageView(user, viewRow) {
-  if (viewRow.scope === 'global') return isStaffUser(user);
+  if (viewRow.scope === 'global' || viewRow.scope === 'vendor') return isStaffUser(user);
   return Number(viewRow.user_id) === Number(user.id);
 }
 
@@ -331,7 +344,7 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const pool = await getPool();
@@ -365,7 +378,7 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const settings = normalizeBoardSettings(req.body?.settings);
@@ -391,23 +404,31 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
   }
 });
 
-// Lijst de views die voor deze gebruiker zichtbaar zijn: eigen personal-views + alle global-views.
+// Lijst de views die voor deze gebruiker zichtbaar zijn:
+// - staff: personal + global + vendor
+// - supplier: personal + vendor (geen staff-only global views)
 router.get('/board-views/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const pool = await getPool();
+    const staff = isStaffUser(req.user);
     const result = await pool.request()
       .input('userId', sql.Int, req.user.id)
       .input('boardKey', sql.NVarChar(64), boardKey)
+      .input('isStaff', sql.Bit, staff ? 1 : 0)
       .query(`
         SELECT id, board_key, name, scope, user_id, view_state_json, is_default, updated_at
         FROM dbo.po_saved_views
         WHERE board_key = @boardKey
-          AND (scope = 'global' OR (scope = 'personal' AND user_id = @userId))
+          AND (
+            (scope = 'personal' AND user_id = @userId)
+            OR scope = 'vendor'
+            OR (scope = 'global' AND @isStaff = 1)
+          )
         ORDER BY scope, name
       `);
 
@@ -422,26 +443,26 @@ router.post('/board-views/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
 
     const name = normalizeViewName(req.body?.name);
     if (!name) {
-      return res.status(400).json({ error: 'Naam is verplicht' });
+      return res.status(400).json({ error: 'Name is required' });
     }
 
     const scope = String(req.body?.scope || 'personal');
     if (!VIEW_SCOPES.has(scope)) {
-      return res.status(400).json({ error: 'Ongeldige scope' });
+      return res.status(400).json({ error: 'Invalid scope' });
     }
-    if (scope === 'global' && !isStaffUser(req.user)) {
-      return res.status(403).json({ error: 'Geen toegang — global views vereisen medewerker- of adminrol' });
+    if ((scope === 'global' || scope === 'vendor') && !isStaffUser(req.user)) {
+      return res.status(403).json({ error: 'Access denied — shared views require employee or admin role' });
     }
 
     const viewState = normalizeViewState(req.body?.viewState);
     const viewStateJson = JSON.stringify(viewState);
     if (viewStateJson.length > MAX_VIEW_STATE_LENGTH) {
-      return res.status(400).json({ error: 'View-state is te groot' });
+      return res.status(400).json({ error: 'View state is too large' });
     }
 
     const isDefault = req.body?.isDefault === true;
@@ -473,7 +494,7 @@ router.post('/board-views/:boardKey', async (req, res, next) => {
     } catch (err) {
       await transaction.rollback();
       if (isUniqueViolation(err)) {
-        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+        return res.status(409).json({ error: 'A view with this name already exists' });
       }
       throw err;
     }
@@ -487,27 +508,27 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
     const viewId = Number(req.params.viewId);
     if (!Number.isInteger(viewId) || viewId <= 0) {
-      return res.status(400).json({ error: 'Ongeldige view id' });
+      return res.status(400).json({ error: 'Invalid view id' });
     }
 
     const pool = await getPool();
     const existing = await loadViewRow(pool, boardKey, viewId);
     if (!existing) {
-      return res.status(404).json({ error: 'View niet gevonden' });
+      return res.status(404).json({ error: 'View not found' });
     }
     if (!canManageView(req.user, existing)) {
-      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+      return res.status(403).json({ error: 'Access denied to this view' });
     }
 
     let nextName = existing.name;
     if (req.body?.name !== undefined) {
       nextName = normalizeViewName(req.body.name);
       if (!nextName) {
-        return res.status(400).json({ error: 'Naam is verplicht' });
+        return res.status(400).json({ error: 'Name is required' });
       }
     }
 
@@ -515,7 +536,7 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
     if (req.body?.viewState !== undefined) {
       nextViewStateJson = JSON.stringify(normalizeViewState(req.body.viewState));
       if (nextViewStateJson.length > MAX_VIEW_STATE_LENGTH) {
-        return res.status(400).json({ error: 'View-state is te groot' });
+        return res.status(400).json({ error: 'View state is too large' });
       }
     }
 
@@ -546,7 +567,7 @@ router.patch('/board-views/:boardKey/:viewId', async (req, res, next) => {
     } catch (err) {
       await transaction.rollback();
       if (isUniqueViolation(err)) {
-        return res.status(409).json({ error: 'Er bestaat al een view met deze naam' });
+        return res.status(409).json({ error: 'A view with this name already exists' });
       }
       throw err;
     }
@@ -559,20 +580,20 @@ router.delete('/board-views/:boardKey/:viewId', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) {
-      return res.status(400).json({ error: 'Ongeldige board key' });
+      return res.status(400).json({ error: 'Invalid board key' });
     }
     const viewId = Number(req.params.viewId);
     if (!Number.isInteger(viewId) || viewId <= 0) {
-      return res.status(400).json({ error: 'Ongeldige view id' });
+      return res.status(400).json({ error: 'Invalid view id' });
     }
 
     const pool = await getPool();
     const existing = await loadViewRow(pool, boardKey, viewId);
     if (!existing) {
-      return res.status(404).json({ error: 'View niet gevonden' });
+      return res.status(404).json({ error: 'View not found' });
     }
     if (!canManageView(req.user, existing)) {
-      return res.status(403).json({ error: 'Geen toegang tot deze view' });
+      return res.status(403).json({ error: 'Access denied to this view' });
     }
 
     await pool.request()
@@ -589,7 +610,7 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ error: 'Ongeldige query-parameters', details: errors.array() });
+      return res.status(400).json({ error: 'Invalid query parameters', details: errors.array() });
     }
 
     const staffUser = isStaffUser(req.user);
@@ -597,10 +618,10 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
 
     if (!staffUser) {
       if (!supplierAccount) {
-        return res.status(400).json({ error: 'Supplier account ontbreekt voor huidige gebruiker' });
+        return res.status(400).json({ error: 'Supplier account is missing for the current user' });
       }
       if (!isValidSupplierAccount(supplierAccount)) {
-        return res.status(400).json({ error: 'Supplier account heeft ongeldig formaat' });
+        return res.status(400).json({ error: 'Supplier account has an invalid format' });
       }
     }
 

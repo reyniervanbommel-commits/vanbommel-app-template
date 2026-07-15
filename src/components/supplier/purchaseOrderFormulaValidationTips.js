@@ -1,23 +1,23 @@
 export function getFormulaValidationTip(message) {
   const text = String(message || '').toLowerCase();
   if (!text) return '';
-  if (text.includes('verwacht eof') || text.includes('onverwachte token')) {
-    return 'Controleer haakjes en gebruik ALS(conditie;waar;onwaar).';
+  if (text.includes('expected eof') || text.includes('unexpected token')) {
+    return 'Check parentheses and use IF(condition;true;false).';
   }
-  if (text.includes('onbekende kolomreferentie')) {
-    return 'Gebruik de kolom-picker zodat de referentie exact klopt.';
+  if (text.includes('unknown column reference')) {
+    return 'Use the column picker so the reference matches exactly.';
   }
-  if (text.includes('formule mag niet verwijzen naar formulekolom')) {
-    return 'Verwijs alleen naar gewone master-kolommen, niet naar andere formulekolommen.';
+  if (text.includes('formula cannot reference formula column')) {
+    return 'Reference only regular master columns, not other formula columns.';
   }
-  if (text.includes('formule is verplicht')) {
-    return 'Vul eerst een formule in voordat je controleert of opslaat.';
+  if (text.includes('formula is required')) {
+    return 'Enter a formula first before validating or saving.';
   }
-  if (text.includes('master-kolommen')) {
-    return 'Gebruik alleen kolommen uit de hoofdtabel (master).';
+  if (text.includes('master columns')) {
+    return 'Use only columns from the main table (master).';
   }
-  if (text.includes('resultaattype')) {
-    return 'Kies een resultaattype dat past bij je uitkomst, bijvoorbeeld Tekst voor \'kleiner/groter\'.';
+  if (text.includes('result type')) {
+    return 'Choose a result type that matches your output, for example Text for \'smaller/larger\'.';
   }
-  return 'Controleer syntax, kolomnamen en scheiding met puntkomma\'s.';
+  return 'Check syntax, column names, and semicolon separators.';
 }

@@ -174,14 +174,14 @@ export default function ResizableTableHeaderCell({
     >
       <div className={styles.content}>
         {children}
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={`Resize ${columnKey} column`}
-          className={combineClassNames(styles.resizeHandle, dragging ? styles.resizeHandleDragging : '')}
-          onMouseDown={handleResizeMouseDown}
-        />
       </div>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Resize ${columnKey} column`}
+        className={combineClassNames(styles.resizeHandle, dragging ? styles.resizeHandleDragging : '')}
+        onMouseDown={handleResizeMouseDown}
+      />
     </th>
   );
 }

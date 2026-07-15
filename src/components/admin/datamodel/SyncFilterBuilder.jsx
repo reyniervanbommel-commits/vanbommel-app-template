@@ -53,7 +53,7 @@ const useStyles = makeStyles({
 function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
-  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items';
+  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items' || tableKey === 'product-receipt-lines';
   const isReadOnly = isInheritedTable || Boolean(syncFilter?.readOnly);
   const readOnlyMessage = String(syncFilter?.message || '').trim();
   const inheritedCompiled = String(
@@ -139,7 +139,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       </div>
       <Text className={styles.hint} block>
         Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
-        network traffic and sync time. Only fields that currently contain data are selectable.
+        network traffic and sync time. Use Discover D365 fields to register all entity columns first.
       </Text>
       {retentionHint ? (
         <Text className={styles.hint} block>

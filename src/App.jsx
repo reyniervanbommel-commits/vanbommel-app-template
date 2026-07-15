@@ -18,9 +18,13 @@ const ForgotPasswordPage = lazy(() => import('./components/auth/ForgotPasswordPa
 const ResetPasswordPage = lazy(() => import('./components/auth/ResetPasswordPage'));
 const MfaPage = lazy(() => import('./components/auth/MfaPage'));
 const AdminPage = lazy(() => import('./components/admin/AdminPage'));
+const BiPage = lazy(() =>
+  import('./components/bi').then((m) => ({ default: m.BiPage })),
+);
 const PurchaseOrdersPage = lazy(() =>
   import('./components/supplier').then((m) => ({ default: m.PurchaseOrdersPage })),
 );
+const RccpPage = lazy(() => import('./components/rccp/RccpPage'));
 
 const useStyles = makeStyles({
   appShell: {
@@ -49,7 +53,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
   return (
     <div className={styles.appShell}>
       <div className={styles.content}>
-        <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Laden…" /></div>}>
+        <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/set-password" element={<SetPasswordPage />} />
@@ -62,6 +66,26 @@ function AppInner({ isDarkMode, onToggleTheme }) {
               <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
                 <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <AdminPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/bi"
+            element={
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                  <BiPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/rccp"
+            element={
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                  <RccpPage />
                 </AppLayout>
               </AuthGuard>
             }

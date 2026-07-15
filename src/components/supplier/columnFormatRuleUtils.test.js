@@ -28,6 +28,7 @@ describe('columnFormatRuleUtils legacy compatibility', () => {
 });
 import {
   evalFormatRules,
+  migrateFormatRulesForStatusRenames,
   normalizeColumnFormatRuleSet,
   normalizeColumnFormatRulesMap,
 } from './columnFormatRuleUtils';
@@ -99,5 +100,26 @@ describe('columnFormatRuleUtils.evalFormatRules', () => {
       rules: [{ op: '=', value: '', color: '#FFF4CE' }],
     });
     expect(color).toBe('#fff4ce');
+  });
+
+  it('matcht statuswaarden op stabiele option id na label-rename', () => {
+    const statusOptions = [{ id: 'done', label: 'Completed', color: '#00c875' }];
+    const color = evalFormatRules('Completed', {
+      target: 'row',
+      rules: [{ op: '=', value: 'Done', color: '#E7F4EA' }],
+    }, {}, statusOptions);
+    expect(color).toBe('#e7f4ea');
+  });
+});
+
+describe('columnFormatRuleUtils.migrateFormatRulesForStatusRenames', () => {
+  it('werkt formatregel-vergelijkingswaarden bij na statuslabel-rename', () => {
+    const nextMap = migrateFormatRulesForStatusRenames({
+      status: {
+        target: 'row',
+        rules: [{ op: '=', value: 'Done', color: '#e7f4ea' }],
+      },
+    }, 'status', [{ from: 'Done', to: 'Completed' }]);
+    expect(nextMap.status.rules[0].value).toBe('Completed');
   });
 });

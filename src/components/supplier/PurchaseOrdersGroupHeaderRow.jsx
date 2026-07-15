@@ -1,61 +1,94 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Checkbox } from '@fluentui/react-components';
+import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 
 function PurchaseOrdersGroupHeaderRow({
-  colCount,
-  styles,
-  groupColor,
-  selectionEnabled,
-  groupAllSelected,
-  groupSomeSelected,
-  groupKey,
-  groupName,
-  groupLabel,
-  groupColumnKey,
-  groupSummaries = [],
-  groupLevel = 0,
-  entryCount,
-  isCollapsed,
-  onToggleGroup,
-  onToggleGroupSelection,
-  onClearGroupingColumn,
+  group,
+  layout,
+  selection,
+  actions,
 }) {
-  if (!groupName && !groupLabel) return null;
+  const {
+    groupKey,
+    groupName,
+    groupLabel,
+    groupColumnKey,
+    groupSummaries = [],
+    groupLevel = 0,
+    groupColor,
+    selectionEntries,
+  } = group;
+  const { colCount, styles, isCollapsed } = layout;
+  const selectionEnabled = Boolean(selection?.enabled);
+  const selectionKeys = useMemo(
+    () => Array.from(new Set(selectionEntries
+      .map(({ order, rowId }) => resolveOrderSelectionKey(order, rowId))
+      .filter(Boolean))),
+    [selectionEntries]
+  );
+  const groupAllSelected = selectionEnabled
+    && selectionKeys.length > 0
+    && selectionKeys.every((key) => selection.isSelected(key));
+  const groupSomeSelected = selectionEnabled
+    && !groupAllSelected
+    && selectionKeys.some((key) => selection.isSelected(key));
+  const cellStyle = useMemo(() => ({ backgroundColor: groupColor }), [groupColor]);
+  const innerStyle = useMemo(() => ({
+    position: 'sticky',
+    left: 0,
+    zIndex: 5,
+    width: 'fit-content',
+    backgroundColor: groupColor,
+  }), [groupColor]);
+  const labelStyle = useMemo(
+    () => ({ paddingLeft: `${12 + (groupLevel * 14)}px` }),
+    [groupLevel]
+  );
 
-  const handleToggleGroupSelection = (_, data) => {
-    onToggleGroupSelection(data.checked === true);
-  };
+  const handleToggleGroupSelection = useCallback((_, data) => {
+    actions.onToggleGroupSelection(selectionKeys, data.checked === true);
+  }, [actions, selectionKeys]);
 
-  const handleGroupLabelClick = (event) => {
+  const handleGroupLabelClick = useCallback((event) => {
     if (selectionEnabled) {
-      onToggleGroupSelection(!groupAllSelected);
+      actions.onToggleGroupSelection(selectionKeys, !groupAllSelected);
       return;
     }
-    onToggleGroup(event);
-  };
+    actions.onToggleGroup(event);
+  }, [actions, groupAllSelected, selectionEnabled, selectionKeys]);
+
+  const handleClearGrouping = useCallback(() => {
+    actions.onClearGroupingColumn(groupColumnKey);
+  }, [actions, groupColumnKey]);
+
+  const handleCheckboxClick = useCallback((event) => {
+    event.stopPropagation();
+  }, []);
+
+  if (!groupName && !groupLabel) return null;
 
   return (
     <tr>
-      <td colSpan={colCount} className={styles.groupRowCell} style={{ backgroundColor: groupColor }}>
+      <td colSpan={colCount} className={styles.groupRowCell} style={cellStyle}>
         <div
           className={styles.groupRowInner}
-          style={{ position: 'sticky', left: 0, zIndex: 5, width: 'fit-content', backgroundColor: groupColor }}
+          style={innerStyle}
         >
           {selectionEnabled ? (
             <Checkbox
               className={styles.groupCheckbox}
               checked={groupAllSelected ? true : (groupSomeSelected ? 'mixed' : false)}
-              onClick={(event) => event.stopPropagation()}
+              onClick={handleCheckboxClick}
               onChange={handleToggleGroupSelection}
-              aria-label={`Select all rows in category ${groupName}`}
+              aria-label={`Select all rows in group ${groupName}`}
             />
           ) : null}
           <button
             type="button"
             className={styles.groupCollapseButton}
             data-group-key={groupKey}
-            onClick={onToggleGroup}
-            aria-label={isCollapsed ? `Expand category ${groupName}` : `Collapse category ${groupName}`}
+            onClick={actions.onToggleGroup}
+            aria-label={isCollapsed ? `Expand group ${groupName}` : `Collapse group ${groupName}`}
           >
             {isCollapsed ? '+' : '-'}
           </button>
@@ -63,7 +96,7 @@ function PurchaseOrdersGroupHeaderRow({
             <button
               type="button"
               className={styles.groupCollapseButton}
-              onClick={() => onClearGroupingColumn(groupColumnKey)}
+              onClick={handleClearGrouping}
               aria-label={`Remove grouping for ${groupLabel}`}
             >
               ×
@@ -74,12 +107,12 @@ function PurchaseOrdersGroupHeaderRow({
             className={styles.groupButton}
             data-group-key={groupKey}
             onClick={handleGroupLabelClick}
-            aria-label={`Select rows in category ${groupName}`}
-            style={{ paddingLeft: `${12 + (groupLevel * 14)}px` }}
+            aria-label={`Select rows in group ${groupName}`}
+            style={labelStyle}
           >
             <span className={styles.groupDot}>●</span>
             <span>{`${groupLabel}: ${groupName}`}</span>
-            <span>({entryCount})</span>
+            <span>({selectionEntries.length})</span>
             {groupSummaries.map((summary) => (
               <span key={summary.columnKey}>{`${summary.label}: ${summary.displayValue}`}</span>
             ))}

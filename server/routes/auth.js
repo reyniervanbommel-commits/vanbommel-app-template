@@ -8,11 +8,13 @@ const authService = require('../services/AuthService');
 const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { getSqlPool } = require('../utils/sqlPool');
+const trackChangesService = require('../services/TrackChangesService');
+const { getAppBaseUrl, isDevLikeApp } = require('../utils/appEnvironment');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: { error: 'Te veel pogingen. Probeer het over een minuut opnieuw.' },
+  message: { error: 'Too many attempts. Try again in one minute.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -86,7 +88,7 @@ async function recordLogoutAnalytics(userId, sessionId, loggedInAt) {
 router.post('/login', strictLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    if (!email) return res.status(400).json({ error: 'E-mailadres is vereist' });
+    if (!email) return res.status(400).json({ error: 'Email address is required' });
     const result = await authService.login(email, password);
     if (result.requiresPasswordSetup) {
       return res.json({ requiresPasswordSetup: true, email: result.user.email });
@@ -96,9 +98,10 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     req.session.loggedInAt = new Date().toISOString();
     await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
     await recordLoginAnalytics(result.user.id, req.sessionID);
+    await trackChangesService.recordSessionOnLogin(result.user.role);
     res.json({ user: result.user });
   } catch (err) {
-    if (err.message.includes('onjuist') || err.message.includes('geblokkeerd')) {
+    if (err.message.includes('incorrect') || err.message.includes('locked')) {
       return res.status(401).json({ error: err.message });
     }
     next(err);
@@ -122,9 +125,9 @@ router.post('/logout', async (req, res) => {
 router.post('/set-password', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'E-mailadres en wachtwoord zijn vereist' });
+    if (!email || !password) return res.status(400).json({ error: 'Email address and password are required' });
     const user = await authService.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
     await authService.setPasswordForUser(user.id, password);
     const safeUser = authService.mapUserForSession(user);
     req.session.userId = user.id;
@@ -132,6 +135,7 @@ router.post('/set-password', async (req, res, next) => {
     req.session.loggedInAt = new Date().toISOString();
     await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
     await recordLoginAnalytics(user.id, req.sessionID);
+    await trackChangesService.recordSessionOnLogin(safeUser.role);
     res.json({ user: safeUser });
   } catch (err) {
     next(err);
@@ -143,23 +147,22 @@ router.post('/forgot-password', strictLimiter, async (req, res, next) => {
     const { email } = req.body;
     const result = await authService.requestPasswordReset(email);
 
-    const response = { success: true, message: 'Als het e-mailadres bekend is, ontvang je een resetlink.' };
-    const isProduction = process.env.NODE_ENV === 'production';
+    const response = { success: true, message: 'If the email address is known, you will receive a reset link.' };
 
     if (result.success) {
-      const resetUrl = (process.env.APP_BASE_URL || 'http://localhost:5173') + '/reset-password?token=' + result.token;
+      const resetUrl = getAppBaseUrl() + '/reset-password?token=' + result.token;
       const emailResult = await emailService.sendPasswordResetEmail(result.user.email, resetUrl).catch(() => ({ skipped: true }));
 
       // DEV-fallback: zonder werkende mail (bv. ACS niet ingericht) geven we de resetlink
       // direct terug in de response zodat lokaal/DEV testen mogelijk is. Nooit in productie.
       const mailSkipped = emailResult && emailResult.skipped;
-      if (!isProduction && mailSkipped) {
+      if (isDevLikeApp() && mailSkipped) {
         response.devResetUrl = resetUrl;
-        response.devNotice = 'DEV: mail niet verstuurd, gebruik deze resetlink direct.';
+        response.devNotice = 'DEV: email not sent, use this reset link directly.';
       }
-    } else if (!isProduction) {
+    } else if (isDevLikeApp()) {
       // Alleen in DEV: maak expliciet waarom er geen link is (account bestaat nog niet).
-      response.devNotice = 'DEV: geen account gevonden voor dit e-mailadres. Draai migraties (npm run migrate:db) of maak het account aan.';
+      response.devNotice = 'DEV: no account found for this email address. Run migrations (npm run migrate:db) or create the account.';
     }
 
     res.json(response);
@@ -171,11 +174,11 @@ router.post('/forgot-password', strictLimiter, async (req, res, next) => {
 router.post('/reset-password', async (req, res, next) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password) return res.status(400).json({ error: 'Token en wachtwoord zijn vereist' });
+    if (!token || !password) return res.status(400).json({ error: 'Token and password are required' });
     const user = await authService.resetPassword(token, password);
     res.json({ success: true, user });
   } catch (err) {
-    if (err.message.includes('ongeldig')) return res.status(400).json({ error: err.message });
+    if (err.message.includes('invalid')) return res.status(400).json({ error: err.message });
     next(err);
   }
 });

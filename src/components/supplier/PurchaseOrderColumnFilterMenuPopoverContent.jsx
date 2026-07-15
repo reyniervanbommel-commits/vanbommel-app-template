@@ -7,10 +7,10 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   column,
   columnTypeMeta,
   connectionTargets,
-  isImageColumn,
   activeSubmenu,
   submenuTop,
   openSubmenu,
+  closeSubmenu,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
   canToggleWriteback,
@@ -22,8 +22,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleRenameColumn,
   canEditFormulaColumn,
   handleEditFormulaColumn,
-  canEditImageColumn,
-  handleEditImageColumn,
+  canConfigureDatePeriodDisplay,
   canRemoveColumn,
   handleRemoveColumn,
   canToggleLineTotal,
@@ -39,10 +38,13 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   canUnstickSticky,
   stickyColumnCount,
   handleMakeColumnSticky,
+  canHideColumn,
+  handleHideColumn,
   setSortAsc,
   setSortDesc,
   clearSort,
   isDate,
+  isNumber,
   draft,
   operatorLabels,
   operatorEntries,
@@ -52,6 +54,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleApply,
   handleClearFilter,
   handleAddType,
+  remarksAlreadyAdded,
   textStyleDraft,
   handleTextColorChange,
   handleToggleBold,
@@ -71,6 +74,11 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   canToggleGroupSummary,
   isGroupSummaryColumn,
   handleToggleGroupSummary,
+  showGrouping = true,
+  showColumnMutations = true,
+  showSortAndFilter = true,
+  datePeriodDisplayMode,
+  onSelectDatePeriodDisplayMode,
 }) {
   return (
     <PopoverSurface className={styles.surface}>
@@ -79,12 +87,14 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         columnLabel={column.label}
         columnTypeMeta={columnTypeMeta}
         connectionTargets={connectionTargets}
-        showSortAndFilter={!isImageColumn}
-        showGrouping={!isImageColumn}
+        showGrouping={showGrouping}
+        showColumnMutations={showColumnMutations}
+        showSortAndFilter={showSortAndFilter}
         activeSubmenu={activeSubmenu}
         openSubmenu={openSubmenu}
+        closeSubmenu={closeSubmenu}
         canSetColumnTextStyle={canSetColumnTextStyle}
-        canSetColumnFormatRules={canSetColumnFormatRules && !isImageColumn}
+        canSetColumnFormatRules={canSetColumnFormatRules}
         canToggleWriteback={canToggleWriteback}
         showWritebackLocked={showWritebackLocked}
         handleToggleWriteback={handleToggleWriteback}
@@ -93,9 +103,10 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canRenameColumn={canRenameColumn}
         handleRenameColumn={handleRenameColumn}
         canEditFormulaColumn={canEditFormulaColumn}
+        canConfigureDatePeriodDisplay={canConfigureDatePeriodDisplay}
+        datePeriodDisplayMode={datePeriodDisplayMode}
+        onSelectDatePeriodDisplayMode={onSelectDatePeriodDisplayMode}
         handleEditFormulaColumn={handleEditFormulaColumn}
-        canEditImageColumn={canEditImageColumn}
-        handleEditImageColumn={handleEditImageColumn}
         canRemoveColumn={canRemoveColumn}
         handleRemoveColumn={handleRemoveColumn}
         canToggleLineTotal={canToggleLineTotal}
@@ -111,10 +122,13 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canUnstickSticky={canUnstickSticky}
         stickyColumnCount={stickyColumnCount}
         handleMakeColumnSticky={handleMakeColumnSticky}
+        canHideColumn={canHideColumn}
+        handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc}
         setSortDesc={setSortDesc}
         clearSort={clearSort}
         isDate={isDate}
+        isNumber={isNumber}
         draft={draft}
         operatorLabels={operatorLabels}
         operatorEntries={operatorEntries}
@@ -129,6 +143,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         activeSubmenu={activeSubmenu}
         submenuTop={submenuTop}
         handleAddType={handleAddType}
+        remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft}
         handleTextColorChange={handleTextColorChange}
         handleToggleBold={handleToggleBold}

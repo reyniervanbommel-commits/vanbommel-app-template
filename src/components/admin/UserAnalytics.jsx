@@ -64,30 +64,30 @@ export default function UserAnalytics() {
 
   return (
     <div className={styles.container}>
-      <Text size={600} weight="semibold">Gebruikersanalytics</Text>
+      <Text size={600} weight="semibold">User analytics</Text>
       <MessageBar intent="info">
-        <MessageBarBody>Activiteitsdata wordt maximaal 90 dagen bewaard.</MessageBarBody>
+        <MessageBarBody>Activity data is retained for up to 90 days.</MessageBarBody>
       </MessageBar>
       {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
 
       <div className={styles.filters}>
-        <Field label="Startdatum">
+        <Field label="Start date">
           <div lang="nl-NL">
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
         </Field>
-        <Field label="Einddatum">
+        <Field label="End date">
           <div lang="nl-NL">
             <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </Field>
-        <Field label="Gebruiker">
+        <Field label="User">
           <Select
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
             style={{ minWidth: '200px' }}
           >
-            <option value="">Alle gebruikers</option>
+            <option value="">All users</option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>{user.email}</option>
             ))}
@@ -98,35 +98,35 @@ export default function UserAnalytics() {
           icon={<ArrowSync24Regular />}
           onClick={handleRefresh}
           disabled={loading}
-          title="Vernieuwen"
+          title="Refresh"
         />
       </div>
 
       {loading && !loginStats && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <Spinner size="large" />
-          <Text style={{ display: 'block', marginTop: '16px' }}>Data laden...</Text>
+          <Text style={{ display: 'block', marginTop: '16px' }}>Loading data...</Text>
         </div>
       )}
 
       {sessionStats && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Sessiestatistieken</Text>
+          <Text size={500} weight="semibold">Session statistics</Text>
           <div className={styles.statsGrid}>
             <div className={styles.statCard}>
-              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Totaal sessies</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Total sessions</Text>
               <Text size={600} weight="semibold">{sessionStats.total_sessions || 0}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Gemiddelde duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Average duration</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.avg_duration_seconds)}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Min. duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Min. duration</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.min_duration_seconds)}</Text>
             </div>
             <div className={styles.statCard}>
-              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Max. duur</Text>
+              <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>Max. duration</Text>
               <Text size={600} weight="semibold">{formatDuration(sessionStats.max_duration_seconds)}</Text>
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function UserAnalytics() {
 
       {loginStats?.by_day?.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Inlogstatistieken per dag</Text>
+          <Text size={500} weight="semibold">Login statistics per day</Text>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={loginStats.by_day}>
@@ -144,7 +144,7 @@ export default function UserAnalytics() {
                 <YAxis />
                 <RechartsTooltip />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke="#2775CE" name="Inlogpogingen" />
+                <Line type="monotone" dataKey="count" stroke="#2775CE" name="Login attempts" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -153,7 +153,7 @@ export default function UserAnalytics() {
 
       {pageUsage.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Paginagebruik</Text>
+          <Text size={500} weight="semibold">Page usage</Text>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pageUsage}>
@@ -162,7 +162,7 @@ export default function UserAnalytics() {
                 <YAxis />
                 <RechartsTooltip />
                 <Legend />
-                <Bar dataKey="count" fill="#2775CE" name="Bezoeken" />
+                <Bar dataKey="count" fill="#2775CE" name="Visits" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -170,15 +170,15 @@ export default function UserAnalytics() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Pagina</TableHeaderCell>
-                  <TableHeaderCell>Bezoeken</TableHeaderCell>
-                  <TableHeaderCell>Unieke gebruikers</TableHeaderCell>
+                  <TableHeaderCell>Page</TableHeaderCell>
+                  <TableHeaderCell>Visits</TableHeaderCell>
+                  <TableHeaderCell>Unique users</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pageUsage.map((page, i) => (
                   <TableRow key={i}>
-                    <TableCell>{page.page_name || 'Onbekend'}</TableCell>
+                    <TableCell>{page.page_name || 'Unknown'}</TableCell>
                     <TableCell>{page.count || 0}</TableCell>
                     <TableCell>{page.unique_users || 0}</TableCell>
                   </TableRow>
@@ -191,13 +191,13 @@ export default function UserAnalytics() {
 
       {userLoginStats.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Inlogstatistieken per gebruiker</Text>
+          <Text size={500} weight="semibold">Login statistics per user</Text>
           <div className={styles.tableContainer}>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Gebruiker</TableHeaderCell>
-                  <TableHeaderCell>Aantal inlogpogingen</TableHeaderCell>
+                  <TableHeaderCell>User</TableHeaderCell>
+                  <TableHeaderCell>Login attempts</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -215,15 +215,15 @@ export default function UserAnalytics() {
 
       {clickStats.length > 0 && (
         <div className={styles.section}>
-          <Text size={500} weight="semibold">Klikstatistieken</Text>
+          <Text size={500} weight="semibold">Click statistics</Text>
           <div className={styles.tableContainer}>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Pagina</TableHeaderCell>
+                  <TableHeaderCell>Page</TableHeaderCell>
                   <TableHeaderCell>Element</TableHeaderCell>
-                  <TableHeaderCell>Klikken</TableHeaderCell>
-                  <TableHeaderCell>Unieke gebruikers</TableHeaderCell>
+                  <TableHeaderCell>Clicks</TableHeaderCell>
+                  <TableHeaderCell>Unique users</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -248,7 +248,7 @@ export default function UserAnalytics() {
         userLoginStats.length === 0 &&
         clickStats.length === 0 && (
           <MessageBar intent="info">
-            <MessageBarBody>Geen analytics-data gevonden voor de geselecteerde periode.</MessageBarBody>
+            <MessageBarBody>No analytics data found for the selected period.</MessageBarBody>
           </MessageBar>
       )}
     </div>

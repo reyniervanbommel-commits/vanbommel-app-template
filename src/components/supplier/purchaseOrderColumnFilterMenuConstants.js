@@ -5,13 +5,15 @@ import {
 } from './columnFormatRuleUtils';
 
 export const NEW_COLUMN_TYPES = [
-  { key: 'status', label: 'Status', dataType: 'select', options: ['Nieuw', 'Bezig', 'Klaar'] },
-  { key: 'text', label: 'Tekst', dataType: 'text' },
-  { key: 'number', label: 'Nummers', dataType: 'number' },
-  { key: 'date', label: 'Datum', dataType: 'date' },
-  { key: 'boolean', label: 'Ja/nee', dataType: 'boolean' },
-  { key: 'image', label: 'Plaatje', dataType: 'image' },
-  { key: 'formula', label: 'Formule', dataType: 'number' },
+  { key: 'status', label: 'Status', dataType: 'status' },
+  { key: 'text', label: 'Text', dataType: 'text' },
+  { key: 'number', label: 'Numbers', dataType: 'number' },
+  { key: 'date', label: 'Date', dataType: 'date' },
+  { key: 'date_wm', label: 'Date W/M', dataType: 'date_period' },
+  { key: 'boolean', label: 'Yes/No', dataType: 'boolean' },
+  { key: 'image', label: 'Image', dataType: 'image' },
+  { key: 'remarks', label: 'Remarks', dataType: 'remarks' },
+  { key: 'formula', label: 'Formula', dataType: 'number' },
 ];
 
 const COLUMN_TYPE_META = {
@@ -21,8 +23,11 @@ const COLUMN_TYPE_META = {
   date: { key: 'date', label: 'Date' },
   boolean: { key: 'boolean', label: 'Yes/No' },
   select: { key: 'select', label: 'Select' },
+  status: { key: 'status', label: 'Status' },
   image: { key: 'image', label: 'Image' },
+  remarks: { key: 'remarks', label: 'Remarks' },
   formula: { key: 'formula', label: 'Formula' },
+  date_period: { key: 'date_period', label: 'Date W/M' },
 };
 
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
@@ -38,8 +43,14 @@ export function isDateColumn(column) {
   return column?.dataType === 'date';
 }
 
+export function isNumberColumn(column) {
+  return column?.dataType === 'number';
+}
+
 function getDefaultOperator(column) {
-  return isDateColumn(column) ? 'before' : 'contains';
+  if (isDateColumn(column)) return 'before';
+  if (isNumberColumn(column)) return 'equals';
+  return 'contains';
 }
 
 export function getDraftFromFilter(column, filter) {
@@ -57,6 +68,10 @@ export function isColumnFilterActive(column, filter) {
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
     if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
+  }
+  if (isNumberColumn(column)) {
+    if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
+    return filter.value !== '' && filter.value !== null && filter.value !== undefined;
   }
   if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);
