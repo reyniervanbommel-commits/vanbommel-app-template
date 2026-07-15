@@ -14,8 +14,12 @@ function filtersFromColumnMap(filterByColumn) {
     }));
 }
 
-function chartConfigKey(chart) {
-  return JSON.stringify(chart?.config || {});
+function chartFetchKey(chart, inheritedFilters, dataRevision) {
+  return JSON.stringify({
+    config: chart?.config || {},
+    inheritedFilters,
+    dataRevision: dataRevision ?? null,
+  });
 }
 
 function chartIdKey(id) {
@@ -46,9 +50,9 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
         ...chart.config,
         filters: [...(chart.config?.filters || []), ...inheritedFilters],
       })),
-      configKeys: list.map((chart) => chartConfigKey(chart)),
+      configKeys: list.map((chart) => chartFetchKey(chart, inheritedFilters, dataRevision)),
     };
-  }, [charts, inheritedFilters]);
+  }, [charts, inheritedFilters, dataRevision]);
 
   const payloadKey = useMemo(
     () => JSON.stringify({ payload, boardKey, dataRevision: dataRevision ?? null }),
