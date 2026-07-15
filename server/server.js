@@ -18,11 +18,18 @@ const supplierRouter = require('./routes/supplier');
 const dataRouter = require('./routes/data');
 const biRouter = require('./routes/bi');
 const dataLinksRouter = require('./routes/dataLinks');
+const rccpRouter = require('./routes/rccp');
+const { rccpAccess } = require('./middleware/rccpAccess');
 const { createMediaRouter } = require('./routes/media');
 const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
+const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
+const {
+  DEFAULT_LOCAL_APP_ORIGIN,
+  useSecureSessionCookies,
+} = require('./utils/appEnvironment');
 
 // Robuustheid: een transiente fout buiten de request-keten (bv. een 'error'-event van de
 // MSSQL-connection-pool of session-store bij een korte DB-hapering) zou anders een
@@ -47,7 +54,7 @@ app.use(compression());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173'];
+  : [DEFAULT_LOCAL_APP_ORIGIN];
 
 app.use(cors({
   origin: allowedOrigins,
@@ -57,6 +64,10 @@ app.use(cors({
 function shouldSkipGlobalRateLimit(req) {
   const requestPath = String(req.path || '').trim();
   if (requestPath === '/api/purchase-orders/refresh/progress') return true;
+  // Product-images zijn één request per uniek item; een beeld-zwaar bord vuurt er tientallen
+  // tegelijk af. Die vallen al onder de eigen media-limiter (zie routes/media.js), dus tel ze
+  // niet óók mee in de globale 100/min-limiet — anders zet één board-load de hele app op 429.
+  if (requestPath.startsWith('/api/media/')) return true;
   return /^\/api\/data\/[^/]+\/refresh\/progress$/.test(requestPath);
 }
 
@@ -93,7 +104,7 @@ app.use(session({
   name: process.env.SESSION_COOKIE_NAME || 'vendorportal.sid',
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: useSecureSessionCookies(),
     sameSite: 'lax',
     maxAge: parseInt(process.env.SESSION_TTL_HOURS || '8') * 60 * 60 * 1000,
   },
@@ -128,11 +139,14 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
 // Generieke Table Builder-data-API — het PO-board draait hier volledig op (po_*-laag verwijderd, #AB:177).
-app.use('/api/data', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataRouter);
+// Staff (admin/employee) heeft volledige toegang; suppliers mogen uitsluitend hun eigen
+// purchase-orders lezen (rij-filter op leveranciersaccount in TableDataService.read).
+app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
 // BI-grafieken (#AB:218/#AB:219) — v1 staff-only (admin/employee), geen supplier-scoping.
 app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), biRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
+app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);
 app.use('/api/media', createMediaRouter());
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

@@ -21,6 +21,8 @@ const {
   writeBackField,
 } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
+const trackChangesService = require('./TrackChangesService');
+const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
@@ -2044,6 +2046,9 @@ function assertCustomColumnWritable(column) {
   if (String(column?.dataType || '').toLowerCase() === 'image') {
     throw Object.assign(new Error('Image columns are read-only'), { status: 400 });
   }
+  if (String(column?.dataType || '').toLowerCase() === 'date_period') {
+    throw Object.assign(new Error('Date period columns are read-only'), { status: 400 });
+  }
   if (String(column?.dataType || '').toLowerCase() === 'remarks') {
     throw Object.assign(new Error('Remarks columns do not support direct value writes'), { status: 400 });
   }
@@ -2052,8 +2057,8 @@ function assertCustomColumnWritable(column) {
   }
 }
 
-function compileMasterFormulaColumns(masterColumns) {
-  return (Array.isArray(masterColumns) ? masterColumns : [])
+function compileFormulaColumns(columns) {
+  return (Array.isArray(columns) ? columns : [])
     .filter((column) => isFormulaColumn(column))
     .map((column) => {
       try {
@@ -2072,6 +2077,63 @@ function compileMasterFormulaColumns(masterColumns) {
     });
 }
 
+function compileMasterFormulaColumns(masterColumns) {
+  return compileFormulaColumns(masterColumns);
+}
+
+function buildFormulaEvaluationContext(rowValues, columns, compiledFormulas) {
+  const evalValues = withCaseInsensitiveKeys(rowValues);
+  const referencedKeys = new Set();
+  for (const item of Array.isArray(compiledFormulas) ? compiledFormulas : []) {
+    for (const ref of [...(item?.compiled?.references || [])]) {
+      referencedKeys.add(String(ref || '').toLowerCase());
+    }
+  }
+  for (const column of Array.isArray(columns) ? columns : []) {
+    const keyLower = String(column?.key || '').toLowerCase();
+    if (!keyLower || !referencedKeys.has(keyLower)) continue;
+    if (column.source !== 'source') continue;
+    const value = rowValues?.[column.key];
+    evalValues[column.key] = value;
+    evalValues[keyLower] = value;
+  }
+  return evalValues;
+}
+
+function buildDetailFormulaEvaluationContext(detailValues, detailJson, detailCols, compiledDetailFormulas) {
+  const evalValues = withCaseInsensitiveKeys(detailValues);
+  const referencedKeys = new Set();
+  for (const item of Array.isArray(compiledDetailFormulas) ? compiledDetailFormulas : []) {
+    for (const ref of [...(item?.compiled?.references || [])]) {
+      referencedKeys.add(String(ref || '').toLowerCase());
+    }
+  }
+  for (const column of Array.isArray(detailCols) ? detailCols : []) {
+    const keyLower = String(column?.key || '').toLowerCase();
+    if (!keyLower || !referencedKeys.has(keyLower)) continue;
+    if (column.source !== 'source') continue;
+    const value = resolveSourceColumnValue(detailJson, column);
+    evalValues[column.key] = value;
+    evalValues[keyLower] = value;
+  }
+  return evalValues;
+}
+
+function detailFormulaHasMissingSourceReference(compiled, evaluationValues, detailCols) {
+  const references = [...(compiled?.references || [])];
+  if (!references.length) return false;
+  for (const ref of references) {
+    const refLower = String(ref || '').toLowerCase();
+    const column = (Array.isArray(detailCols) ? detailCols : []).find(
+      (entry) => String(entry?.key || '').toLowerCase() === refLower,
+    );
+    if (!column || column.source !== 'source' || !column.sourceField) continue;
+    const value = evaluationValues?.[column.key] ?? evaluationValues?.[refLower] ?? evaluationValues?.[ref];
+    if (value === null || value === undefined) return true;
+  }
+  return false;
+}
+
 function withCaseInsensitiveKeys(values) {
   const normalized = { ...(values || {}) };
   for (const [key, value] of Object.entries(values || {})) {
@@ -2083,21 +2145,37 @@ function withCaseInsensitiveKeys(values) {
   return normalized;
 }
 
-function applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas) {
+function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {}) {
   const formulaErrors = {};
-  const evaluationValues = withCaseInsensitiveKeys(masterValues);
-  for (const item of Array.isArray(compiledMasterFormulas) ? compiledMasterFormulas : []) {
+  const {
+    evaluationValues: providedEvaluationValues = null,
+    detailCols = null,
+    strictMissingSourceRefs = false,
+  } = options;
+  const evaluationValues = providedEvaluationValues
+    ? withCaseInsensitiveKeys(providedEvaluationValues)
+    : withCaseInsensitiveKeys(rowValues);
+  for (const item of Array.isArray(compiledFormulas) ? compiledFormulas : []) {
     const formulaKey = item?.column?.key;
     if (!formulaKey) continue;
     if (item.compileError) {
-      masterValues[formulaKey] = null;
+      rowValues[formulaKey] = null;
       evaluationValues[formulaKey] = null;
       evaluationValues[String(formulaKey).toLowerCase()] = null;
       formulaErrors[formulaKey] = item.compileError;
       continue;
     }
+    if (
+      strictMissingSourceRefs
+      && detailFormulaHasMissingSourceReference(item.compiled, evaluationValues, detailCols)
+    ) {
+      rowValues[formulaKey] = null;
+      evaluationValues[formulaKey] = null;
+      evaluationValues[String(formulaKey).toLowerCase()] = null;
+      continue;
+    }
     const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
-    masterValues[formulaKey] = result.value;
+    rowValues[formulaKey] = result.value;
     evaluationValues[formulaKey] = result.value;
     evaluationValues[String(formulaKey).toLowerCase()] = result.value;
     if (result.error) formulaErrors[formulaKey] = result.error;
@@ -2338,9 +2416,132 @@ async function loadHistoryByCell(pool, tableId) {
 }
 
 // ---------------------------------------------------------------------------
+// Track changes — streepjes-patronen per cel, meeberekend in de board-read.
+// Bronnen: tb_cell_history (custom-kolommen) + tb_field_corrections met
+// status='applied' (write-back naar D365-kolommen). Eén query, alleen bij
+// ≥1 actieve kolom. Bucketing (week/session) volledig in SQL; JS bouwt alleen
+// de kant-en-klare 5-tekenstrings via buildMarkPattern.
+// ---------------------------------------------------------------------------
+async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
+  const empty = { trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} };
+  if (!Array.isArray(enabledColumns) || enabledColumns.length === 0) return empty;
+
+  const maxOffset = MARK_COUNT - 1;
+  const activeOffsetByColumnId = {};
+  const defaultPattern = {};
+  const request = pool.request().input('tableId', sql.BigInt, tableId);
+
+  // Week-mode: bereken de active-offset per kolom mét dezelfde kalender als de
+  // bucketing (SQL DATEDIFF(week, ...)). JS-datumrekenen met een vaste 7-daagse
+  // deling wijkt rond weekgrenzen/DATEFIRST af van DATEDIFF(week) en zou dan
+  // onterecht gele/grijze streepjes tonen. SQL is hier de bron van waarheid.
+  let weekOffsetByColumnId = null;
+  if (mode === 'week') {
+    const weekReq = pool.request();
+    const weekRows = [];
+    enabledColumns.forEach((col, i) => {
+      const cId = 'wc' + i;
+      const aId = 'wa' + i;
+      weekReq.input(cId, sql.BigInt, col.columnId);
+      weekReq.input(aId, sql.DateTime2, col.activatedAt);
+      weekRows.push(`(@${cId}, @${aId})`);
+    });
+    const weekResult = await weekReq.query(`
+      SELECT v.column_id, DATEDIFF(week, v.activated_at, SYSUTCDATETIME()) AS week_offset
+      FROM (VALUES ${weekRows.join(', ')}) AS v(column_id, activated_at)
+    `);
+    weekOffsetByColumnId = {};
+    for (const r of weekResult.recordset) {
+      weekOffsetByColumnId[String(r.column_id)] = Number(r.week_offset);
+    }
+  }
+
+  // VALUES-join met per-kolom activatedAt (fresh start per kolom).
+  const valueRows = [];
+  enabledColumns.forEach((col, i) => {
+    const cId = 'tc_c' + i;
+    const aId = 'tc_a' + i;
+    request.input(cId, sql.BigInt, col.columnId);
+    request.input(aId, sql.DateTime2, col.activatedAt);
+    valueRows.push(`(@${cId}, @${aId})`);
+
+    let activeOffset;
+    if (mode === 'week') {
+      const weeks = weekOffsetByColumnId?.[String(col.columnId)] ?? 0;
+      activeOffset = Math.max(0, Math.min(weeks, maxOffset));
+    } else {
+      const n = boundaries.filter((b) => b.getTime() >= col.activatedAt.getTime()).length;
+      activeOffset = Math.max(0, Math.min(n - 1, maxOffset));
+    }
+    activeOffsetByColumnId[String(col.columnId)] = activeOffset;
+    defaultPattern[String(col.columnId)] = buildMarkPattern([], activeOffset);
+  });
+
+  let offsetExpr;
+  if (mode === 'week') {
+    offsetExpr = 'DATEDIFF(week, ch.changed_at, SYSUTCDATETIME())';
+  } else {
+    if (!Array.isArray(boundaries) || boundaries.length === 0) {
+      return { trackMarksByCell: new Map(), activeOffsetByColumnId, defaultPattern };
+    }
+    const cases = boundaries.map((b, i) => {
+      const bId = 'tc_b' + i;
+      request.input(bId, sql.DateTime2, b);
+      return `WHEN ch.changed_at >= @${bId} THEN ${i}`;
+    });
+    offsetExpr = `CASE ${cases.join(' ')} ELSE 99 END`;
+  }
+
+  // Wijzigingen komen uit twee bronnen: tb_cell_history (custom-kolommen) en
+  // tb_field_corrections (write-back naar D365-kolommen). Alleen toegepaste
+  // correcties tellen; applied_at is het echte wijzigingsmoment (fallback created_at).
+  const query = `
+    ;WITH changes AS (
+      SELECT h.column_id, h.partition_key, h.record_key, h.detail_key, h.changed_at
+      FROM dbo.tb_cell_history h WITH (NOLOCK)
+      WHERE h.table_id = @tableId
+      UNION ALL
+      SELECT f.column_id, f.partition_key, f.record_key, f.detail_key,
+             COALESCE(f.applied_at, f.created_at) AS changed_at
+      FROM dbo.tb_field_corrections f WITH (NOLOCK)
+      WHERE f.table_id = @tableId AND f.status = 'applied'
+    )
+    SELECT ch.column_id, ch.partition_key, ch.record_key, ch.detail_key, ${offsetExpr} AS mark_offset
+    FROM changes ch
+    INNER JOIN (VALUES ${valueRows.join(', ')}) AS act(column_id, activated_at)
+      ON act.column_id = ch.column_id
+    WHERE ch.changed_at >= act.activated_at
+    GROUP BY ch.column_id, ch.partition_key, ch.record_key, ch.detail_key, ${offsetExpr}
+    HAVING ${offsetExpr} BETWEEN 0 AND ${maxOffset}
+  `;
+  const result = await request.query(query);
+
+  const redByCellColumn = new Map();
+  for (const row of result.recordset) {
+    const cellKey = historyCellKey(row.partition_key, row.record_key, row.detail_key);
+    if (!redByCellColumn.has(cellKey)) redByCellColumn.set(cellKey, new Map());
+    const byCol = redByCellColumn.get(cellKey);
+    const colKey = String(row.column_id);
+    if (!byCol.has(colKey)) byCol.set(colKey, new Set());
+    byCol.get(colKey).add(Number(row.mark_offset));
+  }
+
+  const trackMarksByCell = new Map();
+  for (const [cellKey, byCol] of redByCellColumn) {
+    const patterns = {};
+    for (const [colKey, offsets] of byCol) {
+      patterns[colKey] = buildMarkPattern([...offsets], activeOffsetByColumnId[colKey]);
+    }
+    trackMarksByCell.set(cellKey, patterns);
+  }
+
+  return { trackMarksByCell, activeOffsetByColumnId, defaultPattern };
+}
+
+// ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
-async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
+async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount' } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
 
@@ -2351,7 +2552,26 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
   // hetzelfde parallelle blok opgenomen.
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
   const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
+  // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
+  // zodat de frontend na deze read exact de bijbehorende revision opslaat.
+  const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
   const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
+
+  // Track changes: config uit app_settings (in-memory gecached). Alleen bij ≥1 actieve kolom
+  // draait er een query; anders geen SQL en geen Server-Timing-metric tb_track_marks.
+  const trackConfig = await trackChangesService.getConfig();
+  const trackEnabledColumns = Object.entries(trackConfig.columns || {})
+    .map(([id, entry]) => ({ columnId: Number(id), activatedAt: new Date(entry.activatedAt) }))
+    .filter((c) => Number.isFinite(c.columnId) && !Number.isNaN(c.activatedAt.getTime()));
+  const trackActive = trackEnabledColumns.length > 0;
+  const trackMarksPromise = trackActive
+    ? time('tb_track_marks', async () => {
+        const boundaries = trackConfig.mode === 'session'
+          ? await trackChangesService.getSessionBoundaries()
+          : [];
+        return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries);
+      })
+    : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
     const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
@@ -2389,6 +2609,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     enrichment,
     { d365LedgerRows, hasLedgerWindow },
     historyByCell,
+    trackMarks,
   ] = await Promise.all([
     time('tb_read_cols', () => Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
@@ -2402,8 +2623,10 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     time('tb_lookups', () => loadLookupEnrichment(table)),
     ledgerPromise,
     historyByCellPromise,
+    trackMarksPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -2457,6 +2680,17 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       const detailJson = parseJson(d.data_json);
       const detailValues = valuesFor(detailCols, detailJson, detailCustom);
       applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailJson);
+      const detailFormulaEvalValues = buildDetailFormulaEvaluationContext(
+        detailValues,
+        detailJson,
+        detailCols,
+        compiledDetailFormulas,
+      );
+      const detailFormulaErrors = applyFormulaColumnsToRowValues(detailValues, compiledDetailFormulas, {
+        evaluationValues: detailFormulaEvalValues,
+        detailCols,
+        strictMissingSourceRefs: true,
+      });
       const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
       const ledgerState = lineChanges.get(lineKey);
       const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -2473,7 +2707,9 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       return {
         detailKey: d.detail_key,
         values: detailValues,
+        formulaErrors: detailFormulaErrors,
         historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
+        trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)),
         isNew,
         isChanged,
         isRemoved,
@@ -2506,11 +2742,28 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
       changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
       values: masterValues,
       historyByColumnId: historyByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)) || {},
+      trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)),
       formulaErrors,
       details,
       detailCount: details.length,
     };
   });
+
+  // Supplier-scoping: beperk de rijen tot de eigen leverancier. De admin kiest via een
+  // instelling op welke kolom gefilterd wordt (supplierFilterColumn); we vergelijken de
+  // afgeleide rijwaarde met het leveranciersaccount van de gebruiker (case-insensitief).
+  // Wanneer supplierAccount is meegegeven (ook een lege string) filteren we altijd — een
+  // supplier ziet dus nooit onbedoeld alle orders. Staff geeft null door en ziet alles.
+  let scopedRows = rows;
+  if (supplierAccount !== null) {
+    const wantedAccount = String(supplierAccount).trim().toLowerCase();
+    const filterKey = supplierFilterColumn || 'vendorAccount';
+    scopedRows = rows.filter((row) => (
+      String(row.values?.[filterKey] ?? '').trim().toLowerCase() === wantedAccount
+    ));
+    newCount = scopedRows.filter((row) => row.isNew).length;
+    changedCount = scopedRows.filter((row) => row.isChanged).length;
+  }
 
   const staleThresholdMinutes = await getStaleThresholdMinutes(table);
   const stale = table.cacheMode === 'never'
@@ -2519,7 +2772,7 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
 
   let retentionMeta = { retainedCount: 0, retentionWarning: 'none' };
   if (table.key === 'purchase-orders') {
-    const retainedCount = rows.filter((row) => row.syncRetained).length;
+    const retainedCount = scopedRows.filter((row) => row.syncRetained).length;
     const retentionSettings = await time('tb_retention', () => getSyncRetentionSettings());
     retentionMeta = {
       retainedCount,
@@ -2529,9 +2782,12 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
     };
   }
 
+  const { revision } = await revisionPromise;
+
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },
     changeContractVersion: 1,
+    revision,
     syncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
     stale,
     hasCache: Boolean(lastFullSyncAt),
@@ -2541,9 +2797,16 @@ async function read({ tableKey, includeRemoved = false, userId = null } = {}) {
         master: [...masterCols, ...enrichment.masterCols],
         detail: [...detailCols, ...enrichment.detailCols],
       },
+      trackChanges: trackActive
+        ? {
+            mode: trackConfig.mode,
+            activeOffsetByColumnId: trackMarks.activeOffsetByColumnId,
+            defaultPattern: trackMarks.defaultPattern,
+          }
+        : null,
     },
-    rows,
-    total: rows.length,
+    rows: scopedRows,
+    total: scopedRows.length,
     lastViewedAt: lastViewedAt ? new Date(lastViewedAt).toISOString() : null,
     newCount,
     changedCount,
@@ -2566,6 +2829,78 @@ async function getLastViewedAt(tableId) {
         AND u.role = 'admin'
     `);
   return result.recordset[0]?.last_viewed_at || null;
+}
+
+// ---------------------------------------------------------------------------
+// Revision-check — lichtgewicht "is het board gewijzigd?"-token, zodat een terugkeer
+// naar de main table een volledige read() kan overslaan als er niets veranderde.
+// De parts moeten álle inputs van read() dekken; een gemiste part = stille stale data.
+// ---------------------------------------------------------------------------
+
+// Zet een DATETIME2/waarde om naar een stabiele string (of null) voor de hash.
+function revisionPartValue(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  return value;
+}
+
+// Deterministische hash over een key-gesorteerde serialisatie van alle parts. Pure functie:
+// zelfde parts → zelfde revision; één gewijzigde part → andere revision. Apart unit-testbaar.
+function computeRevision(parts) {
+  const stable = {};
+  for (const key of Object.keys(parts || {}).sort()) {
+    stable[key] = revisionPartValue(parts[key]);
+  }
+  return crypto.createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+}
+
+// Berekent de revision voor een reeds opgeloste tabel (gebruikt binnen read() in hetzelfde snapshot).
+async function getRevisionByTable(table, { userId = null, supplierAccount = null } = {}) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .input('userId', sql.Int, userId)
+    .input('boardKey', sql.NVarChar(64), table.key)
+    .query(`
+      SELECT
+        (SELECT last_full_sync_at FROM dbo.tb_sync_state WITH (NOLOCK) WHERE table_id = @tableId) AS syncedAt,
+        (SELECT MAX(content_changed_at) FROM dbo.tb_cache WITH (NOLOCK) WHERE table_id = @tableId) AS maxContentChangedAt,
+        (SELECT MAX(first_seen_at) FROM dbo.tb_cache WITH (NOLOCK) WHERE table_id = @tableId) AS maxFirstSeenAt,
+        (SELECT MAX(updated_at) FROM dbo.tb_custom_values WITH (NOLOCK) WHERE table_id = @tableId) AS maxCustomValueAt,
+        (SELECT MAX(created_at) FROM dbo.tb_change_ledger WITH (NOLOCK) WHERE table_id = @tableId) AS maxLedgerAt,
+        (SELECT MAX(updated_at) FROM dbo.tb_columns WITH (NOLOCK) WHERE table_id = @tableId) AS maxColumnsAt,
+        (SELECT COUNT(*) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS exclusionCount,
+        (SELECT MAX(excluded_at) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS maxExclusionAt,
+        (SELECT MAX(vs.last_viewed_at)
+           FROM dbo.tb_user_view_state vs WITH (NOLOCK)
+           INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
+          WHERE vs.table_id = @tableId AND u.role = 'admin') AS adminViewedAt,
+        (SELECT MAX(updated_at) FROM dbo.user_board_settings WITH (NOLOCK)
+          WHERE user_id = @userId AND board_key = @boardKey) AS userBoardSettingsAt,
+        (SELECT MAX(updated_at) FROM dbo.app_settings WITH (NOLOCK)) AS settingsAt
+    `);
+  const row = result.recordset[0] || {};
+  const parts = {
+    syncedAt: revisionPartValue(row.syncedAt),
+    maxContentChangedAt: revisionPartValue(row.maxContentChangedAt),
+    maxFirstSeenAt: revisionPartValue(row.maxFirstSeenAt),
+    maxCustomValueAt: revisionPartValue(row.maxCustomValueAt),
+    maxLedgerAt: revisionPartValue(row.maxLedgerAt),
+    maxColumnsAt: revisionPartValue(row.maxColumnsAt),
+    exclusionCount: Number(row.exclusionCount) || 0,
+    maxExclusionAt: revisionPartValue(row.maxExclusionAt),
+    adminViewedAt: revisionPartValue(row.adminViewedAt),
+    userBoardSettingsAt: revisionPartValue(row.userBoardSettingsAt),
+    settingsAt: revisionPartValue(row.settingsAt),
+    supplierAccount: supplierAccount || null,
+  };
+  return { revision: computeRevision(parts), parts };
+}
+
+// Publieke revision-check op basis van tableKey (los endpoint).
+async function getRevision({ tableKey, userId = null, supplierAccount = null } = {}) {
+  const table = await getTableByKey(tableKey);
+  return getRevisionByTable(table, { userId, supplierAccount });
 }
 
 async function markViewed(userId, tableKey) {
@@ -3504,6 +3839,8 @@ module.exports = {
   getSyncState,
   isStale,
   getLastViewedAt,
+  getRevision,
+  computeRevision,
   markViewed,
   computeContentHash,
   computeChangedFieldKeys,
@@ -3516,6 +3853,9 @@ module.exports = {
   requiredMasterFieldsFromTable,
   assertCustomColumnWritable,
   compileMasterFormulaColumns,
+  compileFormulaColumns,
+  buildDetailFormulaEvaluationContext,
+  detailFormulaHasMissingSourceReference,
   applyFormulaColumnsToRowValues,
   resolveSourceColumnValue,
   calculateLinkedLineTotal,

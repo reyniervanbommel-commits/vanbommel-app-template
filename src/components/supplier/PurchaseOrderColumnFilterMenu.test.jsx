@@ -105,6 +105,21 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(await screen.findByText('Preview text')).toBeTruthy();
   });
 
+  it('sluit het submenu wanneer de gebruiker over een item zonder submenu hovert', async () => {
+    renderMenu();
+    openColumnMenu();
+    const textStyleButton = await screen.findByRole('button', { name: /Text style/i });
+    fireEvent.mouseEnter(textStyleButton);
+    expect(await screen.findByText('Preview text')).toBeTruthy();
+
+    const sortButton = await screen.findByRole('button', { name: /Sort A to Z/i });
+    fireEvent.mouseEnter(sortButton);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Preview text')).toBeNull();
+    });
+  });
+
   it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
     const { onSetColumnFormatRules } = renderMenu();
 
@@ -154,5 +169,15 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
+  });
+
+  it('toont Hide column in het kolommenu', async () => {
+    const onToggleColumnCollapsed = vi.fn();
+    renderMenu({ onToggleColumnCollapsed });
+    openColumnMenu();
+    const hideButton = await screen.findByRole('button', { name: /Hide column/i });
+    expect(hideButton).toBeTruthy();
+    fireEvent.click(hideButton);
+    expect(onToggleColumnCollapsed).toHaveBeenCalledWith('amount');
   });
 });

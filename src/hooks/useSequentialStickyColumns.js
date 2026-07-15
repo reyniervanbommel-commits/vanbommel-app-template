@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 const CONTROL_COLUMN_WIDTH = 58;
 const FALLBACK_COLUMN_WIDTH = 80;
@@ -11,6 +11,13 @@ function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
   return FALLBACK_COLUMN_WIDTH;
 }
 
+function offsetsShallowEqual(a, b) {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => a[key] === b[key]);
+}
+
 export function useSequentialStickyColumns({
   columns,
   headerColumnWidths,
@@ -21,6 +28,7 @@ export function useSequentialStickyColumns({
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
   const [uncontrolledStickyColumnKeys, setUncontrolledStickyColumnKeys] = useState([]);
   const [measuredStickyWidths, setMeasuredStickyWidths] = useState({});
+  const [measuredOffsetsByKey, setMeasuredOffsetsByKey] = useState({});
   const stickyColumnKeys = Array.isArray(controlledStickyColumnKeys)
     ? controlledStickyColumnKeys
     : uncontrolledStickyColumnKeys;
@@ -50,7 +58,9 @@ export function useSequentialStickyColumns({
     [stickyColumnKeys]
   );
 
-  const stickyOffsetsByKey = useMemo(() => {
+  // Fallback offsets op basis van geschatte content-breedtes. Alleen gebruikt
+  // vóórdat de echte DOM-breedtes (incl. padding + border) gemeten zijn.
+  const fallbackOffsetsByKey = useMemo(() => {
     const offsets = {};
     let left = CONTROL_COLUMN_WIDTH;
     stickyColumnKeys.forEach((key) => {
@@ -60,13 +70,48 @@ export function useSequentialStickyColumns({
     return offsets;
   }, [stickyColumnKeys, headerColumnWidths, measuredStickyWidths]);
 
+  // Meet de werkelijke render-breedtes (border-box, dus incl. padding + border)
+  // van de control-kolom en elke sticky-kolom, en tel ze cumulatief op tot
+  // exacte left-offsets. Breedtes zijn ongevoelig voor scroll/sticky, dus dit
+  // geeft geen feedback-loop.
+  const measureOffsets = useCallback(() => {
+    const container = wrapperRef.current;
+    const head = container?.querySelector('thead');
+    if (!head) return;
+    const controlCell = head.querySelector('th');
+    const controlWidth = controlCell?.getBoundingClientRect?.().width;
+    let left = Number.isFinite(controlWidth) && controlWidth > 0
+      ? controlWidth
+      : CONTROL_COLUMN_WIDTH;
+    const next = {};
+    for (const key of stickyColumnKeys) {
+      next[key] = left;
+      const cell = head.querySelector(`[data-col-key="${key}"]`);
+      const width = cell?.getBoundingClientRect?.().width;
+      if (!Number.isFinite(width) || width <= 0) return; // DOM nog niet klaar; volgende meting corrigeert
+      left += width;
+    }
+    setMeasuredOffsetsByKey((current) => (offsetsShallowEqual(current, next) ? current : next));
+  }, [stickyColumnKeys, wrapperRef]);
+
+  useLayoutEffect(() => {
+    measureOffsets();
+    const table = wrapperRef.current?.querySelector('table');
+    if (!table || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => measureOffsets());
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [measureOffsets, headerColumnWidths, safeColumns, wrapperRef]);
+
   const decoratedColumns = useMemo(
     () => safeColumns.map((column) => {
-      const stickyLeft = stickyOffsetsByKey[column.key];
+      const stickyLeft = Number.isFinite(measuredOffsetsByKey[column.key])
+        ? measuredOffsetsByKey[column.key]
+        : fallbackOffsetsByKey[column.key];
       if (!Number.isFinite(stickyLeft)) return column;
       return { ...column, stickyLeft };
     }),
-    [safeColumns, stickyOffsetsByKey]
+    [safeColumns, measuredOffsetsByKey, fallbackOffsetsByKey]
   );
 
   const makeColumnSticky = useCallback((columnKey) => {

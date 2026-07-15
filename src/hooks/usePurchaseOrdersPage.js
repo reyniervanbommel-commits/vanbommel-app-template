@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
+import { getCachedBoard, setCachedBoard } from '../utils/boardSessionStore';
+import { getCachedBoardSettings, setCachedBoardSettings } from '../utils/boardPresentationCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
 import { migrateFormatRulesForStatusRenames, normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
 import { buildStatusLabelRenames } from '../utils/statusColumnUtils';
@@ -18,6 +19,10 @@ import {
   normalizeVisibleColumns,
 } from '../utils/boardColumnSettings';
 import {
+  normalizeCollapsedColumnKeys,
+  toggleCollapsedColumnKey,
+} from '../utils/collapsedColumnUtils';
+import {
   PRODUCT_IMAGE_COLUMN_KEY,
   applyProductImageColumnWidth,
   createProductImageColumn,
@@ -27,11 +32,47 @@ import {
 
 const BOARD_KEY = 'purchase-orders';
 
+// Optimistische track-change update: zet de meest rechter stip (huidige sessie/week,
+// offset 0 = laatste teken) direct op rood na een celwijziging, zonder board-herlaad.
+// Retourneert dezelfde map-referentie als er niets verandert (kolom niet getrackt).
+function withRightmostMarkRed(existingMarks, columnId, meta) {
+  const colKey = String(columnId);
+  const activeMap = meta?.activeOffsetByColumnId || {};
+  if (!Object.prototype.hasOwnProperty.call(activeMap, colKey)) return existingMarks;
+  const base = existingMarks?.[colKey] ?? meta?.defaultPattern?.[colKey];
+  if (typeof base !== 'string' || base.length === 0) return existingMarks;
+  const next = `${base.slice(0, -1)}r`;
+  if (next === existingMarks?.[colKey]) return existingMarks;
+  return { ...(existingMarks || {}), [colKey]: next };
+}
+
 // Board-cutover Fase 7 (#AB:176): endpoints van de generieke tb_*-laag versus de
 // oorspronkelijke po_*-laag. Shape-mapping zit in utils/purchaseOrdersBoardMapping.
 const DATA_BASE = '/data/purchase-orders';
 const PO_BASE = '/purchase-orders';
 const boardBase = () => (BOARD_TB_SOURCE ? DATA_BASE : PO_BASE);
+
+// Normaliseert een board-settings response (of null) naar de losse state-waarden. Gedeeld door de
+// initiële state-seeding vanuit de sessie-cache (instant kolomlayout bij terugkeer) én door de
+// fetch in loadBoardSettings, zodat beide paden exact hetzelfde normaliseren.
+function normalizeBoardSettings(settings) {
+  return {
+    visibleColumnKeys: Array.isArray(settings?.visibleColumns) ? settings.visibleColumns : [],
+    columnOrder: Array.isArray(settings?.columnOrder) ? settings.columnOrder : [],
+    lineColumnOrder: Array.isArray(settings?.lineColumnOrder) ? settings.lineColumnOrder : [],
+    headerColumnWidths: normalizeColumnWidths(settings?.headerColumnWidths),
+    lineColumnWidths: normalizeColumnWidths(settings?.lineColumnWidths),
+    headerColumnTextStyles: normalizeColumnTextStyleMap(settings?.headerColumnTextStyles),
+    headerColumnFormatRules: normalizeColumnFormatRulesMap(settings?.headerColumnFormatRules),
+    lineColumnTextStyles: normalizeColumnTextStyleMap(settings?.lineColumnTextStyles),
+    lineColumnFormatRules: normalizeColumnFormatRulesMap(settings?.lineColumnFormatRules),
+    lineTotalColumns: Array.isArray(settings?.lineTotalColumns) ? settings.lineTotalColumns : [],
+    lineTotalHeaderLinks: Array.isArray(settings?.lineTotalHeaderLinks) ? settings.lineTotalHeaderLinks : [],
+    lineValueHeaderLinks: Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : [],
+    collapsedHeaderColumnKeys: Array.isArray(settings?.collapsedHeaderColumnKeys) ? settings.collapsedHeaderColumnKeys : [],
+    collapsedLineColumnKeys: Array.isArray(settings?.collapsedLineColumnKeys) ? settings.collapsedLineColumnKeys : [],
+  };
+}
 
 // AANNAME: De nieuwe SQL-backed API levert alle data (orders + dynamische kolommen)
 // in één GET-call onder /purchase-orders (NIET onder /supplier). De tabelpagina
@@ -53,6 +94,13 @@ export function usePurchaseOrdersPage() {
   // Nieuw-detectie per gebruiker (#133)
   const [newCount, setNewCount] = useState(0);
   const [changedCount, setChangedCount] = useState(0);
+  // Track-changes-meta uit de board-read (null = feature globaal uit) (#AB:217)
+  const [trackChangesMeta, setTrackChangesMeta] = useState(null);
+  // Ref zodat save/correct de actuele meta kunnen lezen zonder in hun deps te zitten.
+  const trackChangesMetaRef = useRef(null);
+  useEffect(() => {
+    trackChangesMetaRef.current = trackChangesMeta;
+  }, [trackChangesMeta]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,19 +108,26 @@ export function usePurchaseOrdersPage() {
   const [error, setError] = useState('');
 
   // Board-settings t.b.v. zichtbaarheid/volgorde van header-kolommen (op key-basis).
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState([]);
-  const [columnOrder, setColumnOrder] = useState([]);
-  const [lineColumnOrder, setLineColumnOrder] = useState([]);
-  const [headerColumnWidths, setHeaderColumnWidths] = useState({});
-  const [lineColumnWidths, setLineColumnWidths] = useState({});
-  const [headerColumnTextStyles, setHeaderColumnTextStyles] = useState({});
-  const [headerColumnFormatRules, setHeaderColumnFormatRules] = useState({});
-  const [lineColumnTextStyles, setLineColumnTextStyles] = useState({});
-  const [lineColumnFormatRules, setLineColumnFormatRules] = useState({});
-  const [lineTotalColumns, setLineTotalColumns] = useState([]);
-  const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState([]);
-  const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState([]);
-  const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(false);
+  // Seed de initiële state uit de sessie-cache zodat de kolomlayout bij terugkeer al bij de eerste
+  // paint staat i.p.v. een tel later "bij te trekken". Zonder cache levert dit dezelfde lege
+  // defaults als voorheen (normalizeBoardSettings(null)). De fetch blijft de bron van waarheid.
+  const seededBoardSettings = useMemo(() => normalizeBoardSettings(getCachedBoardSettings(BOARD_KEY)), []);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(seededBoardSettings.visibleColumnKeys);
+  const [columnOrder, setColumnOrder] = useState(seededBoardSettings.columnOrder);
+  const [lineColumnOrder, setLineColumnOrder] = useState(seededBoardSettings.lineColumnOrder);
+  const [headerColumnWidths, setHeaderColumnWidths] = useState(seededBoardSettings.headerColumnWidths);
+  const [lineColumnWidths, setLineColumnWidths] = useState(seededBoardSettings.lineColumnWidths);
+  const [headerColumnTextStyles, setHeaderColumnTextStyles] = useState(seededBoardSettings.headerColumnTextStyles);
+  const [headerColumnFormatRules, setHeaderColumnFormatRules] = useState(seededBoardSettings.headerColumnFormatRules);
+  const [lineColumnTextStyles, setLineColumnTextStyles] = useState(seededBoardSettings.lineColumnTextStyles);
+  const [lineColumnFormatRules, setLineColumnFormatRules] = useState(seededBoardSettings.lineColumnFormatRules);
+  const [lineTotalColumns, setLineTotalColumns] = useState(seededBoardSettings.lineTotalColumns);
+  const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState(seededBoardSettings.lineTotalHeaderLinks);
+  const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState(seededBoardSettings.lineValueHeaderLinks);
+  const [collapsedHeaderColumnKeys, setCollapsedHeaderColumnKeys] = useState(seededBoardSettings.collapsedHeaderColumnKeys);
+  const [collapsedLineColumnKeys, setCollapsedLineColumnKeys] = useState(seededBoardSettings.collapsedLineColumnKeys);
+  const [datePeriodDisplayModes, setDatePeriodDisplayModes] = useState({});
+  const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(() => Boolean(getCachedBoardSettings(BOARD_KEY)));
   const [savingColumns, setSavingColumns] = useState(false);
   // Onthoudt een net-aangemaakte kolom die nog rechts van zijn bron gezet moet worden.
   const [pendingInsertAfter, setPendingInsertAfter] = useState(null);
@@ -89,7 +144,10 @@ export function usePurchaseOrdersPage() {
     setTotal(Number(data?.total) || 0);
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
-    setCachedPurchaseOrdersView(data);
+    setTrackChangesMeta(data?.meta?.trackChanges ?? null);
+    // Payload + revision atomair cachen (revision komt uit dezelfde read). Elke refresh-flow loopt
+    // via applyData, dus cache en revision blijven vanzelf in sync.
+    setCachedBoard(data, data?.revision ?? null);
   }, []);
 
   const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
@@ -123,53 +181,70 @@ export function usePurchaseOrdersPage() {
   // is teruggezet zodat hij weer in het overzicht verschijnt.
   const reload = useCallback(() => loadPurchaseOrders({ skipLoading: true }), [loadPurchaseOrders]);
 
+  // Zet een genormaliseerd board-settings object (van cache of fetch) in de losse state.
+  const applyNormalizedSettings = useCallback((normalized) => {
+    setVisibleColumnKeys(normalized.visibleColumnKeys);
+    setColumnOrder(normalized.columnOrder);
+    setLineColumnOrder(normalized.lineColumnOrder);
+    setHeaderColumnWidths(normalized.headerColumnWidths);
+    setLineColumnWidths(normalized.lineColumnWidths);
+    setHeaderColumnTextStyles(normalized.headerColumnTextStyles);
+    setHeaderColumnFormatRules(normalized.headerColumnFormatRules);
+    setLineColumnTextStyles(normalized.lineColumnTextStyles);
+    setLineColumnFormatRules(normalized.lineColumnFormatRules);
+    setLineTotalColumns(normalized.lineTotalColumns);
+    setLineTotalHeaderLinks(normalized.lineTotalHeaderLinks);
+    setLineValueHeaderLinks(normalized.lineValueHeaderLinks);
+    setCollapsedHeaderColumnKeys(normalized.collapsedHeaderColumnKeys);
+    setCollapsedLineColumnKeys(normalized.collapsedLineColumnKeys);
+  }, []);
+
   const loadBoardSettings = useCallback(async () => {
     try {
       const data = await apiRequest('/supplier/board-settings/' + BOARD_KEY);
       const settings = data?.settings || null;
-      setVisibleColumnKeys(Array.isArray(settings?.visibleColumns) ? settings.visibleColumns : []);
-      setColumnOrder(Array.isArray(settings?.columnOrder) ? settings.columnOrder : []);
-      setLineColumnOrder(Array.isArray(settings?.lineColumnOrder) ? settings.lineColumnOrder : []);
-      setHeaderColumnWidths(normalizeColumnWidths(settings?.headerColumnWidths));
-      setLineColumnWidths(normalizeColumnWidths(settings?.lineColumnWidths));
-      setHeaderColumnTextStyles(normalizeColumnTextStyleMap(settings?.headerColumnTextStyles));
-      setHeaderColumnFormatRules(normalizeColumnFormatRulesMap(settings?.headerColumnFormatRules));
-      setLineColumnTextStyles(normalizeColumnTextStyleMap(settings?.lineColumnTextStyles));
-      setLineColumnFormatRules(normalizeColumnFormatRulesMap(settings?.lineColumnFormatRules));
-      setLineTotalColumns(Array.isArray(settings?.lineTotalColumns) ? settings.lineTotalColumns : []);
-      setLineTotalHeaderLinks(Array.isArray(settings?.lineTotalHeaderLinks) ? settings.lineTotalHeaderLinks : []);
-      setLineValueHeaderLinks(Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : []);
+      applyNormalizedSettings(normalizeBoardSettings(settings));
+      // Cache de ruwe settings zodat een volgende mount de kolomlayout meteen kan seeden.
+      setCachedBoardSettings(BOARD_KEY, settings || {});
     } catch {
       // Board-settings zijn optioneel; bij afwezigheid blijven alle kolommen zichtbaar.
-      setVisibleColumnKeys([]);
-      setColumnOrder([]);
-      setLineColumnOrder([]);
-      setHeaderColumnWidths({});
-      setLineColumnWidths({});
-      setHeaderColumnTextStyles({});
-      setHeaderColumnFormatRules({});
-      setLineColumnTextStyles({});
-      setLineColumnFormatRules({});
-      setLineTotalColumns([]);
-      setLineTotalHeaderLinks([]);
-      setLineValueHeaderLinks([]);
+      // Met een sessie-cache behouden we de geseede layout i.p.v. terug te vallen naar leeg.
+      if (!getCachedBoardSettings(BOARD_KEY)) {
+        applyNormalizedSettings(normalizeBoardSettings(null));
+      }
     } finally {
       setBoardSettingsLoaded(true);
     }
-  }, []);
+  }, [applyNormalizedSettings]);
 
   useEffect(() => {
     let active = true;
-    const cachedData = getCachedPurchaseOrdersView();
-    const hasCachedData = Boolean(cachedData);
+    const cached = getCachedBoard();
+    const hasCachedData = Boolean(cached?.payload);
 
     if (hasCachedData) {
-      applyData(cachedData);
+      applyData(cached.payload);
       setLoading(false);
     }
 
     const bootstrap = async () => {
       if (!active) return;
+      // Met een cache-hit: eerst een lichtgewicht revision-check. Alleen bij een mismatch (data
+      // gewijzigd) of een fout volgt een volledige read; is de revision gelijk, dan slaan we de
+      // zware read() over. Zonder cache: gewoon de volledige read (ongewijzigd gedrag).
+      if (hasCachedData && cached.revision) {
+        try {
+          const rev = await apiRequest(`${boardBase()}/revision`);
+          if (!active) return;
+          if (rev?.revision && rev.revision === cached.revision) {
+            return; // ongewijzigd → geen volledige read
+          }
+        } catch {
+          // Revision-check mislukt → val terug op een volledige read. Nooit stil oneindig stale
+          // data tonen; de oude 5-min-TTL is er niet meer om dit vanzelf te corrigeren.
+        }
+        if (!active) return;
+      }
       await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
     };
     bootstrap();
@@ -262,6 +337,7 @@ export function usePurchaseOrdersPage() {
     const isLine = lineNumber !== null && lineNumber !== undefined;
 
     // Bewaar vorige state voor rollback.
+    const meta = trackChangesMetaRef.current;
     let previousOrders = null;
     setOrders((prev) => {
       previousOrders = prev;
@@ -274,12 +350,20 @@ export function usePurchaseOrdersPage() {
             ...order,
             lines: (order.lines || []).map((line) =>
               line.lineNumber === lineNumber
-                ? { ...line, values: { ...line.values, [columnKey]: value } }
+                ? {
+                    ...line,
+                    values: { ...line.values, [columnKey]: value },
+                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+                  }
                 : line
             ),
           };
         }
-        return { ...order, values: { ...order.values, [columnKey]: value } };
+        return {
+          ...order,
+          values: { ...order.values, [columnKey]: value },
+          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+        };
       });
     });
 
@@ -312,6 +396,7 @@ export function usePurchaseOrdersPage() {
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
     // Fase 3 (#AB:172): write-back naar D365 op tb_*. De guard uit #176 is vervangen door de echte call.
     const isLine = lineNumber !== null && lineNumber !== undefined;
+    const meta = trackChangesMetaRef.current;
     let previousOrders = null;
     setOrders((prev) => {
       previousOrders = prev;
@@ -321,11 +406,21 @@ export function usePurchaseOrdersPage() {
           return {
             ...order,
             lines: (order.lines || []).map((line) =>
-              line.lineNumber === lineNumber ? { ...line, values: { ...line.values, [columnKey]: value } } : line
+              line.lineNumber === lineNumber
+                ? {
+                    ...line,
+                    values: { ...line.values, [columnKey]: value },
+                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+                  }
+                : line
             ),
           };
         }
-        return { ...order, values: { ...order.values, [columnKey]: value } };
+        return {
+          ...order,
+          values: { ...order.values, [columnKey]: value },
+          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+        };
       });
     });
     try {
@@ -524,6 +619,14 @@ export function usePurchaseOrdersPage() {
     () => normalizeColumnFormatRulesMap(lineColumnFormatRules, defaultLineKeys),
     [lineColumnFormatRules, defaultLineKeys]
   );
+  const effectiveCollapsedHeaderColumnKeys = useMemo(
+    () => normalizeCollapsedColumnKeys(collapsedHeaderColumnKeys, defaultHeaderKeys),
+    [collapsedHeaderColumnKeys, defaultHeaderKeys]
+  );
+  const effectiveCollapsedLineColumnKeys = useMemo(
+    () => normalizeCollapsedColumnKeys(collapsedLineColumnKeys, defaultLineKeys),
+    [collapsedLineColumnKeys, defaultLineKeys]
+  );
 
   const persistBoardSettings = useCallback(async ({
     nextVisibleKeys = visibleColumnKeys,
@@ -538,6 +641,8 @@ export function usePurchaseOrdersPage() {
     nextLineTotalColumns = lineTotalColumns,
     nextLineTotalHeaderLinks = lineTotalHeaderLinks,
     nextLineValueHeaderLinks = lineValueHeaderLinks,
+    nextCollapsedHeaderColumnKeys = collapsedHeaderColumnKeys,
+    nextCollapsedLineColumnKeys = collapsedLineColumnKeys,
   } = {}) => {
     const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
     const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
@@ -560,6 +665,14 @@ export function usePurchaseOrdersPage() {
       nextLineValueHeaderLinks,
       defaultLineKeys
     );
+    const normalizedCollapsedHeaderColumnKeys = normalizeCollapsedColumnKeys(
+      nextCollapsedHeaderColumnKeys,
+      defaultHeaderKeys
+    );
+    const normalizedCollapsedLineColumnKeys = normalizeCollapsedColumnKeys(
+      nextCollapsedLineColumnKeys,
+      defaultLineKeys
+    );
 
     setVisibleColumnKeys(normalizedVisible);
     setColumnOrder(normalizedHeaderOrder);
@@ -573,25 +686,33 @@ export function usePurchaseOrdersPage() {
     setLineTotalColumns(normalizedLineTotalColumns);
     setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
     setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
+    setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
+    setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
+    // Houd de sessie-cache in sync met wat we opslaan, zodat een volgende mount de nieuwe layout
+    // meteen seedt en er geen "oude layout → correctie"-flits ontstaat.
+    const persistedSettings = {
+      visibleColumns: normalizedVisible,
+      columnOrder: normalizedHeaderOrder,
+      lineColumnOrder: normalizedLineOrder,
+      headerColumnWidths: normalizedHeaderWidths,
+      lineColumnWidths: normalizedLineWidths,
+      headerColumnTextStyles: normalizedHeaderTextStyles,
+      headerColumnFormatRules: normalizedHeaderFormatRules,
+      lineColumnTextStyles: normalizedLineTextStyles,
+      lineColumnFormatRules: normalizedLineFormatRules,
+      lineTotalColumns: normalizedLineTotalColumns,
+      lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
+      lineValueHeaderLinks: normalizedLineValueHeaderLinks,
+      collapsedHeaderColumnKeys: normalizedCollapsedHeaderColumnKeys,
+      collapsedLineColumnKeys: normalizedCollapsedLineColumnKeys,
+    };
+    setCachedBoardSettings(BOARD_KEY, persistedSettings);
     setSavingColumns(true);
     try {
       await apiRequest('/supplier/board-settings/' + BOARD_KEY, {
         method: 'PATCH',
         body: {
-          settings: {
-            visibleColumns: normalizedVisible,
-            columnOrder: normalizedHeaderOrder,
-            lineColumnOrder: normalizedLineOrder,
-            headerColumnWidths: normalizedHeaderWidths,
-            lineColumnWidths: normalizedLineWidths,
-            headerColumnTextStyles: normalizedHeaderTextStyles,
-            headerColumnFormatRules: normalizedHeaderFormatRules,
-            lineColumnTextStyles: normalizedLineTextStyles,
-            lineColumnFormatRules: normalizedLineFormatRules,
-            lineTotalColumns: normalizedLineTotalColumns,
-            lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
-            lineValueHeaderLinks: normalizedLineValueHeaderLinks,
-          },
+          settings: persistedSettings,
         },
       });
     } finally {
@@ -610,6 +731,8 @@ export function usePurchaseOrdersPage() {
     lineTotalColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
+    collapsedHeaderColumnKeys,
+    collapsedLineColumnKeys,
     defaultHeaderKeys,
     defaultLineKeys,
     lineColumns,
@@ -675,6 +798,9 @@ export function usePurchaseOrdersPage() {
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+    collapsedHeaderColumnKeys: effectiveCollapsedHeaderColumnKeys,
+    collapsedLineColumnKeys: effectiveCollapsedLineColumnKeys,
+    datePeriodDisplayModes: { ...datePeriodDisplayModes },
   }), [
     effectiveVisibleKeys,
     columnOrder,
@@ -690,6 +816,9 @@ export function usePurchaseOrdersPage() {
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
+    effectiveCollapsedHeaderColumnKeys,
+    effectiveCollapsedLineColumnKeys,
+    datePeriodDisplayModes,
   ]);
 
   // Pas een opgeslagen kolomlayout toe (alleen in-memory; niet persistent in
@@ -732,7 +861,39 @@ export function usePurchaseOrdersPage() {
     if (Array.isArray(layout.lineValueHeaderLinks)) {
       setLineValueHeaderLinks(normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys));
     }
+    if (layout.datePeriodDisplayModes && typeof layout.datePeriodDisplayModes === 'object') {
+      setDatePeriodDisplayModes(layout.datePeriodDisplayModes);
+    }
+    if (Array.isArray(layout.collapsedHeaderColumnKeys)) {
+      setCollapsedHeaderColumnKeys(normalizeCollapsedColumnKeys(layout.collapsedHeaderColumnKeys, defaultHeaderKeys));
+    }
+    if (Array.isArray(layout.collapsedLineColumnKeys)) {
+      setCollapsedLineColumnKeys(normalizeCollapsedColumnKeys(layout.collapsedLineColumnKeys, defaultLineKeys));
+    }
   }, [defaultHeaderKeys, defaultLineKeys]);
+
+  const setDatePeriodDisplayMode = useCallback((columnKey, displayMode) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    setDatePeriodDisplayModes((prev) => ({
+      ...prev,
+      [key]: displayMode === 'month' ? 'month' : 'week',
+    }));
+  }, []);
+
+  const toggleHeaderColumnCollapsed = useCallback(async (columnKey) => {
+    const key = String(columnKey || '').trim();
+    if (!key || !defaultHeaderKeys.includes(key)) return;
+    const next = toggleCollapsedColumnKey(effectiveCollapsedHeaderColumnKeys, key);
+    await persistBoardSettings({ nextCollapsedHeaderColumnKeys: next });
+  }, [defaultHeaderKeys, effectiveCollapsedHeaderColumnKeys, persistBoardSettings]);
+
+  const toggleLineColumnCollapsed = useCallback(async (columnKey) => {
+    const key = String(columnKey || '').trim();
+    if (!key || !defaultLineKeys.includes(key)) return;
+    const next = toggleCollapsedColumnKey(effectiveCollapsedLineColumnKeys, key);
+    await persistBoardSettings({ nextCollapsedLineColumnKeys: next });
+  }, [defaultLineKeys, effectiveCollapsedLineColumnKeys, persistBoardSettings]);
 
   const saveHeaderColumnWidth = useCallback(async (columnKey, width) => {
     if (!columnKey) return;
@@ -896,6 +1057,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,
@@ -910,6 +1072,10 @@ export function usePurchaseOrdersPage() {
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+    collapsedHeaderColumnKeys: effectiveCollapsedHeaderColumnKeys,
+    collapsedLineColumnKeys: effectiveCollapsedLineColumnKeys,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     savingColumns,
     refresh,
     finishRefresh,
@@ -939,6 +1105,8 @@ export function usePurchaseOrdersPage() {
     saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
     saveLineColumnFormatRules,
+    toggleHeaderColumnCollapsed,
+    toggleLineColumnCollapsed,
     exportColumnLayout,
     applyColumnLayout,
   }), [
@@ -953,6 +1121,7 @@ export function usePurchaseOrdersPage() {
     total,
     newCount,
     changedCount,
+    trackChangesMeta,
     loading,
     refreshing,
     markingViewed,
@@ -967,6 +1136,10 @@ export function usePurchaseOrdersPage() {
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
+    effectiveCollapsedHeaderColumnKeys,
+    effectiveCollapsedLineColumnKeys,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     savingColumns,
     refresh,
     finishRefresh,
@@ -996,6 +1169,8 @@ export function usePurchaseOrdersPage() {
     saveHeaderColumnFormatRules,
     saveLineColumnTextStyle,
     saveLineColumnFormatRules,
+    toggleHeaderColumnCollapsed,
+    toggleLineColumnCollapsed,
     exportColumnLayout,
     applyColumnLayout,
   ]);

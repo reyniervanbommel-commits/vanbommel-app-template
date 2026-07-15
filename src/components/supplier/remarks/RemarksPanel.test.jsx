@@ -71,7 +71,7 @@ describe('RemarksPanel', () => {
     const view = renderPanel({ onClose, openerRef });
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Purchase order PO-207' })).toBe(document.activeElement)
+      expect(screen.getByLabelText('Add a remark')).toBe(document.activeElement)
     );
     fireEvent.click(screen.getByRole('button', { name: 'Close remarks panel' }));
     expect(onClose).toHaveBeenCalledTimes(1);

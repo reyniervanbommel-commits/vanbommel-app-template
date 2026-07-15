@@ -124,6 +124,8 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
   itemCell: {
+    '--po-cell-padding-y': '2px',
+    '--po-cell-padding-x': '10px',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px', '10px'),
@@ -132,6 +134,9 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
     ...fixedCellOverflow,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   itemCellContent: {
     display: 'block',
@@ -143,6 +148,9 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   newRow: {
     boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
@@ -277,6 +285,7 @@ function PurchaseOrdersBoardRows({
       onToggleOrder: actions.tableActions.onToggleOrder,
       onSaveLineColumnWidth: actions.onSaveLineColumnWidth,
       cellActions: actions.cellActions,
+      onToggleLineColumnCollapsed: actions.onToggleLineColumnCollapsed,
     },
   }), [actions, handleGroupSelection]);
 

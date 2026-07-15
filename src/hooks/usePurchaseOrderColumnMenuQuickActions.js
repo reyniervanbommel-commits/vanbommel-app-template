@@ -17,6 +17,7 @@ export function usePurchaseOrderColumnMenuQuickActions({
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
   onMakeColumnSticky,
+  onToggleColumnCollapsed,
   setOpen,
 }) {
   const handleToggleWriteback = useCallback(() => {
@@ -55,6 +56,12 @@ export function usePurchaseOrderColumnMenuQuickActions({
     setOpen(false);
   }, [canToggleStickyAction, column.key, onMakeColumnSticky, setOpen]);
 
+  const handleHideColumn = useCallback(() => {
+    if (typeof onToggleColumnCollapsed !== 'function') return;
+    onToggleColumnCollapsed(column.key);
+    setOpen(false);
+  }, [column.key, onToggleColumnCollapsed, setOpen]);
+
   return {
     handleToggleWriteback,
     handleToggleLineTotal,
@@ -62,5 +69,6 @@ export function usePurchaseOrderColumnMenuQuickActions({
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
     handleMakeColumnSticky,
+    handleHideColumn,
   };
 }

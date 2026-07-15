@@ -25,6 +25,7 @@ const {
   validateRemarksColumnRequest,
 } = require('./RemarksColumnService');
 const { normalizeStatusOptions, buildStatusLabelRenames } = require('../utils/statusColumnOptions');
+const { validateDatePeriodOptions } = require('../utils/datePeriodColumn');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -162,12 +163,13 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const normalizedFormula = normalizeFormulaExpression(formulaExpr);
   const isFormulaColumn = Boolean(normalizedFormula.expression);
-  if (isFormulaColumn && scope !== 'master') {
-    throw Object.assign(new Error('Formula columns are only allowed at master level'), { status: 400 });
+  if (isFormulaColumn && dataType === 'remarks') {
+    throw Object.assign(new Error('Formula columns do not support the Remarks data type'), { status: 400 });
   }
 
   let optionsJson = null;
   let normalizedImageOptions = null;
+  let normalizedDatePeriodOptions = null;
   if (dataType === 'select' && !isFormulaColumn) {
     const list = Array.isArray(options) ? options.map((o) => String(o || '').trim()).filter(Boolean) : [];
     if (!list.length) throw Object.assign(new Error('A choice list requires at least one option'), { status: 400 });
@@ -186,11 +188,41 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
     normalizedImageOptions = validateImageOptions(options);
     optionsJson = JSON.stringify(normalizedImageOptions);
   }
-  if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image')) {
-    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
+  if (dataType === 'date_period') {
+    if (isFormulaColumn) {
+      throw Object.assign(new Error('Formula columns do not support date period data type'), { status: 400 });
+    }
+    normalizedDatePeriodOptions = validateDatePeriodOptions(options);
+    optionsJson = JSON.stringify({
+      sourceColumnKey: normalizedDatePeriodOptions.sourceColumnKey,
+    });
+  }
+  if (isFormulaColumn && (dataType === 'select' || dataType === 'status' || dataType === 'image' || dataType === 'date_period')) {
+    throw Object.assign(new Error('Formula columns do not support choice list, status, image or date period data types'), { status: 400 });
   }
 
   const pool = await getPool();
+  if (dataType === 'date_period') {
+    const sourceCheck = await pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('scope', sql.NVarChar(16), scope)
+      .input('sourceColumnKey', sql.NVarChar(64), normalizedDatePeriodOptions.sourceColumnKey)
+      .query(`
+        SELECT data_type
+        FROM dbo.tb_columns
+        WHERE table_id = @tableId
+          AND scope = @scope
+          AND [key] = @sourceColumnKey
+          AND is_active = 1
+      `);
+    if (!sourceCheck.recordset.length) {
+      throw Object.assign(new Error('sourceColumnKey does not reference an existing column in this scope'), { status: 400 });
+    }
+    const sourceDataType = String(sourceCheck.recordset[0]?.data_type || '').trim().toLowerCase();
+    if (sourceDataType !== 'date') {
+      throw Object.assign(new Error('sourceColumnKey must reference a date column'), { status: 400 });
+    }
+  }
   if (dataType === 'image') {
     const sourceCheck = await pool.request()
       .input('tableId', sql.BigInt, table.id)
@@ -209,12 +241,12 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
   }
   const key = await uniqueKeyForScope(pool, table.id, scope, slugify(cleanLabel));
   if (isFormulaColumn) {
-    const masterColumns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
-    validateFormulaReferences(normalizedFormula.references, masterColumns, key);
+    const scopeColumns = await listColumns({ tableId: table.id, scope, includeInactive: false });
+    validateFormulaReferences(normalizedFormula.references, scopeColumns, key, scope);
     validateFormulaResultTypeCompatibility(
       normalizedFormula.expression,
       normalizedFormula.references,
-      masterColumns,
+      scopeColumns,
       dataType
     );
   }
@@ -338,8 +370,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (existing.source !== 'custom') {
     throw Object.assign(new Error('Only custom columns can have a formula'), { status: 400 });
   }
-  if (existing.scope !== 'master') {
-    throw Object.assign(new Error('Only master columns can have a formula'), { status: 400 });
+  if (existing.scope !== 'master' && existing.scope !== 'detail') {
+    throw Object.assign(new Error('Only master or detail columns can have a formula'), { status: 400 });
   }
   if (!String(existing.formulaExpr || '').trim()) {
     throw Object.assign(new Error('This column is not a formula column'), { status: 400 });
@@ -351,20 +383,20 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
   if (!DATA_TYPES.includes(nextDataType)) {
     throw Object.assign(new Error('Invalid data type'), { status: 400 });
   }
-  if (nextDataType === 'select' || nextDataType === 'status' || nextDataType === 'image') {
-    throw Object.assign(new Error('Formula columns do not support choice list, status or image data types'), { status: 400 });
+  if (nextDataType === 'select' || nextDataType === 'status' || nextDataType === 'image' || nextDataType === 'date_period') {
+    throw Object.assign(new Error('Formula columns do not support choice list, status, image or date period data types'), { status: 400 });
   }
   const normalizedFormula = normalizeFormulaExpression(formulaExpr !== undefined ? formulaExpr : existing.formulaExpr);
   if (!normalizedFormula.expression) {
     throw Object.assign(new Error('Formula is required'), { status: 400 });
   }
 
-  const masterColumns = await listColumns({ tableId: existing.tableId, scope: 'master', includeInactive: false });
-  validateFormulaReferences(normalizedFormula.references, masterColumns, existing.key);
+  const scopeColumns = await listColumns({ tableId: existing.tableId, scope: existing.scope, includeInactive: false });
+  validateFormulaReferences(normalizedFormula.references, scopeColumns, existing.key, existing.scope);
   validateFormulaResultTypeCompatibility(
     normalizedFormula.expression,
     normalizedFormula.references,
-    masterColumns,
+    scopeColumns,
     nextDataType
   );
 
@@ -459,15 +491,16 @@ async function deactivateColumn(columnId, userId) {
   if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be deleted'), { status: 400 });
 
   const pool = await getPool();
-  if (existing.scope === 'master') {
+  if (existing.scope === 'master' || existing.scope === 'detail') {
     const formulaRows = await pool.request()
       .input('tableId', sql.BigInt, existing.tableId)
       .input('columnId', sql.BigInt, columnId)
+      .input('scope', sql.NVarChar(16), existing.scope)
       .query(`
         SELECT id, [key], label, formula_expr
         FROM dbo.tb_columns
         WHERE table_id = @tableId
-          AND scope = 'master'
+          AND scope = @scope
           AND is_active = 1
           AND source = 'custom'
           AND formula_expr IS NOT NULL
@@ -562,6 +595,7 @@ module.exports = {
   slugify,
   resolveWriteback,
   validateImageOptions,
+  validateDatePeriodOptions,
   ensureRemarksColumn,
   validateRemarksColumnRequest,
   normalizeFormulaExpression,

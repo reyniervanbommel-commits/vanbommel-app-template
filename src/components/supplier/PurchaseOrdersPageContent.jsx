@@ -4,9 +4,9 @@ import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
-import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import { TrackChangesContext } from './trackChangesContext';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -34,6 +34,13 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const { user } = useAuth();
   const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
+  const trackChangesMeta = pageModel.trackChangesMeta || null;
+
+  // Track-changes worden centraal in Settings beheerd; hier alleen de header-indicator.
+  const trackChangesActiveByColumnId = useMemo(
+    () => trackChangesMeta?.activeOffsetByColumnId || null,
+    [trackChangesMeta],
+  );
   const data = useMemo(() => ({
     items: pageModel.orders,
     columns: pageModel.visibleHeaderColumns,
@@ -49,7 +56,11 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     headerColumnWidths: pageModel.headerColumnWidths,
     lineColumnWidths: pageModel.lineColumnWidths,
     stickyColumns: tableContext.stickyColumns,
+    collapsedHeaderColumnKeys: pageModel.collapsedHeaderColumnKeys,
+    collapsedLineColumnKeys: pageModel.collapsedLineColumnKeys,
   }), [
+    pageModel.collapsedHeaderColumnKeys,
+    pageModel.collapsedLineColumnKeys,
     pageModel.headerColumnWidths,
     pageModel.lineColumnWidths,
     tableContext.stickyColumns,
@@ -74,16 +85,21 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onCorrect: bulkEdit.handleCorrectField,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
+    isStaff: tableContext.isStaff,
+    showHistoryIndicators: tableContext.showHistoryIndicators !== false,
   }), [
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
     pageModel.updateStatusOptions,
     tableContext.isAdmin,
+    tableContext.isStaff,
+    tableContext.showHistoryIndicators,
   ]);
   const columnActions = useMemo(() => ({
     onRenameColumn: pageModel.renameColumn,
     onRemoveColumn: pageModel.removeColumn,
     isAdmin: tableContext.isAdmin,
+    isStaff: tableContext.isStaff,
     onToggleWriteback: pageModel.toggleWriteback,
     onReorderHeaderColumn: pageModel.reorderHeaderColumn,
     onReorderLineColumn: pageModel.reorderLineColumn,
@@ -94,15 +110,24 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onSaveLineColumnTextStyle: pageModel.saveLineColumnTextStyle,
     onSaveLineColumnFormatRules: pageModel.saveLineColumnFormatRules,
     onAddColumnRightOf: tableContext.handleAddColumnRightOf,
+    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
+    onSetDatePeriodDisplayMode: tableContext.setDatePeriodDisplayMode,
     editingColumnKey: tableContext.editingColumnKey,
     onEditingDone: tableContext.handleEditingDone,
     reorderingColumns: pageModel.savingColumns,
+    trackChangesActiveByColumnId,
+    onToggleHeaderColumnCollapsed: pageModel.toggleHeaderColumnCollapsed,
+    onToggleLineColumnCollapsed: pageModel.toggleLineColumnCollapsed,
   }), [
     pageModel,
     tableContext.editingColumnKey,
     tableContext.handleAddColumnRightOf,
+    tableContext.datePeriodDisplayModes,
+    tableContext.setDatePeriodDisplayMode,
     tableContext.handleEditingDone,
     tableContext.isAdmin,
+    tableContext.isStaff,
+    trackChangesActiveByColumnId,
   ]);
   const linkActions = useMemo(() => ({
     onSetLineColumnTotal: pageModel.setLineColumnTotal,
@@ -116,10 +141,6 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     tableContext.handlePushLineTotalToHeader,
     tableContext.handlePushLineValuesToHeader,
   ]);
-  const tableDataRevision = useMemo(
-    () => buildTableDataRevision(pageModel.orders),
-    [pageModel.orders],
-  );
   const table = useMemo(() => ({
     data,
     layout,
@@ -172,7 +193,11 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
         tableRows={pageModel.orders}
         isStaff={isStaff}
       >
-        <PurchaseOrdersBoardTable {...table} />
+        <div className={styles.tableRegion}>
+          <TrackChangesContext.Provider value={trackChangesMeta}>
+            <PurchaseOrdersBoardTable {...table} />
+          </TrackChangesContext.Provider>
+        </div>
       </BoardSplitView>
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>

@@ -26,6 +26,8 @@ function PurchaseOrdersBoardExpandedRow({
     headerColumns,
     linkedLineTotalByHeaderKey,
     linkedLineValueByHeaderKey,
+    collapsedLineColumnKeys = [],
+    onToggleLineColumnCollapsed,
   } = tableConfig;
 
   return (
@@ -42,6 +44,7 @@ function PurchaseOrdersBoardExpandedRow({
           onRemoveColumn={cellActions.onRemoveColumn}
           onCorrect={cellActions.onCorrect}
           isAdmin={cellActions.isAdmin}
+          isStaff={cellActions.isStaff}
           onToggleWriteback={cellActions.onToggleWriteback}
           onReorderColumn={cellActions.onReorderLineColumn}
           columnWidths={lineColumnWidths}
@@ -58,6 +61,9 @@ function PurchaseOrdersBoardExpandedRow({
           headerColumns={headerColumns}
           linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
           linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+          collapsedLineColumnKeys={collapsedLineColumnKeys}
+          onToggleLineColumnCollapsed={onToggleLineColumnCollapsed}
+          showHistoryIndicators={cellActions.showHistoryIndicators}
         />
       </td>
     </tr>

@@ -4,6 +4,13 @@ const sql = require('mssql');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
 const { ROLES } = require('../constants/roles');
+const { getSupplierAccount } = require('../utils/supplierScope');
+const {
+  assertSupplierPurchaseOrderRow,
+  filterRowsForSupplier,
+  getSupplierFilterColumnKey,
+  loadSupplierVisibleRowKeys,
+} = require('../utils/supplierRowAccess');
 const { getTableByKey } = require('./TableRegistryService');
 const { iso, mapRemarkRows } = require('./RowRemarksMapper');
 const {
@@ -34,10 +41,13 @@ function httpError(status, message) {
 
 function normalizeActor(actor) {
   const id = normalizePositiveId(actor?.id, 'actor');
+  if (actor?.role === ROLES.SUPPLIER) {
+    return { id, role: ROLES.SUPPLIER, isAdmin: false, isSupplier: true };
+  }
   if (![ROLES.ADMIN, ROLES.EMPLOYEE].includes(actor?.role)) {
     throw httpError(403, 'Insufficient permissions');
   }
-  return { id, role: actor.role, isAdmin: actor.role === ROLES.ADMIN };
+  return { id, role: actor.role, isAdmin: actor.role === ROLES.ADMIN, isSupplier: false };
 }
 
 function remarkRequest(request, { tableId, row, actorId }) {
@@ -56,6 +66,11 @@ async function context(tableKey, partitionKey, recordKey, actor) {
     dependencies.getTable(normalizedTableKey),
     dependencies.getPool(),
   ]);
+  await assertSupplierPurchaseOrderRow(actor, {
+    tableKey: normalizedTableKey,
+    partitionKey: row.partitionKey,
+    recordKey: row.recordKey,
+  });
   return { table, pool, row, actor: normalizedActor };
 }
 
@@ -145,6 +160,7 @@ async function fetchRemark(ctx, remarkId) {
 
 async function addRemark(input, actor) {
   const ctx = await context(input.tableKey, input.partitionKey, input.recordKey, actor);
+  if (ctx.actor.isSupplier) throw httpError(403, 'Suppliers cannot add remarks');
   const body = normalizeBody(input.body);
   const columnId = normalizeOptionalColumnId(input.columnId);
   const result = await remarkRequest(ctx.pool.request(), {
@@ -172,6 +188,7 @@ async function addRemark(input, actor) {
 
 async function deleteRemark(input, actor) {
   const ctx = await context(input.tableKey, input.partitionKey, input.recordKey, actor);
+  if (ctx.actor.isSupplier) throw httpError(403, 'Suppliers cannot delete remarks');
   const remarkId = normalizePositiveId(input.id, 'remarkId');
   await assertMasterRow(ctx);
   const result = await remarkRequest(ctx.pool.request(), {
@@ -275,8 +292,17 @@ async function summarizeRemarks(tableKey, actor) {
       ) latest
       ORDER BY counts.partition_key, counts.record_key;
     `);
-  void normalizedActor;
-  return result.recordset.map((row) => ({
+  let rows = result.recordset;
+  if (normalizedActor.isSupplier) {
+    const supplierFilterColumn = await getSupplierFilterColumnKey();
+    const visibleKeys = await loadSupplierVisibleRowKeys(
+      table.id,
+      getSupplierAccount(actor),
+      supplierFilterColumn
+    );
+    rows = filterRowsForSupplier(rows, visibleKeys);
+  }
+  return rows.map((row) => ({
     partitionKey: row.partition_key,
     recordKey: row.record_key,
     count: Number(row.remark_count),

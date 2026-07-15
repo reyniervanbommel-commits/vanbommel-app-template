@@ -22,6 +22,25 @@ function stableSerialize(value) {
   return JSON.stringify(normalizeForComparison(value));
 }
 
+function pickStartupView(views, isSupplier) {
+  const personalViews = views.filter((view) => view.scope === 'personal');
+  const vendorViews = views.filter((view) => view.scope === 'vendor');
+  const globalViews = views.filter((view) => view.scope === 'global');
+
+  if (isSupplier) {
+    return vendorViews.find((view) => view.isDefault)
+      || vendorViews[0]
+      || personalViews.find((view) => view.isDefault)
+      || personalViews[0]
+      || null;
+  }
+
+  return personalViews.find((view) => view.isDefault)
+    || globalViews.find((view) => view.isDefault)
+    || vendorViews.find((view) => view.isDefault)
+    || null;
+}
+
 /**
  * Bundelt saved-view state en handlers voor de purchase-order board.
  */
@@ -31,11 +50,13 @@ export function usePurchaseOrderSavedViewState({
   exportColumnLayout,
   applyColumnLayout,
   boardView,
+  isSupplier = false,
 }) {
   const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
   const [activeViewId, setActiveViewId] = useState(null);
   const [savedStateFingerprint, setSavedStateFingerprint] = useState(null);
   const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
+  const [showHistoryIndicators, setShowHistoryIndicators] = useState(true);
   const autoAppliedRef = useRef(false);
   const activeView = useMemo(
     () => savedViews.views.find((view) => view.id === activeViewId) || null,
@@ -43,12 +64,13 @@ export function usePurchaseOrderSavedViewState({
   );
 
   const buildCurrentViewState = useCallback(() => ({
+    showHistoryIndicators,
     columns: {
       ...exportColumnLayout(),
       stickyColumnKeys,
     },
     table: boardView.exportFilterSortGrouping(),
-  }), [exportColumnLayout, boardView, stickyColumnKeys]);
+  }), [exportColumnLayout, boardView, stickyColumnKeys, showHistoryIndicators]);
 
   const buildCurrentFingerprint = useCallback(
     () => stableSerialize(buildCurrentViewState()),
@@ -65,6 +87,7 @@ export function usePurchaseOrderSavedViewState({
     applyColumnLayout(state.columns);
     setStickyColumnKeys(Array.isArray(state.columns?.stickyColumnKeys) ? state.columns.stickyColumnKeys : []);
     boardView.applyFilterSortGrouping(state.table);
+    setShowHistoryIndicators(state.showHistoryIndicators !== false);
     setActiveViewId(view?.id ?? null);
     setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
   }, [applyColumnLayout, boardView]);
@@ -74,6 +97,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearSort();
     boardView.clearGrouping();
     boardView.clearGroupSummaries();
+    setShowHistoryIndicators(true);
     setActiveViewId(null);
     setSavedStateFingerprint(null);
   }, [boardView]);
@@ -110,22 +134,36 @@ export function usePurchaseOrderSavedViewState({
   const handleDeleteView = useCallback(async (view) => {
     await savedViews.deleteView(view.id);
     if (view.id === activeViewId) {
+      setShowHistoryIndicators(true);
       setActiveViewId(null);
       setSavedStateFingerprint(null);
     }
   }, [savedViews, activeViewId]);
 
+  const handleToggleShowHistory = useCallback(async (view, enabled) => {
+    const nextViewState = {
+      ...(view?.viewState || {}),
+      showHistoryIndicators: Boolean(enabled),
+    };
+    if (view.id === activeViewId) {
+      setShowHistoryIndicators(Boolean(enabled));
+    }
+    await savedViews.updateView(view.id, { viewState: nextViewState });
+    if (view.id === activeViewId) {
+      setSavedStateFingerprint(stableSerialize(nextViewState));
+    }
+  }, [activeViewId, savedViews]);
+
   useEffect(() => {
     if (autoAppliedRef.current) return;
-    if (savedViews.loading || loading || !orders.length) return;
+    const boardReady = !savedViews.loading && !loading && (isSupplier || orders.length > 0);
+    if (!boardReady) return;
     autoAppliedRef.current = true;
-    const personalDefault = savedViews.views.find((view) => view.scope === 'personal' && view.isDefault);
-    const globalDefault = savedViews.views.find((view) => view.scope === 'global' && view.isDefault);
-    const defaultView = personalDefault || globalDefault;
+    const defaultView = pickStartupView(savedViews.views, isSupplier);
     if (defaultView) {
       applyViewState(defaultView);
     }
-  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState]);
+  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState, isSupplier]);
 
   return useMemo(() => ({
     savedViews,
@@ -137,7 +175,9 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
     hasUnsavedChanges,
+    showHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   }), [
@@ -150,7 +190,9 @@ export function usePurchaseOrderSavedViewState({
     handleRenameView,
     handleSetDefault,
     handleDeleteView,
+    handleToggleShowHistory,
     hasUnsavedChanges,
+    showHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   ]);

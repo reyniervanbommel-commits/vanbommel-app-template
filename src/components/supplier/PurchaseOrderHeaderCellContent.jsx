@@ -5,6 +5,11 @@ import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import {
+  isDatePeriodColumn,
+  normalizeDatePeriodDisplayMode,
+  resolveDatePeriodCellValue,
+} from '../../utils/datePeriodColumnUtils';
 import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
 import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
 import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
@@ -45,6 +50,8 @@ function PurchaseOrderHeaderCellContent({
   cellBackgroundColor = '',
   isConditionalFormat = false,
   productImageLines = order.lines,
+  showHistoryIndicators = true,
+  datePeriodDisplayModes = {},
 }) {
   const styles = useStyles();
   const key = column.key;
@@ -56,6 +63,7 @@ function PurchaseOrderHeaderCellContent({
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
+  const showHistory = showHistoryIndicators !== false && Boolean(order.historyByColumnId?.[column.id]);
   const productImageSummary = useMemo(
     () => getPurchaseOrderProductImageSummary(productImageLines),
     [productImageLines]
@@ -103,7 +111,21 @@ function PurchaseOrderHeaderCellContent({
     );
   }
 
-  if (column.source === 'custom' && !isFormulaColumn && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+  if (isDatePeriodColumn(column)) {
+    const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
+    const display = resolveDatePeriodCellValue(column, order?.values, displayMode) || '-';
+    const displayNode = isChangedCell && !cellBackgroundColor
+      ? <span className={styles.changedCell}>{display}</span>
+      : display;
+    const formattedDisplayNode = isConditionalFormat
+      ? <span style={formattedTextStyle}>{displayNode}</span>
+      : displayNode;
+    return order.removedInD365
+      ? <span className={styles.removedText}>{formattedDisplayNode}</span>
+      : formattedDisplayNode;
+  }
+
+  if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
     if (isStatusColumn(column)) {
       return (
         <StatusCell
@@ -113,7 +135,7 @@ function PurchaseOrderHeaderCellContent({
           onUpdateOptions={handleUpdateStatusOptions}
           isAdmin={isAdmin}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -132,7 +154,7 @@ function PurchaseOrderHeaderCellContent({
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
           ariaLabel={`${column.label} for order ${order.orderNumber}`}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,
@@ -153,7 +175,7 @@ function PurchaseOrderHeaderCellContent({
           value={rawValue}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
-          hasHistory={Boolean(order.historyByColumnId?.[column.id])}
+          hasHistory={showHistory}
           cellKeys={{
             columnId: column.id,
             dataAreaId: order.dataAreaId,

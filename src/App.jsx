@@ -24,6 +24,7 @@ const BiPage = lazy(() =>
 const PurchaseOrdersPage = lazy(() =>
   import('./components/supplier').then((m) => ({ default: m.PurchaseOrdersPage })),
 );
+const RccpPage = lazy(() => import('./components/rccp/RccpPage'));
 
 const useStyles = makeStyles({
   appShell: {
@@ -75,6 +76,16 @@ function AppInner({ isDarkMode, onToggleTheme }) {
               <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
                 <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <BiPage />
+                </AppLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/rccp"
+            element={
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
+                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                  <RccpPage />
                 </AppLayout>
               </AuthGuard>
             }

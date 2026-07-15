@@ -15,7 +15,4 @@ alwaysApply: true
 
 # App-taal (UI)
 
-- Alle gebruikerszichtbare teksten in de app zijn **Engels**
-- Schrijf altijd nieuwe UI-teksten in het Engels: labels, knoppen, placeholders, foutmeldingen, tooltips, aria-labels, empty states
-- Schrijf **nooit** Nederlandse teksten in JSX of in hooks die strings teruggeven aan de UI
-- Dit geldt voor alle components in `src/`
+Zie `app-taal.mdc` — de app-UI is **Engels** (knoppen, labels, foutmeldingen, enz.). Alleen AI-antwoorden blijven Nederlands.

@@ -1,0 +1,48 @@
+---
+description: App UI-taal — alle gebruikerszichtbare teksten in het Engels
+alwaysApply: true
+---
+
+# App-taal (UI) — Engels
+
+De app wordt ontwikkeld met **Engels** als UI-taal. AI-antwoorden aan de ontwikkelaar blijven Nederlands (zie `communicatie.mdc`).
+
+## Verplicht Engels
+
+Alle gebruikerszichtbare teksten in de app:
+
+- Knoppen en menu-items
+- Labels, koppen en subtitels
+- Placeholders en hints
+- Foutmeldingen en succesmeldingen
+- Tooltips, aria-labels en screenreader-teksten
+- Empty states en loading-teksten
+- Dialog- en modalteksten
+- Tabellenkoppen en kolomtitels
+- Badge- en statuslabels
+
+## Waar dit geldt
+
+| Gebied | Pad / scope |
+|--------|-------------|
+| Frontend UI | `src/` — JSX, hooks die UI-strings teruggeven, constants voor labels |
+| API-fouten naar de UI | `server/` — berichten die de frontend direct toont |
+| Tests | UI-asserties en snapshot-teksten in het Engels |
+
+## Niet doen
+
+- Geen Nederlandse (of andere) UI-teksten in JSX, hooks of server-responses die de gebruiker ziet
+- Geen gemengde talen in één scherm (bijv. Engelse knop + Nederlandse foutmelding)
+- Bij refactors: bestaande Nederlandse labels omzetten naar Engels, niet nieuwe NL-teksten toevoegen
+
+## Voorbeelden
+
+| Fout | Goed |
+|------|------|
+| `Opslaan` | `Save` |
+| `Geen resultaten gevonden` | `No results found` |
+| `Wilt u doorgaan?` | `Do you want to continue?` |
+
+## Review-check
+
+Bij elke UI-wijziging: zijn alle nieuwe en aangepaste strings in het Engels?

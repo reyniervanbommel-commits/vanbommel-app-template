@@ -16,6 +16,8 @@ export function useUsersManagement() {
   const [permDialogOpen, setPermDialogOpen] = useState(false);
   const [deleteDialogUser, setDeleteDialogUser] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [vendorDialogUser, setVendorDialogUser] = useState(null);
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const [recentlyUpdatedUserId, setRecentlyUpdatedUserId] = useState(null);
   const [resetMessage, setResetMessage] = useState('');
 
@@ -106,6 +108,18 @@ export function useUsersManagement() {
     setPermDialogOpen(true);
   }, []);
 
+  const handleEditVendorAccount = useCallback((user) => {
+    setVendorDialogUser(user);
+    setVendorDialogOpen(true);
+  }, []);
+
+  const handleVendorAccountSave = useCallback(async (userId, vendorAccount) => {
+    await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { vendor_account: vendorAccount } });
+    await loadUsers();
+    setRecentlyUpdatedUserId(userId);
+    setTimeout(() => setRecentlyUpdatedUserId(null), 2000);
+  }, [loadUsers]);
+
   const handlePermissionsSaved = useCallback(() => {
     const userId = permDialogUser?.id;
     loadUsers();
@@ -139,6 +153,9 @@ export function useUsersManagement() {
     deleteDialogUser,
     deleteDialogOpen,
     setDeleteDialogOpen,
+    vendorDialogUser,
+    vendorDialogOpen,
+    setVendorDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -149,6 +166,8 @@ export function useUsersManagement() {
     handleDeleteClick,
     handleDeleteConfirm,
     handleEditPermissions,
+    handleEditVendorAccount,
+    handleVendorAccountSave,
     handlePermissionsSaved,
     getDisplayPermissions,
   };

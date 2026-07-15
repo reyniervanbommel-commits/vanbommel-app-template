@@ -29,6 +29,7 @@ function PurchaseOrdersSubitemsHeader({
   } = tableView;
   const {
     isAdmin,
+    isStaff = true,
     onToggleWriteback,
     onRenameColumn,
     onRemoveColumn,
@@ -92,6 +93,7 @@ function PurchaseOrdersSubitemsHeader({
                   groupingColumnKey=""
                   groupingColor=""
                   isAdmin={isAdmin}
+                  isStaff={isStaff}
                   onToggleWriteback={onToggleWriteback}
                   onSetSortDirection={setSortDirection}
                   onSetOperator={setFilterOperator}

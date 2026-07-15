@@ -21,8 +21,15 @@ const {
   normalizeRowIdentity,
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
+const { getSupplierAccount } = require('../utils/supplierScope');
+const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
+const settingsService = require('../services/SettingsService');
+
+// Instelling die bepaalt op welke master-kolom het supplier-filter matcht (admin-instelbaar).
+const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
+const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
 
 const router = express.Router();
 
@@ -64,7 +71,7 @@ router.get('/:tableKey/remarks', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
-router.post('/:tableKey/remarks', async (req, res, next) => {
+router.post('/:tableKey/remarks', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
@@ -81,7 +88,7 @@ router.post('/:tableKey/remarks', async (req, res, next) => {
 });
 
 // DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
-router.delete('/:tableKey/remarks/:id', async (req, res, next) => {
+router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const id = normalizePositiveId(req.params.id, 'remarkId');
@@ -135,6 +142,20 @@ router.get('/:tableKey/activity', async (req, res, next) => {
   }
 });
 
+// GET /api/data/:tableKey/revision — lichtgewicht "is het board gewijzigd?"-token.
+// Statisch pad, dus geregistreerd vóór GET /:tableKey (anders vangt de tableKey-route 'revision' op).
+router.get('/:tableKey/revision', async (req, res, next) => {
+  try {
+    const { tableKey } = req.params;
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const result = await dataService.getRevision({ tableKey, userId: req.user.id, supplierAccount });
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {
@@ -151,7 +172,14 @@ router.get('/:tableKey', async (req, res, next) => {
         refreshError = 'Refresh failed';
       }
     }
-    const data = await dataService.read({ tableKey, userId: req.user.id });
+    // Suppliers zien uitsluitend hun eigen orders: geef het leveranciersaccount + de
+    // admin-gekozen filterkolom door zodat de read de rijen filtert. Staff geeft null door.
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const supplierFilterColumn = isSupplier
+      ? await settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN)
+      : DEFAULT_SUPPLIER_FILTER_COLUMN;
+    const data = await dataService.read({ tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn });
     return res.json({ ...data, refreshed, refreshError });
   } catch (err) {
     return next(err);
@@ -238,18 +266,19 @@ router.post('/:tableKey/columns', async (req, res, next) => {
 router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
   try {
     const table = await registry.getTableByKey(req.params.tableKey);
+    const scope = String(req.body?.scope || 'master').trim() === 'detail' ? 'detail' : 'master';
     const ownColumnKey = String(req.body?.ownColumnKey || '').trim();
     const resultType = String(req.body?.dataType || 'number').trim() || 'number';
     const normalized = columnsService.normalizeFormulaExpression(req.body?.formulaExpr);
     if (!normalized.expression) {
       return res.status(400).json({ error: 'Formula is required' });
     }
-    const masterColumns = await registry.listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
-    columnsService.validateFormulaReferences(normalized.references, masterColumns, ownColumnKey);
+    const scopeColumns = await registry.listColumns({ tableId: table.id, scope, includeInactive: false });
+    columnsService.validateFormulaReferences(normalized.references, scopeColumns, ownColumnKey, scope);
     columnsService.validateFormulaResultTypeCompatibility(
       normalized.expression,
       normalized.references,
-      masterColumns,
+      scopeColumns,
       resultType
     );
     return res.json({
@@ -405,6 +434,11 @@ router.get('/:tableKey/history', async (req, res, next) => {
   try {
     const id = toColumnId(req.query.columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey: req.query.partitionKey,
+      recordKey: req.query.recordKey,
+    });
     const history = await dataService.getCellHistory({
       tableKey: req.params.tableKey,
       columnId: id,

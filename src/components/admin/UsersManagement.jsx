@@ -31,6 +31,8 @@ import {
 } from '@fluentui/react-icons';
 import CreateUserDialog from './CreateUserDialog';
 import EditPermissionsDialog from './EditPermissionsDialog';
+import EditVendorAccountDialog from './EditVendorAccountDialog';
+import SupplierFilterColumnSelect from './SupplierFilterColumnSelect';
 import { UserSecurityActions } from './UserSecurityActions';
 import { useUsersManagement } from '../../hooks/useUsersManagement';
 import { ROLES } from '../../constants/roles';
@@ -72,6 +74,9 @@ export default function UsersManagement() {
     deleteDialogUser,
     deleteDialogOpen,
     setDeleteDialogOpen,
+    vendorDialogUser,
+    vendorDialogOpen,
+    setVendorDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -82,6 +87,8 @@ export default function UsersManagement() {
     handleDeleteClick,
     handleDeleteConfirm,
     handleEditPermissions,
+    handleEditVendorAccount,
+    handleVendorAccountSave,
     handlePermissionsSaved,
     getDisplayPermissions,
   } = useUsersManagement();
@@ -98,6 +105,8 @@ export default function UsersManagement() {
           onUserCreated={loadUsers}
         />
       </div>
+
+      <SupplierFilterColumnSelect />
 
       <Input
         placeholder="Search by email or role..."
@@ -122,6 +131,7 @@ export default function UsersManagement() {
           <TableRow>
             <TableHeaderCell>Email</TableHeaderCell>
             <TableHeaderCell>Role</TableHeaderCell>
+            <TableHeaderCell>Vendor</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
             <TableHeaderCell>Permissions</TableHeaderCell>
             <TableHeaderCell>Page access</TableHeaderCell>
@@ -139,6 +149,15 @@ export default function UsersManagement() {
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
                   <Badge appearance={user.role === ROLES.ADMIN ? 'filled' : 'outline'}>{user.role}</Badge>
+                </TableCell>
+                <TableCell>
+                  {user.role === ROLES.SUPPLIER ? (
+                    <Text size={200} className={user.vendor_account ? undefined : styles.noPerms}>
+                      {user.vendor_account || 'email prefix'}
+                    </Text>
+                  ) : (
+                    <Text size={200} className={styles.noPerms}>—</Text>
+                  )}
                 </TableCell>
                 <TableCell>
                   {user.is_locked && <Badge appearance="filled" color="danger">Locked</Badge>}
@@ -189,6 +208,7 @@ export default function UsersManagement() {
                   <UserSecurityActions
                     user={user}
                     onEditPermissions={handleEditPermissions}
+                    onEditVendorAccount={handleEditVendorAccount}
                     onLockToggle={handleLockToggle}
                     onMfaRequiredToggle={handleMfaRequiredToggle}
                     onForceReset={handleForceReset}
@@ -200,7 +220,7 @@ export default function UsersManagement() {
           })}
           {filteredUsers.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={7}>
                 <Text className={styles.noPerms}>No users found</Text>
               </TableCell>
             </TableRow>
@@ -213,6 +233,13 @@ export default function UsersManagement() {
         open={permDialogOpen}
         onOpenChange={setPermDialogOpen}
         onSaved={handlePermissionsSaved}
+      />
+
+      <EditVendorAccountDialog
+        user={vendorDialogUser}
+        open={vendorDialogOpen}
+        onOpenChange={setVendorDialogOpen}
+        onSave={handleVendorAccountSave}
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={(_, d) => setDeleteDialogOpen(d.open)}>
