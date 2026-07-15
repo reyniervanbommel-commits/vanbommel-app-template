@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { getCachedPurchaseOrdersView, setCachedPurchaseOrdersView } from '../utils/purchaseOrdersViewCache';
+import { getCachedBoard, setCachedBoard } from '../utils/boardSessionStore';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
 import { migrateFormatRulesForStatusRenames, normalizeColumnFormatRulesMap } from '../components/supplier/columnFormatRuleUtils';
 import { buildStatusLabelRenames } from '../utils/statusColumnUtils';
@@ -93,6 +93,7 @@ export function usePurchaseOrdersPage() {
   const [lineTotalColumns, setLineTotalColumns] = useState([]);
   const [lineTotalHeaderLinks, setLineTotalHeaderLinks] = useState([]);
   const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState([]);
+  const [datePeriodDisplayModes, setDatePeriodDisplayModes] = useState({});
   const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(false);
   const [savingColumns, setSavingColumns] = useState(false);
   // Onthoudt een net-aangemaakte kolom die nog rechts van zijn bron gezet moet worden.
@@ -111,7 +112,9 @@ export function usePurchaseOrdersPage() {
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
     setTrackChangesMeta(data?.meta?.trackChanges ?? null);
-    setCachedPurchaseOrdersView(data);
+    // Payload + revision atomair cachen (revision komt uit dezelfde read). Elke refresh-flow loopt
+    // via applyData, dus cache en revision blijven vanzelf in sync.
+    setCachedBoard(data, data?.revision ?? null);
   }, []);
 
   const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
@@ -182,16 +185,32 @@ export function usePurchaseOrdersPage() {
 
   useEffect(() => {
     let active = true;
-    const cachedData = getCachedPurchaseOrdersView();
-    const hasCachedData = Boolean(cachedData);
+    const cached = getCachedBoard();
+    const hasCachedData = Boolean(cached?.payload);
 
     if (hasCachedData) {
-      applyData(cachedData);
+      applyData(cached.payload);
       setLoading(false);
     }
 
     const bootstrap = async () => {
       if (!active) return;
+      // Met een cache-hit: eerst een lichtgewicht revision-check. Alleen bij een mismatch (data
+      // gewijzigd) of een fout volgt een volledige read; is de revision gelijk, dan slaan we de
+      // zware read() over. Zonder cache: gewoon de volledige read (ongewijzigd gedrag).
+      if (hasCachedData && cached.revision) {
+        try {
+          const rev = await apiRequest(`${boardBase()}/revision`);
+          if (!active) return;
+          if (rev?.revision && rev.revision === cached.revision) {
+            return; // ongewijzigd → geen volledige read
+          }
+        } catch {
+          // Revision-check mislukt → val terug op een volledige read. Nooit stil oneindig stale
+          // data tonen; de oude 5-min-TTL is er niet meer om dit vanzelf te corrigeren.
+        }
+        if (!active) return;
+      }
       await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
     };
     bootstrap();
@@ -717,6 +736,7 @@ export function usePurchaseOrdersPage() {
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+    datePeriodDisplayModes: { ...datePeriodDisplayModes },
   }), [
     effectiveVisibleKeys,
     columnOrder,
@@ -732,6 +752,7 @@ export function usePurchaseOrdersPage() {
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
+    datePeriodDisplayModes,
   ]);
 
   // Pas een opgeslagen kolomlayout toe (alleen in-memory; niet persistent in
@@ -774,7 +795,19 @@ export function usePurchaseOrdersPage() {
     if (Array.isArray(layout.lineValueHeaderLinks)) {
       setLineValueHeaderLinks(normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys));
     }
+    if (layout.datePeriodDisplayModes && typeof layout.datePeriodDisplayModes === 'object') {
+      setDatePeriodDisplayModes(layout.datePeriodDisplayModes);
+    }
   }, [defaultHeaderKeys, defaultLineKeys]);
+
+  const setDatePeriodDisplayMode = useCallback((columnKey, displayMode) => {
+    const key = String(columnKey || '').trim();
+    if (!key) return;
+    setDatePeriodDisplayModes((prev) => ({
+      ...prev,
+      [key]: displayMode === 'month' ? 'month' : 'week',
+    }));
+  }, []);
 
   const saveHeaderColumnWidth = useCallback(async (columnKey, width) => {
     if (!columnKey) return;
@@ -953,6 +986,8 @@ export function usePurchaseOrdersPage() {
     lineTotalColumns: effectiveLineTotalColumns,
     lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     savingColumns,
     refresh,
     finishRefresh,
@@ -1011,6 +1046,8 @@ export function usePurchaseOrdersPage() {
     effectiveLineTotalColumns,
     effectiveLineTotalHeaderLinks,
     effectiveLineValueHeaderLinks,
+    datePeriodDisplayModes,
+    setDatePeriodDisplayMode,
     savingColumns,
     refresh,
     finishRefresh,

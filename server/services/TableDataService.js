@@ -2046,6 +2046,9 @@ function assertCustomColumnWritable(column) {
   if (String(column?.dataType || '').toLowerCase() === 'image') {
     throw Object.assign(new Error('Image columns are read-only'), { status: 400 });
   }
+  if (String(column?.dataType || '').toLowerCase() === 'date_period') {
+    throw Object.assign(new Error('Date period columns are read-only'), { status: 400 });
+  }
   if (String(column?.dataType || '').toLowerCase() === 'remarks') {
     throw Object.assign(new Error('Remarks columns do not support direct value writes'), { status: 400 });
   }
@@ -2549,6 +2552,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // hetzelfde parallelle blok opgenomen.
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
   const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
+  // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
+  // zodat de frontend na deze read exact de bijbehorende revision opslaat.
+  const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
   const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
 
   // Track changes: config uit app_settings (in-memory gecached). Alleen bij ≥1 actieve kolom
@@ -2776,9 +2782,12 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     };
   }
 
+  const { revision } = await revisionPromise;
+
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },
     changeContractVersion: 1,
+    revision,
     syncedAt: lastFullSyncAt ? new Date(lastFullSyncAt).toISOString() : null,
     stale,
     hasCache: Boolean(lastFullSyncAt),
@@ -2820,6 +2829,78 @@ async function getLastViewedAt(tableId) {
         AND u.role = 'admin'
     `);
   return result.recordset[0]?.last_viewed_at || null;
+}
+
+// ---------------------------------------------------------------------------
+// Revision-check — lichtgewicht "is het board gewijzigd?"-token, zodat een terugkeer
+// naar de main table een volledige read() kan overslaan als er niets veranderde.
+// De parts moeten álle inputs van read() dekken; een gemiste part = stille stale data.
+// ---------------------------------------------------------------------------
+
+// Zet een DATETIME2/waarde om naar een stabiele string (of null) voor de hash.
+function revisionPartValue(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  return value;
+}
+
+// Deterministische hash over een key-gesorteerde serialisatie van alle parts. Pure functie:
+// zelfde parts → zelfde revision; één gewijzigde part → andere revision. Apart unit-testbaar.
+function computeRevision(parts) {
+  const stable = {};
+  for (const key of Object.keys(parts || {}).sort()) {
+    stable[key] = revisionPartValue(parts[key]);
+  }
+  return crypto.createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+}
+
+// Berekent de revision voor een reeds opgeloste tabel (gebruikt binnen read() in hetzelfde snapshot).
+async function getRevisionByTable(table, { userId = null, supplierAccount = null } = {}) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .input('userId', sql.Int, userId)
+    .input('boardKey', sql.NVarChar(64), table.key)
+    .query(`
+      SELECT
+        (SELECT last_full_sync_at FROM dbo.tb_sync_state WITH (NOLOCK) WHERE table_id = @tableId) AS syncedAt,
+        (SELECT MAX(content_changed_at) FROM dbo.tb_cache WITH (NOLOCK) WHERE table_id = @tableId) AS maxContentChangedAt,
+        (SELECT MAX(first_seen_at) FROM dbo.tb_cache WITH (NOLOCK) WHERE table_id = @tableId) AS maxFirstSeenAt,
+        (SELECT MAX(updated_at) FROM dbo.tb_custom_values WITH (NOLOCK) WHERE table_id = @tableId) AS maxCustomValueAt,
+        (SELECT MAX(created_at) FROM dbo.tb_change_ledger WITH (NOLOCK) WHERE table_id = @tableId) AS maxLedgerAt,
+        (SELECT MAX(updated_at) FROM dbo.tb_columns WITH (NOLOCK) WHERE table_id = @tableId) AS maxColumnsAt,
+        (SELECT COUNT(*) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS exclusionCount,
+        (SELECT MAX(excluded_at) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS maxExclusionAt,
+        (SELECT MAX(vs.last_viewed_at)
+           FROM dbo.tb_user_view_state vs WITH (NOLOCK)
+           INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
+          WHERE vs.table_id = @tableId AND u.role = 'admin') AS adminViewedAt,
+        (SELECT MAX(updated_at) FROM dbo.user_board_settings WITH (NOLOCK)
+          WHERE user_id = @userId AND board_key = @boardKey) AS userBoardSettingsAt,
+        (SELECT MAX(updated_at) FROM dbo.app_settings WITH (NOLOCK)) AS settingsAt
+    `);
+  const row = result.recordset[0] || {};
+  const parts = {
+    syncedAt: revisionPartValue(row.syncedAt),
+    maxContentChangedAt: revisionPartValue(row.maxContentChangedAt),
+    maxFirstSeenAt: revisionPartValue(row.maxFirstSeenAt),
+    maxCustomValueAt: revisionPartValue(row.maxCustomValueAt),
+    maxLedgerAt: revisionPartValue(row.maxLedgerAt),
+    maxColumnsAt: revisionPartValue(row.maxColumnsAt),
+    exclusionCount: Number(row.exclusionCount) || 0,
+    maxExclusionAt: revisionPartValue(row.maxExclusionAt),
+    adminViewedAt: revisionPartValue(row.adminViewedAt),
+    userBoardSettingsAt: revisionPartValue(row.userBoardSettingsAt),
+    settingsAt: revisionPartValue(row.settingsAt),
+    supplierAccount: supplierAccount || null,
+  };
+  return { revision: computeRevision(parts), parts };
+}
+
+// Publieke revision-check op basis van tableKey (los endpoint).
+async function getRevision({ tableKey, userId = null, supplierAccount = null } = {}) {
+  const table = await getTableByKey(tableKey);
+  return getRevisionByTable(table, { userId, supplierAccount });
 }
 
 async function markViewed(userId, tableKey) {
@@ -3758,6 +3839,8 @@ module.exports = {
   getSyncState,
   isStale,
   getLastViewedAt,
+  getRevision,
+  computeRevision,
   markViewed,
   computeContentHash,
   computeChangedFieldKeys,

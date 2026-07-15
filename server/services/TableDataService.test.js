@@ -8,6 +8,7 @@ const {
   addLookupColumnsByScope,
   applyLookups,
   normalizeExclusionRows,
+  computeRevision,
   resolveConfiguredMaxItems,
   requiredMasterFieldsFromTable,
   compileMasterFormulaColumns,
@@ -54,6 +55,61 @@ describe('TableDataService.computeContentHash', () => {
 
   it('werkt zonder details', () => {
     expect(typeof computeContentHash(masterJson, [])).toBe('string');
+  });
+});
+
+describe('TableDataService.computeRevision', () => {
+  const baseParts = {
+    syncedAt: '2026-07-15T10:00:00.000Z',
+    maxContentChangedAt: '2026-07-15T09:30:00.000Z',
+    maxFirstSeenAt: '2026-07-10T08:00:00.000Z',
+    maxCustomValueAt: '2026-07-15T09:45:00.000Z',
+    maxLedgerAt: null,
+    maxColumnsAt: '2026-07-01T00:00:00.000Z',
+    exclusionCount: 3,
+    maxExclusionAt: '2026-07-14T12:00:00.000Z',
+    adminViewedAt: '2026-07-15T09:00:00.000Z',
+    userBoardSettingsAt: null,
+    settingsAt: '2026-07-05T00:00:00.000Z',
+    supplierAccount: null,
+  };
+
+  it('is deterministisch voor dezelfde parts', () => {
+    expect(computeRevision(baseParts)).toBe(computeRevision({ ...baseParts }));
+  });
+
+  it('is onafhankelijk van de key-volgorde', () => {
+    const reordered = {};
+    for (const key of Object.keys(baseParts).reverse()) reordered[key] = baseParts[key];
+    expect(computeRevision(reordered)).toBe(computeRevision(baseParts));
+  });
+
+  it('verandert wanneer een cel-edit binnenkomt (maxCustomValueAt)', () => {
+    const changed = { ...baseParts, maxCustomValueAt: '2026-07-15T10:15:00.000Z' };
+    expect(computeRevision(changed)).not.toBe(computeRevision(baseParts));
+  });
+
+  it('verandert wanneer een rij wordt verborgen/teruggezet (exclusionCount)', () => {
+    expect(computeRevision({ ...baseParts, exclusionCount: 4 })).not.toBe(computeRevision(baseParts));
+  });
+
+  it('verandert wanneer een kolomdefinitie wijzigt (maxColumnsAt)', () => {
+    const changed = { ...baseParts, maxColumnsAt: '2026-07-15T11:00:00.000Z' };
+    expect(computeRevision(changed)).not.toBe(computeRevision(baseParts));
+  });
+
+  it('is supplier-aware: verschillende supplier → andere revision', () => {
+    expect(computeRevision({ ...baseParts, supplierAccount: 'Q000104' }))
+      .not.toBe(computeRevision({ ...baseParts, supplierAccount: 'Q000200' }));
+  });
+
+  it('behandelt Date en ISO-string identiek', () => {
+    const withDate = { ...baseParts, syncedAt: new Date('2026-07-15T10:00:00.000Z') };
+    expect(computeRevision(withDate)).toBe(computeRevision(baseParts));
+  });
+
+  it('levert altijd een niet-lege hex-string', () => {
+    expect(computeRevision(baseParts)).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
