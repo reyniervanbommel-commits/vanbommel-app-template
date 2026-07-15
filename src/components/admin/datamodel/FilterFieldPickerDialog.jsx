@@ -9,6 +9,7 @@ import {
   DialogTitle,
   Dropdown,
   Option,
+  SearchBox,
   Table,
   TableBody,
   TableCell,
@@ -22,6 +23,10 @@ import {
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
+  search: {
+    width: '100%',
+    marginBottom: '8px',
+  },
   tableWrap: {
     maxHeight: '340px',
     overflowY: 'auto',
@@ -66,6 +71,7 @@ function operatorsForType(valueType) {
 function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
   const styles = useStyles();
   const [operatorByField, setOperatorByField] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const levelTitle = level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)';
   const sortedFields = useMemo(
@@ -73,12 +79,26 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
     [fields]
   );
 
+  const filteredFields = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return sortedFields;
+    return sortedFields.filter((field) =>
+      `${field.label || ''} ${field.field || ''}`.toLowerCase().includes(term)
+    );
+  }, [sortedFields, searchTerm]);
+
   return (
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onClose()}>
       <DialogSurface>
         <DialogBody>
           <DialogTitle>Select field from {levelTitle}</DialogTitle>
           <DialogContent>
+            <SearchBox
+              className={styles.search}
+              placeholder="Search field by name..."
+              value={searchTerm}
+              onChange={(_, data) => setSearchTerm(data.value)}
+            />
             <div className={styles.tableWrap}>
               <Table size="small">
                 <TableHeader>
@@ -90,7 +110,7 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedFields.map((field) => {
+                  {filteredFields.map((field) => {
                     const ops = operatorsForType(field.valueType);
                     const selectedOperator = operatorByField[field.field] || ops[0];
                     return (
@@ -131,11 +151,13 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
                       </TableRow>
                     );
                   })}
-                  {!sortedFields.length ? (
+                  {!filteredFields.length ? (
                     <TableRow>
                       <TableCell colSpan={4}>
                         <Text className={styles.emptyState}>
-                          No filterable fields with sampled values for {levelTitle}. Run Sync now or switch level.
+                          {searchTerm.trim()
+                            ? `No fields match "${searchTerm.trim()}".`
+                            : `No filterable fields with sampled values for ${levelTitle}. Run Sync now or switch level.`}
                         </Text>
                       </TableCell>
                     </TableRow>
