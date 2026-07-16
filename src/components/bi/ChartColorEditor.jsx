@@ -1,55 +1,61 @@
 import React, { memo, useCallback } from 'react';
-import { Field, makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
+import { Dropdown, Field, makeStyles, Option, shorthands } from '@fluentui/react-components';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
-import { defaultColorForIndex } from './biConstants';
+import { COLOR_MODE_OPTIONS, COLOR_MODE_SINGLE, resolveSingleColor } from './biConstants';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('8px') },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shorthands.gap('12px'),
-    maxWidth: '320px',
+  swatches: {
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    ...shorthands.padding('4px', '0'),
   },
-  label: { color: tokens.colorNeutralForeground2, fontWeight: 600, fontSize: '13px' },
-  itemLabel: { minWidth: 0, flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 });
 
-function ChartColorEditor({ items, colors, onChange, wide = false, compact = false }) {
+const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
+
+function ChartColorEditor({
+  colorMode,
+  config,
+  onColorModeChange,
+  onSingleColorChange,
+  embedded = false,
+  controlSize = 'small',
+}) {
   const styles = useStyles();
+  const singleColor = resolveSingleColor(config || {});
 
-  const handleSelect = useCallback((key, color) => {
-    onChange({ ...colors, [key]: color });
-  }, [colors, onChange]);
-
-  if (!items.length) return null;
+  const handleModeSelect = useCallback((_, data) => {
+    onColorModeChange(data.optionValue);
+  }, [onColorModeChange]);
 
   return (
-    <div className={styles.root}>
-      <Text className={styles.label} style={compact ? { fontSize: '10px' } : undefined}>Colors</Text>
-      {items.map((item, index) => (
-        <div
-          className={styles.row}
-          key={item.key}
-          style={wide ? { maxWidth: '100%' } : undefined}
+    <>
+      <Field label="Color mode" size={embedded ? controlSize : undefined}>
+        <Dropdown
+          size={controlSize}
+          selectedOptions={[colorMode]}
+          value={findLabel(COLOR_MODE_OPTIONS, colorMode)}
+          onOptionSelect={handleModeSelect}
         >
-          <Text
-            className={styles.itemLabel}
-            title={item.label}
-            style={compact ? { fontSize: '11px' } : undefined}
-          >{item.label}</Text>
-          <Field>
+          {COLOR_MODE_OPTIONS.map((option) => (
+            <Option key={option.key} value={option.key} text={option.label}>{option.label}</Option>
+          ))}
+        </Dropdown>
+      </Field>
+      {colorMode === COLOR_MODE_SINGLE ? (
+        <Field label="Color" size={embedded ? controlSize : undefined}>
+          <div className={styles.swatches}>
             <ColorPalettePicker
-              layout="popover"
-              selectedColor={colors?.[item.key] || defaultColorForIndex(index)}
-              onSelect={(color) => handleSelect(item.key, color)}
-              ariaLabel={`Color for ${item.label}`}
+              layout="compact"
+              selectedColor={singleColor}
+              onSelect={onSingleColorChange}
+              ariaLabel="Chart color"
             />
-          </Field>
-        </div>
-      ))}
-    </div>
+          </div>
+        </Field>
+      ) : null}
+    </>
   );
 }
 

@@ -4,10 +4,10 @@ const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
+const { CAPACITY_MEASURE_KEY } = require('./RccpSettingsService');
 const { getIsoWeek, getIsoWeekYear, buildWeekRange, isoWeekStartUtc, isoWeekEndUtc } = require('../utils/isoWeek');
 const { computeRccpStatus } = require('../utils/rccpStatus');
 
-const UNCLASSIFIED = 'Unclassified';
 const PO_TABLE_KEY = 'purchase-orders';
 
 function toNumber(value) {
@@ -22,13 +22,8 @@ function pickValue(values, key) {
   return v === undefined || v === null || v === '' ? null : v;
 }
 
-function isExcludedStatus(status, excludedStatuses) {
-  const normalized = String(status || '').trim().toLowerCase();
-  return excludedStatuses.some((s) => normalized === String(s).trim().toLowerCase());
-}
-
-function cellKey(vendor, year, week, category) {
-  return `${vendor}|${year}|${week}|${category}`;
+function cellKey(vendor, year, week, measureKey) {
+  return `${vendor}|${year}|${week}|${measureKey}`;
 }
 
 function parseCellKey(key) {
@@ -37,13 +32,14 @@ function parseCellKey(key) {
     vendorAccount,
     periodYear: Number(periodYear),
     isoWeek: Number(isoWeek),
-    capacityCategory: rest.join('|'),
+    measureKey: rest.join('|'),
   };
 }
 
 function aggregatePoLoad(rows, config, window) {
   const confirmedByCell = new Map();
   const missingDates = [];
+  const measures = config.quantityMeasures || [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
   const diagnostics = {
     orderCount: rows.length,
@@ -57,6 +53,14 @@ function aggregatePoLoad(rows, config, window) {
     totalConfirmedQty: 0,
   };
 
+  const addLoad = (vendor, year, week, measureKey, qty) => {
+    if (qty <= 0) return;
+    diagnostics.countedLines += 1;
+    diagnostics.totalConfirmedQty += qty;
+    const key = cellKey(vendor, year, week, measureKey);
+    confirmedByCell.set(key, (confirmedByCell.get(key) || 0) + qty);
+  };
+
   for (const row of rows) {
     const masterValues = row.values || {};
     const vendor = String(pickValue(masterValues, config.vendorColumnKey) || '').trim();
@@ -66,7 +70,8 @@ function aggregatePoLoad(rows, config, window) {
     }
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
-    const details = Array.isArray(row.details) ? row.details : [];
+    const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
+    const masterQtyByMeasure = measures.map((m) => toNumber(pickValue(masterValues, m.columnKey)));
 
     const processLine = (lineNumber, lineValues, dateFromHeaderDefault) => {
       diagnostics.lineCount += 1;
@@ -76,20 +81,9 @@ function aggregatePoLoad(rows, config, window) {
         return;
       }
 
-      const qty = toNumber(
-        pickValue(lineValues, config.quantityColumnKey) ?? pickValue(masterValues, config.quantityColumnKey),
-      );
-      const category = String(
-        pickValue(lineValues, config.categoryColumnKey)
-          ?? pickValue(masterValues, config.categoryColumnKey)
-          ?? UNCLASSIFIED,
-      ).trim() || UNCLASSIFIED;
-
       let dateValue = pickValue(lineValues, config.dateColumnKey);
-      let dateFromHeader = dateFromHeaderDefault;
       if (!dateValue) {
         dateValue = pickValue(masterValues, config.dateColumnKey);
-        dateFromHeader = Boolean(dateValue);
       }
       if (!dateValue) {
         diagnostics.missingDateLines += 1;
@@ -97,7 +91,7 @@ function aggregatePoLoad(rows, config, window) {
           orderNumber: row.recordKey,
           lineNumber,
           vendorAccount: vendor,
-          quantity: qty,
+          quantity: masterQtyByMeasure[0] || 0,
           dateFromHeader: false,
         });
         return;
@@ -111,15 +105,15 @@ function aggregatePoLoad(rows, config, window) {
         return;
       }
 
-      if (qty <= 0) {
-        diagnostics.zeroQuantityLines += 1;
-        return;
-      }
-
-      diagnostics.countedLines += 1;
-      diagnostics.totalConfirmedQty += qty;
-      const key = cellKey(vendor, year, week, category);
-      confirmedByCell.set(key, (confirmedByCell.get(key) || 0) + qty);
+      const share = details.length ? 1 / details.length : 1;
+      let hasQty = false;
+      measures.forEach((measure, index) => {
+        const qty = masterQtyByMeasure[index] * share;
+        if (qty <= 0) return;
+        hasQty = true;
+        addLoad(vendor, year, week, measure.columnKey, qty);
+      });
+      if (!hasQty) diagnostics.zeroQuantityLines += 1;
     };
 
     if (!details.length) {
@@ -128,7 +122,6 @@ function aggregatePoLoad(rows, config, window) {
     }
 
     for (const detail of details) {
-      if (detail.isRemoved) continue;
       processLine(detail.detailKey, detail.values || {}, false);
     }
   }
@@ -143,63 +136,116 @@ function isInWindow(year, week, window) {
   return point >= start && point <= end;
 }
 
-function buildMatrixCells({ capacityRows, confirmedByCell, config, window, vendorFilter = null }) {
-  const capacityByKey = new Map();
+function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
+  const totals = new Map();
   for (const row of capacityRows) {
     if (vendorFilter && row.vendorAccount !== vendorFilter) continue;
-    capacityByKey.set(cellKey(row.vendorAccount, row.periodYear, row.isoWeek, row.capacityCategory), row);
+    const key = `${row.vendorAccount}|${row.periodYear}|${row.isoWeek}`;
+    totals.set(key, (totals.get(key) || 0) + Number(row.availableQty || 0));
   }
-
-  const keys = new Set([...capacityByKey.keys(), ...confirmedByCell.keys()]);
-  const cells = [];
-
-  for (const key of keys) {
-    const parts = parseCellKey(key);
-    if (vendorFilter && parts.vendorAccount !== vendorFilter) continue;
-    if (!isInWindow(parts.periodYear, parts.isoWeek, window)) continue;
-
-    const capacity = capacityByKey.get(key);
-    const available = capacity ? capacity.availableQty : 0;
-    const confirmed = confirmedByCell.get(key) || 0;
-    const remaining = available - confirmed;
-    const status = computeRccpStatus(available, confirmed, config.thresholds);
-
-    cells.push({
-      ...parts,
-      availableQty: available,
-      confirmedQty: confirmed,
-      remainingQty: remaining,
-      utilPercent: status.utilPercent,
-      statusColor: status.color,
-      statusLabel: status.label,
-      capacityId: capacity?.id ?? null,
-    });
-  }
-
-  const categories = [...new Set(cells.map((c) => c.capacityCategory))].sort();
-  const periods = buildWeekRange(window.fromYear, window.fromWeek, window.toYear, window.toWeek);
-
-  return { cells, categories, periods };
+  return totals;
 }
 
-function buildKpis(cells) {
-  const totalAvailable = cells.reduce((s, c) => s + c.availableQty, 0);
-  const totalConfirmed = cells.reduce((s, c) => s + c.confirmedQty, 0);
-  const overloaded = cells.filter((c) => c.statusLabel === 'Overloaded' || c.statusLabel === 'Unplanned').length;
-  const warnings = cells.filter((c) => c.statusLabel === 'Warning').length;
+function buildMatrixCells({
+  capacityRows, confirmedByCell, config, window, vendorFilter = null,
+}) {
+  const measures = config.quantityMeasures || [];
+  const capacityTotals = sumCapacityByVendorWeek(capacityRows, vendorFilter);
+  const periods = buildWeekRange(window.fromYear, window.fromWeek, window.toYear, window.toWeek);
+  const cells = [];
+
+  const vendors = new Set();
+  for (const key of confirmedByCell.keys()) vendors.add(parseCellKey(key).vendorAccount);
+  for (const key of capacityTotals.keys()) vendors.add(key.split('|')[0]);
+
+  for (const vendor of vendors) {
+    if (vendorFilter && vendor !== vendorFilter) continue;
+
+    for (const period of periods) {
+      const capKey = `${vendor}|${period.year}|${period.week}`;
+      const available = capacityTotals.get(capKey) || 0;
+
+      for (const measure of measures) {
+        const confirmed = confirmedByCell.get(cellKey(vendor, period.year, period.week, measure.columnKey)) || 0;
+        const status = computeRccpStatus(available, confirmed, config.thresholds);
+        cells.push({
+          vendorAccount: vendor,
+          periodYear: period.year,
+          isoWeek: period.week,
+          measureKey: measure.columnKey,
+          availableQty: available,
+          confirmedQty: confirmed,
+          remainingQty: available - confirmed,
+          utilPercent: status.utilPercent,
+          statusColor: status.color,
+          statusLabel: status.label,
+        });
+      }
+
+      if (available > 0) {
+        cells.push({
+          vendorAccount: vendor,
+          periodYear: period.year,
+          isoWeek: period.week,
+          measureKey: CAPACITY_MEASURE_KEY,
+          availableQty: available,
+          confirmedQty: 0,
+          remainingQty: available,
+          utilPercent: null,
+          statusColor: 'green',
+          statusLabel: 'OK',
+        });
+      }
+    }
+  }
+
+  const measureRows = [
+    ...measures.map((m) => ({
+      measureKey: m.columnKey,
+      label: m.label || m.columnKey,
+      chartType: m.chartType,
+      color: m.color,
+      showInChart: m.showInChart !== false,
+      isCapacity: false,
+    })),
+    {
+      measureKey: CAPACITY_MEASURE_KEY,
+      label: 'Available capacity',
+      chartType: 'line',
+      color: '#107C10',
+      showInChart: true,
+      isCapacity: true,
+    },
+  ];
+
+  return { cells, measureRows, periods };
+}
+
+function buildKpis(cells, measures) {
+  const loadKeys = new Set((measures || []).map((m) => m.columnKey));
+  const loadCells = cells.filter((c) => loadKeys.has(c.measureKey));
+  const totalAvailable = cells
+    .filter((c) => c.measureKey === CAPACITY_MEASURE_KEY)
+    .reduce((s, c) => s + c.availableQty, 0);
+  const totalConfirmed = loadCells.reduce((s, c) => s + c.confirmedQty, 0);
+  const overloaded = loadCells.filter((c) => c.statusLabel === 'Overloaded' || c.statusLabel === 'Unplanned').length;
+  const warnings = loadCells.filter((c) => c.statusLabel === 'Warning').length;
   return { totalAvailable, totalConfirmed, overloaded, warnings };
 }
 
-function buildChartSeries(cells, periods) {
+function buildChartSeries(cells, periods, measureRows) {
   return periods.map(({ year, week, key }) => {
-    const slice = cells.filter((c) => c.periodYear === year && c.isoWeek === week);
-    return {
-      key,
-      year,
-      week,
-      available: slice.reduce((s, c) => s + c.availableQty, 0),
-      confirmed: slice.reduce((s, c) => s + c.confirmedQty, 0),
-    };
+    const point = { key, year, week };
+    for (const row of measureRows) {
+      const slice = cells.filter(
+        (c) => c.periodYear === year && c.isoWeek === week && c.measureKey === row.measureKey,
+      );
+      point[row.measureKey] = slice.reduce(
+        (s, c) => s + (row.isCapacity ? c.availableQty : c.confirmedQty),
+        0,
+      );
+    }
+    return point;
   });
 }
 
@@ -234,7 +280,7 @@ async function analyze({
     toWeek: window.toWeek,
   }));
 
-  const { cells, categories, periods } = buildMatrixCells({
+  const { cells, measureRows, periods } = buildMatrixCells({
     capacityRows,
     confirmedByCell,
     config,
@@ -247,20 +293,22 @@ async function analyze({
     window,
     vendorAccount: effectiveVendor,
     cells,
-    categories,
+    measureRows,
     periods,
     missingDates: effectiveVendor
       ? missingDates.filter((m) => m.vendorAccount === effectiveVendor)
       : missingDates,
     diagnostics,
-    kpis: buildKpis(cells),
-    chart: buildChartSeries(cells, periods),
+    kpis: buildKpis(cells, config.quantityMeasures),
+    chart: buildChartSeries(cells, periods, measureRows),
   };
 }
 
 function buildDrillDownRows(rows, config, cell, window) {
   const result = [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
+  const measureKey = cell.measureKey;
+  if (!measureKey || measureKey === CAPACITY_MEASURE_KEY) return result;
 
   for (const row of rows) {
     const masterValues = row.values || {};
@@ -268,23 +316,22 @@ function buildDrillDownRows(rows, config, cell, window) {
     if (vendor !== cell.vendorAccount) continue;
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
-    const details = Array.isArray(row.details) ? row.details : [];
+    const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
+    const masterQty = toNumber(pickValue(masterValues, measureKey));
+    const share = details.length ? 1 / details.length : 1;
 
     const pushLine = (lineNumber, lineValues, dateValue, dateFromHeader) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
       if (status && excludedSet.has(String(status).toLowerCase())) return;
-
-      const qty = toNumber(pickValue(lineValues, config.quantityColumnKey) ?? pickValue(masterValues, config.quantityColumnKey));
-      const category = String(
-        pickValue(lineValues, config.categoryColumnKey) ?? pickValue(masterValues, config.categoryColumnKey) ?? UNCLASSIFIED,
-      ).trim() || UNCLASSIFIED;
-      if (category !== cell.capacityCategory) return;
       if (!dateValue) return;
 
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (year !== cell.periodYear || week !== cell.isoWeek) return;
       if (!isInWindow(year, week, window)) return;
+
+      const qty = masterQty * share;
+      if (qty <= 0) return;
 
       result.push({
         orderNumber: row.recordKey,
@@ -303,7 +350,6 @@ function buildDrillDownRows(rows, config, cell, window) {
     }
 
     for (const detail of details) {
-      if (detail.isRemoved) continue;
       const lineValues = detail.values || {};
       let dateValue = pickValue(lineValues, config.dateColumnKey);
       let dateFromHeader = false;
@@ -334,7 +380,7 @@ async function getDrillDown(params) {
     vendorAccount: params.vendorAccount,
     periodYear: Number(params.periodYear),
     isoWeek: Number(params.isoWeek),
-    capacityCategory: params.capacityCategory,
+    measureKey: params.measureKey,
   };
   return {
     cell,
@@ -342,7 +388,6 @@ async function getDrillDown(params) {
   };
 }
 
-/** Distinct vendor values from PO master rows using the configured vendor column. */
 function extractVendorsFromRows(rows, vendorColumnKey) {
   const vendors = new Set();
   for (const row of rows || []) {
@@ -365,7 +410,6 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
 }
 
 module.exports = {
-  UNCLASSIFIED,
   aggregatePoLoad,
   buildMatrixCells,
   analyze,

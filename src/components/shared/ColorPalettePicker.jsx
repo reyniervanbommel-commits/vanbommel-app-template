@@ -19,6 +19,12 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     justifyContent: 'start',
   },
+  colorPaletteCompact: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    ...shorthands.gap('3px'),
+    alignItems: 'center',
+  },
   colorSwatch: {
     width: '24px',
     height: '24px',
@@ -26,6 +32,18 @@ const useStyles = makeStyles({
     ...shorthands.border('2px', 'solid', 'transparent'),
     cursor: 'pointer',
     ...shorthands.padding('0'),
+    ':hover': {
+      ...shorthands.borderColor(tokens.colorNeutralStroke1),
+    },
+  },
+  colorSwatchCompact: {
+    width: '18px',
+    height: '18px',
+    ...shorthands.borderRadius('3px'),
+    ...shorthands.border('1.5px', 'solid', 'transparent'),
+    cursor: 'pointer',
+    ...shorthands.padding('0'),
+    flexShrink: 0,
     ':hover': {
       ...shorthands.borderColor(tokens.colorNeutralStroke1),
     },
@@ -49,11 +67,13 @@ const useStyles = makeStyles({
   },
 });
 
-function ColorPaletteGrid({ selectedColor, onSelect, ariaLabel = 'Pick color' }) {
+function ColorPaletteGrid({ selectedColor, onSelect, ariaLabel = 'Pick color', compact = false }) {
   const styles = useStyles();
+  const swatchClass = compact ? styles.colorSwatchCompact : styles.colorSwatch;
+  const paletteClass = compact ? styles.colorPaletteCompact : styles.colorPalette;
 
   return (
-    <div className={styles.colorPalette} role="listbox" aria-label={ariaLabel}>
+    <div className={paletteClass} role="listbox" aria-label={ariaLabel}>
       {SELECTABLE_STATUS_COLORS.map((color) => (
         <button
           key={color}
@@ -61,7 +81,7 @@ function ColorPaletteGrid({ selectedColor, onSelect, ariaLabel = 'Pick color' })
           role="option"
           aria-selected={selectedColor === color}
           className={mergeClasses(
-            styles.colorSwatch,
+            swatchClass,
             selectedColor === color ? styles.colorSwatchSelected : undefined,
           )}
           style={{ backgroundColor: color }}
@@ -87,12 +107,13 @@ export default function ColorPalettePicker({
     setOpen(false);
   }, [onSelect]);
 
-  if (layout === 'grid') {
+  if (layout === 'grid' || layout === 'compact') {
     return (
       <ColorPaletteGrid
         selectedColor={selectedColor}
         onSelect={onSelect}
         ariaLabel={ariaLabel}
+        compact={layout === 'compact'}
       />
     );
   }

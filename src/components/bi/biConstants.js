@@ -45,6 +45,30 @@ export const CHART_SIZE_OPTIONS_BAR_LINE = [
   { key: CHART_SIZE_WIDE, label: 'Wide' },
 ];
 
+export const COLOR_MODE_SINGLE = 'single';
+export const COLOR_MODE_RANDOM = 'random';
+
+export const COLOR_MODE_OPTIONS = [
+  { key: COLOR_MODE_SINGLE, label: 'Single color' },
+  { key: COLOR_MODE_RANDOM, label: 'Random colors' },
+];
+
+export const VALUE_DISPLAY_VALUE = 'value';
+export const VALUE_DISPLAY_PERCENT = 'percent';
+
+export const VALUE_DISPLAY_OPTIONS = [
+  { key: VALUE_DISPLAY_VALUE, label: 'Values' },
+  { key: VALUE_DISPLAY_PERCENT, label: 'Percentages' },
+];
+
+export const MEASURE_STYLE_BAR = 'bar';
+export const MEASURE_STYLE_LINE = 'line';
+
+export const MEASURE_STYLE_OPTIONS = [
+  { key: MEASURE_STYLE_BAR, label: 'Bar' },
+  { key: MEASURE_STYLE_LINE, label: 'Line' },
+];
+
 export const CHART_COLOR_PALETTE = SELECTABLE_STATUS_COLORS;
 
 export const DEFAULT_CHART_COLORS = Object.freeze([
@@ -75,7 +99,50 @@ export function defaultColorForIndex(index) {
   return DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
 }
 
+export function resolveColorMode(config) {
+  return config?.options?.colorMode === COLOR_MODE_SINGLE ? COLOR_MODE_SINGLE : COLOR_MODE_RANDOM;
+}
+
+export function resolveSingleColor(config) {
+  const options = config?.options || {};
+  if (options.singleColor) return options.singleColor;
+  const colors = options.colors || {};
+  if (colors[SERIES_COLOR_KEY]) return colors[SERIES_COLOR_KEY];
+  const firstKey = Object.keys(colors).find((key) => colors[key]);
+  if (firstKey) return colors[firstKey];
+  return defaultColorForIndex(0);
+}
+
+export function resolveValueDisplay(config) {
+  return config?.options?.valueDisplay === VALUE_DISPLAY_PERCENT
+    ? VALUE_DISPLAY_PERCENT
+    : VALUE_DISPLAY_VALUE;
+}
+
+/** Bar charts: per-measure bar or line. Line charts: always line. */
+export function resolveMeasureStyle(config, measureKey) {
+  if (config?.type === 'line') return MEASURE_STYLE_LINE;
+  const styles = config?.options?.measureStyles || {};
+  return styles[measureKey] === MEASURE_STYLE_LINE ? MEASURE_STYLE_LINE : MEASURE_STYLE_BAR;
+}
+
+export function normalizeMeasureStyles(measures, existing = {}) {
+  const next = {};
+  measures.forEach((key) => {
+    next[key] = existing[key] === MEASURE_STYLE_LINE ? MEASURE_STYLE_LINE : MEASURE_STYLE_BAR;
+  });
+  return next;
+}
+
+export function hasLineSeriesInBarChart(config) {
+  if (config?.type !== 'bar') return false;
+  return resolveMeasures(config).some((key) => resolveMeasureStyle(config, key) === MEASURE_STYLE_LINE);
+}
+
 export function resolveChartColor(config, key, index = 0) {
+  if (resolveColorMode(config) === COLOR_MODE_SINGLE) {
+    return resolveSingleColor(config);
+  }
   const colors = config?.options?.colors;
   if (colors && typeof colors === 'object' && colors[key]) return colors[key];
   return defaultColorForIndex(index);
@@ -114,7 +181,7 @@ function resolveChartType(chart) {
 export function resolveGridSpan(chart) {
   const type = resolveChartType(chart);
   const size = resolveChartSize(chart);
-  if (type === 'kpi') return 8;
+  if (type === 'kpi') return 5;
   if (type === 'pie') return 11;
   if (size === CHART_SIZE_WIDE) return 36;
   return 15;
@@ -144,7 +211,7 @@ export function stripCardStyle(chart) {
     return { flex: '0 0 60%', minWidth: '384px', maxWidth: '60%' };
   }
   if (size === CHART_SIZE_SMALL) {
-    return { flex: '0 0 14%', minWidth: '140px', maxWidth: '14%' };
+    return { flex: '0 0 10%', minWidth: '120px', maxWidth: '120px' };
   }
   if (type === 'pie') {
     return { flex: '0 0 17.5%', minWidth: '182px', maxWidth: '17.5%' };
@@ -164,6 +231,11 @@ export function createEmptyChartConfig() {
     options: {
       chartSize: CHART_SIZE_MEDIUM,
       colors: {},
+      colorMode: COLOR_MODE_RANDOM,
+      singleColor: DEFAULT_CHART_COLORS[0],
+      valueDisplay: VALUE_DISPLAY_VALUE,
+      unit: '',
+      measureStyles: {},
     },
   };
 }

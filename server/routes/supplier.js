@@ -179,6 +179,25 @@ function normalizeBiSplitPane(value) {
     open: value.open === true,
     height: Number.isFinite(height) ? Math.min(800, Math.max(120, Math.round(height))) : 280,
     chartIds,
+    activeTab: value.activeTab === 'rccp' ? 'rccp' : 'bi',
+  };
+}
+
+// RCCP ISO-weekrange (#AB:224): gedeeld tussen /rccp en split-pane, board-key `rccp`.
+function normalizeIsoWindow(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const fromYear = Number(value.fromYear);
+  const fromWeek = Number(value.fromWeek);
+  const toYear = Number(value.toYear);
+  const toWeek = Number(value.toWeek);
+  if (!Number.isFinite(fromYear) || !Number.isFinite(fromWeek) || !Number.isFinite(toYear) || !Number.isFinite(toWeek)) {
+    return null;
+  }
+  return {
+    fromYear: Math.round(fromYear),
+    fromWeek: Math.max(1, Math.min(53, Math.round(fromWeek))),
+    toYear: Math.round(toYear),
+    toWeek: Math.max(1, Math.min(53, Math.round(toWeek))),
   };
 }
 
@@ -186,6 +205,7 @@ function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
     biSplitPane: normalizeBiSplitPane(input.biSplitPane),
+    isoWindow: normalizeIsoWindow(input.isoWindow),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),

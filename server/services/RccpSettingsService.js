@@ -9,13 +9,25 @@ const settingsService = require('./SettingsService');
 const CONFIG_KEY = 'RCCP_CONFIG';
 const VALID_DUPLICATE_POLICIES = Object.freeze(['update', 'skip']);
 const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
+const VALID_CHART_TYPES = Object.freeze(['line', 'bar']);
+const MEASURE_COLORS = Object.freeze(['#D13438', '#0078D4', '#8764B8', '#CA5010', '#107C10', '#5C2D91']);
+const CAPACITY_MEASURE_KEY = '__capacity__';
+
+function defaultQuantityMeasures() {
+  return [{
+    columnKey: 'quantity',
+    label: 'Quantity',
+    chartType: 'line',
+    color: '#D13438',
+    showInChart: true,
+  }];
+}
 
 function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
-    quantityColumnKey: 'quantity',
-    categoryColumnKey: 'itemNumber',
     vendorColumnKey: 'vendorAccount',
+    quantityMeasures: defaultQuantityMeasures(),
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
@@ -25,18 +37,37 @@ function defaultConfig() {
 
 const LEGACY_COLUMN_KEY_MAP = Object.freeze({
   orderedPurchaseQuantity: 'quantity',
-  productCategory: 'itemNumber',
 });
 
-function normalizeLegacyColumnKeys(config) {
-  const next = { ...config };
-  if (LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey]) {
-    next.quantityColumnKey = LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey];
+function normalizeQuantityMeasures(raw) {
+  const list = Array.isArray(raw?.quantityMeasures) ? raw.quantityMeasures : [];
+  if (list.length) {
+    return list.map((entry, index) => {
+      const columnKey = String(entry?.columnKey || '').trim();
+      if (!columnKey) return null;
+      const chartType = VALID_CHART_TYPES.includes(entry?.chartType) ? entry.chartType : 'line';
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
+        ? String(entry.color)
+        : MEASURE_COLORS[index % MEASURE_COLORS.length];
+      return {
+        columnKey,
+        label: String(entry?.label || columnKey).trim() || columnKey,
+        chartType,
+        color,
+        showInChart: entry?.showInChart !== false,
+      };
+    }).filter(Boolean).slice(0, 8);
   }
-  if (LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey]) {
-    next.categoryColumnKey = LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey];
-  }
-  return next;
+
+  const legacyKey = String(raw?.quantityColumnKey || 'quantity').trim();
+  const mapped = LEGACY_COLUMN_KEY_MAP[legacyKey] || legacyKey;
+  return [{
+    columnKey: mapped,
+    label: mapped,
+    chartType: 'line',
+    color: MEASURE_COLORS[0],
+    showInChart: true,
+  }];
 }
 
 function normalizeStringArray(value) {
@@ -51,11 +82,10 @@ function validateConfig(raw) {
 
   const base = defaultConfig();
   const dateColumnKey = String(raw.dateColumnKey ?? base.dateColumnKey).trim();
-  const quantityColumnKey = String(raw.quantityColumnKey ?? base.quantityColumnKey).trim();
-  const categoryColumnKey = String(raw.categoryColumnKey ?? base.categoryColumnKey).trim();
   const vendorColumnKey = String(raw.vendorColumnKey ?? base.vendorColumnKey).trim();
-  if (!dateColumnKey || !quantityColumnKey || !categoryColumnKey || !vendorColumnKey) {
-    return { valid: false, error: 'Column keys are required' };
+  const quantityMeasures = normalizeQuantityMeasures(raw);
+  if (!dateColumnKey || !vendorColumnKey || !quantityMeasures.length) {
+    return { valid: false, error: 'Column keys and at least one quantity measure are required' };
   }
 
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
@@ -80,9 +110,8 @@ function validateConfig(raw) {
     valid: true,
     config: {
       dateColumnKey,
-      quantityColumnKey,
-      categoryColumnKey,
       vendorColumnKey,
+      quantityMeasures,
       excludedStatuses,
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
@@ -98,7 +127,7 @@ async function getConfig() {
     const parsed = JSON.parse(raw);
     const result = validateConfig(parsed);
     if (!result.valid) return defaultConfig();
-    return normalizeLegacyColumnKeys(result.config);
+    return result.config;
   } catch {
     return defaultConfig();
   }
@@ -117,8 +146,9 @@ async function saveConfig(raw, userId = null) {
 
 module.exports = {
   CONFIG_KEY,
+  CAPACITY_MEASURE_KEY,
   defaultConfig,
-  normalizeLegacyColumnKeys,
+  normalizeQuantityMeasures,
   validateConfig,
   getConfig,
   saveConfig,

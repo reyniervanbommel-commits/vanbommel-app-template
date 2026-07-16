@@ -29,6 +29,14 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow8,
     backgroundColor: tokens.colorNeutralBackground1Hover,
   },
+  kpiRoot: {
+    maxWidth: '132px',
+    ...shorthands.padding('8px'),
+  },
+  kpiBody: {
+    aspectRatio: '1 / 1',
+    maxHeight: '112px',
+  },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
   titleWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px'), minWidth: 0 },
   title: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -42,6 +50,7 @@ function ChartCard({
   onEdit, onDelete, height = 260,
 }) {
   const styles = useStyles();
+  const isKpi = chart.config?.type === 'kpi';
 
   const handleCardClick = useCallback(() => {
     if (canManage) onEdit(chart);
@@ -61,6 +70,7 @@ function ChartCard({
     <div
       className={mergeClasses(
         styles.root,
+        isKpi && styles.kpiRoot,
         canManage && styles.rootInteractive,
         selected && styles.rootSelected,
       )}
@@ -100,11 +110,17 @@ function ChartCard({
           </div>
         ) : null}
       </div>
-      <div className={styles.body}>
+      <div className={mergeClasses(styles.body, isKpi && styles.kpiBody)}>
         {loading ? (
           <div className={styles.loading}><Spinner size="tiny" label="Loading…" /></div>
         ) : (
-          <ChartRenderer type={chart.config?.type} series={series} config={chart.config} columns={columns} height={height} />
+          <ChartRenderer
+            type={chart.config?.type}
+            series={series}
+            config={chart.config}
+            columns={columns}
+            height={isKpi ? 112 : height}
+          />
         )}
       </div>
     </div>

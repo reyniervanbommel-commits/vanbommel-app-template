@@ -17,6 +17,46 @@ export function formatWeekLabel(year, week) {
   return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
+/** Matrix column: week only (01, 02, …). Year shown separately when the range crosses years. */
+export function formatMatrixWeekLabel(week) {
+  return String(week).padStart(2, '0');
+}
+
+/**
+ * @param {{ year: number, week: number, key: string }[]} periods
+ * @returns {{ year: number, week: number, key: string, weekLabel: string, yearLabel: string }[]}
+ */
+export function buildMatrixPeriodHeaders(periods) {
+  if (!Array.isArray(periods) || !periods.length) return [];
+  const spansYears = periods[0].year !== periods[periods.length - 1].year;
+  return periods.map((period, index) => ({
+    ...period,
+    weekLabel: formatMatrixWeekLabel(period.week),
+    yearLabel: spansYears && (index === 0 || period.year !== periods[index - 1].year)
+      ? String(period.year)
+      : '',
+  }));
+}
+
+export function isMatrixCellEmpty(cell) {
+  if (!cell) return true;
+  return cell.statusLabel === 'N/A' && cell.availableQty <= 0 && cell.confirmedQty <= 0;
+}
+
+export function formatMatrixQty(value) {
+  const n = Number(value) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export function formatIsoWindowLabel(window) {
+  if (!window) return '';
+  return `${formatWeekLabel(window.fromYear, window.fromWeek)} → ${formatWeekLabel(window.toYear, window.toWeek)}`;
+}
+
+export const RCCP_WEEK_COL_WIDTH = 72;
+export const RCCP_ROW_LABEL_WIDTH = 148;
+export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
+
 export function currentIsoWindow(size = 8) {
   const now = new Date();
   const year = now.getUTCFullYear();

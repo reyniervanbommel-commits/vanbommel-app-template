@@ -8,10 +8,10 @@ const DEFAULT_HEIGHT = 280;
 
 /**
  * Beheert het inklapbare split-screen-paneel: open/dicht, hoogte en de geselecteerde chart-ids.
- * @returns {{ open, height, chartIds, loaded, toggleOpen, setHeight, toggleChart, setChartIds }}
+ * @returns {{ open, height, chartIds, activeTab, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }}
  */
 export function useSplitPane() {
-  const [state, setState] = useState({ open: false, height: DEFAULT_HEIGHT, chartIds: [] });
+  const [state, setState] = useState({ open: false, height: DEFAULT_HEIGHT, chartIds: [], activeTab: 'bi' });
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);
 
@@ -26,6 +26,7 @@ export function useSplitPane() {
             open: Boolean(pane.open),
             height: Number(pane.height) || DEFAULT_HEIGHT,
             chartIds: Array.isArray(pane.chartIds) ? pane.chartIds : [],
+            activeTab: pane.activeTab === 'rccp' ? 'rccp' : 'bi',
           });
         }
       })
@@ -58,8 +59,12 @@ export function useSplitPane() {
     update({ chartIds });
   }, [update, state.chartIds]);
 
+  const setActiveTab = useCallback((activeTab) => {
+    update({ activeTab: activeTab === 'rccp' ? 'rccp' : 'bi' });
+  }, [update]);
+
   return useMemo(
-    () => ({ ...state, loaded, toggleOpen, setHeight, toggleChart, setChartIds }),
-    [state, loaded, toggleOpen, setHeight, toggleChart, setChartIds],
+    () => ({ ...state, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }),
+    [state, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab],
   );
 }

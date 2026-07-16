@@ -18,9 +18,9 @@ import { BOARD_KEY } from './biConstants';
 const useStyles = makeStyles({
   pageLayout: {
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     ...shorthands.gap('16px'),
-    minHeight: 0,
+    minHeight: 'calc(100vh - 120px)',
   },
   dashboardArea: {
     flex: 1,

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   Button, Field, Input, Spinner, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
@@ -14,6 +14,7 @@ import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
 import RccpCapacityEditor from './RccpCapacityEditor';
 import RccpImportDialog from './RccpImportDialog';
+import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 
@@ -26,8 +27,10 @@ const useStyles = makeStyles({
 export default function RccpPageContent() {
   const styles = useStyles();
   const { user } = useAuth();
+  const isAdmin = user?.role === ROLES.ADMIN;
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const [vendorAccount, setVendorAccount] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     vendors, vendorColumnKey, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
@@ -47,6 +50,10 @@ export default function RccpPageContent() {
   }, []);
 
   const handleCloseDrill = useCallback(() => setDrillCell(null), []);
+
+  const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
+  const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
+  const handleSettingsSaved = useCallback(() => reload(), [reload]);
 
   return (
     <div className={styles.root}>
@@ -71,6 +78,9 @@ export default function RccpPageContent() {
         <Field label="To year"><Input type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} /></Field>
         <Field label="To week"><Input type="number" value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} /></Field>
         <Button icon={<ArrowClockwise24Regular />} onClick={reload}>Refresh</Button>
+        {isAdmin && (
+          <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
+        )}
         <RccpCapacityEditor readOnly={readOnly} onSaved={reload} />
         <RccpImportDialog readOnly={readOnly} onImported={reload} />
       </div>
@@ -94,6 +104,7 @@ export default function RccpPageContent() {
             categories={categories}
             periods={periods}
             cellMap={cellMap}
+            groupColumnKey={analysis.config?.categoryColumnKey}
             onCellClick={handleCellClick}
           />
         </>
@@ -105,6 +116,14 @@ export default function RccpPageContent() {
         window={window}
         onClose={handleCloseDrill}
       />
+
+      {isAdmin && (
+        <RccpSettingsFlyout
+          open={settingsOpen}
+          onClose={handleCloseSettings}
+          onSaved={handleSettingsSaved}
+        />
+      )}
     </div>
   );
 }
