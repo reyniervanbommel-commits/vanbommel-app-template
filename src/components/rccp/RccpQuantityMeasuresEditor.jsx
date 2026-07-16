@@ -10,20 +10,20 @@ const CHART_TYPES = [
 ];
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), width: '100%' },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), width: '100%' },
   row: {
     display: 'grid',
     gridTemplateColumns: '1fr 88px 72px auto auto',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
     alignItems: 'end',
   },
   rowFlyout: {
     gridTemplateColumns: '1fr',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
   },
   fieldFlyout: { width: '100%' },
   controlShell: { maxWidth: '168px', overflowX: 'auto' },
-  hint: { color: tokens.colorNeutralForeground3, fontSize: '12px' },
+  hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
 function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {

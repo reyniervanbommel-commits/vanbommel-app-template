@@ -12,7 +12,7 @@ const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
     minHeight: 0,
     height: '100%',
     width: '100%',
@@ -21,10 +21,10 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
     flexWrap: 'wrap',
   },
-  meta: { color: tokens.colorNeutralForeground3, fontSize: '12px' },
+  meta: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   body: { flex: 1, minHeight: 0, overflow: 'hidden' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });

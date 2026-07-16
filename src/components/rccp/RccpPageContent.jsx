@@ -18,8 +18,11 @@ import RccpVendorFilter from './RccpVendorFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
-  toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap('12px') },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
+  subtitle: { color: tokens.colorNeutralForeground3 },
+  toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap(tokens.spacingHorizontalM) },
+  yearInput: { width: '104px' },
+  weekInput: { width: '84px' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
@@ -57,7 +60,7 @@ export default function RccpPageContent() {
   return (
     <div className={styles.root}>
       <Text size={700} weight="semibold">Rough Cut Capacity Planning</Text>
-      <Text style={{ color: tokens.colorNeutralForeground3 }}>
+      <Text className={styles.subtitle}>
         Compare planned vendor capacity against live purchase order load.
       </Text>
 
@@ -72,10 +75,18 @@ export default function RccpPageContent() {
             error={vendorsError}
           />
         )}
-        <Field label="From year"><Input type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} /></Field>
-        <Field label="From week"><Input type="number" value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} /></Field>
-        <Field label="To year"><Input type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} /></Field>
-        <Field label="To week"><Input type="number" value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} /></Field>
+        <Field label="From year">
+          <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
+        </Field>
+        <Field label="From week">
+          <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} />
+        </Field>
+        <Field label="To year">
+          <Input className={styles.yearInput} type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} />
+        </Field>
+        <Field label="To week">
+          <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} />
+        </Field>
         <Button icon={<ArrowClockwise24Regular />} onClick={reload}>Refresh</Button>
         {isAdmin && (
           <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>

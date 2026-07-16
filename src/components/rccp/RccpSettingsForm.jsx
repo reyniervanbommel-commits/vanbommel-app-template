@@ -6,31 +6,32 @@ import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
-  rootFlyout: { ...shorthands.gap('16px') },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
+  rootFlyout: { ...shorthands.gap(tokens.spacingVerticalL) },
   section: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRadius('8px'),
-    ...shorthands.padding('20px'),
+    ...shorthands.borderRadius(tokens.borderRadiusXLarge),
+    ...shorthands.padding(tokens.spacingVerticalXL),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('16px'),
+    ...shorthands.gap(tokens.spacingVerticalL),
   },
   sectionFlyout: {
-    ...shorthands.padding('16px'),
-    ...shorthands.gap('12px'),
+    ...shorthands.padding(tokens.spacingVerticalL),
+    ...shorthands.gap(tokens.spacingVerticalM),
     alignItems: 'flex-start',
     width: '100%',
     boxSizing: 'border-box',
   },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', ...shorthands.gap('12px') },
-  gridFlyout: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), alignItems: 'flex-start' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', ...shorthands.gap(tokens.spacingHorizontalM) },
+  gridFlyout: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), alignItems: 'flex-start' },
   fieldFlyout: { width: 'auto', maxWidth: '100%' },
   controlShell: { maxWidth: '168px', overflowX: 'auto', width: '100%' },
   controlShellWide: { maxWidth: '240px' },
   controlShellNarrow: { maxWidth: '88px' },
   hint: { color: tokens.colorNeutralForeground3 },
-  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px'), flexWrap: 'wrap' },
+  error: { color: tokens.colorPaletteRedForeground1 },
+  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap(tokens.spacingHorizontalM), flexWrap: 'wrap' },
 });
 
 function ControlShell({ compact, wide, narrow, children }) {
@@ -162,7 +163,7 @@ function RccpSettingsForm({
         <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>Save settings</Button>
         {saving && <Spinner size="tiny" />}
         {saved && <Text className={styles.hint}>Saved</Text>}
-        {error && <Text style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Text>}
+        {error && <Text className={styles.error}>{error}</Text>}
       </div>
     </div>
   );

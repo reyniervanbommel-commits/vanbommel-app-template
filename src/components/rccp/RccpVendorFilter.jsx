@@ -1,9 +1,5 @@
 import React, { useCallback } from 'react';
-import { Field, Select, Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
-
-const useStyles = makeStyles({
-  hint: { color: tokens.colorNeutralForeground3 },
-});
+import { Field, Select, Spinner } from '@fluentui/react-components';
 
 export default function RccpVendorFilter({
   value,
@@ -13,8 +9,6 @@ export default function RccpVendorFilter({
   loading,
   error,
 }) {
-  const styles = useStyles();
-
   const handleChange = useCallback((event) => {
     onChange(event.target.value);
   }, [onChange]);
@@ -27,6 +21,8 @@ export default function RccpVendorFilter({
     <Field
       label="Vendor filter"
       hint={vendorColumnKey ? `Values from main table column: ${vendorColumnKey}` : undefined}
+      validationState={error ? 'error' : 'none'}
+      validationMessage={error || undefined}
     >
       <Select value={value} onChange={handleChange}>
         <option value="">All vendors</option>
@@ -34,7 +30,6 @@ export default function RccpVendorFilter({
           <option key={vendor} value={vendor}>{vendor}</option>
         ))}
       </Select>
-      {error && <Text size={200} className={styles.hint}>{error}</Text>}
     </Field>
   );
 }

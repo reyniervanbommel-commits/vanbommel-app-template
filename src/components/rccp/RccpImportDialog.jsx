@@ -1,13 +1,15 @@
 import React, { useCallback, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
-  Spinner, Text, makeStyles, shorthands,
+  Field, Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import { ArrowUpload24Regular, ArrowDownload24Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
-  body: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
+  body: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalM) },
   summary: { whiteSpace: 'pre-wrap' },
+  templateButton: { alignSelf: 'flex-start' },
+  error: { color: tokens.colorPaletteRedForeground1 },
 });
 
 export default function RccpImportDialog({ readOnly, onImported }) {
@@ -78,10 +80,17 @@ export default function RccpImportDialog({ readOnly, onImported }) {
           <DialogBody>
             <DialogTitle>Import RCCP capacity</DialogTitle>
             <DialogContent className={styles.body}>
-              <Button appearance="subtle" icon={<ArrowDownload24Regular />} onClick={handleDownloadTemplate}>
+              <Button
+                appearance="subtle"
+                className={styles.templateButton}
+                icon={<ArrowDownload24Regular />}
+                onClick={handleDownloadTemplate}
+              >
                 Download template
               </Button>
-              <input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <Field label="Excel file" hint="Accepts .xlsx and .xls files.">
+                <input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </Field>
               <Button onClick={handlePreview} disabled={!file || busy}>Preview</Button>
               {preview && (
                 <Text className={styles.summary}>
@@ -90,7 +99,7 @@ export default function RccpImportDialog({ readOnly, onImported }) {
                   {' | '}Duplicates: {preview.duplicates?.length || 0}
                 </Text>
               )}
-              {error && <Text>{error}</Text>}
+              {error && <Text className={styles.error}>{error}</Text>}
             </DialogContent>
             <DialogActions>
               <Button appearance="secondary" onClick={() => setOpen(false)}>Close</Button>

@@ -4,12 +4,13 @@ import { Card, Text, makeStyles, tokens, shorthands } from '@fluentui/react-comp
 const useStyles = makeStyles({
   card: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('16px'),
+    ...shorthands.padding(tokens.spacingVerticalL),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
   },
   row: { fontSize: tokens.fontSizeBase200 },
+  muted: { color: tokens.colorNeutralForeground3 },
 });
 
 function RccpDiagnosticsCard({ diagnostics, config, window }) {
@@ -19,11 +20,11 @@ function RccpDiagnosticsCard({ diagnostics, config, window }) {
   return (
     <Card className={styles.card}>
       <Text weight="semibold">Load diagnostics</Text>
-      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+      <Text size={200} className={styles.muted}>
         Columns: vendor={config?.vendorColumnKey}, date={config?.dateColumnKey},
         measures={(config?.quantityMeasures || []).map((m) => m.columnKey).join(', ') || '—'}
       </Text>
-      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+      <Text size={200} className={styles.muted}>
         Window: {window?.fromYear}-W{window?.fromWeek} → {window?.toYear}-W{window?.toWeek}
       </Text>
       <Text className={styles.row}>PO orders scanned: {diagnostics.orderCount}</Text>

@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import {
-  Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Spinner,
+  Button, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Spinner,
 } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import { useRccpSettings } from '../../hooks/useRccpSettings';
@@ -18,7 +18,14 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
     <Drawer open={open} position="end" size="medium" onOpenChange={(_, data) => { if (!data.open) handleClose(); }}>
       <DrawerHeader>
         <DrawerHeaderTitle
-          action={<Dismiss24Regular onClick={handleClose} aria-label="Close settings" role="button" />}
+          action={(
+            <Button
+              appearance="subtle"
+              icon={<Dismiss24Regular />}
+              aria-label="Close settings"
+              onClick={handleClose}
+            />
+          )}
         >
           RCCP settings
         </DrawerHeaderTitle>
