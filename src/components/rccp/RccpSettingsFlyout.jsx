@@ -8,21 +8,14 @@ import RccpSettingsForm from './RccpSettingsForm';
 
 export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
   const settings = useRccpSettings();
-
   const handleClose = useCallback(() => onClose?.(), [onClose]);
-
   const handleSave = useCallback(async () => {
     const ok = await settings.save();
     if (ok) onSaved?.();
   }, [onSaved, settings]);
 
   return (
-    <Drawer
-      open={open}
-      position="end"
-      size="medium"
-      onOpenChange={(_, data) => { if (!data.open) handleClose(); }}
-    >
+    <Drawer open={open} position="end" size="medium" onOpenChange={(_, data) => { if (!data.open) handleClose(); }}>
       <DrawerHeader>
         <DrawerHeaderTitle
           action={<Dismiss24Regular onClick={handleClose} aria-label="Close settings" role="button" />}
@@ -31,9 +24,7 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody>
-        {settings.loading ? (
-          <Spinner label="Loading RCCP settings..." />
-        ) : (
+        {settings.loading ? <Spinner label="Loading RCCP settings..." /> : (
           <RccpSettingsForm
             variant="flyout"
             config={settings.config}
@@ -41,7 +32,6 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
             saving={settings.saving}
             error={settings.error}
             saved={settings.saved}
-            categoryChanged={settings.categoryChanged}
             statusOptions={settings.statusOptions}
             onUpdateField={settings.updateField}
             onSave={handleSave}

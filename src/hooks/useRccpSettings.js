@@ -8,10 +8,6 @@ import {
 
 const PO_TABLE = 'purchase-orders';
 
-/**
- * RCCP admin settings: load, edit and save with cross-surface sync.
- * @returns settings state and handlers for Admin + RCCP flyout
- */
 export function useRccpSettings() {
   const [config, setConfig] = useState(() => getCachedRccpConfig());
   const [columns, setColumns] = useState([]);
@@ -19,7 +15,6 @@ export function useRccpSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
-  const [categoryChanged, setCategoryChanged] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,14 +39,11 @@ export function useRccpSettings() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     return subscribeRccpSettingsSync((nextConfig) => {
       setConfig(nextConfig);
-      setCategoryChanged(false);
       setSaved(false);
     });
   }, []);
@@ -59,7 +51,6 @@ export function useRccpSettings() {
   const updateField = useCallback((field, value) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
     setSaved(false);
-    if (field === 'categoryColumnKey') setCategoryChanged(true);
   }, []);
 
   const save = useCallback(async () => {
@@ -71,7 +62,6 @@ export function useRccpSettings() {
       const result = await apiRequest('/admin/rccp/settings', { method: 'PUT', body: config });
       publishRccpSettingsSync(result.config);
       setConfig(result.config);
-      setCategoryChanged(false);
       setSaved(true);
       return true;
     } catch (err) {
@@ -84,21 +74,10 @@ export function useRccpSettings() {
 
   const statusOptions = useMemo(() => {
     const statusCol = columns.find((c) => c.key === 'status' || c.key === 'purchaseOrderStatus');
-    const options = statusCol?.options || [];
-    return Array.isArray(options) ? options : [];
+    return Array.isArray(statusCol?.options) ? statusCol.options : [];
   }, [columns]);
 
   return {
-    config,
-    columns,
-    loading,
-    saving,
-    error,
-    saved,
-    categoryChanged,
-    statusOptions,
-    updateField,
-    save,
-    reload: load,
+    config, columns, loading, saving, error, saved, statusOptions, updateField, save, reload: load,
   };
 }

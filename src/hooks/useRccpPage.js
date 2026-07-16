@@ -25,18 +25,16 @@ export function useRccpPage({ vendorAccount = '' } = {}) {
     }
   }, [isoWindow, vendorAccount]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const categories = useMemo(() => analysis?.categories || [], [analysis]);
+  const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
   const periods = useMemo(() => analysis?.periods || [], [analysis]);
   const cells = useMemo(() => analysis?.cells || [], [analysis]);
 
   const cellMap = useMemo(() => {
     const map = new Map();
     for (const cell of cells) {
-      map.set(`${cell.capacityCategory}|${cell.periodYear}|${cell.isoWeek}`, cell);
+      map.set(`${cell.measureKey}|${cell.periodYear}|${cell.isoWeek}`, cell);
     }
     return map;
   }, [cells]);
@@ -49,7 +47,7 @@ export function useRccpPage({ vendorAccount = '' } = {}) {
     loading,
     error,
     readOnly,
-    categories,
+    measureRows,
     periods,
     cells,
     cellMap,

@@ -21,7 +21,7 @@ function RccpDiagnosticsCard({ diagnostics, config, window }) {
       <Text weight="semibold">Load diagnostics</Text>
       <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
         Columns: vendor={config?.vendorColumnKey}, date={config?.dateColumnKey},
-        qty={config?.quantityColumnKey}, category={config?.categoryColumnKey}
+        measures={(config?.quantityMeasures || []).map((m) => m.columnKey).join(', ') || '—'}
       </Text>
       <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
         Window: {window?.fromYear}-W{window?.fromWeek} → {window?.toYear}-W{window?.toWeek}

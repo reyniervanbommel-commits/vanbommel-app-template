@@ -24,7 +24,7 @@ export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
           vendorAccount: cell.vendorAccount,
           periodYear: String(cell.periodYear),
           isoWeek: String(cell.isoWeek),
-          capacityCategory: cell.capacityCategory,
+          measureKey: cell.measureKey,
           fromYear: String(window.fromYear),
           fromWeek: String(window.fromWeek),
           toYear: String(window.toYear),
@@ -49,7 +49,7 @@ export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
         <DrawerHeaderTitle
           action={<Dismiss24Regular onClick={handleClose} aria-label="Close drill-down" role="button" />}
         >
-          Drill-down — {cell?.capacityCategory} / {formatWeekLabel(cell?.periodYear, cell?.isoWeek)}
+          Drill-down — {cell?.measureKey} / {formatWeekLabel(cell?.periodYear, cell?.isoWeek)}
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody>

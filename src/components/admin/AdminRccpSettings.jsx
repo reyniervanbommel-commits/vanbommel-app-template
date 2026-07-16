@@ -4,16 +4,13 @@ import { useRccpSettings } from '../../hooks/useRccpSettings';
 import RccpSettingsForm from '../rccp/RccpSettingsForm';
 
 const useStyles = makeStyles({
-  root: { maxWidth: '820px' },
+  root: { maxWidth: '920px' },
 });
 
 export default function AdminRccpSettings() {
   const styles = useStyles();
   const settings = useRccpSettings();
-
-  const handleSave = useCallback(async () => {
-    await settings.save();
-  }, [settings]);
+  const handleSave = useCallback(async () => { await settings.save(); }, [settings]);
 
   if (settings.loading) return <Spinner label="Loading RCCP settings..." />;
 
@@ -26,7 +23,6 @@ export default function AdminRccpSettings() {
         saving={settings.saving}
         error={settings.error}
         saved={settings.saved}
-        categoryChanged={settings.categoryChanged}
         statusOptions={settings.statusOptions}
         onUpdateField={settings.updateField}
         onSave={handleSave}

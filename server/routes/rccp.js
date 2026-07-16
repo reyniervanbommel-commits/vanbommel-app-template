@@ -165,7 +165,7 @@ router.get('/drill-down', async (req, res, next) => {
       vendorAccount,
       periodYear: req.query.periodYear,
       isoWeek: req.query.isoWeek,
-      capacityCategory: req.query.capacityCategory,
+      measureKey: req.query.measureKey || req.query.capacityCategory,
       supplierAccount,
       ...window,
     });

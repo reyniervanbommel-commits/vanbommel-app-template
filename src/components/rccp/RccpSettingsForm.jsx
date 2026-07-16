@@ -2,7 +2,8 @@ import React, { memo } from 'react';
 import {
   Button, Field, Input, Select, Spinner, Text, makeStyles, tokens, shorthands, mergeClasses,
 } from '@fluentui/react-components';
-import { Save24Regular, Warning24Regular } from '@fluentui/react-icons';
+import { Save24Regular } from '@fluentui/react-icons';
+import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
@@ -23,38 +24,12 @@ const useStyles = makeStyles({
     boxSizing: 'border-box',
   },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', ...shorthands.gap('12px') },
-  gridFlyout: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('10px'),
-    alignItems: 'flex-start',
-  },
+  gridFlyout: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), alignItems: 'flex-start' },
   fieldFlyout: { width: 'auto', maxWidth: '100%' },
-  controlShell: {
-    maxWidth: '168px',
-    overflowX: 'auto',
-    overflowY: 'hidden',
-    width: '100%',
-    scrollbarGutter: 'stable',
-  },
+  controlShell: { maxWidth: '168px', overflowX: 'auto', width: '100%' },
   controlShellWide: { maxWidth: '240px' },
   controlShellNarrow: { maxWidth: '88px' },
-  controlInner: {
-    width: 'max-content',
-    minWidth: '100%',
-  },
-  selectInner: {
-    width: 'max-content',
-    minWidth: '100%',
-    maxWidth: '320px',
-  },
   hint: { color: tokens.colorNeutralForeground3 },
-  warn: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    ...shorthands.gap('8px'),
-    color: tokens.colorPaletteDarkOrangeForeground1,
-  },
   actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px'), flexWrap: 'wrap' },
 });
 
@@ -62,12 +37,7 @@ function ControlShell({ compact, wide, narrow, children }) {
   const styles = useStyles();
   if (!compact) return children;
   return (
-    <div className={mergeClasses(
-      styles.controlShell,
-      wide && styles.controlShellWide,
-      narrow && styles.controlShellNarrow,
-    )}
-    >
+    <div className={mergeClasses(styles.controlShell, wide && styles.controlShellWide, narrow && styles.controlShellNarrow)}>
       {children}
     </div>
   );
@@ -78,12 +48,7 @@ function ColumnSelect({ label, value, onChange, columns, hint, compact }) {
   return (
     <Field label={label} hint={hint} className={compact ? styles.fieldFlyout : undefined}>
       <ControlShell compact={compact}>
-        <Select
-          className={compact ? styles.selectInner : undefined}
-          size={compact ? 'small' : 'medium'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
+        <Select size={compact ? 'small' : 'medium'} value={value} onChange={(e) => onChange(e.target.value)}>
           {columns.map((col) => (
             <option key={`${col.scope}-${col.key}`} value={col.key}>{col.label || col.key}</option>
           ))}
@@ -94,16 +59,7 @@ function ColumnSelect({ label, value, onChange, columns, hint, compact }) {
 }
 
 function RccpSettingsForm({
-  variant = 'page',
-  config,
-  columns,
-  saving,
-  error,
-  saved,
-  categoryChanged,
-  statusOptions,
-  onUpdateField,
-  onSave,
+  variant = 'page', config, columns, saving, error, saved, statusOptions, onUpdateField, onSave,
 }) {
   const styles = useStyles();
   const isFlyout = variant === 'flyout';
@@ -117,19 +73,8 @@ function RccpSettingsForm({
       {!isFlyout && (
         <>
           <Text size={600} weight="semibold">RCCP settings</Text>
-          <Text className={styles.hint}>
-            Configure which purchase order columns drive live RCCP load calculation.
-          </Text>
+          <Text className={styles.hint}>Configure main-table columns for RCCP load and chart series.</Text>
         </>
-      )}
-
-      {categoryChanged && (
-        <div className={styles.warn}>
-          <Warning24Regular />
-          <Text size={200}>
-            Changing the category column keeps existing capacity rows on their old category values.
-          </Text>
-        </div>
       )}
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
@@ -144,37 +89,27 @@ function RccpSettingsForm({
           <ColumnSelect
             compact={isFlyout}
             label="Date column"
-            hint="Line value falls back to order header when empty."
+            hint="Line date falls back to order header when empty."
             value={config.dateColumnKey}
             onChange={(v) => onUpdateField('dateColumnKey', v)}
-            columns={columns}
-          />
-          <ColumnSelect
-            compact={isFlyout}
-            label="Quantity column"
-            value={config.quantityColumnKey}
-            onChange={(v) => onUpdateField('quantityColumnKey', v)}
-            columns={columns}
-          />
-          <ColumnSelect
-            compact={isFlyout}
-            label="Category column"
-            value={config.categoryColumnKey}
-            onChange={(v) => onUpdateField('categoryColumnKey', v)}
             columns={columns}
           />
         </div>
       </div>
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
-        <Field
-          label="Excluded PO statuses"
-          hint="Comma-separated status labels to ignore in load calculation."
-          className={isFlyout ? styles.fieldFlyout : undefined}
-        >
+        <RccpQuantityMeasuresEditor
+          measures={config.quantityMeasures || []}
+          columns={columns}
+          compact={isFlyout}
+          onChange={(quantityMeasures) => onUpdateField('quantityMeasures', quantityMeasures)}
+        />
+      </div>
+
+      <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
+        <Field label="Excluded PO statuses" hint="Comma-separated status labels to ignore." className={isFlyout ? styles.fieldFlyout : undefined}>
           <ControlShell compact={isFlyout} wide>
             <Input
-              className={isFlyout ? styles.controlInner : undefined}
               size={isFlyout ? 'small' : 'medium'}
               value={(config.excludedStatuses || []).join(', ')}
               onChange={(e) => onUpdateField(
@@ -191,7 +126,6 @@ function RccpSettingsForm({
           <Field label="Green threshold (%)" className={isFlyout ? styles.fieldFlyout : undefined}>
             <ControlShell compact={isFlyout} narrow>
               <Input
-                className={isFlyout ? styles.controlInner : undefined}
                 size={isFlyout ? 'small' : 'medium'}
                 type="number"
                 value={String(config.thresholds?.greenMax ?? 80)}
@@ -202,7 +136,6 @@ function RccpSettingsForm({
           <Field label="Orange threshold (%)" className={isFlyout ? styles.fieldFlyout : undefined}>
             <ControlShell compact={isFlyout} narrow>
               <Input
-                className={isFlyout ? styles.controlInner : undefined}
                 size={isFlyout ? 'small' : 'medium'}
                 type="number"
                 value={String(config.thresholds?.orangeMax ?? 100)}
@@ -213,7 +146,6 @@ function RccpSettingsForm({
           <Field label="Duplicate import policy" className={isFlyout ? styles.fieldFlyout : undefined}>
             <ControlShell compact={isFlyout} wide>
               <Select
-                className={isFlyout ? styles.selectInner : undefined}
                 size={isFlyout ? 'small' : 'medium'}
                 value={config.duplicatePolicy || 'update'}
                 onChange={(e) => onUpdateField('duplicatePolicy', e.target.value)}
@@ -227,9 +159,7 @@ function RccpSettingsForm({
       </div>
 
       <div className={styles.actions}>
-        <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>
-          Save settings
-        </Button>
+        <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>Save settings</Button>
         {saving && <Spinner size="tiny" />}
         {saved && <Text className={styles.hint}>Saved</Text>}
         {error && <Text style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Text>}

@@ -7,8 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
 import RccpKpiCards from './RccpKpiCards';
-import RccpMatrixTable from './RccpMatrixTable';
-import RccpChart from './RccpChart';
+import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
 import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
@@ -36,7 +35,7 @@ export default function RccpPageContent() {
   } = useRccpVendorOptions();
   const {
     window, setWindow, analysis, loading, error, readOnly,
-    categories, periods, cellMap, reload,
+    measureRows, periods, cellMap, reload,
   } = useRccpPage({ vendorAccount: isSupplier ? undefined : vendorAccount });
 
   const [drillCell, setDrillCell] = useState(null);
@@ -91,7 +90,14 @@ export default function RccpPageContent() {
       {!loading && !error && analysis && (
         <>
           <RccpKpiCards kpis={analysis.kpis} />
-          <RccpChart chart={analysis.chart} />
+          <RccpChartMatrixPanel
+            chart={analysis.chart}
+            measureRows={measureRows}
+            periods={periods}
+            cellMap={cellMap}
+            onCellClick={handleCellClick}
+            interactive
+          />
           {(analysis.kpis?.totalConfirmed === 0) && (
             <RccpDiagnosticsCard
               diagnostics={analysis.diagnostics}
@@ -100,13 +106,6 @@ export default function RccpPageContent() {
             />
           )}
           <RccpMissingDateCard items={analysis.missingDates} />
-          <RccpMatrixTable
-            categories={categories}
-            periods={periods}
-            cellMap={cellMap}
-            groupColumnKey={analysis.config?.categoryColumnKey}
-            onCellClick={handleCellClick}
-          />
         </>
       )}
 

@@ -2,10 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 
-/**
- * RCCP-analyse voor het PO split-pane: debounced reload bij tabel-/filterwijzigingen.
- * @param {{ vendorAccount?: string, isoWindow: object, enabled: boolean, refreshKey: string }} params
- */
 export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refreshKey }) {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -31,18 +27,16 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
     if (!enabled) return undefined;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(load, 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [enabled, load, refreshKey]);
 
-  const categories = useMemo(() => analysis?.categories || [], [analysis]);
+  const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
   const periods = useMemo(() => analysis?.periods || [], [analysis]);
 
   const cellMap = useMemo(() => {
     const map = new Map();
     for (const cell of analysis?.cells || []) {
-      map.set(`${cell.capacityCategory}|${cell.periodYear}|${cell.isoWeek}`, cell);
+      map.set(`${cell.measureKey}|${cell.periodYear}|${cell.isoWeek}`, cell);
     }
     return map;
   }, [analysis]);
@@ -51,10 +45,9 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
     analysis,
     loading,
     error,
-    categories,
+    measureRows,
     periods,
     cellMap,
     chart: analysis?.chart || [],
-    categoryColumnKey: analysis?.config?.categoryColumnKey || '',
   };
 }

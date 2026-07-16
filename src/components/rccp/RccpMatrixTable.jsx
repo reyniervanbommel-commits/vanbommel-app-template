@@ -1,134 +1,163 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
   Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow,
-  Text, makeStyles, tokens, shorthands,
+  Text, Switch, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
 import {
   buildMatrixPeriodHeaders,
   formatMatrixQty,
   isMatrixCellEmpty,
+  RCCP_CAPACITY_MEASURE_KEY,
+  RCCP_ROW_LABEL_WIDTH,
+  RCCP_WEEK_COL_WIDTH,
   statusToken,
 } from './rccpUtils';
 
 const useStyles = makeStyles({
-  wrap: { overflowX: 'auto', width: '100%' },
-  wrapCompact: { overflowX: 'auto', overflowY: 'auto', width: '100%', maxHeight: '100%' },
-  cell: {
-    minWidth: '72px',
-    ...shorthands.borderRadius('6px'),
-    ...shorthands.padding('6px', '8px'),
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    ...shorthands.gap('2px'),
-  },
-  cellCompact: {
-    minWidth: '56px',
-    ...shorthands.padding('4px', '5px'),
-  },
-  cellInteractive: { cursor: 'pointer' },
+  table: { tableLayout: 'fixed', width: 'auto' },
   sticky: {
     position: 'sticky',
     left: 0,
     backgroundColor: tokens.colorNeutralBackground1,
     zIndex: 1,
-    fontWeight: tokens.fontWeightSemibold,
+    width: `${RCCP_ROW_LABEL_WIDTH}px`,
+    minWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
+    maxWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
+  },
+  weekCol: {
+    width: `${RCCP_WEEK_COL_WIDTH}px`,
+    minWidth: `${RCCP_WEEK_COL_WIDTH}px`,
+    maxWidth: `${RCCP_WEEK_COL_WIDTH}px`,
+    textAlign: 'center',
+    paddingLeft: '2px',
+    paddingRight: '2px',
   },
   periodHeader: { textAlign: 'center', lineHeight: 1.2 },
-  yearHeader: {
-    fontSize: '10px',
-    color: tokens.colorNeutralForeground3,
-  },
+  yearHeader: { fontSize: '10px', color: tokens.colorNeutralForeground3 },
   weekHeader: { fontWeight: tokens.fontWeightSemibold },
-  groupHint: { color: tokens.colorNeutralForeground3, fontSize: '11px', fontWeight: 400 },
-  loadValue: { fontWeight: tokens.fontWeightSemibold },
-  utilValue: { color: tokens.colorNeutralForeground2, fontSize: '11px' },
+  rowLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('6px'),
+    minWidth: 0,
+  },
+  rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  cell: {
+    ...shorthands.borderRadius('6px'),
+    ...shorthands.padding('4px', '2px'),
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    ...shorthands.gap('1px'),
+    minHeight: '44px',
+    justifyContent: 'center',
+  },
+  cellInteractive: { cursor: 'pointer' },
+  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: '12px' },
+  utilValue: { color: tokens.colorNeutralForeground2, fontSize: '10px' },
+  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: '12px' },
 });
 
 function RccpMatrixTable({
-  categories, periods, cellMap, onCellClick, interactive, compact, groupColumnKey,
+  measureRows,
+  periods,
+  cellMap,
+  visibleKeys,
+  onToggleVisible,
+  onCellClick,
+  interactive,
+  compact,
+  gridWidth,
 }) {
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
 
-  const visibleCategories = useMemo(
-    () => categories.filter((category) => periodHeaders.some((period) => {
-      const cell = cellMap.get(`${category}|${period.year}|${period.week}`);
+  const visibleMeasureRows = useMemo(
+    () => measureRows.filter((row) => periodHeaders.some((period) => {
+      const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
       return !isMatrixCellEmpty(cell);
     })),
-    [categories, periodHeaders, cellMap],
+    [measureRows, periodHeaders, cellMap],
   );
 
   const handleClick = useCallback((cell) => {
     if (cell && onCellClick) onCellClick(cell);
   }, [onCellClick]);
 
-  if (!visibleCategories.length || !periodHeaders.length) {
+  if (!visibleMeasureRows.length || !periodHeaders.length) {
     return <Text>No matrix data for the selected window.</Text>;
   }
 
-  const groupTitle = groupColumnKey
-    ? `PO values from column "${groupColumnKey}" — each row is one value from that column`
-    : 'Each row groups PO load by the configured category column';
-
   return (
-    <div className={compact ? styles.wrapCompact : styles.wrap}>
-      <Table size="small">
-        <TableHeader>
-          <TableRow>
-            <TableHeaderCell className={styles.sticky} title={groupTitle}>
-              <div>Group</div>
-              {groupColumnKey ? <div className={styles.groupHint}>{groupColumnKey}</div> : null}
+    <Table size="small" className={styles.table} style={{ width: gridWidth || undefined }}>
+      <TableHeader>
+        <TableRow>
+          <TableHeaderCell className={styles.sticky}>Measure</TableHeaderCell>
+          {periodHeaders.map((period) => (
+            <TableHeaderCell key={period.key} className={`${styles.weekCol} ${styles.periodHeader}`}>
+              {period.yearLabel ? <div className={styles.yearHeader}>{period.yearLabel}</div> : null}
+              <div className={styles.weekHeader}>{period.weekLabel}</div>
             </TableHeaderCell>
-            {periodHeaders.map((period) => (
-              <TableHeaderCell key={period.key} className={styles.periodHeader}>
-                {period.yearLabel ? (
-                  <div className={styles.yearHeader}>{period.yearLabel}</div>
-                ) : null}
-                <div className={styles.weekHeader}>{period.weekLabel}</div>
-              </TableHeaderCell>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {visibleCategories.map((category) => (
-            <TableRow key={category}>
-              <TableCell className={styles.sticky}>{category}</TableCell>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {visibleMeasureRows.map((row) => {
+          const isCapacity = row.measureKey === RCCP_CAPACITY_MEASURE_KEY;
+          return (
+            <TableRow key={row.measureKey}>
+              <TableCell className={styles.sticky}>
+                <div className={styles.rowLabel}>
+                  {!isCapacity && onToggleVisible ? (
+                    <Switch
+                      checked={Boolean(visibleKeys?.[row.measureKey])}
+                      onChange={(_, data) => onToggleVisible(row.measureKey, Boolean(data.checked))}
+                      aria-label={`Show ${row.label} in chart`}
+                    />
+                  ) : null}
+                  <span className={styles.rowName} title={row.label}>{row.label}</span>
+                </div>
+              </TableCell>
               {periodHeaders.map((period) => {
-                const cell = cellMap.get(`${category}|${period.year}|${period.week}`);
+                const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
                 if (isMatrixCellEmpty(cell)) {
-                  return <TableCell key={period.key} />;
+                  return <TableCell key={period.key} className={styles.weekCol} />;
                 }
 
-                const bg = statusToken(cell.statusColor);
+                const bg = isCapacity ? tokens.colorNeutralBackground3 : statusToken(cell.statusColor);
                 return (
-                  <TableCell key={period.key}>
+                  <TableCell key={period.key} className={styles.weekCol}>
                     <div
-                      className={`${styles.cell}${compact ? ` ${styles.cellCompact}` : ''}${isInteractive ? ` ${styles.cellInteractive}` : ''}`}
+                      className={`${styles.cell}${isInteractive && !isCapacity ? ` ${styles.cellInteractive}` : ''}`}
                       style={{ backgroundColor: bg }}
-                      {...(isInteractive ? {
+                      {...(isInteractive && !isCapacity ? {
                         role: 'button',
                         tabIndex: 0,
                         onClick: () => handleClick(cell),
                         onKeyDown: (e) => { if (e.key === 'Enter') handleClick(cell); },
                       } : {})}
-                      aria-label={`${category} load ${cell.confirmedQty} capacity ${cell.availableQty}`}
                     >
-                      <Text size={200} className={styles.loadValue}>{formatMatrixQty(cell.confirmedQty)}</Text>
-                      <Text size={100}>/ {formatMatrixQty(cell.availableQty)}</Text>
-                      {cell.utilPercent !== null && cell.utilPercent !== undefined && (
-                        <Text className={styles.utilValue}>{cell.utilPercent}%</Text>
+                      {isCapacity ? (
+                        <Text className={styles.capacityValue}>{formatMatrixQty(cell.availableQty)}</Text>
+                      ) : (
+                        <>
+                          <Text className={styles.loadValue}>{formatMatrixQty(cell.confirmedQty)}</Text>
+                          <Text className={styles.utilValue}>/ {formatMatrixQty(cell.availableQty)}</Text>
+                          {cell.utilPercent !== null && cell.utilPercent !== undefined && (
+                            <Text className={styles.utilValue}>{cell.utilPercent}%</Text>
+                          )}
+                        </>
                       )}
                     </div>
                   </TableCell>
                 );
               })}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
