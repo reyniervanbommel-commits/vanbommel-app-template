@@ -5,6 +5,7 @@ const {
   buildMatrixCells,
   cellKey,
   extractVendorsFromRows,
+  extractVendorNamesFromRows,
 } = require('../services/RccpAnalysisService');
 const { getIsoWeek, getIsoWeekYear } = require('../utils/isoWeek');
 
@@ -42,6 +43,63 @@ describe('RccpAnalysisService', () => {
     const { confirmedByCell, missingDates } = aggregatePoLoad(rows, config, testWindow);
     expect(missingDates).toHaveLength(0);
     expect(confirmedByCell.get(cellKey('V001', year, week, 'quantity'))).toBe(15);
+  });
+
+  it('counts a line-level quantity per line instead of spreading it', () => {
+    const deliveryDate = '2026-03-10T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'PO-1',
+      // Geen quantity op de order: die staat op de regels (het echte D365-geval).
+      values: { vendorAccount: 'V001', status: 'Open' },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: deliveryDate, quantity: 7 } },
+        { detailKey: '2', values: { requestedDeliveryDate: deliveryDate, quantity: 5 } },
+      ],
+    }];
+
+    const { confirmedByCell, diagnostics } = aggregatePoLoad(rows, config, testWindow);
+    expect(confirmedByCell.get(cellKey('V001', year, week, 'quantity'))).toBe(12);
+    expect(diagnostics.zeroQuantityLines).toBe(0);
+    expect(diagnostics.countedLines).toBe(2);
+  });
+
+  it('spreads an order-level total across its lines', () => {
+    const deliveryDate = '2026-03-10T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open', quantity: 10 },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: deliveryDate } },
+        { detailKey: '2', values: { requestedDeliveryDate: deliveryDate } },
+      ],
+    }];
+
+    const { confirmedByCell } = aggregatePoLoad(rows, config, testWindow);
+    expect(confirmedByCell.get(cellKey('V001', year, week, 'quantity'))).toBe(10);
+  });
+
+  it('prefers the line quantity over an order total when both exist', () => {
+    const deliveryDate = '2026-03-10T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open', quantity: 999 },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: deliveryDate, quantity: 3 } },
+        { detailKey: '2', values: { requestedDeliveryDate: deliveryDate, quantity: 4 } },
+      ],
+    }];
+
+    const { confirmedByCell } = aggregatePoLoad(rows, config, testWindow);
+    expect(confirmedByCell.get(cellKey('V001', year, week, 'quantity'))).toBe(7);
   });
 
   it('puts rows without dates in missingDates and excludes canceled statuses', () => {
@@ -98,5 +156,23 @@ describe('RccpAnalysisService', () => {
       { values: { vendorAccount: '' } },
     ];
     expect(extractVendorsFromRows(rows, 'vendorAccount')).toEqual(['V001', 'V002']);
+  });
+
+  it('maps vendor values to their vendor name and skips vendors without one', () => {
+    const rows = [
+      { values: { vendorAccount: 'V001', vendorName: 'Vendor BV' } },
+      { values: { vendorAccount: 'V001', vendorName: 'Vendor BV' } },
+      { values: { vendorAccount: 'V002', vendorName: '' } },
+      { values: { vendorAccount: 'V003' } },
+    ];
+    expect(extractVendorNamesFromRows(rows, 'vendorAccount')).toEqual({ V001: 'Vendor BV' });
+  });
+
+  it('falls back to a later row when the first row has no vendor name', () => {
+    const rows = [
+      { values: { vendorAccount: 'V001' } },
+      { values: { vendorAccount: 'V001', vendorName: 'Vendor BV' } },
+    ];
+    expect(extractVendorNamesFromRows(rows, 'vendorAccount')).toEqual({ V001: 'Vendor BV' });
   });
 });

@@ -21,6 +21,7 @@ const {
   enrichLookupSourceFromCacheRow,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
+  toAdminColumn,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
   buildLookupFieldMap,
@@ -362,6 +363,23 @@ describe('TableDataService runtime linked header values', () => {
       lineValueHeaderLinks: [],
     });
     expect(masterValues.aantal_total_2).toBe(5);
+  });
+
+  it('toAdminColumn geeft rccpMeasure en formulaExpr door aan de admin-UI', () => {
+    // Zonder deze velden kan de "RCCP value column"-toggle zijn eigen stand niet tonen en
+    // wordt een custom kolom met formule onterecht als onbruikbaar gemarkeerd.
+    const mapped = toAdminColumn({
+      id: 1,
+      key: 'quantity',
+      label: 'Aantal',
+      scope: 'detail',
+      source: 'source',
+      dataType: 'number',
+      rccpMeasure: true,
+      formulaExpr: '(a)+(b)',
+    });
+    expect(mapped.rccpMeasure).toBe(true);
+    expect(mapped.formulaExpr).toBe('(a)+(b)');
   });
 
   it('calculateLinkedLineTotal telt robuust numerieke waarden', () => {

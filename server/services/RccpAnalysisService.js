@@ -75,6 +75,14 @@ function aggregatePoLoad(rows, config, window) {
 
     const processLine = (lineNumber, lineValues, dateFromHeaderDefault) => {
       diagnostics.lineCount += 1;
+      const share = details.length ? 1 / details.length : 1;
+      // Een measure kan een regel-kolom zijn (eigen waarde per regel, bijv. quantity) of een
+      // master-rollup (één totaal op de order, dat over de regels verdeeld moet worden).
+      const measureQty = (measure, index) => {
+        const lineRaw = pickValue(lineValues, measure.columnKey);
+        return lineRaw !== null ? toNumber(lineRaw) : masterQtyByMeasure[index] * share;
+      };
+
       const status = pickValue(lineValues, 'status') ?? masterStatus;
       if (status && excludedSet.has(String(status).toLowerCase())) {
         diagnostics.excludedLines += 1;
@@ -91,7 +99,7 @@ function aggregatePoLoad(rows, config, window) {
           orderNumber: row.recordKey,
           lineNumber,
           vendorAccount: vendor,
-          quantity: masterQtyByMeasure[0] || 0,
+          quantity: measures.length ? measureQty(measures[0], 0) : 0,
           dateFromHeader: false,
         });
         return;
@@ -105,10 +113,9 @@ function aggregatePoLoad(rows, config, window) {
         return;
       }
 
-      const share = details.length ? 1 / details.length : 1;
       let hasQty = false;
       measures.forEach((measure, index) => {
-        const qty = masterQtyByMeasure[index] * share;
+        const qty = measureQty(measure, index);
         if (qty <= 0) return;
         hasQty = true;
         addLoad(vendor, year, week, measure.columnKey, qty);
@@ -397,6 +404,22 @@ function extractVendorsFromRows(rows, vendorColumnKey) {
   return [...vendors].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
+/**
+ * Maps each vendor value to the vendor name on its order rows. The vendor column is
+ * configurable while vendorName is a fixed master field, so vendors without a name
+ * are simply absent from the map and fall back to their code in the UI.
+ */
+function extractVendorNamesFromRows(rows, vendorColumnKey) {
+  const names = {};
+  for (const row of rows || []) {
+    const vendor = String(pickValue(row.values, vendorColumnKey) || '').trim();
+    if (!vendor || names[vendor]) continue;
+    const name = String(pickValue(row.values, 'vendorName') || '').trim();
+    if (name) names[vendor] = name;
+  }
+  return names;
+}
+
 async function listMainTableVendors({ supplierAccount = null } = {}) {
   const config = await settingsService.getConfig();
   const poData = await time('rccp_vendor_list', () => tableDataService.read({
@@ -406,6 +429,7 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
   return {
     vendorColumnKey: config.vendorColumnKey,
     vendors: extractVendorsFromRows(poData.rows, config.vendorColumnKey),
+    vendorNames: extractVendorNamesFromRows(poData.rows, config.vendorColumnKey),
   };
 }
 
@@ -416,6 +440,7 @@ module.exports = {
   getDrillDown,
   listMainTableVendors,
   extractVendorsFromRows,
+  extractVendorNamesFromRows,
   cellKey,
   parseCellKey,
 };

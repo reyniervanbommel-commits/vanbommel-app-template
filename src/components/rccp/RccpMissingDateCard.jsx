@@ -4,10 +4,10 @@ import { Card, Text, makeStyles, tokens, shorthands } from '@fluentui/react-comp
 const useStyles = makeStyles({
   card: {
     backgroundColor: tokens.colorPaletteYellowBackground1,
-    ...shorthands.padding('16px'),
+    ...shorthands.padding(tokens.spacingVerticalL),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
   },
   item: { fontSize: tokens.fontSizeBase200 },
 });

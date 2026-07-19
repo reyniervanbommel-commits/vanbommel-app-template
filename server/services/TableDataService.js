@@ -3607,6 +3607,10 @@ function toAdminColumn(col) {
     filterable: Boolean(col.filterable),
     sortable: Boolean(col.sortable),
     sortOrder: col.sortOrder,
+    // Nodig voor de "RCCP value column"-toggle: de stand zelf, en formulaExpr omdat een custom
+    // kolom mét formule wél als RCCP-waarde bruikbaar is.
+    rccpMeasure: Boolean(col.rccpMeasure),
+    formulaExpr: col.formulaExpr || null,
   };
 }
 
@@ -3987,6 +3991,7 @@ module.exports = {
   ensureKeyFieldColumnsInProjection,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
+  toAdminColumn,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,

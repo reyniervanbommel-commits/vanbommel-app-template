@@ -122,6 +122,7 @@ export default function EntityConfigTable({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
+  onToggleRccpMeasure,
   onDeleteColumn,
   onExportExcel,
   onSetColumnToggleState,
@@ -234,6 +235,8 @@ export default function EntityConfigTable({
                 action={bulkActionByKey.writeback}
                 className={styles.headerCell}
               />
+              {/* Bewust geen bulkschakelaar: welke kolom een capaciteitswaarde is, kies je per kolom. */}
+              <TableHeaderCell className={styles.headerCell}>RCCP value column</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Delete custom column</TableHeaderCell>
             </TableRow>
           </TableHeader>
@@ -253,13 +256,14 @@ export default function EntityConfigTable({
                   onToggleVisibility={onToggleVisibility}
                   onToggleVisibleAtDelete={onToggleVisibleAtDelete}
                   onToggleWriteback={onToggleWriteback}
+                  onToggleRccpMeasure={onToggleRccpMeasure}
                   onDeleteColumn={onDeleteColumn}
                 />
               );
             })}
             {!filteredColumns.length ? (
               <TableRow>
-                <TableCell className={styles.valueCell} colSpan={9}>No columns match the active filter</TableCell>
+                <TableCell className={styles.valueCell} colSpan={10}>No columns match the active filter</TableCell>
               </TableRow>
             ) : null}
           </TableBody>

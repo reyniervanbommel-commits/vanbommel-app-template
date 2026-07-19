@@ -5,8 +5,10 @@
  */
 
 const settingsService = require('./SettingsService');
+const registry = require('./TableRegistryService');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
+const PO_TABLE_KEY = 'purchase-orders';
 const VALID_DUPLICATE_POLICIES = Object.freeze(['update', 'skip']);
 const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
 const VALID_CHART_TYPES = Object.freeze(['line', 'bar']);
@@ -133,6 +135,28 @@ async function getConfig() {
   }
 }
 
+/**
+ * Alleen kolommen die de admin op de data model-tab heeft vrijgegeven mogen als waardekolom
+ * dienen. Deze check zit bewust in het schrijfpad: getConfig() draait bij elke analyse en moet
+ * geen database-lookup doen.
+ */
+async function assertMeasuresAreReleased(measures) {
+  const table = await registry.getTableByKey(PO_TABLE_KEY);
+  const columns = await registry.listColumns({ tableId: table.id });
+  const released = new Set(columns.filter((c) => c.rccpMeasure).map((c) => c.key));
+  const rejected = (measures || [])
+    .map((m) => m.columnKey)
+    .filter((key) => !released.has(key));
+  if (rejected.length) {
+    const err = new Error(
+      `Not released as an RCCP value column: ${[...new Set(rejected)].join(', ')}. `
+      + 'Enable it under Admin → Data model first.',
+    );
+    err.status = 400;
+    throw err;
+  }
+}
+
 async function saveConfig(raw, userId = null) {
   const result = validateConfig(raw);
   if (!result.valid) {
@@ -140,6 +164,7 @@ async function saveConfig(raw, userId = null) {
     err.status = 400;
     throw err;
   }
+  await assertMeasuresAreReleased(result.config.quantityMeasures);
   await settingsService.set(CONFIG_KEY, JSON.stringify(result.config), userId);
   return result.config;
 }
