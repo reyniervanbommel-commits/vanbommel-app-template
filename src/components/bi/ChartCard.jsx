@@ -9,8 +9,8 @@ const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('12px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalM),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
@@ -31,18 +31,33 @@ const useStyles = makeStyles({
   },
   kpiRoot: {
     maxWidth: '132px',
-    ...shorthands.padding('8px'),
+    ...shorthands.padding(tokens.spacingVerticalS),
   },
   kpiBody: {
     aspectRatio: '1 / 1',
     maxHeight: '112px',
   },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
-  titleWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px'), minWidth: 0 },
-  title: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  actions: { display: 'flex', ...shorthands.gap('2px'), flexShrink: 0 },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  titleWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalSNudge),
+    minWidth: 0,
+  },
+  title: {
+    fontWeight: tokens.fontWeightSemibold,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalXXS), flexShrink: 0 },
   body: { flexGrow: 1, minHeight: 0, pointerEvents: 'none' },
-  loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('24px') },
+  loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding(tokens.spacingVerticalXXL) },
 });
 
 function ChartCard({

@@ -7,8 +7,8 @@ const useStyles = makeStyles({
   grid: {
     display: 'grid',
     gridTemplateColumns: `repeat(${CHART_GRID_COLUMNS}, minmax(0, 1fr))`,
-    columnGap: '16px',
-    rowGap: '16px',
+    columnGap: tokens.spacingHorizontalL,
+    rowGap: tokens.spacingVerticalL,
     alignItems: 'start',
   },
   cell: {
@@ -42,7 +42,7 @@ function BiDashboardGrid({
             loading={Boolean(loadingById[String(chart.id)]) && !(resultsById[String(chart.id)]?.length)}
             columns={columns}
             canManage={Number(chart.userId) === Number(currentUserId)}
-            selected={Number(selectedChartId) === Number(chart.id)}
+            selected={String(selectedChartId) === String(chart.id)}
             onEdit={onEdit}
             onDelete={onDelete}
           />

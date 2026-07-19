@@ -37,17 +37,17 @@ const useStyles = makeStyles({
   toggleBar: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('4px', '8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
     ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
     backgroundColor: tokens.colorNeutralBackground2,
     flexWrap: 'wrap',
   },
   toggleSpacer: { flex: 1, minWidth: '8px' },
-  weekMeta: { color: tokens.colorNeutralForeground3, fontSize: '12px' },
+  weekMeta: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   pane: {
     ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding('8px', '8px', '4px'),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
     backgroundColor: tokens.colorNeutralBackground2,
     minHeight: 0,
   },
@@ -144,6 +144,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
           size="small"
           appearance="subtle"
           icon={split.open ? <ChevronDownRegular /> : <ChevronUpRegular />}
+          aria-expanded={split.open}
           onClick={split.toggleOpen}
         >
           {split.open ? 'Hide panel' : 'Show panel'}

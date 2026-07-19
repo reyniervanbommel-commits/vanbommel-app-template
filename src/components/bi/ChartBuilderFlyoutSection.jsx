@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
-import { makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
+import { makeStyles, shorthands, Text, tokens, useId } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   section: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('10px'),
-    ...shorthands.padding('12px', '0'),
+    ...shorthands.gap(tokens.spacingVerticalMNudge),
+    ...shorthands.padding(tokens.spacingVerticalM, '0'),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     minWidth: 0,
     ':last-child': {
@@ -22,7 +22,7 @@ const useStyles = makeStyles({
   content: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('10px'),
+    ...shorthands.gap(tokens.spacingVerticalMNudge),
     minWidth: 0,
     width: '100%',
     '& .fui-Dropdown': { width: '100%', maxWidth: '100%' },
@@ -32,10 +32,11 @@ const useStyles = makeStyles({
 
 function ChartBuilderFlyoutSection({ title, children }) {
   const styles = useStyles();
+  const titleId = useId('bi-section-');
 
   return (
-    <section className={styles.section} aria-label={title}>
-      <Text size={200} weight="semibold" className={styles.title}>{title}</Text>
+    <section className={styles.section} aria-labelledby={titleId}>
+      <Text id={titleId} size={200} weight="semibold" className={styles.title}>{title}</Text>
       <div className={styles.content}>{children}</div>
     </section>
   );

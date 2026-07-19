@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect } from 'react';
 import {
-  Button, Divider, Dropdown, Field, Input, makeStyles, mergeClasses, Option, shorthands, Text, tokens,
+  Button, Divider, Dropdown, Field, Input, makeStyles, Option, shorthands, Text, tokens,
 } from '@fluentui/react-components';
 import ChartFilterEditor from './ChartFilterEditor';
 import ChartMeasureMultiSelect from './ChartMeasureMultiSelect';
@@ -20,22 +20,22 @@ const useStyles = makeStyles({
   shell: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('20px'),
+    ...shorthands.gap(tokens.spacingVerticalXL),
     width: '100%',
   },
   panel: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('20px'),
-    ...shorthands.padding('20px'),
+    ...shorthands.gap(tokens.spacingVerticalXL),
+    ...shorthands.padding(tokens.spacingVerticalXL),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     boxShadow: tokens.shadow8,
   },
-  section: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
+  section: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalM) },
   sectionTitle: {
-    fontSize: '12px',
-    fontWeight: 600,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground3,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
@@ -43,23 +43,23 @@ const useStyles = makeStyles({
   fieldGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    ...shorthands.gap('12px'),
+    ...shorthands.gap(tokens.spacingVerticalM),
   },
   fieldNarrow: { maxWidth: '320px' },
   nameInputFlyout: {
     width: '100%',
     '& .fui-Input__input': {
-      fontSize: '15px',
-      fontWeight: 600,
+      fontSize: tokens.fontSizeBase400,
+      fontWeight: tokens.fontWeightSemibold,
       color: tokens.colorBrandForeground1,
-      ...shorthands.padding('2px', '0'),
+      ...shorthands.padding(tokens.spacingVerticalXXS, '0'),
     },
     '& .fui-Input__underline': {
       ...shorthands.borderColor(tokens.colorBrandStroke1),
     },
   },
-  actions: { display: 'flex', ...shorthands.gap('8px'), justifyContent: 'flex-end' },
-  title: { fontSize: '18px', fontWeight: 600 },
+  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalS), justifyContent: 'flex-end' },
+  title: { fontSize: tokens.fontSizeBase500, fontWeight: tokens.fontWeightSemibold },
 });
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
