@@ -59,7 +59,8 @@ const COLUMN_OUTPUT = `
   OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label, INSERTED.source,
          INSERTED.source_field, INSERTED.data_type, INSERTED.options_json, INSERTED.writable,
          INSERTED.write_mechanism, INSERTED.is_default_visible, INSERTED.filterable, INSERTED.sortable,
-         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr
+         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr,
+         INSERTED.rccp_measure
 `;
 
 const WRITE_MECHANISMS = ['patch', 'action', 'sql'];
@@ -568,6 +569,52 @@ async function setVisibleAtDelete(columnId, flag, userId) {
   return mapColumnRow(result.recordset[0]);
 }
 
+/**
+ * Kan RCCP deze kolom technisch uitlezen?
+ *
+ * RCCP leest de tabel zonder userId. Custom kolommen zonder formule worden alleen gevuld vanuit
+ * persoonlijke bord-instellingen (de line-total-links uit user_board_settings) en zijn in de
+ * RCCP-context dus altijd leeg. Aanzetten zou een stil lege matrix opleveren.
+ *
+ * Wélke van de bruikbare kolommen zinvol is, bepaalt de admin — dat is geen codebeslissing.
+ */
+function resolveRccpMeasureEligibility(column) {
+  if (!column) return { eligible: false, reason: 'Column not found' };
+  if (column.dataType !== 'number') {
+    return { eligible: false, reason: 'Only number columns can be used as an RCCP value' };
+  }
+  if (column.source === 'custom' && !column.formulaExpr) {
+    return {
+      eligible: false,
+      reason: 'Custom columns without a formula are filled from personal board settings and are always empty in RCCP',
+    };
+  }
+  return { eligible: true, reason: null };
+}
+
+// Admin-keuze: mag deze kolom als waardekolom in de RCCP-analyse gekozen worden.
+async function setRccpMeasure(columnId, flag, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (flag) {
+    const { eligible, reason } = resolveRccpMeasureEligibility(existing);
+    if (!eligible) throw Object.assign(new Error(reason), { status: 400 });
+  }
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('flag', sql.Bit, flag ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET rccp_measure = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      ${COLUMN_OUTPUT}
+      WHERE id = @id
+    `);
+  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
+  return mapColumnRow(result.recordset[0]);
+}
+
 // Write-back-config (admin): welke kolommen naar de bron terugschrijfbaar zijn en via welk mechanisme.
 async function setWriteBackConfig(columnId, config, userId) {
   const existing = await getColumnById(columnId);
@@ -614,4 +661,6 @@ module.exports = {
   setColumnVisibility,
   setVisibleAtDelete,
   setWriteBackConfig,
+  resolveRccpMeasureEligibility,
+  setRccpMeasure,
 };

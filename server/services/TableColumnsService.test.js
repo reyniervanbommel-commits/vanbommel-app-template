@@ -3,6 +3,7 @@
 const {
   DATA_TYPES,
   ensureRemarksColumn,
+  resolveRccpMeasureEligibility,
   resolveWriteback,
   slugify,
   findDependentFormulaColumn,
@@ -31,6 +32,35 @@ describe('TableColumnsService.resolveWriteback', () => {
 
   it('weigert een onbekend mechanisme', () => {
     expect(() => resolveWriteback({ writable: true, mechanism: 'webhook' })).toThrow();
+  });
+});
+
+describe('TableColumnsService.resolveRccpMeasureEligibility', () => {
+  it('accepts a synced number column', () => {
+    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source' });
+    expect(result.eligible).toBe(true);
+    expect(result.reason).toBeNull();
+  });
+
+  it('accepts a custom number column that has a formula', () => {
+    const result = resolveRccpMeasureEligibility({
+      dataType: 'number', source: 'custom', formulaExpr: '(a)+(b)',
+    });
+    expect(result.eligible).toBe(true);
+  });
+
+  it('rejects a custom number column without a formula (per-user rollup, always empty in RCCP)', () => {
+    const result = resolveRccpMeasureEligibility({
+      dataType: 'number', source: 'custom', formulaExpr: null,
+    });
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toMatch(/board settings/i);
+  });
+
+  it('rejects a non-number column', () => {
+    const result = resolveRccpMeasureEligibility({ dataType: 'text', source: 'source' });
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toMatch(/number/i);
   });
 });
 
