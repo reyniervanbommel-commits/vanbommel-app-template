@@ -5,8 +5,7 @@ import {
 } from '@fluentui/react-components';
 import { ChartMultipleRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
-import ChartWidthSelect from './ChartWidthSelect';
-import { resolveChartSize, stripFlexStyle } from './biConstants';
+import { stripFlexStyle } from './biConstants';
 
 const useStyles = makeStyles({
   root: {
@@ -20,10 +19,9 @@ const useStyles = makeStyles({
   header: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     ...shorthands.gap(tokens.spacingHorizontalS),
   },
-  title: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2 },
   strip: {
     display: 'flex',
     flexDirection: 'row',
@@ -76,7 +74,7 @@ const useStyles = makeStyles({
 });
 
 function BiChartStrip({
-  availableCharts, selectedIds, onToggleChart, onWidthChange, currentUserId, height, columns = [],
+  availableCharts, selectedIds, onToggleChart, height, columns = [],
 }) {
   const styles = useStyles();
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds]);
@@ -108,7 +106,6 @@ function BiChartStrip({
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <Text className={styles.title}>Charts follow the table filters</Text>
         <Menu checkedValues={{ charts: selectedIds.map(String) }}>
           <MenuTrigger disableButtonEnhancement>
             <Button size="small" appearance="secondary" icon={<ChartMultipleRegular />}>Select charts</Button>
@@ -135,9 +132,7 @@ function BiChartStrip({
           {groups.map((group) => {
             const isKpiColumn = group[0].config?.type === 'kpi';
             const cards = group.map((chart) => {
-              const canManage = Number(chart.userId) === Number(currentUserId);
               const chartType = chart.config?.type;
-              const showSizeSelect = chartType === 'bar' || chartType === 'line';
               return (
                 <div
                   className={mergeClasses(styles.card, isKpiColumn && styles.kpiCard)}
@@ -146,13 +141,6 @@ function BiChartStrip({
                 >
                   <div className={styles.cardHeader}>
                     <Text className={styles.cardTitle} title={chart.name}>{chart.name}</Text>
-                    {showSizeSelect ? (
-                      <ChartWidthSelect
-                        chartSize={resolveChartSize(chart)}
-                        disabled={!canManage || !onWidthChange}
-                        onChange={(chartSize) => onWidthChange?.(chart, chartSize)}
-                      />
-                    ) : null}
                   </div>
                   <div className={styles.chartWrap}>
                     <ChartRenderer

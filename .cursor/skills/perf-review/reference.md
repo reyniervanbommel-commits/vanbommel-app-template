@@ -4,12 +4,44 @@ Technische bijlage bij `SKILL.md`. Bevat de meetsnippets, de labelinventaris en 
 
 ---
 
-## 1. Meetsnippets (browser)
+## 1. Meten
 
-### Interactie-latentie — welk element kost tijd
+### Hoofdweg — console (werkt overal)
 
-De Event Timing API geeft per interactie het **letterlijke DOM-element** terug plus de opsplitsing
-in input-delay / verwerking / render. Dit is het directe antwoord op "welke tab is traag en waarom".
+De observers zitten al in `src/utils/perf.js` en installeren zichzelf in dev/preview. Lees ze met
+`browser_console_messages`; er is geen opstart-call nodig.
+
+```
+[perf] interaction {"event":"click","target":"BUTTON.fui-Tab","text":"Purchase orders",
+                    "total":1180,"inputDelay":8,"processing":740,"render":432}
+[perf] longframe    {"duration":520,"blocking":470,"scripts":[{"ms":460,"source":"…/board.js:buildRows"}]}
+[perf] navigation   {"url":"/bi","ttfb":180,"domContentLoaded":940,"load":1620,"resourceKB":880}
+[perf] measure board:process → 310ms
+[api]  GET /table/rows → 200 in 870ms
+```
+
+Lezen: `processing` hoog → JS-werk (client-berekening). `render` hoog → React commit + paint.
+Drempel is 100 ms (`SLOW_INTERACTION_MS` in `perf.js`) — een stille console betekent snel genoeg.
+
+### Uitleesweg met evaluate-tool
+
+Alleen als je JS in de pagina kunt uitvoeren. Preciezer dan console-parsen:
+
+```js
+window.__perf.reset();       // vóór de interactie
+window.__perf.timings();     // ná: [{ method, path, status, ms, at }, …]
+window.__perf.navigation();  // { ttfb, domContentLoaded, load, transferKB }
+window.__perf.resourceKB();  // totale JS/CSS-transfer
+window.__perf.dump('tab-x'); // alles als één [perf] dump-regel in de console
+```
+
+Entries met `method: 'ui'` zijn `measure()`-blokken (client-berekening), de rest zijn
+`apiRequest`-calls. Buffer is max 40 entries — altijd resetten vóór de meting.
+
+### De observers zelf (ter referentie)
+
+Dit draait al in de app; hieronder staat wat er gemeten wordt, voor als je het handmatig
+in een console wilt herhalen of de drempel wilt verlagen.
 
 ```js
 window.__perfEvents = [];
@@ -26,8 +58,6 @@ new PerformanceObserver((l) => {
   }
 }).observe({ type: 'event', buffered: true, durationThreshold: 100 });
 ```
-
-Lezen: `processing` hoog → JS-werk (client-berekening). `render` hoog → React commit + paint.
 
 ### Blokkerende scripts — welke regel code
 
@@ -48,19 +78,8 @@ new PerformanceObserver((l) => {
 ```
 
 Niet in elke browser beschikbaar (Chromium-only). Ontbreekt het, val terug op `longtask` — die
-geeft wel de duur maar niet de bron.
-
-### App-eigen buffer
-
-```js
-window.__perf.reset();       // vóór de interactie
-window.__perf.timings();     // ná: [{ method, path, status, ms, at }, …]
-window.__perf.navigation();  // { ttfb, domContentLoaded, load, transferKB }
-window.__perf.resourceKB();  // totale JS/CSS-transfer
-```
-
-Entries met `method: 'ui'` zijn `measure()`-blokken (client-berekening), de rest zijn
-`apiRequest`-calls. Buffer is max 40 entries — altijd resetten vóór de meting.
+geeft wel de duur maar niet de bron. In dat geval is de `render`-post uit de interactie-regel
+je enige aanwijzing, en is modus `drilldown` eerder nodig.
 
 ### Server-Timing uitlezen
 

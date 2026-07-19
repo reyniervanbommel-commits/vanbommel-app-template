@@ -23,7 +23,9 @@ export function useSplitPane() {
         const pane = data?.settings?.biSplitPane;
         if (pane) {
           setState({
-            open: Boolean(pane.open),
+            // Always start collapsed on page open so the board is usable immediately;
+            // chart/tab preferences are still restored from saved settings.
+            open: false,
             height: Number(pane.height) || DEFAULT_HEIGHT,
             chartIds: Array.isArray(pane.chartIds) ? pane.chartIds : [],
             activeTab: pane.activeTab === 'rccp' ? 'rccp' : 'bi',

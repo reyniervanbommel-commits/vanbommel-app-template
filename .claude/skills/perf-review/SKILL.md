@@ -17,6 +17,21 @@ description: >-
 > **Verwant:** `ui-design-review` (visuele consistentie), `browser-feature-test` (functioneel gedrag).
 > Deze skill kijkt uitsluitend naar snelheid.
 
+## Omgeving
+
+Werkt in **Cursor** (`.cursor/skills/perf-review/`) en **Claude Code** (`.claude/skills/`,
+plus `/perf-check`). Wat je kunt meten hangt af van de beschikbare tools:
+
+| Tool aanwezig | Gevolg |
+|---------------|--------|
+| `browser_console_messages` | **Volledige meting.** De app logt zichzelf — dit is de hoofdweg (zie stap 1) |
+| `browser_network_requests` | Server-Timing-headers → SQL-toerekening |
+| evaluate / JS uitvoeren | Optioneel, preciezer: `window.__perf.*` in plaats van console-parsen |
+| geen browser-tools | Alleen statische analyse — vermeld **"static only"** en sla stap 1–2 over |
+
+De meetweg via de console is bewust de standaard: die werkt in beide omgevingen. Ga niet uit
+van een evaluate-tool.
+
 ## Modi
 
 | Modus | Wanneer | Wat |
@@ -60,27 +75,41 @@ Perf Progress:
 
 ## Stap 1 — Meten
 
-Per actie dezelfde cyclus. **Klik echt** — navigeer niet via de URL, anders krijg je geen
-Event Timing-entry en verlies je de interactie-meting.
+De app **logt zichzelf**: de observers in `src/utils/perf.js` installeren zich in dev/preview en
+schrijven naar de console. Je hoeft niets op te starten en geen JS te injecteren.
+
+| Consoleregel | Bron | Geeft |
+|--------------|------|-------|
+| `[perf] interaction {…}` | Event Timing | Doelelement + opsplitsing inputDelay / processing / render |
+| `[perf] longframe {…}` | Long Animation Frames | Blokkerend script met bestand + functienaam |
+| `[perf] navigation {…}` | Navigation Timing | ttfb / domContentLoaded / load / transferKB per paginalading |
+| `[perf] measure <label> → …ms` | `measure()` | Client-berekening |
+| `[api] GET /path → 200 in …ms` | `apiRequest` | Netwerk + backend per call |
+
+Alleen interacties trager dan 100 ms worden gelogd — een stille console betekent "snel genoeg",
+niet "kapot".
+
+Per actie:
 
 ```
-1. window.__perf.reset()                    → buffer leegmaken
-2. (observers plaatsen — zie reference.md)  → event + long-animation-frame
-3. browser_click op de tab/link             → de echte interactie
-4. browser_wait_for                         → wacht op een element dat pas ná de data verschijnt
-5. window.__perf.timings()                  → API-calls + measure()-blokken van déze actie
-6. browser_network_requests                 → Server-Timing-headers uitlezen
+1. browser_click op de tab/link  → de echte interactie
+2. browser_wait_for              → wacht op een element dat pas ná de data verschijnt
+3. browser_console_messages      → lees de [perf]- en [api]-regels van déze actie
+4. browser_network_requests      → Server-Timing-headers (SQL-labels)
 ```
 
-Bij een **paginalading** (eerste load, harde refresh) gebruik je in plaats van stap 3–5:
-`window.__perf.navigation()` → `ttfb` / `domContentLoaded` / `load`, en
-`window.__perf.resourceKB()` voor de JS/CSS-transfer.
+**Klik echt** — navigeer niet via de URL. Zonder echte klik is er geen Event Timing-entry en
+verlies je de interactie-meting volledig.
+
+Bij een **paginalading** (eerste load, harde refresh) gebruik je de `[perf] navigation`-regel;
+die verschijnt vanzelf na het load-event.
 
 Meet elke actie **3×** en noteer de mediaan. Een enkele meting is ruis: koude cache, JIT,
 achtergrond-sync. Noteer de eerste meting apart als die sterk afwijkt — dat is je koude-start.
 
-> De `timings()`-buffer houdt max 40 entries vast. Bij een actie met veel calls: reset vlak
-> vóór de klik en lees direct erna uit.
+> **Heb je wél een evaluate-tool?** Dan is `window.__perf.timings()` / `.navigation()` /
+> `.reset()` / `.dump()` sneller en preciezer dan console-parsen. De buffer houdt 40 entries
+> vast — `reset()` vlak vóór de klik, uitlezen direct erna. Zie `reference.md`.
 
 ---
 
