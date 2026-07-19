@@ -1,5 +1,15 @@
 {
   "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--output-dir=playwright/mcp",
+        "--output-mode=file"
+      ]
+    },
     "d365-fo-mcp": {
       "url": "https://vanbommel-acc.sandbox.operations.dynamics.com/mcp",
       "headers": {
