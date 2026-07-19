@@ -5,7 +5,7 @@ export default function RccpVendorFilter({
   value,
   onChange,
   vendors,
-  vendorColumnKey,
+  vendorNames,
   loading,
   error,
 }) {
@@ -20,15 +20,19 @@ export default function RccpVendorFilter({
   return (
     <Field
       label="Vendor filter"
-      hint={vendorColumnKey ? `Values from main table column: ${vendorColumnKey}` : undefined}
       validationState={error ? 'error' : 'none'}
       validationMessage={error || undefined}
     >
       <Select value={value} onChange={handleChange}>
         <option value="">All vendors</option>
-        {vendors.map((vendor) => (
-          <option key={vendor} value={vendor}>{vendor}</option>
-        ))}
+        {vendors.map((vendor) => {
+          const name = vendorNames?.[vendor];
+          return (
+            <option key={vendor} value={vendor}>
+              {name ? `${vendor} — ${name}` : vendor}
+            </option>
+          );
+        })}
       </Select>
     </Field>
   );

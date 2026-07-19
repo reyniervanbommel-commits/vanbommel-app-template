@@ -34,7 +34,7 @@ export default function RccpPageContent() {
   const [vendorAccount, setVendorAccount] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const {
-    vendors, vendorColumnKey, loading: vendorsLoading, error: vendorsError,
+    vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
   const {
     window, setWindow, analysis, loading, error, readOnly,
@@ -70,7 +70,7 @@ export default function RccpPageContent() {
             value={vendorAccount}
             onChange={setVendorAccount}
             vendors={vendors}
-            vendorColumnKey={vendorColumnKey}
+            vendorNames={vendorNames}
             loading={vendorsLoading}
             error={vendorsError}
           />
