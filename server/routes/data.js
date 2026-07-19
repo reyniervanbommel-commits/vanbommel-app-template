@@ -332,7 +332,9 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
 });
 
 // DELETE /api/data/:tableKey/columns/:id — soft-delete (waarden blijven behouden).
-router.delete('/:tableKey/columns/:id', async (req, res, next) => {
+// Admin-only: een kolom weghalen raakt het bord voor iedereen (grootste blast radius van de
+// datamodel-routes). De overige beheerroutes blijven bewust open voor employees.
+router.delete('/:tableKey/columns/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
