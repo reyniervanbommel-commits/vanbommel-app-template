@@ -334,6 +334,7 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     filterCatalog: data?.filterCatalog || { header: [], line: [] },
     previewTables: data?.previewTables || null,
     lookups: data?.lookups || [],
+    discovery: data?.discovery || null,
     loading,
     error,
     togglingKey,

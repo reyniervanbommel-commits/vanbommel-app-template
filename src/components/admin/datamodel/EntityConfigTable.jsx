@@ -39,8 +39,6 @@ const useStyles = makeStyles({
   muted: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   tableWrap: {
     width: '100%',
-    maxHeight: '430px',
-    overflowY: 'auto',
     overflowX: 'auto',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius('6px'),
@@ -194,7 +192,7 @@ export default function EntityConfigTable({
       <div className={styles.titleRow}>
         <Text weight="semibold">{title}</Text>
         <span className={styles.mono}>{entityName}</span>
-        <Badge appearance="tint" color="brand" size="small">{visibleCount}/{columns.length} visible</Badge>
+        <Badge appearance="tint" color="brand" size="small">{visibleCount} visible · {columns.length} registered</Badge>
         <Button className={styles.exportButton} appearance="secondary" onClick={handleExport}>
           Export Excel
         </Button>

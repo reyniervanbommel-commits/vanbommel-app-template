@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  MessageBar,
+  MessageBarBody,
   Spinner,
   Tab,
   TabList,
@@ -17,12 +19,25 @@ const useStyles = makeStyles({
   root: { width: '100%', maxWidth: 'none', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
   intro: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1 },
+  info: { marginTop: '4px' },
 });
 
 /**
  * Admin tab "Data model": configureer kolommen en syncfilters per entiteit (PO, vendors, items),
  * plus een tab "External links" om een Excel als read-only verrijking te koppelen (#AB:162/#195).
  */
+function formatDiscoveryMessage(discovery) {
+  if (!discovery) return '';
+  const headerAdded = Number(discovery.headerInserted) || 0;
+  const lineAdded = Number(discovery.lineInserted) || 0;
+  const totalAdded = headerAdded + lineAdded;
+  if (!totalAdded) return '';
+  const parts = [];
+  if (headerAdded) parts.push(`${headerAdded} header`);
+  if (lineAdded) parts.push(`${lineAdded} line`);
+  return `Added ${parts.join(' and ')} column${totalAdded === 1 ? '' : 's'} from D365 (hidden by default). Turn on "Visible in table" to use them on the board.`;
+}
+
 export default function AdminDataModel() {
   const styles = useStyles();
   const [selectedTab, setSelectedTab] = useState('purchase-orders');
@@ -38,6 +53,7 @@ export default function AdminDataModel() {
   };
   const selectedModel = modelByTab[selectedTab];
   const isDataEntityTab = Boolean(selectedModel);
+  const discoveryMessage = formatDiscoveryMessage(selectedModel?.discovery);
 
   return (
     <div className={styles.root}>
@@ -63,6 +79,11 @@ export default function AdminDataModel() {
         ) : (
           <>
             {selectedModel.error ? <Text className={styles.error} block>{selectedModel.error}</Text> : null}
+            {discoveryMessage ? (
+              <MessageBar intent="info" className={styles.info}>
+                <MessageBarBody>{discoveryMessage}</MessageBarBody>
+              </MessageBar>
+            ) : null}
             <SyncFilterBuilder
               tableKey={selectedTab}
               filterCatalog={selectedModel.filterCatalog}

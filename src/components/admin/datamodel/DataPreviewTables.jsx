@@ -108,7 +108,7 @@ function DataPreviewTables({
             Discover D365 fields
           </Button>
           <Text className={styles.discoverHint}>
-            Haalt alle beschikbare velden uit de D365-entiteit op en voegt ontbrekende kolommen toe (standaard verborgen).
+            Fetches all available fields from the D365 entity and adds missing columns (hidden by default).
           </Text>
         </div>
       ) : null}

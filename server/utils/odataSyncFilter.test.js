@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileSyncRules, parseSyncRules } = require('./odataSyncFilter');
+const { compileSyncRules, parseSyncRules, recordMatchesSyncRules } = require('./odataSyncFilter');
 
 describe('compileSyncRules (D365-syncfilters)', () => {
   it('compileert een tekst-regel met quoting en escaping', () => {
@@ -64,5 +64,35 @@ describe('parseSyncRules', () => {
     expect(parseSyncRules('geen json')).toEqual([]);
     expect(parseSyncRules('')).toEqual([]);
     expect(parseSyncRules('{"niet":"een array"}')).toEqual([]);
+  });
+});
+
+describe('recordMatchesSyncRules', () => {
+  const backorderRule = [{
+    level: 'header',
+    field: 'PurchaseOrderStatus',
+    operator: 'eq',
+    value: 'Backorder',
+    valueType: 'enum',
+    enumType: 'PurchStatus',
+  }];
+
+  it('matcht op D365-veldnaam en status-alias', () => {
+    expect(recordMatchesSyncRules(backorderRule, { PurchaseOrderStatus: 'Backorder' }, [])).toBe(true);
+    expect(recordMatchesSyncRules(backorderRule, { status: 'Backorder' }, [])).toBe(true);
+    expect(recordMatchesSyncRules(backorderRule, { status: 'Invoiced' }, [])).toBe(false);
+  });
+
+  it('combineert meerdere regels met AND', () => {
+    const rules = [
+      ...backorderRule,
+      { level: 'header', field: 'OrderVendorAccountNumber', operator: 'eq', value: 'V001', valueType: 'text' },
+    ];
+    expect(recordMatchesSyncRules(rules, { status: 'Backorder', vendorAccount: 'V001' }, [])).toBe(true);
+    expect(recordMatchesSyncRules(rules, { status: 'Backorder', vendorAccount: 'V002' }, [])).toBe(false);
+  });
+
+  it('geeft true bij geen actieve regels', () => {
+    expect(recordMatchesSyncRules([], { status: 'Invoiced' }, [])).toBe(true);
   });
 });
