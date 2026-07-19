@@ -1116,32 +1116,83 @@ function buildD365LedgerEntries({
   }));
 }
 
+// Eén ledger-entry -> de 12 SQL-parameters met een rij-index in de naam (uniek binnen de batch).
+function ledgerEntryParams(entry, idx) {
+  return [
+    { name: `tableId${idx}`, type: sql.BigInt, value: entry.tableId },
+    { name: `partitionKey${idx}`, type: sql.NVarChar(32), value: entry.partitionKey },
+    { name: `recordKey${idx}`, type: sql.NVarChar(128), value: entry.recordKey },
+    { name: `detailKey${idx}`, type: sql.Int, value: Number.isInteger(entry.detailKey) ? entry.detailKey : MASTER_DETAIL_KEY },
+    { name: `fieldKey${idx}`, type: sql.NVarChar(128), value: entry.fieldKey || null },
+    { name: `source${idx}`, type: sql.NVarChar(16), value: entry.source || 'USER' },
+    { name: `action${idx}`, type: sql.NVarChar(16), value: entry.action || 'UPDATE' },
+    { name: `oldValue${idx}`, type: sql.NVarChar(sql.MAX), value: entry.oldValue || null },
+    { name: `newValue${idx}`, type: sql.NVarChar(sql.MAX), value: entry.newValue || null },
+    { name: `changedByUserId${idx}`, type: sql.Int, value: entry.changedByUserId || null },
+    { name: `correlationId${idx}`, type: sql.NVarChar(64), value: entry.correlationId || null },
+    { name: `refreshJobId${idx}`, type: sql.NVarChar(64), value: entry.refreshJobId || null },
+  ];
+}
+
+// Bouwt een multi-row INSERT voor één batch entries. Retourneert de VALUES-tuples en de vlakke
+// parameterlijst; zo blijft de string-opbouw puur en testbaar los van de mssql-request.
+function buildLedgerInsert(chunk) {
+  const params = [];
+  const tuples = chunk.map((entry, idx) => {
+    const cols = ledgerEntryParams(entry, idx);
+    params.push(...cols);
+    return `(${cols.map((c) => `@${c.name}`).join(', ')})`;
+  });
+  const text = `
+    INSERT INTO dbo.tb_change_ledger
+      (table_id, partition_key, record_key, detail_key, field_key, source, action,
+       old_value, new_value, changed_by_user_id, correlation_id, refresh_job_id)
+    VALUES ${tuples.join(', ')}
+  `;
+  return { text, params };
+}
+
+// SQL Server staat max 2100 parameters per statement toe; 12 per entry -> ~175 max. 100 houdt ruime
+// marge. Voorheen ging elke entry als los INSERT-round-trip; bij een refresh scheelt dat duizenden.
+const LEDGER_INSERT_CHUNK = 100;
+
 async function writeChangeLedgerEntries(requestFactory, entries) {
   const list = Array.isArray(entries) ? entries : [];
   if (!list.length) return;
-  for (const entry of list) {
-    await requestFactory()
-      .input('tableId', sql.BigInt, entry.tableId)
-      .input('partitionKey', sql.NVarChar(32), entry.partitionKey)
-      .input('recordKey', sql.NVarChar(128), entry.recordKey)
-      .input('detailKey', sql.Int, Number.isInteger(entry.detailKey) ? entry.detailKey : MASTER_DETAIL_KEY)
-      .input('fieldKey', sql.NVarChar(128), entry.fieldKey || null)
-      .input('source', sql.NVarChar(16), entry.source || 'USER')
-      .input('action', sql.NVarChar(16), entry.action || 'UPDATE')
-      .input('oldValue', sql.NVarChar(sql.MAX), entry.oldValue || null)
-      .input('newValue', sql.NVarChar(sql.MAX), entry.newValue || null)
-      .input('changedByUserId', sql.Int, entry.changedByUserId || null)
-      .input('correlationId', sql.NVarChar(64), entry.correlationId || null)
-      .input('refreshJobId', sql.NVarChar(64), entry.refreshJobId || null)
-      .query(`
-        INSERT INTO dbo.tb_change_ledger
-          (table_id, partition_key, record_key, detail_key, field_key, source, action,
-           old_value, new_value, changed_by_user_id, correlation_id, refresh_job_id)
-        VALUES
-          (@tableId, @partitionKey, @recordKey, @detailKey, @fieldKey, @source, @action,
-           @oldValue, @newValue, @changedByUserId, @correlationId, @refreshJobId)
-      `);
+  for (let i = 0; i < list.length; i += LEDGER_INSERT_CHUNK) {
+    const chunk = list.slice(i, i + LEDGER_INSERT_CHUNK);
+    const { text, params } = buildLedgerInsert(chunk);
+    const req = requestFactory();
+    for (const p of params) req.input(p.name, p.type, p.value);
+    await req.query(text);
   }
+}
+
+// Retentie voor tb_change_ledger. read() leest alleen sinds de laatste sync en RowActivity toont
+// recente rij-historie, dus ouder dan dit venster hoeft niet bewaard te blijven. Zonder opschoning
+// groeit de tabel onbegrensd (32 MB in 12 dagen op DEV). Instelbaar via env; standaard 90 dagen.
+const LEDGER_RETENTION_DAYS = (() => {
+  const raw = Number.parseInt(String(process.env.TB_LEDGER_RETENTION_DAYS ?? ''), 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 90;
+})();
+
+// Delete in behapbare brokken zodat een grote opschoning het log niet lang op slot zet.
+async function pruneChangeLedger(pool, tableId, retentionDays = LEDGER_RETENTION_DAYS) {
+  let totalDeleted = 0;
+  for (;;) {
+    const res = await pool.request()
+      .input('tableId', sql.BigInt, tableId)
+      .input('days', sql.Int, retentionDays)
+      .query(`
+        DELETE TOP (5000) FROM dbo.tb_change_ledger
+        WHERE table_id = @tableId
+          AND created_at < DATEADD(day, -@days, SYSUTCDATETIME())
+      `);
+    const deleted = res.rowsAffected?.[0] || 0;
+    totalDeleted += deleted;
+    if (deleted < 5000) break;
+  }
+  return totalDeleted;
 }
 
 function isPlainObject(value) {
@@ -2074,6 +2125,13 @@ async function refresh(tableKey, options = {}) {
       finishedAt: new Date().toISOString(),
       error: null,
     });
+    try {
+      const pruned = await pruneChangeLedger(pool, table.id);
+      if (pruned) logger.info('Change-ledger opgeschoond', { tableKey, pruned, retentionDays: LEDGER_RETENTION_DAYS });
+    } catch (pruneErr) {
+      logger.warn('Change-ledger opschonen mislukt; refresh is verder klaar', { tableKey, error: pruneErr.message });
+    }
+
     return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
   } catch (err) {
     updateRefreshProgress(tableKey, {
@@ -4194,6 +4252,7 @@ module.exports = {
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
   buildD365ChangeState,
+  buildLedgerInsert,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,

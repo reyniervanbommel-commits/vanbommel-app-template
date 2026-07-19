@@ -27,6 +27,7 @@ const {
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
   buildD365ChangeState,
+  buildLedgerInsert,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
@@ -682,6 +683,34 @@ describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
       purchaseOrderLineNumber: '10',
       lineNumber: '10',
     });
+  });
+});
+
+describe('TableDataService.buildLedgerInsert', () => {
+  const entry = (over) => ({
+    tableId: 1, partitionKey: 'whsl', recordKey: 'PO-1', detailKey: 2,
+    fieldKey: 'quantity', source: 'D365', action: 'INSERT', newValue: '5', ...over,
+  });
+
+  it('bouwt één VALUES-tuple per entry', () => {
+    const { text, params } = buildLedgerInsert([entry(), entry({ recordKey: 'PO-2' })]);
+    expect(text.match(/\(@tableId\d+,/g)).toHaveLength(2);
+    // 12 parameters per entry.
+    expect(params).toHaveLength(24);
+  });
+
+  it('geeft elke parameter een rij-unieke naam (geen botsingen in de batch)', () => {
+    const { params } = buildLedgerInsert([entry(), entry({ recordKey: 'PO-2' })]);
+    const names = params.map((p) => p.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toContain('tableId0');
+    expect(names).toContain('tableId1');
+  });
+
+  it('valt terug op het master-detailkey (-1) bij een niet-integer detailKey', () => {
+    const { params } = buildLedgerInsert([entry({ detailKey: null })]);
+    const detail = params.find((p) => p.name === 'detailKey0');
+    expect(detail.value).toBe(-1);
   });
 });
 
