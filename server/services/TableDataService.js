@@ -1602,11 +1602,16 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     const previousDetailByRecord = new Map();
     for (const row of existingRows.recordset) {
       const rowKey = `${row.partition_key}|${row.record_key}`;
+      // Bewust óók soft-deleted rijen (removed_at_source = 1) als "vorige staat" meenemen. De
+      // twee-fasen-refresh soft-delete een retained order in fase 1 en herplaatst hem in fase 2;
+      // zonder deze rij zag fase 2 de order als nieuw en schreef hij per veld een INSERT weg
+      // (churn + het bord markeerde ~alles als 'nieuw'). Met de vorige staat erbij wordt het een
+      // UPDATE die alleen echt gewijzigde velden logt — en niets als er niets veranderde.
       if (row.scope === 'master') {
-        if (!row.removed_at_source) previousMasterByRecord.set(rowKey, parseJson(row.data_json));
+        previousMasterByRecord.set(rowKey, parseJson(row.data_json));
         continue;
       }
-      if (row.scope !== 'detail' || row.removed_at_source) continue;
+      if (row.scope !== 'detail') continue;
       if (!previousDetailByRecord.has(rowKey)) previousDetailByRecord.set(rowKey, new Map());
       previousDetailByRecord.get(rowKey).set(Number(row.detail_key), parseJson(row.data_json));
     }
@@ -1985,6 +1990,9 @@ async function refresh(tableKey, options = {}) {
     }
     for (const row of removedDetails.recordset || []) {
       if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
+      // Zelfde guard als de koppen: een regel van een retained order wordt in fase 1 wel
+      // soft-deleted maar in fase 2 hersteld — daar hoort geen DELETE-event bij.
+      if (retainedKeys.has(`${row.partition_key}|${row.record_key}`)) continue;
       removedEntries.push(...buildD365LedgerEntries({
         tableId: table.id,
         partitionKey: row.partition_key,
