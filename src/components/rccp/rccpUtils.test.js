@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildMatrixPeriodHeaders,
+  buildRccpChartWeekBoundaryCoordinates,
   formatIsoWeekMondayLabel,
   formatMatrixWeekLabel,
   isMatrixCellEmpty,
-  rccpChartWeekBoundaryCoordinates,
   resolveChartWeekRangeBounds,
+  RCCP_CAPACITY_MEASURE_KEY,
+  selectVisibleMeasureRows,
 } from './rccpUtils';
 
 describe('matrix period headers', () => {
@@ -66,18 +68,10 @@ describe('resolveChartWeekRangeBounds', () => {
   });
 });
 
-describe('rccpChartWeekBoundaryCoordinates', () => {
-  it('returns left and right edges for each ISO week band', () => {
-    const domain = ['2026-W06', '2026-W07', '2026-W08'];
-    const scale = Object.assign(
-      (entry) => domain.indexOf(entry) * 68,
-      { domain: () => domain, bandwidth: () => 68 },
-    );
-
-    expect(rccpChartWeekBoundaryCoordinates({
-      xAxis: { scale },
-      offset: { left: 42 },
-    })).toEqual([42, 110, 178, 246]);
+describe('buildRccpChartWeekBoundaryCoordinates', () => {
+  it('includes the Y-axis offset so lines align with week band edges', () => {
+    const coordinates = buildRccpChartWeekBoundaryCoordinates(3)({ offset: { left: 42 } });
+    expect(coordinates).toEqual([42, 110, 178, 246]);
   });
 });
 
@@ -96,5 +90,38 @@ describe('isMatrixCellEmpty', () => {
       availableQty: 0,
       confirmedQty: 5,
     })).toBe(false);
+  });
+});
+
+describe('selectVisibleMeasureRows', () => {
+  const periodHeaders = [
+    { year: 2021, week: 1 },
+    { year: 2021, week: 2 },
+  ];
+  const emptyCell = { statusLabel: 'N/A', availableQty: 0, confirmedQty: 0 };
+
+  it('keeps a user-added measure even when it has no data in the window', () => {
+    const measureRows = [{ measureKey: 'remainingPurchaseQuantity', label: 'Remaining qty' }];
+    // Geen enkele cel voor deze measure in cellMap -> alle cellen leeg.
+    const rows = selectVisibleMeasureRows(measureRows, periodHeaders, new Map());
+    expect(rows.map((r) => r.measureKey)).toEqual(['remainingPurchaseQuantity']);
+  });
+
+  it('hides the automatic capacity row when the window has no capacity', () => {
+    const measureRows = [{ measureKey: RCCP_CAPACITY_MEASURE_KEY, label: 'Available capacity' }];
+    const cellMap = new Map([
+      [`${RCCP_CAPACITY_MEASURE_KEY}|2021|1`, emptyCell],
+      [`${RCCP_CAPACITY_MEASURE_KEY}|2021|2`, emptyCell],
+    ]);
+    expect(selectVisibleMeasureRows(measureRows, periodHeaders, cellMap)).toEqual([]);
+  });
+
+  it('keeps the capacity row when at least one week has capacity', () => {
+    const measureRows = [{ measureKey: RCCP_CAPACITY_MEASURE_KEY, label: 'Available capacity' }];
+    const cellMap = new Map([
+      [`${RCCP_CAPACITY_MEASURE_KEY}|2021|1`, emptyCell],
+      [`${RCCP_CAPACITY_MEASURE_KEY}|2021|2`, { statusLabel: 'N/A', availableQty: 100, confirmedQty: 0 }],
+    ]);
+    expect(selectVisibleMeasureRows(measureRows, periodHeaders, cellMap)).toHaveLength(1);
   });
 });

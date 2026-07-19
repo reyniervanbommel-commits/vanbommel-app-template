@@ -184,14 +184,22 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
   });
 
-  it('past filter operator direct op bij wijziging', async () => {
+  it('past filter operator en waarde pas op bij Apply', async () => {
     const onSetOperator = vi.fn();
-    renderMenu({ onSetOperator });
+    const onSetValue = vi.fn();
+    renderMenu({ onSetOperator, onSetValue });
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Filter operator for Amount/i }));
-    fireEvent.click(await screen.findByRole('option', { name: '>' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'greater than' }));
+    expect(onSetOperator).not.toHaveBeenCalled();
+
+    const valueInput = await screen.findByLabelText(/Filter value for Amount/i);
+    fireEvent.change(valueInput, { target: { value: '45' } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Apply$/i }));
+
     await waitFor(() => {
-      expect(onSetOperator).toHaveBeenCalled();
+      expect(onSetOperator).toHaveBeenCalledWith('amount', 'gt');
+      expect(onSetValue).toHaveBeenCalledWith('amount', '45');
     });
   });
 

@@ -56,7 +56,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handleOperatorSelect,
   handleValueChange,
   handleSecondaryValueChange,
-  handleFilterValueBlur,
+  handleApplyFilter,
   handleClearFilter,
   connectionTargets = [],
 }) {
@@ -134,7 +134,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             handleOperatorSelect={handleOperatorSelect}
             handleValueChange={handleValueChange}
             handleSecondaryValueChange={handleSecondaryValueChange}
-            handleFilterValueBlur={handleFilterValueBlur}
+            handleApplyFilter={handleApplyFilter}
             handleClearFilter={handleClearFilter}
             onMouseEnter={handleFilterRowMouseEnter}
           />

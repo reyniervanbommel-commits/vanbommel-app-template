@@ -38,13 +38,8 @@ export function usePurchaseOrderSortFilterActions({
   const handleOperatorSelect = useCallback((_, data) => {
     if (!data.optionValue) return;
     const nextOperator = data.optionValue;
-    setDraft((prev) => {
-      const nextDraft = { ...prev, operator: nextOperator };
-      onSetOperator(columnKey, nextOperator);
-      persistDraftValues(columnKey, nextDraft, onSetValue, onSetSecondaryValue);
-      return nextDraft;
-    });
-  }, [columnKey, onSetOperator, onSetSecondaryValue, onSetValue, setDraft]);
+    setDraft((prev) => ({ ...prev, operator: nextOperator }));
+  }, [setDraft]);
 
   const handleValueChange = useCallback((event) => {
     const nextValue = event.target.value;
@@ -56,9 +51,10 @@ export function usePurchaseOrderSortFilterActions({
     setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
   }, [setDraft]);
 
-  const handleFilterValueBlur = useCallback(() => {
+  const handleApplyFilter = useCallback(() => {
+    onSetOperator(columnKey, draft.operator);
     persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
-  }, [columnKey, draft, onSetSecondaryValue, onSetValue]);
+  }, [columnKey, draft, onSetOperator, onSetSecondaryValue, onSetValue]);
 
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
@@ -72,7 +68,7 @@ export function usePurchaseOrderSortFilterActions({
     handleOperatorSelect,
     handleValueChange,
     handleSecondaryValueChange,
-    handleFilterValueBlur,
+    handleApplyFilter,
     handleClearFilter,
   };
 }

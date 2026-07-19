@@ -103,6 +103,17 @@ router.put('/capacity/:id', requireRole(ROLES.ADMIN), async (req, res, next) => 
   }
 });
 
+router.delete('/capacity', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const vendorAccount = resolveVendorQuery(req);
+    const result = await capacityService.deleteAllCapacity({ vendorAccount });
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
 router.delete('/capacity/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const result = await capacityService.deleteCapacity(req.params.id);

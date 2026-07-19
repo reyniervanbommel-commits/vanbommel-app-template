@@ -268,6 +268,16 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
       color: tokens.colorBrandForeground1,
     },
   },
+  filterOperatorLinkContent: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
+  },
+  filterOperatorChevron: {
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
   filterOperatorFlyout: {
     position: 'absolute',
     top: '0',
@@ -310,10 +320,23 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     minWidth: 0,
   },
   filterClearButton: {
-    alignSelf: 'flex-start',
-    minWidth: '56px',
-    height: '24px',
+    flex: '1 1 0',
+    minWidth: 0,
+    height: '28px',
     ...shorthands.padding('0', '8px'),
+  },
+  filterApplyButton: {
+    flex: '1 1 0',
+    minWidth: 0,
+    height: '28px',
+    ...shorthands.padding('0', '8px'),
+  },
+  filterActionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    width: '100%',
+    marginTop: '2px',
   },
   filterHint: {
     color: tokens.colorNeutralForeground3,

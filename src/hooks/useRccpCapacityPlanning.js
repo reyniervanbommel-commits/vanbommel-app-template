@@ -17,6 +17,7 @@ export function createEmptyCapacityRow() {
     capacityCategory: '',
     availableQty: 0,
     isNew: true,
+    dirty: true,
   };
 }
 
@@ -37,7 +38,12 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
     try {
       const data = await apiRequest(buildCapacityQuery(vendorAccount || undefined));
       if (requestId !== requestIdRef.current) return;
-      setRows((data.rows || []).map((row) => ({ ...row, localKey: String(row.id) })));
+      setRows((data.rows || []).map((row) => ({
+        ...row,
+        localKey: String(row.id),
+        dirty: false,
+        isNew: false,
+      })));
       setReadOnly(Boolean(data.readOnly));
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
@@ -56,7 +62,7 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
 
   const updateRow = useCallback((localKey, field, value) => {
     setRows((prev) => prev.map((row) => (
-      row.localKey === localKey ? { ...row, [field]: value } : row
+      row.localKey === localKey ? { ...row, [field]: value, dirty: true } : row
     )));
   }, []);
 
@@ -82,7 +88,7 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
         });
         setRows((prev) => prev.map((item) => (
           item.localKey === row.localKey
-            ? { ...data.row, localKey: String(data.row.id) }
+            ? { ...data.row, localKey: String(data.row.id), dirty: false, isNew: false }
             : item
         )));
       } else {
@@ -92,7 +98,7 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
         });
         setRows((prev) => prev.map((item) => (
           item.localKey === row.localKey
-            ? { ...data.row, localKey: String(data.row.id), isNew: false }
+            ? { ...data.row, localKey: String(data.row.id), dirty: false, isNew: false }
             : item
         )));
       }
@@ -120,6 +126,40 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
     }
   }, [removeRow]);
 
+  const deleteRows = useCallback(async (rowsToDelete) => {
+    setRowError('');
+    if (!rowsToDelete.length) return true;
+
+    let ok = true;
+    for (const row of rowsToDelete) {
+      if (!row.id) {
+        removeRow(row.localKey);
+        continue;
+      }
+      try {
+        await apiRequest(`/rccp/capacity/${row.id}`, { method: 'DELETE' });
+        removeRow(row.localKey);
+      } catch (err) {
+        setRowError(err.message || 'Failed to delete selected capacity rows');
+        ok = false;
+        break;
+      }
+    }
+    return ok;
+  }, [removeRow]);
+
+  const deleteAllRows = useCallback(async () => {
+    setRowError('');
+    try {
+      await apiRequest(buildCapacityQuery(vendorAccount), { method: 'DELETE' });
+      setRows([]);
+      return true;
+    } catch (err) {
+      setRowError(err.message || 'Failed to delete all capacity rows');
+      return false;
+    }
+  }, [vendorAccount]);
+
   return {
     rows,
     loading,
@@ -132,5 +172,7 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
     updateRow,
     saveRow,
     deleteRow,
+    deleteRows,
+    deleteAllRows,
   };
 }

@@ -2,6 +2,7 @@
 
 const {
   aggregatePoLoad,
+  buildDrillDownRows,
   buildMatrixCells,
   cellKey,
   extractVendorsFromRows,
@@ -174,5 +175,71 @@ describe('RccpAnalysisService', () => {
       { values: { vendorAccount: 'V001', vendorName: 'Vendor BV' } },
     ];
     expect(extractVendorNamesFromRows(rows, 'vendorAccount')).toEqual({ V001: 'Vendor BV' });
+  });
+
+  it('buildDrillDownRows includes line-level quantities', () => {
+    const deliveryDate = '2026-03-10T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open' },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: deliveryDate, quantity: 7 } },
+        { detailKey: '2', values: { requestedDeliveryDate: deliveryDate, quantity: 5 } },
+      ],
+    }];
+    const cell = { vendorAccount: 'V001', periodYear: year, isoWeek: week, measureKey: 'quantity' };
+
+    const result = buildDrillDownRows(rows, config, cell, testWindow);
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.quantity).sort((a, b) => a - b)).toEqual([5, 7]);
+  });
+
+  it('buildDrillDownRows spreads order-level quantity across lines without line qty', () => {
+    const deliveryDate = '2026-03-10T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open', quantity: 10 },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: deliveryDate } },
+        { detailKey: '2', values: { requestedDeliveryDate: deliveryDate } },
+      ],
+    }];
+    const cell = { vendorAccount: 'V001', periodYear: year, isoWeek: week, measureKey: 'quantity' };
+
+    const result = buildDrillDownRows(rows, config, cell, testWindow);
+    expect(result).toHaveLength(2);
+    expect(result.every((r) => r.quantity === 5)).toBe(true);
+  });
+
+  it('buildDrillDownRows includes lookup measures such as receivedPurchaseQuantity', () => {
+    const deliveryDate = '2021-11-08T12:00:00Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const rows = [{
+      recordKey: 'WSPO-1',
+      values: { vendorAccount: 'V000583', status: 'Invoiced' },
+      details: [{
+        detailKey: '1',
+        values: { requestedDeliveryDate: deliveryDate, receivedPurchaseQuantity: 150 },
+      }],
+    }];
+    const cell = {
+      vendorAccount: 'V000583',
+      periodYear: year,
+      isoWeek: week,
+      measureKey: 'receivedPurchaseQuantity',
+    };
+
+    const result = buildDrillDownRows(rows, config, cell, testWindow);
+    expect(result).toHaveLength(1);
+    expect(result[0].quantity).toBe(150);
+    expect(result[0].orderNumber).toBe('WSPO-1');
   });
 });

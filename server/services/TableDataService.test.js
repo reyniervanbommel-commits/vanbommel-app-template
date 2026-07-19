@@ -26,6 +26,7 @@ const {
   assertCustomColumnWritable,
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
+  buildD365ChangeState,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
@@ -681,6 +682,43 @@ describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
       purchaseOrderLineNumber: '10',
       lineNumber: '10',
     });
+  });
+});
+
+describe('TableDataService.buildD365ChangeState', () => {
+  const line = (action, createdAt) => ({
+    partition_key: 'whsl', record_key: 'WSPO-1', detail_key: 20, field_key: 'quantity', action, created_at: createdAt,
+  });
+  const stateFor = (rows) => buildD365ChangeState(rows).lineChanges.get('whsl|WSPO-1|20');
+
+  it('markeert een regel als verwijderd bij DELETE', () => {
+    expect(stateFor([line('DELETE', '2026-07-15T17:56:32Z')]).isRemoved).toBe(true);
+  });
+
+  // Een refresh schrijft DELETE + INSERT vlak na elkaar; de regel bestaat daarna gewoon.
+  it('heft de verwijdering op als de regel daarna opnieuw wordt ingevoegd', () => {
+    const state = stateFor([
+      line('DELETE', '2026-07-15T17:56:32Z'),
+      line('INSERT', '2026-07-15T17:56:57Z'),
+    ]);
+    expect(state.isRemoved).toBe(false);
+    expect(state.isNew).toBe(true);
+  });
+
+  it('heft de verwijdering ook op bij een latere UPDATE', () => {
+    const state = stateFor([
+      line('DELETE', '2026-07-15T17:56:32Z'),
+      line('UPDATE', '2026-07-15T18:00:00Z'),
+    ]);
+    expect(state.isRemoved).toBe(false);
+  });
+
+  it('houdt een DELETE die ná de INSERT komt wél vast', () => {
+    const state = stateFor([
+      line('INSERT', '2026-07-15T17:00:00Z'),
+      line('DELETE', '2026-07-15T18:00:00Z'),
+    ]);
+    expect(state.isRemoved).toBe(true);
   });
 });
 

@@ -1,166 +1,189 @@
 import React, { memo, useCallback, useState } from 'react';
-import {
-  Button, Input, Spinner, Table, TableBody, TableCell, TableHeader,
-  TableHeaderCell, TableRow, Text, makeStyles, shorthands, tokens,
-} from '@fluentui/react-components';
-import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons';
+import { Checkbox, Text, mergeClasses } from '@fluentui/react-components';
+import { CAPACITY_PLANNING_COLUMNS } from './rccpCapacityPlanningColumns';
+import RccpCapacityColumnMenu from './RccpCapacityColumnMenu';
+import { useRccpCapacityPlanningTableStyles, RCCP_CAPACITY_CONTROL_WIDTH } from './rccpCapacityPlanningTableStyles';
+import { useRccpCapacityColumnWidths } from '../../hooks/useRccpCapacityColumnWidths';
 
-const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalM) },
-  tableWrap: { overflowX: 'auto' },
-  table: { minWidth: '720px' },
-  input: { width: '100%', minWidth: 0 },
-  yearInput: { width: '96px' },
-  weekInput: { width: '72px' },
-  qtyInput: { width: '120px' },
-  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalXS), whiteSpace: 'nowrap' },
-  empty: { color: tokens.colorNeutralForeground3 },
-  error: { color: tokens.colorPaletteRedForeground1 },
-});
-
-function CapacityRow({
-  row, readOnly, onUpdate, onSave, onDelete,
+function SpreadsheetRow({
+  row,
+  readOnly,
+  selected,
+  onToggleSelect,
+  onUpdate,
+  onSave,
 }) {
-  const styles = useStyles();
+  const styles = useRccpCapacityPlanningTableStyles();
   const [busy, setBusy] = useState(false);
 
   const handleFieldChange = useCallback((field) => (event) => {
     onUpdate(row.localKey, field, event.target.value);
   }, [onUpdate, row.localKey]);
 
-  const handleSave = useCallback(async () => {
+  const handleBlur = useCallback(async () => {
+    if (readOnly || busy || !row.dirty) return;
     setBusy(true);
     await onSave(row);
     setBusy(false);
-  }, [onSave, row]);
+  }, [busy, onSave, readOnly, row]);
 
-  const handleDelete = useCallback(async () => {
-    setBusy(true);
-    await onDelete(row);
-    setBusy(false);
-  }, [onDelete, row]);
+  const handleSelectClick = useCallback((event) => {
+    event.preventDefault();
+    onToggleSelect(row.localKey, event);
+  }, [onToggleSelect, row.localKey]);
+
+  const rowClass = mergeClasses(
+    styles.itemRow,
+    row.dirty && styles.rowDirty,
+    row.isNew && styles.rowNew,
+    selected && styles.rowSelected,
+    busy && styles.rowBusy,
+  );
 
   return (
-    <TableRow>
-      <TableCell>
-        <Input
-          className={styles.input}
-          value={row.vendorAccount}
-          disabled={readOnly || busy}
-          onChange={handleFieldChange('vendorAccount')}
-          aria-label="Vendor code"
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          className={styles.yearInput}
-          type="number"
-          value={String(row.periodYear ?? '')}
-          disabled={readOnly || busy}
-          onChange={handleFieldChange('periodYear')}
-          aria-label="Year"
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          className={styles.weekInput}
-          type="number"
-          min={1}
-          max={53}
-          value={String(row.isoWeek ?? '')}
-          disabled={readOnly || busy}
-          onChange={handleFieldChange('isoWeek')}
-          aria-label="ISO week"
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          className={styles.input}
-          value={row.capacityCategory}
-          disabled={readOnly || busy}
-          onChange={handleFieldChange('capacityCategory')}
-          aria-label="Capacity category"
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          className={styles.qtyInput}
-          type="number"
-          value={String(row.availableQty ?? '')}
-          disabled={readOnly || busy}
-          onChange={handleFieldChange('availableQty')}
-          aria-label="Capacity quantity"
-        />
-      </TableCell>
-      {!readOnly && (
-        <TableCell>
-          <div className={styles.actions}>
-            <Button
-              size="small"
-              icon={busy ? <Spinner size="tiny" /> : <Save24Regular />}
-              onClick={handleSave}
-              disabled={busy}
-              aria-label="Save row"
+    <tr className={rowClass}>
+      <td className={styles.controlCell}>
+        <div className={styles.controlCellInner}>
+          {!readOnly && (
+            <Checkbox
+              className={styles.rowCheckbox}
+              checked={selected}
+              onClick={handleSelectClick}
+              aria-label={`Select row ${row.localKey}`}
             />
-            <Button
-              size="small"
-              appearance="subtle"
-              icon={<Delete24Regular />}
-              onClick={handleDelete}
-              disabled={busy}
-              aria-label="Delete row"
-            />
-          </div>
-        </TableCell>
-      )}
-    </TableRow>
+          )}
+        </div>
+      </td>
+      {CAPACITY_PLANNING_COLUMNS.map((column) => (
+        <td key={column.key} className={styles.dataCell}>
+          <input
+            className={mergeClasses(
+              styles.cellInput,
+              column.align === 'right' && styles.alignRight,
+            )}
+            type={column.type || 'text'}
+            value={row[column.key] ?? ''}
+            disabled={readOnly || busy}
+            onChange={handleFieldChange(column.key)}
+            onBlur={handleBlur}
+            aria-label={column.label}
+            min={column.key === 'isoWeek' ? 1 : undefined}
+            max={column.key === 'isoWeek' ? 53 : undefined}
+          />
+        </td>
+      ))}
+    </tr>
   );
 }
 
-const MemoCapacityRow = memo(CapacityRow);
+const MemoSpreadsheetRow = memo(SpreadsheetRow);
 
-export default function RccpCapacityPlanningTable({
+function RccpCapacityPlanningTable({
   rows,
+  totalCount = 0,
   readOnly,
   rowError,
+  filters,
+  sort,
+  isColumnFilterActive,
+  onFilterChange,
+  onClearColumnFilter,
+  onSetSortAsc,
+  onSetSortDesc,
+  onClearSort,
+  selectedKeys,
+  allVisibleSelected,
+  someVisibleSelected,
+  onToggleSelectAll,
+  onToggleRowSelection,
   onUpdate,
   onSave,
-  onDelete,
 }) {
-  const styles = useStyles();
+  const styles = useRccpCapacityPlanningTableStyles();
+  const columnWidths = useRccpCapacityColumnWidths(rows);
 
   return (
     <div className={styles.root}>
-      <div className={styles.tableWrap}>
-        <Table className={styles.table} aria-label="Capacity planning">
-          <TableHeader>
-            <TableRow>
-              <TableHeaderCell>VendorCode</TableHeaderCell>
-              <TableHeaderCell>Year</TableHeaderCell>
-              <TableHeaderCell>ISOWeek</TableHeaderCell>
-              <TableHeaderCell>CapacityCategory</TableHeaderCell>
-              <TableHeaderCell>CapacityQuantity</TableHeaderCell>
-              {!readOnly && <TableHeaderCell>Actions</TableHeaderCell>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className={styles.wrapper}>
+        <table className={styles.table} aria-label="Capacity planning">
+          <colgroup>
+            <col style={{ width: RCCP_CAPACITY_CONTROL_WIDTH }} />
+            {CAPACITY_PLANNING_COLUMNS.map((column) => (
+              <col key={column.key} style={{ width: `${columnWidths[column.key]}px` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col" className={styles.controlHeaderCell} aria-label="Row selection">
+                {!readOnly && (
+                  <Checkbox
+                    className={styles.selectAll}
+                    checked={allVisibleSelected ? true : (someVisibleSelected ? 'mixed' : false)}
+                    onChange={(_, data) => onToggleSelectAll(Boolean(data.checked))}
+                    aria-label="Select all visible rows"
+                  />
+                )}
+              </th>
+              {CAPACITY_PLANNING_COLUMNS.map((column) => {
+                const filterActive = isColumnFilterActive(column.key);
+                return (
+                  <th
+                    key={column.key}
+                    scope="col"
+                    className={mergeClasses(
+                      styles.headerCell,
+                      filterActive && styles.headerCellFiltered,
+                    )}
+                  >
+                    <div className={styles.headerCellContent}>
+                      <div className={styles.headerCellLabel}>
+                        <span className={styles.headerLabelText}>{column.label}</span>
+                      </div>
+                      {!readOnly && (
+                        <RccpCapacityColumnMenu
+                          columnKey={column.key}
+                          columnLabel={column.label}
+                          filterValue={filters[column.key]}
+                          sortKey={sort.key}
+                          sortDirection={sort.key === column.key ? sort.direction : 'none'}
+                          onSetFilter={onFilterChange}
+                          onClearFilter={onClearColumnFilter}
+                          onSetSortAsc={onSetSortAsc}
+                          onSetSortDesc={onSetSortDesc}
+                          onClearSort={onClearSort}
+                        />
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row) => (
-              <MemoCapacityRow
+              <MemoSpreadsheetRow
                 key={row.localKey}
                 row={row}
                 readOnly={readOnly}
+                selected={selectedKeys.has(row.localKey)}
+                onToggleSelect={onToggleRowSelection}
                 onUpdate={onUpdate}
                 onSave={onSave}
-                onDelete={onDelete}
               />
             ))}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
       {!rows.length && (
-        <Text className={styles.empty}>No capacity records yet. Import Excel or add a row.</Text>
+        <Text className={styles.empty}>
+          {totalCount > 0
+            ? 'No rows match the current filters.'
+            : 'No capacity records yet. Import Excel or add a row.'}
+        </Text>
       )}
       {rowError && <Text className={styles.error}>{rowError}</Text>}
     </div>
   );
 }
+
+export default memo(RccpCapacityPlanningTable);

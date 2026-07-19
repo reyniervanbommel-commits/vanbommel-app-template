@@ -2480,9 +2480,18 @@ function buildD365ChangeState(ledgerRows) {
     const lineKey = `${orderKey}|${detailKey}`;
     if (!lineChanges.has(lineKey)) lineChanges.set(lineKey, createLineChangeState());
     const lineState = lineChanges.get(lineKey);
-    if (action === 'INSERT') lineState.isNew = true;
-    else if (action === 'UPDATE') lineState.isChanged = true;
-    else if (action === 'DELETE') lineState.isRemoved = true;
+    // Een refresh die een regel opnieuw ophaalt schrijft eerst DELETE en daarna INSERT. Zonder de
+    // reset hieronder bleef isRemoved staan en gold een bestaande regel de rest van het
+    // ledger-venster als verwijderd — hij verdween dan uit de RCCP-belasting (die filtert op
+    // !isRemoved) en werd op het bord als vervallen getoond. De laatste actie wint: INSERT en
+    // UPDATE bewijzen dat de regel er weer is.
+    if (action === 'INSERT') {
+      lineState.isNew = true;
+      lineState.isRemoved = false;
+    } else if (action === 'UPDATE') {
+      lineState.isChanged = true;
+      lineState.isRemoved = false;
+    } else if (action === 'DELETE') lineState.isRemoved = true;
     if (fieldKey) lineState.changedFieldKeys.add(fieldKey);
   }
 
@@ -4030,6 +4039,7 @@ module.exports = {
   listHiddenInFilterRows,
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
+  buildD365ChangeState,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,

@@ -177,7 +177,7 @@ function PurchaseOrderColumnFilterMenu({
     onSetDatePeriodDisplayMode(column.key, displayMode);
     setActiveSubmenu('none');
   }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
-  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleFilterValueBlur, handleClearFilter } = usePurchaseOrderSortFilterActions({
+  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApplyFilter, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
     onSetSortDirection,
@@ -240,7 +240,7 @@ function PurchaseOrderColumnFilterMenu({
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
-        handleSecondaryValueChange={handleSecondaryValueChange} handleFilterValueBlur={handleFilterValueBlur} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
+        handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline} handleClearTextStyle={handleClearTextStyle}

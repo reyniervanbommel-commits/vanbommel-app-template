@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Button, Input, Text } from '@fluentui/react-components';
+import { ChevronDownRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 
 export default function PurchaseOrderColumnFilterMenuFilterSection({
@@ -14,7 +15,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   handleOperatorSelect,
   handleValueChange,
   handleSecondaryValueChange,
-  handleFilterValueBlur,
+  handleApplyFilter,
   handleClearFilter,
   onMouseEnter,
 }) {
@@ -53,7 +54,10 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             aria-expanded={operatorFlyoutOpen}
             onClick={handleOperatorToggle}
           >
-            {operatorLabels[draft.operator]}
+            <span className={styles.filterOperatorLinkContent}>
+              {operatorLabels[draft.operator]}
+              <ChevronDownRegular className={styles.filterOperatorChevron} aria-hidden="true" />
+            </span>
           </Button>
           {operatorFlyoutOpen ? (
             <div className={styles.filterOperatorFlyout} role="listbox" aria-label="Filter operators">
@@ -80,7 +84,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             aria-label={`Filter value for ${columnLabel}`}
           />
         ) : null}
@@ -92,7 +95,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             min={1}
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             placeholder="Amount"
             aria-label={`Filter amount for ${columnLabel}`}
           />
@@ -104,7 +106,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             placeholder="Value"
             aria-label={`Filter value for ${columnLabel}`}
           />
@@ -115,7 +116,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             placeholder={draft.operator === 'oneOf' ? 'Value1, Value2' : 'Value'}
             aria-label={`Filter value for ${columnLabel}`}
           />
@@ -129,7 +129,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             aria-label={`Filter from date for ${columnLabel}`}
           />
           <Input
@@ -138,7 +137,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.secondaryValue}
             onChange={handleSecondaryValueChange}
-            onBlur={handleFilterValueBlur}
             aria-label={`Filter to date for ${columnLabel}`}
           />
         </div>
@@ -151,7 +149,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            onBlur={handleFilterValueBlur}
             placeholder="From"
             aria-label={`Filter from value for ${columnLabel}`}
           />
@@ -161,7 +158,6 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             size="small"
             value={draft.secondaryValue}
             onChange={handleSecondaryValueChange}
-            onBlur={handleFilterValueBlur}
             placeholder="To"
             aria-label={`Filter to value for ${columnLabel}`}
           />
@@ -170,15 +166,26 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
       {isDate && draft.operator === 'nextWeek' ? (
         <Text className={styles.filterHint}>Matches records in the next calendar week.</Text>
       ) : null}
-      <PurchaseOrderColumnFilterMenuButton
-        className={styles.filterClearButton}
-        size="small"
-        appearance="outline"
-        closeSubmenu={closeSubmenu}
-        onClick={handleClearFilter}
-      >
-        Clear
-      </PurchaseOrderColumnFilterMenuButton>
+      <div className={styles.filterActionRow}>
+        <PurchaseOrderColumnFilterMenuButton
+          className={styles.filterApplyButton}
+          size="small"
+          appearance="primary"
+          closeSubmenu={closeSubmenu}
+          onClick={handleApplyFilter}
+        >
+          Apply
+        </PurchaseOrderColumnFilterMenuButton>
+        <PurchaseOrderColumnFilterMenuButton
+          className={styles.filterClearButton}
+          size="small"
+          appearance="outline"
+          closeSubmenu={closeSubmenu}
+          onClick={handleClearFilter}
+        >
+          Clear
+        </PurchaseOrderColumnFilterMenuButton>
+      </div>
     </div>
   );
 }

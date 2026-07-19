@@ -6,31 +6,31 @@
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
 
 export const TEXT_FILTER_OPERATORS = {
-  equals: 'equals',
+  equals: 'is exactly',
   contains: 'contains',
   notContains: 'does not contain',
   startsWith: 'starts with',
   notStartsWith: 'does not start with',
-  oneOf: 'one of',
+  oneOf: 'is one of',
 };
 
 export const DATE_FILTER_OPERATORS = {
-  equals: 'equals',
-  before: 'before',
-  after: 'after',
-  between: 'between',
+  equals: 'is',
+  before: 'is before',
+  after: 'is after',
+  between: 'is between',
   inNextWeeks: 'in the next xx weeks',
   inNextDays: 'in the next xx days',
-  nextWeek: 'next week',
+  nextWeek: 'is next week',
 };
 
 export const NUMBER_FILTER_OPERATORS = {
-  equals: '=',
-  gt: '>',
-  lt: '<',
-  gte: '>=',
-  lte: '<=',
-  between: 'between',
+  equals: 'is',
+  gt: 'greater than',
+  lt: 'less than',
+  gte: 'greater than or equal to',
+  lte: 'less than or equal to',
+  between: 'is between',
 };
 
 export function isDateColumn(column) {

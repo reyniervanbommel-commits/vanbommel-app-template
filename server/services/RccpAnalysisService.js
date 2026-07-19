@@ -22,6 +22,12 @@ function pickValue(values, key) {
   return v === undefined || v === null || v === '' ? null : v;
 }
 
+function resolveLineMeasureQty(lineValues, masterValues, measureKey, share = 1) {
+  const lineRaw = pickValue(lineValues, measureKey);
+  const masterQty = toNumber(pickValue(masterValues, measureKey));
+  return lineRaw !== null ? toNumber(lineRaw) : masterQty * share;
+}
+
 function cellKey(vendor, year, week, measureKey) {
   return `${vendor}|${year}|${week}|${measureKey}`;
 }
@@ -71,16 +77,17 @@ function aggregatePoLoad(rows, config, window) {
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
-    const masterQtyByMeasure = measures.map((m) => toNumber(pickValue(masterValues, m.columnKey)));
 
     const processLine = (lineNumber, lineValues, dateFromHeaderDefault) => {
       diagnostics.lineCount += 1;
       const share = details.length ? 1 / details.length : 1;
       // Een measure kan een regel-kolom zijn (eigen waarde per regel, bijv. quantity) of een
       // master-rollup (één totaal op de order, dat over de regels verdeeld moet worden).
-      const measureQty = (measure, index) => {
+      const measureQty = (measure) => {
         const lineRaw = pickValue(lineValues, measure.columnKey);
-        return lineRaw !== null ? toNumber(lineRaw) : masterQtyByMeasure[index] * share;
+        return lineRaw !== null
+          ? toNumber(lineRaw)
+          : resolveLineMeasureQty(lineValues, masterValues, measure.columnKey, share);
       };
 
       const status = pickValue(lineValues, 'status') ?? masterStatus;
@@ -99,7 +106,7 @@ function aggregatePoLoad(rows, config, window) {
           orderNumber: row.recordKey,
           lineNumber,
           vendorAccount: vendor,
-          quantity: measures.length ? measureQty(measures[0], 0) : 0,
+          quantity: measures.length ? measureQty(measures[0]) : 0,
           dateFromHeader: false,
         });
         return;
@@ -114,8 +121,8 @@ function aggregatePoLoad(rows, config, window) {
       }
 
       let hasQty = false;
-      measures.forEach((measure, index) => {
-        const qty = measureQty(measure, index);
+      measures.forEach((measure) => {
+        const qty = measureQty(measure);
         if (qty <= 0) return;
         hasQty = true;
         addLoad(vendor, year, week, measure.columnKey, qty);
@@ -324,7 +331,6 @@ function buildDrillDownRows(rows, config, cell, window) {
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
-    const masterQty = toNumber(pickValue(masterValues, measureKey));
     const share = details.length ? 1 / details.length : 1;
 
     const pushLine = (lineNumber, lineValues, dateValue, dateFromHeader) => {
@@ -337,7 +343,7 @@ function buildDrillDownRows(rows, config, cell, window) {
       if (year !== cell.periodYear || week !== cell.isoWeek) return;
       if (!isInWindow(year, week, window)) return;
 
-      const qty = masterQty * share;
+      const qty = resolveLineMeasureQty(lineValues, masterValues, measureKey, share);
       if (qty <= 0) return;
 
       result.push({
@@ -435,6 +441,7 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
 
 module.exports = {
   aggregatePoLoad,
+  buildDrillDownRows,
   buildMatrixCells,
   analyze,
   getDrillDown,

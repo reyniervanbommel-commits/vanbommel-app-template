@@ -4,12 +4,13 @@ import {
 } from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
+import RccpWeekBandCursor from './RccpWeekBandCursor';
 import {
   buildMatrixPeriodHeaders,
+  buildRccpChartWeekBoundaryCoordinates,
   RCCP_CHART_Y_AXIS_WIDTH,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
-  rccpChartWeekBoundaryCoordinates,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
 
@@ -60,6 +61,10 @@ function RccpChartMatrixPanel({
   );
   const plotWidth = periodHeaders.length * RCCP_WEEK_COL_WIDTH;
   const chartWidth = RCCP_CHART_Y_AXIS_WIDTH + plotWidth;
+  const weekBoundaryCoordinates = useMemo(
+    () => buildRccpChartWeekBoundaryCoordinates(periodHeaders.length),
+    [periodHeaders.length],
+  );
 
   const [visibleKeys, setVisibleKeys] = useState({});
 
@@ -100,11 +105,11 @@ function RccpChartMatrixPanel({
               <CartesianGrid
                 stroke={tokens.colorNeutralStroke2}
                 strokeDasharray="4 4"
-                verticalCoordinatesGenerator={rccpChartWeekBoundaryCoordinates}
+                verticalCoordinatesGenerator={weekBoundaryCoordinates}
               />
               <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
               <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
-              <Tooltip />
+              <Tooltip shared cursor={<RccpWeekBandCursor />} />
               <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
               {chartRangeBands.map((band, index) => (
                 <ReferenceArea

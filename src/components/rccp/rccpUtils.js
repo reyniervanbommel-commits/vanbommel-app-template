@@ -114,19 +114,32 @@ export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
 
-/** Recharts CartesianGrid: vertical dashed lines at ISO week band edges. */
-export function rccpChartWeekBoundaryCoordinates({ xAxis, offset }) {
-  const scale = xAxis?.scale;
-  if (!scale || typeof scale.bandwidth !== 'function') return [];
+/**
+ * Welke measure-rijen de matrix toont.
+ *
+ * Een measure die de admin in de instellingen heeft toegevoegd blijft altijd staan, ook als er in
+ * het gekozen venster geen data is — anders verdwijnt een net toegevoegde measure zonder uitleg
+ * (bijv. "Remaining qty" in een periode waarin niets openstaat). De automatische capaciteitsrij is
+ * niet door de gebruiker toegevoegd; die verbergen we wél als er in dit venster geen capaciteit is,
+ * zodat een leeg dashboard geen kale capaciteitsregel toont.
+ */
+export function selectVisibleMeasureRows(measureRows, periodHeaders, cellMap) {
+  const rows = Array.isArray(measureRows) ? measureRows : [];
+  const headers = Array.isArray(periodHeaders) ? periodHeaders : [];
+  return rows.filter((row) => {
+    if (row.measureKey !== RCCP_CAPACITY_MEASURE_KEY) return true;
+    return headers.some(
+      (period) => !isMatrixCellEmpty(cellMap.get(`${row.measureKey}|${period.year}|${period.week}`)),
+    );
+  });
+}
 
-  const bandwidth = scale.bandwidth();
-  const domain = scale.domain();
-  if (!domain.length) return [];
-
-  const left = offset?.left ?? 0;
-  const coords = domain.map((entry) => scale(entry) + left);
-  coords.push(scale(domain[domain.length - 1]) + bandwidth + left);
-  return coords;
+/** Recharts CartesianGrid: vertical dashed lines at ISO week band edges (in chart coordinates). */
+export function buildRccpChartWeekBoundaryCoordinates(periodCount) {
+  return ({ offset }) => {
+    const left = offset?.left ?? RCCP_CHART_Y_AXIS_WIDTH;
+    return Array.from({ length: periodCount + 1 }, (_, index) => left + index * RCCP_WEEK_COL_WIDTH);
+  };
 }
 
 export function currentIsoWindow(size = 8) {

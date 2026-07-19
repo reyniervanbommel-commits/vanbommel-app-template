@@ -51,7 +51,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleOperatorSelect,
   handleValueChange,
   handleSecondaryValueChange,
-  handleFilterValueBlur,
+  handleApplyFilter,
   handleClearFilter,
   handleAddType,
   remarksAlreadyAdded,
@@ -133,7 +133,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         handleOperatorSelect={handleOperatorSelect}
         handleValueChange={handleValueChange}
         handleSecondaryValueChange={handleSecondaryValueChange}
-        handleFilterValueBlur={handleFilterValueBlur}
+        handleApplyFilter={handleApplyFilter}
         handleClearFilter={handleClearFilter}
       />
       <FilterMenuSubPane

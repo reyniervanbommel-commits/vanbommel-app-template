@@ -154,10 +154,23 @@ async function deleteCapacity(id) {
   return { id: result.recordset[0].id };
 }
 
+async function deleteAllCapacity({ vendorAccount = null } = {}) {
+  const pool = await getPool();
+  const request = pool.request();
+  let query = 'DELETE FROM dbo.rccp_capacity OUTPUT DELETED.id WHERE 1=1';
+  if (vendorAccount) {
+    request.input('vendorAccount', sql.NVarChar(64), vendorAccount);
+    query += ' AND vendor_account = @vendorAccount';
+  }
+  const result = await request.query(query);
+  return { deletedCount: result.recordset.length };
+}
+
 module.exports = {
   listCapacity,
   createCapacity,
   updateCapacity,
   upsertCapacity,
   deleteCapacity,
+  deleteAllCapacity,
 };

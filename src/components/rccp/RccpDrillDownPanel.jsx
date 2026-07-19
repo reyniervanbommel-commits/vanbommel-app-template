@@ -27,6 +27,7 @@ export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
     (async () => {
       setLoading(true);
       setError('');
+      setRows([]);
       try {
         const params = new URLSearchParams({
           vendorAccount: cell.vendorAccount,

@@ -876,7 +876,69 @@ async function fetchPurchaseOrders({
   };
 }
 
+/**
+ * Readiness-check voor de D365-koppeling.
+ *
+ * Doet bewust méér dan een token ophalen: op 2026-07-19 bleek bij het inregelen van de
+ * LIVE-omgeving dat het token prima slaagde terwijl élke entity-read 403 gaf (de gekoppelde
+ * F&O-gebruiker had geen rechten). Een token-only check zou die situatie als 'gezond'
+ * rapporteren. Daarom halen we ook echt één record op.
+ *
+ * Gooit nooit; geeft altijd een status terug zodat de caller kan beslissen over de HTTP-code.
+ */
+async function checkHealth() {
+  const result = { status: 'error', baseUrl: null, company: null, token: 'fail', read: 'fail', message: null };
+
+  try {
+    result.baseUrl = await getBaseUrl();
+    result.company = (await settingsService.getAsync('D365_ODATA_COMPANY')) || null;
+  } catch (error) {
+    result.message = error.message;
+    return result;
+  }
+
+  let headers;
+  try {
+    headers = await buildHeaders();
+    if (!headers.Authorization) {
+      result.message = 'No D365 credentials configured';
+      return result;
+    }
+    result.token = 'ok';
+  } catch (error) {
+    result.message = 'Token request failed: ' + error.message;
+    return result;
+  }
+
+  const ordersPath = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH')) || DEFAULT_PURCHASE_ORDERS_PATH;
+  const probeUrl = result.baseUrl + ordersPath + '?$top=1&cross-company=true';
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(probeUrl, { headers, signal: controller.signal });
+    if (response.ok) {
+      result.read = 'ok';
+      result.status = 'ok';
+      return result;
+    }
+    // 403 betekent: token goed, rechten niet. Dat onderscheid is de kern van deze check.
+    const body = await response.text().catch(() => '');
+    result.message = response.status === 403
+      ? 'Authenticated, but the linked F&O user is not authorized to read ' + ordersPath
+      : 'D365 returned HTTP ' + response.status;
+    logger.error('D365 readiness-check mislukt', { status: response.status, bodyPreview: body.slice(0, 300) });
+  } catch (error) {
+    result.message = error.name === 'AbortError' ? 'D365 request timed out' : 'D365 unreachable';
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+
+  return result;
+}
+
 module.exports = {
+  checkHealth,
   fetchPurchaseOrders,
   fetchPurchaseOrdersByKeys,
   fetchEntityRecords,

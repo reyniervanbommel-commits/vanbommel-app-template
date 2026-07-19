@@ -11,6 +11,7 @@ import {
   RCCP_CAPACITY_MEASURE_KEY,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
+  selectVisibleMeasureRows,
   statusToken,
 } from './rccpUtils';
 
@@ -83,10 +84,7 @@ function RccpMatrixTable({
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
 
   const visibleMeasureRows = useMemo(
-    () => measureRows.filter((row) => periodHeaders.some((period) => {
-      const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
-      return !isMatrixCellEmpty(cell);
-    })),
+    () => selectVisibleMeasureRows(measureRows, periodHeaders, cellMap),
     [measureRows, periodHeaders, cellMap],
   );
 
