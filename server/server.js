@@ -84,6 +84,18 @@ app.use(rateLimit({
 
 app.use(express.json());
 
+// Publieke health-endpoints vóór session/rate-limit zodat probes en deploy-checks nooit
+// afhangen van DB/session-store of een volle rate-limit bucket.
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+// Readiness-check voor de D365-koppeling. Bewust géén onderdeel van /api/health: dat is de
+// liveness-probe van de Container App, en een D365-storing mag geen restart uitlokken.
+// Wordt na een deploy aangeroepen (deploy-prod.yml) zodat een kapotte koppeling de deploy laat falen.
+app.get('/api/health/d365', async (_req, res) => {
+  const result = await d365ODataService.checkHealth();
+  res.status(result.status === 'ok' ? 200 : 503).json(result);
+});
+
 // Eigen MSSQL-session-store op de gedeelde app-pool (sql.connect), i.p.v. connect-mssql-v2.
 // Die had een eigen losse pool met een race in ready(): bij parallelle requests vlak na login
 // bleef store.get hangen (alleen in de container). Door dezelfde, bewezen werkende pool als de
@@ -149,16 +161,6 @@ app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE])
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
 app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);
 app.use('/api/media', createMediaRouter());
-
-app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
-
-// Readiness-check voor de D365-koppeling. Bewust géén onderdeel van /api/health: dat is de
-// liveness-probe van de Container App, en een D365-storing mag geen restart uitlokken.
-// Wordt na een deploy aangeroepen (deploy-prod.yml) zodat een kapotte koppeling de deploy laat falen.
-app.get('/api/health/d365', async (_req, res) => {
-  const result = await d365ODataService.checkHealth();
-  res.status(result.status === 'ok' ? 200 : 503).json(result);
-});
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.resolve(__dirname, '../dist');
