@@ -9,47 +9,66 @@ const CHART_TYPES = [
   { value: 'bar', label: 'Bar' },
 ];
 
+/** Labels als "Aantal" en "Aantal Total" lijken op elkaar; de kolomnaam maakt het eenduidig. */
+function optionText(col) {
+  const label = col.label || col.key;
+  return label === col.key ? label : `${label} (${col.key})`;
+}
+
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), width: '100%' },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), width: '100%' },
   row: {
     display: 'grid',
     gridTemplateColumns: '1fr 88px 72px auto auto',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
     alignItems: 'end',
   },
   rowFlyout: {
     gridTemplateColumns: '1fr',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
   },
   fieldFlyout: { width: '100%' },
-  controlShell: { maxWidth: '168px', overflowX: 'auto' },
-  hint: { color: tokens.colorNeutralForeground3, fontSize: '12px' },
+  compactControl: { width: '168px', maxWidth: '100%' },
+  hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
 function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
   const styles = useStyles();
-  const masterNumberCols = useMemo(
-    () => columns.filter((c) => c.scope === 'master' && c.dataType === 'number'),
-    [columns],
-  );
+  // Welke kolommen als waardekolom mogen dienen, bepaalt de admin op de data model-tab
+  // ("RCCP value column"). De config kent alleen columnKey, dus een key die in beide scopes
+  // voorkomt levert één optie op — de regel wint, net als in de aggregatie op de server.
+  const numberCols = useMemo(() => {
+    const byKey = new Map();
+    for (const col of columns) {
+      if (!col.rccpMeasure) continue;
+      if (!byKey.has(col.key) || col.scope === 'detail') byKey.set(col.key, col);
+    }
+    return [...byKey.values()];
+  }, [columns]);
+
+  const lineCols = useMemo(() => numberCols.filter((c) => c.scope === 'detail'), [numberCols]);
+  const orderCols = useMemo(() => numberCols.filter((c) => c.scope !== 'detail'), [numberCols]);
 
   const updateMeasure = useCallback((index, patch) => {
     onChange(measures.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
   }, [measures, onChange]);
 
+  // De eerste vrijgegeven kolom die nog niet als measure in gebruik is.
+  const nextFreeColumn = useMemo(
+    () => numberCols.find((col) => !measures.some((m) => m.columnKey === col.key)) || null,
+    [numberCols, measures],
+  );
+
   const addMeasure = useCallback(() => {
-    const nextKey = masterNumberCols.find(
-      (col) => !measures.some((m) => m.columnKey === col.key),
-    )?.key;
-    if (!nextKey) return;
+    if (!nextFreeColumn) return;
     onChange([...measures, {
-      columnKey: nextKey,
-      label: masterNumberCols.find((c) => c.key === nextKey)?.label || nextKey,
+      columnKey: nextFreeColumn.key,
+      label: nextFreeColumn.label || nextFreeColumn.key,
       chartType: 'line',
       color: '#0078D4',
       showInChart: true,
     }]);
-  }, [masterNumberCols, measures, onChange]);
+  }, [nextFreeColumn, measures, onChange]);
 
   const removeMeasure = useCallback((index) => {
     onChange(measures.filter((_, i) => i !== index));
@@ -57,33 +76,65 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
 
   return (
     <div className={styles.root}>
-      <Text weight="semibold">Quantity measures (main table)</Text>
+      <Text weight="semibold">Quantity measures</Text>
       <Text className={styles.hint}>
-        Add numeric main-table columns. Each becomes a matrix row and optional chart series.
+        Each measure becomes a matrix row and an optional chart series.
       </Text>
-      {measures.map((measure, index) => (
+      {!numberCols.length && (
+        <Text className={styles.hint}>
+          No columns are released for RCCP yet. Enable “RCCP value column” for a number column
+          under Admin → Data model.
+        </Text>
+      )}
+      {measures.map((measure, index) => {
+        // Een opgeslagen kolom die niet (meer) bruikbaar is, moet zichtbaar blijven staan.
+        // Zonder eigen option toont de browser stilzwijgend de eerste optie, en dan overschrijft
+        // Save de config met een kolom die niemand heeft gekozen.
+        const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
+        return (
         <div key={`${measure.columnKey}-${index}`} className={mergeClasses(styles.row, compact && styles.rowFlyout)}>
-          <Field label="Column" className={compact ? styles.fieldFlyout : undefined}>
-            <div className={compact ? styles.controlShell : undefined}>
-              <Select
-                size={compact ? 'small' : 'medium'}
-                value={measure.columnKey}
-                onChange={(e) => {
-                  const col = masterNumberCols.find((c) => c.key === e.target.value);
-                  updateMeasure(index, {
-                    columnKey: e.target.value,
-                    label: col?.label || e.target.value,
-                  });
-                }}
-              >
-                {masterNumberCols.map((col) => (
-                  <option key={col.key} value={col.key}>{col.label || col.key}</option>
-                ))}
-              </Select>
-            </div>
+          <Field
+            label="Column"
+            className={compact ? styles.fieldFlyout : undefined}
+            validationState={isUnavailable ? 'warning' : 'none'}
+            validationMessage={isUnavailable ? 'This column has no value in RCCP. Pick another one.' : undefined}
+          >
+            <Select
+              className={compact ? styles.compactControl : undefined}
+              size={compact ? 'small' : 'medium'}
+              value={measure.columnKey}
+              onChange={(e) => {
+                const col = numberCols.find((c) => c.key === e.target.value);
+                updateMeasure(index, {
+                  columnKey: e.target.value,
+                  label: col?.label || e.target.value,
+                });
+              }}
+            >
+              {isUnavailable && (
+                <option value={measure.columnKey}>
+                  {`${measure.label || measure.columnKey} — unavailable`}
+                </option>
+              )}
+              {lineCols.length > 0 && (
+                <optgroup label="Order line — counts per line">
+                  {lineCols.map((col) => (
+                    <option key={col.key} value={col.key}>{optionText(col)}</option>
+                  ))}
+                </optgroup>
+              )}
+              {orderCols.length > 0 && (
+                <optgroup label="Order header — spread across lines">
+                  {orderCols.map((col) => (
+                    <option key={col.key} value={col.key}>{optionText(col)}</option>
+                  ))}
+                </optgroup>
+              )}
+            </Select>
           </Field>
           <Field label="Chart">
             <Select
+              className={compact ? styles.compactControl : undefined}
               size={compact ? 'small' : 'medium'}
               value={measure.chartType || 'line'}
               onChange={(e) => updateMeasure(index, { chartType: e.target.value })}
@@ -93,6 +144,7 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
           </Field>
           <Field label="Color">
             <Input
+              className={compact ? styles.compactControl : undefined}
               size={compact ? 'small' : 'medium'}
               type="color"
               value={measure.color || '#D13438'}
@@ -101,6 +153,7 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
           </Field>
           <Field label="In chart">
             <Select
+              className={compact ? styles.compactControl : undefined}
               size={compact ? 'small' : 'medium'}
               value={measure.showInChart === false ? 'no' : 'yes'}
               onChange={(e) => updateMeasure(index, { showInChart: e.target.value === 'yes' })}
@@ -117,12 +170,14 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
             aria-label="Remove measure"
           />
         </div>
-      ))}
+        );
+      })}
       <Button
         appearance="secondary"
         icon={<Add24Regular />}
-        disabled={measures.length >= masterNumberCols.length}
+        disabled={!nextFreeColumn}
         onClick={addMeasure}
+        title={nextFreeColumn ? undefined : 'Every released column is already in use'}
       >
         Add quantity column
       </Button>

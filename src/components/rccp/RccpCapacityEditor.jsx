@@ -1,12 +1,21 @@
 import React, { useCallback, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
-  Field, Input, Spinner, Text,
+  Field, Input, Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import { Add24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 
+const useStyles = makeStyles({
+  body: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalM) },
+  yearInput: { width: '104px' },
+  weekInput: { width: '84px' },
+  qtyInput: { width: '140px' },
+  error: { color: tokens.colorPaletteRedForeground1 },
+});
+
 export default function RccpCapacityEditor({ readOnly, onSaved }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -53,13 +62,23 @@ export default function RccpCapacityEditor({ readOnly, onSaved }) {
         <DialogSurface>
           <DialogBody>
             <DialogTitle>Add capacity record</DialogTitle>
-            <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Field label="Vendor code"><Input value={form.vendorAccount} onChange={(e) => update('vendorAccount', e.target.value)} /></Field>
-              <Field label="Year"><Input type="number" value={String(form.periodYear)} onChange={(e) => update('periodYear', e.target.value)} /></Field>
-              <Field label="ISO week"><Input type="number" value={String(form.isoWeek)} onChange={(e) => update('isoWeek', e.target.value)} /></Field>
-              <Field label="Category"><Input value={form.capacityCategory} onChange={(e) => update('capacityCategory', e.target.value)} /></Field>
-              <Field label="Available quantity"><Input type="number" value={String(form.availableQty)} onChange={(e) => update('availableQty', e.target.value)} /></Field>
-              {error && <Text>{error}</Text>}
+            <DialogContent className={styles.body}>
+              <Field label="Vendor code">
+                <Input value={form.vendorAccount} onChange={(e) => update('vendorAccount', e.target.value)} />
+              </Field>
+              <Field label="Year">
+                <Input className={styles.yearInput} type="number" value={String(form.periodYear)} onChange={(e) => update('periodYear', e.target.value)} />
+              </Field>
+              <Field label="ISO week">
+                <Input className={styles.weekInput} type="number" min={1} max={53} value={String(form.isoWeek)} onChange={(e) => update('isoWeek', e.target.value)} />
+              </Field>
+              <Field label="Capacity category">
+                <Input value={form.capacityCategory} onChange={(e) => update('capacityCategory', e.target.value)} />
+              </Field>
+              <Field label="Available quantity">
+                <Input className={styles.qtyInput} type="number" value={String(form.availableQty)} onChange={(e) => update('availableQty', e.target.value)} />
+              </Field>
+              {error && <Text className={styles.error}>{error}</Text>}
             </DialogContent>
             <DialogActions>
               <Button appearance="secondary" onClick={() => setOpen(false)}>Cancel</Button>

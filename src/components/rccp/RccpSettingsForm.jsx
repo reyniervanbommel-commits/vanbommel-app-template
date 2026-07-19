@@ -6,54 +6,48 @@ import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
-  rootFlyout: { ...shorthands.gap('16px') },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
+  rootFlyout: { ...shorthands.gap(tokens.spacingVerticalL) },
   section: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRadius('8px'),
-    ...shorthands.padding('20px'),
+    ...shorthands.borderRadius(tokens.borderRadiusXLarge),
+    ...shorthands.padding(tokens.spacingVerticalXL),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('16px'),
+    ...shorthands.gap(tokens.spacingVerticalL),
   },
   sectionFlyout: {
-    ...shorthands.padding('16px'),
-    ...shorthands.gap('12px'),
+    ...shorthands.padding(tokens.spacingVerticalL),
+    ...shorthands.gap(tokens.spacingVerticalM),
     alignItems: 'flex-start',
     width: '100%',
     boxSizing: 'border-box',
   },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', ...shorthands.gap('12px') },
-  gridFlyout: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), alignItems: 'flex-start' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', ...shorthands.gap(tokens.spacingHorizontalM) },
+  gridFlyout: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), alignItems: 'flex-start' },
   fieldFlyout: { width: 'auto', maxWidth: '100%' },
-  controlShell: { maxWidth: '168px', overflowX: 'auto', width: '100%' },
-  controlShellWide: { maxWidth: '240px' },
-  controlShellNarrow: { maxWidth: '88px' },
+  // Eén breedte voor alle controls in de flyout. Zet de breedte op de control zelf:
+  // een wrapper met maxWidth + overflowX gaf number-inputs een echte scrollbalk.
+  compactControl: { width: '168px', maxWidth: '100%' },
   hint: { color: tokens.colorNeutralForeground3 },
-  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px'), flexWrap: 'wrap' },
+  error: { color: tokens.colorPaletteRedForeground1 },
+  actions: { display: 'flex', alignItems: 'center', ...shorthands.gap(tokens.spacingHorizontalM), flexWrap: 'wrap' },
 });
-
-function ControlShell({ compact, wide, narrow, children }) {
-  const styles = useStyles();
-  if (!compact) return children;
-  return (
-    <div className={mergeClasses(styles.controlShell, wide && styles.controlShellWide, narrow && styles.controlShellNarrow)}>
-      {children}
-    </div>
-  );
-}
 
 function ColumnSelect({ label, value, onChange, columns, hint, compact }) {
   const styles = useStyles();
   return (
     <Field label={label} hint={hint} className={compact ? styles.fieldFlyout : undefined}>
-      <ControlShell compact={compact}>
-        <Select size={compact ? 'small' : 'medium'} value={value} onChange={(e) => onChange(e.target.value)}>
-          {columns.map((col) => (
-            <option key={`${col.scope}-${col.key}`} value={col.key}>{col.label || col.key}</option>
-          ))}
-        </Select>
-      </ControlShell>
+      <Select
+        className={compact ? styles.compactControl : undefined}
+        size={compact ? 'small' : 'medium'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {columns.map((col) => (
+          <option key={`${col.scope}-${col.key}`} value={col.key}>{col.label || col.key}</option>
+        ))}
+      </Select>
     </Field>
   );
 }
@@ -68,6 +62,15 @@ function RccpSettingsForm({
     return <Text className={styles.hint}>{error || 'No settings available'}</Text>;
   }
 
+  const actions = (
+    <div className={styles.actions}>
+      <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>Save settings</Button>
+      {saving && <Spinner size="tiny" />}
+      {saved && <Text className={styles.hint}>Saved</Text>}
+      {error && <Text className={styles.error}>{error}</Text>}
+    </div>
+  );
+
   return (
     <div className={mergeClasses(styles.root, isFlyout && styles.rootFlyout)}>
       {!isFlyout && (
@@ -76,6 +79,8 @@ function RccpSettingsForm({
           <Text className={styles.hint}>Configure main-table columns for RCCP load and chart series.</Text>
         </>
       )}
+
+      {isFlyout && actions}
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
         <div className={mergeClasses(styles.grid, isFlyout && styles.gridFlyout)}>
@@ -108,62 +113,57 @@ function RccpSettingsForm({
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
         <Field label="Excluded PO statuses" hint="Comma-separated status labels to ignore." className={isFlyout ? styles.fieldFlyout : undefined}>
-          <ControlShell compact={isFlyout} wide>
-            <Input
-              size={isFlyout ? 'small' : 'medium'}
-              value={(config.excludedStatuses || []).join(', ')}
-              onChange={(e) => onUpdateField(
-                'excludedStatuses',
-                e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-              )}
-            />
-          </ControlShell>
+          <Input
+            className={isFlyout ? styles.compactControl : undefined}
+            size={isFlyout ? 'small' : 'medium'}
+            value={(config.excludedStatuses || []).join(', ')}
+            onChange={(e) => onUpdateField(
+              'excludedStatuses',
+              e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+            )}
+          />
         </Field>
         {statusOptions.length > 0 && (
           <Text size={200} className={styles.hint}>Known statuses: {statusOptions.join(', ')}</Text>
         )}
         <div className={mergeClasses(styles.grid, isFlyout && styles.gridFlyout)}>
           <Field label="Green threshold (%)" className={isFlyout ? styles.fieldFlyout : undefined}>
-            <ControlShell compact={isFlyout} narrow>
-              <Input
-                size={isFlyout ? 'small' : 'medium'}
-                type="number"
-                value={String(config.thresholds?.greenMax ?? 80)}
-                onChange={(e) => onUpdateField('thresholds', { ...config.thresholds, greenMax: Number(e.target.value) })}
-              />
-            </ControlShell>
+            <Input
+              className={isFlyout ? styles.compactControl : undefined}
+              size={isFlyout ? 'small' : 'medium'}
+              type="number"
+              min={0}
+              max={100}
+              value={String(config.thresholds?.greenMax ?? 80)}
+              onChange={(e) => onUpdateField('thresholds', { ...config.thresholds, greenMax: Number(e.target.value) })}
+            />
           </Field>
           <Field label="Orange threshold (%)" className={isFlyout ? styles.fieldFlyout : undefined}>
-            <ControlShell compact={isFlyout} narrow>
-              <Input
-                size={isFlyout ? 'small' : 'medium'}
-                type="number"
-                value={String(config.thresholds?.orangeMax ?? 100)}
-                onChange={(e) => onUpdateField('thresholds', { ...config.thresholds, orangeMax: Number(e.target.value) })}
-              />
-            </ControlShell>
+            <Input
+              className={isFlyout ? styles.compactControl : undefined}
+              size={isFlyout ? 'small' : 'medium'}
+              type="number"
+              min={0}
+              max={100}
+              value={String(config.thresholds?.orangeMax ?? 100)}
+              onChange={(e) => onUpdateField('thresholds', { ...config.thresholds, orangeMax: Number(e.target.value) })}
+            />
           </Field>
           <Field label="Duplicate import policy" className={isFlyout ? styles.fieldFlyout : undefined}>
-            <ControlShell compact={isFlyout} wide>
-              <Select
-                size={isFlyout ? 'small' : 'medium'}
-                value={config.duplicatePolicy || 'update'}
-                onChange={(e) => onUpdateField('duplicatePolicy', e.target.value)}
-              >
-                <option value="update">Update existing rows</option>
-                <option value="skip">Skip duplicates</option>
-              </Select>
-            </ControlShell>
+            <Select
+              className={isFlyout ? styles.compactControl : undefined}
+              size={isFlyout ? 'small' : 'medium'}
+              value={config.duplicatePolicy || 'update'}
+              onChange={(e) => onUpdateField('duplicatePolicy', e.target.value)}
+            >
+              <option value="update">Update existing rows</option>
+              <option value="skip">Skip duplicates</option>
+            </Select>
           </Field>
         </div>
       </div>
 
-      <div className={styles.actions}>
-        <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>Save settings</Button>
-        {saving && <Spinner size="tiny" />}
-        {saved && <Text className={styles.hint}>Saved</Text>}
-        {error && <Text style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Text>}
-      </div>
+      {!isFlyout && actions}
     </div>
   );
 }

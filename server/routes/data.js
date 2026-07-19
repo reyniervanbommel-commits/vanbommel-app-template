@@ -367,6 +367,19 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
   }
 });
 
+// PATCH /api/data/:tableKey/columns/:id/rccp-measure — kolom vrijgeven als RCCP-waardekolom.
+router.patch('/:tableKey/columns/:id/rccp-measure', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
+    const column = await columnsService.setRccpMeasure(columnId, Boolean(req.body?.enabled), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    return next(err);
+  }
+});
+
 // PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
 router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   try {

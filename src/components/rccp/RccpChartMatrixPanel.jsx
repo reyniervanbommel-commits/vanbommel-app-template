@@ -2,19 +2,19 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import { Card, Text, makeStyles, shorthands } from '@fluentui/react-components';
+import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
 import { buildMatrixPeriodHeaders, RCCP_ROW_LABEL_WIDTH } from './rccpUtils';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
   chartCard: {
-    ...shorthands.padding('12px', '16px', '0'),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL, '0'),
     minHeight: '240px',
     overflow: 'hidden',
   },
   chartCardCompact: {
-    ...shorthands.padding('8px', '12px', '0'),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM, '0'),
     flex: 1,
     minHeight: 0,
     display: 'flex',

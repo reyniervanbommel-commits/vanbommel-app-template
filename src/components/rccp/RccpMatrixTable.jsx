@@ -1,11 +1,12 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
   Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow,
-  Text, Switch, makeStyles, tokens, shorthands,
+  Text, Switch, makeStyles, mergeClasses, tokens, shorthands,
 } from '@fluentui/react-components';
 import {
   buildMatrixPeriodHeaders,
   formatMatrixQty,
+  formatWeekLabel,
   isMatrixCellEmpty,
   RCCP_CAPACITY_MEASURE_KEY,
   RCCP_ROW_LABEL_WIDTH,
@@ -29,22 +30,22 @@ const useStyles = makeStyles({
     minWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     maxWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     textAlign: 'center',
-    paddingLeft: '2px',
-    paddingRight: '2px',
+    paddingLeft: tokens.spacingHorizontalXXS,
+    paddingRight: tokens.spacingHorizontalXXS,
   },
   periodHeader: { textAlign: 'center', lineHeight: 1.2 },
-  yearHeader: { fontSize: '10px', color: tokens.colorNeutralForeground3 },
+  yearHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   weekHeader: { fontWeight: tokens.fontWeightSemibold },
   rowLabel: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('6px'),
+    ...shorthands.gap(tokens.spacingHorizontalSNudge),
     minWidth: 0,
   },
   rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   cell: {
-    ...shorthands.borderRadius('6px'),
-    ...shorthands.padding('4px', '2px'),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalXXS),
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -53,9 +54,9 @@ const useStyles = makeStyles({
     justifyContent: 'center',
   },
   cellInteractive: { cursor: 'pointer' },
-  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: '12px' },
-  utilValue: { color: tokens.colorNeutralForeground2, fontSize: '10px' },
-  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: '12px' },
+  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200 },
+  utilValue: { color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase100 },
+  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200 },
 });
 
 function RccpMatrixTable({
@@ -126,16 +127,23 @@ function RccpMatrixTable({
                 }
 
                 const bg = isCapacity ? tokens.colorNeutralBackground3 : statusToken(cell.statusColor);
+                const clickable = isInteractive && !isCapacity;
                 return (
                   <TableCell key={period.key} className={styles.weekCol}>
                     <div
-                      className={`${styles.cell}${isInteractive && !isCapacity ? ` ${styles.cellInteractive}` : ''}`}
+                      className={mergeClasses(styles.cell, clickable && styles.cellInteractive)}
                       style={{ backgroundColor: bg }}
-                      {...(isInteractive && !isCapacity ? {
+                      {...(clickable ? {
                         role: 'button',
                         tabIndex: 0,
+                        'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell.confirmedQty)} of ${formatMatrixQty(cell.availableQty)}. Show purchase order lines.`,
                         onClick: () => handleClick(cell),
-                        onKeyDown: (e) => { if (e.key === 'Enter') handleClick(cell); },
+                        onKeyDown: (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleClick(cell);
+                          }
+                        },
                       } : {})}
                     >
                       {isCapacity ? (
