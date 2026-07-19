@@ -257,12 +257,23 @@ Dit is de **laatste stap** in modus `build`. Zonder dit blok is de taak niet afg
 
 ---
 
-## Stap 7 — Browser test
+## Stap 7 — UI & browser test
 
-**Modus `test`:** voer alleen deze stap uit tegen de opgegeven of bekende preview URL.
+**Modus `test`:** voer stap 7b uit tegen de opgegeven of bekende preview URL.
 **Modus `full`:** gebruik de preview URL uit stap 6.
 
-Volg de workflow uit `browser-feature-test` (visuele controles, interactietests, console-errors, testrapport in `test-reports/`). Geen gebruikersinput nodig.
+### Stap 7a — UI design review (modus `full` only)
+
+Volg `ui-design-review` tegen de gewijzigde `src/`-bestanden. Rapport in `test-reports/ui-design-review-*.md`.
+
+- **BLOCKER** → fix vóór PR, push opnieuw, herhaal 7a
+- **VERBETERPUNTEN** / **GOEDGEKEURD** → ga door naar 7b
+
+Sla 7a over als de feature geen UI-wijzigingen heeft (`src/` diff leeg).
+
+### Stap 7b — Browser feature test
+
+Volg `browser-feature-test` (interactietests, console-errors, testrapport in `test-reports/`). Geen gebruikersinput nodig.
 
 ---
 
@@ -320,5 +331,6 @@ Na blocker-fix: push opnieuw (preview-URL blijft hetzelfde), update DevOps comme
 |-------|---------|
 | `writing-plans` | Geen plan aanwezig — autonoom uitvoeren |
 | `subagent-driven-development` | Implementatie per Story |
-| `browser-feature-test` | Gedetailleerde testworkflow — modus `test` / stap 7 |
+| `ui-design-review` | Design-consistentie — modus `full` stap 7a |
+| `browser-feature-test` | Functionele browser test — modus `test` / stap 7b |
 | `create-adr` | Automatisch bij architectuurbeslissingen (modus `full`) |

@@ -11,7 +11,6 @@ import {
   Chat24Regular,
   CloudRegular,
   EditRegular,
-  FilterRegular,
   HistoryRegular,
   LinkRegular,
   MoreVerticalRegular,
@@ -132,7 +131,7 @@ export default function PurchaseOrderColumnHeader({
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
   const trackChangesIndicator = showTrackChangesIndicator ? (
-    <Tooltip content="Track changes actief" relationship="label">
+    <Tooltip content="Track changes active" relationship="label">
       <HistoryRegular className={styles.indicatorIcon} />
     </Tooltip>
   ) : null;
@@ -198,11 +197,6 @@ export default function PurchaseOrderColumnHeader({
             : <CloudRegular className={styles.indicatorIcon} />}
         </Tooltip>
         {connectionIndicator}
-        {showFilterIndicator ? (
-          <Tooltip content="Filter active" relationship="label">
-            <FilterRegular className={styles.indicatorIcon} />
-          </Tooltip>
-        ) : null}
         {showConditionalFormattingIndicator ? (
           <Tooltip content="Conditional formatting active" relationship="label">
             <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
@@ -250,11 +244,6 @@ export default function PurchaseOrderColumnHeader({
           </Tooltip>
         ) : null}
         {connectionIndicator}
-        {showFilterIndicator ? (
-          <Tooltip content="Filter active" relationship="label">
-            <FilterRegular className={styles.indicatorIcon} />
-          </Tooltip>
-        ) : null}
         {showConditionalFormattingIndicator ? (
           <Tooltip content="Conditional formatting active" relationship="label">
             <PaintBrushRegular className={styles.conditionalFormattingIndicator} />

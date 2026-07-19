@@ -1,5 +1,14 @@
 import { useCallback } from 'react';
 
+function persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue) {
+  onSetValue(columnKey, draft.value);
+  if (draft.operator === 'between') {
+    onSetSecondaryValue(columnKey, draft.secondaryValue);
+  } else {
+    onSetSecondaryValue(columnKey, '');
+  }
+}
+
 export function usePurchaseOrderSortFilterActions({
   columnKey,
   draft,
@@ -28,8 +37,14 @@ export function usePurchaseOrderSortFilterActions({
 
   const handleOperatorSelect = useCallback((_, data) => {
     if (!data.optionValue) return;
-    setDraft((prev) => ({ ...prev, operator: data.optionValue }));
-  }, [setDraft]);
+    const nextOperator = data.optionValue;
+    setDraft((prev) => {
+      const nextDraft = { ...prev, operator: nextOperator };
+      onSetOperator(columnKey, nextOperator);
+      persistDraftValues(columnKey, nextDraft, onSetValue, onSetSecondaryValue);
+      return nextDraft;
+    });
+  }, [columnKey, onSetOperator, onSetSecondaryValue, onSetValue, setDraft]);
 
   const handleValueChange = useCallback((event) => {
     const nextValue = event.target.value;
@@ -41,16 +56,9 @@ export function usePurchaseOrderSortFilterActions({
     setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
   }, [setDraft]);
 
-  const handleApply = useCallback(() => {
-    onSetOperator(columnKey, draft.operator);
-    onSetValue(columnKey, draft.value);
-    if (draft.operator === 'between') {
-      onSetSecondaryValue(columnKey, draft.secondaryValue);
-    } else {
-      onSetSecondaryValue(columnKey, '');
-    }
-    setOpen(false);
-  }, [columnKey, draft, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
+  const handleFilterValueBlur = useCallback(() => {
+    persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
+  }, [columnKey, draft, onSetSecondaryValue, onSetValue]);
 
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
@@ -64,7 +72,7 @@ export function usePurchaseOrderSortFilterActions({
     handleOperatorSelect,
     handleValueChange,
     handleSecondaryValueChange,
-    handleApply,
+    handleFilterValueBlur,
     handleClearFilter,
   };
 }

@@ -12,7 +12,8 @@ description: >-
 
 # Browser Feature Test
 
-> **OTAP-straat:** gebruik `develop-from-devops` modus `test` — die roept deze workflow aan.
+> **OTAP-straat:** gebruik `develop-from-devops` modus `test` — die roept deze workflow aan (stap 7b).
+> **Design review:** gebruik `ui-design-review` vóór deze skill voor Fluent UI consistentie (stap 7a in modus `full`, of standalone na kleine features).
 > **Los gebruiken:** ad-hoc UI-tests buiten de OTAP-pipeline (bijv. lokaal, zonder DevOps work item).
 
 Test nieuwe features in de browser via de cursor-ide-browser MCP-server.

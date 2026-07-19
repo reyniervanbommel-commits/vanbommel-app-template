@@ -1,4 +1,4 @@
-/** In-memory sync bus so Admin RCCP tab and RCCP flyout stay aligned after saves. */
+/** In-memory sync bus so RCCP flyout instances stay aligned after saves. */
 let cachedConfig = null;
 const listeners = new Set();
 

@@ -50,6 +50,25 @@ export function subscribePerf(fn) {
   return () => listeners.delete(fn);
 }
 
+// Dev/preview-brug: maakt de metingen leesbaar vanuit de console en vanuit browser-automation
+// (de perf-review skill leest hier uit). Nooit in productie — zelfde conditie als PERF_ENABLED.
+if (
+  typeof window !== 'undefined' &&
+  (import.meta.env.DEV ||
+    import.meta.env.VITE_APP_ENV === 'dev' ||
+    import.meta.env.VITE_APP_ENV === 'preview')
+) {
+  window.__perf = {
+    timings: getApiTimings,
+    navigation: getNavigationTiming,
+    resourceKB: getResourceTransferKB,
+    // Leeg de buffer zodat een volgende meting alleen die ene interactie bevat.
+    reset: () => {
+      entries.length = 0;
+    },
+  };
+}
+
 // Navigatie-timing: TTFB, DOMContentLoaded en volledige load in ms sinds navigatiestart,
 // plus het overgedragen aantal KB (na compressie) van het hoofddocument.
 export function getNavigationTiming() {

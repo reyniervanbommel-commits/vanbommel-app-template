@@ -1,4 +1,5 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 
 export const usePurchaseOrdersBoardTableStyles = makeStyles({
   wrapper: {
@@ -39,6 +40,13 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
       opacity: 1,
       pointerEvents: 'auto',
     },
+    ':has([data-column-menu-trigger-active="true"]) [data-column-menu-trigger="true"]': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+  },
+  headerCellFiltered: {
+    boxShadow: `inset 0 -3px 0 0 ${SUBITEM_CONNECTOR_COLOR}`,
   },
   dragDropCell: { cursor: 'grab' },
   dragSourceCell: { opacity: 0.6 },

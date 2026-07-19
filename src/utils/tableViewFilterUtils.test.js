@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildFilterFromCellValue,
+  columnValueMatchesFilter,
   copyCellValueToClipboard,
   isCellContextMenuDisabled,
   serializeRawValueForFilter,
@@ -51,5 +52,18 @@ describe('tableViewFilterUtils', () => {
 
     await copyCellValueToClipboard({ dataType: 'text' }, 'PO-1001');
     expect(writeText).toHaveBeenCalledWith('PO-1001');
+  });
+
+  it('filters date period week columns with numeric operators', () => {
+    const column = {
+      key: 'deliveryWeek',
+      dataType: 'date_period',
+      options: { sourceColumnKey: 'requestedDeliveryDate' },
+    };
+    const modes = { deliveryWeek: 'week' };
+
+    expect(columnValueMatchesFilter(column, '12', { operator: 'gt', value: '5' }, modes)).toBe(true);
+    expect(columnValueMatchesFilter(column, '4', { operator: 'gt', value: '5' }, modes)).toBe(false);
+    expect(columnValueMatchesFilter(column, '12', { operator: 'between', value: '10', secondaryValue: '20' }, modes)).toBe(true);
   });
 });

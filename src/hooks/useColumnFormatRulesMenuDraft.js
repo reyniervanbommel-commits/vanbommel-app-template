@@ -7,30 +7,55 @@ import {
 
 /**
  * Draft state for conditional formatting in the column header menu.
- * @param {{ open: boolean, columnFormatRuleSet: object|null }} options
+ * @param {{ open: boolean, columnFormatRuleSet: object|null, onPersist?: (ruleSet: object|null) => void|Promise<void> }} options
  */
-export function useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet }) {
-  const [formatTarget, setFormatTarget] = useState('cell');
+export function useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet, onPersist }) {
+  const [formatTarget, setFormatTargetState] = useState('cell');
   const [formatRules, setFormatRules] = useState([]);
 
   useEffect(() => {
     if (!open) return;
     const draft = getFormatRulesDraft(columnFormatRuleSet);
-    setFormatTarget(draft.target);
+    setFormatTargetState(draft.target);
     setFormatRules(draft.rules);
   }, [open, columnFormatRuleSet]);
 
+  const persistDraft = useCallback((target, rules) => {
+    if (typeof onPersist !== 'function') return;
+    void onPersist(serializeFormatRulesDraft(target, rules));
+  }, [onPersist]);
+
+  const setFormatTarget = useCallback((target) => {
+    setFormatTargetState(target);
+    setFormatRules((rules) => {
+      persistDraft(target, rules);
+      return rules;
+    });
+  }, [persistDraft]);
+
   const addFormatRule = useCallback(() => {
-    setFormatRules((prev) => [...prev, buildFormatRulesDraft()]);
-  }, []);
+    setFormatRules((prev) => {
+      const next = [...prev, buildFormatRulesDraft()];
+      persistDraft(formatTarget, next);
+      return next;
+    });
+  }, [formatTarget, persistDraft]);
 
   const removeFormatRule = useCallback((ruleId) => {
-    setFormatRules((prev) => prev.filter((rule) => rule.id !== ruleId));
-  }, []);
+    setFormatRules((prev) => {
+      const next = prev.filter((rule) => rule.id !== ruleId);
+      persistDraft(formatTarget, next);
+      return next;
+    });
+  }, [formatTarget, persistDraft]);
 
   const updateFormatRule = useCallback((ruleId, patch) => {
-    setFormatRules((prev) => prev.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule)));
-  }, []);
+    setFormatRules((prev) => {
+      const next = prev.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule));
+      persistDraft(formatTarget, next);
+      return next;
+    });
+  }, [formatTarget, persistDraft]);
 
   const buildRuleSet = useCallback(
     () => serializeFormatRulesDraft(formatTarget, formatRules),
@@ -39,7 +64,7 @@ export function useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet }) {
 
   const resetDraft = useCallback(() => {
     const draft = getFormatRulesDraft(null);
-    setFormatTarget(draft.target);
+    setFormatTargetState(draft.target);
     setFormatRules(draft.rules);
   }, []);
 

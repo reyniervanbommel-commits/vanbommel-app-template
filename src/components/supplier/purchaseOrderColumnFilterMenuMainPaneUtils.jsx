@@ -31,6 +31,19 @@ export function submenuLabel(styles, icon, text) {
   );
 }
 
+export function getSortActionLabels(isDate, isNumber) {
+  if (isDate || isNumber) {
+    return {
+      ascending: 'Sort ascending',
+      descending: 'Sort descending',
+    };
+  }
+  return {
+    ascending: 'Sort A to Z',
+    descending: 'Sort Z to A',
+  };
+}
+
 export function renderColumnTypeIcon(typeKey) {
   switch (typeKey) {
     case 'number':

@@ -51,7 +51,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleOperatorSelect,
   handleValueChange,
   handleSecondaryValueChange,
-  handleApply,
+  handleFilterValueBlur,
   handleClearFilter,
   handleAddType,
   remarksAlreadyAdded,
@@ -60,11 +60,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleToggleBold,
   handleToggleItalic,
   handleToggleUnderline,
-  handleApplyTextStyle,
   handleClearTextStyle,
   formatRulesDraft,
   formatReferenceColumns,
-  handleApplyFormatRules,
   handleClearFormatRules,
   isGroupingColumn,
   groupingColor,
@@ -135,7 +133,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         handleOperatorSelect={handleOperatorSelect}
         handleValueChange={handleValueChange}
         handleSecondaryValueChange={handleSecondaryValueChange}
-        handleApply={handleApply}
+        handleFilterValueBlur={handleFilterValueBlur}
         handleClearFilter={handleClearFilter}
       />
       <FilterMenuSubPane
@@ -150,7 +148,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline}
         columnLabel={column.label}
-        handleApplyTextStyle={handleApplyTextStyle}
         handleClearTextStyle={handleClearTextStyle}
         formatTarget={formatRulesDraft.formatTarget}
         setFormatTarget={formatRulesDraft.setFormatTarget}
@@ -159,7 +156,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         addFormatRule={formatRulesDraft.addFormatRule}
         updateFormatRule={formatRulesDraft.updateFormatRule}
         removeFormatRule={formatRulesDraft.removeFormatRule}
-        handleApplyFormatRules={handleApplyFormatRules}
         handleClearFormatRules={handleClearFormatRules}
         column={column}
         isGroupingColumn={isGroupingColumn}

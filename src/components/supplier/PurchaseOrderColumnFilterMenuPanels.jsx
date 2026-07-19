@@ -20,7 +20,6 @@ export function FilterMenuSubPane({
   handleToggleItalic,
   handleToggleUnderline,
   columnLabel,
-  handleApplyTextStyle,
   handleClearTextStyle,
   formatTarget,
   setFormatTarget,
@@ -29,7 +28,6 @@ export function FilterMenuSubPane({
   addFormatRule,
   updateFormatRule,
   removeFormatRule,
-  handleApplyFormatRules,
   handleClearFormatRules,
   column,
   isGroupingColumn,
@@ -63,7 +61,6 @@ export function FilterMenuSubPane({
         handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline}
         columnLabel={columnLabel}
-        handleApplyTextStyle={handleApplyTextStyle}
         handleClearTextStyle={handleClearTextStyle}
       />
     );
@@ -80,7 +77,6 @@ export function FilterMenuSubPane({
         addFormatRule={addFormatRule}
         updateFormatRule={updateFormatRule}
         removeFormatRule={removeFormatRule}
-        handleApplyFormatRules={handleApplyFormatRules}
         handleClearFormatRules={handleClearFormatRules}
       />
     );

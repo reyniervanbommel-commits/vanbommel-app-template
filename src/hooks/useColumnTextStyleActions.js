@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HEX_COLOR_PATTERN, getTextStyleDraft } from '../components/supplier/purchaseOrderColumnFilterMenuConstants';
 import { useAppToast } from './useAppToast';
 
@@ -8,10 +8,10 @@ export function useColumnTextStyleActions({
   canSetColumnTextStyle,
   onSetColumnTextStyle,
   columnKey,
-  onClose,
 }) {
   const { notifyError } = useAppToast();
   const [textStyleDraft, setTextStyleDraft] = useState(() => getTextStyleDraft(columnTextStyle));
+  const persistRequestRef = useRef(0);
 
   useEffect(() => {
     if (open) {
@@ -19,46 +19,67 @@ export function useColumnTextStyleActions({
     }
   }, [open, columnTextStyle]);
 
+  const persistTextStyle = useCallback(async (nextDraft) => {
+    if (!canSetColumnTextStyle) return;
+    const requestId = persistRequestRef.current + 1;
+    persistRequestRef.current = requestId;
+    try {
+      await onSetColumnTextStyle(columnKey, nextDraft);
+    } catch (err) {
+      if (persistRequestRef.current === requestId) {
+        notifyError(err?.message || 'Applying text style failed.');
+      }
+    }
+  }, [canSetColumnTextStyle, columnKey, notifyError, onSetColumnTextStyle]);
+
   const handleTextColorChange = useCallback((nextColorOrEvent) => {
     const nextColor = typeof nextColorOrEvent === 'string'
       ? nextColorOrEvent
       : String(nextColorOrEvent?.target?.value || '').toLowerCase();
-    setTextStyleDraft((prev) => ({ ...prev, textColor: HEX_COLOR_PATTERN.test(nextColor) ? nextColor : '' }));
-  }, []);
+    setTextStyleDraft((prev) => {
+      const next = {
+        ...prev,
+        textColor: HEX_COLOR_PATTERN.test(nextColor) ? nextColor : '',
+      };
+      void persistTextStyle(next);
+      return next;
+    });
+  }, [persistTextStyle]);
 
   const handleToggleBold = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, bold: !prev.bold }));
-  }, []);
+    setTextStyleDraft((prev) => {
+      const next = { ...prev, bold: !prev.bold };
+      void persistTextStyle(next);
+      return next;
+    });
+  }, [persistTextStyle]);
 
   const handleToggleItalic = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, italic: !prev.italic }));
-  }, []);
+    setTextStyleDraft((prev) => {
+      const next = { ...prev, italic: !prev.italic };
+      void persistTextStyle(next);
+      return next;
+    });
+  }, [persistTextStyle]);
 
   const handleToggleUnderline = useCallback(() => {
-    setTextStyleDraft((prev) => ({ ...prev, underline: !prev.underline }));
-  }, []);
-
-  const handleApplyTextStyle = useCallback(async () => {
-    if (!canSetColumnTextStyle) return;
-    try {
-      await onSetColumnTextStyle(columnKey, textStyleDraft);
-      onClose();
-    } catch (err) {
-      notifyError(err?.message || 'Applying text style failed.');
-    }
-  }, [canSetColumnTextStyle, onSetColumnTextStyle, columnKey, textStyleDraft, onClose, notifyError]);
+    setTextStyleDraft((prev) => {
+      const next = { ...prev, underline: !prev.underline };
+      void persistTextStyle(next);
+      return next;
+    });
+  }, [persistTextStyle]);
 
   const handleClearTextStyle = useCallback(async () => {
     if (!canSetColumnTextStyle) return;
     const resetValue = { textColor: '', bold: false, italic: false, underline: false };
+    setTextStyleDraft(resetValue);
     try {
       await onSetColumnTextStyle(columnKey, resetValue);
-      setTextStyleDraft(resetValue);
-      onClose();
     } catch (err) {
       notifyError(err?.message || 'Clearing text style failed.');
     }
-  }, [canSetColumnTextStyle, onSetColumnTextStyle, columnKey, onClose, notifyError]);
+  }, [canSetColumnTextStyle, columnKey, notifyError, onSetColumnTextStyle]);
 
   return {
     textStyleDraft,
@@ -66,7 +87,6 @@ export function useColumnTextStyleActions({
     handleToggleBold,
     handleToggleItalic,
     handleToggleUnderline,
-    handleApplyTextStyle,
     handleClearTextStyle,
   };
 }

@@ -112,7 +112,7 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     fireEvent.mouseEnter(textStyleButton);
     expect(await screen.findByText('Preview text')).toBeTruthy();
 
-    const sortButton = await screen.findByRole('button', { name: /Sort A to Z/i });
+    const sortButton = await screen.findByRole('button', { name: /Sort ascending/i });
     fireEvent.mouseEnter(sortButton);
 
     await waitFor(() => {
@@ -120,14 +120,27 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     });
   });
 
-  it('slaagt regels op via onSetColumnFormatRules bij Apply', async () => {
+  it('past text style direct op bij toggle bold', async () => {
+    const onSetColumnTextStyle = vi.fn().mockResolvedValue(undefined);
+    renderMenu({ onSetColumnTextStyle });
+
+    openColumnMenu();
+    fireEvent.mouseEnter(await screen.findByRole('button', { name: /Text style/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Toggle bold/i }));
+
+    await waitFor(() => {
+      expect(onSetColumnTextStyle).toHaveBeenCalledWith('amount', expect.objectContaining({ bold: true }));
+    });
+  });
+
+  it('past conditional formatting direct op bij rule toevoegen', async () => {
     const { onSetColumnFormatRules } = renderMenu();
 
     openColumnMenu();
     const submenuButtons = await screen.findAllByRole('button', { name: /Conditional formatting/i });
     fireEvent.click(submenuButtons[submenuButtons.length - 1]);
-    const applyButtons = screen.getAllByRole('button', { name: /^Apply$/i });
-    fireEvent.click(applyButtons[applyButtons.length - 1]);
+    fireEvent.click(await screen.findByRole('button', { name: /Manage formatting rules/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /\+ Add rule/i }));
 
     await waitFor(() => {
       expect(onSetColumnFormatRules).toHaveBeenCalledTimes(1);
@@ -167,8 +180,19 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByRole('button', { name: /Rename column Remarks/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Conditional formatting/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sort ascending/i })).toBeNull();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
+  });
+
+  it('past filter operator direct op bij wijziging', async () => {
+    const onSetOperator = vi.fn();
+    renderMenu({ onSetOperator });
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Filter operator for Amount/i }));
+    fireEvent.click(await screen.findByRole('option', { name: '>' }));
+    await waitFor(() => {
+      expect(onSetOperator).toHaveBeenCalled();
+    });
   });
 
   it('toont Hide column in het kolommenu', async () => {

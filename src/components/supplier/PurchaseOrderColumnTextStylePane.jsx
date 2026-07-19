@@ -10,7 +10,6 @@ export default function PurchaseOrderColumnTextStylePane({
   handleToggleItalic,
   handleToggleUnderline,
   columnLabel,
-  handleApplyTextStyle,
   handleClearTextStyle,
 }) {
   return (
@@ -63,8 +62,7 @@ export default function PurchaseOrderColumnTextStylePane({
         Preview text
       </Text>
       <div className={styles.actionRow}>
-        <Button size="small" appearance="primary" onClick={handleApplyTextStyle}>Apply</Button>
-        <Button size="small" appearance="secondary" onClick={handleClearTextStyle}>Reset</Button>
+        <Button size="small" appearance="secondary" onClick={handleClearTextStyle}>Reset to default</Button>
       </div>
     </>
   );

@@ -7,7 +7,6 @@ import {
   Mail24Regular,
   Flowchart24Regular,
   History24Regular,
-  ChartMultiple24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
@@ -16,7 +15,6 @@ import AdminODataSettings from './AdminODataSettings';
 import { AdminDataModel } from './datamodel';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 import AdminTrackChangesSettings from './AdminTrackChangesSettings';
-import AdminRccpSettings from './AdminRccpSettings';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
@@ -48,7 +46,6 @@ export default function AdminPage() {
   const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
   const handleTabTrackChanges = useCallback(() => setAdminTab('track-changes'), []);
-  const handleTabRccp = useCallback(() => setAdminTab('rccp'), []);
 
   return (
     <div className={styles.page}>
@@ -89,12 +86,6 @@ export default function AdminPage() {
           active={adminTab === 'track-changes'}
           onClick={handleTabTrackChanges}
         />
-        <SidebarNavItem
-          icon={ChartMultiple24Regular}
-          label="RCCP"
-          active={adminTab === 'rccp'}
-          onClick={handleTabRccp}
-        />
       </aside>
 
       <div className={styles.content}>
@@ -104,7 +95,6 @@ export default function AdminPage() {
         {adminTab === 'datamodel' && <AdminDataModel />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
         {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
-        {adminTab === 'rccp' && <AdminRccpSettings />}
       </div>
     </div>
   );

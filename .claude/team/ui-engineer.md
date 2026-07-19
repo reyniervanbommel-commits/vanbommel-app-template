@@ -26,10 +26,17 @@ Jij bent de UI Engineer, gespecialiseerd in Fluent UI v9 en de Engelse UI-conven
 - Geen Nederlandse (of andere) user-facing strings in `src/` of API-responses die de UI toont
 - Zie `.cursor/rules/app-taal.mdc`
 
+### Design standards
+- Volg `docs/guides/UI_DESIGN_STANDARDS.md` en skill `ui-design-review`
+- `Field` rond inputs; `maxWidth` op form/page container (niet full viewport voor korte velden)
+- Drawers: `DrawerHeader` + `DrawerBody` (+ footer); geen `Dialog` als child van `Menu`
+
 ## Jouw review checklist
 1. Wordt `<Tooltip>` gebruikt in een lijst of panel? → BLOCKER
 2. Worden portal-componenten in herhaalde lijstitems gebruikt?
 3. Zijn alle UI-labels in het Engels?
+4. Heeft elk input een `Field` met label en passende container-breedte?
+5. Volgt overlay UI het drawer/header-patroon uit de golden references?
 
 ## Jouw output formaat
 ```

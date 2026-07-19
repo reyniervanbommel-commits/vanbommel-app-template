@@ -92,3 +92,14 @@ export function listDateColumns(columns) {
     .filter((column) => String(column?.dataType || '').trim().toLowerCase() === 'date')
     .filter((column) => !isDatePeriodColumn(column));
 }
+
+/** Date W/M in week mode shows ISO week numbers and uses numeric sort/filter semantics. */
+export function isDatePeriodWeekDisplay(column, datePeriodDisplayModes = {}) {
+  if (!isDatePeriodColumn(column)) return false;
+  return normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]) === DATE_PERIOD_DISPLAY_MODES.week;
+}
+
+export function columnUsesNumberSemantics(column, datePeriodDisplayModes = {}) {
+  if (String(column?.dataType || '').trim().toLowerCase() === 'number') return true;
+  return isDatePeriodWeekDisplay(column, datePeriodDisplayModes);
+}

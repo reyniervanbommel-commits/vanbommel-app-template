@@ -1,3 +1,4 @@
+import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -43,25 +44,25 @@ export function isDateColumn(column) {
   return column?.dataType === 'date';
 }
 
-export function isNumberColumn(column) {
-  return column?.dataType === 'number';
+export function isNumberColumn(column, datePeriodDisplayModes = {}) {
+  return columnUsesNumberSemantics(column, datePeriodDisplayModes);
 }
 
-function getDefaultOperator(column) {
+function getDefaultOperator(column, datePeriodDisplayModes = {}) {
   if (isDateColumn(column)) return 'before';
-  if (isNumberColumn(column)) return 'equals';
+  if (isNumberColumn(column, datePeriodDisplayModes)) return 'equals';
   return 'contains';
 }
 
-export function getDraftFromFilter(column, filter) {
+export function getDraftFromFilter(column, filter, datePeriodDisplayModes = {}) {
   return {
-    operator: filter?.operator || getDefaultOperator(column),
+    operator: filter?.operator || getDefaultOperator(column, datePeriodDisplayModes),
     value: filter?.value || '',
     secondaryValue: filter?.secondaryValue || '',
   };
 }
 
-export function isColumnFilterActive(column, filter) {
+export function isColumnFilterActive(column, filter, datePeriodDisplayModes = {}) {
   if (!filter) return false;
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
@@ -69,7 +70,7 @@ export function isColumnFilterActive(column, filter) {
     if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
   }
-  if (isNumberColumn(column)) {
+  if (isNumberColumn(column, datePeriodDisplayModes)) {
     if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
     return filter.value !== '' && filter.value !== null && filter.value !== undefined;
   }

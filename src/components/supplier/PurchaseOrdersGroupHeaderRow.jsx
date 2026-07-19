@@ -36,7 +36,7 @@ function PurchaseOrdersGroupHeaderRow({
   const innerStyle = useMemo(() => ({
     position: 'sticky',
     left: 0,
-    zIndex: 5,
+    zIndex: 1,
     width: 'fit-content',
     backgroundColor: groupColor,
   }), [groupColor]);
@@ -70,10 +70,7 @@ function PurchaseOrdersGroupHeaderRow({
   return (
     <tr>
       <td colSpan={colCount} className={styles.groupRowCell} style={cellStyle}>
-        <div
-          className={styles.groupRowInner}
-          style={innerStyle}
-        >
+        <div className={styles.groupRowInner} style={innerStyle}>
           {selectionEnabled ? (
             <Checkbox
               className={styles.groupCheckbox}
