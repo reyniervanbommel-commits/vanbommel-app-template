@@ -4,7 +4,11 @@ const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
-const { CAPACITY_MEASURE_KEY } = require('./RccpSettingsService');
+const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY } = require('./RccpSettingsService');
+
+// Vaste kleur voor de afgeleide overcapaciteit-lijn (Fluent purple). Niet configureerbaar: het is
+// geen door de gebruiker toegevoegde measure maar een berekende regel.
+const OVERCAPACITY_COLOR = '#8764B8';
 const { getIsoWeek, getIsoWeekYear, buildWeekRange, isoWeekStartUtc, isoWeekEndUtc } = require('../utils/isoWeek');
 const { computeRccpStatus } = require('../utils/rccpStatus');
 
@@ -164,6 +168,7 @@ function buildMatrixCells({
   capacityRows, confirmedByCell, config, window, vendorFilter = null,
 }) {
   const measures = config.quantityMeasures || [];
+  const openMeasureKey = config.openMeasureKey || '';
   const capacityTotals = sumCapacityByVendorWeek(capacityRows, vendorFilter);
   const periods = buildWeekRange(window.fromYear, window.fromWeek, window.toYear, window.toWeek);
   const cells = [];
@@ -196,22 +201,45 @@ function buildMatrixCells({
         });
       }
 
-      if (available > 0) {
+      // Capaciteitsregel altijd tonen (ook zonder capaciteit in deze week), zodat de regel niet
+      // per week in en uit springt.
+      cells.push({
+        vendorAccount: vendor,
+        periodYear: period.year,
+        isoWeek: period.week,
+        measureKey: CAPACITY_MEASURE_KEY,
+        availableQty: available,
+        confirmedQty: 0,
+        remainingQty: available,
+        utilPercent: null,
+        statusColor: 'green',
+        statusLabel: 'OK',
+      });
+
+      // Overcapaciteit = beschikbare capaciteit − de als "openstaand" gekozen measure. Negatief =
+      // tekort; dat toont de matrix rood en de grafiek onder de nullijn.
+      if (openMeasureKey) {
+        const openLoad = confirmedByCell.get(cellKey(vendor, period.year, period.week, openMeasureKey)) || 0;
+        const over = available - openLoad;
         cells.push({
           vendorAccount: vendor,
           periodYear: period.year,
           isoWeek: period.week,
-          measureKey: CAPACITY_MEASURE_KEY,
+          measureKey: OVERCAPACITY_MEASURE_KEY,
           availableQty: available,
-          confirmedQty: 0,
-          remainingQty: available,
+          confirmedQty: over,
+          remainingQty: over,
           utilPercent: null,
-          statusColor: 'green',
-          statusLabel: 'OK',
+          statusColor: over < 0 ? 'red' : 'green',
+          statusLabel: over < 0 ? 'Shortage' : 'OK',
         });
       }
     }
   }
+
+  const openLabel = openMeasureKey
+    ? (measures.find((m) => m.columnKey === openMeasureKey)?.label || openMeasureKey)
+    : '';
 
   const measureRows = [
     ...measures.map((m) => ({
@@ -230,6 +258,15 @@ function buildMatrixCells({
       showInChart: true,
       isCapacity: true,
     },
+    ...(openMeasureKey ? [{
+      measureKey: OVERCAPACITY_MEASURE_KEY,
+      label: `Overcapacity (vs ${openLabel})`,
+      chartType: 'line',
+      color: OVERCAPACITY_COLOR,
+      showInChart: true,
+      isCapacity: false,
+      isOvercapacity: true,
+    }] : []),
   ];
 
   return { cells, measureRows, periods };
@@ -322,7 +359,8 @@ function buildDrillDownRows(rows, config, cell, window) {
   const result = [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
   const measureKey = cell.measureKey;
-  if (!measureKey || measureKey === CAPACITY_MEASURE_KEY) return result;
+  // Capaciteit en overcapaciteit zijn afgeleide regels zonder onderliggende PO-regels.
+  if (!measureKey || measureKey === CAPACITY_MEASURE_KEY || measureKey === OVERCAPACITY_MEASURE_KEY) return result;
 
   for (const row of rows) {
     const masterValues = row.values || {};

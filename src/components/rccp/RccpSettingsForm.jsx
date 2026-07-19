@@ -63,6 +63,12 @@ function RccpSettingsForm({
     return <Text className={styles.hint}>{error || 'No settings available'}</Text>;
   }
 
+  // Val terug op "None" als de opgeslagen open-measure inmiddels uit de measures is verwijderd,
+  // zodat de Select niet stilzwijgend de eerste optie toont.
+  const openMeasureValue = (config.quantityMeasures || []).some((m) => m.columnKey === config.openMeasureKey)
+    ? config.openMeasureKey
+    : '';
+
   const actions = (
     <div className={styles.actions}>
       <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>Save settings</Button>
@@ -108,6 +114,23 @@ function RccpSettingsForm({
           compact={isFlyout}
           onChange={(quantityMeasures) => onUpdateField('quantityMeasures', quantityMeasures)}
         />
+        <Field
+          label="Open measure (subtract from capacity)"
+          hint="Adds an 'Overcapacity' row: capacity minus this measure. Negative = capacity shortage."
+          className={isFlyout ? styles.fieldFlyout : undefined}
+        >
+          <Select
+            className={isFlyout ? styles.compactControl : undefined}
+            size={isFlyout ? 'small' : 'medium'}
+            value={openMeasureValue}
+            onChange={(e) => onUpdateField('openMeasureKey', e.target.value)}
+          >
+            <option value="">None</option>
+            {(config.quantityMeasures || []).map((m) => (
+              <option key={m.columnKey} value={m.columnKey}>{m.label || m.columnKey}</option>
+            ))}
+          </Select>
+        </Field>
       </div>
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
