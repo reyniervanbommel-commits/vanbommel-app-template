@@ -23,7 +23,7 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
-const { compileSyncRules, parseSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileSyncRules, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
@@ -184,6 +184,59 @@ async function clearSyncRetainedForTable(pool, tableId) {
     `);
 }
 
+async function markOutOfScopeCacheRows(pool, tableId, rules) {
+  if (!Array.isArray(rules) || !rules.length) return { marked: 0 };
+  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const masters = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT partition_key, record_key, data_json
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'master' AND sync_retained = 0
+    `);
+  const detailJsonByRecord = hasLineRules
+    ? await loadDetailJsonByRecord(
+      pool,
+      tableId,
+      (masters.recordset || []).map((row) => `${row.partition_key}|${row.record_key}`)
+    )
+    : new Map();
+
+  const outOfScopeKeys = [];
+  for (const row of masters.recordset || []) {
+    const headerJson = parseJson(row.data_json);
+    const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
+    if (!recordMatchesSyncRules(rules, headerJson, lineRecords)) {
+      outOfScopeKeys.push({ partitionKey: row.partition_key, recordKey: row.record_key });
+    }
+  }
+  if (!outOfScopeKeys.length) return { marked: 0 };
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { partitionKey, recordKey } of outOfScopeKeys) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, tableId)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .query(`
+          UPDATE dbo.tb_cache
+          SET removed_at_source = 1
+          WHERE table_id = @tableId AND scope = 'master'
+            AND partition_key = @partitionKey AND record_key = @recordKey
+            AND detail_key = ${MASTER_DETAIL_KEY}
+            AND sync_retained = 0
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+  return { marked: outOfScopeKeys.length };
+}
+
 async function countSyncRetainedMasters(pool, tableId) {
   const result = await pool.request()
     .input('tableId', sql.BigInt, tableId)
@@ -195,10 +248,46 @@ async function countSyncRetainedMasters(pool, tableId) {
   return Number(result.recordset?.[0]?.retained_count) || 0;
 }
 
-async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings) {
-  const candidates = (removedMasters.recordset || []).filter((row) => (
+async function loadDetailJsonByRecord(pool, tableId, recordKeys) {
+  const keys = Array.isArray(recordKeys) ? recordKeys : [];
+  if (!keys.length) return new Map();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT partition_key, record_key, data_json
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'detail'
+    `);
+  const wanted = new Set(keys);
+  const grouped = new Map();
+  for (const row of result.recordset || []) {
+    const recKey = `${row.partition_key}|${row.record_key}`;
+    if (!wanted.has(recKey)) continue;
+    if (!grouped.has(recKey)) grouped.set(recKey, []);
+    grouped.get(recKey).push(parseJson(row.data_json));
+  }
+  return grouped;
+}
+
+async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings, syncRules) {
+  const rules = Array.isArray(syncRules) ? syncRules : [];
+  const rawCandidates = (removedMasters.recordset || []).filter((row) => (
     Number(row.previous_removed) === 0 && Number(row.removed_at_source) === 1
   ));
+  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const detailJsonByRecord = hasLineRules
+    ? await loadDetailJsonByRecord(
+      pool,
+      table.id,
+      rawCandidates.map((row) => `${row.partition_key}|${row.record_key}`)
+    )
+    : new Map();
+  const candidates = rawCandidates.filter((row) => {
+    if (!rules.length) return true;
+    const headerJson = parseJson(row.data_json);
+    const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
+    return recordMatchesSyncRules(rules, headerJson, lineRecords);
+  });
   if (!candidates.length) {
     return { retainedAdded: 0, capReached: false, retainedKeys: new Set() };
   }
@@ -1867,11 +1956,13 @@ async function refresh(tableKey, options = {}) {
 
     if (table.key === 'purchase-orders') {
       const retentionSettings = await getSyncRetentionSettings();
+      const syncRules = await getTableSyncRules(table);
       const retentionResult = await applySyncRetainedTransitions(
         pool,
         table,
         removedMasters,
-        retentionSettings
+        retentionSettings,
+        syncRules
       );
       retentionCapReached = Boolean(retentionResult.capReached);
       retainedKeys = retentionResult.retainedKeys || new Set();
@@ -1993,6 +2084,27 @@ async function refresh(tableKey, options = {}) {
 // gescheiden van de board-sync, die alleen de geselecteerde kolommen ophaalt en wegschrijft (#AB:177).
 // ---------------------------------------------------------------------------
 const FIELD_DISCOVERY_ROW_LIMIT = 5;
+const DATA_MODEL_DISCOVERY_COOLDOWN_MS = 15 * 60 * 1000;
+const dataModelDiscoveryAt = new Map();
+
+async function ensureSourceFieldsDiscovered(tableKey) {
+  const normalizedKey = String(tableKey || '').trim().toLowerCase();
+  if (!normalizedKey) return null;
+  const now = Date.now();
+  const lastRunAt = dataModelDiscoveryAt.get(normalizedKey) || 0;
+  if (now - lastRunAt < DATA_MODEL_DISCOVERY_COOLDOWN_MS) return null;
+  try {
+    const result = await discoverSourceFields(normalizedKey);
+    dataModelDiscoveryAt.set(normalizedKey, now);
+    return result;
+  } catch (err) {
+    logger.warn('Automatische veld-discovery bij datamodel mislukt', {
+      tableKey: normalizedKey,
+      error: err.message,
+    });
+    return null;
+  }
+}
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
@@ -2025,6 +2137,7 @@ async function discoverSourceFields(tableKey) {
   }
   const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
   logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
+  dataModelDiscoveryAt.set(String(tableKey || '').trim().toLowerCase(), Date.now());
   return { headerInserted, lineInserted, sampledRows: records.length };
 }
 
@@ -2729,6 +2842,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
         return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries);
       })
     : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
+  const syncRulesPromise = table.key === 'purchase-orders'
+    ? time('tb_sync_rules', () => getTableSyncRules(table))
+    : Promise.resolve([]);
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
     const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
@@ -2767,6 +2883,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     { d365LedgerRows, hasLedgerWindow },
     historyByCell,
     trackMarks,
+    syncRules,
   ] = await Promise.all([
     time('tb_read_cols', () => Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
@@ -2780,6 +2897,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     ledgerPromise,
     historyByCellPromise,
     trackMarksPromise,
+    syncRulesPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
@@ -2826,6 +2944,10 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   let newCount = 0;
   let changedCount = 0;
   let scopedRows;
+  const activeSyncRules = Array.isArray(syncRules) ? syncRules : [];
+  const masterJsonByRecKey = new Map(
+    mastersResult.recordset.map((m) => [`${m.partition_key}|${m.record_key}`, parseJson(m.data_json)])
+  );
   await time('tb_build_rows', async () => {
   const rows = mastersResult.recordset.map((m) => {
     const recKey = `${m.partition_key}|${m.record_key}`;
@@ -2896,16 +3018,29 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     };
   });
 
+  let visibleRows = rows;
+  if (table.key === 'purchase-orders' && activeSyncRules.length) {
+    visibleRows = rows.filter((row) => {
+      if (row.syncRetained) return true;
+      const recKey = `${row.partitionKey}|${row.recordKey}`;
+      const masterJson = masterJsonByRecKey.get(recKey) || {};
+      const lineRecords = (detailsByRecord.get(recKey) || []).map((d) => parseJson(d.data_json));
+      return recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords);
+    });
+    newCount = visibleRows.filter((row) => row.isNew).length;
+    changedCount = visibleRows.filter((row) => row.isChanged).length;
+  }
+
   // Supplier-scoping: beperk de rijen tot de eigen leverancier. De admin kiest via een
   // instelling op welke kolom gefilterd wordt (supplierFilterColumn); we vergelijken de
   // afgeleide rijwaarde met het leveranciersaccount van de gebruiker (case-insensitief).
   // Wanneer supplierAccount is meegegeven (ook een lege string) filteren we altijd — een
   // supplier ziet dus nooit onbedoeld alle orders. Staff geeft null door en ziet alles.
-  scopedRows = rows;
+  scopedRows = visibleRows;
   if (supplierAccount !== null) {
     const wantedAccount = String(supplierAccount).trim().toLowerCase();
     const filterKey = supplierFilterColumn || 'vendorAccount';
-    scopedRows = rows.filter((row) => (
+    scopedRows = visibleRows.filter((row) => (
       String(row.values?.[filterKey] ?? '').trim().toLowerCase() === wantedAccount
     ));
     newCount = scopedRows.filter((row) => row.isNew).length;
@@ -3746,6 +3881,7 @@ async function getBoardColumnDefinitions(tableKey, { scope = null } = {}) {
 
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
+  const discovery = await ensureSourceFieldsDiscovered(tableKey);
   const pool = await getPool();
   const [masterCols, detailCols] = await Promise.all([
     listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
@@ -3924,6 +4060,13 @@ async function getDataModel(tableKey) {
     filterCatalog: filterMeta.catalog,
     previewTables,
     lookups: lookupEntities,
+    discovery: discovery
+      ? {
+        headerInserted: Number(discovery.headerInserted) || 0,
+        lineInserted: Number(discovery.lineInserted) || 0,
+        sampledRows: Number(discovery.sampledRows) || 0,
+      }
+      : null,
   };
 }
 
@@ -3954,6 +4097,9 @@ async function saveSyncFilters(tableKey, rules) {
     await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
     const pool = await getPool();
     await clearSyncRetainedForTable(pool, table.id);
+    if (list.length) {
+      await markOutOfScopeCacheRows(pool, table.id, list);
+    }
   }
   await saveTableDefaultFilter(table.id, list);
   return { rules: list, compiled };

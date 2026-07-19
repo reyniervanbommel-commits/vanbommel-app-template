@@ -91,7 +91,24 @@ jobs:
           echo "Container App FQDN: $FQDN"
           echo "Laatste revision: $REVISION"
 
-          curl --fail --silent --show-error "https://${FQDN}/api/health"
+          echo "Wachten tot revision ${REVISION} 100% actief is..."
+          for i in $(seq 1 36); do
+            WEIGHT="$(az containerapp revision list \
+              --name "$APP_NAME" \
+              --resource-group "$ACA_RESOURCE_GROUP" \
+              --query "[?name=='${REVISION}'].properties.trafficWeight | [0]" -o tsv)"
+            if [ "$WEIGHT" = "100" ]; then
+              echo "Revision actief (poging ${i})"
+              break
+            fi
+            if [ "$i" -eq 36 ]; then
+              echo "::warning::Revision kreeg geen 100% traffic binnen timeout; doorgaan met health-checks"
+            fi
+            sleep 5
+          done
+
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors \
+            "https://${FQDN}/api/health"
 
       - name: D365-koppeling verifiëren
         run: |
@@ -100,10 +117,24 @@ jobs:
           # Deze check doet een echte entity-read, niet alleen een token-aanvraag: een geldig
           # token zegt niets over de rechten van de gekoppelde F&O-gebruiker (zie 2026-07-19,
           # waar het token slaagde maar elke read 403 gaf).
-          BODY="$(curl --silent --show-error "https://${FQDN}/api/health/d365")"
-          echo "$BODY"
+          # Na een image-update kan kort de oude revision nog antwoorden (404 op /api/health/d365);
+          # daarom retries tot we JSON terugkrijgen.
+          for attempt in $(seq 1 12); do
+            BODY="$(curl --silent --show-error --max-time 45 "https://${FQDN}/api/health/d365" || true)"
+            echo "Poging ${attempt}: ${BODY}"
 
-          if ! echo "$BODY" | grep -q '"status":"ok"'; then
-            echo "::error::De D365-koppeling werkt niet. Zie de melding hierboven."
-            exit 1
-          fi
+            if echo "$BODY" | grep -q '"status":"ok"'; then
+              echo "D365-koppeling OK"
+              exit 0
+            fi
+
+            if echo "$BODY" | grep -q '"status"'; then
+              echo "::error::De D365-koppeling werkt niet. Zie de melding hierboven."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::De D365-readiness-check gaf geen geldig antwoord binnen de timeout."
+          exit 1
