@@ -83,8 +83,18 @@ router.post('/capacity', requireRole(ROLES.ADMIN), async (req, res, next) => {
 
 router.put('/capacity/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
+    const {
+      vendorAccount, periodYear, isoWeek, capacityCategory, availableQty,
+    } = req.body || {};
+    if (!vendorAccount || !capacityCategory) {
+      return res.status(400).json({ error: 'vendorAccount and capacityCategory are required' });
+    }
     const row = await capacityService.updateCapacity(req.params.id, {
-      availableQty: Number(req.body?.availableQty),
+      vendorAccount: String(vendorAccount).trim(),
+      periodYear: Number(periodYear),
+      isoWeek: Number(isoWeek),
+      capacityCategory: String(capacityCategory).trim(),
+      availableQty: Number(availableQty),
     }, req.user?.id ?? null);
     res.json({ row });
   } catch (err) {

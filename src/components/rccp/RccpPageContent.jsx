@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  Button, Field, Input, Spinner, Text, makeStyles, tokens, shorthands,
+  Button, Field, Input, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -13,11 +13,11 @@ import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
 import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
+import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
-  subtitle: { color: tokens.colorNeutralForeground3 },
   toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap(tokens.spacingHorizontalM) },
   yearInput: { width: '104px' },
   weekInput: { width: '84px' },
@@ -31,6 +31,7 @@ export default function RccpPageContent() {
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const [vendorAccount, setVendorAccount] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const {
     vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
@@ -40,6 +41,7 @@ export default function RccpPageContent() {
   } = useRccpPage({ vendorAccount: isSupplier ? undefined : vendorAccount });
 
   const [drillCell, setDrillCell] = useState(null);
+  const capacityReloadRef = useRef(null);
 
   const handleWindowChange = useCallback((field, value) => {
     setWindow((prev) => ({ ...prev, [field]: Number(value) }));
@@ -54,13 +56,36 @@ export default function RccpPageContent() {
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
   const handleSettingsSaved = useCallback(() => reload(), [reload]);
+  const handleCapacityChanged = useCallback(() => reload(), [reload]);
+  const handleImportCompleted = useCallback(() => {
+    setActiveTab('capacity-planning');
+    reload();
+  }, [reload]);
+
+  const handleTabSelect = useCallback((_, data) => {
+    setActiveTab(data.value);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (activeTab === 'capacity-planning') {
+      capacityReloadRef.current?.();
+      return;
+    }
+    reload();
+  }, [activeTab, reload]);
+
+  const handleRegisterCapacityReload = useCallback((fn) => {
+    capacityReloadRef.current = fn;
+  }, []);
 
   return (
     <div className={styles.root}>
       <Text size={700} weight="semibold">Rough Cut Capacity Planning</Text>
-      <Text className={styles.subtitle}>
-        Compare planned vendor capacity against live purchase order load.
-      </Text>
+
+      <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+        <Tab value="dashboard">Dashboard</Tab>
+        <Tab value="capacity-planning">Capacity planning</Tab>
+      </TabList>
 
       <div className={styles.toolbar}>
         {!isSupplier && (
@@ -73,48 +98,67 @@ export default function RccpPageContent() {
             error={vendorsError}
           />
         )}
-        <Field label="From year">
-          <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
-        </Field>
-        <Field label="From week">
-          <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} />
-        </Field>
-        <Field label="To year">
-          <Input className={styles.yearInput} type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} />
-        </Field>
-        <Field label="To week">
-          <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} />
-        </Field>
-        <Button icon={<ArrowClockwise24Regular />} onClick={reload}>Refresh</Button>
+        {activeTab === 'dashboard' && (
+          <>
+            <Field label="From year">
+              <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
+            </Field>
+            <Field label="From week">
+              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} />
+            </Field>
+            <Field label="To year">
+              <Input className={styles.yearInput} type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} />
+            </Field>
+            <Field label="To week">
+              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} />
+            </Field>
+          </>
+        )}
+        <Button icon={<ArrowClockwise24Regular />} onClick={handleRefresh}>Refresh</Button>
         {isAdmin && (
           <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
         )}
       </div>
 
-      {loading && <Spinner label="Loading RCCP dashboard..." />}
-      {error && <Text className={styles.error}>{error}</Text>}
-
-      {!loading && !error && analysis && (
+      {activeTab === 'dashboard' && (
         <>
-          <RccpKpiCards kpis={analysis.kpis} />
-          <RccpChartMatrixPanel
-            chart={analysis.chart}
-            measureRows={measureRows}
-            periods={periods}
-            cellMap={cellMap}
-            chartWeekRanges={analysis.config?.chartWeekRanges}
-            onCellClick={handleCellClick}
-            interactive
-          />
-          {(analysis.kpis?.totalConfirmed === 0) && (
-            <RccpDiagnosticsCard
-              diagnostics={analysis.diagnostics}
-              config={analysis.config}
-              window={analysis.window}
-            />
+          {loading && <Spinner label="Loading RCCP dashboard..." />}
+          {error && <Text className={styles.error}>{error}</Text>}
+
+          {!loading && !error && analysis && (
+            <>
+              <RccpKpiCards kpis={analysis.kpis} />
+              <RccpChartMatrixPanel
+                chart={analysis.chart}
+                measureRows={measureRows}
+                periods={periods}
+                cellMap={cellMap}
+                chartWeekRanges={analysis.config?.chartWeekRanges}
+                onCellClick={handleCellClick}
+                interactive
+              />
+              {(analysis.kpis?.totalConfirmed === 0) && (
+                <RccpDiagnosticsCard
+                  diagnostics={analysis.diagnostics}
+                  config={analysis.config}
+                  window={analysis.window}
+                />
+              )}
+              <RccpMissingDateCard items={analysis.missingDates} />
+            </>
           )}
-          <RccpMissingDateCard items={analysis.missingDates} />
         </>
+      )}
+
+      {activeTab === 'capacity-planning' && (
+        <RccpCapacityPlanningTab
+          vendorAccount={isSupplier ? undefined : vendorAccount}
+          enabled={activeTab === 'capacity-planning'}
+          isAdmin={isAdmin}
+          onImported={handleImportCompleted}
+          onChanged={handleCapacityChanged}
+          onRegisterReload={handleRegisterCapacityReload}
+        />
       )}
 
       <RccpDrillDownPanel

@@ -4,6 +4,7 @@ import {
   formatIsoWeekMondayLabel,
   formatMatrixWeekLabel,
   isMatrixCellEmpty,
+  rccpChartWeekBoundaryCoordinates,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
 
@@ -62,6 +63,21 @@ describe('resolveChartWeekRangeBounds', () => {
       toWeek: 2,
       color: '#579bfc',
     }, periods)).toBeNull();
+  });
+});
+
+describe('rccpChartWeekBoundaryCoordinates', () => {
+  it('returns left and right edges for each ISO week band', () => {
+    const domain = ['2026-W06', '2026-W07', '2026-W08'];
+    const scale = Object.assign(
+      (entry) => domain.indexOf(entry) * 68,
+      { domain: () => domain, bandwidth: () => 68 },
+    );
+
+    expect(rccpChartWeekBoundaryCoordinates({
+      xAxis: { scale },
+      offset: { left: 42 },
+    })).toEqual([42, 110, 178, 246]);
   });
 });
 

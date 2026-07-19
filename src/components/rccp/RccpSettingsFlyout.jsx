@@ -5,25 +5,10 @@ import {
 } from '@fluentui/react-components';
 import { Dismiss24Regular, Save24Regular } from '@fluentui/react-icons';
 import { useRccpSettings } from '../../hooks/useRccpSettings';
-import RccpCapacityEditor from './RccpCapacityEditor';
-import RccpImportDialog from './RccpImportDialog';
 import RccpSettingsForm from './RccpSettingsForm';
 
 const useStyles = makeStyles({
   body: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalL) },
-  dataSection: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRadius(tokens.borderRadiusXLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap(tokens.spacingVerticalM),
-  },
-  dataActions: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    ...shorthands.gap(tokens.spacingHorizontalM),
-  },
   footer: {
     display: 'flex',
     alignItems: 'center',
@@ -61,14 +46,6 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved, readOnly })
       </DrawerHeader>
       <DrawerBody>
         <div className={styles.body}>
-          <div className={styles.dataSection}>
-            <Text weight="semibold">Capacity data</Text>
-            <Text className={styles.hint}>Add or import vendor capacity records.</Text>
-            <div className={styles.dataActions}>
-              <RccpCapacityEditor readOnly={readOnly} onSaved={onSaved} />
-              <RccpImportDialog readOnly={readOnly} onImported={onSaved} />
-            </div>
-          </div>
           {settings.loading ? <Spinner label="Loading RCCP settings..." /> : (
             <RccpSettingsForm
               variant="flyout"

@@ -1,10 +1,17 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea,
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
 } from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import { buildMatrixPeriodHeaders, RCCP_ROW_LABEL_WIDTH, RCCP_WEEK_COL_WIDTH, resolveChartWeekRangeBounds } from './rccpUtils';
+import {
+  buildMatrixPeriodHeaders,
+  RCCP_CHART_Y_AXIS_WIDTH,
+  RCCP_ROW_LABEL_WIDTH,
+  RCCP_WEEK_COL_WIDTH,
+  rccpChartWeekBoundaryCoordinates,
+  resolveChartWeekRangeBounds,
+} from './rccpUtils';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
@@ -51,6 +58,8 @@ function RccpChartMatrixPanel({
       .filter(Boolean),
     [chartWeekRanges, periods],
   );
+  const plotWidth = periodHeaders.length * RCCP_WEEK_COL_WIDTH;
+  const chartWidth = RCCP_CHART_Y_AXIS_WIDTH + plotWidth;
 
   const [visibleKeys, setVisibleKeys] = useState({});
 
@@ -75,12 +84,26 @@ function RccpChartMatrixPanel({
   const alignedContent = (
     <div className={styles.scroller}>
       <div className={styles.alignedBlock} style={{ width: gridWidth }}>
-        <div style={{ marginLeft: RCCP_ROW_LABEL_WIDTH, height: chartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chart} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="key" hide />
-              <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={42} />
+        <div
+          style={{
+            marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH,
+            width: chartWidth,
+            height: chartHeight,
+          }}
+        >
+          <ComposedChart
+            width={chartWidth}
+            height={chartHeight}
+            data={chart}
+            margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+          >
+              <CartesianGrid
+                stroke={tokens.colorNeutralStroke2}
+                strokeDasharray="4 4"
+                verticalCoordinatesGenerator={rccpChartWeekBoundaryCoordinates}
+              />
+              <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
+              <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
               {chartRangeBands.map((band, index) => (
@@ -115,8 +138,7 @@ function RccpChartMatrixPanel({
                   />
                 )
               ))}
-            </ComposedChart>
-          </ResponsiveContainer>
+          </ComposedChart>
         </div>
         <RccpMatrixTable
           measureRows={measureRows}

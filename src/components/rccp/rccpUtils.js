@@ -111,7 +111,23 @@ export function formatIsoWindowLabel(window) {
 
 export const RCCP_WEEK_COL_WIDTH = 68;
 export const RCCP_ROW_LABEL_WIDTH = 148;
+export const RCCP_CHART_Y_AXIS_WIDTH = 42;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
+
+/** Recharts CartesianGrid: vertical dashed lines at ISO week band edges. */
+export function rccpChartWeekBoundaryCoordinates({ xAxis, offset }) {
+  const scale = xAxis?.scale;
+  if (!scale || typeof scale.bandwidth !== 'function') return [];
+
+  const bandwidth = scale.bandwidth();
+  const domain = scale.domain();
+  if (!domain.length) return [];
+
+  const left = offset?.left ?? 0;
+  const coords = domain.map((entry) => scale(entry) + left);
+  coords.push(scale(domain[domain.length - 1]) + bandwidth + left);
+  return coords;
+}
 
 export function currentIsoWindow(size = 8) {
   const now = new Date();
