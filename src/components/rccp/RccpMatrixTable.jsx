@@ -7,11 +7,10 @@ import {
   buildMatrixPeriodHeaders,
   formatMatrixQty,
   formatWeekLabel,
-  isMatrixCellEmpty,
   RCCP_CAPACITY_MEASURE_KEY,
+  RCCP_OVERCAPACITY_MEASURE_KEY,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
-  selectVisibleMeasureRows,
   statusToken,
 } from './rccpUtils';
 
@@ -83,16 +82,11 @@ function RccpMatrixTable({
   const isInteractive = interactive ?? Boolean(onCellClick);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
 
-  const visibleMeasureRows = useMemo(
-    () => selectVisibleMeasureRows(measureRows, periodHeaders, cellMap),
-    [measureRows, periodHeaders, cellMap],
-  );
-
   const handleClick = useCallback((cell) => {
     if (cell && onCellClick) onCellClick(cell);
   }, [onCellClick]);
 
-  if (!visibleMeasureRows.length || !periodHeaders.length) {
+  if (!measureRows.length || !periodHeaders.length) {
     return <Text>No matrix data for the selected window.</Text>;
   }
 
@@ -113,8 +107,10 @@ function RccpMatrixTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {visibleMeasureRows.map((row) => {
+        {measureRows.map((row) => {
           const isCapacity = row.measureKey === RCCP_CAPACITY_MEASURE_KEY;
+          const isOvercapacity = row.measureKey === RCCP_OVERCAPACITY_MEASURE_KEY;
+          const isDerived = isCapacity || isOvercapacity;
           return (
             <TableRow key={row.measureKey}>
               <TableCell className={styles.sticky}>
@@ -131,16 +127,14 @@ function RccpMatrixTable({
               </TableCell>
               {periodHeaders.map((period) => {
                 const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
-                if (isMatrixCellEmpty(cell)) {
-                  return (
-                    <TableCell key={period.key} className={styles.weekCol}>
-                      <div className={styles.weekColInner} aria-hidden />
-                    </TableCell>
-                  );
-                }
-
-                const bg = isCapacity ? tokens.colorNeutralBackground3 : statusToken(cell.statusColor);
-                const clickable = isInteractive && !isCapacity;
+                // Altijd een getal tonen (0 als er geen cel is), zodat een measure met alleen nullen
+                // niet als lege regel oogt. Capaciteit toont zijn beschikbare aantal; load en
+                // overcapaciteit tonen confirmedQty (overcapaciteit kan negatief zijn = tekort).
+                const value = isCapacity ? (cell?.availableQty ?? 0) : (cell?.confirmedQty ?? 0);
+                const bg = isCapacity
+                  ? tokens.colorNeutralBackground3
+                  : statusToken(cell ? cell.statusColor : 'grey');
+                const clickable = isInteractive && !isDerived;
                 return (
                   <TableCell key={period.key} className={styles.weekCol}>
                     <div className={styles.weekColInner}>
@@ -150,7 +144,7 @@ function RccpMatrixTable({
                         {...(clickable ? {
                           role: 'button',
                           tabIndex: 0,
-                          'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell.confirmedQty)} of ${formatMatrixQty(cell.availableQty)}. Show purchase order lines.`,
+                          'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell?.confirmedQty ?? 0)} of ${formatMatrixQty(cell?.availableQty ?? 0)}. Show purchase order lines.`,
                           onClick: () => handleClick(cell),
                           onKeyDown: (e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -160,11 +154,9 @@ function RccpMatrixTable({
                           },
                         } : {})}
                       >
-                        {isCapacity ? (
-                          <Text className={styles.capacityValue}>{formatMatrixQty(cell.availableQty)}</Text>
-                        ) : (
-                          <Text className={styles.loadValue}>{formatMatrixQty(cell.confirmedQty)}</Text>
-                        )}
+                        <Text className={isCapacity ? styles.capacityValue : styles.loadValue}>
+                          {formatMatrixQty(value)}
+                        </Text>
                       </div>
                     </div>
                   </TableCell>

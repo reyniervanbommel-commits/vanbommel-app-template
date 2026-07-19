@@ -134,6 +134,64 @@ describe('RccpAnalysisService', () => {
     expect(loadCell.statusColor).toBe('red');
   });
 
+  it('adds a capacity row for every week, also without capacity', () => {
+    const { cells } = buildMatrixCells({
+      capacityRows: [],
+      confirmedByCell: new Map([[cellKey('V001', 2026, 10, 'quantity'), 5]]),
+      config,
+      window,
+      vendorFilter: 'V001',
+    });
+    const capCells = cells.filter((c) => c.measureKey === '__capacity__');
+    // 3 weken in het venster -> capaciteitscel per week, ook al is availableQty 0.
+    expect(capCells).toHaveLength(3);
+    expect(capCells.every((c) => c.availableQty === 0)).toBe(true);
+  });
+
+  describe('overcapacity', () => {
+    const openConfig = { ...config, openMeasureKey: 'quantity' };
+
+    it('adds an overcapacity row = capacity minus the open measure', () => {
+      const { cells, measureRows } = buildMatrixCells({
+        capacityRows: [{ vendorAccount: 'V001', periodYear: 2026, isoWeek: 10, availableQty: 30 }],
+        confirmedByCell: new Map([[cellKey('V001', 2026, 10, 'quantity'), 12]]),
+        config: openConfig,
+        window,
+        vendorFilter: 'V001',
+      });
+      const over = cells.find((c) => c.measureKey === '__overcapacity__' && c.isoWeek === 10);
+      expect(over.confirmedQty).toBe(18); // 30 - 12
+      expect(over.statusColor).toBe('green');
+      expect(measureRows.some((r) => r.measureKey === '__overcapacity__')).toBe(true);
+    });
+
+    it('shows a shortage as a negative value in red', () => {
+      const { cells } = buildMatrixCells({
+        capacityRows: [{ vendorAccount: 'V001', periodYear: 2026, isoWeek: 10, availableQty: 8 }],
+        confirmedByCell: new Map([[cellKey('V001', 2026, 10, 'quantity'), 20]]),
+        config: openConfig,
+        window,
+        vendorFilter: 'V001',
+      });
+      const over = cells.find((c) => c.measureKey === '__overcapacity__' && c.isoWeek === 10);
+      expect(over.confirmedQty).toBe(-12); // 8 - 20
+      expect(over.statusColor).toBe('red');
+      expect(over.statusLabel).toBe('Shortage');
+    });
+
+    it('omits the overcapacity row when no open measure is selected', () => {
+      const { cells, measureRows } = buildMatrixCells({
+        capacityRows: [],
+        confirmedByCell: new Map([[cellKey('V001', 2026, 10, 'quantity'), 5]]),
+        config,
+        window,
+        vendorFilter: 'V001',
+      });
+      expect(cells.some((c) => c.measureKey === '__overcapacity__')).toBe(false);
+      expect(measureRows.some((r) => r.measureKey === '__overcapacity__')).toBe(false);
+    });
+  });
+
   it('scopes matrix cells to a supplier vendor', () => {
     const confirmedByCell = new Map([
       [cellKey('V001', 2026, 10, 'quantity'), 5],

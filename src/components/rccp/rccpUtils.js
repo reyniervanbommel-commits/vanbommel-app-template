@@ -113,26 +113,7 @@ export const RCCP_WEEK_COL_WIDTH = 68;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
-
-/**
- * Welke measure-rijen de matrix toont.
- *
- * Een measure die de admin in de instellingen heeft toegevoegd blijft altijd staan, ook als er in
- * het gekozen venster geen data is — anders verdwijnt een net toegevoegde measure zonder uitleg
- * (bijv. "Remaining qty" in een periode waarin niets openstaat). De automatische capaciteitsrij is
- * niet door de gebruiker toegevoegd; die verbergen we wél als er in dit venster geen capaciteit is,
- * zodat een leeg dashboard geen kale capaciteitsregel toont.
- */
-export function selectVisibleMeasureRows(measureRows, periodHeaders, cellMap) {
-  const rows = Array.isArray(measureRows) ? measureRows : [];
-  const headers = Array.isArray(periodHeaders) ? periodHeaders : [];
-  return rows.filter((row) => {
-    if (row.measureKey !== RCCP_CAPACITY_MEASURE_KEY) return true;
-    return headers.some(
-      (period) => !isMatrixCellEmpty(cellMap.get(`${row.measureKey}|${period.year}|${period.week}`)),
-    );
-  });
-}
+export const RCCP_OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
 
 /** Recharts CartesianGrid: vertical dashed lines at ISO week band edges (in chart coordinates). */
 export function buildRccpChartWeekBoundaryCoordinates(periodCount) {

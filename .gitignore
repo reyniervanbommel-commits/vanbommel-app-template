@@ -5,6 +5,11 @@ dist/
 .env.*.local
 *.log
 npm-debug.log*
+
+# Playwright MCP/browser ephemeral output (keep .gitkeep placeholders)
+playwright/mcp/*.yml
+playwright/mcp/*.log
+playwright/videos/*.webm
 .DS_Store
 Thumbs.db
 .worktrees/

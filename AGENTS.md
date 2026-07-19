@@ -89,4 +89,4 @@ De DevOps MCP staat in `.cursor/mcp.json` (server `Devops`). Cloud agents hebben
 
 Lokaal: `.\refresh-ado-mcp-token.ps1 -PersistToUserEnv` (Azure CLI) of PAT handmatig zetten.
 
-Zie `MCP_DEVOPS_CURSOR_SETUP.md` voor volledige instructies.
+Zie `docs/guides/MCP_DEVOPS_CURSOR_SETUP.md` voor volledige instructies.

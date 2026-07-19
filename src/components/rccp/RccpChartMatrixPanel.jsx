@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
 } from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
@@ -109,6 +109,8 @@ function RccpChartMatrixPanel({
               />
               <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
               <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
+              {/* Nullijn: bij een capaciteitstekort duikt de overcapaciteit-lijn hieronder. */}
+              <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
               <Tooltip shared cursor={<RccpWeekBandCursor />} />
               <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
               {chartRangeBands.map((band, index) => (

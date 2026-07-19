@@ -14,6 +14,9 @@ const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
 const VALID_CHART_TYPES = Object.freeze(['line', 'bar']);
 const MEASURE_COLORS = Object.freeze(['#D13438', '#0078D4', '#8764B8', '#CA5010', '#107C10', '#5C2D91']);
 const CAPACITY_MEASURE_KEY = '__capacity__';
+// Synthetische measure-sleutel voor de "overcapaciteit"-regel (capaciteit min de openstaande
+// measure). Geen tb_columns-kolom; alleen een afgeleide matrix/chart-regel.
+const OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
 
 function defaultQuantityMeasures() {
   return [{
@@ -56,6 +59,7 @@ function defaultConfig() {
     dateColumnKey: 'requestedDeliveryDate',
     vendorColumnKey: 'vendorAccount',
     quantityMeasures: defaultQuantityMeasures(),
+    openMeasureKey: '',
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
@@ -117,6 +121,14 @@ function validateConfig(raw) {
     return { valid: false, error: 'Column keys and at least one quantity measure are required' };
   }
 
+  // Welke measure als "openstaand" van de capaciteit wordt afgetrokken. Leeg = uit. Alleen geldig
+  // als hij naar een van de gekozen measures wijst; anders stil terug naar uit, zodat een
+  // verwijderde measure de config niet ongeldig maakt.
+  const openMeasureKeyRaw = String(raw.openMeasureKey ?? '').trim();
+  const openMeasureKey = quantityMeasures.some((m) => m.columnKey === openMeasureKeyRaw)
+    ? openMeasureKeyRaw
+    : '';
+
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
@@ -142,6 +154,7 @@ function validateConfig(raw) {
       dateColumnKey,
       vendorColumnKey,
       quantityMeasures,
+      openMeasureKey,
       chartWeekRanges,
       excludedStatuses,
       thresholds: { greenMax, orangeMax },
@@ -206,6 +219,7 @@ async function saveConfig(raw, userId = null) {
 module.exports = {
   CONFIG_KEY,
   CAPACITY_MEASURE_KEY,
+  OVERCAPACITY_MEASURE_KEY,
   defaultConfig,
   normalizeQuantityMeasures,
   normalizeChartWeekRanges,
