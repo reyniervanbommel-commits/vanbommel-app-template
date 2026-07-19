@@ -1,0 +1,178 @@
+{
+  "date": "2026-07-19",
+  "hermetingDate": "2026-07-19T17:34:00+02:00",
+  "environment": "http://localhost:5178",
+  "runsPerAction": 3,
+  "actions": {
+    "route-po": {
+      "label": "Route / — Purchase orders (hermeting)",
+      "median": {
+        "app": 740,
+        "tb_ledger": 445,
+        "tb_lookups": 423,
+        "tb_read_details": 385,
+        "tb_lookup_product_receipt_lines": 279,
+        "tb_track_marks": 213,
+        "tb_read_masters": 122,
+        "tb_read_custom": 120,
+        "tb_build_rows": 29
+      },
+      "cold": {
+        "app": 1204,
+        "tb_ledger": 1003
+      },
+      "dominant": "tb_ledger",
+      "note": "Parallel labels — use app as wall clock"
+    },
+    "route-rccp": {
+      "label": "Route /rccp",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 1084,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "route-bi": {
+      "label": "Route /bi",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 386,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "route-admin": {
+      "label": "Route /admin",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "board-tab-charts": {
+      "label": "PO board tab — Charts",
+      "median": {
+        "total": 120,
+        "sql": 0,
+        "backendOther": 75,
+        "network": 16,
+        "client": 0,
+        "render": 0
+      },
+      "dominant": "backendOther",
+      "cold": {
+        "total": 120
+      }
+    },
+    "board-tab-rccp": {
+      "label": "PO board tab — RCCP",
+      "median": {
+        "total": 112,
+        "sql": 0,
+        "backendOther": 99,
+        "network": 14,
+        "client": 0,
+        "render": 0
+      },
+      "dominant": "backendOther",
+      "cold": {
+        "total": 112
+      }
+    },
+    "admin-users": {
+      "label": "Admin tab — Users",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "admin-analytics": {
+      "label": "Admin tab — Analytics",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "admin-odata": {
+      "label": "Admin tab — OData",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "admin-datamodel": {
+      "label": "Admin tab — Data model",
+      "median": {
+        "total": null,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": null
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": null
+      }
+    },
+    "datamodel-vendors": {
+      "label": "Data model tab — Vendors",
+      "median": {
+        "total": 144,
+        "sql": 0,
+        "backendOther": 0,
+        "network": 0,
+        "client": 0,
+        "render": 0
+      },
+      "dominant": "sql",
+      "cold": {
+        "total": 144
+      }
+    }
+  }
+}
