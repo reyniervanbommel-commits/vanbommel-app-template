@@ -1,5 +1,4 @@
 import React from 'react';
-import { Text } from '@fluentui/react-components';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
 import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRulesPane';
@@ -84,20 +83,18 @@ export function FilterMenuSubPane({
 
   if (activeSubmenu === 'group') {
     content = (
-      <>
-        <Text className={styles.subPaneTitle}>Category / group</Text>
-        <PurchaseOrderColumnGroupingSection
-          column={column}
-          isGroupingColumn={isGroupingColumn}
-          groupingColor={groupingColor}
-          onSetGroupingColumn={onSetGroupingColumn}
-          onClearGrouping={onClearGrouping}
-          onSetGroupingColor={onSetGroupingColor}
-          canToggleGroupSummary={canToggleGroupSummary}
-          isGroupSummaryColumn={isGroupSummaryColumn}
-          onToggleGroupSummary={handleToggleGroupSummary}
-        />
-      </>
+      <PurchaseOrderColumnGroupingSection
+        styles={styles}
+        column={column}
+        isGroupingColumn={isGroupingColumn}
+        groupingColor={groupingColor}
+        onSetGroupingColumn={onSetGroupingColumn}
+        onClearGrouping={onClearGrouping}
+        onSetGroupingColor={onSetGroupingColor}
+        canToggleGroupSummary={canToggleGroupSummary}
+        isGroupSummaryColumn={isGroupSummaryColumn}
+        onToggleGroupSummary={handleToggleGroupSummary}
+      />
     );
   }
 

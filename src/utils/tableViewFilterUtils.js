@@ -15,21 +15,21 @@ export const TEXT_FILTER_OPERATORS = {
 };
 
 export const DATE_FILTER_OPERATORS = {
-  equals: 'is',
+  equals: 'is exactly',
   before: 'is before',
   after: 'is after',
   between: 'is between',
-  inNextWeeks: 'in the next xx weeks',
-  inNextDays: 'in the next xx days',
+  inNextWeeks: 'is in the next xx weeks',
+  inNextDays: 'is in the next xx days',
   nextWeek: 'is next week',
 };
 
 export const NUMBER_FILTER_OPERATORS = {
-  equals: 'is',
-  gt: 'greater than',
-  lt: 'less than',
-  gte: 'greater than or equal to',
-  lte: 'less than or equal to',
+  equals: 'is exactly',
+  gt: 'is greater than',
+  lt: 'is less than',
+  gte: 'is greater than or equal to',
+  lte: 'is less than or equal to',
   between: 'is between',
 };
 

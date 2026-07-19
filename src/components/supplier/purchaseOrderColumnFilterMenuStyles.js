@@ -382,4 +382,18 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusSmall,
   },
+  groupingSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+  },
+  groupingToggleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('8px'),
+  },
+  groupingColorField: {
+    ...shorthands.gap('4px'),
+  },
 });

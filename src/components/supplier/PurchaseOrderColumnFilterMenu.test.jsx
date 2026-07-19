@@ -154,9 +154,20 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /Show sum in group header/i }));
+    fireEvent.click(await screen.findByRole('switch', { name: /Show sum in group header/i }));
 
     expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
+  });
+
+  it('gebruikt palette picker voor category bar color', async () => {
+    const onSetGroupingColor = vi.fn();
+    renderMenu({ onSetGroupingColor, groupingColor: '#f4e6ed' });
+
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /Pick color #00c875/i }));
+
+    expect(onSetGroupingColor).toHaveBeenCalledWith('amount', '#00c875');
   });
 
   it('verbergt Conditional formatting voor image-kolommen', async () => {
@@ -190,7 +201,7 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     renderMenu({ onSetOperator, onSetValue });
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Filter operator for Amount/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'greater than' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'is greater than' }));
     expect(onSetOperator).not.toHaveBeenCalled();
 
     const valueInput = await screen.findByLabelText(/Filter value for Amount/i);
