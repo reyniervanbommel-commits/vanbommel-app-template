@@ -583,6 +583,12 @@ function resolveRccpMeasureEligibility(column) {
   if (column.dataType !== 'number') {
     return { eligible: false, reason: 'Only number columns can be used as an RCCP value' };
   }
+  // Een inactieve kolom wordt niet meegesynct en staat niet in de board-read (includeInactive:
+  // false), dus hij is in RCCP altijd leeg. De admin-tab toont inactieve kolommen wél — anders kon
+  // je ze nooit heractiveren — dus zonder deze check is de toggle daar zichtbaar maar zinloos.
+  if (!column.isActive) {
+    return { eligible: false, reason: 'Inactive columns are not synced, so they are always empty in RCCP' };
+  }
   if (column.source === 'custom' && !column.formulaExpr) {
     return {
       eligible: false,

@@ -25,6 +25,7 @@ const {
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
   buildLookupFieldMap,
+  buildSyntheticLookupColumn,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
@@ -680,6 +681,48 @@ describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
       purchaseOrderLineNumber: '10',
       lineNumber: '10',
     });
+  });
+});
+
+describe('TableDataService.buildSyntheticLookupColumn', () => {
+  const base = {
+    derivedKey: 'receivedPurchaseQuantity',
+    targetColKey: 'receivedPurchaseQuantity',
+    tableId: 1,
+    sourceScope: 'detail',
+    targetTableKey: 'product-receipt-lines',
+    targetTableLabel: 'Ontvangstregels',
+  };
+
+  it('erft de RCCP-vrijgave van de doelkolom', () => {
+    const column = buildSyntheticLookupColumn({
+      ...base,
+      targetColumn: {
+        label: 'Received qty', dataType: 'number', rccpMeasure: true,
+      },
+    });
+    expect(column.rccpMeasure).toBe(true);
+    expect(column.key).toBe('receivedPurchaseQuantity');
+    expect(column.dataType).toBe('number');
+    expect(column.source).toBe('lookup');
+    // Synthetisch: geen tb_columns-rij, dus niet zelf toggelbaar via de kolom-id.
+    expect(column.id).toBeNull();
+  });
+
+  it('blijft niet-vrijgegeven wanneer de doelkolom dat niet is', () => {
+    const column = buildSyntheticLookupColumn({
+      ...base,
+      targetColumn: {
+        label: 'Received qty', dataType: 'number', rccpMeasure: false,
+      },
+    });
+    expect(column.rccpMeasure).toBe(false);
+  });
+
+  it('valt terug op niet-vrijgegeven zonder doelkolom', () => {
+    const column = buildSyntheticLookupColumn({ ...base, targetColumn: undefined });
+    expect(column.rccpMeasure).toBe(false);
+    expect(column.dataType).toBe('text');
   });
 });
 

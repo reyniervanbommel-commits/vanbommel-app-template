@@ -4,6 +4,7 @@ import {
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
+import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -108,6 +109,14 @@ function RccpSettingsForm({
           columns={columns}
           compact={isFlyout}
           onChange={(quantityMeasures) => onUpdateField('quantityMeasures', quantityMeasures)}
+        />
+      </div>
+
+      <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
+        <RccpChartWeekRangesEditor
+          ranges={config.chartWeekRanges || []}
+          compact={isFlyout}
+          onChange={(chartWeekRanges) => onUpdateField('chartWeekRanges', chartWeekRanges)}
         />
       </div>
 

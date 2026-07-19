@@ -15,7 +15,7 @@ import {
 } from './rccpUtils';
 
 const useStyles = makeStyles({
-  table: { tableLayout: 'fixed', width: 'auto' },
+  table: { tableLayout: 'fixed', width: 'auto', borderCollapse: 'collapse' },
   sticky: {
     position: 'sticky',
     left: 0,
@@ -29,13 +29,22 @@ const useStyles = makeStyles({
     width: `${RCCP_WEEK_COL_WIDTH}px`,
     minWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     maxWidth: `${RCCP_WEEK_COL_WIDTH}px`,
+    boxSizing: 'border-box',
+    ...shorthands.padding(tokens.spacingVerticalXXS, '0'),
     textAlign: 'center',
-    paddingLeft: tokens.spacingHorizontalXXS,
-    paddingRight: tokens.spacingHorizontalXXS,
+    verticalAlign: 'middle',
   },
-  periodHeader: { textAlign: 'center', lineHeight: 1.2 },
+  weekColInner: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1.2,
+  },
   yearHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   weekHeader: { fontWeight: tokens.fontWeightSemibold },
+  mondayHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   rowLabel: {
     display: 'flex',
     alignItems: 'center',
@@ -44,19 +53,18 @@ const useStyles = makeStyles({
   },
   rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   cell: {
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalXXS),
+    width: '100%',
+    boxSizing: 'border-box',
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalXXS),
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    ...shorthands.gap('1px'),
-    minHeight: '44px',
     justifyContent: 'center',
+    minHeight: '28px',
   },
   cellInteractive: { cursor: 'pointer' },
-  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200 },
-  utilValue: { color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase100 },
-  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200 },
+  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
+  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
 });
 
 function RccpMatrixTable({
@@ -96,9 +104,12 @@ function RccpMatrixTable({
         <TableRow>
           <TableHeaderCell className={styles.sticky}>Measure</TableHeaderCell>
           {periodHeaders.map((period) => (
-            <TableHeaderCell key={period.key} className={`${styles.weekCol} ${styles.periodHeader}`}>
-              {period.yearLabel ? <div className={styles.yearHeader}>{period.yearLabel}</div> : null}
-              <div className={styles.weekHeader}>{period.weekLabel}</div>
+            <TableHeaderCell key={period.key} className={styles.weekCol}>
+              <div className={styles.weekColInner}>
+                {period.yearLabel ? <div className={styles.yearHeader}>{period.yearLabel}</div> : null}
+                <div className={styles.weekHeader}>{period.weekLabel}</div>
+                <div className={styles.mondayHeader}>{period.mondayLabel}</div>
+              </div>
             </TableHeaderCell>
           ))}
         </TableRow>
@@ -123,40 +134,40 @@ function RccpMatrixTable({
               {periodHeaders.map((period) => {
                 const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
                 if (isMatrixCellEmpty(cell)) {
-                  return <TableCell key={period.key} className={styles.weekCol} />;
+                  return (
+                    <TableCell key={period.key} className={styles.weekCol}>
+                      <div className={styles.weekColInner} aria-hidden />
+                    </TableCell>
+                  );
                 }
 
                 const bg = isCapacity ? tokens.colorNeutralBackground3 : statusToken(cell.statusColor);
                 const clickable = isInteractive && !isCapacity;
                 return (
                   <TableCell key={period.key} className={styles.weekCol}>
-                    <div
-                      className={mergeClasses(styles.cell, clickable && styles.cellInteractive)}
-                      style={{ backgroundColor: bg }}
-                      {...(clickable ? {
-                        role: 'button',
-                        tabIndex: 0,
-                        'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell.confirmedQty)} of ${formatMatrixQty(cell.availableQty)}. Show purchase order lines.`,
-                        onClick: () => handleClick(cell),
-                        onKeyDown: (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleClick(cell);
-                          }
-                        },
-                      } : {})}
-                    >
-                      {isCapacity ? (
-                        <Text className={styles.capacityValue}>{formatMatrixQty(cell.availableQty)}</Text>
-                      ) : (
-                        <>
+                    <div className={styles.weekColInner}>
+                      <div
+                        className={mergeClasses(styles.cell, clickable && styles.cellInteractive)}
+                        style={{ backgroundColor: bg }}
+                        {...(clickable ? {
+                          role: 'button',
+                          tabIndex: 0,
+                          'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell.confirmedQty)} of ${formatMatrixQty(cell.availableQty)}. Show purchase order lines.`,
+                          onClick: () => handleClick(cell),
+                          onKeyDown: (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleClick(cell);
+                            }
+                          },
+                        } : {})}
+                      >
+                        {isCapacity ? (
+                          <Text className={styles.capacityValue}>{formatMatrixQty(cell.availableQty)}</Text>
+                        ) : (
                           <Text className={styles.loadValue}>{formatMatrixQty(cell.confirmedQty)}</Text>
-                          <Text className={styles.utilValue}>/ {formatMatrixQty(cell.availableQty)}</Text>
-                          {cell.utilPercent !== null && cell.utilPercent !== undefined && (
-                            <Text className={styles.utilValue}>{cell.utilPercent}%</Text>
-                          )}
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                 );

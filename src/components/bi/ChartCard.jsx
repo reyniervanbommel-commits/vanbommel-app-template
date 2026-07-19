@@ -1,8 +1,8 @@
 import React, { memo, useCallback } from 'react';
 import {
-  Badge, Button, makeStyles, mergeClasses, shorthands, Spinner, Text, tokens,
+  Button, makeStyles, mergeClasses, shorthands, Spinner, Text, tokens,
 } from '@fluentui/react-components';
-import { DeleteRegular, EditRegular } from '@fluentui/react-icons';
+import { DeleteRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
 
 const useStyles = makeStyles({
@@ -71,11 +71,6 @@ function ChartCard({
     if (canManage) onEdit(chart);
   }, [canManage, onEdit, chart]);
 
-  const handleEditClick = useCallback((event) => {
-    event.stopPropagation();
-    onEdit(chart);
-  }, [onEdit, chart]);
-
   const handleDeleteClick = useCallback((event) => {
     event.stopPropagation();
     onDelete(chart);
@@ -104,17 +99,9 @@ function ChartCard({
       <div className={styles.header}>
         <div className={styles.titleWrap}>
           <Text className={styles.title}>{chart.name}</Text>
-          {chart.visibility === 'shared' ? <Badge appearance="tint" color="informative">Shared</Badge> : null}
         </div>
         {canManage ? (
           <div className={styles.actions}>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<EditRegular />}
-              aria-label={`Edit ${chart.name}`}
-              onClick={handleEditClick}
-            />
             <Button
               appearance="subtle"
               size="small"

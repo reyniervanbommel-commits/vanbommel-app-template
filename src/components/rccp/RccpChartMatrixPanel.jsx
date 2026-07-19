@@ -1,10 +1,10 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea,
 } from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import { buildMatrixPeriodHeaders, RCCP_ROW_LABEL_WIDTH } from './rccpUtils';
+import { buildMatrixPeriodHeaders, RCCP_ROW_LABEL_WIDTH, RCCP_WEEK_COL_WIDTH, resolveChartWeekRangeBounds } from './rccpUtils';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
@@ -31,6 +31,7 @@ function RccpChartMatrixPanel({
   measureRows,
   periods,
   cellMap,
+  chartWeekRanges = [],
   compact = false,
   chartHeight = 240,
   onCellClick,
@@ -40,9 +41,15 @@ function RccpChartMatrixPanel({
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
   const gridWidth = useMemo(
     () => measureRows.length && periodHeaders.length
-      ? RCCP_ROW_LABEL_WIDTH + periodHeaders.length * 72
+      ? RCCP_ROW_LABEL_WIDTH + periodHeaders.length * RCCP_WEEK_COL_WIDTH
       : 0,
     [measureRows.length, periodHeaders.length],
+  );
+  const chartRangeBands = useMemo(
+    () => (chartWeekRanges || [])
+      .map((range) => resolveChartWeekRangeBounds(range, periods))
+      .filter(Boolean),
+    [chartWeekRanges, periods],
   );
 
   const [visibleKeys, setVisibleKeys] = useState({});
@@ -76,6 +83,17 @@ function RccpChartMatrixPanel({
               <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={42} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
+              {chartRangeBands.map((band, index) => (
+                <ReferenceArea
+                  key={`${band.x1}-${band.x2}-${index}`}
+                  x1={band.x1}
+                  x2={band.x2}
+                  fill={band.color}
+                  fillOpacity={0.22}
+                  strokeOpacity={0}
+                  ifOverflow="hidden"
+                />
+              ))}
               {activeRows.map((row) => (
                 row.chartType === 'bar' ? (
                   <Bar

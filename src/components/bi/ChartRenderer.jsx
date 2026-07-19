@@ -27,11 +27,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     marginTop: tokens.spacingVerticalXXS,
   },
-  kpiLabel: {
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
-    marginTop: tokens.spacingVerticalXXS,
-  },
   empty: {
     display: 'flex',
     alignItems: 'center',
@@ -136,13 +131,11 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
     const total = data.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     const colorKey = measureKeys[0] || 'value';
     const kpiColor = resolveChartColor(config, colorKey, 0);
-    const kpiLabel = measureLabel(colorKey, columns) || 'Total';
     const unit = String(config?.options?.unit || '').trim();
     return (
       <div className={styles.kpi} style={{ height }}>
         <span className={styles.kpiValue} style={{ color: kpiColor }}>{formatNumber(total)}</span>
         {unit ? <Text className={styles.kpiUnit}>{unit}</Text> : null}
-        <Text className={styles.kpiLabel}>{kpiLabel}</Text>
       </div>
     );
   }

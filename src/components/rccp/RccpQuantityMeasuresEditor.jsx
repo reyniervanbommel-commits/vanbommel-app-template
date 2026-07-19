@@ -1,8 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
-  Button, Field, Input, Select, Text, makeStyles, shorthands, tokens, mergeClasses,
+  Button, Field, Select, Text, makeStyles, shorthands, tokens, mergeClasses,
 } from '@fluentui/react-components';
 import { Add24Regular, Delete24Regular } from '@fluentui/react-icons';
+import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 
 const CHART_TYPES = [
   { value: 'line', label: 'Line' },
@@ -29,6 +30,7 @@ const useStyles = makeStyles({
   },
   fieldFlyout: { width: '100%' },
   compactControl: { width: '168px', maxWidth: '100%' },
+  colorField: { display: 'flex', alignItems: 'flex-end', minHeight: '32px' },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
@@ -65,7 +67,7 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
       columnKey: nextFreeColumn.key,
       label: nextFreeColumn.label || nextFreeColumn.key,
       chartType: 'line',
-      color: '#0078D4',
+      color: SELECTABLE_STATUS_COLORS[4] || '#579bfc',
       showInChart: true,
     }]);
   }, [nextFreeColumn, measures, onChange]);
@@ -142,14 +144,14 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
               {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </Select>
           </Field>
-          <Field label="Color">
-            <Input
-              className={compact ? styles.compactControl : undefined}
-              size={compact ? 'small' : 'medium'}
-              type="color"
-              value={measure.color || '#D13438'}
-              onChange={(e) => updateMeasure(index, { color: e.target.value })}
-            />
+          <Field label="Color" className={compact ? styles.fieldFlyout : undefined}>
+            <div className={styles.colorField}>
+              <ColorPalettePicker
+                selectedColor={measure.color || SELECTABLE_STATUS_COLORS[0]}
+                onSelect={(color) => updateMeasure(index, { color })}
+                ariaLabel="Measure color"
+              />
+            </div>
           </Field>
           <Field label="In chart">
             <Select

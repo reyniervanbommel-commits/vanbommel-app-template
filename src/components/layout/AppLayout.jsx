@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import {
+  CalendarDataBar24Regular,
   ChartMultiple24Regular,
-  ClipboardTaskListLtr24Regular,
   Settings24Regular,
   Table24Regular,
 } from '@fluentui/react-icons';
@@ -139,7 +139,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
-      { id: 'rccp', label: 'RCCP', icon: ClipboardTaskListLtr24Regular, path: '/rccp' },
+      { id: 'rccp', label: 'RCCP', icon: CalendarDataBar24Regular, path: '/rccp' },
       ...(isAdminLike ? [
         { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
         { type: 'divider' },

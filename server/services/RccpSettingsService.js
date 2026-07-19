@@ -5,7 +5,7 @@
  */
 
 const settingsService = require('./SettingsService');
-const registry = require('./TableRegistryService');
+const dataService = require('./TableDataService');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
 const PO_TABLE_KEY = 'purchase-orders';
@@ -25,11 +25,38 @@ function defaultQuantityMeasures() {
   }];
 }
 
+function normalizeChartWeekRanges(raw) {
+  const list = Array.isArray(raw?.chartWeekRanges) ? raw.chartWeekRanges : [];
+  return list.map((entry, index) => {
+    const fromYear = Number(entry?.fromYear);
+    const fromWeek = Number(entry?.fromWeek);
+    const toYear = Number(entry?.toYear);
+    const toWeek = Number(entry?.toWeek);
+    if (!Number.isFinite(fromYear) || !Number.isFinite(fromWeek)
+      || !Number.isFinite(toYear) || !Number.isFinite(toWeek)) return null;
+    if (fromWeek < 1 || fromWeek > 53 || toWeek < 1 || toWeek > 53) return null;
+    if (fromYear * 100 + fromWeek > toYear * 100 + toWeek) return null;
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
+      ? String(entry.color)
+      : MEASURE_COLORS[index % MEASURE_COLORS.length];
+    const label = String(entry?.label || '').trim();
+    return {
+      fromYear,
+      fromWeek,
+      toYear,
+      toWeek,
+      color,
+      ...(label ? { label } : {}),
+    };
+  }).filter(Boolean).slice(0, 12);
+}
+
 function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
     vendorColumnKey: 'vendorAccount',
     quantityMeasures: defaultQuantityMeasures(),
+    chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
@@ -90,6 +117,7 @@ function validateConfig(raw) {
     return { valid: false, error: 'Column keys and at least one quantity measure are required' };
   }
 
+  const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
   if (!VALID_DUPLICATE_POLICIES.includes(duplicatePolicy)) {
@@ -114,6 +142,7 @@ function validateConfig(raw) {
       dateColumnKey,
       vendorColumnKey,
       quantityMeasures,
+      chartWeekRanges,
       excludedStatuses,
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
@@ -139,10 +168,15 @@ async function getConfig() {
  * Alleen kolommen die de admin op de data model-tab heeft vrijgegeven mogen als waardekolom
  * dienen. Deze check zit bewust in het schrijfpad: getConfig() draait bij elke analyse en moet
  * geen database-lookup doen.
+ *
+ * We lezen via getBoardColumnDefinitions in plaats van registry.listColumns, zodat lookup-kolommen
+ * (bv. Received qty uit de ontvangstregels) meetellen. Die staan niet in tb_columns van deze tabel;
+ * ze erven hun vrijgave van de doelkolom. Dat is dezelfde kolomlijst die de analyse gebruikt, dus
+ * wat hier valideert, kan de aggregatie ook echt resolven.
  */
 async function assertMeasuresAreReleased(measures) {
-  const table = await registry.getTableByKey(PO_TABLE_KEY);
-  const columns = await registry.listColumns({ tableId: table.id });
+  const defs = await dataService.getBoardColumnDefinitions(PO_TABLE_KEY);
+  const columns = [...(defs.master || []), ...(defs.detail || [])];
   const released = new Set(columns.filter((c) => c.rccpMeasure).map((c) => c.key));
   const rejected = (measures || [])
     .map((m) => m.columnKey)
@@ -174,6 +208,7 @@ module.exports = {
   CAPACITY_MEASURE_KEY,
   defaultConfig,
   normalizeQuantityMeasures,
+  normalizeChartWeekRanges,
   validateConfig,
   getConfig,
   saveConfig,

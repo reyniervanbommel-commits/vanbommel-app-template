@@ -106,6 +106,7 @@ export default function RccpPageContent() {
             measureRows={measureRows}
             periods={periods}
             cellMap={cellMap}
+            chartWeekRanges={analysis.config?.chartWeekRanges}
             onCellClick={handleCellClick}
             interactive
           />

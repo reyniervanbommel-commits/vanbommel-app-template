@@ -22,9 +22,34 @@ export function formatMatrixWeekLabel(week) {
   return String(week).padStart(2, '0');
 }
 
+/** Monday 00:00 UTC of the given ISO week. */
+export function isoWeekStartUtc(year, week) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const day = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - day + 1);
+  const start = new Date(week1Monday);
+  start.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  return start;
+}
+
+/** Short English label for the Monday that starts the ISO week (e.g. "31 Mar"). */
+export function formatIsoWeekMondayLabel(year, week) {
+  return isoWeekStartUtc(year, week).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+export function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
+  if (aYear !== bYear) return aYear - bYear;
+  return aWeek - bWeek;
+}
+
 /**
  * @param {{ year: number, week: number, key: string }[]} periods
- * @returns {{ year: number, week: number, key: string, weekLabel: string, yearLabel: string }[]}
+ * @returns {{ year: number, week: number, key: string, weekLabel: string, mondayLabel: string, yearLabel: string }[]}
  */
 export function buildMatrixPeriodHeaders(periods) {
   if (!Array.isArray(periods) || !periods.length) return [];
@@ -32,10 +57,41 @@ export function buildMatrixPeriodHeaders(periods) {
   return periods.map((period, index) => ({
     ...period,
     weekLabel: formatMatrixWeekLabel(period.week),
+    mondayLabel: formatIsoWeekMondayLabel(period.year, period.week),
     yearLabel: spansYears && (index === 0 || period.year !== periods[index - 1].year)
       ? String(period.year)
       : '',
   }));
+}
+
+/**
+ * Map a configured week range onto visible chart period keys.
+ * @returns {{ x1: string, x2: string, color: string, label?: string } | null}
+ */
+export function resolveChartWeekRangeBounds(range, periods) {
+  if (!range || !Array.isArray(periods) || !periods.length) return null;
+
+  const startIdx = periods.findIndex(
+    (period) => compareIsoWeek(period.year, period.week, range.fromYear, range.fromWeek) >= 0,
+  );
+  if (startIdx < 0) return null;
+
+  let endIdx = -1;
+  for (let index = periods.length - 1; index >= 0; index -= 1) {
+    const period = periods[index];
+    if (compareIsoWeek(period.year, period.week, range.toYear, range.toWeek) <= 0) {
+      endIdx = index;
+      break;
+    }
+  }
+  if (endIdx < startIdx) return null;
+
+  return {
+    x1: periods[startIdx].key,
+    x2: periods[endIdx].key,
+    color: range.color,
+    label: range.label,
+  };
 }
 
 export function isMatrixCellEmpty(cell) {
@@ -53,7 +109,7 @@ export function formatIsoWindowLabel(window) {
   return `${formatWeekLabel(window.fromYear, window.fromWeek)} → ${formatWeekLabel(window.toYear, window.toWeek)}`;
 }
 
-export const RCCP_WEEK_COL_WIDTH = 72;
+export const RCCP_WEEK_COL_WIDTH = 68;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
 

@@ -22,8 +22,11 @@ export function useRccpSettings() {
     try {
       const [settings, masterCols, detailCols] = await Promise.all([
         apiRequest('/admin/rccp/settings'),
-        apiRequest(`/data/${PO_TABLE}/columns?scope=master`),
-        apiRequest(`/data/${PO_TABLE}/columns?scope=detail`),
+        // enriched=1: inclusief lookup-kolommen (bv. Received qty uit de ontvangstregels), zodat
+        // die ook als waardekolom te kiezen zijn. Zonder deze vlag levert de route alleen de
+        // tb_columns-rijen van deze tabel en ontbreken de afgeleide kolommen.
+        apiRequest(`/data/${PO_TABLE}/columns?scope=master&enriched=1`),
+        apiRequest(`/data/${PO_TABLE}/columns?scope=detail&enriched=1`),
       ]);
       const nextConfig = settings.config;
       publishRccpSettingsSync(nextConfig);

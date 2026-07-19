@@ -28,7 +28,7 @@ export default function AppNavItem({ item, compact, active, styles, onNavigate }
           aria-label={item.label}
           aria-current={active ? 'page' : undefined}
         />
-        <span data-tooltip className={styles.railTooltip}>{item.label}</span>
+        <span data-tooltip className={styles.railTooltip}>{item.tooltipLabel ?? item.label}</span>
       </div>
     );
   }

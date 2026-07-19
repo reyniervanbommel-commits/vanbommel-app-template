@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 import { useRccpWindow } from './useRccpWindow';
@@ -9,21 +9,27 @@ export function useRccpPage({ vendorAccount = '' } = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [readOnly, setReadOnly] = useState(false);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    if (!windowLoaded) return;
+
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError('');
     try {
       const data = await apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined));
+      if (requestId !== requestIdRef.current) return;
       setAnalysis(data);
       setReadOnly(Boolean(data.readOnly));
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err.message || 'Failed to load RCCP analysis');
       setAnalysis(null);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [isoWindow, vendorAccount]);
+  }, [isoWindow, vendorAccount, windowLoaded]);
 
   useEffect(() => { load(); }, [load]);
 

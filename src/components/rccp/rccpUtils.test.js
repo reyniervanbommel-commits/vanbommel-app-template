@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildMatrixPeriodHeaders,
+  formatIsoWeekMondayLabel,
   formatMatrixWeekLabel,
   isMatrixCellEmpty,
+  resolveChartWeekRangeBounds,
 } from './rccpUtils';
 
 describe('matrix period headers', () => {
@@ -12,6 +14,7 @@ describe('matrix period headers', () => {
       { year: 2026, week: 2, key: '2026-W02' },
     ]);
     expect(headers[0].weekLabel).toBe('01');
+    expect(headers[0].mondayLabel).toBe(formatIsoWeekMondayLabel(2026, 1));
     expect(headers[0].yearLabel).toBe('');
     expect(headers[1].yearLabel).toBe('');
   });
@@ -24,6 +27,41 @@ describe('matrix period headers', () => {
     expect(formatMatrixWeekLabel(52)).toBe('52');
     expect(headers[0].yearLabel).toBe('2026');
     expect(headers[1].yearLabel).toBe('2027');
+  });
+});
+
+describe('resolveChartWeekRangeBounds', () => {
+  const periods = [
+    { year: 2026, week: 12, key: '2026-W12' },
+    { year: 2026, week: 13, key: '2026-W13' },
+    { year: 2026, week: 14, key: '2026-W14' },
+    { year: 2026, week: 15, key: '2026-W15' },
+  ];
+
+  it('maps a configured range onto visible period keys', () => {
+    const bounds = resolveChartWeekRangeBounds({
+      fromYear: 2026,
+      fromWeek: 13,
+      toYear: 2026,
+      toWeek: 14,
+      color: '#00c875',
+    }, periods);
+    expect(bounds).toEqual({
+      x1: '2026-W13',
+      x2: '2026-W14',
+      color: '#00c875',
+      label: undefined,
+    });
+  });
+
+  it('returns null when the range is outside the visible window', () => {
+    expect(resolveChartWeekRangeBounds({
+      fromYear: 2026,
+      fromWeek: 1,
+      toYear: 2026,
+      toWeek: 2,
+      color: '#579bfc',
+    }, periods)).toBeNull();
   });
 });
 

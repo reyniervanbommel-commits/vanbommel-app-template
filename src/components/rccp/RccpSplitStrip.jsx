@@ -35,7 +35,7 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
   const chartHeight = Math.max(120, (height || 280) - 120);
 
   const {
-    loading, error, measureRows, periods, cellMap, chart,
+    loading, error, measureRows, periods, cellMap, chart, chartWeekRanges,
   } = useRccpSplitAnalysis({
     vendorAccount,
     isoWindow,
@@ -72,6 +72,7 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
             measureRows={measureRows}
             periods={periods}
             cellMap={cellMap}
+            chartWeekRanges={chartWeekRanges}
             compact
             chartHeight={chartHeight}
           />

@@ -2036,6 +2036,40 @@ async function discoverSourceFields(tableKey) {
 // Laadt de data voor één (gededupliceerde) lookup: doeltabel + doelkolommen + cache-rijen.
 // Alle SQL-reads binnen één lookup zijn zo veel mogelijk parallel; retourneert null als de
 // lookup overgeslagen moet worden (doeltabel weg, geen kolommen, geen veld-mapping).
+/**
+ * Bouwt de synthetische kolom voor één lookup-veld. Synthetisch = geen tb_columns-rij, dus id null;
+ * hij bestaat alleen in de response.
+ *
+ * De RCCP-vrijgave (rccpMeasure) erft hij van de doelkolom. Die heeft wél een echte rij en is dus
+ * wat de admin op de data model-tab van de doeltabel togglet — bijvoorbeeld 'Received qty' op de
+ * ontvangstregels, die op het PO-bord als lookup binnenkomt.
+ */
+function buildSyntheticLookupColumn({
+  derivedKey, targetColKey, targetColumn, tableId, sourceScope, targetTableKey, targetTableLabel,
+}) {
+  const tc = targetColumn;
+  return {
+    id: null,
+    tableId,
+    scope: sourceScope,
+    key: derivedKey,
+    label: tc ? `${tc.label} (${targetTableLabel})` : derivedKey,
+    source: 'lookup',
+    sourceField: null,
+    dataType: tc ? tc.dataType : 'text',
+    options: null,
+    writable: false,
+    writeMechanism: null,
+    isDefaultVisible: true,
+    filterable: false,
+    sortable: true,
+    isActive: true,
+    sortOrder: 9000,
+    rccpMeasure: tc ? Boolean(tc.rccpMeasure) : false,
+    lookup: { targetTableKey, targetColumnKey: targetColKey },
+  };
+}
+
 async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   let targetTable;
   try {
@@ -2091,28 +2125,15 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
 
   const synthetic = fieldEntries
     .filter(([, targetColKey]) => targetColByKey.has(targetColKey))
-    .map(([derivedKey, targetColKey]) => {
-    const tc = targetColByKey.get(targetColKey);
-    return {
-      id: null,
+    .map(([derivedKey, targetColKey]) => buildSyntheticLookupColumn({
+      derivedKey,
+      targetColKey,
+      targetColumn: targetColByKey.get(targetColKey),
       tableId: table.id,
-      scope: lk.sourceScope,
-      key: derivedKey,
-      label: tc ? `${tc.label} (${targetTable.label})` : derivedKey,
-      source: 'lookup',
-      sourceField: null,
-      dataType: tc ? tc.dataType : 'text',
-      options: null,
-      writable: false,
-      writeMechanism: null,
-      isDefaultVisible: true,
-      filterable: false,
-      sortable: true,
-      isActive: true,
-      sortOrder: 9000,
-      lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
-    };
-  });
+      sourceScope: lk.sourceScope,
+      targetTableKey: lk.targetTableKey,
+      targetTableLabel: targetTable.label,
+    }));
 
   return {
     synthetic,
@@ -3998,6 +4019,7 @@ module.exports = {
   includeRows,
   listHiddenInFilterRows,
   buildLookupFieldMap,
+  buildSyntheticLookupColumn,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,

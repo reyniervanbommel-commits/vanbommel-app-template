@@ -49,5 +49,6 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
     periods,
     cellMap,
     chart: analysis?.chart || [],
+    chartWeekRanges: analysis?.config?.chartWeekRanges || [],
   };
 }
