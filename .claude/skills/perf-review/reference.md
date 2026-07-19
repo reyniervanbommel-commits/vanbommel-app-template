@@ -107,9 +107,12 @@ De `time()`-labels die de Server-Timing-header vullen, en waar ze vandaan komen:
 | Label | Bestand | Wat |
 |-------|---------|-----|
 | `app` | `server/server.js` (middleware) | Totale request-tijd — altijd aanwezig |
-| `tb_read_sql` | `server/services/TableDataService.js` | Hoofdquery van het board |
+| `tb_read_masters`, `tb_read_details`, `tb_read_custom` | `server/services/TableDataService.js` | Drie parallelle `tb_cache`-reads (board) |
+| `tb_read_sql` | idem | *Deprecated alias* — vervangen door bovenstaande drie labels |
 | `tb_read_cols` | idem | Kolom-metadata |
-| `tb_links`, `tb_lookups` | idem | Relaties en lookup-resolutie |
+| `tb_links`, `tb_lookups` | idem | Relaties en lookup-enrichment totaal |
+| `tb_lookup_<targetKey>` | idem | Enkele lookup-doeltabel (bijv. `tb_lookup_items`) |
+| `tb_build_rows` | idem | JS-projectie na SQL (board opbouwen) — **backend-overig**, geen SQL |
 | `tb_ledger`, `tb_revision`, `tb_history_hints` | idem | Historie/mutatie-lagen |
 | `tb_meta`, `tb_sync_state`, `tb_viewed`, `tb_track_marks` | idem | Metadata rond het board |
 | `tb_retention` | idem | Opschoning |

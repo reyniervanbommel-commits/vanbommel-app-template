@@ -25,11 +25,18 @@ const useStyles = makeStyles({
     alignItems: 'end',
   },
   rowFlyout: {
-    gridTemplateColumns: '1fr',
+    display: 'flex',
+    flexDirection: 'column',
     ...shorthands.gap(tokens.spacingVerticalS),
+  },
+  rowFlyoutInline: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    ...shorthands.gap(tokens.spacingHorizontalS),
   },
   fieldFlyout: { width: '100%' },
   compactControl: { width: '168px', maxWidth: '100%' },
+  deleteFlyout: { flexShrink: 0 },
   colorField: { display: 'flex', alignItems: 'flex-end', minHeight: '32px' },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
@@ -94,7 +101,7 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
         // Save de config met een kolom die niemand heeft gekozen.
         const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
         return (
-        <div key={`${measure.columnKey}-${index}`} className={mergeClasses(styles.row, compact && styles.rowFlyout)}>
+        <div key={`${measure.columnKey}-${index}`} className={compact ? styles.rowFlyout : styles.row}>
           <Field
             label="Column"
             className={compact ? styles.fieldFlyout : undefined}
@@ -147,30 +154,56 @@ function RccpQuantityMeasuresEditor({ measures, columns, compact, onChange }) {
           <Field label="Color" className={compact ? styles.fieldFlyout : undefined}>
             <div className={styles.colorField}>
               <ColorPalettePicker
+                layout={compact ? 'popover' : 'grid'}
                 selectedColor={measure.color || SELECTABLE_STATUS_COLORS[0]}
                 onSelect={(color) => updateMeasure(index, { color })}
                 ariaLabel="Measure color"
               />
             </div>
           </Field>
-          <Field label="In chart">
-            <Select
-              className={compact ? styles.compactControl : undefined}
-              size={compact ? 'small' : 'medium'}
-              value={measure.showInChart === false ? 'no' : 'yes'}
-              onChange={(e) => updateMeasure(index, { showInChart: e.target.value === 'yes' })}
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </Select>
-          </Field>
-          <Button
-            appearance="subtle"
-            icon={<Delete24Regular />}
-            disabled={measures.length <= 1}
-            onClick={() => removeMeasure(index)}
-            aria-label="Remove measure"
-          />
+          {compact ? (
+            <div className={styles.rowFlyoutInline}>
+              <Field label="In chart" className={styles.fieldFlyout}>
+                <Select
+                  className={styles.compactControl}
+                  size="small"
+                  value={measure.showInChart === false ? 'no' : 'yes'}
+                  onChange={(e) => updateMeasure(index, { showInChart: e.target.value === 'yes' })}
+                >
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </Select>
+              </Field>
+              <Button
+                className={styles.deleteFlyout}
+                appearance="subtle"
+                icon={<Delete24Regular />}
+                disabled={measures.length <= 1}
+                onClick={() => removeMeasure(index)}
+                aria-label="Remove measure"
+              />
+            </div>
+          ) : (
+            <>
+              <Field label="In chart">
+                <Select
+                  size="medium"
+                  value={measure.showInChart === false ? 'no' : 'yes'}
+                  onChange={(e) => updateMeasure(index, { showInChart: e.target.value === 'yes' })}
+                >
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </Select>
+              </Field>
+              <Button
+                appearance="subtle"
+                icon={<Delete24Regular />}
+                disabled={measures.length <= 1}
+                onClick={() => removeMeasure(index)}
+                aria-label="Remove measure"
+              />
+            </>
+          )}
         </div>
         );
       })}

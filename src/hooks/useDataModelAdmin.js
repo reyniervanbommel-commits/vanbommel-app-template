@@ -39,6 +39,9 @@ function resolveHideAllowed(column) {
  */
 function resolveRccpMeasureBlockedReason(column) {
   if (column.dataType !== 'number') return 'Only number columns can be used as an RCCP value';
+  // Deze tab toont ook inactieve kolommen (nodig om ze te kunnen heractiveren), maar die worden
+  // niet gesynct en zijn in RCCP dus altijd leeg.
+  if (!column.isActive) return 'Inactive columns are not synced, so they are always empty in RCCP';
   if (column.source === 'custom' && !column.formulaExpr) {
     return 'Filled from personal board settings, so always empty in RCCP';
   }

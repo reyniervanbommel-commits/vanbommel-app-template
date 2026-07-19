@@ -81,8 +81,6 @@ function RccpSettingsForm({
         </>
       )}
 
-      {isFlyout && actions}
-
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
         <div className={mergeClasses(styles.grid, isFlyout && styles.gridFlyout)}>
           <ColumnSelect

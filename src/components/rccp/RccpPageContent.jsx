@@ -11,8 +11,6 @@ import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
 import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
-import RccpCapacityEditor from './RccpCapacityEditor';
-import RccpImportDialog from './RccpImportDialog';
 import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
@@ -91,8 +89,6 @@ export default function RccpPageContent() {
         {isAdmin && (
           <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
         )}
-        <RccpCapacityEditor readOnly={readOnly} onSaved={reload} />
-        <RccpImportDialog readOnly={readOnly} onImported={reload} />
       </div>
 
       {loading && <Spinner label="Loading RCCP dashboard..." />}
@@ -133,6 +129,7 @@ export default function RccpPageContent() {
           open={settingsOpen}
           onClose={handleCloseSettings}
           onSaved={handleSettingsSaved}
+          readOnly={readOnly}
         />
       )}
     </div>

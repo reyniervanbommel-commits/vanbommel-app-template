@@ -2070,7 +2070,13 @@ function buildSyntheticLookupColumn({
   };
 }
 
+function lookupTimingLabel(targetTableKey) {
+  const slug = String(targetTableKey || 'unknown').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32);
+  return `tb_lookup_${slug}`;
+}
+
 async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
+  return time(lookupTimingLabel(lk.targetTableKey), async () => {
   let targetTable;
   try {
     targetTable = await getTableByKey(lk.targetTableKey);
@@ -2147,6 +2153,7 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
       partitionless,
     },
   };
+  });
 }
 
 function addLookupColumnsByScope(sourceScope, syntheticColumns, masterCols, detailCols) {
@@ -2484,8 +2491,9 @@ function buildD365ChangeState(ledgerRows) {
 
 // De drie tb_cache-reads (masters, details, custom values) parallel op de pool;
 // onafhankelijke queries, dus geen reden om op elkaar te wachten.
+// Elk deel krijgt een eigen Server-Timing-label (tb_read_masters/details/custom).
 async function readCacheRows(pool, tableId, includeRemoved) {
-  const mastersPromise = pool.request()
+  const mastersPromise = time('tb_read_masters', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
@@ -2497,18 +2505,18 @@ async function readCacheRows(pool, tableId, includeRemoved) {
           WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
         )`}
       ORDER BY c.record_key
-    `);
+    `));
 
-  const detailsPromise = pool.request()
+  const detailsPromise = time('tb_read_details', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
       FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId AND scope = 'detail'
       ORDER BY record_key, detail_key
-    `);
+    `));
 
-  const customPromise = pool.request()
+  const customPromise = time('tb_read_custom', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
@@ -2516,7 +2524,7 @@ async function readCacheRows(pool, tableId, includeRemoved) {
       FROM dbo.tb_custom_values cv WITH (NOLOCK)
       INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
       WHERE cv.table_id = @tableId AND c.is_active = 1
-    `);
+    `));
 
   const [mastersResult, detailsResult, customResult] = await Promise.all([
     mastersPromise, detailsPromise, customPromise,
@@ -2758,8 +2766,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key)),
     syncStatePromise,
     viewedPromise,
-    // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
-    time('tb_read_sql', () => readCacheRows(pool, table.id, includeRemoved)),
+    readCacheRows(pool, table.id, includeRemoved),
     time('tb_lookups', () => loadLookupEnrichment(table)),
     ledgerPromise,
     historyByCellPromise,
@@ -2809,6 +2816,8 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 
   let newCount = 0;
   let changedCount = 0;
+  let scopedRows;
+  await time('tb_build_rows', async () => {
   const rows = mastersResult.recordset.map((m) => {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
@@ -2883,7 +2892,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // afgeleide rijwaarde met het leveranciersaccount van de gebruiker (case-insensitief).
   // Wanneer supplierAccount is meegegeven (ook een lege string) filteren we altijd — een
   // supplier ziet dus nooit onbedoeld alle orders. Staff geeft null door en ziet alles.
-  let scopedRows = rows;
+  scopedRows = rows;
   if (supplierAccount !== null) {
     const wantedAccount = String(supplierAccount).trim().toLowerCase();
     const filterKey = supplierFilterColumn || 'vendorAccount';
@@ -2893,6 +2902,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     newCount = scopedRows.filter((row) => row.isNew).length;
     changedCount = scopedRows.filter((row) => row.isChanged).length;
   }
+  });
 
   const staleThresholdMinutes = await getStaleThresholdMinutes(table);
   const stale = table.cacheMode === 'never'

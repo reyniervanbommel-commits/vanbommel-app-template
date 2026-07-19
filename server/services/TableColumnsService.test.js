@@ -37,30 +37,38 @@ describe('TableColumnsService.resolveWriteback', () => {
 
 describe('TableColumnsService.resolveRccpMeasureEligibility', () => {
   it('accepts a synced number column', () => {
-    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source' });
+    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source', isActive: true });
     expect(result.eligible).toBe(true);
     expect(result.reason).toBeNull();
   });
 
   it('accepts a custom number column that has a formula', () => {
     const result = resolveRccpMeasureEligibility({
-      dataType: 'number', source: 'custom', formulaExpr: '(a)+(b)',
+      dataType: 'number', source: 'custom', formulaExpr: '(a)+(b)', isActive: true,
     });
     expect(result.eligible).toBe(true);
   });
 
   it('rejects a custom number column without a formula (per-user rollup, always empty in RCCP)', () => {
     const result = resolveRccpMeasureEligibility({
-      dataType: 'number', source: 'custom', formulaExpr: null,
+      dataType: 'number', source: 'custom', formulaExpr: null, isActive: true,
     });
     expect(result.eligible).toBe(false);
     expect(result.reason).toMatch(/board settings/i);
   });
 
   it('rejects a non-number column', () => {
-    const result = resolveRccpMeasureEligibility({ dataType: 'text', source: 'source' });
+    const result = resolveRccpMeasureEligibility({ dataType: 'text', source: 'source', isActive: true });
     expect(result.eligible).toBe(false);
     expect(result.reason).toMatch(/number/i);
+  });
+
+  // De admin-tab toont inactieve kolommen (nodig om ze te heractiveren), maar ze worden niet
+  // gesynct en staan niet in de board-read — als measure leveren ze altijd 0.
+  it('rejects an inactive column', () => {
+    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source', isActive: false });
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toMatch(/inactive/i);
   });
 });
 
