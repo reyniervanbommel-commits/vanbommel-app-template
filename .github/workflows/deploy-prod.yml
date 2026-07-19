@@ -57,7 +57,12 @@ jobs:
             --resource-group "$ACA_RESOURCE_GROUP" \
             --secrets \
               sql-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/sql-connection-string-prod,identityref:system" \
-              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-prod,identityref:system"
+              session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-prod,identityref:system" \
+              d365-base-url="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-BASE-URL,identityref:system" \
+              d365-tenant-id="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-TENANT-ID,identityref:system" \
+              d365-client-id="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-CLIENT-ID,identityref:system" \
+              d365-client-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-CLIENT-SECRET,identityref:system" \
+              d365-secret-expires-at="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-CLIENT-SECRET-EXPIRES-AT,identityref:system"
 
           az containerapp update \
             --name "$APP_NAME" \
@@ -65,7 +70,13 @@ jobs:
             --set-env-vars \
               SQL_CONNECTION_STRING=secretref:sql-connection-string \
               SESSION_SECRET=secretref:session-secret \
-              APP_ENV=production
+              APP_ENV=production \
+              D365_ODATA_BASE_URL=secretref:d365-base-url \
+              D365_ODATA_TENANT_ID=secretref:d365-tenant-id \
+              D365_ODATA_CLIENT_ID=secretref:d365-client-id \
+              D365_ODATA_CLIENT_SECRET=secretref:d365-client-secret \
+              D365_ODATA_CLIENT_SECRET_EXPIRES_AT=secretref:d365-secret-expires-at \
+              D365_ODATA_COMPANY=WHSL
 
           az containerapp update \
             --name "$APP_NAME" \
@@ -81,3 +92,18 @@ jobs:
           echo "Laatste revision: $REVISION"
 
           curl --fail --silent --show-error "https://${FQDN}/api/health"
+
+      - name: D365-koppeling verifiëren
+        run: |
+          FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$ACA_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
+
+          # Deze check doet een echte entity-read, niet alleen een token-aanvraag: een geldig
+          # token zegt niets over de rechten van de gekoppelde F&O-gebruiker (zie 2026-07-19,
+          # waar het token slaagde maar elke read 403 gaf).
+          BODY="$(curl --silent --show-error "https://${FQDN}/api/health/d365")"
+          echo "$BODY"
+
+          if ! echo "$BODY" | grep -q '"status":"ok"'; then
+            echo "::error::De D365-koppeling werkt niet. Zie de melding hierboven."
+            exit 1
+          fi

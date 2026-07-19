@@ -57,8 +57,24 @@ const EMPTY_FORM = {
   D365_ODATA_TENANT_ID: '',
   D365_ODATA_CLIENT_ID: '',
   D365_ODATA_CLIENT_SECRET: '',
+  D365_ODATA_CLIENT_SECRET_EXPIRES_AT: '',
   PO_SYNC_MAX_ORDERS: '',
   PO_CACHE_STALE_MINUTES: '',
+};
+
+const EXPIRY_BADGE = {
+  expired: { color: 'danger', label: 'Expired' },
+  warning: { color: 'warning', label: 'Expires soon' },
+  ok: { color: 'success', label: 'Valid' },
+  unknown: { color: 'informative', label: 'Not set' },
+};
+
+// Input type="date" verwacht yyyy-MM-dd; de backend levert een volledige ISO-timestamp.
+const toDateInputValue = (raw) => {
+  if (!raw) return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
 };
 
 export default function AdminODataSettings() {
@@ -92,6 +108,7 @@ export default function AdminODataSettings() {
         D365_ODATA_TENANT_ID: s.D365_ODATA_TENANT_ID || '',
         D365_ODATA_CLIENT_ID: s.D365_ODATA_CLIENT_ID || '',
         D365_ODATA_CLIENT_SECRET: '',
+        D365_ODATA_CLIENT_SECRET_EXPIRES_AT: toDateInputValue(s.D365_ODATA_CLIENT_SECRET_EXPIRES_AT),
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
       });
@@ -130,6 +147,8 @@ export default function AdminODataSettings() {
   if (loading) return <Spinner label="Loading from database..." />;
 
   const auth = AUTH_LABELS[derived.authMethod] || AUTH_LABELS.none;
+  const expiry = derived.clientSecretExpiry || {};
+  const expiryBadge = EXPIRY_BADGE[expiry.status] || EXPIRY_BADGE.unknown;
 
   return (
     <div className={styles.root}>
@@ -161,6 +180,18 @@ export default function AdminODataSettings() {
             <Badge appearance="tint" color={secretSet.clientSecret ? 'success' : 'danger'}>
               {secretSet.clientSecret ? 'Configured' : 'Missing'}
             </Badge>
+          </div>
+          <div className={styles.statusRow}>
+            <span className={styles.statusLabel}>Secret expiry</span>
+            <Badge appearance="tint" color={expiryBadge.color}>{expiryBadge.label}</Badge>
+            {expiry.expiresAt && (
+              <span className={styles.hint}>
+                {toDateInputValue(expiry.expiresAt)}
+                {typeof expiry.daysRemaining === 'number' && expiry.daysRemaining > 0
+                  ? ` — ${expiry.daysRemaining} days left`
+                  : ''}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -210,6 +241,16 @@ export default function AdminODataSettings() {
           hint={secretSet.clientSecret ? 'A secret is configured. Leave empty to keep it; enter a value to replace it.' : 'No secret configured yet.'}
         >
           <Input type="password" placeholder={secretSet.clientSecret ? '•••••••• (configured)' : 'Client secret'} value={form.D365_ODATA_CLIENT_SECRET} onChange={handleChange('D365_ODATA_CLIENT_SECRET')} />
+        </Field>
+        <Field
+          label="Client secret expires on"
+          hint="Admins are warned in the app from 30 days before this date, and keep being warned until it is updated. Set this to the new expiry date whenever you rotate the secret."
+        >
+          <Input
+            type="date"
+            value={form.D365_ODATA_CLIENT_SECRET_EXPIRES_AT}
+            onChange={handleChange('D365_ODATA_CLIENT_SECRET_EXPIRES_AT')}
+          />
         </Field>
       </div>
 

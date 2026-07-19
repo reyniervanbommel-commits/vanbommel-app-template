@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { Button, makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
+import React, { memo, useEffect, useRef } from 'react';
+import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { DismissRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -9,19 +9,21 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
-    maxHeight: 'calc(100vh - 120px)',
+    alignSelf: 'stretch',
     position: 'sticky',
     top: '0',
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    boxShadow: tokens.shadow16,
+    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
+    overflow: 'hidden',
+    ':focus-visible': {
+      ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
+    },
   },
   header: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('12px', '12px', '10px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM, tokens.spacingVerticalMNudge),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     flexShrink: 0,
   },
@@ -29,40 +31,43 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
   },
-  nameWrap: { flex: 1, minWidth: 0 },
-  title: { fontSize: '11px', fontWeight: 600, color: tokens.colorNeutralForeground3, marginBottom: '4px' },
+  nameWrap: { flex: 1, minWidth: 0, overflow: 'hidden' },
   actions: {
     display: 'flex',
-    ...shorthands.gap('6px'),
+    ...shorthands.gap(tokens.spacingHorizontalSNudge),
     justifyContent: 'flex-end',
   },
   body: {
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
     overflowY: 'auto',
-    ...shorthands.padding('0', '12px', '12px'),
+    overflowX: 'hidden',
+    ...shorthands.padding('0', tokens.spacingHorizontalL, tokens.spacingVerticalL),
   },
 });
 
 function ChartBuilderFlyout({ title, onClose, actions, nameField, children }) {
   const styles = useStyles();
+  const asideRef = useRef(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    asideRef.current?.focus();
+    return () => {
+      if (previouslyFocused instanceof HTMLElement && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
+    };
+  }, []);
 
   return (
-    <aside className={styles.flyout} aria-label="Chart settings">
+    <aside ref={asideRef} tabIndex={-1} className={styles.flyout} aria-label={title || 'Chart settings'}>
       <div className={styles.header}>
         <div className={styles.headerTop}>
-          <div className={styles.nameWrap}>
-            {nameField ? (
-              <>
-                <Text className={styles.title}>Chart name</Text>
-                {nameField}
-              </>
-            ) : (
-              <Text className={styles.title}>{title}</Text>
-            )}
-          </div>
+          <div className={styles.nameWrap}>{nameField}</div>
           <Button
             appearance="subtle"
             size="small"

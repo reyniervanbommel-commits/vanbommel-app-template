@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  columnUsesNumberSemantics,
   DATE_PERIOD_DISPLAY_MODES,
   formatDatePeriodValue,
   isDatePeriodColumn,
@@ -43,5 +44,16 @@ describe('datePeriodColumnUtils', () => {
   it('normalizes display mode fallback to week', () => {
     expect(normalizeDatePeriodDisplayMode('month')).toBe('month');
     expect(normalizeDatePeriodDisplayMode('unknown')).toBe('week');
+  });
+
+  it('uses numeric semantics for date period week columns', () => {
+    const column = {
+      dataType: 'date_period',
+      key: 'deliveryWeek',
+      options: { sourceColumnKey: 'requestedDeliveryDate' },
+    };
+    expect(columnUsesNumberSemantics(column, { deliveryWeek: 'week' })).toBe(true);
+    expect(columnUsesNumberSemantics(column, { deliveryWeek: 'month' })).toBe(false);
+    expect(columnUsesNumberSemantics(column)).toBe(true);
   });
 });

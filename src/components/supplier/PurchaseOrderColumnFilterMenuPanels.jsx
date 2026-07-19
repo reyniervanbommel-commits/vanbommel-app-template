@@ -1,5 +1,4 @@
 import React from 'react';
-import { Text } from '@fluentui/react-components';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
 import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRulesPane';
@@ -20,7 +19,6 @@ export function FilterMenuSubPane({
   handleToggleItalic,
   handleToggleUnderline,
   columnLabel,
-  handleApplyTextStyle,
   handleClearTextStyle,
   formatTarget,
   setFormatTarget,
@@ -29,7 +27,6 @@ export function FilterMenuSubPane({
   addFormatRule,
   updateFormatRule,
   removeFormatRule,
-  handleApplyFormatRules,
   handleClearFormatRules,
   column,
   isGroupingColumn,
@@ -63,7 +60,6 @@ export function FilterMenuSubPane({
         handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline}
         columnLabel={columnLabel}
-        handleApplyTextStyle={handleApplyTextStyle}
         handleClearTextStyle={handleClearTextStyle}
       />
     );
@@ -80,7 +76,6 @@ export function FilterMenuSubPane({
         addFormatRule={addFormatRule}
         updateFormatRule={updateFormatRule}
         removeFormatRule={removeFormatRule}
-        handleApplyFormatRules={handleApplyFormatRules}
         handleClearFormatRules={handleClearFormatRules}
       />
     );
@@ -88,20 +83,18 @@ export function FilterMenuSubPane({
 
   if (activeSubmenu === 'group') {
     content = (
-      <>
-        <Text className={styles.subPaneTitle}>Category / group</Text>
-        <PurchaseOrderColumnGroupingSection
-          column={column}
-          isGroupingColumn={isGroupingColumn}
-          groupingColor={groupingColor}
-          onSetGroupingColumn={onSetGroupingColumn}
-          onClearGrouping={onClearGrouping}
-          onSetGroupingColor={onSetGroupingColor}
-          canToggleGroupSummary={canToggleGroupSummary}
-          isGroupSummaryColumn={isGroupSummaryColumn}
-          onToggleGroupSummary={handleToggleGroupSummary}
-        />
-      </>
+      <PurchaseOrderColumnGroupingSection
+        styles={styles}
+        column={column}
+        isGroupingColumn={isGroupingColumn}
+        groupingColor={groupingColor}
+        onSetGroupingColumn={onSetGroupingColumn}
+        onClearGrouping={onClearGrouping}
+        onSetGroupingColor={onSetGroupingColor}
+        canToggleGroupSummary={canToggleGroupSummary}
+        isGroupSummaryColumn={isGroupSummaryColumn}
+        onToggleGroupSummary={handleToggleGroupSummary}
+      />
     );
   }
 

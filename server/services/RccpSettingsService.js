@@ -5,17 +5,58 @@
  */
 
 const settingsService = require('./SettingsService');
+const dataService = require('./TableDataService');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
+const PO_TABLE_KEY = 'purchase-orders';
 const VALID_DUPLICATE_POLICIES = Object.freeze(['update', 'skip']);
 const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
+const VALID_CHART_TYPES = Object.freeze(['line', 'bar']);
+const MEASURE_COLORS = Object.freeze(['#D13438', '#0078D4', '#8764B8', '#CA5010', '#107C10', '#5C2D91']);
+const CAPACITY_MEASURE_KEY = '__capacity__';
+
+function defaultQuantityMeasures() {
+  return [{
+    columnKey: 'quantity',
+    label: 'Quantity',
+    chartType: 'line',
+    color: '#D13438',
+    showInChart: true,
+  }];
+}
+
+function normalizeChartWeekRanges(raw) {
+  const list = Array.isArray(raw?.chartWeekRanges) ? raw.chartWeekRanges : [];
+  return list.map((entry, index) => {
+    const fromYear = Number(entry?.fromYear);
+    const fromWeek = Number(entry?.fromWeek);
+    const toYear = Number(entry?.toYear);
+    const toWeek = Number(entry?.toWeek);
+    if (!Number.isFinite(fromYear) || !Number.isFinite(fromWeek)
+      || !Number.isFinite(toYear) || !Number.isFinite(toWeek)) return null;
+    if (fromWeek < 1 || fromWeek > 53 || toWeek < 1 || toWeek > 53) return null;
+    if (fromYear * 100 + fromWeek > toYear * 100 + toWeek) return null;
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
+      ? String(entry.color)
+      : MEASURE_COLORS[index % MEASURE_COLORS.length];
+    const label = String(entry?.label || '').trim();
+    return {
+      fromYear,
+      fromWeek,
+      toYear,
+      toWeek,
+      color,
+      ...(label ? { label } : {}),
+    };
+  }).filter(Boolean).slice(0, 12);
+}
 
 function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
-    quantityColumnKey: 'quantity',
-    categoryColumnKey: 'itemNumber',
     vendorColumnKey: 'vendorAccount',
+    quantityMeasures: defaultQuantityMeasures(),
+    chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
@@ -25,18 +66,37 @@ function defaultConfig() {
 
 const LEGACY_COLUMN_KEY_MAP = Object.freeze({
   orderedPurchaseQuantity: 'quantity',
-  productCategory: 'itemNumber',
 });
 
-function normalizeLegacyColumnKeys(config) {
-  const next = { ...config };
-  if (LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey]) {
-    next.quantityColumnKey = LEGACY_COLUMN_KEY_MAP[next.quantityColumnKey];
+function normalizeQuantityMeasures(raw) {
+  const list = Array.isArray(raw?.quantityMeasures) ? raw.quantityMeasures : [];
+  if (list.length) {
+    return list.map((entry, index) => {
+      const columnKey = String(entry?.columnKey || '').trim();
+      if (!columnKey) return null;
+      const chartType = VALID_CHART_TYPES.includes(entry?.chartType) ? entry.chartType : 'line';
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
+        ? String(entry.color)
+        : MEASURE_COLORS[index % MEASURE_COLORS.length];
+      return {
+        columnKey,
+        label: String(entry?.label || columnKey).trim() || columnKey,
+        chartType,
+        color,
+        showInChart: entry?.showInChart !== false,
+      };
+    }).filter(Boolean).slice(0, 8);
   }
-  if (LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey]) {
-    next.categoryColumnKey = LEGACY_COLUMN_KEY_MAP[next.categoryColumnKey];
-  }
-  return next;
+
+  const legacyKey = String(raw?.quantityColumnKey || 'quantity').trim();
+  const mapped = LEGACY_COLUMN_KEY_MAP[legacyKey] || legacyKey;
+  return [{
+    columnKey: mapped,
+    label: mapped,
+    chartType: 'line',
+    color: MEASURE_COLORS[0],
+    showInChart: true,
+  }];
 }
 
 function normalizeStringArray(value) {
@@ -51,13 +111,13 @@ function validateConfig(raw) {
 
   const base = defaultConfig();
   const dateColumnKey = String(raw.dateColumnKey ?? base.dateColumnKey).trim();
-  const quantityColumnKey = String(raw.quantityColumnKey ?? base.quantityColumnKey).trim();
-  const categoryColumnKey = String(raw.categoryColumnKey ?? base.categoryColumnKey).trim();
   const vendorColumnKey = String(raw.vendorColumnKey ?? base.vendorColumnKey).trim();
-  if (!dateColumnKey || !quantityColumnKey || !categoryColumnKey || !vendorColumnKey) {
-    return { valid: false, error: 'Column keys are required' };
+  const quantityMeasures = normalizeQuantityMeasures(raw);
+  if (!dateColumnKey || !vendorColumnKey || !quantityMeasures.length) {
+    return { valid: false, error: 'Column keys and at least one quantity measure are required' };
   }
 
+  const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
   if (!VALID_DUPLICATE_POLICIES.includes(duplicatePolicy)) {
@@ -80,9 +140,9 @@ function validateConfig(raw) {
     valid: true,
     config: {
       dateColumnKey,
-      quantityColumnKey,
-      categoryColumnKey,
       vendorColumnKey,
+      quantityMeasures,
+      chartWeekRanges,
       excludedStatuses,
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
@@ -98,9 +158,36 @@ async function getConfig() {
     const parsed = JSON.parse(raw);
     const result = validateConfig(parsed);
     if (!result.valid) return defaultConfig();
-    return normalizeLegacyColumnKeys(result.config);
+    return result.config;
   } catch {
     return defaultConfig();
+  }
+}
+
+/**
+ * Alleen kolommen die de admin op de data model-tab heeft vrijgegeven mogen als waardekolom
+ * dienen. Deze check zit bewust in het schrijfpad: getConfig() draait bij elke analyse en moet
+ * geen database-lookup doen.
+ *
+ * We lezen via getBoardColumnDefinitions in plaats van registry.listColumns, zodat lookup-kolommen
+ * (bv. Received qty uit de ontvangstregels) meetellen. Die staan niet in tb_columns van deze tabel;
+ * ze erven hun vrijgave van de doelkolom. Dat is dezelfde kolomlijst die de analyse gebruikt, dus
+ * wat hier valideert, kan de aggregatie ook echt resolven.
+ */
+async function assertMeasuresAreReleased(measures) {
+  const defs = await dataService.getBoardColumnDefinitions(PO_TABLE_KEY);
+  const columns = [...(defs.master || []), ...(defs.detail || [])];
+  const released = new Set(columns.filter((c) => c.rccpMeasure).map((c) => c.key));
+  const rejected = (measures || [])
+    .map((m) => m.columnKey)
+    .filter((key) => !released.has(key));
+  if (rejected.length) {
+    const err = new Error(
+      `Not released as an RCCP value column: ${[...new Set(rejected)].join(', ')}. `
+      + 'Enable it under Admin → Data model first.',
+    );
+    err.status = 400;
+    throw err;
   }
 }
 
@@ -111,14 +198,17 @@ async function saveConfig(raw, userId = null) {
     err.status = 400;
     throw err;
   }
+  await assertMeasuresAreReleased(result.config.quantityMeasures);
   await settingsService.set(CONFIG_KEY, JSON.stringify(result.config), userId);
   return result.config;
 }
 
 module.exports = {
   CONFIG_KEY,
+  CAPACITY_MEASURE_KEY,
   defaultConfig,
-  normalizeLegacyColumnKeys,
+  normalizeQuantityMeasures,
+  normalizeChartWeekRanges,
   validateConfig,
   getConfig,
   saveConfig,

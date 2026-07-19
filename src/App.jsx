@@ -7,6 +7,7 @@ import LoginPage from './components/auth/LoginPage';
 import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay } from './components/layout';
 import AppToaster from './components/shared/AppToaster';
+import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
 import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
 // Route-based code-splitting: de admin-module (incl. de zware recharts-bibliotheek), de
@@ -52,6 +53,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
 
   return (
     <div className={styles.appShell}>
+      <SecretExpiryWarning />
       <div className={styles.content}>
         <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
         <Routes>

@@ -170,7 +170,11 @@ export function usePurchaseOrderBoardView({
     [activityFilter, itemsWithDerivedDatePeriods, matchesActivityFilter]
   );
 
-  const tableView = usePurchaseOrderTableView({ items: filteredItems, columns });
+  const tableView = usePurchaseOrderTableView({
+    items: filteredItems,
+    columns,
+    datePeriodDisplayModes,
+  });
 
   const rows = useMemo(
     () =>

@@ -11,7 +11,6 @@ export default function PurchaseOrderColumnFormatRulesPane({
   addFormatRule,
   updateFormatRule,
   removeFormatRule,
-  handleApplyFormatRules,
   handleClearFormatRules,
 }) {
   return (
@@ -26,8 +25,7 @@ export default function PurchaseOrderColumnFormatRulesPane({
         removeFormatRule={removeFormatRule}
       />
       <div className={styles.actionRow}>
-        <Button size="small" appearance="primary" onClick={handleApplyFormatRules}>Apply</Button>
-        <Button size="small" appearance="secondary" onClick={handleClearFormatRules}>Reset</Button>
+        <Button size="small" appearance="secondary" onClick={handleClearFormatRules}>Reset to default</Button>
       </div>
     </>
   );

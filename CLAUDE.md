@@ -44,6 +44,21 @@ Tabelnamen: `users`, `sessions`, `password_reset_tokens`, `mfa_backup_codes`, `a
 
 `.claude/team/` bevat 9 persona-bestanden. Gebruik `/review` om parallel te reviewen.
 
+## Skills (Claude Code)
+
+Project skills staan in `.claude/skills/`. Belangrijkste:
+
+| Skill | Slash command | Wanneer |
+|-------|---------------|---------|
+| `ui-design-review` | `/check-ui` of `/ui-design-review` | Fluent UI design-consistentie na feature (ook kleine wijzigingen) |
+| `browser-feature-test` | — | Functionele browser-test (gedrag, API, console) |
+| `perf-review` | `/perf-check` | Laadtijden meten én toerekenen (SQL / backend / netwerk / client / render) |
+| `develop-from-devops` | — | OTAP-straat: build / test / full |
+
+Design standards: `docs/guides/UI_DESIGN_STANDARDS.md`
+
+Triggers voor UI review: *check de ui*, *ui controleren*, *review UI design*, *design consistentie*, *ui-design-review*.
+
 ## Placeholders (vervangen bij "Use this template")
 
 - `[APP_NAME]` — app-naam voor workflows en Container App namen
@@ -73,4 +88,4 @@ Snelheid is standaard meetbaar via vaste "chokepoints" — houd nieuwe code daar
 | Nieuwe frontend backend-call | `apiRequest` (`src/utils/api.js`) logt duur naar console + perf-HUD | **Altijd** `apiRequest`, nooit raw `fetch` (ESLint waarschuwt) |
 | Zware client-berekening | `measure('label', () => ...)` uit `src/utils/perf.js` → User Timing + perf-HUD | Wrap het blok in `measure()` |
 
-Zien: DevTools → Network → **Timing** (Server-Timing), de **⚡ perf-HUD** linksonder (dev/preview), of de console. De HUD is dev/preview-only (`VITE_APP_ENV`), nooit in productie. Voorbeeld-instrumentatie: `TableDataService.read()` (het board leest hieruit) → `tb_read_cols` / `tb_read_sql`.
+Zien: DevTools → Network → **Timing** (Server-Timing), de **⚡ perf-HUD** linksonder (dev/preview), `window.__perf` in de console (dev/preview), of `/perf-check` voor een gemeten review met toerekening. De HUD is dev/preview-only (`VITE_APP_ENV`), nooit in productie. Voorbeeld-instrumentatie: `TableDataService.read()` (het board leest hieruit) → `tb_read_cols` / `tb_read_sql`.

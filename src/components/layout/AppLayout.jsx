@@ -1,6 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
-import { ChartMultiple24Regular, DataTrending24Regular, Settings24Regular, Table24Regular } from '@fluentui/react-icons';
+import {
+  CalendarDataBar24Regular,
+  ChartMultiple24Regular,
+  Settings24Regular,
+  Table24Regular,
+} from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
@@ -134,9 +139,9 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
-      { id: 'rccp', label: 'RCCP', icon: ChartMultiple24Regular, path: '/rccp' },
+      { id: 'rccp', label: 'RCCP', icon: CalendarDataBar24Regular, path: '/rccp' },
       ...(isAdminLike ? [
-        { id: 'bi', label: 'BI', icon: DataTrending24Regular, path: '/bi' },
+        { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
         { type: 'divider' },
         { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
       ] : []),

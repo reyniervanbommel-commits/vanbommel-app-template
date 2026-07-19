@@ -7,12 +7,20 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...shorthands.gap('12px'),
-    marginBottom: '16px',
+    ...shorthands.gap(tokens.spacingHorizontalM),
+    marginBottom: tokens.spacingVerticalL,
   },
-  title: { fontSize: '20px', fontWeight: 700 },
-  subtitle: { color: tokens.colorNeutralForeground3, marginLeft: '8px', fontSize: '13px' },
-  actions: { display: 'flex', ...shorthands.gap('8px') },
+  heading: {
+    ...shorthands.margin('0'),
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightBold,
+  },
+  subtitle: {
+    color: tokens.colorNeutralForeground3,
+    marginLeft: tokens.spacingHorizontalS,
+    fontSize: tokens.fontSizeBase200,
+  },
+  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalS) },
 });
 
 function BiToolbar({ chartCount, onNewChart, onRefresh }) {
@@ -20,7 +28,7 @@ function BiToolbar({ chartCount, onNewChart, onRefresh }) {
   return (
     <div className={styles.root}>
       <div>
-        <Text className={styles.title}>Business Intelligence</Text>
+        <Text as="h1" className={styles.heading}>Business Intelligence</Text>
         <Text className={styles.subtitle}>{chartCount} chart{chartCount === 1 ? '' : 's'}</Text>
       </div>
       <div className={styles.actions}>

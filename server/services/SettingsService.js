@@ -80,6 +80,8 @@ const ODATA_KEYS = [
   'D365_ODATA_TENANT_ID',
   'D365_ODATA_CLIENT_ID',
   'D365_ODATA_CLIENT_SECRET',
+  // Vervaldatum van de client secret (ISO-datum). Niet geheim; voedt de verloopwaarschuwing.
+  'D365_ODATA_CLIENT_SECRET_EXPIRES_AT',
   // Cache-sync scope/versheid (Fase 1, B2)
   // Gestructureerde sync-filterregels (JSON) — gecompileerd naar $filter (zie odataSyncFilter.js)
   'PO_SYNC_RULES',

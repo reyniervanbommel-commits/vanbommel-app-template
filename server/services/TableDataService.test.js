@@ -21,9 +21,12 @@ const {
   enrichLookupSourceFromCacheRow,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
+  toAdminColumn,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
   buildLookupFieldMap,
+  buildSyntheticLookupColumn,
+  buildD365ChangeState,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,
@@ -364,6 +367,23 @@ describe('TableDataService runtime linked header values', () => {
     expect(masterValues.aantal_total_2).toBe(5);
   });
 
+  it('toAdminColumn geeft rccpMeasure en formulaExpr door aan de admin-UI', () => {
+    // Zonder deze velden kan de "RCCP value column"-toggle zijn eigen stand niet tonen en
+    // wordt een custom kolom met formule onterecht als onbruikbaar gemarkeerd.
+    const mapped = toAdminColumn({
+      id: 1,
+      key: 'quantity',
+      label: 'Aantal',
+      scope: 'detail',
+      source: 'source',
+      dataType: 'number',
+      rccpMeasure: true,
+      formulaExpr: '(a)+(b)',
+    });
+    expect(mapped.rccpMeasure).toBe(true);
+    expect(mapped.formulaExpr).toBe('(a)+(b)');
+  });
+
   it('calculateLinkedLineTotal telt robuust numerieke waarden', () => {
     const total = calculateLinkedLineTotal(
       [
@@ -662,6 +682,85 @@ describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
       purchaseOrderLineNumber: '10',
       lineNumber: '10',
     });
+  });
+});
+
+describe('TableDataService.buildD365ChangeState', () => {
+  const line = (action, createdAt) => ({
+    partition_key: 'whsl', record_key: 'WSPO-1', detail_key: 20, field_key: 'quantity', action, created_at: createdAt,
+  });
+  const stateFor = (rows) => buildD365ChangeState(rows).lineChanges.get('whsl|WSPO-1|20');
+
+  it('markeert een regel als verwijderd bij DELETE', () => {
+    expect(stateFor([line('DELETE', '2026-07-15T17:56:32Z')]).isRemoved).toBe(true);
+  });
+
+  // Een refresh schrijft DELETE + INSERT vlak na elkaar; de regel bestaat daarna gewoon.
+  it('heft de verwijdering op als de regel daarna opnieuw wordt ingevoegd', () => {
+    const state = stateFor([
+      line('DELETE', '2026-07-15T17:56:32Z'),
+      line('INSERT', '2026-07-15T17:56:57Z'),
+    ]);
+    expect(state.isRemoved).toBe(false);
+    expect(state.isNew).toBe(true);
+  });
+
+  it('heft de verwijdering ook op bij een latere UPDATE', () => {
+    const state = stateFor([
+      line('DELETE', '2026-07-15T17:56:32Z'),
+      line('UPDATE', '2026-07-15T18:00:00Z'),
+    ]);
+    expect(state.isRemoved).toBe(false);
+  });
+
+  it('houdt een DELETE die ná de INSERT komt wél vast', () => {
+    const state = stateFor([
+      line('INSERT', '2026-07-15T17:00:00Z'),
+      line('DELETE', '2026-07-15T18:00:00Z'),
+    ]);
+    expect(state.isRemoved).toBe(true);
+  });
+});
+
+describe('TableDataService.buildSyntheticLookupColumn', () => {
+  const base = {
+    derivedKey: 'receivedPurchaseQuantity',
+    targetColKey: 'receivedPurchaseQuantity',
+    tableId: 1,
+    sourceScope: 'detail',
+    targetTableKey: 'product-receipt-lines',
+    targetTableLabel: 'Ontvangstregels',
+  };
+
+  it('erft de RCCP-vrijgave van de doelkolom', () => {
+    const column = buildSyntheticLookupColumn({
+      ...base,
+      targetColumn: {
+        label: 'Received qty', dataType: 'number', rccpMeasure: true,
+      },
+    });
+    expect(column.rccpMeasure).toBe(true);
+    expect(column.key).toBe('receivedPurchaseQuantity');
+    expect(column.dataType).toBe('number');
+    expect(column.source).toBe('lookup');
+    // Synthetisch: geen tb_columns-rij, dus niet zelf toggelbaar via de kolom-id.
+    expect(column.id).toBeNull();
+  });
+
+  it('blijft niet-vrijgegeven wanneer de doelkolom dat niet is', () => {
+    const column = buildSyntheticLookupColumn({
+      ...base,
+      targetColumn: {
+        label: 'Received qty', dataType: 'number', rccpMeasure: false,
+      },
+    });
+    expect(column.rccpMeasure).toBe(false);
+  });
+
+  it('valt terug op niet-vrijgegeven zonder doelkolom', () => {
+    const column = buildSyntheticLookupColumn({ ...base, targetColumn: undefined });
+    expect(column.rccpMeasure).toBe(false);
+    expect(column.dataType).toBe('text');
   });
 });
 

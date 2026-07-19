@@ -1,16 +1,16 @@
 import React, { memo, useCallback } from 'react';
 import {
-  Badge, Button, makeStyles, mergeClasses, shorthands, Spinner, Text, tokens,
+  Button, makeStyles, mergeClasses, shorthands, Spinner, Text, tokens,
 } from '@fluentui/react-components';
-import { DeleteRegular, EditRegular } from '@fluentui/react-icons';
+import { DeleteRegular } from '@fluentui/react-icons';
 import ChartRenderer from './ChartRenderer';
 
 const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('12px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalM),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
@@ -29,12 +29,35 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow8,
     backgroundColor: tokens.colorNeutralBackground1Hover,
   },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('8px') },
-  titleWrap: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px'), minWidth: 0 },
-  title: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  actions: { display: 'flex', ...shorthands.gap('2px'), flexShrink: 0 },
+  kpiRoot: {
+    maxWidth: '132px',
+    ...shorthands.padding(tokens.spacingVerticalS),
+  },
+  kpiBody: {
+    aspectRatio: '1 / 1',
+    maxHeight: '112px',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  titleWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalSNudge),
+    minWidth: 0,
+  },
+  title: {
+    fontWeight: tokens.fontWeightSemibold,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalXXS), flexShrink: 0 },
   body: { flexGrow: 1, minHeight: 0, pointerEvents: 'none' },
-  loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('24px') },
+  loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding(tokens.spacingVerticalXXL) },
 });
 
 function ChartCard({
@@ -42,15 +65,11 @@ function ChartCard({
   onEdit, onDelete, height = 260,
 }) {
   const styles = useStyles();
+  const isKpi = chart.config?.type === 'kpi';
 
   const handleCardClick = useCallback(() => {
     if (canManage) onEdit(chart);
   }, [canManage, onEdit, chart]);
-
-  const handleEditClick = useCallback((event) => {
-    event.stopPropagation();
-    onEdit(chart);
-  }, [onEdit, chart]);
 
   const handleDeleteClick = useCallback((event) => {
     event.stopPropagation();
@@ -61,6 +80,7 @@ function ChartCard({
     <div
       className={mergeClasses(
         styles.root,
+        isKpi && styles.kpiRoot,
         canManage && styles.rootInteractive,
         selected && styles.rootSelected,
       )}
@@ -79,17 +99,9 @@ function ChartCard({
       <div className={styles.header}>
         <div className={styles.titleWrap}>
           <Text className={styles.title}>{chart.name}</Text>
-          {chart.visibility === 'shared' ? <Badge appearance="tint" color="informative">Shared</Badge> : null}
         </div>
         {canManage ? (
           <div className={styles.actions}>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<EditRegular />}
-              aria-label={`Edit ${chart.name}`}
-              onClick={handleEditClick}
-            />
             <Button
               appearance="subtle"
               size="small"
@@ -100,11 +112,17 @@ function ChartCard({
           </div>
         ) : null}
       </div>
-      <div className={styles.body}>
+      <div className={mergeClasses(styles.body, isKpi && styles.kpiBody)}>
         {loading ? (
           <div className={styles.loading}><Spinner size="tiny" label="Loading…" /></div>
         ) : (
-          <ChartRenderer type={chart.config?.type} series={series} config={chart.config} columns={columns} height={height} />
+          <ChartRenderer
+            type={chart.config?.type}
+            series={series}
+            config={chart.config}
+            columns={columns}
+            height={isKpi ? 112 : height}
+          />
         )}
       </div>
     </div>

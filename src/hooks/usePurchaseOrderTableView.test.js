@@ -53,4 +53,28 @@ describe('usePurchaseOrderTableView equals filter', () => {
     expect(result.current.filterByColumn.delivery.operator).toBe('equals');
     expect(result.current.filterByColumn.delivery.value).toBe('2026-03-15');
   });
+
+  it('sorts date period week columns numerically', () => {
+    const weekColumn = {
+      key: 'deliveryWeek',
+      dataType: 'date_period',
+      options: { sourceColumnKey: 'requestedDeliveryDate' },
+    };
+    const weekItems = [
+      { values: { deliveryWeek: '12' } },
+      { values: { deliveryWeek: '2' } },
+      { values: { deliveryWeek: '5' } },
+    ];
+    const { result } = renderHook(() => usePurchaseOrderTableView({
+      items: weekItems,
+      columns: [weekColumn],
+      datePeriodDisplayModes: { deliveryWeek: 'week' },
+    }));
+
+    act(() => {
+      result.current.setSortDirection('deliveryWeek', 'asc');
+    });
+
+    expect(result.current.processedItems.map((item) => item.values.deliveryWeek)).toEqual(['2', '5', '12']);
+  });
 });

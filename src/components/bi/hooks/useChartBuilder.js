@@ -1,16 +1,29 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   CHART_SIZE_MEDIUM, CHART_SIZE_SMALL, CHART_SIZE_WIDE,
-  createEmptyChartConfig, resolveMeasures, supportsMultipleMeasures,
+  CHART_TYPE_OPTIONS, createEmptyChartConfig, normalizeMeasureStyles, resolveMeasures, supportsMultipleMeasures,
 } from '../biConstants';
+
+const VALID_CHART_TYPES = new Set(CHART_TYPE_OPTIONS.map((option) => option.key));
+
+function normalizeChartType(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  return VALID_CHART_TYPES.has(candidate) ? candidate : null;
+}
 
 function normalizeConfig(raw) {
   const base = createEmptyChartConfig();
   const merged = { ...base, ...(raw || {}) };
   merged.options = { ...base.options, ...(merged.options || {}) };
+  const normalizedType = normalizeChartType(merged.type);
+  if (normalizedType) merged.type = normalizedType;
   merged.measures = resolveMeasures(merged);
   if (!merged.measures.length && merged.measure) merged.measures = [merged.measure];
   if (merged.measures.length === 1) merged.measure = merged.measures[0];
+  merged.options.measureStyles = normalizeMeasureStyles(
+    merged.measures,
+    merged.options?.measureStyles,
+  );
   return merged;
 }
 
@@ -37,18 +50,33 @@ export function useChartBuilder(chart, columns = []) {
     setState((prev) => {
       const nextConfig = { ...prev.config, [field]: value };
       if (field === 'type') {
-        if (!supportsMultipleMeasures(value)) {
+        const nextType = normalizeChartType(value);
+        if (!nextType) return prev;
+        nextConfig.type = nextType;
+        if (!supportsMultipleMeasures(nextType)) {
           nextConfig.measures = nextConfig.measures.slice(0, 1);
           nextConfig.measure = nextConfig.measures[0] || '';
         }
-        if (value === 'kpi') {
-          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_SMALL };
-        } else if (value === 'pie') {
-          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_MEDIUM };
-        } else if (value === 'bar' || value === 'line') {
+        if (nextType === 'kpi') {
+          nextConfig.dimension = '';
+          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_SMALL, measureStyles: {} };
+        } else if (nextType === 'pie') {
+          nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_MEDIUM, measureStyles: {} };
+        } else if (nextType === 'bar' || nextType === 'line') {
           const size = nextConfig.options?.chartSize;
           if (size !== CHART_SIZE_MEDIUM && size !== CHART_SIZE_WIDE) {
             nextConfig.options = { ...nextConfig.options, chartSize: CHART_SIZE_MEDIUM };
+          }
+          if (nextType === 'line') {
+            nextConfig.options = { ...nextConfig.options, measureStyles: {} };
+          } else {
+            nextConfig.options = {
+              ...nextConfig.options,
+              measureStyles: normalizeMeasureStyles(
+                resolveMeasures(nextConfig),
+                nextConfig.options?.measureStyles,
+              ),
+            };
           }
         }
       }
@@ -69,6 +97,26 @@ export function useChartBuilder(chart, columns = []) {
         ...prev.config,
         measures,
         measure: measures[0] || '',
+        options: {
+          ...prev.config.options,
+          measureStyles: normalizeMeasureStyles(measures, prev.config.options?.measureStyles),
+        },
+      },
+    }));
+  }, []);
+
+  const setMeasureStyle = useCallback((measureKey, style) => {
+    setState((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        options: {
+          ...prev.config.options,
+          measureStyles: {
+            ...(prev.config.options?.measureStyles || {}),
+            [measureKey]: style,
+          },
+        },
       },
     }));
   }, []);
@@ -77,6 +125,16 @@ export function useChartBuilder(chart, columns = []) {
     setState((prev) => ({
       ...prev,
       config: { ...prev.config, options: { ...prev.config.options, colors } },
+    }));
+  }, []);
+
+  const setOption = useCallback((key, value) => {
+    setState((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        options: { ...prev.config.options, [key]: value },
+      },
     }));
   }, []);
 
@@ -155,12 +213,14 @@ export function useChartBuilder(chart, columns = []) {
     setVisibility,
     setConfigField,
     setMeasures,
+    setMeasureStyle,
     setColors,
+    setOption,
     setChartSize,
     setFilters,
     loadFrom,
     reset,
   }), [state, measureColumns, dimensionColumn, isDateDimension, selectedMeasures, multiMeasureMode,
-    colorItems, isValid, payload, setName, setVisibility, setConfigField, setMeasures, setColors,
-    setChartSize, setFilters, loadFrom, reset]);
+    colorItems, isValid, payload, setName, setVisibility, setConfigField, setMeasures, setMeasureStyle,
+    setColors, setOption, setChartSize, setFilters, loadFrom, reset]);
 }

@@ -4,6 +4,7 @@ import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import {
+  purchaseOrderBoardHeaderHeight,
   purchaseOrderBoardRowHeight,
 } from './purchaseOrderBoardLayout';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
@@ -18,9 +19,13 @@ const fixedCellOverflow = {
 
 const useStyles = makeStyles({
   groupRowCell: {
+    position: 'sticky',
+    top: purchaseOrderBoardHeaderHeight,
+    zIndex: 4,
     backgroundColor: '#f4e6ed',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('0'),
+    verticalAlign: 'middle',
   },
   groupButton: {
     flex: 1,

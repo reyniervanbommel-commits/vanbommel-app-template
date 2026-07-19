@@ -83,10 +83,31 @@ router.post('/capacity', requireRole(ROLES.ADMIN), async (req, res, next) => {
 
 router.put('/capacity/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
+    const {
+      vendorAccount, periodYear, isoWeek, capacityCategory, availableQty,
+    } = req.body || {};
+    if (!vendorAccount || !capacityCategory) {
+      return res.status(400).json({ error: 'vendorAccount and capacityCategory are required' });
+    }
     const row = await capacityService.updateCapacity(req.params.id, {
-      availableQty: Number(req.body?.availableQty),
+      vendorAccount: String(vendorAccount).trim(),
+      periodYear: Number(periodYear),
+      isoWeek: Number(isoWeek),
+      capacityCategory: String(capacityCategory).trim(),
+      availableQty: Number(availableQty),
     }, req.user?.id ?? null);
     res.json({ row });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.delete('/capacity', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const vendorAccount = resolveVendorQuery(req);
+    const result = await capacityService.deleteAllCapacity({ vendorAccount });
+    res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
@@ -165,7 +186,7 @@ router.get('/drill-down', async (req, res, next) => {
       vendorAccount,
       periodYear: req.query.periodYear,
       isoWeek: req.query.isoWeek,
-      capacityCategory: req.query.capacityCategory,
+      measureKey: req.query.measureKey || req.query.capacityCategory,
       supplierAccount,
       ...window,
     });

@@ -7,6 +7,7 @@ import { apiRequest } from '../utils/api';
  */
 export function useRccpVendorOptions() {
   const [vendors, setVendors] = useState([]);
+  const [vendorNames, setVendorNames] = useState({});
   const [vendorColumnKey, setVendorColumnKey] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,9 +18,11 @@ export function useRccpVendorOptions() {
     try {
       const data = await apiRequest('/rccp/vendors');
       setVendors(Array.isArray(data?.vendors) ? data.vendors : []);
+      setVendorNames(data?.vendorNames || {});
       setVendorColumnKey(data?.vendorColumnKey || '');
     } catch (err) {
       setVendors([]);
+      setVendorNames({});
       setError(err.message || 'Failed to load vendors');
     } finally {
       setLoading(false);
@@ -30,5 +33,5 @@ export function useRccpVendorOptions() {
     load();
   }, [load]);
 
-  return { vendors, vendorColumnKey, loading, error, reload: load };
+  return { vendors, vendorNames, vendorColumnKey, loading, error, reload: load };
 }

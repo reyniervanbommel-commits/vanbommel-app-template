@@ -1,8 +1,10 @@
 import React, { lazy, Suspense, useCallback, useMemo } from 'react';
-import { Badge, Button, makeStyles, shorthands, Spinner, tokens } from '@fluentui/react-components';
+import {
+  Button, Tab, TabList, makeStyles, shorthands, Spinner, tokens,
+} from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
-import { useAuth } from '../../context/AuthContext';
-import { useAppToast } from '../../hooks/useAppToast';
+import { useRccpWindow } from '../../hooks/useRccpWindow';
+import { resolveRccpVendorFromFilter } from '../rccp/resolveRccpVendorFilter';
 import { useSplitPane } from './hooks/useSplitPane';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
@@ -10,8 +12,8 @@ import { useBiMeta } from './hooks/useBiMeta';
 import { BOARD_KEY } from './biConstants';
 import { buildTableDataRevision } from './tableDataRevision';
 
-// Lazy zodat recharts pas in de bundle komt wanneer een staff-gebruiker het paneel opent.
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
+const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 },
@@ -32,42 +34,38 @@ const useStyles = makeStyles({
   toggleBar: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('4px', '8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
     ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
     backgroundColor: tokens.colorNeutralBackground2,
+    flexWrap: 'wrap',
   },
   pane: {
     ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding('8px', '8px', '4px'),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
     backgroundColor: tokens.colorNeutralBackground2,
+    minHeight: 0,
+  },
+  paneCollapsed: {
+    height: 0,
+    overflow: 'hidden',
+    padding: 0,
+    borderTopWidth: 0,
     minHeight: 0,
   },
 });
 
 export default function BoardSplitView({ filterByColumn, tableRows, isStaff, children }) {
   const styles = useStyles();
-  const { user } = useAuth();
-  const { notifyError } = useAppToast();
   const split = useSplitPane();
-  const { charts, updateChart } = useBiCharts();
+  const { isoWindow } = useRccpWindow();
+  const { charts } = useBiCharts();
   const meta = useBiMeta(BOARD_KEY);
 
-  const handleWidthChange = useCallback(async (chart, chartSize) => {
-    if (Number(chart.userId) !== Number(user?.id)) return;
-    try {
-      await updateChart(chart.id, {
-        name: chart.name,
-        visibility: chart.visibility,
-        config: {
-          ...chart.config,
-          options: { ...(chart.config?.options || {}), chartSize },
-        },
-      });
-    } catch (err) {
-      notifyError(err.message || 'Failed to update chart size');
-    }
-  }, [updateChart, user?.id, notifyError]);
+  const handleTabSelect = useCallback((_, data) => {
+    split.setActiveTab(data.value);
+    if (!split.open) split.toggleOpen();
+  }, [split]);
 
   const selectedIdSet = useMemo(() => new Set(split.chartIds.map(String)), [split.chartIds]);
   const selectedCharts = useMemo(
@@ -76,10 +74,19 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
   );
 
   const dataRevision = useMemo(() => buildTableDataRevision(tableRows), [tableRows]);
+  const vendorAccount = useMemo(
+    () => resolveRccpVendorFromFilter(filterByColumn),
+    [filterByColumn],
+  );
+  const rccpRefreshKey = useMemo(
+    () => `${dataRevision}|${vendorAccount || ''}`,
+    [dataRevision, vendorAccount],
+  );
+  const showBiPane = !split.open || split.activeTab === 'bi';
+  const showRccpPane = !split.open || split.activeTab === 'rccp';
 
-  // Grafieken erven de actieve tabelfilters (#AB:222). Alleen ophalen als het paneel open is.
   const { resultsById } = useChartData({
-    charts: split.open ? selectedCharts : [],
+    charts: selectedCharts,
     externalFilterByColumn: filterByColumn,
     dataRevision,
   });
@@ -100,28 +107,49 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
           size="small"
           appearance="subtle"
           icon={split.open ? <ChevronDownRegular /> : <ChevronUpRegular />}
+          aria-expanded={split.open}
+          aria-label={split.open ? 'Hide panel' : 'Show panel'}
           onClick={split.toggleOpen}
+        />
+
+        <TabList
+          size="small"
+          selectedValue={split.activeTab}
+          onTabSelect={handleTabSelect}
         >
-          {split.open ? 'Hide charts' : 'Show charts'}
-        </Button>
-        {split.chartIds.length ? <Badge appearance="tint" color="informative">{split.chartIds.length} selected</Badge> : null}
+          <Tab value="bi">Charts</Tab>
+          <Tab value="rccp">RCCP</Tab>
+        </TabList>
       </div>
 
-      {split.open ? (
-        <div className={styles.pane} style={{ height: `${split.height}px` }}>
+      <div
+        className={split.open ? styles.pane : styles.paneCollapsed}
+        style={split.open ? { height: `${split.height}px` } : undefined}
+        aria-hidden={!split.open}
+      >
+        <div hidden={!showBiPane}>
           <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
             <BiChartStrip
               availableCharts={chartsWithSeries}
               selectedIds={split.chartIds}
               onToggleChart={split.toggleChart}
-              onWidthChange={handleWidthChange}
-              currentUserId={user?.id}
               height={split.height}
               columns={meta.columns}
             />
           </Suspense>
         </div>
-      ) : null}
+        <div hidden={!showRccpPane}>
+          <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
+            <RccpSplitStrip
+              vendorAccount={vendorAccount}
+              refreshKey={rccpRefreshKey}
+              height={split.height}
+              enabled
+              isoWindow={isoWindow}
+            />
+          </Suspense>
+        </div>
+      </div>
     </div>
   );
 }

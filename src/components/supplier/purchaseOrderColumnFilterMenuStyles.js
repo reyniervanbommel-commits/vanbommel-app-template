@@ -1,4 +1,5 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 
 export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   trigger: {
@@ -19,7 +20,27 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     },
   },
   triggerActive: {
-    color: tokens.colorBrandForeground1,
+    opacity: 1,
+    pointerEvents: 'auto',
+    color: tokens.colorNeutralForeground1,
+    backgroundColor: tokens.colorNeutralBackground1Hover,
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      backgroundColor: tokens.colorNeutralBackground2,
+    },
+  },
+  triggerFilterActive: {
+    opacity: 1,
+    pointerEvents: 'auto',
+    color: tokens.colorNeutralForeground1,
+    backgroundColor: SUBITEM_CONNECTOR_COLOR,
+    borderRadius: tokens.borderRadiusSmall,
+    boxShadow: `inset 0 0 0 1px ${SUBITEM_CONNECTOR_COLOR}`,
+    ':hover': {
+      color: tokens.colorNeutralForeground1,
+      backgroundColor: SUBITEM_CONNECTOR_COLOR,
+    },
   },
   surface: {
     ...shorthands.padding('0'),
@@ -34,10 +55,24 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     width: '256px',
     minWidth: '256px',
     boxSizing: 'border-box',
-    ...shorthands.padding('8px'),
+    ...shorthands.padding('6px', '8px'),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap('6px'),
+    overflow: 'visible',
+  },
+  sectionTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    marginTop: '2px',
+  },
+  sectionBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('2px'),
   },
   subPane: {
     width: '240px',
@@ -68,7 +103,7 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   sortActions: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('4px'),
+    ...shorthands.gap('0'),
   },
   sortButton: {
     justifyContent: 'flex-start',
@@ -155,12 +190,34 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.padding('0'),
     color: tokens.colorBrandForeground1,
   },
-  typeMetaConnectionSurface: {
-    maxWidth: '280px',
+  typeMetaConnectionButtonActive: {
+    backgroundColor: tokens.colorNeutralBackground1Selected,
   },
   typeMetaConnectionList: {
     margin: 0,
     paddingLeft: '16px',
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+  },
+  inlineConnectionList: {
+    margin: 0,
+    paddingLeft: '16px',
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+  },
+  d365SyncLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('6px'),
+  },
+  d365SyncIcon: {
+    width: '14px',
+    height: '14px',
+    objectFit: 'contain',
+  },
+  displayModeButtonSelected: {
+    backgroundColor: tokens.colorNeutralBackground1Selected,
+    boxShadow: `inset 0 0 0 1px ${tokens.colorBrandStroke1}`,
   },
   typeIcon: {
     display: 'inline-flex',
@@ -174,10 +231,122 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase100,
   },
+  filterBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('4px'),
+  },
+  filterSectionLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
+  },
+  filterValueStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    ...shorthands.gap('2px'),
+    width: '100%',
+    minWidth: 0,
+  },
+  filterOperatorWrap: {
+    position: 'relative',
+    flexShrink: 0,
+  },
+  filterOperatorLink: {
+    minWidth: 'auto',
+    height: 'auto',
+    ...shorthands.padding('0'),
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightRegular,
+    justifyContent: 'flex-start',
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      textDecorationLine: 'underline',
+    },
+    ':active': {
+      color: tokens.colorBrandForeground1,
+    },
+  },
+  filterOperatorLinkContent: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
+  },
+  filterOperatorChevron: {
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  filterOperatorFlyout: {
+    position: 'absolute',
+    top: '0',
+    left: 'calc(100% + 4px)',
+    zIndex: 2,
+    minWidth: '168px',
+    boxSizing: 'border-box',
+    ...shorthands.padding('4px'),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    boxShadow: tokens.shadow8,
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('0'),
+  },
+  filterOperatorOption: {
+    justifyContent: 'flex-start',
+    minWidth: 'auto',
+    width: '100%',
+    height: '28px',
+    ...shorthands.padding('0', '8px'),
+    color: tokens.colorNeutralForeground1,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+  },
+  filterValueField: {
+    flexGrow: 1,
+    minWidth: 0,
+    width: '100%',
+  },
+  filterBetweenRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('6px'),
+  },
+  filterValueFieldBetween: {
+    flex: '1 1 0',
+    minWidth: 0,
+  },
+  filterClearButton: {
+    flex: '1 1 0',
+    minWidth: 0,
+    height: '28px',
+    ...shorthands.padding('0', '8px'),
+  },
+  filterApplyButton: {
+    flex: '1 1 0',
+    minWidth: 0,
+    height: '28px',
+    ...shorthands.padding('0', '8px'),
+  },
+  filterActionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    width: '100%',
+    marginTop: '2px',
+  },
+  filterHint: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    lineHeight: tokens.lineHeightBase200,
+  },
   filterRow: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('6px'),
+    ...shorthands.gap('4px'),
   },
   actionRow: {
     display: 'flex',
@@ -212,5 +381,19 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.padding('4px', '6px'),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusSmall,
+  },
+  groupingSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('8px'),
+  },
+  groupingToggleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.gap('8px'),
+  },
+  groupingColorField: {
+    ...shorthands.gap('4px'),
   },
 });

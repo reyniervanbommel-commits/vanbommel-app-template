@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { columnUsesNumberSemantics } from '../utils/datePeriodColumnUtils';
 import {
   buildFilterFromCellValue,
   columnValueMatchesFilter,
@@ -32,7 +33,7 @@ function parseDateValue(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
 }
 
-function compareValues(a, b, column) {
+function compareValues(a, b, column, datePeriodDisplayModes = {}) {
   if (isDateColumn(column)) {
     const left = parseDateValue(a);
     const right = parseDateValue(b);
@@ -42,7 +43,7 @@ function compareValues(a, b, column) {
     return left - right;
   }
 
-  if (column?.dataType === 'number') {
+  if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) {
     const left = Number(a);
     const right = Number(b);
     const leftIsNumber = Number.isFinite(left);
@@ -58,7 +59,7 @@ function compareValues(a, b, column) {
   return left.localeCompare(right, 'nl-NL', { sensitivity: 'base' });
 }
 
-export function usePurchaseOrderTableView({ items, columns }) {
+export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {} }) {
   const [sortState, setSortState] = useState({ columnKey: '', direction: SORT_DIRECTIONS.none });
   const [filterByColumn, setFilterByColumn] = useState({});
 
@@ -70,7 +71,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
   const setFilterOperator = useCallback((columnKey, operator) => {
     setFilterByColumn((prev) => {
       const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey]);
+      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
       return {
         ...prev,
         [columnKey]: {
@@ -79,12 +80,12 @@ export function usePurchaseOrderTableView({ items, columns }) {
         },
       };
     });
-  }, [columnByKey]);
+  }, [columnByKey, datePeriodDisplayModes]);
 
   const setFilterValue = useCallback((columnKey, value) => {
     setFilterByColumn((prev) => {
       const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey]);
+      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
       return {
         ...prev,
         [columnKey]: {
@@ -93,12 +94,12 @@ export function usePurchaseOrderTableView({ items, columns }) {
         },
       };
     });
-  }, [columnByKey]);
+  }, [columnByKey, datePeriodDisplayModes]);
 
   const setFilterSecondaryValue = useCallback((columnKey, secondaryValue) => {
     setFilterByColumn((prev) => {
       const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey]);
+      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
       return {
         ...prev,
         [columnKey]: {
@@ -107,7 +108,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
         },
       };
     });
-  }, [columnByKey]);
+  }, [columnByKey, datePeriodDisplayModes]);
 
   const clearColumnFilter = useCallback((columnKey) => {
     setFilterByColumn((prev) => {
@@ -178,7 +179,7 @@ export function usePurchaseOrderTableView({ items, columns }) {
     Object.entries(rawFilters).forEach(([key, filter]) => {
       const column = columnByKey.get(key);
       if (!column || !filter) return;
-      nextFilters[key] = resolveFilterModel(column, filter);
+      nextFilters[key] = resolveFilterModel(column, filter, datePeriodDisplayModes);
     });
     setFilterByColumn(nextFilters);
 
@@ -190,18 +191,18 @@ export function usePurchaseOrderTableView({ items, columns }) {
     } else {
       setSortState({ columnKey: '', direction: SORT_DIRECTIONS.none });
     }
-  }, [columnByKey]);
+  }, [columnByKey, datePeriodDisplayModes]);
 
   const processedItems = useMemo(() => {
     const activeFilters = columns
-      .map((column) => [column, resolveFilterModel(column, filterByColumn[column.key])])
-      .filter(([column, filter]) => hasActiveFilter(column, filter));
+      .map((column) => [column, resolveFilterModel(column, filterByColumn[column.key], datePeriodDisplayModes)])
+      .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
 
     const filtered = activeFilters.length
       ? items.filter((order) => {
         return activeFilters.every(([column, filter]) => {
           const rawValue = order?.values?.[column.key];
-          return columnValueMatchesFilter(column, rawValue, filter);
+          return columnValueMatchesFilter(column, rawValue, filter, datePeriodDisplayModes);
         });
       })
       : items;
@@ -218,16 +219,23 @@ export function usePurchaseOrderTableView({ items, columns }) {
     const sorted = [...filtered].sort((leftOrder, rightOrder) => {
       const leftValue = leftOrder?.values?.[sortColumn.key];
       const rightValue = rightOrder?.values?.[sortColumn.key];
-      const base = compareValues(leftValue, rightValue, sortColumn);
+      const base = compareValues(leftValue, rightValue, sortColumn, datePeriodDisplayModes);
       if (sortState.direction === SORT_DIRECTIONS.desc) return -base;
       return base;
     });
     return sorted;
-  }, [columns, filterByColumn, items, sortState, columnByKey]);
+  }, [columns, filterByColumn, items, sortState, columnByKey, datePeriodDisplayModes]);
 
   const activeFilterCount = useMemo(
-    () => columns.reduce((count, column) => count + (hasActiveFilter(column, resolveFilterModel(column, filterByColumn[column.key])) ? 1 : 0), 0),
-    [columns, filterByColumn]
+    () => columns.reduce(
+      (count, column) => count + (hasActiveFilter(
+        column,
+        resolveFilterModel(column, filterByColumn[column.key], datePeriodDisplayModes),
+        datePeriodDisplayModes
+      ) ? 1 : 0),
+      0
+    ),
+    [columns, filterByColumn, datePeriodDisplayModes]
   );
 
   return useMemo(() => ({

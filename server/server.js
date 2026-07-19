@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const sql = require('mssql');
 const SqlSessionStore = require('./services/SqlSessionStore');
+const d365ODataService = require('./services/D365ODataService');
 const { runWithRequestTiming, buildServerTimingHeader } = require('./utils/timing');
 
 const authRouter = require('./routes/auth');
@@ -150,6 +151,14 @@ app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE
 app.use('/api/media', createMediaRouter());
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+// Readiness-check voor de D365-koppeling. Bewust géén onderdeel van /api/health: dat is de
+// liveness-probe van de Container App, en een D365-storing mag geen restart uitlokken.
+// Wordt na een deploy aangeroepen (deploy-prod.yml) zodat een kapotte koppeling de deploy laat falen.
+app.get('/api/health/d365', async (_req, res) => {
+  const result = await d365ODataService.checkHealth();
+  res.status(result.status === 'ok' ? 200 : 503).json(result);
+});
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.resolve(__dirname, '../dist');

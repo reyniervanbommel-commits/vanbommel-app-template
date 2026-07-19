@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect } from 'react';
 import {
-  Button, Divider, Dropdown, Field, Input, makeStyles, mergeClasses, Option, shorthands, Text, tokens,
+  Button, Divider, Dropdown, Field, Input, makeStyles, Option, shorthands, Text, tokens,
 } from '@fluentui/react-components';
 import ChartFilterEditor from './ChartFilterEditor';
 import ChartMeasureMultiSelect from './ChartMeasureMultiSelect';
+import ChartMeasureStyleEditor from './ChartMeasureStyleEditor';
 import ChartColorEditor from './ChartColorEditor';
+import ChartBuilderFlyoutForm from './ChartBuilderFlyoutForm';
 import { useChartBuilder } from './hooks/useChartBuilder';
-import { useChartData } from './hooks/useChartData';
 import {
   AGGREGATION_OPTIONS, CHART_SIZE_MEDIUM, CHART_SIZE_OPTIONS_BAR_LINE, CHART_SIZE_WIDE,
-  CHART_TYPE_OPTIONS, DATE_GROUPING_OPTIONS, SERIES_COLOR_KEY, VISIBILITY_OPTIONS,
-  resolveChartSize, resolveMeasures,
+  CHART_TYPE_OPTIONS, COLOR_MODE_RANDOM, DATE_GROUPING_OPTIONS, VALUE_DISPLAY_OPTIONS,
+  VISIBILITY_OPTIONS, resolveChartSize, resolveColorMode, resolveValueDisplay,
 } from './biConstants';
 
 const NONE_OPTION = { key: '__none__', label: 'None' };
@@ -19,76 +20,49 @@ const useStyles = makeStyles({
   shell: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('20px'),
+    ...shorthands.gap(tokens.spacingVerticalXL),
     width: '100%',
-  },
-  shellFlyout: {
-    ...shorthands.gap('10px'),
-    ...shorthands.padding('10px', '0', '0'),
   },
   panel: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('20px'),
-    ...shorthands.padding('20px'),
+    ...shorthands.gap(tokens.spacingVerticalXL),
+    ...shorthands.padding(tokens.spacingVerticalXL),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     boxShadow: tokens.shadow8,
   },
-  panelFlyout: {
-    ...shorthands.gap('10px'),
-    ...shorthands.padding('0'),
-    boxShadow: 'none',
-    ...shorthands.borderRadius(0),
-  },
-  section: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
-  sectionFlyout: { ...shorthands.gap('6px') },
+  section: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalM) },
   sectionTitle: {
-    fontSize: '12px',
-    fontWeight: 600,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground3,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
-  sectionTitleFlyout: { fontSize: '10px', letterSpacing: '0.06em' },
   fieldGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    ...shorthands.gap('12px'),
-  },
-  fieldGridFlyout: {
-    gridTemplateColumns: '1fr',
-    ...shorthands.gap('8px'),
-  },
-  fieldGridFlyoutPair: {
-    gridTemplateColumns: '1fr 1fr',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingVerticalM),
   },
   fieldNarrow: { maxWidth: '320px' },
-  fieldNarrowFlyout: { maxWidth: '100%' },
-  fieldCompact: {
-    '& label': { fontSize: '11px' },
-    '& .fui-Field__hint': { fontSize: '10px' },
+  nameInputFlyout: {
+    width: '100%',
+    '& .fui-Input__input': {
+      fontSize: tokens.fontSizeBase400,
+      fontWeight: tokens.fontWeightSemibold,
+      color: tokens.colorBrandForeground1,
+      ...shorthands.padding(tokens.spacingVerticalXXS, '0'),
+    },
+    '& .fui-Input__underline': {
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
   },
-  actions: { display: 'flex', ...shorthands.gap('8px'), justifyContent: 'flex-end' },
-  title: { fontSize: '18px', fontWeight: 600 },
-  dividerFlyout: { marginTop: '2px', marginBottom: '2px' },
+  actions: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalS), justifyContent: 'flex-end' },
+  title: { fontSize: tokens.fontSizeBase500, fontWeight: tokens.fontWeightSemibold },
 });
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
-
-function usesDimensionColors(type, config) {
-  const measures = resolveMeasures(config);
-  if (measures.length > 1) return false;
-  if (type === 'pie') return Boolean(config.dimension);
-  if (type === 'bar' || type === 'line') return Boolean(config.dimension);
-  return false;
-}
-
-function usesSeriesColor(type, config) {
-  if (type !== 'bar' && type !== 'line') return false;
-  return resolveMeasures(config).length <= 1;
-}
 
 export default function ChartBuilderPanel({
   columns, chart, onSave, onCancel, onDraftChange, onFlyoutChromeChange,
@@ -98,27 +72,13 @@ export default function ChartBuilderPanel({
   const isFlyout = variant === 'flyout';
   const controlSize = isFlyout ? 'small' : 'medium';
   const builder = useChartBuilder(chart, columns);
-  const { config, measureColumns, isDateDimension, isValid, multiMeasureMode, selectedMeasures } = builder;
+  const {
+    config, measureColumns, isDateDimension, isValid, multiMeasureMode, selectedMeasures,
+  } = builder;
   const countMode = config.aggregation === 'count';
-
-  const previewCharts = useMemo(() => [{ id: 'preview', config }], [config]);
-  const { resultsById } = useChartData({ charts: previewCharts });
-  const previewSeries = resultsById.preview || [];
-
-  const colorItems = useMemo(() => {
-    if (usesDimensionColors(config.type, config)) {
-      const segmentItems = [...new Set(previewSeries.map((entry) => entry.name))]
-        .map((name) => ({ key: name, label: name }));
-      if (usesSeriesColor(config.type, config)) {
-        return [{ key: SERIES_COLOR_KEY, label: 'Series color' }, ...segmentItems];
-      }
-      return segmentItems;
-    }
-    if (usesSeriesColor(config.type, config)) {
-      return [{ key: SERIES_COLOR_KEY, label: 'Series color' }, ...builder.colorItems];
-    }
-    return builder.colorItems;
-  }, [config.type, config, previewSeries, builder.colorItems]);
+  const colorMode = resolveColorMode(config);
+  const valueDisplay = resolveValueDisplay(config);
+  const chartOptions = config.options || {};
 
   useEffect(() => {
     onDraftChange?.(builder.payload);
@@ -141,7 +101,9 @@ export default function ChartBuilderPanel({
     onFlyoutChromeChange?.({
       nameField: (
         <Input
-          size="small"
+          className={styles.nameInputFlyout}
+          appearance="underline"
+          size="medium"
           value={builder.name}
           onChange={handleNameChange}
           placeholder="Chart name"
@@ -158,45 +120,45 @@ export default function ChartBuilderPanel({
       ),
     });
     return () => onFlyoutChromeChange?.({ actions: null, nameField: null });
-  }, [isFlyout, isValid, busy, handleSave, onCancel, onFlyoutChromeChange, builder.name, handleNameChange]);
-
-  const fieldGridClass = mergeClasses(
-    styles.fieldGrid,
-    isFlyout && styles.fieldGridFlyout,
-    isFlyout && (config.type === 'bar' || config.type === 'line') && styles.fieldGridFlyoutPair,
-  );
-  const fieldClass = mergeClasses(
-    isFlyout ? styles.fieldNarrowFlyout : styles.fieldNarrow,
-    isFlyout && styles.fieldCompact,
-  );
-  const sectionClass = mergeClasses(styles.section, isFlyout && styles.sectionFlyout);
-  const sectionTitleClass = mergeClasses(styles.sectionTitle, isFlyout && styles.sectionTitleFlyout);
+  }, [isFlyout, isValid, busy, handleSave, onCancel, onFlyoutChromeChange, builder.name, handleNameChange, styles.nameInputFlyout]);
 
   const dimensionLabel = columns.find((col) => col.key === config.dimension)?.label
     || (config.dimension ? config.dimension : NONE_OPTION.label);
-
   const measureLabel = measureColumns.find((col) => col.key === config.measure)?.label
     || (config.measure ? config.measure : NONE_OPTION.label);
 
-  return (
-    <div className={mergeClasses(styles.shell, isFlyout && styles.shellFlyout)}>
-      <div className={mergeClasses(styles.panel, isFlyout && styles.panelFlyout)}>
-        {!isFlyout ? <Text className={styles.title}>{chart ? 'Edit chart' : 'New chart'}</Text> : null}
+  if (isFlyout) {
+    return (
+      <ChartBuilderFlyoutForm
+        builder={builder}
+        columns={columns}
+        config={config}
+        measureColumns={measureColumns}
+        isDateDimension={isDateDimension}
+        multiMeasureMode={multiMeasureMode}
+        selectedMeasures={selectedMeasures}
+        countMode={countMode}
+      />
+    );
+  }
 
-        <div className={sectionClass}>
-          {!isFlyout ? <Text className={sectionTitleClass}>Details</Text> : null}
-          <div className={fieldGridClass}>
-            {!isFlyout ? (
-              <Field label="Name" required className={fieldClass}>
-                <Input
-                  size={controlSize}
-                  value={builder.name}
-                  onChange={handleNameChange}
-                  placeholder="Chart name"
-                />
-              </Field>
-            ) : null}
-            <Field label="Visibility" className={fieldClass}>
+  return (
+    <div className={styles.shell}>
+      <div className={styles.panel}>
+        <Text className={styles.title}>{chart ? 'Edit chart' : 'New chart'}</Text>
+
+        <div className={styles.section}>
+          <Text className={styles.sectionTitle}>Details</Text>
+          <div className={styles.fieldGrid}>
+            <Field label="Name" required className={styles.fieldNarrow}>
+              <Input
+                size={controlSize}
+                value={builder.name}
+                onChange={handleNameChange}
+                placeholder="Chart name"
+              />
+            </Field>
+            <Field label="Visibility" className={styles.fieldNarrow}>
               <Dropdown
                 size={controlSize}
                 selectedOptions={[builder.visibility]}
@@ -209,7 +171,7 @@ export default function ChartBuilderPanel({
               </Dropdown>
             </Field>
             {(config.type === 'bar' || config.type === 'line') ? (
-              <Field label="Chart size" className={fieldClass}>
+              <Field label="Chart size" className={styles.fieldNarrow}>
                 <Dropdown
                   size={controlSize}
                   selectedOptions={[resolveChartSize({ config })]}
@@ -227,12 +189,12 @@ export default function ChartBuilderPanel({
           </div>
         </div>
 
-        <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
+        <Divider />
 
-        <div className={sectionClass}>
-          <Text className={sectionTitleClass}>Chart setup</Text>
-          <div className={fieldGridClass}>
-            <Field label="Type" className={fieldClass}>
+        <div className={styles.section}>
+          <Text className={styles.sectionTitle}>Data</Text>
+          <div className={styles.fieldGrid}>
+            <Field label="Chart type" className={styles.fieldNarrow}>
               <Dropdown
                 size={controlSize}
                 selectedOptions={[config.type]}
@@ -244,8 +206,7 @@ export default function ChartBuilderPanel({
                 ))}
               </Dropdown>
             </Field>
-
-            <Field label="Aggregation" className={fieldClass}>
+            <Field label="Aggregation" className={styles.fieldNarrow}>
               <Dropdown
                 size={controlSize}
                 selectedOptions={[config.aggregation]}
@@ -257,26 +218,26 @@ export default function ChartBuilderPanel({
                 ))}
               </Dropdown>
             </Field>
-
-            <Field label={config.type === 'kpi' ? 'Dimension (optional)' : 'Dimension'} className={fieldClass}>
-              <Dropdown
-                size={controlSize}
-                selectedOptions={config.dimension ? [config.dimension] : [NONE_OPTION.key]}
-                value={dimensionLabel}
-                onOptionSelect={(_, data) => {
-                  const value = data.optionValue === NONE_OPTION.key ? '' : (data.optionValue || '');
-                  builder.setConfigField('dimension', value);
-                }}
-              >
-                <Option key={NONE_OPTION.key} value={NONE_OPTION.key} text={NONE_OPTION.label}>{NONE_OPTION.label}</Option>
-                {columns.map((col) => (
-                  <Option key={col.key} value={col.key} text={col.label}>{col.label}</Option>
-                ))}
-              </Dropdown>
-            </Field>
-
-            {isDateDimension ? (
-              <Field label="Date grouping" className={fieldClass}>
+            {config.type !== 'kpi' ? (
+              <Field label="Dimension" className={styles.fieldNarrow}>
+                <Dropdown
+                  size={controlSize}
+                  selectedOptions={config.dimension ? [config.dimension] : [NONE_OPTION.key]}
+                  value={dimensionLabel}
+                  onOptionSelect={(_, data) => {
+                    const value = data.optionValue === NONE_OPTION.key ? '' : (data.optionValue || '');
+                    builder.setConfigField('dimension', value);
+                  }}
+                >
+                  <Option key={NONE_OPTION.key} value={NONE_OPTION.key} text={NONE_OPTION.label}>{NONE_OPTION.label}</Option>
+                  {columns.map((col) => (
+                    <Option key={col.key} value={col.key} text={col.label}>{col.label}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+            ) : null}
+            {config.type !== 'kpi' && isDateDimension ? (
+              <Field label="Date grouping" className={styles.fieldNarrow}>
                 <Dropdown
                   size={controlSize}
                   selectedOptions={[config.dateGrouping]}
@@ -289,18 +250,25 @@ export default function ChartBuilderPanel({
                 </Dropdown>
               </Field>
             ) : null}
-
             {multiMeasureMode && !countMode ? (
-              <div className={fieldClass}>
+              <>
                 <ChartMeasureMultiSelect
                   columns={measureColumns}
                   selectedKeys={selectedMeasures}
                   onChange={builder.setMeasures}
                   size={controlSize}
                 />
-              </div>
+                {config.type === 'bar' && selectedMeasures.length > 0 ? (
+                  <ChartMeasureStyleEditor
+                    columns={measureColumns}
+                    selectedKeys={selectedMeasures}
+                    measureStyles={chartOptions.measureStyles || {}}
+                    onMeasureStyleChange={builder.setMeasureStyle}
+                  />
+                ) : null}
+              </>
             ) : (
-              <Field label="Value (measure)" hint={countMode ? 'Not used with Count' : undefined} className={fieldClass}>
+              <Field label="Value (measure)" hint={countMode ? 'Not used with Count' : undefined} className={styles.fieldNarrow}>
                 <Dropdown
                   size={controlSize}
                   disabled={countMode}
@@ -321,32 +289,56 @@ export default function ChartBuilderPanel({
           </div>
         </div>
 
-        {colorItems.length ? (
-          <>
-            <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
-            <div className={sectionClass}>
+        <Divider />
+
+        <div className={styles.section}>
+          <Text className={styles.sectionTitle}>Appearance</Text>
+          <div className={styles.fieldGrid}>
+            {config.type === 'kpi' ? (
+              <Field label="Unit" hint="Shown under the value on the card" className={styles.fieldNarrow}>
+                <Input
+                  size={controlSize}
+                  value={chartOptions.unit || ''}
+                  onChange={(_, data) => builder.setOption('unit', data.value)}
+                  placeholder="e.g. EUR, pcs"
+                />
+              </Field>
+            ) : null}
+            {(config.type === 'bar' || config.type === 'line' || config.type === 'pie') ? (
+              <Field label="Data labels" className={styles.fieldNarrow}>
+                <Dropdown
+                  size={controlSize}
+                  selectedOptions={[valueDisplay]}
+                  value={findLabel(VALUE_DISPLAY_OPTIONS, valueDisplay)}
+                  onOptionSelect={(_, data) => builder.setOption('valueDisplay', data.optionValue)}
+                >
+                  {VALUE_DISPLAY_OPTIONS.map((option) => (
+                    <Option key={option.key} value={option.key} text={option.label}>{option.label}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+            ) : null}
+            <div className={styles.fieldNarrow}>
               <ChartColorEditor
-                items={colorItems}
-                colors={config.options?.colors || {}}
-                onChange={builder.setColors}
-                wide={isFlyout}
-                compact={isFlyout}
+                colorMode={colorMode}
+                config={config}
+                onColorModeChange={(mode) => builder.setOption('colorMode', mode || COLOR_MODE_RANDOM)}
+                onSingleColorChange={(color) => builder.setOption('singleColor', color)}
+                controlSize={controlSize}
               />
             </div>
-          </>
-        ) : null}
-
-        <Divider className={isFlyout ? styles.dividerFlyout : undefined} />
-        <ChartFilterEditor columns={columns} filters={config.filters} onChange={builder.setFilters} compact={isFlyout} />
-
-        {!isFlyout ? (
-          <div className={styles.actions}>
-            <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
-            <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
-              {busy ? 'Saving…' : 'Save chart'}
-            </Button>
           </div>
-        ) : null}
+        </div>
+
+        <Divider />
+        <ChartFilterEditor columns={columns} filters={config.filters} onChange={builder.setFilters} />
+
+        <div className={styles.actions}>
+          <Button appearance="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button appearance="primary" onClick={handleSave} disabled={!isValid || busy}>
+            {busy ? 'Saving…' : 'Save chart'}
+          </Button>
+        </div>
       </div>
     </div>
   );

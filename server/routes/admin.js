@@ -15,6 +15,7 @@ const passwordResetEmailTemplateService = require('../services/PasswordResetEmai
 const { getSqlPool } = require('../utils/sqlPool');
 const { requireRole } = require('../middleware/auth');
 const { getAppBaseUrl } = require('../utils/appEnvironment');
+const { getSecretExpiryStatus } = require('../utils/secretExpiry');
 
 function getPool() {
   return getSqlPool();
@@ -303,6 +304,7 @@ router.get('/settings/odata', async (req, res, next) => {
         ? 'https://login.microsoftonline.com/' + config.D365_ODATA_TENANT_ID + '/oauth2/v2.0/token'
         : '',
       entityUrl: baseUrl ? baseUrl + (config.D365_ODATA_PURCHASE_ORDERS_PATH || '') : '',
+      clientSecretExpiry: getSecretExpiryStatus(config.D365_ODATA_CLIENT_SECRET_EXPIRES_AT),
     };
 
     res.json({ settings: config, derived, source: 'app_settings' });
@@ -432,8 +434,7 @@ router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) =>
     const config = await rccpSettingsService.saveConfig(req.body || {}, req.user?.id ?? null);
     await auditLog(req.user.id, req.user.email, 'UPDATE_RCCP_SETTINGS', 'app_settings', null, {
       dateColumnKey: config.dateColumnKey,
-      quantityColumnKey: config.quantityColumnKey,
-      categoryColumnKey: config.categoryColumnKey,
+      quantityMeasures: (config.quantityMeasures || []).map((m) => m.columnKey),
     });
     res.json({ success: true, config });
   } catch (err) {

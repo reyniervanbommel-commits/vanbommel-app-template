@@ -3,32 +3,34 @@
 // server-side aggregatie (server/utils/biAggregate.js) zodat een filter in de tabel exact
 // hetzelfde resultaat geeft als in een grafiek (#AB:220).
 
+import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
+
 export const TEXT_FILTER_OPERATORS = {
-  equals: 'equals',
+  equals: 'is exactly',
   contains: 'contains',
   notContains: 'does not contain',
   startsWith: 'starts with',
   notStartsWith: 'does not start with',
-  oneOf: 'one of',
+  oneOf: 'is one of',
 };
 
 export const DATE_FILTER_OPERATORS = {
-  equals: 'equals',
-  before: 'before',
-  after: 'after',
-  between: 'between',
-  inNextWeeks: 'in the next xx weeks',
-  inNextDays: 'in the next xx days',
-  nextWeek: 'next week',
+  equals: 'is exactly',
+  before: 'is before',
+  after: 'is after',
+  between: 'is between',
+  inNextWeeks: 'is in the next xx weeks',
+  inNextDays: 'is in the next xx days',
+  nextWeek: 'is next week',
 };
 
 export const NUMBER_FILTER_OPERATORS = {
-  equals: '=',
-  gt: '>',
-  lt: '<',
-  gte: '>=',
-  lte: '<=',
-  between: 'between',
+  equals: 'is exactly',
+  gt: 'is greater than',
+  lt: 'is less than',
+  gte: 'is greater than or equal to',
+  lte: 'is less than or equal to',
+  between: 'is between',
 };
 
 export function isDateColumn(column) {
@@ -80,7 +82,7 @@ function startOfNextWeek() {
 }
 
 // Bepaalt het standaard filter-model voor een kolomtype.
-export function resolveFilterModel(column, filter) {
+export function resolveFilterModel(column, filter, datePeriodDisplayModes = {}) {
   if (isDateColumn(column)) {
     return {
       operator: filter?.operator || 'before',
@@ -88,7 +90,7 @@ export function resolveFilterModel(column, filter) {
       secondaryValue: filter?.secondaryValue || '',
     };
   }
-  if (isNumberColumn(column)) {
+  if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) {
     return {
       operator: filter?.operator || 'equals',
       value: filter?.value || '',
@@ -102,7 +104,7 @@ export function resolveFilterModel(column, filter) {
   };
 }
 
-export function hasActiveFilter(column, filter) {
+export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
   if (!filter) return false;
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
@@ -110,7 +112,7 @@ export function hasActiveFilter(column, filter) {
     if (filter.operator === 'equals' && filter.value === '') return true;
     return Boolean(filter.value);
   }
-  if (isNumberColumn(column)) {
+  if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) {
     if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
     return filter.value !== '' && filter.value !== null && filter.value !== undefined;
   }
@@ -199,9 +201,9 @@ export function numberMatchesFilter(rawValue, filter) {
 }
 
 // Dispatcht op kolomtype naar de juiste match-functie.
-export function columnValueMatchesFilter(column, rawValue, filter) {
+export function columnValueMatchesFilter(column, rawValue, filter, datePeriodDisplayModes = {}) {
   if (isDateColumn(column)) return dateMatchesFilter(rawValue, filter);
-  if (isNumberColumn(column)) return numberMatchesFilter(rawValue, filter);
+  if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) return numberMatchesFilter(rawValue, filter);
   return textMatchesFilter(rawValue, filter);
 }
 

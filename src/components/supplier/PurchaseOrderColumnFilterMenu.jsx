@@ -66,9 +66,17 @@ function PurchaseOrderColumnFilterMenu({
   // Tracks which flyout submenu is currently aligned with the hovered menu item.
   const [activeSubmenu, setActiveSubmenu] = useState('none');
   const [submenuTop, setSubmenuTop] = useState(0);
-  const [draft, setDraft] = useState(() => getDraftFromFilter(column, filter));
+  const datePeriodFilterModes = useMemo(
+    () => ({ [column.key]: datePeriodDisplayMode }),
+    [column.key, datePeriodDisplayMode]
+  );
+  const [draft, setDraft] = useState(() => getDraftFromFilter(
+    column,
+    filter,
+    { [column.key]: datePeriodDisplayMode }
+  ));
   const isDate = isDateColumn(column);
-  const isNumber = isNumberColumn(column);
+  const isNumber = isNumberColumn(column, datePeriodFilterModes);
   const groupingColumnKeys = useMemo(
     () => String(groupingColumnKey || '')
       .split(',')
@@ -84,23 +92,34 @@ function PurchaseOrderColumnFilterMenu({
       : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
-  const filterActive = isColumnFilterActive(column, filter);
+  const filterActive = isColumnFilterActive(column, filter, datePeriodFilterModes);
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
-  const formatRulesDraft = useColumnFormatRulesMenuDraft({ open, columnFormatRuleSet });
   const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, canHideColumn, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, onToggleColumnCollapsed, isConnectedType });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
     setSubmenuTop(0);
   }, []);
+  const persistFormatRules = useCallback(async (ruleSet) => {
+    if (!canSetColumnFormatRules) return;
+    try {
+      await onSetColumnFormatRules(column.key, ruleSet);
+    } catch (err) {
+      notifyError(err?.message || 'Saving conditional formatting failed.');
+    }
+  }, [canSetColumnFormatRules, column.key, notifyError, onSetColumnFormatRules]);
+  const formatRulesDraft = useColumnFormatRulesMenuDraft({
+    open,
+    columnFormatRuleSet,
+    onPersist: persistFormatRules,
+  });
   const {
     textStyleDraft,
     handleTextColorChange,
     handleToggleBold,
     handleToggleItalic,
     handleToggleUnderline,
-    handleApplyTextStyle,
     handleClearTextStyle,
   } = useColumnTextStyleActions({
     open,
@@ -108,7 +127,6 @@ function PurchaseOrderColumnFilterMenu({
     canSetColumnTextStyle,
     onSetColumnTextStyle,
     columnKey: column.key,
-    onClose: closeMenu,
   });
   const { dialogState, setRenameValue, handleRenameColumn, handleRenameCancel, handleRenameSubmit, handleRemoveColumn, handleRemoveCancel, handleRemoveConfirm } = usePurchaseOrderColumnMutationActions({
     column,
@@ -126,9 +144,9 @@ function PurchaseOrderColumnFilterMenu({
   );
   useEffect(() => {
     if (open) {
-      setDraft(getDraftFromFilter(column, filter));
+      setDraft(getDraftFromFilter(column, filter, datePeriodFilterModes));
     }
-  }, [open, column, filter]);
+  }, [open, column, filter, datePeriodFilterModes]);
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
     if (!data.open) {
@@ -159,7 +177,7 @@ function PurchaseOrderColumnFilterMenu({
     onSetDatePeriodDisplayMode(column.key, displayMode);
     setActiveSubmenu('none');
   }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
-  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApply, handleClearFilter } = usePurchaseOrderSortFilterActions({
+  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApplyFilter, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
     onSetSortDirection,
@@ -170,16 +188,19 @@ function PurchaseOrderColumnFilterMenu({
     setDraft,
     setOpen,
   });
-  const { handleApplyFormatRules, handleClearFormatRules } = useColumnFormatRulesMenuActions({
+  const { handleClearFormatRules } = useColumnFormatRulesMenuActions({
     canSetColumnFormatRules,
     columnKey: column.key,
     formatRulesDraft,
     onSetColumnFormatRules,
-    onClose: closeMenu,
     onError: notifyError,
   });
   const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky, handleHideColumn } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, onToggleColumnCollapsed, setOpen });
-  const triggerClassName = filterActive || sortDirection !== 'none' ? `${styles.trigger} ${styles.triggerActive}` : styles.trigger;
+  const triggerClassName = [
+    styles.trigger,
+    filterActive ? styles.triggerFilterActive : '',
+    !filterActive && sortDirection !== 'none' ? styles.triggerActive : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <>
@@ -191,6 +212,7 @@ function PurchaseOrderColumnFilterMenu({
           size="small"
           aria-label={`Sort, filter and add column for ${column.label}`}
           data-column-menu-trigger="true"
+          data-column-menu-trigger-active={filterActive ? 'true' : undefined}
           draggable={false}
           onDragStart={(event) => event.preventDefault()}
           onMouseDown={(event) => event.stopPropagation()}
@@ -218,11 +240,11 @@ function PurchaseOrderColumnFilterMenu({
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
-        handleSecondaryValueChange={handleSecondaryValueChange} handleApply={handleApply} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
+        handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
-        handleToggleUnderline={handleToggleUnderline} handleApplyTextStyle={handleApplyTextStyle} handleClearTextStyle={handleClearTextStyle}
-        formatRulesDraft={formatRulesDraft} formatReferenceColumns={formatReferenceColumns} handleApplyFormatRules={handleApplyFormatRules}
+        handleToggleUnderline={handleToggleUnderline} handleClearTextStyle={handleClearTextStyle}
+        formatRulesDraft={formatRulesDraft} formatReferenceColumns={formatReferenceColumns}
         handleClearFormatRules={handleClearFormatRules} isGroupingColumn={isGroupingColumn} groupingColor={groupingColor}
         onSetGroupingColumn={onSetGroupingColumn} onClearGrouping={onClearGrouping} onSetGroupingColor={onSetGroupingColor}
         canToggleGroupSummary={canToggleGroupSummary} isGroupSummaryColumn={isGroupSummaryColumn} handleToggleGroupSummary={handleToggleGroupSummary}

@@ -1,42 +1,47 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  Button, Field, Input, Spinner, Text, makeStyles, tokens, shorthands,
+  Button, Field, Input, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
 import RccpKpiCards from './RccpKpiCards';
-import RccpMatrixTable from './RccpMatrixTable';
-import RccpChart from './RccpChart';
+import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
 import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
-import RccpCapacityEditor from './RccpCapacityEditor';
-import RccpImportDialog from './RccpImportDialog';
+import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
+import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
-  toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap('12px') },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
+  toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap(tokens.spacingHorizontalM) },
+  yearInput: { width: '104px' },
+  weekInput: { width: '84px' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
 export default function RccpPageContent() {
   const styles = useStyles();
   const { user } = useAuth();
+  const isAdmin = user?.role === ROLES.ADMIN;
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const [vendorAccount, setVendorAccount] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const {
-    vendors, vendorColumnKey, loading: vendorsLoading, error: vendorsError,
+    vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
   const {
     window, setWindow, analysis, loading, error, readOnly,
-    categories, periods, cellMap, reload,
+    measureRows, periods, cellMap, reload,
   } = useRccpPage({ vendorAccount: isSupplier ? undefined : vendorAccount });
 
   const [drillCell, setDrillCell] = useState(null);
+  const capacityReloadRef = useRef(null);
 
   const handleWindowChange = useCallback((field, value) => {
     setWindow((prev) => ({ ...prev, [field]: Number(value) }));
@@ -48,12 +53,39 @@ export default function RccpPageContent() {
 
   const handleCloseDrill = useCallback(() => setDrillCell(null), []);
 
+  const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
+  const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
+  const handleSettingsSaved = useCallback(() => reload(), [reload]);
+  const handleCapacityChanged = useCallback(() => reload(), [reload]);
+  const handleImportCompleted = useCallback(() => {
+    setActiveTab('capacity-planning');
+    reload();
+  }, [reload]);
+
+  const handleTabSelect = useCallback((_, data) => {
+    setActiveTab(data.value);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (activeTab === 'capacity-planning') {
+      capacityReloadRef.current?.();
+      return;
+    }
+    reload();
+  }, [activeTab, reload]);
+
+  const handleRegisterCapacityReload = useCallback((fn) => {
+    capacityReloadRef.current = fn;
+  }, []);
+
   return (
     <div className={styles.root}>
       <Text size={700} weight="semibold">Rough Cut Capacity Planning</Text>
-      <Text style={{ color: tokens.colorNeutralForeground3 }}>
-        Compare planned vendor capacity against live purchase order load.
-      </Text>
+
+      <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+        <Tab value="dashboard">Dashboard</Tab>
+        <Tab value="capacity-planning">Capacity planning</Tab>
+      </TabList>
 
       <div className={styles.toolbar}>
         {!isSupplier && (
@@ -61,42 +93,72 @@ export default function RccpPageContent() {
             value={vendorAccount}
             onChange={setVendorAccount}
             vendors={vendors}
-            vendorColumnKey={vendorColumnKey}
+            vendorNames={vendorNames}
             loading={vendorsLoading}
             error={vendorsError}
           />
         )}
-        <Field label="From year"><Input type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} /></Field>
-        <Field label="From week"><Input type="number" value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} /></Field>
-        <Field label="To year"><Input type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} /></Field>
-        <Field label="To week"><Input type="number" value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} /></Field>
-        <Button icon={<ArrowClockwise24Regular />} onClick={reload}>Refresh</Button>
-        <RccpCapacityEditor readOnly={readOnly} onSaved={reload} />
-        <RccpImportDialog readOnly={readOnly} onImported={reload} />
+        {activeTab === 'dashboard' && (
+          <>
+            <Field label="From year">
+              <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
+            </Field>
+            <Field label="From week">
+              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} />
+            </Field>
+            <Field label="To year">
+              <Input className={styles.yearInput} type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} />
+            </Field>
+            <Field label="To week">
+              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} />
+            </Field>
+          </>
+        )}
+        <Button icon={<ArrowClockwise24Regular />} onClick={handleRefresh}>Refresh</Button>
+        {isAdmin && (
+          <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
+        )}
       </div>
 
-      {loading && <Spinner label="Loading RCCP dashboard..." />}
-      {error && <Text className={styles.error}>{error}</Text>}
-
-      {!loading && !error && analysis && (
+      {activeTab === 'dashboard' && (
         <>
-          <RccpKpiCards kpis={analysis.kpis} />
-          <RccpChart chart={analysis.chart} />
-          {(analysis.kpis?.totalConfirmed === 0) && (
-            <RccpDiagnosticsCard
-              diagnostics={analysis.diagnostics}
-              config={analysis.config}
-              window={analysis.window}
-            />
+          {loading && <Spinner label="Loading RCCP dashboard..." />}
+          {error && <Text className={styles.error}>{error}</Text>}
+
+          {!loading && !error && analysis && (
+            <>
+              <RccpKpiCards kpis={analysis.kpis} />
+              <RccpChartMatrixPanel
+                chart={analysis.chart}
+                measureRows={measureRows}
+                periods={periods}
+                cellMap={cellMap}
+                chartWeekRanges={analysis.config?.chartWeekRanges}
+                onCellClick={handleCellClick}
+                interactive
+              />
+              {(analysis.kpis?.totalConfirmed === 0) && (
+                <RccpDiagnosticsCard
+                  diagnostics={analysis.diagnostics}
+                  config={analysis.config}
+                  window={analysis.window}
+                />
+              )}
+              <RccpMissingDateCard items={analysis.missingDates} />
+            </>
           )}
-          <RccpMissingDateCard items={analysis.missingDates} />
-          <RccpMatrixTable
-            categories={categories}
-            periods={periods}
-            cellMap={cellMap}
-            onCellClick={handleCellClick}
-          />
         </>
+      )}
+
+      {activeTab === 'capacity-planning' && (
+        <RccpCapacityPlanningTab
+          vendorAccount={isSupplier ? undefined : vendorAccount}
+          enabled={activeTab === 'capacity-planning'}
+          isAdmin={isAdmin}
+          onImported={handleImportCompleted}
+          onChanged={handleCapacityChanged}
+          onRegisterReload={handleRegisterCapacityReload}
+        />
       )}
 
       <RccpDrillDownPanel
@@ -105,6 +167,15 @@ export default function RccpPageContent() {
         window={window}
         onClose={handleCloseDrill}
       />
+
+      {isAdmin && (
+        <RccpSettingsFlyout
+          open={settingsOpen}
+          onClose={handleCloseSettings}
+          onSaved={handleSettingsSaved}
+          readOnly={readOnly}
+        />
+      )}
     </div>
   );
 }

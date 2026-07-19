@@ -77,22 +77,41 @@ async function createCapacity(payload, userId = null) {
 
 async function updateCapacity(id, payload, userId = null) {
   const pool = await getPool();
-  const result = await pool.request()
-    .input('id', sql.BigInt, id)
-    .input('availableQty', sql.Decimal(18, 4), payload.availableQty)
-    .input('userId', sql.Int, userId)
-    .query(`
-      UPDATE dbo.rccp_capacity
-      SET available_qty = @availableQty, updated_at = SYSUTCDATETIME(), updated_by = @userId
-      OUTPUT INSERTED.*
-      WHERE id = @id
-    `);
-  if (!result.recordset.length) {
-    const err = new Error('Capacity record not found');
-    err.status = 404;
+  try {
+    const result = await pool.request()
+      .input('id', sql.BigInt, id)
+      .input('vendorAccount', sql.NVarChar(64), payload.vendorAccount)
+      .input('periodYear', sql.Int, payload.periodYear)
+      .input('isoWeek', sql.Int, payload.isoWeek)
+      .input('capacityCategory', sql.NVarChar(128), payload.capacityCategory)
+      .input('availableQty', sql.Decimal(18, 4), payload.availableQty)
+      .input('userId', sql.Int, userId)
+      .query(`
+        UPDATE dbo.rccp_capacity
+        SET vendor_account = @vendorAccount,
+            period_year = @periodYear,
+            iso_week = @isoWeek,
+            capacity_category = @capacityCategory,
+            available_qty = @availableQty,
+            updated_at = SYSUTCDATETIME(),
+            updated_by = @userId
+        OUTPUT INSERTED.*
+        WHERE id = @id
+      `);
+    if (!result.recordset.length) {
+      const err = new Error('Capacity record not found');
+      err.status = 404;
+      throw err;
+    }
+    return mapRow(result.recordset[0]);
+  } catch (err) {
+    if (err.number === 2627 || err.number === 2601) {
+      const dup = new Error('Capacity record already exists for this vendor, week and category');
+      dup.status = 409;
+      throw dup;
+    }
     throw err;
   }
-  return mapRow(result.recordset[0]);
 }
 
 async function upsertCapacity(payload, userId = null) {
@@ -135,10 +154,23 @@ async function deleteCapacity(id) {
   return { id: result.recordset[0].id };
 }
 
+async function deleteAllCapacity({ vendorAccount = null } = {}) {
+  const pool = await getPool();
+  const request = pool.request();
+  let query = 'DELETE FROM dbo.rccp_capacity OUTPUT DELETED.id WHERE 1=1';
+  if (vendorAccount) {
+    request.input('vendorAccount', sql.NVarChar(64), vendorAccount);
+    query += ' AND vendor_account = @vendorAccount';
+  }
+  const result = await request.query(query);
+  return { deletedCount: result.recordset.length };
+}
+
 module.exports = {
   listCapacity,
   createCapacity,
   updateCapacity,
   upsertCapacity,
   deleteCapacity,
+  deleteAllCapacity,
 };

@@ -2036,7 +2036,47 @@ async function discoverSourceFields(tableKey) {
 // Laadt de data voor één (gededupliceerde) lookup: doeltabel + doelkolommen + cache-rijen.
 // Alle SQL-reads binnen één lookup zijn zo veel mogelijk parallel; retourneert null als de
 // lookup overgeslagen moet worden (doeltabel weg, geen kolommen, geen veld-mapping).
+/**
+ * Bouwt de synthetische kolom voor één lookup-veld. Synthetisch = geen tb_columns-rij, dus id null;
+ * hij bestaat alleen in de response.
+ *
+ * De RCCP-vrijgave (rccpMeasure) erft hij van de doelkolom. Die heeft wél een echte rij en is dus
+ * wat de admin op de data model-tab van de doeltabel togglet — bijvoorbeeld 'Received qty' op de
+ * ontvangstregels, die op het PO-bord als lookup binnenkomt.
+ */
+function buildSyntheticLookupColumn({
+  derivedKey, targetColKey, targetColumn, tableId, sourceScope, targetTableKey, targetTableLabel,
+}) {
+  const tc = targetColumn;
+  return {
+    id: null,
+    tableId,
+    scope: sourceScope,
+    key: derivedKey,
+    label: tc ? `${tc.label} (${targetTableLabel})` : derivedKey,
+    source: 'lookup',
+    sourceField: null,
+    dataType: tc ? tc.dataType : 'text',
+    options: null,
+    writable: false,
+    writeMechanism: null,
+    isDefaultVisible: true,
+    filterable: false,
+    sortable: true,
+    isActive: true,
+    sortOrder: 9000,
+    rccpMeasure: tc ? Boolean(tc.rccpMeasure) : false,
+    lookup: { targetTableKey, targetColumnKey: targetColKey },
+  };
+}
+
+function lookupTimingLabel(targetTableKey) {
+  const slug = String(targetTableKey || 'unknown').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32);
+  return `tb_lookup_${slug}`;
+}
+
 async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
+  return time(lookupTimingLabel(lk.targetTableKey), async () => {
   let targetTable;
   try {
     targetTable = await getTableByKey(lk.targetTableKey);
@@ -2091,28 +2131,15 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
 
   const synthetic = fieldEntries
     .filter(([, targetColKey]) => targetColByKey.has(targetColKey))
-    .map(([derivedKey, targetColKey]) => {
-    const tc = targetColByKey.get(targetColKey);
-    return {
-      id: null,
+    .map(([derivedKey, targetColKey]) => buildSyntheticLookupColumn({
+      derivedKey,
+      targetColKey,
+      targetColumn: targetColByKey.get(targetColKey),
       tableId: table.id,
-      scope: lk.sourceScope,
-      key: derivedKey,
-      label: tc ? `${tc.label} (${targetTable.label})` : derivedKey,
-      source: 'lookup',
-      sourceField: null,
-      dataType: tc ? tc.dataType : 'text',
-      options: null,
-      writable: false,
-      writeMechanism: null,
-      isDefaultVisible: true,
-      filterable: false,
-      sortable: true,
-      isActive: true,
-      sortOrder: 9000,
-      lookup: { targetTableKey: lk.targetTableKey, targetColumnKey: targetColKey },
-    };
-  });
+      sourceScope: lk.sourceScope,
+      targetTableKey: lk.targetTableKey,
+      targetTableLabel: targetTable.label,
+    }));
 
   return {
     synthetic,
@@ -2126,6 +2153,7 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
       partitionless,
     },
   };
+  });
 }
 
 function addLookupColumnsByScope(sourceScope, syntheticColumns, masterCols, detailCols) {
@@ -2452,9 +2480,18 @@ function buildD365ChangeState(ledgerRows) {
     const lineKey = `${orderKey}|${detailKey}`;
     if (!lineChanges.has(lineKey)) lineChanges.set(lineKey, createLineChangeState());
     const lineState = lineChanges.get(lineKey);
-    if (action === 'INSERT') lineState.isNew = true;
-    else if (action === 'UPDATE') lineState.isChanged = true;
-    else if (action === 'DELETE') lineState.isRemoved = true;
+    // Een refresh die een regel opnieuw ophaalt schrijft eerst DELETE en daarna INSERT. Zonder de
+    // reset hieronder bleef isRemoved staan en gold een bestaande regel de rest van het
+    // ledger-venster als verwijderd — hij verdween dan uit de RCCP-belasting (die filtert op
+    // !isRemoved) en werd op het bord als vervallen getoond. De laatste actie wint: INSERT en
+    // UPDATE bewijzen dat de regel er weer is.
+    if (action === 'INSERT') {
+      lineState.isNew = true;
+      lineState.isRemoved = false;
+    } else if (action === 'UPDATE') {
+      lineState.isChanged = true;
+      lineState.isRemoved = false;
+    } else if (action === 'DELETE') lineState.isRemoved = true;
     if (fieldKey) lineState.changedFieldKeys.add(fieldKey);
   }
 
@@ -2463,8 +2500,9 @@ function buildD365ChangeState(ledgerRows) {
 
 // De drie tb_cache-reads (masters, details, custom values) parallel op de pool;
 // onafhankelijke queries, dus geen reden om op elkaar te wachten.
+// Elk deel krijgt een eigen Server-Timing-label (tb_read_masters/details/custom).
 async function readCacheRows(pool, tableId, includeRemoved) {
-  const mastersPromise = pool.request()
+  const mastersPromise = time('tb_read_masters', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
@@ -2476,18 +2514,18 @@ async function readCacheRows(pool, tableId, includeRemoved) {
           WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
         )`}
       ORDER BY c.record_key
-    `);
+    `));
 
-  const detailsPromise = pool.request()
+  const detailsPromise = time('tb_read_details', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
       FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId AND scope = 'detail'
       ORDER BY record_key, detail_key
-    `);
+    `));
 
-  const customPromise = pool.request()
+  const customPromise = time('tb_read_custom', () => pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
       SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
@@ -2495,7 +2533,7 @@ async function readCacheRows(pool, tableId, includeRemoved) {
       FROM dbo.tb_custom_values cv WITH (NOLOCK)
       INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
       WHERE cv.table_id = @tableId AND c.is_active = 1
-    `);
+    `));
 
   const [mastersResult, detailsResult, customResult] = await Promise.all([
     mastersPromise, detailsPromise, customPromise,
@@ -2737,8 +2775,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key)),
     syncStatePromise,
     viewedPromise,
-    // De drie tb_cache-reads getimed als tb_read_sql (zichtbaar in Server-Timing → Network → Timing).
-    time('tb_read_sql', () => readCacheRows(pool, table.id, includeRemoved)),
+    readCacheRows(pool, table.id, includeRemoved),
     time('tb_lookups', () => loadLookupEnrichment(table)),
     ledgerPromise,
     historyByCellPromise,
@@ -2788,6 +2825,8 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 
   let newCount = 0;
   let changedCount = 0;
+  let scopedRows;
+  await time('tb_build_rows', async () => {
   const rows = mastersResult.recordset.map((m) => {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
@@ -2862,7 +2901,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // afgeleide rijwaarde met het leveranciersaccount van de gebruiker (case-insensitief).
   // Wanneer supplierAccount is meegegeven (ook een lege string) filteren we altijd — een
   // supplier ziet dus nooit onbedoeld alle orders. Staff geeft null door en ziet alles.
-  let scopedRows = rows;
+  scopedRows = rows;
   if (supplierAccount !== null) {
     const wantedAccount = String(supplierAccount).trim().toLowerCase();
     const filterKey = supplierFilterColumn || 'vendorAccount';
@@ -2872,6 +2911,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     newCount = scopedRows.filter((row) => row.isNew).length;
     changedCount = scopedRows.filter((row) => row.isChanged).length;
   }
+  });
 
   const staleThresholdMinutes = await getStaleThresholdMinutes(table);
   const stale = table.cacheMode === 'never'
@@ -3607,6 +3647,10 @@ function toAdminColumn(col) {
     filterable: Boolean(col.filterable),
     sortable: Boolean(col.sortable),
     sortOrder: col.sortOrder,
+    // Nodig voor de "RCCP value column"-toggle: de stand zelf, en formulaExpr omdat een custom
+    // kolom mét formule wél als RCCP-waarde bruikbaar is.
+    rccpMeasure: Boolean(col.rccpMeasure),
+    formulaExpr: col.formulaExpr || null,
   };
 }
 
@@ -3987,12 +4031,15 @@ module.exports = {
   ensureKeyFieldColumnsInProjection,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
+  toAdminColumn,
   applyRuntimeLinkedHeaderValues,
   normalizeExclusionRows,
   excludeRows,
   includeRows,
   listHiddenInFilterRows,
   buildLookupFieldMap,
+  buildSyntheticLookupColumn,
+  buildD365ChangeState,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
   resolveLookupProjectionColumns,

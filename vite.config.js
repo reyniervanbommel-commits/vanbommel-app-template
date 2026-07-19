@@ -1,10 +1,13 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const devPort = Number.parseInt(process.env.VITE_DEV_PORT || '5178', 10);
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:3008';
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const devPort = Number.parseInt(env.VITE_DEV_PORT || '5178', 10);
+  const backendPort = env.PORT || '3008';
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${backendPort}`;
 
-export default defineConfig({
+  return {
   plugins: [react()],
   server: {
     port: Number.isFinite(devPort) && devPort > 0 ? devPort : 5178,
@@ -31,4 +34,5 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 700,
   },
+  };
 });

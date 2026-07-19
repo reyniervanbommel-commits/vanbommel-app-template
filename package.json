@@ -43,6 +43,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/mcp": "^0.0.78",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^24.0.12",
@@ -50,6 +51,7 @@
     "concurrently": "^8.2.2",
     "eslint": "^9.9.0",
     "jsdom": "^29.1.1",
+    "playwright": "^1.62.0-alpha-1783623505000",
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
     "vite": "^5.4.0",

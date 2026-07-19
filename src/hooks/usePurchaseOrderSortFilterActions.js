@@ -1,5 +1,14 @@
 import { useCallback } from 'react';
 
+function persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue) {
+  onSetValue(columnKey, draft.value);
+  if (draft.operator === 'between') {
+    onSetSecondaryValue(columnKey, draft.secondaryValue);
+  } else {
+    onSetSecondaryValue(columnKey, '');
+  }
+}
+
 export function usePurchaseOrderSortFilterActions({
   columnKey,
   draft,
@@ -28,7 +37,8 @@ export function usePurchaseOrderSortFilterActions({
 
   const handleOperatorSelect = useCallback((_, data) => {
     if (!data.optionValue) return;
-    setDraft((prev) => ({ ...prev, operator: data.optionValue }));
+    const nextOperator = data.optionValue;
+    setDraft((prev) => ({ ...prev, operator: nextOperator }));
   }, [setDraft]);
 
   const handleValueChange = useCallback((event) => {
@@ -41,16 +51,10 @@ export function usePurchaseOrderSortFilterActions({
     setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
   }, [setDraft]);
 
-  const handleApply = useCallback(() => {
+  const handleApplyFilter = useCallback(() => {
     onSetOperator(columnKey, draft.operator);
-    onSetValue(columnKey, draft.value);
-    if (draft.operator === 'between') {
-      onSetSecondaryValue(columnKey, draft.secondaryValue);
-    } else {
-      onSetSecondaryValue(columnKey, '');
-    }
-    setOpen(false);
-  }, [columnKey, draft, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
+    persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
+  }, [columnKey, draft, onSetOperator, onSetSecondaryValue, onSetValue]);
 
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
@@ -64,7 +68,7 @@ export function usePurchaseOrderSortFilterActions({
     handleOperatorSelect,
     handleValueChange,
     handleSecondaryValueChange,
-    handleApply,
+    handleApplyFilter,
     handleClearFilter,
   };
 }

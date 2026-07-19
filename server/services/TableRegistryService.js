@@ -47,13 +47,15 @@ function mapColumnRow(row) {
     visibleAtDelete: Boolean(row.visible_at_delete),
     sortOrder: Number(row.sort_order),
     formulaExpr: row.formula_expr || null,
+    // Admin-keuze: mag deze kolom als waardekolom in de RCCP-analyse gekozen worden.
+    rccpMeasure: Boolean(row.rccp_measure),
   };
 }
 
 const COLUMN_SELECT = `
   SELECT id, table_id, scope, [key], label, source, source_field, data_type, options_json,
          writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order,
-         visible_at_delete, formula_expr
+         visible_at_delete, formula_expr, rccp_measure
   FROM dbo.tb_columns
 `;
 

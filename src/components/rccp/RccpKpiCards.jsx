@@ -2,8 +2,8 @@ import React, { memo } from 'react';
 import { Card, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
-  row: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', ...shorthands.gap('12px') },
-  card: { ...shorthands.padding('16px') },
+  row: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', ...shorthands.gap(tokens.spacingHorizontalM) },
+  card: { ...shorthands.padding(tokens.spacingVerticalL) },
   label: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   value: { fontSize: tokens.fontSizeBase500, fontWeight: tokens.fontWeightSemibold },
 });
