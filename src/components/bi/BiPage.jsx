@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
-  makeStyles, MessageBar, MessageBarBody, shorthands, Spinner,
+  makeStyles, MessageBar, MessageBarActions, MessageBarBody, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
 import { useAuth } from '../../context/AuthContext';
 import { useAppToast } from '../../hooks/useAppToast';
@@ -19,7 +19,7 @@ const useStyles = makeStyles({
   pageLayout: {
     display: 'flex',
     alignItems: 'stretch',
-    ...shorthands.gap('16px'),
+    ...shorthands.gap(tokens.spacingHorizontalL),
     minHeight: 'calc(100vh - 120px)',
   },
   dashboardArea: {
@@ -29,7 +29,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
   },
   loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('48px') },
-  message: { marginBottom: '12px' },
+  message: { marginBottom: tokens.spacingVerticalM },
 });
 
 export default function BiPage() {
@@ -179,9 +179,11 @@ export default function BiPage() {
         {!charts.length && !builderMode ? (
           <MessageBar intent="info" className={styles.message}>
             <MessageBarBody>Start with a set of ready-made example charts.</MessageBarBody>
-            <Button size="small" appearance="primary" onClick={handleSeed} disabled={seeding}>
-              {seeding ? 'Adding…' : 'Add starter charts'}
-            </Button>
+            <MessageBarActions>
+              <Button size="small" appearance="primary" onClick={handleSeed} disabled={seeding}>
+                {seeding ? 'Adding…' : 'Add starter charts'}
+              </Button>
+            </MessageBarActions>
           </MessageBar>
         ) : null}
 

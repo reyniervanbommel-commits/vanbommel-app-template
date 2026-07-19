@@ -6,8 +6,8 @@ const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('8px', '10px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalMNudge),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     backgroundColor: tokens.colorNeutralBackground2,

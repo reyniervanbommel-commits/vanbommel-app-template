@@ -19,11 +19,19 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    ...shorthands.padding('4px'),
+    ...shorthands.padding(tokens.spacingVerticalXS),
   },
-  kpiValue: { fontSize: '26px', fontWeight: 700, lineHeight: 1.1 },
-  kpiUnit: { fontSize: '11px', color: tokens.colorNeutralForeground3, marginTop: '2px' },
-  kpiLabel: { fontSize: '10px', color: tokens.colorNeutralForeground3, marginTop: '2px' },
+  kpiValue: { fontSize: tokens.fontSizeBase600, fontWeight: tokens.fontWeightBold, lineHeight: 1.1 },
+  kpiUnit: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXXS,
+  },
+  kpiLabel: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXXS,
+  },
   empty: {
     display: 'flex',
     alignItems: 'center',

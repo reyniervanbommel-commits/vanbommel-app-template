@@ -1,5 +1,7 @@
 import React, { memo, useCallback } from 'react';
-import { Button, Dropdown, Field, Input, makeStyles, Option, shorthands, Text, tokens } from '@fluentui/react-components';
+import {
+  Button, Dropdown, Field, Input, makeStyles, mergeClasses, Option, shorthands, Text, tokens,
+} from '@fluentui/react-components';
 import { AddRegular, DeleteRegular } from '@fluentui/react-icons';
 import {
   DATE_FILTER_OPERATORS,
@@ -8,13 +10,13 @@ import {
 } from '../../utils/tableViewFilterUtils';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), minWidth: 0 },
-  filterList: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px'), minWidth: 0 },
+  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), minWidth: 0 },
+  filterList: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalMNudge), minWidth: 0 },
   filterCard: {
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('10px'),
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalMNudge),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     backgroundColor: tokens.colorNeutralBackground2,
@@ -24,13 +26,14 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    ...shorthands.gap(tokens.spacingHorizontalS),
   },
-  filterTitle: { fontWeight: 600, color: tokens.colorNeutralForeground2 },
-  row: { display: 'flex', ...shorthands.gap('6px'), alignItems: 'center', minWidth: 0 },
+  filterTitle: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2 },
+  row: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalSNudge), alignItems: 'center', minWidth: 0 },
   grow: { flexGrow: 1, minWidth: 0 },
-  label: { color: tokens.colorNeutralForeground2, fontWeight: 600 },
-  empty: { color: tokens.colorNeutralForeground3, fontSize: '12px' },
+  label: { color: tokens.colorNeutralForeground2, fontWeight: tokens.fontWeightSemibold },
+  labelCompact: { fontSize: tokens.fontSizeBase100 },
+  empty: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
 function operatorsForColumn(column) {
@@ -180,6 +183,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
         ) : null}
         <Button
           appearance="subtle"
+          size={controlSize}
           icon={<DeleteRegular />}
           aria-label="Remove filter"
           onClick={() => removeFilter(index)}
@@ -191,7 +195,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
   return (
     <div className={styles.root}>
       {!stacked ? (
-        <Text className={styles.label} style={compact ? { fontSize: '10px' } : undefined}>Filters</Text>
+        <Text className={mergeClasses(styles.label, compact && styles.labelCompact)}>Filters</Text>
       ) : null}
       <div className={styles.filterList}>
         {safeFilters.map((filter, index) => {
@@ -201,11 +205,11 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
           return renderFilterFields(filter, index, column, operatorLabels, inputType);
         })}
       </div>
-      {!safeFilters.length && stacked ? (
+      {!safeFilters.length ? (
         <Text className={styles.empty}>No filters applied.</Text>
       ) : null}
       <div>
-        <Button size="small" appearance="secondary" icon={<AddRegular />} onClick={addFilter}>
+        <Button size={controlSize} appearance="secondary" icon={<AddRegular />} onClick={addFilter}>
           Add filter
         </Button>
       </div>

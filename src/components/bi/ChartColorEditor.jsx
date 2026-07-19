@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { Dropdown, Field, makeStyles, Option, shorthands } from '@fluentui/react-components';
+import { Dropdown, Field, makeStyles, Option, shorthands, tokens } from '@fluentui/react-components';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { COLOR_MODE_OPTIONS, COLOR_MODE_SINGLE, resolveSingleColor } from './biConstants';
 
@@ -8,7 +8,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     maxWidth: '100%',
     overflow: 'hidden',
-    ...shorthands.padding('4px', '0'),
+    ...shorthands.padding(tokens.spacingVerticalXS, '0'),
   },
 });
 
