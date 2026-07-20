@@ -102,6 +102,7 @@ Environment `production` met required reviewers:
 
 ```bash
 gh api --method PUT repos/<owner>/<repo>/environments/production --input .github/environments/production.json
+gh api --method POST repos/<owner>/<repo>/environments/production/deployment-branch-policies -f name=main -f type=branch
 ```
 
 Zie `.github/branch-protection/` en `.github/environments/` in de repo voor de canonical JSON-configs.
