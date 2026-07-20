@@ -220,6 +220,12 @@ describe('TableDataService.applyLookups (fk_join-verrijking #AB:162)', () => {
     expect(v.artikelKleur).toBeNull();
   });
 
+  it('materialiseert geen lookup-keys buiten fieldEntries (inactive velden blijven weg)', () => {
+    const v = { itemNumber: 'ART-1' };
+    applyLookups(v, 'whsl', [excelLookup], 'detail');
+    expect(Object.keys(v).sort()).toEqual(['artikelKleur', 'itemNumber']);
+  });
+
   it('valt terug op source-json wanneer de lookup-bronkolom niet zichtbaar is', () => {
     const v = {};
     applyLookups(v, 'whsl', [vendorLookup], 'master', { vendorAccount: 'Q000101' });

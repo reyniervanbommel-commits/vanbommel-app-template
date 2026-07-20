@@ -2294,7 +2294,11 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
       Boolean(String(derivedKey || '').trim()) && targetColByKeyAll.has(String(targetColKey || '').trim())
     ))
     .map(([derivedKey, targetColKey]) => [String(derivedKey).trim(), String(targetColKey).trim()]);
-  if (!fieldEntries.length) return null;
+  // Alleen actieve doelkolommen in de board-read: inactive velden hoorden hier als null op elke
+  // detailregel (~300+ keys × 20k regels ≈ 300 MB JSON in PROD). Admin/datamodel houdt het volledige
+  // fieldMap in lk.fields; de read-response mag niet elke inactive lookup-projectie materialiseren.
+  const activeFieldEntries = fieldEntries.filter(([, targetColKey]) => targetColByKey.has(targetColKey));
+  if (!activeFieldEntries.length) return null;
 
   const byKey = new Map();
   for (const r of cacheRes.recordset) {
@@ -2308,8 +2312,7 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
     if (mapKey) byKey.set(mapKey, parsed);
   }
 
-  const synthetic = fieldEntries
-    .filter(([, targetColKey]) => targetColByKey.has(targetColKey))
+  const synthetic = activeFieldEntries
     .map(([derivedKey, targetColKey]) => buildSyntheticLookupColumn({
       derivedKey,
       targetColKey,
@@ -2328,7 +2331,7 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
       targetAliasesByKey,
       fields: fieldMap,
       byKey,
-      fieldEntries,
+      fieldEntries: activeFieldEntries,
       partitionless,
     },
   };
