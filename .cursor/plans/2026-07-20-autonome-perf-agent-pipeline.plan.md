@@ -380,6 +380,23 @@ Gespiegeld in `.claude/skills/`. Schemas: `test-reports/schemas/`. Playwright: `
 
 **Start:** *"start perf pipeline"* → `perf-orchestrate`
 
+### Lokale worktree (veilig testen)
+
+| Tree | Pad | Branch |
+|------|-----|--------|
+| **Hoofd-repo** | `vanbommel-app-template/` | `develop` |
+| **Perf-pilot** | `.worktrees/perf-pipeline-v1/` | `feature/perf-pipeline-skills-v1.3` |
+
+Open de worktree als apart Cursor-venster. Alle perf-pipeline commits vanaf daar; hoofd-repo blijft schoon op `develop`.
+
+```powershell
+cd .worktrees/perf-pipeline-v1
+npm ci
+npm run dev:all   # eigen poorten — niet tegelijk met hoofd-repo
+```
+
+Opruimen na merge: `git worktree remove .worktrees/perf-pipeline-v1` (vanuit repo root).
+
 ---
 
 ## Beslissingen — ingevuld (product-owner 2026-07-20)

@@ -58,6 +58,11 @@ Schemas: `test-reports/schemas/`. Playwright: `playwright/perf-screening.js`, `p
 
 Plan: `.cursor/plans/2026-07-20-autonome-perf-agent-pipeline.plan.md`
 
+### Worktree
+
+Perf-pilot draait in **`.worktrees/perf-pipeline-v1/`** (branch `feature/perf-pipeline-skills-v1.3`).
+Hoofd-repo blijft op `develop`. Open die map als apart Cursor-project voor veilig testen.
+
 ---
 
 ## Skills vs agents
