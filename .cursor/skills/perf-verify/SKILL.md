@@ -9,7 +9,7 @@ description: >-
 
 # Perf Verify
 
-> **Rol:** Verifier (Agent 4). Beoordeelt of een fix veilig en sneller is.
+> **Rol:** Verifier · **Skill:** `perf-verify`. Beoordeelt of een fix veilig en sneller is.
 >
 > **Input:** `test-reports/perf-fix-plan-<id>.json` + lokale commit  
 > **Output:** `test-reports/perf-verify-<id>.md` + pass/fail  

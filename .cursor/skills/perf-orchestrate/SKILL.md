@@ -10,7 +10,7 @@ description: >-
 
 # Perf Orchestrate
 
-> **Rol:** Orchestrator (Agent 0). Dirigeert de pipeline; implementeert zelf geen fixes.
+> **Rol:** Orchestrator · **Skill:** `perf-orchestrate`. Dirigeert de pipeline; implementeert zelf geen fixes.
 >
 > **Verwant:** `perf-review` (Scout), `perf-architect`, `perf-optimize`, `perf-verify`,
 > `perf-adversary`. Policy: `test-reports/perf-optimize-policy.json`.

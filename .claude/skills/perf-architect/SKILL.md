@@ -9,7 +9,7 @@ description: >-
 
 # Perf Architect
 
-> **Rol:** Architect (Agent 2). Plant de fix; wijzigt geen code.
+> **Rol:** Architect · **Skill:** `perf-architect`. Plant de fix; wijzigt geen code.
 >
 > **Input:** één item uit `test-reports/perf-backlog.json`  
 > **Output:** `test-reports/perf-fix-plan-<id>.json`  

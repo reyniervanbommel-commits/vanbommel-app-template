@@ -1,16 +1,18 @@
 ---
 name: Autonome perf-agent pipeline
 overview: >-
-  Voorstel v1.1 — autonome multi-agent pipeline voor ervaren snelheid (wandklok)
-  én backend-latency, onder realistische dataload, met adversary-checks en CI-regressie.
-  Gebouwd op perf-review skill en bestaande meetinstrumentatie.
+  Autonome perf-pipeline v1.3 — zes rollen, zes skills, één handmatige run.
+  UX (elapsedWall) primair; policy in perf-optimize-policy.json.
 todos:
   - id: team-decisions-mc
     content: "Product-owner beantwoordt multiple-choice vragen (plan § Beslissingen)"
     status: completed
   - id: perf-policy-json
     content: "perf-optimize-policy.json + perf-backlog.schema.json + scale-profielen S/M/L"
-    status: in_progress
+    status: completed
+  - id: skill-pipeline-index
+    content: "Index-skill perf-pipeline — rollen + skills overzicht"
+    status: completed
   - id: seed-scale-profiles
     content: "seed-perf-po-cache.js uitbreiden met --orders=500 en --orders=2000"
     status: pending
@@ -38,25 +40,39 @@ todos:
 isProject: false
 ---
 
-# Autonome perf-agent pipeline — voorstel v1.1
+# Autonome perf-pipeline — plan v1.3
 
-> **Status:** beslissingen ingevuld — v1.2 klaar voor bouw  
+> **Status:** skills gebouwd — klaar voor pilot (Fase B)  
 > **Auteur:** AI-assistent + Reynier (perf-review nulmeting 2026-07-20)  
+> **Wijziging v1.3:** terminologie **rollen + skills** (geen losse cloud-agents); index-skill `perf-pipeline`  
 > **Wijziging v1.2:** product-owner MC-antwoorden → `test-reports/perf-optimize-policy.json`  
-> **Wijziging v1.1:** ervaren snelheid primair, schaal-profielen, adversary-agent, CI-gate, v1-scope beperkt  
-> **Gerelateerd:** `.cursor/skills/perf-review/`, `test-reports/perf-baseline.json`, PR #57
+> **Gerelateerd:** `.cursor/skills/perf-pipeline/`, `test-reports/perf-optimize-policy.json`, PR #57
+
+---
+
+## Rollen vs skills vs agents
+
+| Term | Betekenis |
+|------|-----------|
+| **Rol** | Functie in de pipeline (Orchestrator, Scout, …) |
+| **Skill** | Recept in git (`SKILL.md`) — hoe die rol werkt |
+| **Agent-run** | Eén Cursor-sessie die skills **achtereenvolgens** volgt |
+
+**Geen 6 parallelle cloud-agents.** Handmatig starten → `perf-orchestrate` → roept andere skills aan.
+
+Index: `.cursor/skills/perf-pipeline/SKILL.md`
 
 ---
 
 ## Doel
 
-**De app merkbaar sneller maken voor eindgebruikers** — wat mensen *voelen* bij tab-switches en paginaladingen — via een autonome agent-pipeline die:
+**De app merkbaar sneller maken voor eindgebruikers** — wat mensen *voelen* bij tab-switches en paginaladingen — via een pipeline die:
 
 1. **Meet** waar de tijd naartoe gaat (wandklok + server, niet alleen `app`)
 2. **Prioriteert** op `(geschatte UX-winst) × werkelijke route-frequency` (analytics)
 3. **Optimaliseert** gericht per bottleneck (SQL, netwerk, client, render)
 4. **Verifieert** met tests + perf-regressie op **twee schaal-profielen**
-5. **Breekt** fixes bewust (adversary) vóór push
+5. **Breekt** fixes bewust (rol Adversary) vóór push
 6. **Beveiligt** via CI-regressie op elke PR
 
 ### Prioriteitsformule
@@ -101,24 +117,24 @@ priority = (elapsedWall_median − targetWall) × routeFrequencyWeight
 
 ---
 
-## Voorgestelde aanpak: 6 agents + orchestrator
+## Pipeline: zes rollen, zes skills
 
 ```mermaid
 flowchart TB
-  O[0 Orchestrator] --> S[1 Scout]
+  O[Orchestrator\nperf-orchestrate] --> S[Scout\nperf-review]
   S --> B[(perf-backlog.json)]
-  B --> A[2 Architect]
+  B --> A[Architect\nperf-architect]
   A --> P[(perf-fix-plan.json)]
-  P --> F[3 Fixer]
-  F --> V[4 Verifier]
-  V --> ADV[5 Adversary]
+  P --> F[Fixer\nperf-optimize]
+  F --> V[Verifier\nperf-verify]
+  V --> ADV[Adversary\nperf-adversary]
   ADV -->|ok| B
   V -->|regressie| A
   ADV -->|breuk| A
   V --> CI[CI perf-regression]
 ```
 
-### Agent 0 — Orchestrator
+### Rol: Orchestrator — skill `perf-orchestrate`
 
 - Scope **v1 beperkt** tot 3 kritieke journeys (zie onder)
 - Priority: `(UX-winst) × analytics-frequency`
@@ -129,9 +145,7 @@ flowchart TB
 
 **Artifact:** `test-reports/perf-pipeline-state.json`
 
-### Agent 1 — Scout (Diagnost)
-
-**Basis:** `perf-review` skill.
+### Rol: Scout — skill `perf-review`
 
 | Modus | Wanneer |
 |-------|---------|
@@ -151,7 +165,7 @@ flowchart TB
 
 **Output:** `perf-backlog.json` met `elapsedWall`, `app`, `apiSum`, dominant post, labels, `priorityScore`.
 
-### Agent 2 — Architect
+### Rol: Architect — skill `perf-architect`
 
 - Beslisboom v2 + **gap-routing eerst** (R vóór S als wandklok-dominated)
 - Fix-plan met **dual successCriteria** (`elapsedWall` + `app`/`apiSum`)
@@ -159,12 +173,12 @@ flowchart TB
 
 **Output:** `perf-fix-plan-<id>.json`
 
-### Agent 3 — Fixer
+### Rol: Fixer — skill `perf-optimize`
 
 - Eén fix-plan; tier L0→L5
 - Geen push — commit lokaal tot Adversary groen
 
-### Agent 4 — Verifier
+### Rol: Verifier — skill `perf-verify`
 
 1. `npm test` + `npm run build`
 2. `perf-review regression` op **profiel S** (smoke)
@@ -179,7 +193,7 @@ flowchart TB
 | Regressie UX **of** server | revert → retry (max 2×) |
 | Tests rood | revert → `blocked` |
 
-### Agent 5 — Adversary (nieuw v1.1)
+### Rol: Adversary — skill `perf-adversary`
 
 **Doel:** perf-fixes breken die Verifier mist.
 
@@ -344,28 +358,27 @@ END
 | SQL fix, UX unchanged | elapsedWall primair + gap-routing |
 | Fix werkt op 80 PO, faalt op 500 | Profiel M verplicht |
 | Stale indicators | Adversary A5 + functionalInvariants |
-| Agent bias | Adversary-agent |
+| Agent bias | Adversary-rol (`perf-adversary`) |
 | Baseline drift | CI + shared baseline.json |
 | Analytics leeg (dev) | Fallback frequency weights in policy |
 
 ---
 
-## Te bouwen skills
+## Skill-set (gebouwd)
 
-| Skill | Rol | Status |
-|-------|-----|--------|
-| `perf-review` | Scout (meten) | ✅ bestaand |
-| `perf-orchestrate` | Orchestrator | ✅ gebouwd |
-| `perf-architect` | Architect | ✅ gebouwd |
-| `perf-optimize` | Fixer | ✅ gebouwd |
-| `perf-verify` | Verifier | ✅ gebouwd |
-| `perf-adversary` | Adversary | ✅ gebouwd |
+| Skill | Rol | Pad |
+|-------|-----|-----|
+| `perf-pipeline` | Index / overzicht | `.cursor/skills/perf-pipeline/` |
+| `perf-orchestrate` | Orchestrator | `.cursor/skills/perf-orchestrate/` |
+| `perf-review` | Scout | `.cursor/skills/perf-review/` |
+| `perf-architect` | Architect | `.cursor/skills/perf-architect/` |
+| `perf-optimize` | Fixer | `.cursor/skills/perf-optimize/` |
+| `perf-verify` | Verifier | `.cursor/skills/perf-verify/` |
+| `perf-adversary` | Adversary | `.cursor/skills/perf-adversary/` |
 
-Locaties: `.cursor/skills/perf-*/` en `.claude/skills/perf-*/` (gespiegeld).
+Gespiegeld in `.claude/skills/`. Schemas: `test-reports/schemas/`. Playwright: `playwright/perf-adversary.js`.
 
-Schemas: `test-reports/schemas/perf-backlog.schema.json`, `perf-fix-plan.schema.json`.
-
-Playwright: `playwright/perf-adversary.js` (stub A1/A4/A5).
+**Start:** *"start perf pipeline"* → `perf-orchestrate`
 
 ---
 
@@ -405,3 +418,4 @@ Playwright: `playwright/perf-adversary.js` (stub A1/A4/A5).
 | v1.0 | Initieel 5-agent voorstel |
 | v1.1 | UX primair, adversary, S/M/L profielen, CI, v1-scope, analytics frequency, partial re-measure |
 | v1.2 | Product-owner MC-antwoorden; policy JSON; cross-page cache unlimited; UX-only regression gate |
+| v1.3 | Terminologie rollen+skills; index-skill perf-pipeline; Scout-backlog in perf-review |

@@ -8,7 +8,7 @@ description: >-
 
 # Perf Adversary
 
-> **Rol:** Adversary (Agent 5). Probeert perf-fixes kapot te maken.
+> **Rol:** Adversary · **Skill:** `perf-adversary`. Probeert perf-fixes kapot te maken.
 >
 > **Input:** `test-reports/perf-fix-plan-<id>.json` (na verify PASS)  
 > **Output:** `test-reports/perf-adversary-<id>.md`  

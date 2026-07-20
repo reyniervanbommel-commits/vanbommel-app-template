@@ -242,5 +242,25 @@ Dit kost een tijdelijke codewijziging. Meld dat expliciet aan de gebruiker vóó
 - **Meet op preview, niet alleen lokaal.** Lokaal is er geen netwerklatentie richting Azure;
   transport-problemen zie je pas op een preview-URL.
 - **Rapporteer wat je niet kon meten.** Een ongemeten route is een bevinding, geen weglating.
-</content>
-</invoke>
+
+---
+
+## Pipeline-modus: Scout (via `perf-orchestrate`)
+
+Wanneer orchestrator `perf-review` aanroept voor screening:
+
+1. Meet v1-journeys **J1, J2, J3** op profielen **M + L** (policy `scoutProfiles`).
+2. Schrijf/update `test-reports/perf-baseline.json` per profiel.
+3. Schrijf `test-reports/perf-backlog.json` volgens `test-reports/schemas/perf-backlog.schema.json`:
+
+Per item: `id` (BL-001…), `journey`, `action`, metrics, `dominantPost`, `labels`, `priorityScore`, `status: open`.
+
+```
+priorityScore = (elapsedWall_median − targetWall) × routeFrequencyWeight
+```
+
+4. Frequency uit `/admin/analytics/page-usage`; fallback weight 1.0 als leeg.
+5. Sorteer items aflopend op `priorityScore`.
+
+Geen fixes in Scout-modus — alleen meten en backlog vullen.
+

@@ -9,7 +9,7 @@ description: >-
 
 # Perf Optimize
 
-> **Rol:** Fixer (Agent 3). Implementeert precies één fix-plan.
+> **Rol:** Fixer · **Skill:** `perf-optimize`. Implementeert precies één fix-plan.
 >
 > **Input:** `test-reports/perf-fix-plan-<id>.json`  
 > **Output:** lokale git commit (geen push)  
