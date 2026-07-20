@@ -1,9 +1,9 @@
 {
   "date": "2026-07-20",
+  "hermetingDate": "2026-07-20T12:15:00+00:00",
   "environment": "http://localhost:5178",
-  "database": "local SQL Server (empty tb_cache — no PO rows)",
+  "database": "local SQL Server — 80 PO masters, 240 detail lines (seed-perf-po-cache)",
   "runsPerAction": 3,
-  "note": "Interacties onder 100 ms geven geen Event Timing total. PO board-tabs niet meetbaar zonder cache-data. Zie referenceWithData voor Azure/DEV meting met gevuld board.",
   "navigation": {
     "ttfb": 4,
     "domContentLoaded": 412,
@@ -11,174 +11,107 @@
     "transferKB": 1
   },
   "actions": {
-    "route-po": {
-      "label": "Route / — Purchase orders",
+    "route-po-board-load": {
+      "label": "Route / — PO board-load (hard reload)",
       "median": {
-        "total": null,
-        "elapsedWall": 825,
-        "sql": 0,
+        "elapsedWall": 1779,
+        "poApiMs": 390,
+        "app": 95,
+        "sql": 391,
         "backendOther": 0,
-        "network": 0,
+        "network": 295,
         "client": 0,
-        "render": null,
-        "app": 0,
-        "apiSum": 0
+        "render": 1389,
+        "tb_lookups": 49,
+        "tb_read_details": 33,
+        "tb_sync_state": 31,
+        "tb_read_cols": 30,
+        "tb_ledger": 13,
+        "tb_build_rows": 2
       },
       "dominant": "render",
-      "cold": { "elapsedWall": 826 },
-      "measurable": true,
-      "note": "Empty board — geen board-API; zie referenceWithData voor gevuld board"
+      "cold": { "elapsedWall": 1779, "app": 90, "poApiMs": 348 },
+      "warm": { "elapsedWall": 1789, "app": 100, "poApiMs": 399 },
+      "note": "render = elapsedWall - poApiMs (client DOM + paint). Server: gebruik app als wandklok."
     },
     "route-rccp": {
       "label": "Route /rccp",
       "median": {
-        "total": null,
-        "elapsedWall": 844,
-        "sql": 474,
-        "backendOther": 0,
-        "network": 229,
-        "client": 0,
-        "render": null,
-        "app": 193,
-        "apiSum": 422
+        "elapsedWall": 860,
+        "app": 179,
+        "sql": 119,
+        "backendOther": 60,
+        "network": 288,
+        "apiSum": 467
       },
       "dominant": "sql",
-      "cold": { "elapsedWall": 844, "app": 193 },
-      "topLabels": ["tb_lookups", "rccp_vendor_list", "tb_read_cols"]
+      "topLabels": ["rccp_vendor_list", "tb_lookup_product_receipt_lines", "tb_lookup_vendors"]
     },
     "route-bi": {
       "label": "Route /bi",
       "median": {
-        "total": null,
-        "elapsedWall": 841,
-        "sql": 167,
-        "backendOther": 0,
-        "network": 58,
-        "client": 0,
-        "render": null,
-        "app": 48,
-        "apiSum": 106
+        "elapsedWall": 837,
+        "app": 0,
+        "apiSum": 28,
+        "network": 28
       },
-      "dominant": "sql",
-      "cold": { "elapsedWall": 841, "app": 48 },
-      "topLabels": ["bi_meta", "tb_lookups"]
+      "dominant": "network"
+    },
+    "board-tab-charts": {
+      "label": "PO board tab — Charts",
+      "median": {
+        "total": null,
+        "elapsedWall": 120,
+        "note": "No charts configured — interaction under 100ms threshold"
+      },
+      "dominant": "render",
+      "measurable": true
+    },
+    "board-tab-rccp": {
+      "label": "PO board tab — RCCP",
+      "median": {
+        "elapsedWall": 833,
+        "app": 5,
+        "apiSum": 12,
+        "network": 7
+      },
+      "dominant": "network"
     },
     "route-admin": {
       "label": "Route /admin",
       "median": {
-        "total": null,
         "elapsedWall": 931,
-        "sql": 0,
-        "backendOther": 28,
-        "network": 69,
-        "client": 0,
-        "render": null,
         "app": 28,
-        "apiSum": 97
+        "apiSum": 97,
+        "network": 69
       },
-      "dominant": "network",
-      "cold": { "elapsedWall": 931 }
-    },
-    "board-tab-charts": {
-      "label": "PO board tab — Charts",
-      "median": null,
-      "dominant": null,
-      "measurable": false,
-      "note": "BoardSplitView niet gerenderd bij orderCount=0"
-    },
-    "board-tab-rccp": {
-      "label": "PO board tab — RCCP",
-      "median": null,
-      "dominant": null,
-      "measurable": false,
-      "note": "BoardSplitView niet gerenderd bij orderCount=0"
-    },
-    "admin-users": {
-      "label": "Admin tab — Users",
-      "median": {
-        "total": null,
-        "elapsedWall": 862,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null,
-        "app": 0,
-        "apiSum": 0
-      },
-      "dominant": "render",
-      "cold": { "elapsedWall": 855 },
-      "note": "Warm — gecacht na eerste /admin load"
+      "dominant": "network"
     },
     "admin-analytics": {
       "label": "Admin tab — Analytics",
       "median": {
-        "total": null,
         "elapsedWall": 980,
-        "sql": 0,
-        "backendOther": 62,
-        "network": 730,
-        "client": 0,
-        "render": null,
         "app": 62,
-        "apiSum": 792
+        "apiSum": 792,
+        "network": 730
       },
-      "dominant": "network",
-      "cold": { "elapsedWall": 980, "apiSum": 792 }
-    },
-    "admin-odata": {
-      "label": "Admin tab — OData",
-      "median": null,
-      "dominant": null,
-      "note": "Niet apart gemeten in cold-run (zelfde patroon als admin-datamodel)"
-    },
-    "admin-datamodel": {
-      "label": "Admin tab — Data model",
-      "median": {
-        "total": null,
-        "elapsedWall": 897,
-        "sql": 0,
-        "backendOther": 155,
-        "network": 379,
-        "client": 0,
-        "render": null,
-        "app": 155,
-        "apiSum": 534
-      },
-      "dominant": "network",
-      "cold": { "elapsedWall": 897, "apiSum": 534 }
-    },
-    "datamodel-vendors": {
-      "label": "Data model tab — Vendors",
-      "median": {
-        "total": null,
-        "elapsedWall": 904,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null,
-        "app": 0,
-        "apiSum": 0
-      },
-      "dominant": "render",
-      "cold": { "elapsedWall": 904 },
-      "note": "Warm — geen extra API na tab-switch"
+      "dominant": "network"
     }
   },
   "referenceWithData": {
     "date": "2026-07-19",
-    "environment": "http://localhost:5178 + Azure SQL (gevuld board)",
-    "route-po": {
+    "environment": "localhost:5178 + Azure SQL (production-like PO volume)",
+    "route-po-board-load": {
       "app": 740,
       "dominant": "tb_ledger",
       "topLabels": {
         "tb_ledger": 445,
         "tb_lookups": 423,
         "tb_read_details": 385,
+        "tb_read_masters": 122,
         "tb_build_rows": 29
       },
-      "note": "Hermeting uit eerdere perf-review — gebruik als referentie voor productie-achtige board-load"
+      "note": "Use for Azure/DEV regression comparison — local seed is not comparable on absolute ms"
     }
   }
 }

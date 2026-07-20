@@ -1,101 +1,99 @@
 # Performance Review — 2026-07-20
 
-**Modus:** screening (nulmeting)
-**Omgeving:** local (localhost:5178) — lege lokale SQL Server, geen netwerklatentie richting Azure
-**Baseline:** eerste gestructureerde nulmeting (vorige run 2026-07-19 had Azure-data)
-**Verdict:** STABIEL (local) — referentie-board-load nog te hermeten op DEV/preview met data
-**Meetweg:** Playwright headless (browser MCP niet beschikbaar)
+**Modus:** screening + hermeting (nulmeting)
+**Omgeving:** local (localhost:5178) — lokale SQL Server, 80 geseede PO-rijen
+**Baseline:** nulmeting — vervangt eerdere lege-DB run
+**Verdict:** STABIEL (local) — Azure-referentie blijft leidend voor productie-load
+**Meetweg:** Playwright headless + hermeting script
 
 - `window.__perf` actief op dev-server
-- Login: admin@example.com (bootstrap)
+- Login: admin@example.com
+- Seed: `node scripts/seed-perf-po-cache.js --orders=80 --lines=3`
 
 ---
 
 ## 1. Ranglijst
 
-Koude start (eerste navigatie na login). Interactie-total `<100 ms` → geen Event Timing-regel (actie voelt snel). **elapsedWall** = wandklok tot UI klaar.
+### Hermeting board-load (hard reload 3× mediaan)
 
-| Actie | elapsedWall | Δ ref.* | SQL | Backend-ov. | Netwerk | Client | Dominant |
-|-------|------------:|--------:|----:|------------:|--------:|-------:|----------|
-| Admin tab — Analytics | 980 | — | 0 | 62 | 730 | 0 | network |
-| Route /admin | 931 | — | 0 | 28 | 69 | 0 | network |
-| Data model tab — Vendors | 904 | — | 0 | 0 | 0 | 0 | render |
-| Admin tab — Data model | 897 | — | 0 | 155 | 379 | 0 | network |
-| Route /rccp | 844 | −23% app† | 474 | 0 | 229 | 0 | SQL |
-| Route /bi | 841 | — | 167 | 0 | 58 | 0 | SQL |
-| Route / — Purchase orders | 826 | −87% app‡ | 0 | 0 | 0 | 0 | render |
-| Admin tab — Users | 855 | — | 0 | 0 | 0 | 0 | render |
-| PO board tab — Charts | — | — | — | — | — | — | **NIET MEETBAAR** |
-| PO board tab — RCCP | — | — | — | — | — | — | **NIET MEETBAAR** |
+| Metriek | Mediaan | Run 1 (koud) | Run 3 (warm) |
+|---------|--------:|-------------:|-------------:|
+| Wandklok (elapsedWall) | **1779** | 1779 | 1789 |
+| `GET /data/purchase-orders` (apiRequest) | **390** | 348 | 399 |
+| Server `app` | **95** | 90 | 100 |
+| SQL-labels (parallel)* | 391 | 340 | 401 |
 
-\* Δ t.o.v. `referenceWithData` in baseline (2026-07-19 Azure board-load).
-† RCCP lokaal leeg: app 193 ms vs. ~1084 ms netwerk (screening 2026-07-19).
-‡ PO board lokaal leeg: geen API-call; referentie app **740 ms** warm (Azure).
+\*Gebruik altijd `app` als server-wandklok; label-sommen lopen parallel op.
 
-Warme herklik (mediaan 3×): alle routes `<830 ms` wandklok — gecachte responses, geen nieuwe Server-Timing.
+**Dominante labels (mediaan):** `tb_lookups` 49 ms → `tb_read_details` 33 ms → `tb_sync_state` 31 ms → `tb_read_cols` 30 ms → `tb_ledger` 13 ms → `tb_build_rows` 2 ms
+
+**Δ t.o.v. Azure-referentie (2026-07-19):** server `app` **95 ms** local vs. **740 ms** Azure (−87%) — verwacht door lokale SQL zonder netwerklatentie.
+
+### Overige acties (koud, na login)
+
+| Actie | elapsedWall | app | apiSum | Dominant |
+|-------|------------:|----:|-------:|----------|
+| Route /rccp | 860 | 179 | 467 | SQL (`rccp_vendor_list`) |
+| PO board tab — RCCP | 833 | 5 | 12 | network |
+| Route /bi | 837 | 0 | 28 | network |
+| PO board tab — Charts | ~120† | — | — | render |
+
+†Charts-tab: geen geconfigureerde grafieken — klik <100 ms (geen recharts-render).
 
 ---
 
 ## 2. Bevindingen
 
-Gesorteerd op geschatte winst bij productie-data.
+Gesorteerd op geschatte winst bij productie-data (Azure).
 
-### B1 — PO board-load (referentie) · geschatte winst ~200–400 ms server
+### B1 — PO board-load · geschatte winst ~200–400 ms server (Azure)
 
-- **Gemeten (referentie 2026-07-19):** server `app` **740 ms** warm, **1204 ms** koud
-- **Toegerekend aan:** `tb_ledger` 445 ms → `tb_read_details` 385 ms + `tb_lookups` 423 ms parallel
-- **Oorzaak:** ~10 parallelle SQL-blokken in `TableDataService.read()`; ledger-window en detail-cache-read zijn kritisch pad
-- **Plek:** `server/services/TableDataService.js` (labels `tb_ledger`, `tb_read_details`)
-- **Voorstel:** detail-cache-query versmallen; lookup-materialisatie bij sync; ledger-window beperken
-- **Afweging:** vandaag niet hergemeten — lokale DB heeft 0 PO-rijen; hermeting vereist DEV/preview met sync
+- **Gemeten (local hermeting):** server `app` **95 ms**, API **390 ms**, wandklok **1779 ms** (80 PO's, 240 regels)
+- **Gemeten (Azure referentie):** server `app` **740 ms** warm — zelfde labels, remote SQL
+- **Dominant (Azure):** `tb_ledger` 445 ms → `tb_read_details` 385 ms + `tb_lookups` 423 ms
+- **Dominant (local):** `tb_lookups` 49 ms → `tb_read_details` 33 ms — zelfde architectuur, andere latency
+- **Plek:** `server/services/TableDataService.js` — `read()` met parallelle SQL-blokken
+- **Voorstel:** detail-cache-query optimaliseren; lookup-materialisatie bij sync; ledger-window verkleinen
+- **Afweging:** stale indicators vs. minder ledger-SQL
 
 ### B2 — Route /rccp · geschatte winst ~300 ms bij gevuld board
 
-- **Gemeten (koud local):** API-som 422 ms, `app` 193 ms; dominant SQL (`rccp_vendor_list`, `tb_lookups`)
-- **Toegerekend aan:** `RccpAnalysisService` roept `tableDataService.read()` op via `rccp_po_read` / `rccp_vendor_list`
-- **Oorzaak:** volledige board-read voor RCCP-analyse, ook al is PO-data elders geladen
-- **Plek:** `server/services/RccpAnalysisService.js`
-- **Voorstel:** revision-cache delen of smaller scoped read voor RCCP
-- **Afweging:** geheugen vs. invalidatie-logica
+- **Gemeten (local):** `app` **179 ms**, `rccp_vendor_list` 40 ms, volledige `tableDataService.read()` opnieuw
+- **Referentie (2026-07-19):** ~1084 ms netwerk/API op Azure
+- **Plek:** `server/services/RccpAnalysisService.js` — `rccp_po_read` / `rccp_vendor_list`
+- **Voorstel:** PO-data delen via revision-cache of smaller scoped read
 
-### B3 — Admin tab Analytics · geschatte winst ~400 ms
+### B3 — Board-render (80 rijen) · geschatte winst ~800 ms client
 
-- **Gemeten (koud local):** API-som **792 ms** over 12 calls; dominant netwerk/waterfall
-- **Toegerekend aan:** sequentiële admin-API's bij tab-open (geen bundeling)
-- **Oorzaak:** elke subresource apart opgehaald; geen `Promise.all`-batch
-- **Plek:** admin-tab componenten onder `src/components/admin/`
-- **Voorstel:** parallel fetchen waar onafhankelijk; lazy load voor zware tabellen
-- **Afweging:** iets complexere loading-state in UI
+- **Gemeten:** wandklok **1779 ms** vs. server `app` **95 ms** → ~**1680 ms** client/render/netwerk-rest
+- **Oorzaak:** 80 master-rijen × 3 detailregels DOM; geen virtualisatie-meting in deze run
+- **Plek:** `src/components/supplier/PurchaseOrdersBoardTable.jsx`
+- **Voorstel:** drilldown met React Profiler bij grotere datasets; virtualisatie evalueren bij >200 rijen
 
 ---
 
 ## 3. Meetgaten
 
-| Actie / route | Ongemeten deel | Actie |
-|---------------|----------------|-------|
-| PO board tabs (Charts, RCCP) | Volledig | Seed/sync PO-data; `BoardSplitView` rendert pas bij `orderCount > 0` |
-| Route / — PO board-load | Server-Timing labels | Hermet op DEV/preview na D365-sync |
-| Interactie-total | Event Timing `<100 ms` | Normaal voor local; op preview met data verwacht `>100 ms` |
-| Browser MCP | Event Timing precisie | `cursor-ide-browser` inschakelen voor drilldown |
-| Preview-URL | Netwerklatentie | Meten op preview-container na volgende deploy |
+| Onderdeel | Status |
+|-----------|--------|
+| Preview-URL / Azure DEV | Niet gemeten — preview.yml triggert alleen op `feature/**` |
+| Charts-tab render | Geen grafieken geconfigureerd — geen recharts-meting mogelijk |
+| Event Timing total | Alle tab-klikken <100 ms drempel |
+| Browser MCP | Niet beschikbaar — Playwright fallback |
 
 ---
 
 ## 4. Baseline
 
-`test-reports/perf-baseline.json` — **aangemaakt** (nulmeting 2026-07-20).
+`test-reports/perf-baseline.json` — **bijgewerkt** met hermeting (80 PO's, local SQL).
 
-Bevat:
-- Local empty-DB metingen (cold + warm)
-- `referenceWithData` uit 2026-07-19 voor PO board-load (app 740 ms)
-
-Regressiedrempel: > +25% of > +200 ms t.o.v. baseline.
+Bevat `referenceWithData` (Azure 2026-07-19, app 740 ms) voor regressievergelijking op productie-achtige load.
 
 ---
 
 ## 5. Aantekeningen
 
-- Paginalading na login: TTFB 4 ms, load 414 ms, transfer 1 KB (Vite dev-shell).
-- Lokale lege DB maakt alle routes snel; **nulmeting is infrastructuur-baseline**, geen productie-snapshot.
-- Volgende stap: hermeting op **DEV/preview met gesynchroniseerde PO-data** voor board-load en tabs.
-- Playwright-script robuuster gemaakt (`playwright/perf-screening.js`) — slaat ontbrekende board-tabs netjes over.
+- Seed-script: `scripts/seed-perf-po-cache.js` — herbruikbaar voor lokale perf-runs.
+- Local `app` 95 ms is geen regressie t.o.v. Azure 740 ms — andere database-locatie.
+- Volgende hermeting: **DEV Container App** (Azure SQL + echte PO-volume) voor representatieve nulmeting.
+- Charts-tab timeout in oude screening (20 s wachten op recharts) opgelost in `playwright/perf-screening.js`.

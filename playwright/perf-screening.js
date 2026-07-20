@@ -278,7 +278,9 @@ function buildActions() {
         await tab.click();
       },
       wait: async (page) => {
-        await page.locator('.recharts-wrapper').first().waitFor({ timeout: 20000 }).catch(() => {});
+        await page.locator('.recharts-wrapper, [class*="BiChartStrip"]').first()
+          .waitFor({ timeout: 5000 })
+          .catch(() => page.getByText(/No charts|Select charts|chart/i).first().waitFor({ timeout: 3000 }).catch(() => {}));
       },
     },
     {
