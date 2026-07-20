@@ -315,14 +315,15 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     setTogglingKey('discover-fields');
     setError('');
     try {
-      await apiRequest(`${adminBasePath}/discover-fields`, { method: 'POST' });
-      await reload();
+      const discovery = await apiRequest(`${adminBasePath}/discover-fields`, { method: 'POST' });
+      const result = await apiRequest(`${adminBasePath}/datamodel`);
+      setData(mapDataModelPayload({ ...result, discovery }));
     } catch (err) {
       setError(err.message);
     } finally {
       setTogglingKey(null);
     }
-  }, [adminBasePath, reload]);
+  }, [adminBasePath]);
 
   return useMemo(() => ({
     entities: data?.entities || [],

@@ -2144,33 +2144,12 @@ async function refresh(tableKey, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// discoverSourceFields — los, licht discovery-pad voor de datamodel-pagina. Haalt ALLE bronvelden op met
-// een kleine sample (bewust géén $select) en registreert nieuwe velden als beschikbare (inactieve) kolommen,
-// zodat de admin ze kan kiezen. Schrijft NIETS naar tb_cache. Zo blijft "alle kolommen tonen om te kiezen"
-// gescheiden van de board-sync, die alleen de geselecteerde kolommen ophaalt en wegschrijft (#AB:177).
+// discoverSourceFields — los, licht discovery-pad voor de datamodel-pagina. Alleen via POST
+// /discover-fields (knop "Discover D365 fields"), nooit automatisch bij GET /datamodel. Haalt ALLE
+// bronvelden op met een kleine sample (bewust géén $select) en registreert nieuwe velden als
+// beschikbare (inactieve) kolommen. Schrijft NIETS naar tb_cache (#AB:177).
 // ---------------------------------------------------------------------------
 const FIELD_DISCOVERY_ROW_LIMIT = 5;
-const DATA_MODEL_DISCOVERY_COOLDOWN_MS = 15 * 60 * 1000;
-const dataModelDiscoveryAt = new Map();
-
-async function ensureSourceFieldsDiscovered(tableKey) {
-  const normalizedKey = String(tableKey || '').trim().toLowerCase();
-  if (!normalizedKey) return null;
-  const now = Date.now();
-  const lastRunAt = dataModelDiscoveryAt.get(normalizedKey) || 0;
-  if (now - lastRunAt < DATA_MODEL_DISCOVERY_COOLDOWN_MS) return null;
-  try {
-    const result = await discoverSourceFields(normalizedKey);
-    dataModelDiscoveryAt.set(normalizedKey, now);
-    return result;
-  } catch (err) {
-    logger.warn('Automatische veld-discovery bij datamodel mislukt', {
-      tableKey: normalizedKey,
-      error: err.message,
-    });
-    return null;
-  }
-}
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
@@ -2203,7 +2182,6 @@ async function discoverSourceFields(tableKey) {
   }
   const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
   logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
-  dataModelDiscoveryAt.set(String(tableKey || '').trim().toLowerCase(), Date.now());
   return { headerInserted, lineInserted, sampledRows: records.length };
 }
 
@@ -3950,7 +3928,6 @@ async function getBoardColumnDefinitions(tableKey, { scope = null } = {}) {
 
 async function getDataModel(tableKey) {
   const table = await getTableByKey(tableKey);
-  const discovery = await ensureSourceFieldsDiscovered(tableKey);
   const pool = await getPool();
   const [masterCols, detailCols] = await Promise.all([
     listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
@@ -4129,13 +4106,7 @@ async function getDataModel(tableKey) {
     filterCatalog: filterMeta.catalog,
     previewTables,
     lookups: lookupEntities,
-    discovery: discovery
-      ? {
-        headerInserted: Number(discovery.headerInserted) || 0,
-        lineInserted: Number(discovery.lineInserted) || 0,
-        sampledRows: Number(discovery.sampledRows) || 0,
-      }
-      : null,
+    discovery: null,
   };
 }
 
