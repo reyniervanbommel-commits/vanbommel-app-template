@@ -14,8 +14,8 @@ description: >-
 > **Doel:** een getal én de oorzaak. Meten alleen levert "de tab duurt 1,2 s"; deze skill
 > levert "1,2 s waarvan 850 ms `tb_read_sql`" met de plek in de code erbij.
 >
-> **Verwant:** `ui-design-review` (visuele consistentie), `browser-feature-test` (functioneel gedrag).
-> Deze skill kijkt uitsluitend naar snelheid.
+> **Verwant:** `perf-orchestrate`, `perf-architect`, `perf-optimize`, `perf-verify`,
+> `perf-adversary` (autonome pipeline). `ui-design-review`, `browser-feature-test`.
 
 ## Omgeving
 

@@ -1,178 +1,117 @@
 {
-  "date": "2026-07-19",
-  "hermetingDate": "2026-07-19T17:34:00+02:00",
+  "date": "2026-07-20",
+  "hermetingDate": "2026-07-20T12:15:00+00:00",
   "environment": "http://localhost:5178",
+  "database": "local SQL Server — 80 PO masters, 240 detail lines (seed-perf-po-cache)",
   "runsPerAction": 3,
+  "navigation": {
+    "ttfb": 4,
+    "domContentLoaded": 412,
+    "load": 414,
+    "transferKB": 1
+  },
   "actions": {
-    "route-po": {
-      "label": "Route / — Purchase orders (hermeting)",
+    "route-po-board-load": {
+      "label": "Route / — PO board-load (hard reload)",
       "median": {
-        "app": 740,
-        "tb_ledger": 445,
-        "tb_lookups": 423,
-        "tb_read_details": 385,
-        "tb_lookup_product_receipt_lines": 279,
-        "tb_track_marks": 213,
-        "tb_read_masters": 122,
-        "tb_read_custom": 120,
-        "tb_build_rows": 29
+        "elapsedWall": 1779,
+        "poApiMs": 390,
+        "app": 95,
+        "sql": 391,
+        "backendOther": 0,
+        "network": 295,
+        "client": 0,
+        "render": 1389,
+        "tb_lookups": 49,
+        "tb_read_details": 33,
+        "tb_sync_state": 31,
+        "tb_read_cols": 30,
+        "tb_ledger": 13,
+        "tb_build_rows": 2
       },
-      "cold": {
-        "app": 1204,
-        "tb_ledger": 1003
-      },
-      "dominant": "tb_ledger",
-      "note": "Parallel labels — use app as wall clock"
+      "dominant": "render",
+      "cold": { "elapsedWall": 1779, "app": 90, "poApiMs": 348 },
+      "warm": { "elapsedWall": 1789, "app": 100, "poApiMs": 399 },
+      "note": "render = elapsedWall - poApiMs (client DOM + paint). Server: gebruik app als wandklok."
     },
     "route-rccp": {
       "label": "Route /rccp",
       "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 1084,
-        "client": 0,
-        "render": null
+        "elapsedWall": 860,
+        "app": 179,
+        "sql": 119,
+        "backendOther": 60,
+        "network": 288,
+        "apiSum": 467
       },
       "dominant": "sql",
-      "cold": {
-        "total": null
-      }
+      "topLabels": ["rccp_vendor_list", "tb_lookup_product_receipt_lines", "tb_lookup_vendors"]
     },
     "route-bi": {
       "label": "Route /bi",
       "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 386,
-        "client": 0,
-        "render": null
+        "elapsedWall": 837,
+        "app": 0,
+        "apiSum": 28,
+        "network": 28
       },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
-    },
-    "route-admin": {
-      "label": "Route /admin",
-      "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null
-      },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
+      "dominant": "network"
     },
     "board-tab-charts": {
       "label": "PO board tab — Charts",
       "median": {
-        "total": 120,
-        "sql": 0,
-        "backendOther": 75,
-        "network": 16,
-        "client": 0,
-        "render": 0
+        "total": null,
+        "elapsedWall": 120,
+        "note": "No charts configured — interaction under 100ms threshold"
       },
-      "dominant": "backendOther",
-      "cold": {
-        "total": 120
-      }
+      "dominant": "render",
+      "measurable": true
     },
     "board-tab-rccp": {
       "label": "PO board tab — RCCP",
       "median": {
-        "total": 112,
-        "sql": 0,
-        "backendOther": 99,
-        "network": 14,
-        "client": 0,
-        "render": 0
+        "elapsedWall": 833,
+        "app": 5,
+        "apiSum": 12,
+        "network": 7
       },
-      "dominant": "backendOther",
-      "cold": {
-        "total": 112
-      }
+      "dominant": "network"
     },
-    "admin-users": {
-      "label": "Admin tab — Users",
+    "route-admin": {
+      "label": "Route /admin",
       "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null
+        "elapsedWall": 931,
+        "app": 28,
+        "apiSum": 97,
+        "network": 69
       },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
+      "dominant": "network"
     },
     "admin-analytics": {
       "label": "Admin tab — Analytics",
       "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null
+        "elapsedWall": 980,
+        "app": 62,
+        "apiSum": 792,
+        "network": 730
       },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
-    },
-    "admin-odata": {
-      "label": "Admin tab — OData",
-      "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null
+      "dominant": "network"
+    }
+  },
+  "referenceWithData": {
+    "date": "2026-07-19",
+    "environment": "localhost:5178 + Azure SQL (production-like PO volume)",
+    "route-po-board-load": {
+      "app": 740,
+      "dominant": "tb_ledger",
+      "topLabels": {
+        "tb_ledger": 445,
+        "tb_lookups": 423,
+        "tb_read_details": 385,
+        "tb_read_masters": 122,
+        "tb_build_rows": 29
       },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
-    },
-    "admin-datamodel": {
-      "label": "Admin tab — Data model",
-      "median": {
-        "total": null,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": null
-      },
-      "dominant": "sql",
-      "cold": {
-        "total": null
-      }
-    },
-    "datamodel-vendors": {
-      "label": "Data model tab — Vendors",
-      "median": {
-        "total": 144,
-        "sql": 0,
-        "backendOther": 0,
-        "network": 0,
-        "client": 0,
-        "render": 0
-      },
-      "dominant": "sql",
-      "cold": {
-        "total": 144
-      }
+      "note": "Use for Azure/DEV regression comparison — local seed is not comparable on absolute ms"
     }
   }
 }

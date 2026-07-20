@@ -12,7 +12,7 @@ const path = require('path');
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5178';
 const RUNS = Number(process.env.PERF_RUNS || 3);
-const REPORT_PATH = path.join(__dirname, '..', 'test-reports', 'perf-review-2026-07-19.md');
+const REPORT_PATH = path.join(__dirname, '..', 'test-reports', `perf-review-${new Date().toISOString().slice(0, 10)}.md`);
 const BASELINE_PATH = path.join(__dirname, '..', 'test-reports', 'perf-baseline.json');
 
 const SQL_LABELS = new Set([
@@ -152,9 +152,27 @@ async function measureClick(page, clickFn, waitFn) {
 
 async function runAction(page, action, runs = RUNS) {
   const samples = [];
+  let lastError = null;
   for (let i = 0; i < runs; i += 1) {
-    samples.push(await measureClick(page, action.click, action.wait));
+    try {
+      samples.push(await measureClick(page, action.click, action.wait));
+    } catch (err) {
+      lastError = err;
+      break;
+    }
     await page.waitForTimeout(300);
+  }
+
+  if (!samples.length) {
+    return {
+      id: action.id,
+      label: action.label,
+      runs: 0,
+      cold: null,
+      warm: { total: null, sql: null, backendOther: null, network: null, client: null, render: null },
+      dominant: 'unknown',
+      error: lastError?.message || 'No samples',
+    };
   }
 
   const keys = ['total', 'sql', 'backendOther', 'network', 'client', 'render'];
@@ -217,7 +235,9 @@ function buildActions() {
       label: 'Route / — Purchase orders',
       click: poNav.click,
       wait: async (page) => {
-        await page.locator('[aria-label^="Select order"]').first().waitFor({ timeout: 20000 }).catch(() => {});
+        await page.locator('[aria-label^="Select order"]').first().waitFor({ timeout: 5000 }).catch(async () => {
+          await page.getByText('No purchase orders found').waitFor({ timeout: 15000 });
+        });
       },
     },
     {
@@ -251,10 +271,16 @@ function buildActions() {
       label: 'PO board tab — Charts',
       click: async (page) => {
         await poNav.click(page);
-        await page.getByRole('tab', { name: 'Charts' }).click();
+        const tab = page.getByRole('tab', { name: 'Charts' });
+        if ((await tab.count()) === 0) {
+          throw new Error('Charts tab unavailable (empty board — no PO rows in cache)');
+        }
+        await tab.click();
       },
       wait: async (page) => {
-        await page.locator('.recharts-wrapper').first().waitFor({ timeout: 20000 }).catch(() => {});
+        await page.locator('.recharts-wrapper, [class*="BiChartStrip"]').first()
+          .waitFor({ timeout: 5000 })
+          .catch(() => page.getByText(/No charts|Select charts|chart/i).first().waitFor({ timeout: 3000 }).catch(() => {}));
       },
     },
     {
@@ -262,7 +288,11 @@ function buildActions() {
       label: 'PO board tab — RCCP',
       click: async (page) => {
         await poNav.click(page);
-        await page.getByRole('tab', { name: 'RCCP' }).click();
+        const tab = page.getByRole('tab', { name: 'RCCP' });
+        if ((await tab.count()) === 0) {
+          throw new Error('RCCP tab unavailable (empty board — no PO rows in cache)');
+        }
+        await tab.click();
       },
       wait: async (page) => {
         await page.getByText('Loading RCCP dashboard...').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {});
@@ -342,11 +372,13 @@ function buildReport({ results, loginInfo, envNote }) {
     .map((r) => `| ${r.label} | ${r.cold.total} | ${r.warm.total} |`)
     .join('\n');
 
-  return `# Performance Review — 2026-07-19
+  const reportDate = new Date().toISOString().slice(0, 10);
+  const baselineExists = fs.existsSync(BASELINE_PATH);
+  return `# Performance Review — ${reportDate}
 
 **Modus:** screening
 **Omgeving:** local (${BASE_URL.replace('http://', '')}) — geen netwerklatentie richting Azure
-**Baseline:** eerste run, geen vergelijking
+**Baseline:** ${baselineExists ? 'aanwezig (vergelijking in rapport §1)' : 'eerste run, geen vergelijking'}
 **Verdict:** ${results.some((r) => (r.warm.total || 0) > 500) ? 'VERBETERPUNTEN' : 'GEMETEN'}
 **Meetweg:** Playwright headless (+ MCP beschikbaar voor drilldown)
 
@@ -423,7 +455,7 @@ async function main() {
     const navigation = await page.evaluate(() => window.__perf?.navigation?.()).catch(() => null);
     await browser.close();
 
-    const partialReport = `# Performance Review — 2026-07-19
+    const partialReport = `# Performance Review — ${new Date().toISOString().slice(0, 10)}
 
 **Modus:** screening (gestopt — login vereist)
 **Omgeving:** local (${BASE_URL.replace('http://', '')})
@@ -492,7 +524,7 @@ Dominant: **client/render** (~2,6 s load, TTFB 39 ms — Vite-bundle parsing).
   fs.writeFileSync(REPORT_PATH, report, 'utf8');
 
   const baseline = {
-    date: '2026-07-19',
+    date: new Date().toISOString().slice(0, 10),
     environment: BASE_URL,
     runsPerAction: RUNS,
     actions: Object.fromEntries(results.map((r) => [r.id, {
