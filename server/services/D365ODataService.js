@@ -4,6 +4,8 @@ const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
+const DEFAULT_RELEASED_PRODUCT_DOCUMENT_ATTACHMENTS_PATH = '/data/ReleasedProductDocumentAttachments';
+const DEFAULT_PRODUCT_DOCUMENT_ATTACHMENTS_PATH = '/data/ProductDocumentAttachments';
 const DEFAULT_VENDORS_PATH = '/data/VendorsV2';
 const DEFAULT_RELEASED_PRODUCTS_PATH = '/data/ReleasedProductsV2';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
@@ -441,6 +443,7 @@ async function buildGenericEntityUrl({
   skip,
   extraFilter = '',
   selectFields = null,
+  applyCompanyFilter = true,
 }) {
   const baseUrl = await getBaseUrl();
   const normalizedPath = String(sourceEntity || '').trim();
@@ -463,11 +466,11 @@ async function buildGenericEntityUrl({
   }
 
   const clauses = [];
-  if (company) clauses.push(`dataAreaId eq '${escapeODataLiteral(company)}'`);
+  if (applyCompanyFilter && company) clauses.push(`dataAreaId eq '${escapeODataLiteral(company)}'`);
   const trimmedExtra = String(extraFilter || '').trim();
   if (trimmedExtra) clauses.push(`(${trimmedExtra})`);
   if (clauses.length) searchParams.set('$filter', clauses.join(' and '));
-  if (company) searchParams.set('cross-company', 'true');
+  if (applyCompanyFilter && company) searchParams.set('cross-company', 'true');
 
   return url.toString();
 }
@@ -599,6 +602,7 @@ async function fetchEntityRecords({
   maxItems = MAX_PURCHASE_ORDER_ITEMS,
   onProgress,
   selectFields = null,
+  applyCompanyFilter = true,
 }) {
   const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
@@ -621,6 +625,7 @@ async function fetchEntityRecords({
     skip,
     extraFilter,
     selectFields,
+    applyCompanyFilter,
   });
 
   const emitProgress = (isTruncated = false) => {
@@ -882,12 +887,54 @@ async function fetchPurchaseOrders({
  * Doet bewust méér dan een token ophalen: op 2026-07-19 bleek bij het inregelen van de
  * LIVE-omgeving dat het token prima slaagde terwijl élke entity-read 403 gaf (de gekoppelde
  * F&O-gebruiker had geen rechten). Een token-only check zou die situatie als 'gezond'
- * rapporteren. Daarom halen we ook echt één record op.
+ * rapporteren. Daarom halen we ook echt één record op per kritieke entiteit.
+ *
+ * Productafbeeldingen lezen primair uit ProductDocumentAttachments (F&O UI product image),
+ * met fallback naar ReleasedProductDocumentAttachments — beide worden hier geprobeerd.
  *
  * Gooit nooit; geeft altijd een status terug zodat de caller kan beslissen over de HTTP-code.
  */
+async function probeEntityRead(baseUrl, headers, entityPath, { crossCompany = true } = {}) {
+  const probeUrl = `${baseUrl}${entityPath}?$top=1${crossCompany ? '&cross-company=true' : ''}`;
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(probeUrl, { headers, signal: controller.signal });
+    if (response.ok) return { status: 'ok' };
+    const body = await response.text().catch(() => '');
+    return {
+      status: 'fail',
+      httpStatus: response.status,
+      message: response.status === 403
+        ? `Authenticated, but the linked F&O user is not authorized to read ${entityPath}`
+        : `D365 returned HTTP ${response.status}`,
+      bodyPreview: body.slice(0, 300),
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      message: error.name === 'AbortError' ? 'D365 request timed out' : 'D365 unreachable',
+    };
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 async function checkHealth() {
-  const result = { status: 'error', baseUrl: null, company: null, token: 'fail', read: 'fail', message: null };
+  const result = {
+    status: 'error',
+    baseUrl: null,
+    company: null,
+    token: 'fail',
+    read: 'fail',
+    productImageRead: 'fail',
+    entities: {
+      purchaseOrders: 'fail',
+      productDocumentAttachments: 'fail',
+      releasedProductDocumentAttachments: 'fail',
+    },
+    message: null,
+  };
 
   try {
     result.baseUrl = await getBaseUrl();
@@ -911,29 +958,44 @@ async function checkHealth() {
   }
 
   const ordersPath = (await settingsService.getAsync('D365_ODATA_PURCHASE_ORDERS_PATH')) || DEFAULT_PURCHASE_ORDERS_PATH;
-  const probeUrl = result.baseUrl + ordersPath + '?$top=1&cross-company=true';
+  const probes = [
+    ['purchaseOrders', ordersPath],
+    ['productDocumentAttachments', DEFAULT_PRODUCT_DOCUMENT_ATTACHMENTS_PATH],
+    ['releasedProductDocumentAttachments', DEFAULT_RELEASED_PRODUCT_DOCUMENT_ATTACHMENTS_PATH],
+  ];
 
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(probeUrl, { headers, signal: controller.signal });
-    if (response.ok) {
-      result.read = 'ok';
-      result.status = 'ok';
-      return result;
+  let firstFailure = null;
+  for (const [key, entityPath] of probes) {
+    const probe = await probeEntityRead(result.baseUrl, headers, entityPath);
+    result.entities[key] = probe.status === 'ok' ? 'ok' : 'fail';
+    if (probe.status !== 'ok' && !firstFailure) {
+      firstFailure = probe;
+      logger.error('D365 readiness-check mislukt', {
+        entity: entityPath,
+        status: probe.httpStatus,
+        bodyPreview: probe.bodyPreview,
+      });
     }
-    // 403 betekent: token goed, rechten niet. Dat onderscheid is de kern van deze check.
-    const body = await response.text().catch(() => '');
-    result.message = response.status === 403
-      ? 'Authenticated, but the linked F&O user is not authorized to read ' + ordersPath
-      : 'D365 returned HTTP ' + response.status;
-    logger.error('D365 readiness-check mislukt', { status: response.status, bodyPreview: body.slice(0, 300) });
-  } catch (error) {
-    result.message = error.name === 'AbortError' ? 'D365 request timed out' : 'D365 unreachable';
-  } finally {
-    clearTimeout(timeoutHandle);
   }
 
+  result.read = result.entities.purchaseOrders === 'ok' ? 'ok' : 'fail';
+  result.productImageRead = (
+    result.entities.productDocumentAttachments === 'ok'
+    || result.entities.releasedProductDocumentAttachments === 'ok'
+  ) ? 'ok' : 'fail';
+
+  if (result.read === 'ok' && result.productImageRead === 'ok') {
+    result.status = 'ok';
+    return result;
+  }
+
+  if (result.read !== 'ok') {
+    result.message = firstFailure?.message || 'Purchase order entity is unavailable';
+    return result;
+  }
+
+  result.status = 'error';
+  result.message = 'Purchase orders are readable, but product image entities are unavailable';
   return result;
 }
 
