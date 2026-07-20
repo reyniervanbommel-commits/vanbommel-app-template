@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "perf-backlog.schema.json",
+  "title": "PerfBacklog",
+  "type": "object",
+  "required": ["version", "generatedAt", "environment", "items"],
+  "properties": {
+    "version": { "type": "string" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "profiles": {
+          "type": "array",
+          "items": { "enum": ["S", "M", "L"] }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "journey", "action", "elapsedWall", "dominantPost", "priorityScore", "status"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^BL-[0-9]{3}$" },
+          "journey": { "enum": ["J1", "J2", "J3"] },
+          "action": { "type": "string" },
+          "elapsedWall": { "type": "number" },
+          "app": { "type": "number" },
+          "apiSum": { "type": "number" },
+          "dominantPost": {
+            "enum": ["sql", "server", "network", "client", "render", "unknown"]
+          },
+          "labels": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "priorityScore": { "type": "number" },
+          "routeFrequencyWeight": { "type": "number" },
+          "status": {
+            "enum": ["open", "in_progress", "verifying", "adversary", "done", "blocked", "skipped"]
+          },
+          "attemptedTiers": {
+            "type": "array",
+            "items": { "enum": ["L0", "L1", "L2", "L3", "L4", "L5"] }
+          },
+          "targetWallMs": { "type": "number" }
+        }
+      }
+    }
+  }
+}

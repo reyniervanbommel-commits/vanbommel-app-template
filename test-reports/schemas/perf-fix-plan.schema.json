@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "perf-fix-plan.schema.json",
+  "title": "PerfFixPlan",
+  "type": "object",
+  "required": [
+    "id",
+    "backlogItemId",
+    "journey",
+    "branch",
+    "tier",
+    "hypothesis",
+    "steps",
+    "successCriteria",
+    "functionalInvariants",
+    "blastRadius",
+    "verifyProfiles"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "backlogItemId": { "type": "string" },
+    "journey": { "enum": ["J1", "J2", "J3"] },
+    "action": { "type": "string" },
+    "branch": { "enum": ["R", "N", "S", "C"] },
+    "tier": { "enum": ["L0", "L1", "L2", "L3", "L4", "L5"] },
+    "hypothesis": { "type": "string" },
+    "targetFiles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "successCriteria": {
+      "type": "object",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "object",
+          "required": ["metric", "minGainMs"],
+          "properties": {
+            "metric": { "const": "elapsedWall" },
+            "baselineMs": { "type": "number" },
+            "targetReductionPercent": { "type": "number" },
+            "minGainMs": { "type": "number" }
+          }
+        },
+        "secondary": {
+          "type": "object",
+          "properties": {
+            "metric": { "const": "app" },
+            "role": { "enum": ["informational"] }
+          }
+        }
+      }
+    },
+    "functionalInvariants": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "adversaryScenarios": {
+      "type": "array",
+      "items": { "enum": ["A1", "A2", "A3", "A4", "A5"] }
+    },
+    "blastRadius": {
+      "type": "array",
+      "items": { "enum": ["J1", "J2", "J3"] }
+    },
+    "verifyProfiles": {
+      "type": "array",
+      "items": { "enum": ["S", "M", "L"] }
+    }
+  }
+}

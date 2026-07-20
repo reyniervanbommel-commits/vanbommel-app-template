@@ -16,19 +16,19 @@ todos:
     status: pending
   - id: skill-orchestrate
     content: "Skill perf-orchestrate — state machine, scope v1, frequency uit analytics"
-    status: pending
+    status: completed
   - id: skill-architect
     content: "Skill perf-architect — beslisboom v2, dual targets (wall + app)"
-    status: pending
+    status: completed
   - id: skill-optimize
     content: "Skill perf-optimize — implementatie per fix-tier L0–L5"
-    status: pending
+    status: completed
   - id: skill-verify
     content: "Skill perf-verify — test/build + regression S+M profielen"
-    status: pending
+    status: completed
   - id: skill-adversary
     content: "Skill perf-adversary — stale/concurrent/role scenario's"
-    status: pending
+    status: completed
   - id: ci-perf-regression
     content: "GitHub Actions workflow perf-regression.yml op PR naar develop"
     status: pending
@@ -315,8 +315,8 @@ END
 
 - [x] MC-beslissingen product-owner (chat 2026-07-20)
 - [x] Policy JSON (`test-reports/perf-optimize-policy.json`)
-- [ ] Backlog schema + seed M/L
-- [ ] Skills: orchestrate, architect, optimize, verify, **adversary**
+- [x] Backlog + fix-plan schema (`test-reports/schemas/`)
+- [x] Skills: orchestrate, architect, optimize, verify, adversary
 - [ ] CI workflow perf-regression.yml
 
 ### Fase B — Pilot v1
@@ -352,14 +352,20 @@ END
 
 ## Te bouwen skills
 
-| Skill | Nieuw? |
-|-------|--------|
-| `perf-review` | bestaand → Scout |
-| `perf-orchestrate` | **nieuw** |
-| `perf-architect` | **nieuw** |
-| `perf-optimize` | **nieuw** |
-| `perf-verify` | **nieuw** |
-| `perf-adversary` | **nieuw v1.1** |
+| Skill | Rol | Status |
+|-------|-----|--------|
+| `perf-review` | Scout (meten) | ✅ bestaand |
+| `perf-orchestrate` | Orchestrator | ✅ gebouwd |
+| `perf-architect` | Architect | ✅ gebouwd |
+| `perf-optimize` | Fixer | ✅ gebouwd |
+| `perf-verify` | Verifier | ✅ gebouwd |
+| `perf-adversary` | Adversary | ✅ gebouwd |
+
+Locaties: `.cursor/skills/perf-*/` en `.claude/skills/perf-*/` (gespiegeld).
+
+Schemas: `test-reports/schemas/perf-backlog.schema.json`, `perf-fix-plan.schema.json`.
+
+Playwright: `playwright/perf-adversary.js` (stub A1/A4/A5).
 
 ---
 
