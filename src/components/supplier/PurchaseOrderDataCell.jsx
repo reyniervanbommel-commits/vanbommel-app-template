@@ -24,8 +24,6 @@ function PurchaseOrderDataCell({
     return marksByColumnId?.[colId] ?? trackMeta.defaultPattern?.[colId] ?? null;
   }, [trackMeta, column?.id, marksByColumnId]);
   const disabled = isCellContextMenuDisabled(column);
-  const activeFilter = contextMenu?.filterByColumn?.[column.key];
-  const filterActive = isColumnFilterActive(column, activeFilter);
   const stickyLeft = Number(column?.stickyLeft);
   const isLocated = Boolean(layout?.isLocated);
   const resolvedCellStyle = useMemo(() => {
@@ -42,16 +40,19 @@ function PurchaseOrderDataCell({
     };
   }, [isLocated, stickyLeft, style]);
 
+  // De actieve filter pas uitlezen bij het openen van het menu (ref), zodat een filterwijziging
+  // niet elke cel op het bord opnieuw laat renderen.
   const handleContextMenu = useCallback((event) => {
     if (disabled) return;
     event.preventDefault();
+    const activeFilter = contextMenu?.filterByColumnRef?.current?.[column.key];
     contextMenu?.open?.(event.currentTarget, {
       column,
       rawValue,
-      filterActive,
+      filterActive: isColumnFilterActive(column, activeFilter),
       order,
     });
-  }, [column, contextMenu, disabled, filterActive, order, rawValue]);
+  }, [column, contextMenu, disabled, order, rawValue]);
 
   return (
     <td

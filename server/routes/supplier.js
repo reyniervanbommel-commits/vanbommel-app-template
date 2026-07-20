@@ -220,6 +220,7 @@ function normalizeBoardSettings(rawSettings) {
     lineValueHeaderLinks: normalizeLineValueLinks(input.lineValueHeaderLinks),
     collapsedHeaderColumnKeys: normalizeStringArray(input.collapsedHeaderColumnKeys),
     collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
+    productImageColumnVisible: input.productImageColumnVisible !== false,
   };
 }
 
@@ -274,6 +275,7 @@ function normalizeViewState(rawState) {
       lineValueHeaderLinks: normalizeLineValueLinks(columns.lineValueHeaderLinks),
       collapsedHeaderColumnKeys: normalizeStringArray(columns.collapsedHeaderColumnKeys),
       collapsedLineColumnKeys: normalizeStringArray(columns.collapsedLineColumnKeys),
+      productImageColumnVisible: columns.productImageColumnVisible !== false,
     },
     table: {
       activityFilter: VIEW_ACTIVITY_FILTERS.has(table.activityFilter) ? table.activityFilter : 'all',

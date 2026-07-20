@@ -104,7 +104,9 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.activityFilter).toBe('new');
   });
 
-  it('sorteert header-kolommen met gepushte line totals op de berekende som', () => {
+  // De som zelf komt sinds de lazy-lines-payload uit de board-read (values.lineAmountTotal);
+  // de hook sorteert daar alleen nog op.
+  it('sorteert header-kolommen met gepushte line totals op de som uit de read', () => {
     const columns = [
       { key: 'orderNumber', dataType: 'text', label: 'Order' },
       { key: 'lineAmountTotal', dataType: 'number', label: 'Line Amount Total' },
@@ -116,14 +118,14 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
       {
         orderNumber: 'PO-2',
         dataAreaId: 'nl',
-        values: { orderNumber: 'PO-2' },
-        lines: [{ lineNumber: '10', values: { lineAmount: 20 } }],
+        values: { orderNumber: 'PO-2', lineAmountTotal: 20 },
+        lineCount: 1,
       },
       {
         orderNumber: 'PO-1',
         dataAreaId: 'nl',
-        values: { orderNumber: 'PO-1' },
-        lines: [{ lineNumber: '10', values: { lineAmount: 10 } }],
+        values: { orderNumber: 'PO-1', lineAmountTotal: 10 },
+        lineCount: 1,
       },
     ];
 

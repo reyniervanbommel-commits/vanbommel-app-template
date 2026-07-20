@@ -123,6 +123,37 @@ describe('mapTbResponseToBoard', () => {
     expect(result.columns.line[0]).toMatchObject({ key: 'qty', level: 'line' });
   });
 
+  it('marks lines as not-yet-loaded and keeps the rollup when details are omitted', () => {
+    const result = mapTbResponseToBoard({
+      rows: [{
+        partitionKey: 'nl01',
+        recordKey: 'PO-3',
+        values: { status: 'Open' },
+        detailCount: 4,
+        hasChangedLine: true,
+        productImageSummary: { firstItemNumber: 'ITEM-1', additionalItemCount: 2 },
+        linkedLineValues: { itemNumbers: ['ITEM-1', 'ITEM-2'] },
+      }],
+    });
+
+    const order = result.orders[0];
+    expect(order.lines).toBe(null);
+    expect(order.lineCount).toBe(4);
+    expect(order.hasNewLine).toBe(false);
+    expect(order.hasChangedLine).toBe(true);
+    expect(order.hasRemovedLine).toBe(false);
+    expect(order.productImageSummary).toEqual({ firstItemNumber: 'ITEM-1', additionalItemCount: 2 });
+    expect(order.linkedLineValues).toEqual({ itemNumbers: ['ITEM-1', 'ITEM-2'] });
+  });
+
+  it('falls back to an empty product image summary when the rollup omits it', () => {
+    const result = mapTbResponseToBoard({
+      rows: [{ partitionKey: 'nl01', recordKey: 'PO-4' }],
+    });
+    expect(result.orders[0].productImageSummary).toEqual({ firstItemNumber: '', additionalItemCount: 0 });
+    expect(result.orders[0].linkedLineValues).toBe(null);
+  });
+
   it('keeps a removed row visible as retained when syncRetained is set', () => {
     const result = mapTbResponseToBoard({
       rows: [{ partitionKey: 'nl01', recordKey: 'PO-2', removedAtSource: true, syncRetained: true }],

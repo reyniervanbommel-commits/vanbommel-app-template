@@ -370,6 +370,39 @@ async function listRetainedOrderKeys(pool, tableId, fetchBudget) {
   }));
 }
 
+/**
+ * Zet retained orders (en hun regels) terug op "aanwezig" na de blanket soft-delete.
+ *
+ * Uitgesloten rijen (tb_row_exclusions) blijven met rust: die heeft iemand bewust van het bord
+ * gehaald. Retourneert het aantal herstelde rijen, puur voor logging.
+ */
+async function restoreRetainedRowsPresence(pool, tableId) {
+  const res = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      UPDATE c
+      SET c.removed_at_source = 0
+      FROM dbo.tb_cache c
+      WHERE c.table_id = @tableId AND c.scope = 'master'
+        AND c.sync_retained = 1 AND c.removed_at_source = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.tb_row_exclusions ex
+          WHERE ex.table_id = @tableId
+            AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+        );
+
+      UPDATE d
+      SET d.removed_at_source = 0
+      FROM dbo.tb_cache d
+      INNER JOIN dbo.tb_cache m
+        ON m.table_id = d.table_id AND m.scope = 'master'
+        AND m.partition_key = d.partition_key AND m.record_key = d.record_key
+        AND m.sync_retained = 1 AND m.removed_at_source = 0
+      WHERE d.table_id = @tableId AND d.scope = 'detail' AND d.removed_at_source = 1;
+    `);
+  return (res.rowsAffected || []).reduce((sum, n) => sum + n, 0);
+}
+
 async function refreshRetainedPurchaseOrders({
   pool,
   table,
@@ -381,6 +414,7 @@ async function refreshRetainedPurchaseOrders({
   lineSelectFields,
   retentionSettings,
   tableKey,
+  skipLedger = false,
 }) {
   const retainedKeys = await listRetainedOrderKeys(pool, table.id, retentionSettings.fetchBudget);
   const retainedTotal = await countSyncRetainedMasters(pool, table.id);
@@ -429,7 +463,8 @@ async function refreshRetainedPurchaseOrders({
       refreshStart,
       masterSource,
       detailSource,
-      refreshJobId
+      refreshJobId,
+      skipLedger
     );
     saved += chunkSaved;
     updateRefreshProgress(tableKey, {
@@ -1094,9 +1129,30 @@ function buildD365LedgerEntries({
     }];
   }
 
-  const fieldKeys = action === 'INSERT'
-    ? Object.keys(isPlainObject(nextValues) ? nextValues : {}).sort()
-    : computeChangedFieldKeys(previousValues, nextValues);
+  // INSERT is één regel per rij, symmetrisch met DELETE hierboven: bij een nieuwe rij is "deze rij
+  // is erbij gekomen" de hele waarheid — per veld loggen gaf ~10x zoveel regels zonder extra
+  // informatie. Het bord markeert een nieuwe rij ook als hele rij en negeert changedFieldKeys voor
+  // isNew-rijen. Alleen UPDATE blijft per veld; daar is juist wél relevant wát er veranderde.
+  // Let op: dit geldt alleen voor de D365-sync. Gebruikersacties (saveCustomValue, correctField)
+  // bouwen hun entries zelf en houden hun veldniveau.
+  if (action === 'INSERT') {
+    return [{
+      tableId,
+      partitionKey,
+      recordKey,
+      detailKey,
+      fieldKey: null,
+      source: 'D365',
+      action,
+      oldValue: null,
+      newValue: toLedgerValue(nextValues),
+      changedByUserId: null,
+      correlationId: null,
+      refreshJobId,
+    }];
+  }
+
+  const fieldKeys = computeChangedFieldKeys(previousValues, nextValues);
 
   if (!fieldKeys.length) return [];
 
@@ -1108,7 +1164,7 @@ function buildD365LedgerEntries({
     fieldKey,
     source: 'D365',
     action,
-    oldValue: action === 'INSERT' ? null : toLedgerValue(previousValues?.[fieldKey]),
+    oldValue: toLedgerValue(previousValues?.[fieldKey]),
     newValue: toLedgerValue(nextValues?.[fieldKey]),
     changedByUserId: null,
     correlationId: null,
@@ -1166,6 +1222,14 @@ async function writeChangeLedgerEntries(requestFactory, entries) {
     for (const p of params) req.input(p.name, p.type, p.value);
     await req.query(text);
   }
+}
+
+// Heeft deze tabel nog geen enkele cache-rij? Dan is de eerstvolgende refresh een nulmeting.
+async function isCacheEmpty(pool, tableId) {
+  const res = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query('SELECT TOP (1) 1 AS present FROM dbo.tb_cache WITH (NOLOCK) WHERE table_id = @tableId');
+  return !res.recordset.length;
 }
 
 // Retentie voor tb_change_ledger. read() leest alleen sinds de laatste sync en RowActivity toont
@@ -1539,7 +1603,8 @@ function dedupeDetailRows(detailRows) {
 // draai daarna één MERGE (master) en één DELETE + INSERT (details). Zo verdwijnt het N+1-patroon
 // (transactie + losse INSERT per order/regel) dat de refresh traag maakte.
 // ---------------------------------------------------------------------------
-async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId) {
+// skipLedger: nulmeting-modus — wel data wegschrijven, geen dagboekregels (zie refresh()).
+async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId, skipLedger = false) {
   const masterRows = [];
   const detailRows = [];
   let watermark = null;
@@ -1782,7 +1847,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
         `);
     }
 
-    if (ledgerEntries.length) {
+    if (ledgerEntries.length && !skipLedger) {
       try {
         await writeChangeLedgerEntries(() => new sql.Request(tx), ledgerEntries);
       } catch (ledgerErr) {
@@ -1850,6 +1915,9 @@ async function refresh(tableKey, options = {}) {
     return { orders: 0, truncated: false, syncedAt: null, skipped: 'already_visited' };
   }
   visitedTables.add(table.key);
+  // Verse brondata betekent mogelijk verse lookup-labels; de TTL-cache voor het lazy
+  // laden van sublijnen mag daar niet achterlopen.
+  invalidateLookupEnrichmentCache();
   if (table.cacheMode === 'never') {
     resetRefreshProgress(tableKey, {
       status: 'done',
@@ -1959,6 +2027,16 @@ async function refresh(tableKey, options = {}) {
     }
 
     const pool = await getPool();
+    // Nulmeting: de eerste vulling van een tabel is geen verzameling wijzigingen maar een
+    // startpunt. Alles zou als "nieuw" in het dagboek belanden en het bord zou na de eerste sync
+    // elke rij als nieuw markeren. Automatisch bij een lege cache; de admin kan het ook expliciet
+    // forceren (opnieuw inlezen na een datamodel-wijziging) via options.baseline.
+    const skipLedger = options.baseline === true || await isCacheEmpty(pool, table.id);
+    if (skipLedger) {
+      logger.info('Refresh als nulmeting: wijzigingen worden niet in het dagboek vastgelegd', {
+        tableKey, reason: options.baseline === true ? 'expliciet' : 'lege cache',
+      });
+    }
     let watermark = null;
     let saved = 0;
 
@@ -1966,7 +2044,7 @@ async function refresh(tableKey, options = {}) {
     for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
       const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
       const { saved: chunkSaved, watermark: chunkWatermark } =
-        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId);
+        await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId, skipLedger);
       if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
       saved += chunkSaved;
       updateRefreshProgress(tableKey, {
@@ -2054,7 +2132,7 @@ async function refresh(tableKey, options = {}) {
         refreshJobId,
       }));
     }
-    if (removedEntries.length) {
+    if (removedEntries.length && !skipLedger) {
       try {
         await writeChangeLedgerEntries(() => pool.request(), removedEntries);
       } catch (err) {
@@ -2075,6 +2153,14 @@ async function refresh(tableKey, options = {}) {
       `);
 
     if (table.key === 'purchase-orders') {
+      // Retained orders zijn bewust behouden: ze vallen buiten de sync-scope maar horen in de app
+      // te blijven staan. De blanket soft-delete hierboven markeert ze toch als "weg", waarna fase 2
+      // ze weer terugzet. In dat gat (een D365-fetch van tientallen seconden) zien andere lezers een
+      // uitgedunde PO-cache. Dat is niet onschuldig: items en vendors leiden hun ophaal-scope af uit
+      // de PO-cache met removed_at_source = 0, dus een losse items/vendors-refresh in dit venster
+      // gooit massaal rijen weg. Daarom hier direct herstellen: retained = niet verwijderd.
+      await restoreRetainedRowsPresence(pool, table.id);
+
       const retentionSettings = await getSyncRetentionSettings();
       const { selectFields, lineSelectFields } = await resolvePurchaseOrderSelectFields(table);
       const phase2 = await refreshRetainedPurchaseOrders({
@@ -2088,6 +2174,7 @@ async function refresh(tableKey, options = {}) {
         lineSelectFields,
         retentionSettings,
         tableKey,
+        skipLedger,
       });
       retainedTotal = phase2.retainedTotal;
       retainedFetched = phase2.retainedFetched;
@@ -2571,25 +2658,33 @@ function calculateLinkedLineTotal(details, lineColumnKey) {
   }, 0);
 }
 
-function calculateLinkedLineValues(details, lineColumnKey) {
-  if (!Array.isArray(details) || !lineColumnKey) return '-';
+// Distinct ruwe regelwaarden voor een value-link. Ruw, want het board formatteert ze zelf
+// met het dataType van de regel-kolom (formatCellValue) voordat het ze samenvoegt.
+function collectLinkedLineValues(details, lineColumnKey) {
+  if (!Array.isArray(details) || !lineColumnKey) return [];
   const seen = new Set();
   const list = [];
   for (const detail of details) {
     const raw = detail?.values?.[lineColumnKey];
     if (raw === null || raw === undefined || raw === '') continue;
-    const text = String(raw).trim();
-    if (!text || text === '-') continue;
-    if (seen.has(text)) continue;
-    seen.add(text);
-    list.push(text);
+    const dedupeKey = String(raw).trim();
+    if (!dedupeKey || dedupeKey === '-' || seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    list.push(raw);
   }
+  return list;
+}
+
+function calculateLinkedLineValues(details, lineColumnKey) {
+  const list = collectLinkedLineValues(details, lineColumnKey).map((raw) => String(raw).trim());
   if (!list.length) return '-';
   return list.length === 1 ? list[0] : list.join(', ');
 }
 
+// Vult de gekoppelde header-kolommen en geeft de ruwe regelwaarden per header-kolom terug,
+// zodat het board die kan formatteren zonder de sublijnen in de payload te hebben.
 function applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks) {
-  if (!masterValues || typeof masterValues !== 'object') return;
+  if (!masterValues || typeof masterValues !== 'object') return {};
   const totalLinks = Array.isArray(runtimeLinks?.lineTotalHeaderLinks) ? runtimeLinks.lineTotalHeaderLinks : [];
   const valueLinks = Array.isArray(runtimeLinks?.lineValueHeaderLinks) ? runtimeLinks.lineValueHeaderLinks : [];
 
@@ -2599,12 +2694,98 @@ function applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks) {
     if (!headerColumnKey || !lineColumnKey) continue;
     masterValues[headerColumnKey] = calculateLinkedLineTotal(details, lineColumnKey);
   }
+  const linkedLineValues = {};
   for (const link of valueLinks) {
     const headerColumnKey = normalizeBoardColumnKey(link?.headerColumnKey);
     const lineColumnKey = normalizeBoardColumnKey(link?.lineColumnKey);
     if (!headerColumnKey || !lineColumnKey) continue;
     masterValues[headerColumnKey] = calculateLinkedLineValues(details, lineColumnKey);
+    linkedLineValues[headerColumnKey] = collectLinkedLineValues(details, lineColumnKey);
   }
+  return linkedLineValues;
+}
+
+// Kolomwaarden voor één cache-record. Gehoist uit read() zodat de detail-projectie
+// gedeeld kan worden met readRowDetails (lazy laden bij expanden).
+function buildValuesFromColumns(cols, sourceJson, custom) {
+  const values = {};
+  for (const col of cols) {
+    if (isFormulaColumn(col)) values[col.key] = null;
+    else if (col.source === 'source') values[col.key] = resolveSourceColumnValue(sourceJson, col);
+    else values[col.key] = custom && col.key in custom ? custom[col.key] : null;
+  }
+  return values;
+}
+
+// Eén detailregel projecteren naar de board-vorm. ctx bundelt de gedeelde lookups die
+// zowel de board-read als de per-order details-read opbouwen.
+function buildDetailRow(d, ctx) {
+  const {
+    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    lineChanges, compareAgainstBaseline, hasLedgerWindow,
+  } = ctx;
+  const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
+  const detailJson = parseJson(d.data_json);
+  const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
+  const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
+  applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+  const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
+  const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
+  const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
+  const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
+  const isNew = Boolean(ledgerState?.isNew) || (!hasLedgerWindow && compareAgainstBaseline(detailFirstSeenMs));
+  const isChanged = !isNew
+    && (Boolean(ledgerState?.isChanged) || (!hasLedgerWindow && compareAgainstBaseline(detailChangedMs)));
+  const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
+  const detailHistory = historyByCell.get(cellKey);
+  const detailTrackMarks = trackMarks.trackMarksByCell.get(cellKey);
+  return {
+    detailKey: d.detail_key,
+    values: detailValues,
+    ...(detailHistory ? { historyByColumnId: detailHistory } : {}),
+    ...(detailTrackMarks ? { trackMarksByColumnId: detailTrackMarks } : {}),
+    isNew,
+    isChanged,
+    isRemoved,
+    // Alleen recente removal-events tellen als "gewijzigd" voor de order-rollup; historisch
+    // removed-at-source mag changedCount niet elke refresh opnieuw opblazen.
+    hasRemovalChange: Boolean(ledgerState?.isRemoved),
+    changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
+  };
+}
+
+// Wat het board van de sublijnen nodig heeft zolang de order dichtgeklapt is.
+// Hiermee kan details[] uit de board-payload blijven.
+function buildDetailRollup(details) {
+  const seenItemNumbers = new Set();
+  let firstItemNumber = '';
+  let uniqueItemCount = 0;
+  let hasNewLine = false;
+  let hasChangedLine = false;
+  let hasRemovedLine = false;
+
+  for (const detail of details) {
+    if (detail.isNew) hasNewLine = true;
+    if (detail.isChanged || detail.changedFieldKeys?.length) hasChangedLine = true;
+    if (detail.isRemoved) hasRemovedLine = true;
+    if (detail.isRemoved) continue;
+    const itemNumber = String(detail.values?.itemNumber ?? '').trim();
+    if (!itemNumber || seenItemNumbers.has(itemNumber)) continue;
+    seenItemNumbers.add(itemNumber);
+    if (!firstItemNumber) firstItemNumber = itemNumber;
+    uniqueItemCount += 1;
+  }
+
+  // Alleen wat waar is meesturen; de client vult de rest met false/lege defaults.
+  return {
+    detailCount: details.length,
+    ...(hasNewLine ? { hasNewLine } : {}),
+    ...(hasChangedLine ? { hasChangedLine } : {}),
+    ...(hasRemovedLine ? { hasRemovedLine } : {}),
+    ...(firstItemNumber
+      ? { productImageSummary: { firstItemNumber, additionalItemCount: Math.max(uniqueItemCount - 1, 0) } }
+      : {}),
+  };
 }
 
 function createOrderChangeState() {
@@ -2715,18 +2896,28 @@ function buildHistoryByCell(rows) {
   return historyByCell;
 }
 
-async function loadHistoryByCell(pool, tableId) {
-  const result = await pool.request()
-    .input('tableId', sql.BigInt, tableId)
+// recordFilter beperkt de read tot één order — gebruikt door readRowDetails, zodat het
+// lazy laden van sublijnen niet de hele historie-tabel hoeft te scannen.
+function applyRecordFilter(request, recordFilter) {
+  if (!recordFilter) return '';
+  request.input('partitionKey', sql.NVarChar(32), recordFilter.partitionKey);
+  request.input('recordKey', sql.NVarChar(128), recordFilter.recordKey);
+  return 'AND partition_key = @partitionKey AND record_key = @recordKey';
+}
+
+async function loadHistoryByCell(pool, tableId, recordFilter = null) {
+  const request = pool.request().input('tableId', sql.BigInt, tableId);
+  const scope = applyRecordFilter(request, recordFilter);
+  const result = await request
     .query(`
       SELECT column_id, partition_key, record_key, detail_key
       FROM dbo.tb_cell_history WITH (NOLOCK)
-      WHERE table_id = @tableId
+      WHERE table_id = @tableId ${scope}
       GROUP BY column_id, partition_key, record_key, detail_key
       UNION
       SELECT column_id, partition_key, record_key, detail_key
       FROM dbo.tb_field_corrections WITH (NOLOCK)
-      WHERE table_id = @tableId
+      WHERE table_id = @tableId ${scope}
       GROUP BY column_id, partition_key, record_key, detail_key
     `);
   return buildHistoryByCell(result.recordset);
@@ -2739,7 +2930,7 @@ async function loadHistoryByCell(pool, tableId) {
 // ≥1 actieve kolom. Bucketing (week/session) volledig in SQL; JS bouwt alleen
 // de kant-en-klare 5-tekenstrings via buildMarkPattern.
 // ---------------------------------------------------------------------------
-async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
+async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries, recordFilter = null) {
   const empty = { trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} };
   if (!Array.isArray(enabledColumns) || enabledColumns.length === 0) return empty;
 
@@ -2812,16 +3003,20 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
   // Wijzigingen komen uit twee bronnen: tb_cell_history (custom-kolommen) en
   // tb_field_corrections (write-back naar D365-kolommen). Alleen toegepaste
   // correcties tellen; applied_at is het echte wijzigingsmoment (fallback created_at).
+  if (recordFilter) applyRecordFilter(request, recordFilter);
+  const scopeFor = (alias) => (recordFilter
+    ? `AND ${alias}.partition_key = @partitionKey AND ${alias}.record_key = @recordKey`
+    : '');
   const query = `
     ;WITH changes AS (
       SELECT h.column_id, h.partition_key, h.record_key, h.detail_key, h.changed_at
       FROM dbo.tb_cell_history h WITH (NOLOCK)
-      WHERE h.table_id = @tableId
+      WHERE h.table_id = @tableId ${scopeFor('h')}
       UNION ALL
       SELECT f.column_id, f.partition_key, f.record_key, f.detail_key,
              COALESCE(f.applied_at, f.created_at) AS changed_at
       FROM dbo.tb_field_corrections f WITH (NOLOCK)
-      WHERE f.table_id = @tableId AND f.status = 'applied'
+      WHERE f.table_id = @tableId AND f.status = 'applied' ${scopeFor('f')}
     )
     SELECT ch.column_id, ch.partition_key, ch.record_key, ch.detail_key, ${offsetExpr} AS mark_offset
     FROM changes ch
@@ -2858,7 +3053,11 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries) {
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
-async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount' } = {}) {
+// includeDetails=false laat de sublijnen uit de response: het board rendert de sub-tabel pas bij
+// expanden en haalt de regels dan per order op (readRowDetails). De afgeleiden die het board wél
+// collapsed nodig heeft (aantal, new/changed/removed-vlaggen, linked kolomwaarden, image-preview)
+// blijven meekomen als rollup. Scheelt bij ~2000 orders het leeuwendeel van de payload.
+async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
 
@@ -2978,15 +3177,11 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 
   const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows);
 
-  function valuesFor(cols, sourceJson, custom) {
-    const values = {};
-    for (const col of cols) {
-      if (isFormulaColumn(col)) values[col.key] = null;
-      else if (col.source === 'source') values[col.key] = resolveSourceColumnValue(sourceJson, col);
-      else values[col.key] = custom && col.key in custom ? custom[col.key] : null;
-    }
-    return values;
-  }
+  const valuesFor = buildValuesFromColumns;
+  const detailContext = {
+    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    lineChanges, compareAgainstBaseline, hasLedgerWindow,
+  };
 
   let newCount = 0;
   let changedCount = 0;
@@ -3002,36 +3197,12 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
     let hasLineChanges = false;
     const details = (detailsByRecord.get(recKey) || []).map((d) => {
-      const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
-      const detailJson = parseJson(d.data_json);
-      const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
-      const detailValues = valuesFor(detailCols, detailJson, detailCustom);
-      applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
-      const lineKey = `${d.partition_key}|${d.record_key}|${d.detail_key}`;
-      const ledgerState = lineChanges.get(lineKey);
-      const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
-      const detailChangedMs = d.content_changed_at ? new Date(d.content_changed_at).getTime() : null;
-      const isBaseNew = compareAgainstBaseline(detailFirstSeenMs);
-      const isBaseChanged = compareAgainstBaseline(detailChangedMs);
-      const isNew = Boolean(ledgerState?.isNew) || (!hasLedgerWindow && isBaseNew);
-      const isChanged = !isNew && (Boolean(ledgerState?.isChanged) || (!hasLedgerWindow && isBaseChanged));
-      const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
-      // Alleen recente removal-events laten meetellen als "gewijzigd".
-      // Historisch removed-at-source mag niet elke refresh opnieuw changedCount opblazen.
-      const hasRemovalChange = Boolean(ledgerState?.isRemoved);
-      if (isNew || isChanged || hasRemovalChange) hasLineChanges = true;
-      return {
-        detailKey: d.detail_key,
-        values: detailValues,
-        formulaErrors: {},
-        historyByColumnId: historyByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)) || {},
-        trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(d.partition_key, d.record_key, d.detail_key)),
-        isNew,
-        isChanged,
-        isRemoved,
-        changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
-      };
+      const detail = buildDetailRow(d, detailContext);
+      if (detail.isNew || detail.isChanged || detail.hasRemovalChange) hasLineChanges = true;
+      delete detail.hasRemovalChange;
+      return detail;
     });
+    const detailRollup = buildDetailRollup(details);
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
@@ -3045,8 +3216,15 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
-    applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
+    const linkedLineValues = applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
+
+    // Lege objecten/arrays laten we weg: de client vult ze zelf aan met dezelfde defaults, en bij
+    // ~2000 rijen scheelt dat honderden kilobytes aan "historyByColumnId":{} in de payload.
+    const masterCellKey = historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY);
+    const changedFieldKeys = [...(orderLedgerState?.changedFieldKeys || new Set())];
+    const historyByColumnId = historyByCell.get(masterCellKey);
+    const trackMarksByColumnId = trackMarks.trackMarksByCell.get(masterCellKey);
 
     return {
       partitionKey: m.partition_key,
@@ -3055,13 +3233,14 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
       syncRetained: Boolean(m.sync_retained),
       isNew,
       isChanged,
-      changedFieldKeys: [...(orderLedgerState?.changedFieldKeys || new Set())],
+      ...(changedFieldKeys.length ? { changedFieldKeys } : {}),
       values: masterValues,
-      historyByColumnId: historyByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)) || {},
-      trackMarksByColumnId: trackMarks.trackMarksByCell.get(historyCellKey(m.partition_key, m.record_key, MASTER_DETAIL_KEY)),
-      formulaErrors,
-      details,
-      detailCount: details.length,
+      ...(historyByColumnId ? { historyByColumnId } : {}),
+      ...(trackMarksByColumnId ? { trackMarksByColumnId } : {}),
+      ...(formulaErrors && Object.keys(formulaErrors).length ? { formulaErrors } : {}),
+      ...(includeDetails ? { details } : {}),
+      ...(Object.keys(linkedLineValues).length ? { linkedLineValues } : {}),
+      ...detailRollup,
     };
   });
 
@@ -3142,6 +3321,149 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     changedCount,
     retention: retentionMeta,
   };
+}
+
+// ---------------------------------------------------------------------------
+// readRowDetails — sublijnen van één order, voor het lazy openklappen op het board.
+// Dezelfde projectie als de board-read (buildDetailRow), maar met alle queries
+// gefilterd op één order in plaats van de hele tabel.
+// ---------------------------------------------------------------------------
+
+// De lookup-verrijking leest complete doeltabellen (vendors/items) en kost honderden ms.
+// Voor het openklappen van één order is dat te duur en een paar seconden oude
+// lookup-labels zijn ongevaarlijk; de board-read zelf blijft ongecached.
+const LOOKUP_ENRICHMENT_TTL_MS = 30 * 1000;
+const lookupEnrichmentCache = new Map();
+
+async function loadLookupEnrichmentCached(table) {
+  const cached = lookupEnrichmentCache.get(table.id);
+  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) return cached.value;
+  const value = await loadLookupEnrichment(table);
+  lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
+  return value;
+}
+
+function invalidateLookupEnrichmentCache(tableId = null) {
+  if (tableId === null) lookupEnrichmentCache.clear();
+  else lookupEnrichmentCache.delete(tableId);
+}
+
+// Supplier-scoping gebeurt in de route met assertSupplierPurchaseOrderRow (zelfde guard als de
+// andere rij-gerichte endpoints); deze functie gaat ervan uit dat de toegang al is gecontroleerd.
+async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
+  const table = await getTableByKey(tableKey);
+  const pool = await getPool();
+  const recordFilter = { partitionKey: String(partitionKey), recordKey: String(recordKey) };
+
+  const detailsPromise = time('tb_row_details_sql', () => pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .input('partitionKey', sql.NVarChar(32), recordFilter.partitionKey)
+    .input('recordKey', sql.NVarChar(128), recordFilter.recordKey)
+    .query(`
+      SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'detail'
+        AND partition_key = @partitionKey AND record_key = @recordKey
+      ORDER BY detail_key
+    `));
+
+  const customPromise = pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .input('partitionKey', sql.NVarChar(32), recordFilter.partitionKey)
+    .input('recordKey', sql.NVarChar(128), recordFilter.recordKey)
+    .query(`
+      SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
+             cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
+      FROM dbo.tb_custom_values cv WITH (NOLOCK)
+      INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
+      WHERE cv.table_id = @tableId AND c.is_active = 1
+        AND cv.partition_key = @partitionKey AND cv.record_key = @recordKey
+    `);
+
+  const trackConfig = await trackChangesService.getConfig();
+  const trackEnabledColumns = Object.entries(trackConfig.columns || {})
+    .map(([id, entry]) => ({ columnId: Number(id), activatedAt: new Date(entry.activatedAt) }))
+    .filter((c) => Number.isFinite(c.columnId) && !Number.isNaN(c.activatedAt.getTime()));
+  const trackMarksPromise = trackEnabledColumns.length
+    ? (async () => {
+        const boundaries = trackConfig.mode === 'session'
+          ? await trackChangesService.getSessionBoundaries()
+          : [];
+        return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries, recordFilter);
+      })()
+    : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
+
+  const ledgerPromise = (async () => {
+    const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([
+      getSyncState(table.id), getLastViewedAt(table.id),
+    ]);
+    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
+    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
+    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    if (sinceMs === null) return { rows: [], hasLedgerWindow: false, sinceMs: null, useViewedBaseline: false };
+    const useViewedBaseline = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs);
+    try {
+      const result = await pool.request()
+        .input('tableId', sql.BigInt, table.id)
+        .input('sinceAt', sql.DateTime2, new Date(sinceMs))
+        .input('partitionKey', sql.NVarChar(32), recordFilter.partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordFilter.recordKey)
+        .query(`
+          SELECT partition_key, record_key, detail_key, field_key, action
+          FROM dbo.tb_change_ledger WITH (NOLOCK)
+          WHERE table_id = @tableId AND source = 'D365' AND created_at >= @sinceAt
+            AND partition_key = @partitionKey AND record_key = @recordKey
+          ORDER BY created_at ASC, id ASC
+        `);
+      return { rows: result.recordset, hasLedgerWindow: true, sinceMs, useViewedBaseline };
+    } catch (ledgerErr) {
+      logger.warn('Change-ledger uitlezen mislukt bij regel-details; fallback naar cache-only diff', {
+        tableKey: table.key, error: ledgerErr.message,
+      });
+      return { rows: [], hasLedgerWindow: false, sinceMs, useViewedBaseline };
+    }
+  })();
+
+  const [detailCols, enrichment, detailsResult, customResult, historyByCell, trackMarks, ledger] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    loadLookupEnrichmentCached(table),
+    detailsPromise,
+    customPromise,
+    loadHistoryByCell(pool, table.id, recordFilter),
+    trackMarksPromise,
+    ledgerPromise,
+  ]);
+
+  const customByCell = new Map();
+  for (const row of customResult.recordset) {
+    const cellKey = `${row.partition_key}|${row.record_key}|${row.detail_key}`;
+    let value = null;
+    if (row.data_type === 'number') value = row.value_number !== null ? Number(row.value_number) : null;
+    else if (row.data_type === 'date') value = row.value_date ? new Date(row.value_date).toISOString() : null;
+    else if (row.data_type === 'boolean') value = row.value_bool === null ? null : Boolean(row.value_bool);
+    else value = row.value_text;
+    if (!customByCell.has(cellKey)) customByCell.set(cellKey, {});
+    customByCell.get(cellKey)[row.key] = value;
+  }
+
+  const { lineChanges } = buildD365ChangeState(ledger.rows);
+  const { sinceMs, useViewedBaseline } = ledger;
+  const compareAgainstBaseline = (valueMs) => {
+    if (valueMs === null || sinceMs === null) return false;
+    return useViewedBaseline ? valueMs > sinceMs : valueMs >= sinceMs;
+  };
+
+  const detailContext = {
+    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    lineChanges, compareAgainstBaseline, hasLedgerWindow: ledger.hasLedgerWindow,
+  };
+  const details = detailsResult.recordset.map((d) => {
+    const detail = buildDetailRow(d, detailContext);
+    delete detail.hasRemovalChange;
+    return detail;
+  });
+
+  return { partitionKey: recordFilter.partitionKey, recordKey: recordFilter.recordKey, details };
 }
 
 // ---------------------------------------------------------------------------
@@ -4182,6 +4504,9 @@ module.exports = {
   refresh,
   getRefreshProgress,
   read,
+  readRowDetails,
+  buildDetailRollup,
+  invalidateLookupEnrichmentCache,
   saveCustomValue,
   correctField,
   getCellHistory,
@@ -4226,6 +4551,7 @@ module.exports = {
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
   buildD365ChangeState,
+  buildD365LedgerEntries,
   buildLedgerInsert,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,

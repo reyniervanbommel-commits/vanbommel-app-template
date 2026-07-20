@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import EditableCell from './EditableCell';
 import StatusCell from './StatusCell';
@@ -10,11 +10,12 @@ import {
   normalizeDatePeriodDisplayMode,
   resolveDatePeriodCellValue,
 } from '../../utils/datePeriodColumnUtils';
-import { calculateLineColumnSum, calculateLineColumnValues } from '../../utils/purchaseOrderTotals';
-import { getPurchaseOrderProductImageSummary } from '../../utils/purchaseOrderProductImageSummary';
 import { isProductImageColumn } from '../../utils/purchaseOrderProductImageColumn';
 import { isStatusColumn } from '../../utils/statusColumnUtils';
 import { FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
+
+// Vervangt de oude berekening over order.lines: de board-read levert deze samenvatting mee.
+const EMPTY_PRODUCT_IMAGE_SUMMARY = { firstItemNumber: '', additionalItemCount: 0 };
 
 const useStyles = makeStyles({
   removedText: {
@@ -49,7 +50,7 @@ function PurchaseOrderHeaderCellContent({
   linkedLineValueMap,
   cellBackgroundColor = '',
   isConditionalFormat = false,
-  productImageLines = order.lines,
+  productImageSummary = EMPTY_PRODUCT_IMAGE_SUMMARY,
   showHistoryIndicators = true,
   datePeriodDisplayModes = {},
 }) {
@@ -64,10 +65,6 @@ function PurchaseOrderHeaderCellContent({
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
   const showHistory = showHistoryIndicators !== false && Boolean(order.historyByColumnId?.[column.id]);
-  const productImageSummary = useMemo(
-    () => getPurchaseOrderProductImageSummary(productImageLines),
-    [productImageLines]
-  );
 
   const handleSave = useCallback((value) => {
     onSaveValue({
@@ -188,10 +185,12 @@ function PurchaseOrderHeaderCellContent({
     );
   }
 
+  // Gekoppelde kolommen staan al in order.values: het totaal komt uit de board-read, de
+  // value-link is door usePurchaseOrderBoardView geformatteerd uit de ruwe regelwaarden.
   const display = linkedLineTotalColumnKey
-    ? formatCellValue(calculateLineColumnSum(order.lines, linkedLineTotalColumnKey), column.dataType)
+    ? formatCellValue(rawValue, column.dataType)
     : linkedLineValueMeta
-      ? calculateLineColumnValues(order.lines, linkedLineValueMeta.lineColumnKey, linkedLineValueMeta.lineDataType)
+      ? (rawValue ?? '-')
       : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
   const rawDisplayNode = isFormulaColumn
     ? (

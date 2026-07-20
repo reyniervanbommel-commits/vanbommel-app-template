@@ -8,6 +8,7 @@ import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay } from './components/layout';
 import AppToaster from './components/shared/AppToaster';
 import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
+import { usePreventTrackpadNavigation } from './hooks/usePreventTrackpadNavigation';
 import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
 // Route-based code-splitting: de admin-module (incl. de zware recharts-bibliotheek), de
@@ -117,6 +118,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
 }
 
 export default function App() {
+  usePreventTrackpadNavigation();
   const [isDarkMode, setIsDarkMode] = useState(false);
   // Memoiseer het theme-object zodat FluentProvider niet bij elke App-render een nieuw theme
   // krijgt (wat de hele Fluent-componentenboom onnodig zou hertekenen).

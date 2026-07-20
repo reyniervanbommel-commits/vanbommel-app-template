@@ -213,7 +213,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
           isConditionalFormat={isConditionalFormat}
           linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
-          productImageLines={order.lines}
+          productImageSummary={order.productImageSummary}
           showHistoryIndicators={actions.showHistoryIndicators}
           datePeriodDisplayModes={actions.datePeriodDisplayModes}
         />
@@ -225,6 +225,8 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
 function PurchaseOrderBoardRow({
   entry,
   layout,
+  isExpanded = false,
+  isLocated = false,
   formatting,
   actions,
   links,
@@ -233,16 +235,15 @@ function PurchaseOrderBoardRow({
   remarks,
 }) {
   const { order, rowId } = entry;
-  const lines = Array.isArray(order.lines) ? order.lines : [];
-  const hasLines = lines.length > 0;
-  const isExpanded = Boolean(layout.expandedOrders[rowId]);
-  const rowFormatColor = resolveRowFormatColor(
-    order,
-    layout.columns,
-    formatting.headerColumnFormatRules
+  // lineCount komt uit de server-rollup; de regels zelf worden pas bij het openklappen geladen.
+  const hasLines = (Number(order.lineCount) || 0) > 0;
+  // Doorloopt alle kolommen × format-regels; per rij memoïseren scheelt dat werk bij elke
+  // hertekening die niets met opmaak te maken heeft (expand, selectie, remark-badge).
+  const rowFormatColor = useMemo(
+    () => resolveRowFormatColor(order, layout.columns, formatting.headerColumnFormatRules),
+    [formatting.headerColumnFormatRules, layout.columns, order]
   );
   const locateKey = orderLocateKeyFromOrder(order);
-  const isLocated = layout.highlightedLocateKey === locateKey;
   const rowStyle = useMemo(
     () => {
       if (isLocated) return { backgroundColor: ROW_LOCATE_HIGHLIGHT_COLOR };
@@ -252,8 +253,8 @@ function PurchaseOrderBoardRow({
     [isLocated, order.removedInD365, rowFormatColor]
   );
   const expandedRowData = useMemo(
-    () => ({ rowId, order, lines }),
-    [lines, order, rowId]
+    () => ({ rowId, order, lines: order.lines }),
+    [order, rowId]
   );
   const remarkSummary = remarks?.summaryByRow?.get(rowKey(order.dataAreaId, order.orderNumber)) || null;
   const rowRemarks = useMemo(

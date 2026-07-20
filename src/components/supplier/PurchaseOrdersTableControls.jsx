@@ -3,6 +3,7 @@ import {
   Button,
   Checkbox,
   Menu,
+  MenuDivider,
   MenuItem,
   MenuList,
   MenuPopover,
@@ -51,6 +52,8 @@ const useStyles = makeStyles({
 
 function PurchaseOrdersTableControls({
   onSetExpansion,
+  productImageColumnVisible = true,
+  onToggleProductImageColumn,
   selectionEnabled = false,
   allSelected = false,
   someSelected = false,
@@ -63,6 +66,12 @@ function PurchaseOrdersTableControls({
   const collapseAll = useCallback(() => onSetExpansion('all', false), [onSetExpansion]);
   const collapseGroups = useCallback(() => onSetExpansion('boards', false), [onSetExpansion]);
   const collapseSubitems = useCallback(() => onSetExpansion('groups', false), [onSetExpansion]);
+  const hideProductImageColumn = useCallback(() => {
+    onToggleProductImageColumn?.(false);
+  }, [onToggleProductImageColumn]);
+  const showProductImageColumn = useCallback(() => {
+    onToggleProductImageColumn?.(true);
+  }, [onToggleProductImageColumn]);
 
   return (
     <th className={styles.controlHeaderCell} aria-label="Table display controls">
@@ -113,6 +122,16 @@ function PurchaseOrdersTableControls({
                   </MenuList>
                 </MenuPopover>
               </Menu>
+              {typeof onToggleProductImageColumn === 'function' ? (
+                <>
+                  <MenuDivider />
+                  {productImageColumnVisible ? (
+                    <MenuItem onClick={hideProductImageColumn}>Hide image column</MenuItem>
+                  ) : (
+                    <MenuItem onClick={showProductImageColumn}>Show image column</MenuItem>
+                  )}
+                </>
+              ) : null}
             </MenuList>
           </MenuPopover>
         </Menu>

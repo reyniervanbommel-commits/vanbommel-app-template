@@ -21,12 +21,14 @@ const {
   enrichLookupSourceFromCacheRow,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
+  buildDetailRollup,
   toAdminColumn,
   applyRuntimeLinkedHeaderValues,
   assertCustomColumnWritable,
   buildLookupFieldMap,
   buildSyntheticLookupColumn,
   buildD365ChangeState,
+  buildD365LedgerEntries,
   buildLedgerInsert,
   resolveLookupSourceKey,
   resolveLookupTargetSourceField,
@@ -419,6 +421,51 @@ describe('TableDataService runtime linked header values', () => {
     });
     expect(masterValues).toEqual({ item_values: 'Item A, Item B' });
   });
+
+  it('geeft de ruwe, ontdubbelde lijnwaarden terug zodat het board ze zelf formatteert', () => {
+    const linkedLineValues = applyRuntimeLinkedHeaderValues({ item_values: null }, [
+      { values: { items_searchName: 'Item A' } },
+      { values: { items_searchName: 'Item B' } },
+      { values: { items_searchName: 'Item A' } },
+      { values: { items_searchName: '' } },
+    ], {
+      lineValueHeaderLinks: [{ lineColumnKey: 'items_searchName', headerColumnKey: 'item_values' }],
+    });
+    expect(linkedLineValues).toEqual({ item_values: ['Item A', 'Item B'] });
+  });
+});
+
+describe('TableDataService.buildDetailRollup', () => {
+  it('vat samen wat het board van dichtgeklapte sublijnen nodig heeft', () => {
+    const rollup = buildDetailRollup([
+      { values: { itemNumber: 'ITEM-1' }, isNew: false, isChanged: true, isRemoved: false },
+      { values: { itemNumber: 'ITEM-2' }, isNew: true, isChanged: false, isRemoved: false },
+      { values: { itemNumber: 'ITEM-1' }, isNew: false, isChanged: false, isRemoved: false },
+    ]);
+    expect(rollup).toEqual({
+      detailCount: 3,
+      hasNewLine: true,
+      hasChangedLine: true,
+      productImageSummary: { firstItemNumber: 'ITEM-1', additionalItemCount: 1 },
+    });
+  });
+
+  it('telt vervallen regels niet mee in de image-preview maar wel in de vlaggen', () => {
+    const rollup = buildDetailRollup([
+      { values: { itemNumber: 'GONE' }, isRemoved: true },
+      { values: { itemNumber: 'ITEM-9' } },
+    ]);
+    expect(rollup.hasRemovedLine).toBe(true);
+    expect(rollup.productImageSummary).toEqual({ firstItemNumber: 'ITEM-9', additionalItemCount: 0 });
+  });
+
+  it('laat false-vlaggen en een lege image-preview weg uit de payload', () => {
+    expect(buildDetailRollup([])).toEqual({ detailCount: 0 });
+  });
+
+  it('ziet gewijzigde velden zonder isChanged-vlag als regelwijziging', () => {
+    expect(buildDetailRollup([{ values: {}, changedFieldKeys: ['qty'] }]).hasChangedLine).toBe(true);
+  });
 });
 
 describe('TableDataService lookup column scopes', () => {
@@ -689,6 +736,54 @@ describe('TableDataService.enrichLookupSourceFromCacheRow', () => {
       purchaseOrderLineNumber: '10',
       lineNumber: '10',
     });
+  });
+});
+
+describe('TableDataService.buildD365LedgerEntries', () => {
+  const base = { tableId: 1, partitionKey: 'whsl', recordKey: 'PO-1', detailKey: 2 };
+
+  it('schrijft een nieuwe rij als één regel, niet per veld', () => {
+    const entries = buildD365LedgerEntries({
+      ...base,
+      action: 'INSERT',
+      nextValues: { quantity: 5, itemNumber: 'ART-1', description: 'x' },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].fieldKey).toBeNull();
+    expect(entries[0].oldValue).toBeNull();
+    // De hele rij als payload, net als bij DELETE.
+    expect(JSON.parse(entries[0].newValue)).toEqual({ quantity: 5, itemNumber: 'ART-1', description: 'x' });
+  });
+
+  it('houdt UPDATE per gewijzigd veld', () => {
+    const entries = buildD365LedgerEntries({
+      ...base,
+      action: 'UPDATE',
+      previousValues: { quantity: 5, itemNumber: 'ART-1' },
+      nextValues: { quantity: 8, itemNumber: 'ART-1' },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].fieldKey).toBe('quantity');
+    expect(entries[0].oldValue).toBe('5');
+    expect(entries[0].newValue).toBe('8');
+  });
+
+  it('schrijft niets bij een UPDATE zonder wijzigingen', () => {
+    expect(buildD365LedgerEntries({
+      ...base,
+      action: 'UPDATE',
+      previousValues: { quantity: 5 },
+      nextValues: { quantity: 5 },
+    })).toEqual([]);
+  });
+
+  it('houdt DELETE één regel met de hele rij', () => {
+    const entries = buildD365LedgerEntries({
+      ...base, action: 'DELETE', previousValues: { quantity: 5 },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].fieldKey).toBeNull();
+    expect(entries[0].newValue).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
@@ -57,6 +57,8 @@ function PurchaseOrdersBoardTable({
     trackChangesActiveByColumnId = null,
     onToggleHeaderColumnCollapsed,
     onToggleLineColumnCollapsed,
+    productImageColumnVisible = true,
+    onToggleProductImageColumn,
   } = columnActions;
   const {
     onSetLineColumnTotal,
@@ -141,10 +143,17 @@ function PurchaseOrdersBoardTable({
   const closeCellContextMenu = useCallback(() => {
     setCellContext(null);
   }, []);
+  // filterByColumn verandert bij elke filterwijziging. Als het in dit object zit, hertekent
+  // élke cel op het bord mee, terwijl de cellen het alleen nodig hebben op het moment dat het
+  // contextmenu opengaat. Daarom via een ref: het object zelf blijft stabiel.
+  const filterByColumnRef = useRef(filterByColumn);
+  useEffect(() => {
+    filterByColumnRef.current = filterByColumn;
+  }, [filterByColumn]);
   const contextMenu = useMemo(() => ({
-    filterByColumn,
+    filterByColumnRef,
     open: openCellContextMenu,
-  }), [filterByColumn, openCellContextMenu]);
+  }), [openCellContextMenu]);
   const contextMenuActions = useMemo(() => ({
     applyFilter: applyFilterFromCellValue,
     clearFilter: clearColumnFilter,
@@ -180,9 +189,12 @@ function PurchaseOrdersBoardTable({
     lineValueHeaderLinks,
   });
   const colCount = columns.length + 1;
+  // locateActive: zolang er een locate-verzoek loopt moeten álle rijen gemount zijn, anders
+  // vindt usePurchaseOrderRowLocate de gezochte rij niet in de DOM.
+  const locateActive = Boolean(remarks?.locateRequest?.seq);
   const rowsData = useMemo(
-    () => ({ groupedRows, collapsedGroups, expandedOrders, highlightedLocateKey }),
-    [collapsedGroups, expandedOrders, groupedRows, highlightedLocateKey]
+    () => ({ groupedRows, collapsedGroups, expandedOrders, highlightedLocateKey, locateActive }),
+    [collapsedGroups, expandedOrders, groupedRows, highlightedLocateKey, locateActive]
   );
   const rowsLayout = useMemo(
     () => ({
@@ -224,6 +236,8 @@ function PurchaseOrdersBoardTable({
             styles={styles}
             selection={selection}
             onSetExpansion={handleSetExpansion}
+            productImageColumnVisible={productImageColumnVisible}
+            onToggleProductImageColumn={onToggleProductImageColumn}
             columns={decoratedColumns}
             headerColumnDrag={headerColumnDrag}
             headerColumnWidths={effectiveHeaderColumnWidths}

@@ -15,6 +15,8 @@ export default function PurchaseOrdersBoardHeaderRow({
   styles,
   selection,
   onSetExpansion,
+  productImageColumnVisible = true,
+  onToggleProductImageColumn,
   columns,
   headerColumnDrag,
   headerColumnWidths,
@@ -62,6 +64,8 @@ export default function PurchaseOrdersBoardHeaderRow({
     <tr>
       <PurchaseOrdersTableControls
         onSetExpansion={onSetExpansion}
+        productImageColumnVisible={productImageColumnVisible}
+        onToggleProductImageColumn={onToggleProductImageColumn}
         selectionEnabled={Boolean(selection?.enabled)}
         allSelected={Boolean(selection?.allSelected)}
         someSelected={Boolean(selection?.someSelected)}

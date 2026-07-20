@@ -7,7 +7,7 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
   const allOrderRowsWithLines = useMemo(
     () =>
       rows
-        .filter(({ order }) => Array.isArray(order.lines) && order.lines.length > 0)
+        .filter(({ order }) => (Number(order.lineCount) || 0) > 0)
         .map(({ rowId }) => rowId),
     [rows]
   );
