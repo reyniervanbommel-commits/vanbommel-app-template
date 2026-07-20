@@ -3,12 +3,15 @@
 const {
   CACHE_TTL_MS,
   MAX_IMAGE_BYTES,
-  PRODUCT_IMAGE_ENTITY_PATH,
-  PRODUCT_IMAGE_SELECT_FIELDS,
+  PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH,
+  PRODUCT_DOCUMENT_ATTACHMENT_SELECT_FIELDS,
+  RELEASED_PRODUCT_IMAGE_ENTITY_PATH,
+  RELEASED_PRODUCT_IMAGE_SELECT_FIELDS,
   ProductImageServiceError,
   buildCacheKey,
   createProductImageService,
   selectDefaultProductImage,
+  selectProductImageRecord,
   validateProductImageInput,
 } = require('./ProductImageService');
 
@@ -23,20 +26,25 @@ function imageRecord({
   isProductImage = true,
   isDefaultProductImage = true,
   attachedDateTime = '2026-07-13T12:00:00Z',
+  documentAttachmentTypeCode = 'ProductImage',
 } = {}) {
   return {
     ItemNumber: validInput.itemNumber,
+    ProductNumber: validInput.itemNumber,
     dataAreaId: validInput.dataAreaId,
     Attachment: attachment,
     FileType: fileType,
     IsProductImage: isProductImage,
     IsDefaultProductImage: isDefaultProductImage,
     AttachedDateTime: attachedDateTime,
+    DocumentAttachmentTypeCode: documentAttachmentTypeCode,
   };
 }
 
-function createService(items) {
-  const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items });
+function createService(items, { fallbackItems = [] } = {}) {
+  const fetchEntityRecordsFn = vi.fn()
+    .mockResolvedValueOnce({ items })
+    .mockResolvedValueOnce({ items: fallbackItems });
   return {
     fetchEntityRecordsFn,
     service: createProductImageService({ fetchEntityRecordsFn }),
@@ -70,21 +78,57 @@ describe('ProductImageService', () => {
     expect(selectDefaultProductImage([record])).toBe(record);
   });
 
-  it('gebruikt het vaste standaard entity path, ItemNumber en bestaande company-scope', async () => {
-    const { fetchEntityRecordsFn, service } = createService([imageRecord()]);
+  it('kiest een ProductImage-document als fallback wanneer default-vlaggen ontbreken', () => {
+    const productImageDoc = imageRecord({
+      fileType: 'png',
+      isProductImage: false,
+      isDefaultProductImage: false,
+      documentAttachmentTypeCode: 'ProductImage',
+      attachedDateTime: '2026-07-13T13:00:00Z',
+    });
+    expect(selectProductImageRecord([
+      imageRecord({ isDefaultProductImage: false, documentAttachmentTypeCode: 'TechImage' }),
+      productImageDoc,
+    ])).toBe(productImageDoc);
+  });
+
+  it('leest eerst ProductDocumentAttachments en valt terug op ReleasedProductDocumentAttachments', async () => {
+    const { fetchEntityRecordsFn, service } = createService([], {
+      fallbackItems: [imageRecord()],
+    });
 
     await service.getProductImage(validInput);
 
-    expect(fetchEntityRecordsFn).toHaveBeenCalledWith({
-      sourceEntity: PRODUCT_IMAGE_ENTITY_PATH,
+    expect(fetchEntityRecordsFn).toHaveBeenNthCalledWith(1, {
+      sourceEntity: PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH,
+      top: 100,
+      skip: 0,
+      fetchAll: true,
+      maxItems: 100,
+      applyCompanyFilter: false,
+      extraFilter: "ProductNumber eq 'ITEM-001' and DocumentAttachmentTypeLegalEntityId eq 'USMF'",
+      selectFields: PRODUCT_DOCUMENT_ATTACHMENT_SELECT_FIELDS,
+    });
+    expect(fetchEntityRecordsFn).toHaveBeenNthCalledWith(2, {
+      sourceEntity: RELEASED_PRODUCT_IMAGE_ENTITY_PATH,
       top: 100,
       skip: 0,
       fetchAll: true,
       maxItems: 100,
       extraFilter: "dataAreaId eq 'USMF' and ItemNumber eq 'ITEM-001'",
-      selectFields: PRODUCT_IMAGE_SELECT_FIELDS,
+      selectFields: RELEASED_PRODUCT_IMAGE_SELECT_FIELDS,
     });
-    expect(PRODUCT_IMAGE_ENTITY_PATH).toBe('/data/ReleasedProductDocumentAttachments');
+  });
+
+  it('gebruikt ProductDocumentAttachments wanneer daar een productafbeelding staat', async () => {
+    const { fetchEntityRecordsFn, service } = createService([imageRecord()]);
+
+    await service.getProductImage(validInput);
+
+    expect(fetchEntityRecordsFn).toHaveBeenCalledTimes(1);
+    expect(fetchEntityRecordsFn).toHaveBeenCalledWith(expect.objectContaining({
+      sourceEntity: PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH,
+    }));
   });
 
   it.each([
@@ -92,9 +136,8 @@ describe('ProductImageService', () => {
     ['png', '.PNG', png],
     ['webp', 'image/webp', webp],
   ])('decodeert en serveert een geldige %s', async (_label, fileType, bytes) => {
-    const { service } = createService([
-      imageRecord({ fileType, attachment: bytes.toString('base64') }),
-    ]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items: [imageRecord({ fileType, attachment: bytes.toString('base64') })] });
+    const service = createProductImageService({ fetchEntityRecordsFn });
 
     await expect(service.getProductImage(validInput)).resolves.toMatchObject({
       contentType: fileType.toLowerCase().includes('png')
@@ -106,15 +149,17 @@ describe('ProductImageService', () => {
 
   it.each([
     ['geen records', []],
-    ['geen default', [imageRecord({ isDefaultProductImage: false })]],
     ['geen Attachment', [imageRecord({ attachment: '' })]],
+    ['geen image bestandstype', [imageRecord({ fileType: 'pdf', attachment: jpeg.toString('base64'), isProductImage: false, isDefaultProductImage: false, documentAttachmentTypeCode: 'TechImage' })]],
   ])('retourneert null bij %s', async (_label, items) => {
-    const { service } = createService(items);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items });
+    const service = createProductImageService({ fetchEntityRecordsFn });
     await expect(service.getProductImage(validInput)).resolves.toBeNull();
   });
 
   it('cachet alleen succesvolle afbeeldingen en beschermt de gecachete buffer', async () => {
-    const { fetchEntityRecordsFn, service } = createService([imageRecord()]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items: [imageRecord()] });
+    const service = createProductImageService({ fetchEntityRecordsFn });
     const first = await service.getProductImage(validInput);
     first.content.fill(0);
     const second = await service.getProductImage(validInput);
@@ -124,10 +169,11 @@ describe('ProductImageService', () => {
   });
 
   it('cachet ontbrekende afbeeldingen niet', async () => {
-    const { fetchEntityRecordsFn, service } = createService([]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items: [] });
+    const service = createProductImageService({ fetchEntityRecordsFn });
     await service.getProductImage(validInput);
     await service.getProductImage(validInput);
-    expect(fetchEntityRecordsFn).toHaveBeenCalledTimes(2);
+    expect(fetchEntityRecordsFn).toHaveBeenCalledTimes(4);
   });
 
   it('haalt een afbeelding na het verlopen van de TTL opnieuw op', async () => {
@@ -163,22 +209,25 @@ describe('ProductImageService', () => {
     ['onjuiste JPEG-signatuur', imageRecord({ attachment: png.toString('base64'), fileType: 'jpg' })],
     ['ongeldige Base64', imageRecord({ attachment: 'not valid base64!' })],
   ])('weigert %s', async (_label, record) => {
-    const { service } = createService([record]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items: [record] });
+    const service = createProductImageService({ fetchEntityRecordsFn });
     await expect(service.getProductImage(validInput)).rejects.toBeInstanceOf(ProductImageServiceError);
   });
 
   it('weigert een payload groter dan 5 MB vóór Base64-decodering', async () => {
     const tooLargeBase64 = 'A'.repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 4);
-    const { service } = createService([imageRecord({ attachment: tooLargeBase64 })]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({ items: [imageRecord({ attachment: tooLargeBase64 })] });
+    const service = createProductImageService({ fetchEntityRecordsFn });
     await expect(service.getProductImage(validInput)).rejects.toBeInstanceOf(ProductImageServiceError);
   });
 
   it('accepteert een geldige afbeelding van exact 5 MB', async () => {
     const exactLimit = Buffer.alloc(MAX_IMAGE_BYTES);
     jpeg.copy(exactLimit, 0);
-    const { service } = createService([
-      imageRecord({ attachment: exactLimit.toString('base64') }),
-    ]);
+    const fetchEntityRecordsFn = vi.fn().mockResolvedValue({
+      items: [imageRecord({ attachment: exactLimit.toString('base64') })],
+    });
+    const service = createProductImageService({ fetchEntityRecordsFn });
 
     const image = await service.getProductImage(validInput);
     expect(image.content).toHaveLength(MAX_IMAGE_BYTES);
