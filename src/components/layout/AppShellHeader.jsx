@@ -14,6 +14,7 @@ import {
   WeatherSunny24Regular,
 } from '@fluentui/react-icons';
 import { APP_DISPLAY_NAME } from '../../config/app';
+import { APP_VERSION } from '../../config/version';
 
 const useStyles = makeStyles({
   header: {
@@ -69,6 +70,13 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
   },
   menuButton: { justifyContent: 'flex-start' },
+  menuVersion: {
+    marginTop: '8px',
+    paddingTop: '8px',
+    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
+    color: tokens.colorNeutralForeground3,
+    textAlign: 'center',
+  },
 });
 
 export default function AppShellHeader({
@@ -157,6 +165,9 @@ export default function AppShellHeader({
                       Log out
                     </Button>
                   </div>
+                  <Text size={200} className={styles.menuVersion}>
+                    Version {APP_VERSION}
+                  </Text>
                 </div>
               </>
             )}
