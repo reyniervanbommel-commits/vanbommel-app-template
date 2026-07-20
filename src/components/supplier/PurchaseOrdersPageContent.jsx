@@ -7,6 +7,7 @@ import BoardSplitView from '../bi/BoardSplitView';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
+import { LineDetailsContext } from './lineDetailsContext';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -118,6 +119,8 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     trackChangesActiveByColumnId,
     onToggleHeaderColumnCollapsed: pageModel.toggleHeaderColumnCollapsed,
     onToggleLineColumnCollapsed: pageModel.toggleLineColumnCollapsed,
+    productImageColumnVisible: pageModel.productImageColumnVisible,
+    onToggleProductImageColumn: pageModel.setProductImageColumnVisible,
   }), [
     pageModel,
     tableContext.editingColumnKey,
@@ -195,7 +198,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
       >
         <div className={styles.tableRegion}>
           <TrackChangesContext.Provider value={trackChangesMeta}>
-            <PurchaseOrdersBoardTable {...table} />
+            <LineDetailsContext.Provider value={pageModel.lineDetails}>
+              <PurchaseOrdersBoardTable {...table} />
+            </LineDetailsContext.Provider>
           </TrackChangesContext.Provider>
         </div>
       </BoardSplitView>

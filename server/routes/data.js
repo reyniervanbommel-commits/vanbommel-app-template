@@ -179,7 +179,13 @@ router.get('/:tableKey', async (req, res, next) => {
     const supplierFilterColumn = isSupplier
       ? await settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN)
       : DEFAULT_SUPPLIER_FILTER_COLUMN;
-    const data = await dataService.read({ tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn });
+    // Sublijnen blijven standaard buiten de board-payload; het board haalt ze per order op bij
+    // het openklappen (GET .../rows/:partitionKey/:recordKey/details). ?includeDetails=1 geeft
+    // de oude, volledige vorm terug — handig om te vergelijken bij het debuggen.
+    const includeDetails = req.query.includeDetails === '1' || req.query.includeDetails === 'true';
+    const data = await dataService.read({
+      tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails,
+    });
     return res.json({ ...data, refreshed, refreshError });
   } catch (err) {
     return next(err);
@@ -187,11 +193,15 @@ router.get('/:tableKey', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/refresh — forceer een bron-refresh.
+// body.baseline = true: nulmeting. Haalt alles opnieuw op zonder wijzigingen in het dagboek te
+// zetten — bedoeld na een datamodel-wijziging, zodat de nieuwe uitgangssituatie niet als duizenden
+// "nieuwe" rijen op het bord verschijnt.
 router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    const summary = await dataService.refresh(tableKey);
-    const data = await dataService.read({ tableKey, userId: req.user.id });
+    const baseline = req.body?.baseline === true;
+    const summary = await dataService.refresh(tableKey, { baseline });
+    const data = await dataService.read({ tableKey, userId: req.user.id, includeDetails: false });
     return res.json({ ...data, refresh: summary, refreshed: true });
   } catch (err) {
     return next(err);
@@ -507,6 +517,20 @@ router.post('/:tableKey/rows/exclude', async (req, res, next) => {
 router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   try {
     const result = await dataService.listHiddenInFilterRows(req.params.tableKey);
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details — sublijnen van één rij.
+// Het board krijgt de regels niet meer mee in de board-read (die zou bij ~2000 orders
+// tientallen MB's worden) en haalt ze hiermee op zodra een order wordt opengeklapt.
+router.get('/:tableKey/rows/:partitionKey/:recordKey/details', async (req, res, next) => {
+  try {
+    const { tableKey, partitionKey, recordKey } = req.params;
+    await assertSupplierPurchaseOrderRow(req.user, { tableKey, partitionKey, recordKey });
+    const result = await dataService.readRowDetails({ tableKey, partitionKey, recordKey });
     return res.json(result);
   } catch (err) {
     return next(err);

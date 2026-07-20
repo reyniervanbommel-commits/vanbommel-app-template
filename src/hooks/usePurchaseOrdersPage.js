@@ -10,6 +10,7 @@ import {
   mapTbResponseToBoard,
   scopeForLevel,
 } from '../utils/purchaseOrdersBoardMapping';
+import { usePurchaseOrderLineDetails } from './usePurchaseOrderLineDetails';
 import { filterSummableLineColumnKeys, isSummableLineColumn } from '../utils/purchaseOrderTotals';
 import {
   arraysEqual,
@@ -75,6 +76,7 @@ function normalizeBoardSettings(settings) {
     lineValueHeaderLinks: Array.isArray(settings?.lineValueHeaderLinks) ? settings.lineValueHeaderLinks : [],
     collapsedHeaderColumnKeys: Array.isArray(settings?.collapsedHeaderColumnKeys) ? settings.collapsedHeaderColumnKeys : [],
     collapsedLineColumnKeys: Array.isArray(settings?.collapsedLineColumnKeys) ? settings.collapsedLineColumnKeys : [],
+    productImageColumnVisible: settings?.productImageColumnVisible !== false,
   };
 }
 
@@ -88,6 +90,10 @@ function normalizeBoardSettings(settings) {
  */
 export function usePurchaseOrdersPage() {
   const [orders, setOrders] = useState([]);
+  // Sublijnen worden per order lazy geladen bij het openklappen; deze store staat los van
+  // de orders-state zodat een expand de board-pipeline niet opnieuw laat draaien.
+  const lineDetails = usePurchaseOrderLineDetails();
+  const { applyLineValues, restoreLines, resetLines } = lineDetails;
   const [headerColumns, setHeaderColumns] = useState([]);
   const [lineColumns, setLineColumns] = useState([]);
   const [syncedAt, setSyncedAt] = useState(null);
@@ -130,6 +136,7 @@ export function usePurchaseOrdersPage() {
   const [lineValueHeaderLinks, setLineValueHeaderLinks] = useState(seededBoardSettings.lineValueHeaderLinks);
   const [collapsedHeaderColumnKeys, setCollapsedHeaderColumnKeys] = useState(seededBoardSettings.collapsedHeaderColumnKeys);
   const [collapsedLineColumnKeys, setCollapsedLineColumnKeys] = useState(seededBoardSettings.collapsedLineColumnKeys);
+  const [productImageColumnVisible, setProductImageColumnVisible] = useState(seededBoardSettings.productImageColumnVisible);
   const [datePeriodDisplayModes, setDatePeriodDisplayModes] = useState({});
   const [boardSettingsLoaded, setBoardSettingsLoaded] = useState(() => Boolean(getCachedBoardSettings(BOARD_KEY)));
   const [savingColumns, setSavingColumns] = useState(false);
@@ -149,10 +156,12 @@ export function usePurchaseOrdersPage() {
     setNewCount(Number(data?.newCount) || 0);
     setChangedCount(Number(data?.changedCount) || 0);
     setTrackChangesMeta(data?.meta?.trackChanges ?? null);
+    // Verse board-data betekent mogelijk verse sublijnen; opengeklapte orders halen ze opnieuw op.
+    resetLines();
     // Payload + revision atomair cachen (revision komt uit dezelfde read). Elke refresh-flow loopt
     // via applyData, dus cache en revision blijven vanzelf in sync.
     setCachedBoard(data, data?.revision ?? null);
-  }, []);
+  }, [resetLines]);
 
   const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
     if (!skipLoading) {
@@ -201,6 +210,7 @@ export function usePurchaseOrdersPage() {
     setLineValueHeaderLinks(normalized.lineValueHeaderLinks);
     setCollapsedHeaderColumnKeys(normalized.collapsedHeaderColumnKeys);
     setCollapsedLineColumnKeys(normalized.collapsedLineColumnKeys);
+    setProductImageColumnVisible(normalized.productImageColumnVisible);
   }, []);
 
   const loadBoardSettings = useCallback(async () => {
@@ -340,36 +350,31 @@ export function usePurchaseOrdersPage() {
   const saveValue = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value }) => {
     const isLine = lineNumber !== null && lineNumber !== undefined;
 
-    // Bewaar vorige state voor rollback.
+    // Bewaar vorige state voor rollback. Regelwaarden staan in de lazy line-store,
+    // headerwaarden op de order zelf.
     const meta = trackChangesMetaRef.current;
     let previousOrders = null;
-    setOrders((prev) => {
-      previousOrders = prev;
-      return prev.map((order) => {
-        if (order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber) {
-          return order;
-        }
-        if (isLine) {
-          return {
-            ...order,
-            lines: (order.lines || []).map((line) =>
-              line.lineNumber === lineNumber
-                ? {
-                    ...line,
-                    values: { ...line.values, [columnKey]: value },
-                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
-                  }
-                : line
-            ),
-          };
-        }
-        return {
-          ...order,
-          values: { ...order.values, [columnKey]: value },
-          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
-        };
+    let previousLines = null;
+    if (isLine) {
+      previousLines = applyLineValues(dataAreaId, orderNumber, lineNumber, (line) => ({
+        ...line,
+        values: { ...line.values, [columnKey]: value },
+        trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+      }));
+    } else {
+      setOrders((prev) => {
+        previousOrders = prev;
+        return prev.map((order) => (
+          order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber
+            ? order
+            : {
+              ...order,
+              values: { ...order.values, [columnKey]: value },
+              trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+            }
+        ));
       });
-    });
+    }
 
     try {
       if (BOARD_TB_SOURCE) {
@@ -392,9 +397,10 @@ export function usePurchaseOrdersPage() {
     } catch (err) {
       // Rollback bij fout.
       if (previousOrders) setOrders(previousOrders);
+      if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, []);
+  }, [applyLineValues, restoreLines]);
 
   // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
@@ -402,31 +408,27 @@ export function usePurchaseOrdersPage() {
     const isLine = lineNumber !== null && lineNumber !== undefined;
     const meta = trackChangesMetaRef.current;
     let previousOrders = null;
-    setOrders((prev) => {
-      previousOrders = prev;
-      return prev.map((order) => {
-        if (order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber) return order;
-        if (isLine) {
-          return {
-            ...order,
-            lines: (order.lines || []).map((line) =>
-              line.lineNumber === lineNumber
-                ? {
-                    ...line,
-                    values: { ...line.values, [columnKey]: value },
-                    trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
-                  }
-                : line
-            ),
-          };
-        }
-        return {
-          ...order,
-          values: { ...order.values, [columnKey]: value },
-          trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
-        };
+    let previousLines = null;
+    if (isLine) {
+      previousLines = applyLineValues(dataAreaId, orderNumber, lineNumber, (line) => ({
+        ...line,
+        values: { ...line.values, [columnKey]: value },
+        trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+      }));
+    } else {
+      setOrders((prev) => {
+        previousOrders = prev;
+        return prev.map((order) => (
+          order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber
+            ? order
+            : {
+              ...order,
+              values: { ...order.values, [columnKey]: value },
+              trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+            }
+        ));
       });
-    });
+    }
     try {
       if (BOARD_TB_SOURCE) {
         await apiRequest(`${DATA_BASE}/correct`, {
@@ -441,9 +443,10 @@ export function usePurchaseOrdersPage() {
       }
     } catch (err) {
       if (previousOrders) setOrders(previousOrders);
+      if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, []);
+  }, [applyLineValues, restoreLines]);
 
   const resolveColumnScopeById = useCallback((columnId) => {
     if (headerColumns.some((column) => column.id === columnId)) return 'master';
@@ -582,13 +585,13 @@ export function usePurchaseOrdersPage() {
     const order = normalizeColumnOrder(columnOrder, defaultHeaderKeys);
     return order
       .filter((key) => {
-        if (key === PRODUCT_IMAGE_COLUMN_KEY) return true;
+        if (key === PRODUCT_IMAGE_COLUMN_KEY) return productImageColumnVisible;
         return byKey.has(key) && effectiveVisibleKeys.includes(key);
       })
       .map((key) => (key === PRODUCT_IMAGE_COLUMN_KEY
         ? createProductImageColumn('header')
         : byKey.get(key)));
-  }, [headerColumns, columnOrder, defaultHeaderKeys, effectiveVisibleKeys]);
+  }, [headerColumns, columnOrder, defaultHeaderKeys, effectiveVisibleKeys, productImageColumnVisible]);
 
   const defaultLineKeys = useMemo(
     () => extendDefaultColumnKeys(lineColumns.map((column) => column.key)),
@@ -599,11 +602,14 @@ export function usePurchaseOrdersPage() {
     const byKey = new Map(lineColumns.map((column) => [column.key, column]));
     const order = normalizeColumnOrder(lineColumnOrder, defaultLineKeys);
     return order
-      .filter((key) => key === PRODUCT_IMAGE_COLUMN_KEY || byKey.has(key))
+      .filter((key) => {
+        if (key === PRODUCT_IMAGE_COLUMN_KEY) return productImageColumnVisible;
+        return byKey.has(key);
+      })
       .map((key) => (key === PRODUCT_IMAGE_COLUMN_KEY
         ? createProductImageColumn('line')
         : byKey.get(key)));
-  }, [lineColumns, lineColumnOrder, defaultLineKeys]);
+  }, [lineColumns, lineColumnOrder, defaultLineKeys, productImageColumnVisible]);
 
   const effectiveLineTotalColumns = useMemo(
     () => filterSummableLineColumnKeys(
@@ -673,6 +679,7 @@ export function usePurchaseOrdersPage() {
     nextLineValueHeaderLinks = lineValueHeaderLinks,
     nextCollapsedHeaderColumnKeys = collapsedHeaderColumnKeys,
     nextCollapsedLineColumnKeys = collapsedLineColumnKeys,
+    nextProductImageColumnVisible = productImageColumnVisible,
   } = {}) => {
     const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
     const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
@@ -718,6 +725,7 @@ export function usePurchaseOrdersPage() {
     setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
     setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
     setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
+    setProductImageColumnVisible(nextProductImageColumnVisible !== false);
     // Houd de sessie-cache in sync met wat we opslaan, zodat een volgende mount de nieuwe layout
     // meteen seedt en er geen "oude layout → correctie"-flits ontstaat.
     const persistedSettings = {
@@ -735,6 +743,7 @@ export function usePurchaseOrdersPage() {
       lineValueHeaderLinks: normalizedLineValueHeaderLinks,
       collapsedHeaderColumnKeys: normalizedCollapsedHeaderColumnKeys,
       collapsedLineColumnKeys: normalizedCollapsedLineColumnKeys,
+      productImageColumnVisible: nextProductImageColumnVisible !== false,
     };
     setCachedBoardSettings(BOARD_KEY, persistedSettings);
     setSavingColumns(true);
@@ -763,6 +772,7 @@ export function usePurchaseOrdersPage() {
     lineValueHeaderLinks,
     collapsedHeaderColumnKeys,
     collapsedLineColumnKeys,
+    productImageColumnVisible,
     defaultHeaderKeys,
     defaultLineKeys,
     lineColumns,
@@ -830,6 +840,7 @@ export function usePurchaseOrdersPage() {
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
     collapsedHeaderColumnKeys: effectiveCollapsedHeaderColumnKeys,
     collapsedLineColumnKeys: effectiveCollapsedLineColumnKeys,
+    productImageColumnVisible,
     datePeriodDisplayModes: { ...datePeriodDisplayModes },
   }), [
     effectiveVisibleKeys,
@@ -848,6 +859,7 @@ export function usePurchaseOrdersPage() {
     effectiveLineValueHeaderLinks,
     effectiveCollapsedHeaderColumnKeys,
     effectiveCollapsedLineColumnKeys,
+    productImageColumnVisible,
     datePeriodDisplayModes,
   ]);
 
@@ -900,7 +912,14 @@ export function usePurchaseOrdersPage() {
     if (Array.isArray(layout.collapsedLineColumnKeys)) {
       setCollapsedLineColumnKeys(normalizeCollapsedColumnKeys(layout.collapsedLineColumnKeys, defaultLineKeys));
     }
+    if (Object.prototype.hasOwnProperty.call(layout, 'productImageColumnVisible')) {
+      setProductImageColumnVisible(layout.productImageColumnVisible !== false);
+    }
   }, [defaultHeaderKeys, defaultLineKeys]);
+
+  const setProductImageColumnVisiblePreference = useCallback(async (visible) => {
+    await persistBoardSettings({ nextProductImageColumnVisible: visible !== false });
+  }, [persistBoardSettings]);
 
   const setDatePeriodDisplayMode = useCallback((columnKey, displayMode) => {
     const key = String(columnKey || '').trim();
@@ -1076,6 +1095,7 @@ export function usePurchaseOrdersPage() {
 
   return useMemo(() => ({
     orders,
+    lineDetails,
     headerColumns,
     lineColumns: orderedLineColumns,
     // Header-kolommen met board-settings (zichtbaarheid/volgorde) toegepast.
@@ -1104,6 +1124,7 @@ export function usePurchaseOrdersPage() {
     lineValueHeaderLinks: effectiveLineValueHeaderLinks,
     collapsedHeaderColumnKeys: effectiveCollapsedHeaderColumnKeys,
     collapsedLineColumnKeys: effectiveCollapsedLineColumnKeys,
+    productImageColumnVisible,
     datePeriodDisplayModes,
     setDatePeriodDisplayMode,
     savingColumns,
@@ -1137,10 +1158,12 @@ export function usePurchaseOrdersPage() {
     saveLineColumnFormatRules,
     toggleHeaderColumnCollapsed,
     toggleLineColumnCollapsed,
+    setProductImageColumnVisible: setProductImageColumnVisiblePreference,
     exportColumnLayout,
     applyColumnLayout,
   }), [
     orders,
+    lineDetails,
     headerColumns,
     orderedLineColumns,
     orderedHeaderColumns,
@@ -1168,6 +1191,7 @@ export function usePurchaseOrdersPage() {
     effectiveLineValueHeaderLinks,
     effectiveCollapsedHeaderColumnKeys,
     effectiveCollapsedLineColumnKeys,
+    productImageColumnVisible,
     datePeriodDisplayModes,
     setDatePeriodDisplayMode,
     savingColumns,
@@ -1201,6 +1225,7 @@ export function usePurchaseOrdersPage() {
     saveLineColumnFormatRules,
     toggleHeaderColumnCollapsed,
     toggleLineColumnCollapsed,
+    setProductImageColumnVisiblePreference,
     exportColumnLayout,
     applyColumnLayout,
   ]);

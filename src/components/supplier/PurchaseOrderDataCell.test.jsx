@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,13 +13,12 @@ function SharedContextMenuTable({ applyFilter, clearFilter }) {
   const [context, setContext] = useState(null);
   const open = useCallback((target, cell) => setContext({ target, ...cell }), []);
   const close = useCallback(() => setContext(null), []);
+  // De actieve filter komt via een ref binnen, zodat filterwijzigingen niet elke cel hertekenen.
+  const filterByColumnRef = useRef({
+    status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+  });
   const contextMenu = useMemo(
-    () => ({
-      filterByColumn: {
-        status: { operator: 'equals', value: 'Open', secondaryValue: '' },
-      },
-      open,
-    }),
+    () => ({ filterByColumnRef, open }),
     [open]
   );
   const actions = useMemo(

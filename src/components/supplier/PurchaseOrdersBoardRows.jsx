@@ -8,6 +8,8 @@ import {
   purchaseOrderBoardRowHeight,
 } from './purchaseOrderBoardLayout';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
+import { useProgressiveRenderLimit } from '../../hooks/useProgressiveRenderLimit';
+import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
 
 const fixedCellOverflow = {
   boxSizing: 'border-box',
@@ -68,6 +70,11 @@ const useStyles = makeStyles({
     marginLeft: '6px',
   },
   itemRow: {
+    // Rijen buiten beeld hoeven niet gelayout/getekend te worden. De rijhoogte ligt vast
+    // (32px) en de tabel is table-layout: fixed, dus overslaan verschuift niets. Browsers die
+    // containment op tabelrijen niet toepassen negeren dit; dan verandert er simpelweg niets.
+    contentVisibility: 'auto',
+    containIntrinsicSize: `auto ${purchaseOrderBoardRowHeight}`,
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
     },
@@ -193,6 +200,9 @@ const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
   selection,
   contextMenu,
   remarks,
+  maxEntries,
+  expandedOrders,
+  highlightedLocateKey,
 }) {
   const groupKey = group.groupKey || group.groupName;
   const hidden = group.ancestorGroupKeys?.some((key) => collapsedGroups[key]);
@@ -212,6 +222,11 @@ const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
     }),
     [isCollapsed, rowLayout]
   );
+  // Progressief mounten: het restant van deze groep volgt in een volgend idle-blok.
+  const visibleEntries = useMemo(
+    () => (maxEntries >= group.entries.length ? group.entries : group.entries.slice(0, Math.max(maxEntries, 0))),
+    [group.entries, maxEntries]
+  );
 
   if (hidden) return null;
 
@@ -223,11 +238,13 @@ const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
         selection={selection}
         actions={actions.group}
       />
-      {!isCollapsed ? group.entries.map((entry) => (
+      {!isCollapsed ? visibleEntries.map((entry) => (
         <PurchaseOrderBoardRow
           key={entry.rowId}
           entry={entry}
           layout={rowLayout}
+          isExpanded={Boolean(expandedOrders[entry.rowId])}
+          isLocated={highlightedLocateKey === orderLocateKeyFromOrder(entry.order)}
           formatting={formatting}
           actions={actions.row}
           links={links}
@@ -274,12 +291,12 @@ function PurchaseOrdersBoardRows({
     });
   }, [selection, selectionEnabled]);
 
+  // expandedOrders/highlightedLocateKey horen NIET in rowLayout: dat maakt bij elke expand of
+  // locate een nieuw layout-object voor álle rijen en cellen. Ze gaan als losse booleans per rij.
   const rowLayout = useMemo(() => ({
     ...layout,
     styles,
-    expandedOrders: data.expandedOrders,
-    highlightedLocateKey: data.highlightedLocateKey,
-  }), [data.expandedOrders, data.highlightedLocateKey, layout, styles]);
+  }), [layout, styles]);
   const stableActions = useMemo(() => ({
     group: {
       onToggleGroup: actions.tableActions.onToggleGroup,
@@ -294,22 +311,40 @@ function PurchaseOrdersBoardRows({
     },
   }), [actions, handleGroupSelection]);
 
+  // Rijen komen in blokken de DOM in (eerste ~50 direct, rest in idle-tijd). Het budget wordt
+  // in rendervolgorde over de groepen verdeeld; groepen die er nog niet in passen renderen
+  // alleen hun kopregel.
+  const totalEntryCount = useMemo(
+    () => data.groupedRows.reduce((count, group) => count + (group.entries?.length || 0), 0),
+    [data.groupedRows]
+  );
+  const renderLimit = useProgressiveRenderLimit(totalEntryCount, data.groupedRows, data.locateActive);
+
+  let remainingBudget = renderLimit;
+
   return (
     <tbody>
-      {data.groupedRows.map((group) => (
-        <PurchaseOrdersBoardGroup
-          key={group.groupKey || group.groupName}
-          group={group}
-          collapsedGroups={data.collapsedGroups}
-          rowLayout={rowLayout}
-          formatting={effectiveFormatting}
-          actions={stableActions}
-          links={links}
-          selection={selection}
-          contextMenu={contextMenu}
-          remarks={remarks}
-        />
-      ))}
+      {data.groupedRows.map((group) => {
+        const budget = remainingBudget;
+        remainingBudget -= group.entries?.length || 0;
+        return (
+          <PurchaseOrdersBoardGroup
+            key={group.groupKey || group.groupName}
+            group={group}
+            collapsedGroups={data.collapsedGroups}
+            rowLayout={rowLayout}
+            formatting={effectiveFormatting}
+            actions={stableActions}
+            links={links}
+            selection={selection}
+            contextMenu={contextMenu}
+            remarks={remarks}
+            maxEntries={budget}
+            expandedOrders={data.expandedOrders}
+            highlightedLocateKey={data.highlightedLocateKey}
+          />
+        );
+      })}
     </tbody>
   );
 }

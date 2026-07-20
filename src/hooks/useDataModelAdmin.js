@@ -311,6 +311,21 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     }
   }, [adminBasePath, reload]);
 
+  // Nulmeting: alles opnieuw ophalen zonder het als wijzigingen te loggen. Bedoeld na een
+  // datamodel-wijziging; anders zou het bord elke rij als "nieuw" markeren.
+  const reimportBaseline = useCallback(async () => {
+    setTogglingKey('baseline-import');
+    setError('');
+    try {
+      await apiRequest(`${adminBasePath}/refresh`, { method: 'POST', body: { baseline: true } });
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [adminBasePath, reload]);
+
   const discoverFields = useCallback(async () => {
     setTogglingKey('discover-fields');
     setError('');
@@ -341,6 +356,7 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     togglingKey,
     reload,
     syncNow,
+    reimportBaseline,
     discoverFields,
     toggleVisibility,
     toggleVisibleAtDelete,
@@ -348,5 +364,5 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     toggleRccpMeasure,
     setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleRccpMeasure, setColumnToggleState, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleRccpMeasure, setColumnToggleState, deleteColumn]);
 }

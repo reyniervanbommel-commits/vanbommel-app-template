@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
-import { calculateLineColumnSum, calculateLineColumnValues } from '../utils/purchaseOrderTotals';
+import { formatLinkedLineValues } from '../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
   normalizeDatePeriodDisplayMode,
@@ -54,29 +54,26 @@ export function usePurchaseOrderBoardView({
     [lineValueHeaderLinks, lineColumns]
   );
 
+  // De totalen zet de server al in values (calculateLinkedLineTotal ≡ calculateLineColumnSum);
+  // alleen de value-links moeten hier nog geformatteerd worden, uit de ruwe regelwaarden die
+  // met de rollup meekomen. De sublijnen zelf zitten niet in de board-payload.
   const itemsWithLinkedValues = useMemo(() => {
-    const linkedTotalKeys = Object.keys(linkedLineTotalByHeaderKey);
     const linkedValueKeys = Object.keys(linkedLineValueByHeaderKey);
-    if (!linkedTotalKeys.length && !linkedValueKeys.length) return items;
+    if (!linkedValueKeys.length) return items;
 
     return items.map((order) => {
       let nextValues = order?.values || {};
       let changed = false;
 
-      linkedTotalKeys.forEach((headerKey) => {
-        const lineColumnKey = linkedLineTotalByHeaderKey[headerKey];
-        if (!lineColumnKey) return;
-        const nextValue = calculateLineColumnSum(order?.lines, lineColumnKey);
-        if (nextValues?.[headerKey] === nextValue) return;
-        if (!changed) nextValues = { ...nextValues };
-        nextValues[headerKey] = nextValue;
-        changed = true;
-      });
-
       linkedValueKeys.forEach((headerKey) => {
         const meta = linkedLineValueByHeaderKey[headerKey];
         if (!meta?.lineColumnKey) return;
-        const nextValue = calculateLineColumnValues(order?.lines, meta.lineColumnKey, meta.lineDataType);
+        const rawValues = order?.linkedLineValues?.[headerKey]
+          ?? (Array.isArray(order?.lines)
+            ? order.lines.map((line) => line?.values?.[meta.lineColumnKey])
+            : null);
+        if (!Array.isArray(rawValues)) return;
+        const nextValue = formatLinkedLineValues(rawValues, meta.lineDataType, meta.lineColumnKey);
         if (nextValues?.[headerKey] === nextValue) return;
         if (!changed) nextValues = { ...nextValues };
         nextValues[headerKey] = nextValue;
@@ -86,7 +83,7 @@ export function usePurchaseOrderBoardView({
       if (!changed) return order;
       return { ...order, values: nextValues };
     });
-  }, [items, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
+  }, [items, linkedLineValueByHeaderKey]);
 
   const datePeriodColumns = useMemo(
     () => (Array.isArray(columns) ? columns : []).filter(isDatePeriodColumn),
@@ -118,24 +115,21 @@ export function usePurchaseOrderBoardView({
     });
   }, [datePeriodColumns, datePeriodDisplayModes, itemsWithLinkedValues]);
 
+  // De regel-vlaggen komen als rollup uit de board-read (hasNewLine/hasChangedLine/
+  // hasRemovedLine); de sublijnen zelf zijn hier niet beschikbaar.
   const hasNewData = useCallback((order) => (
-    Boolean(order?.isNew)
-    || (Array.isArray(order?.lines) && order.lines.some((line) => line?.isNew))
+    Boolean(order?.isNew) || Boolean(order?.hasNewLine)
   ), []);
 
   const hasRemovedData = useCallback((order) => (
-    Boolean(order?.removedInD365)
-    || (Array.isArray(order?.lines) && order.lines.some((line) => line?.isRemoved))
+    Boolean(order?.removedInD365) || Boolean(order?.hasRemovedLine)
   ), []);
 
   const hasChangedData = useCallback((order) => {
     if (hasNewData(order)) return false;
     const headerCellChanged = Array.isArray(order?.changedFieldKeys) && order.changedFieldKeys.length > 0;
     const orderChanged = Boolean(order?.isChanged) || headerCellChanged;
-    const lineChanged = Array.isArray(order?.lines) && order.lines.some((line) => (
-      line?.isChanged || (Array.isArray(line?.changedFieldKeys) && line.changedFieldKeys.length > 0)
-    ));
-    return orderChanged || lineChanged;
+    return orderChanged || Boolean(order?.hasChangedLine);
   }, [hasNewData]);
 
   const matchesActivityFilter = useCallback((order) => {

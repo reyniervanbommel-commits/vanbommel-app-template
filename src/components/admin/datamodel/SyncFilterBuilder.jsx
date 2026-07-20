@@ -50,7 +50,24 @@ const useStyles = makeStyles({
   templateDropdown: { width: '200px', minWidth: '180px' },
 });
 
-function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow }) {
+// Nulmeting-knop: haalt alles opnieuw op zonder het als wijzigingen te loggen. Los van "Sync now"
+// omdat het de wijzigingshistorie bewust overslaat — bedoeld na een datamodel-wijziging.
+function ReimportBaselineButton({ onReimportBaseline, busy }) {
+  if (!onReimportBaseline) return null;
+  return (
+    <Button
+      size="small"
+      appearance="secondary"
+      onClick={onReimportBaseline}
+      disabled={busy}
+      title="Re-import all rows as a new starting point. Changes are not written to the change history, so the board will not mark every row as new."
+    >
+      {busy ? 'Re-importing...' : 'Re-import (baseline)'}
+    </Button>
+  );
+}
+
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow, onReimportBaseline, baselineBusy = false }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
   const isInheritedTable = tableKey === 'vendors' || tableKey === 'items' || tableKey === 'product-receipt-lines';
@@ -123,6 +140,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         {inheritedCompiled ? <div className={styles.preview}>Inherited $filter = {inheritedCompiled}</div> : null}
         <div className={styles.actions}>
           <Button appearance="secondary" onClick={onSyncNow}>Sync now</Button>
+          <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
         </div>
       </div>
     );
@@ -164,6 +182,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
           ))}
         </Dropdown>
         <Button size="small" appearance="secondary" onClick={onSyncNow}>Sync now</Button>
+        <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
         <Button
           size="small"
           appearance="secondary"

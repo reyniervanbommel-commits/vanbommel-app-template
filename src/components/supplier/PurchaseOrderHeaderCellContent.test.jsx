@@ -14,19 +14,17 @@ function renderHeaderCell(props) {
 }
 
 describe('PurchaseOrderHeaderCellContent', () => {
-  it('renders the product image column from the active visible line set', () => {
+  // De samenvatting komt sinds de lazy-lines-payload als rollup uit de board-read;
+  // de cel berekent zelf niets meer over de sublijnen.
+  it('renders the product image column from the rollup summary', () => {
     renderHeaderCell({
       order: {
         dataAreaId: 'nl01',
         orderNumber: 'PO-1',
         values: { status: 'Open' },
-        lines: [
-          { values: { itemNumber: 'HIDDEN-ITEM' } },
-          { values: { itemNumber: 'VISIBLE-ITEM' } },
-        ],
       },
       column: createProductImageColumn('header'),
-      productImageLines: [{ values: { itemNumber: 'VISIBLE-ITEM' } }],
+      productImageSummary: { firstItemNumber: 'VISIBLE-ITEM', additionalItemCount: 0 },
     });
 
     expect(screen.getByAltText('Product image for VISIBLE-ITEM')).toBeTruthy();
