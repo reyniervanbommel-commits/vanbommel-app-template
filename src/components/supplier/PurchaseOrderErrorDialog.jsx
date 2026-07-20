@@ -41,6 +41,15 @@ function classifyError(error) {
   const raw = String(error || '').trim();
   const lower = raw.toLowerCase();
 
+  if (lower.includes('503') || lower.includes('service unavailable')) {
+    return {
+      title: 'Service temporarily unavailable',
+      summary: 'The backend could not complete the purchase-order data request.',
+      likelyCause: 'The server was overloaded or still restarting (often after a deploy), or the response was too large to finish in time.',
+      nextStep: 'Wait a few seconds and retry. If this persists after a new deploy, check container logs and response size.',
+    };
+  }
+
   if (lower.includes('timeout') || lower.includes('failed to complete')) {
     return {
       title: 'Request timed out',
