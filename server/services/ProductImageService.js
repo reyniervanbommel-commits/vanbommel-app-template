@@ -3,8 +3,11 @@
 const d365ODataService = require('./D365ODataService');
 
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const PRODUCT_IMAGE_ENTITY_PATH = '/data/ReleasedProductDocumentAttachments';
-const PRODUCT_IMAGE_SELECT_FIELDS = [
+const RELEASED_PRODUCT_IMAGE_ENTITY_PATH = '/data/ReleasedProductDocumentAttachments';
+const PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH = '/data/ProductDocumentAttachments';
+/** @deprecated Use RELEASED_PRODUCT_IMAGE_ENTITY_PATH — kept for tests/backwards references. */
+const PRODUCT_IMAGE_ENTITY_PATH = RELEASED_PRODUCT_IMAGE_ENTITY_PATH;
+const RELEASED_PRODUCT_IMAGE_SELECT_FIELDS = [
   'dataAreaId',
   'ItemNumber',
   'Attachment',
@@ -13,6 +16,18 @@ const PRODUCT_IMAGE_SELECT_FIELDS = [
   'IsDefaultProductImage',
   'AttachedDateTime',
 ];
+const PRODUCT_DOCUMENT_ATTACHMENT_SELECT_FIELDS = [
+  'ProductNumber',
+  'DocumentAttachmentTypeCode',
+  'DocumentAttachmentTypeLegalEntityId',
+  'Attachment',
+  'FileType',
+  'IsProductImage',
+  'IsDefaultProductImage',
+  'AttachedDateTime',
+];
+/** @deprecated Use RELEASED_PRODUCT_IMAGE_SELECT_FIELDS */
+const PRODUCT_IMAGE_SELECT_FIELDS = RELEASED_PRODUCT_IMAGE_SELECT_FIELDS;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
@@ -97,17 +112,43 @@ function isTrue(value) {
   return value === true || value === 1 || normalized === 'true' || normalized === 'yes' || normalized === '1';
 }
 
+function hasAttachment(record) {
+  return typeof record?.Attachment === 'string' && record.Attachment.length > 0;
+}
+
+function sortByAttachedDateDesc(records) {
+  return [...records].sort((left, right) => (
+    Date.parse(right.AttachedDateTime || 0) - Date.parse(left.AttachedDateTime || 0)
+  ));
+}
+
+function isProductImageDocumentType(record) {
+  return String(record?.DocumentAttachmentTypeCode || '').trim().toLowerCase() === 'productimage';
+}
+
 function selectDefaultProductImage(records) {
-  return (Array.isArray(records) ? records : [])
-    .filter((record) => (
-      isTrue(record?.IsProductImage)
-      && isTrue(record?.IsDefaultProductImage)
-      && typeof record?.Attachment === 'string'
-      && record.Attachment.length > 0
-    ))
-    .sort((left, right) => (
-      Date.parse(right.AttachedDateTime || 0) - Date.parse(left.AttachedDateTime || 0)
-    ))[0] || null;
+  return sortByAttachedDateDesc(Array.isArray(records) ? records : [])
+    .filter((record) => isTrue(record?.IsProductImage) && isTrue(record?.IsDefaultProductImage) && hasAttachment(record))[0] || null;
+}
+
+function selectProductImageRecord(records) {
+  const list = Array.isArray(records) ? records : [];
+  const defaultImage = selectDefaultProductImage(list);
+  if (defaultImage) return defaultImage;
+
+  const productImageDocuments = sortByAttachedDateDesc(
+    list.filter((record) => isProductImageDocumentType(record) && hasAttachment(record)),
+  );
+  if (productImageDocuments.length) return productImageDocuments[0];
+
+  const flaggedProductImages = sortByAttachedDateDesc(
+    list.filter((record) => isTrue(record?.IsProductImage) && hasAttachment(record)),
+  );
+  if (flaggedProductImages.length) return flaggedProductImages[0];
+
+  return sortByAttachedDateDesc(
+    list.filter((record) => hasAttachment(record) && contentTypeFromFileType(record?.FileType)),
+  )[0] || null;
 }
 
 function hasMatchingMagicBytes(contentType, content) {
@@ -163,25 +204,53 @@ function createProductImageService({
     });
   }
 
+  async function fetchRecords(config) {
+    return fetchEntityRecordsFn({
+      top: 100,
+      skip: 0,
+      fetchAll: true,
+      maxItems: 100,
+      ...config,
+    });
+  }
+
   async function fetchFromD365(input) {
-    try {
-      const result = await fetchEntityRecordsFn({
-        sourceEntity: PRODUCT_IMAGE_ENTITY_PATH,
-        top: 100,
-        skip: 0,
-        fetchAll: true,
-        maxItems: 100,
+    const sources = [
+      {
+        sourceEntity: PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH,
+        applyCompanyFilter: false,
+        extraFilter: [
+          `ProductNumber eq '${escapeODataLiteral(input.itemNumber)}'`,
+          `DocumentAttachmentTypeLegalEntityId eq '${escapeODataLiteral(input.dataAreaId)}'`,
+        ].join(' and '),
+        selectFields: PRODUCT_DOCUMENT_ATTACHMENT_SELECT_FIELDS,
+      },
+      {
+        sourceEntity: RELEASED_PRODUCT_IMAGE_ENTITY_PATH,
         extraFilter: [
           `dataAreaId eq '${escapeODataLiteral(input.dataAreaId)}'`,
           `ItemNumber eq '${escapeODataLiteral(input.itemNumber)}'`,
         ].join(' and '),
-        selectFields: PRODUCT_IMAGE_SELECT_FIELDS,
-      });
-      return selectDefaultProductImage(result?.items);
-    } catch (error) {
-      if (error instanceof ProductImageServiceError) throw error;
-      throw new ProductImageServiceError('D365 default product image entity is unavailable');
+        selectFields: RELEASED_PRODUCT_IMAGE_SELECT_FIELDS,
+      },
+    ];
+
+    let lastError = null;
+    for (const source of sources) {
+      try {
+        const result = await fetchRecords(source);
+        const record = selectProductImageRecord(result?.items);
+        if (record) return record;
+      } catch (error) {
+        lastError = error;
+      }
     }
+
+    if (lastError instanceof ProductImageServiceError) throw lastError;
+    if (lastError) {
+      throw new ProductImageServiceError('D365 product image entities are unavailable');
+    }
+    return null;
   }
 
   async function getProductImage(input) {
@@ -226,8 +295,12 @@ module.exports = {
   ALLOWED_CONTENT_TYPES,
   CACHE_TTL_MS,
   MAX_IMAGE_BYTES,
+  PRODUCT_DOCUMENT_ATTACHMENT_ENTITY_PATH,
+  PRODUCT_DOCUMENT_ATTACHMENT_SELECT_FIELDS,
   PRODUCT_IMAGE_ENTITY_PATH,
   PRODUCT_IMAGE_SELECT_FIELDS,
+  RELEASED_PRODUCT_IMAGE_ENTITY_PATH,
+  RELEASED_PRODUCT_IMAGE_SELECT_FIELDS,
   ProductImageServiceError,
   buildCacheKey,
   contentTypeFromFileType,
@@ -235,5 +308,6 @@ module.exports = {
   decodeImageContent,
   hasMatchingMagicBytes,
   selectDefaultProductImage,
+  selectProductImageRecord,
   validateProductImageInput,
 };
