@@ -7,10 +7,10 @@ overview: >-
 todos:
   - id: team-decisions-mc
     content: "Product-owner beantwoordt multiple-choice vragen (plan § Beslissingen)"
-    status: pending
+    status: completed
   - id: perf-policy-json
     content: "perf-optimize-policy.json + perf-backlog.schema.json + scale-profielen S/M/L"
-    status: pending
+    status: in_progress
   - id: seed-scale-profiles
     content: "seed-perf-po-cache.js uitbreiden met --orders=500 en --orders=2000"
     status: pending
@@ -40,8 +40,9 @@ isProject: false
 
 # Autonome perf-agent pipeline — voorstel v1.1
 
-> **Status:** concept voor teamreview — v1.1 na kritische review  
+> **Status:** beslissingen ingevuld — v1.2 klaar voor bouw  
 > **Auteur:** AI-assistent + Reynier (perf-review nulmeting 2026-07-20)  
+> **Wijziging v1.2:** product-owner MC-antwoorden → `test-reports/perf-optimize-policy.json`  
 > **Wijziging v1.1:** ervaren snelheid primair, schaal-profielen, adversary-agent, CI-gate, v1-scope beperkt  
 > **Gerelateerd:** `.cursor/skills/perf-review/`, `test-reports/perf-baseline.json`, PR #57
 
@@ -74,10 +75,10 @@ priority = (elapsedWall_median − targetWall) × routeFrequencyWeight
 | PO board-load | **elapsedWall** | ~1779 ms (local 80 PO) / TBD Azure | **−30%** wandklok | — |
 | PO board-load | **server `app`** | **740 ms** (Azure warm) | — | **≤ 500 ms** (−30%) |
 | Route `/rccp` | **elapsedWall** | 860 ms (local) | **−25%** | — |
-| Route `/rccp` | **apiSum** | ~1084 ms (Azure) | — | **≤ 750 ms** |
+| Route `/rccp` | **apiSum** | ~1084 ms (Azure) | — | informatief (geen gate) |
 | Terugkeer `/` na `/rccp` | **duplicate PO-read** | 2× identieke call | **1×** | — |
 
-**Regressie (beide metrics):** ≤ +25% of +200 ms t.o.v. baseline — **UX-metric en server-metric apart**.
+**Regressie:** ≤ +25% of +200 ms t.o.v. baseline — **alleen UX-metric (`elapsedWall`) blokkeert merge**; server-metric is informatief (PO-beslissing Q3=C).
 
 ### Niet-doel (v1)
 
@@ -121,8 +122,8 @@ flowchart TB
 
 - Scope **v1 beperkt** tot 3 kritieke journeys (zie onder)
 - Priority: `(UX-winst) × analytics-frequency`
-- Meet-profiel: Scout op **M**, Verifier op **S + M**, Adversary op **M**
-- L5-fixes (virtualisatie): pas na meting op profiel **L**
+- Meet-profiel: Scout + Adversary op **M + L** (PO-beslissing Q4=D)
+- L5-fixes (virtualisatie): **1 experiment** toegestaan in v1 (Q12=B); Verifier op **S + M + L**
 - Push **alleen** na Verifier + Adversary groen
 - Partial re-measure: na fix alleen **blast radius** (geraakte actie + buren), geen volledige re-screen
 
@@ -252,28 +253,41 @@ Workflow `perf-regression.yml` (concept):
 
 ---
 
-## Autonoom beleid (concept — velden ingevuld na MC-vragen)
+## Autonoom beleid — ingevuld (v1.2)
+
+Zie `test-reports/perf-optimize-policy.json`. Kernkeuzes:
+
+| Onderwerp | Beslissing |
+|-----------|------------|
+| Doelgroep | Alle ingelogde gebruikers |
+| UX-streef | −30% elapsedWall board-load |
+| Server `app` | Informatief, geen merge-gate |
+| Meet-profielen | Scout/Adversary: M + L; Verifier: S + M + L |
+| Autonomie | Tot L5; max 1 L5-experiment in v1 |
+| Cross-page cache | Onbeperkt bij page-switch; invalidate bij revision |
+| Pipeline | Handmatig starten |
+| Waarheid | Azure DEV Container App |
+| Adversary block | Alleen A1 + A5 |
+| Stop | Max 10 iteraties per run |
+| PR | Altijd menselijke review |
 
 ```json
 {
   "primaryMetric": "elapsedWall",
   "secondaryMetric": "app",
-  "scaleProfiles": { "S": 80, "M": 500, "L": 2000 },
-  "scoutProfile": "M",
-  "verifyProfiles": ["S", "M"],
-  "skipIf": { "elapsedWallMs": 500, "appMs": 150, "unlessAnalyticsTopN": 5 },
-  "gapRouting": {
-    "renderIfElapsedMinusApiMsGte": 400,
-    "networkIfApiMinusAppMsGte": 200,
-    "serverIfAppMsGte": 300
+  "secondaryMetricRole": "informational",
+  "scoutProfiles": ["M", "L"],
+  "cache": {
+    "crossPageTtlPolicy": "unlimited-until-revision",
+    "requireRevisionInvalidation": true
   },
-  "cache": { "maxStaleSeconds": "TBD", "requireRevisionInvalidation": true },
-  "autonomyMaxTier": "TBD",
-  "regression": { "thresholdPercent": 25, "thresholdMs": 200, "bothMetrics": true },
-  "retry": { "maxAttemptsPerItem": 2 },
-  "stop": { "maxIterationsPerRun": 10, "minUxGainMs": 50 },
-  "frequencySource": "/admin/analytics/page-usage",
-  "environment": { "truth": "TBD", "seedScript": "scripts/seed-perf-po-cache.js" }
+  "autonomyMaxTier": "L5",
+  "l5ExperimentsInV1": 1,
+  "pipelineSchedule": "manual",
+  "environment": { "truth": "azure-dev-container-app" },
+  "adversary": { "blockingScenarios": ["A1", "A5"] },
+  "regression": { "primaryMetricBlocks": true, "secondaryMetricBlocks": false },
+  "prReview": "always-human"
 }
 ```
 
@@ -299,8 +313,9 @@ END
 
 ### Fase A — Foundation
 
-- [ ] MC-beslissingen product-owner (chat)
-- [ ] Policy JSON + backlog schema + seed M/L
+- [x] MC-beslissingen product-owner (chat 2026-07-20)
+- [x] Policy JSON (`test-reports/perf-optimize-policy.json`)
+- [ ] Backlog schema + seed M/L
 - [ ] Skills: orchestrate, architect, optimize, verify, **adversary**
 - [ ] CI workflow perf-regression.yml
 
@@ -348,9 +363,22 @@ END
 
 ---
 
-## Beslissingen — invullen via multiple choice (product-owner)
+## Beslissingen — ingevuld (product-owner 2026-07-20)
 
-Zie chat-vragen Q1–Q12. Antwoorden worden verwerkt in `perf-optimize-policy.json` en succescriteria.
+| # | Vraag | Antwoord |
+|---|-------|----------|
+| Q1 | Voor wie optimaliseren we primair? | **A** — alle ingelogde gebruikers |
+| Q2 | Primair succescriterium (UX)? | **A** — −30% elapsedWall board-load |
+| Q3 | Secundair succescriterium (server `app`)? | **C** — alleen UX telt; server informatief |
+| Q4 | Default meet-profiel Scout/Adversary? | **D** — M + L verplicht |
+| Q5 | Max autonomie-tier Fixer? | **D** — L5 (incl. virtualisatie) |
+| Q6 | Cross-page PO-cache (PO → BI → terug PO)? | **Custom** — onbeperkt; invalidate bij revision |
+| Q7 | Pipeline-frequentie? | **A** — handmatig |
+| Q8 | Waarheid-omgeving baseline? | **A** — Azure DEV Container App |
+| Q9 | Adversary strictness? | **B** — alleen A1 + A5 blokkeren push |
+| Q10 | Stop na v1-pilot? | **A** — max 10 iteraties per run |
+| Q11 | PR-review perf-fixes? | **A** — altijd menselijke review |
+| Q12 | Virtualisatie L5 in v1? | **B** — 1 experiment toegestaan |
 
 ---
 
@@ -370,3 +398,4 @@ Zie chat-vragen Q1–Q12. Antwoorden worden verwerkt in `perf-optimize-policy.js
 |--------|-----------|
 | v1.0 | Initieel 5-agent voorstel |
 | v1.1 | UX primair, adversary, S/M/L profielen, CI, v1-scope, analytics frequency, partial re-measure |
+| v1.2 | Product-owner MC-antwoorden; policy JSON; cross-page cache unlimited; UX-only regression gate |
