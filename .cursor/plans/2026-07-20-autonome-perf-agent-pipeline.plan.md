@@ -1,119 +1,106 @@
 ---
 name: Autonome perf-agent pipeline
 overview: >-
-  Voorstel voor een volledig autonome multi-agent pipeline die de app systematisch
-  meet, prioriteert, optimaliseert en verifieert — gebouwd op de bestaande perf-review
-  skill en meetinstrumentatie. Doel: snellere tab-switches en paginaladingen zonder
-  handmatige tussenkomst, met harde regressie-guardrails.
+  Voorstel v1.1 — autonome multi-agent pipeline voor ervaren snelheid (wandklok)
+  én backend-latency, onder realistische dataload, met adversary-checks en CI-regressie.
+  Gebouwd op perf-review skill en bestaande meetinstrumentatie.
 todos:
-  - id: review-plan
-    content: "Review: team leest plan en geeft feedback op scope, agent-rollen en policy"
+  - id: team-decisions-mc
+    content: "Product-owner beantwoordt multiple-choice vragen (plan § Beslissingen)"
     status: pending
   - id: perf-policy-json
-    content: "perf-optimize-policy.json + perf-backlog.schema.json vastleggen"
+    content: "perf-optimize-policy.json + perf-backlog.schema.json + scale-profielen S/M/L"
+    status: pending
+  - id: seed-scale-profiles
+    content: "seed-perf-po-cache.js uitbreiden met --orders=500 en --orders=2000"
     status: pending
   - id: skill-orchestrate
-    content: "Skill perf-orchestrate — state machine, scope-queue, pipeline entrypoint"
+    content: "Skill perf-orchestrate — state machine, scope v1, frequency uit analytics"
     status: pending
   - id: skill-architect
-    content: "Skill perf-architect — beslisboom v2, fix-plan JSON output"
+    content: "Skill perf-architect — beslisboom v2, dual targets (wall + app)"
     status: pending
   - id: skill-optimize
     content: "Skill perf-optimize — implementatie per fix-tier L0–L5"
     status: pending
   - id: skill-verify
-    content: "Skill perf-verify — npm test/build + perf regression + optioneel browser-test"
+    content: "Skill perf-verify — test/build + regression S+M profielen"
     status: pending
-  - id: pilot-fase-a
-    content: "Pilot op Fase 1 user journeys (max 10 iteraties) op DEV/preview URL"
+  - id: skill-adversary
+    content: "Skill perf-adversary — stale/concurrent/role scenario's"
     status: pending
-  - id: pilot-fase-b
-    content: "Uitbreiden naar backend hotspots + drilldown (Fase 2–3)"
+  - id: ci-perf-regression
+    content: "GitHub Actions workflow perf-regression.yml op PR naar develop"
+    status: pending
+  - id: pilot-v1
+    content: "Pilot v1: 3 kritieke journeys, max 10 iteraties, DEV-URL, profiel M"
     status: pending
 isProject: false
 ---
 
-# Autonome perf-agent pipeline — voorstel
+# Autonome perf-agent pipeline — voorstel v1.1
 
-> **Status:** concept voor teamreview — nog niet geïmplementeerd  
+> **Status:** concept voor teamreview — v1.1 na kritische review  
 > **Auteur:** AI-assistent + Reynier (perf-review nulmeting 2026-07-20)  
+> **Wijziging v1.1:** ervaren snelheid primair, schaal-profielen, adversary-agent, CI-gate, v1-scope beperkt  
 > **Gerelateerd:** `.cursor/skills/perf-review/`, `test-reports/perf-baseline.json`, PR #57
 
 ---
 
 ## Doel
 
-**De app merkbaar sneller maken voor eindgebruikers** — met name tab-switches en paginaladingen die nu “traag voelen” — door een **autonome agent-pipeline** die:
+**De app merkbaar sneller maken voor eindgebruikers** — wat mensen *voelen* bij tab-switches en paginaladingen — via een autonome agent-pipeline die:
 
-1. **Meet** waar de tijd naartoe gaat (getal + oorzaak, niet alleen “het duurt 1,2 s”)
-2. **Prioriteert** op geschatte winst × gebruiksfrequentie
-3. **Optimaliseert** gericht per bottleneck-type (SQL, netwerk, client, render)
-4. **Verifieert** met tests + perf-regressie vóór elke commit
-5. **De hele codebase systematisch afloopt** zonder handmatige tussenkomst per fix
+1. **Meet** waar de tijd naartoe gaat (wandklok + server, niet alleen `app`)
+2. **Prioriteert** op `(geschatte UX-winst) × werkelijke route-frequency` (analytics)
+3. **Optimaliseert** gericht per bottleneck (SQL, netwerk, client, render)
+4. **Verifieert** met tests + perf-regressie op **twee schaal-profielen**
+5. **Breekt** fixes bewust (adversary) vóór push
+6. **Beveiligt** via CI-regressie op elke PR
 
-### Succescriteria (meetbaar)
+### Prioriteitsformule
 
-| Criterium | Baseline (Azure-referentie) | Streef na pipeline Fase 1 |
-|-----------|----------------------------|---------------------------|
-| PO board-load server `app` | **740 ms** warm | **≤ 500 ms** (−30%) |
-| Route `/rccp` API-som | **~1084 ms** (screening 2026-07-19) | **≤ 750 ms** |
-| Geen regressie op baseline-acties | — | ≤ +25% of +200 ms |
-| `npm test` + `npm run build` | groen | altijd groen na elke agent-commit |
-| Coverage user journeys | deels gemeten | 100% routes/tabs in baseline |
+```
+priority = (elapsedWall_median − targetWall) × routeFrequencyWeight
+```
 
-### Niet-doel
+- `routeFrequencyWeight` uit **`/admin/analytics/page-usage`** (fallback: handmatige high/medium/low)
+- Bij tie-break: hogere `app` wint (backend-kosten)
 
-- Productie-deploy zonder menselijke PR-review (pipeline levert branch + rapport)
-- Absolute ms-budgetten verzinnen zonder baseline
-- UX-wijzigingen zonder expliciet beleid (paginering, stale data > 60 s)
-- Vervanging van functionele tests — perf ≠ correctheid
+### Succescriteria — dual targets (v1.1)
 
----
+| Actie | Metric | Baseline | Primair streef (UX) | Secundair streef (server) |
+|-------|--------|----------|---------------------|---------------------------|
+| PO board-load | **elapsedWall** | ~1779 ms (local 80 PO) / TBD Azure | **−30%** wandklok | — |
+| PO board-load | **server `app`** | **740 ms** (Azure warm) | — | **≤ 500 ms** (−30%) |
+| Route `/rccp` | **elapsedWall** | 860 ms (local) | **−25%** | — |
+| Route `/rccp` | **apiSum** | ~1084 ms (Azure) | — | **≤ 750 ms** |
+| Terugkeer `/` na `/rccp` | **duplicate PO-read** | 2× identieke call | **1×** | — |
 
-## Huidige situatie (wat we al hebben)
+**Regressie (beide metrics):** ≤ +25% of +200 ms t.o.v. baseline — **UX-metric en server-metric apart**.
 
-### Meetinstrumentatie (in de app)
+### Niet-doel (v1)
 
-| Laag | Mechanisme | Locatie |
-|------|------------|---------|
-| Frontend interacties | Event Timing, Long Animation Frames | `src/utils/perf.js` → `window.__perf` |
-| API-calls | Duur + pad logging | `src/utils/api.js` → `[api] GET … in Xms` |
-| Client-berekening | `measure()` | `src/utils/perf.js` |
-| Backend SQL/suboperaties | Server-Timing headers | `server/utils/timing.js` → `time('tb_*', …)` |
-| Perf-HUD | Dev/preview only | `DevPerfOverlay` in `App.jsx` |
-
-### Skill + tooling
-
-| Onderdeel | Status |
-|-----------|--------|
-| **`perf-review` skill** | Screening, drilldown, regression; rapport + baseline |
-| **`playwright/perf-screening.js`** | Headless fallback als browser-MCP ontbreekt |
-| **`scripts/seed-perf-po-cache.js`** | 80 PO's seeden voor lokale board-meting |
-| **`test-reports/perf-baseline.json`** | Nulmeting 2026-07-20 + Azure-referentie |
-| **`test-reports/perf-review-2026-07-20.md`** | Rapport met bevindingen B1–B3 |
-
-### Belangrijkste bevindingen nulmeting
-
-| Actie | Server `app` | Wandklok | Bottleneck |
-|-------|-------------:|---------:|------------|
-| PO board-load (80 PO's, local SQL) | 95 ms | 1779 ms | **Render/DOM** (lokaal) |
-| PO board-load (Azure-referentie) | **740 ms** | — | **SQL** (`tb_ledger`, `tb_read_details`, `tb_lookups`) |
-| Route `/rccp` | 179 ms | 860 ms | **Duplicate PO-read** (`rccp_po_read`) |
-| Admin Analytics | 62 ms | 980 ms | **Netwerk/waterfall** (~12 API-calls) |
-
-**Conclusie:** één simpele “dominant = SQL”-beslisboom is **onvoldoende** — gap-analyse (wandklok vs. server) is verplicht.
-
-### Wat ontbreekt
-
-- Autonome fix-loop (perf-review stopt bewust bij **voorstel**)
-- Machine-leesbare backlog (`perf-backlog.json`)
-- Fix-beleid voor trade-offs (cache, stale data, indexen)
-- Orchestrator + verify-agent
-- Meting op **DEV/preview met Azure SQL** (preview.yml triggert alleen `feature/**`)
+- Hele codebase in één run (Fase 4 structuur = apart epic)
+- Productie-deploy zonder PR-review
+- Optimaliseren op seed-profiel **S** alleen (80 PO) als enige waarheid
+- Perf zonder functionele correctheid (change-indicators, supplier-scope)
 
 ---
 
-## Voorgestelde aanpak: 5 agents + orchestrator
+## Lessons learned nulmeting (waarom v1.1)
+
+| Bevinding | Gevolg voor plan |
+|-----------|------------------|
+| Local: `app` 95 ms, wandklok 1779 ms | **UX-metric primair** — SQL-fix alleen is onvoldoende |
+| Azure: `app` 740 ms, labels SQL | Server-metric blijft secundair streefdoel |
+| 80 PO seed ≠ prod-volume | **Profielen S/M/L** verplicht |
+| `/rccp` herhaalt PO-read | v1-journey: **terugkeer naar board** expliciet meten |
+| Frequency was geraten | **Route analytics** koppelen |
+
+---
+
+## Voorgestelde aanpak: 6 agents + orchestrator
 
 ```mermaid
 flowchart TB
@@ -123,318 +110,263 @@ flowchart TB
   A --> P[(perf-fix-plan.json)]
   P --> F[3 Fixer]
   F --> V[4 Verifier]
-  V -->|ok| B
+  V --> ADV[5 Adversary]
+  ADV -->|ok| B
   V -->|regressie| A
-  V -->|klaar scope| O
+  ADV -->|breuk| A
+  V --> CI[CI perf-regression]
 ```
 
 ### Agent 0 — Orchestrator
 
-**Rol:** state machine; geen code-wijzigingen.
-
-- Beheert **scope-queue** (welk deel van de codebase nu aan de beurt is)
-- Kiest volgende backlog-item op `estimatedGain × frequency`
-- Stopt bij: backlog leeg, winst < drempel, max iteraties
-- Escalatie: na 2 mislukte pogingen → item `skipped`
+- Scope **v1 beperkt** tot 3 kritieke journeys (zie onder)
+- Priority: `(UX-winst) × analytics-frequency`
+- Meet-profiel: Scout op **M**, Verifier op **S + M**, Adversary op **M**
+- L5-fixes (virtualisatie): pas na meting op profiel **L**
+- Push **alleen** na Verifier + Adversary groen
+- Partial re-measure: na fix alleen **blast radius** (geraakte actie + buren), geen volledige re-screen
 
 **Artifact:** `test-reports/perf-pipeline-state.json`
 
 ### Agent 1 — Scout (Diagnost)
 
-**Basis:** bestaande `perf-review` skill.
+**Basis:** `perf-review` skill.
 
 | Modus | Wanneer |
 |-------|---------|
-| `screening` | Nieuwe scope (routes/tabs/cluster) |
-| `drilldown` | Render/client dominant, geen hotspot |
-| `regression` | Aangeroepen door Verifier |
+| `screening` | Nieuwe scope / profiel M |
+| `drilldown` | Render dominant, geen longframe |
+| `regression` | Verifier / CI |
 
-**Output:** `test-reports/perf-backlog.json` — prioriteitenlijst met metingen, dominante post, labels, code-locatie, geschatte winst.
+**Frequency:** haalt weights uit `GET /admin/analytics/page-usage` (via test-account) → `perf-backlog.json`.
 
-**Wijzigt code alleen voor:** meetgaten (stap 5: `time()` / `measure()`).
+**Seed / omgeving:**
 
-### Agent 2 — Architect (Fix-planner)
+| Profiel | PO's | Gebruik |
+|---------|-----:|---------|
+| **S** | 80 | Snelle iteratie, CI smoke |
+| **M** | 500 | Scout + Adversary (default) |
+| **L** | 2000 | L4/L5 stress; optioneel v2 |
 
-**Rol:** backlog-item → concreet fix-plan met autonoom beleid.
+**Output:** `perf-backlog.json` met `elapsedWall`, `app`, `apiSum`, dominant post, labels, `priorityScore`.
 
-- Doorloopt **beslisboom v2** (zie onder)
-- Kiest fix-tier L0–L5 (goedkoop/laag risico eerst)
-- Legt trade-offs vast in fix-plan JSON
-- Geen implementatie
+### Agent 2 — Architect
 
-**Output:** `test-reports/perf-fix-plan-<id>.json`
+- Beslisboom v2 + **gap-routing eerst** (R vóór S als wandklok-dominated)
+- Fix-plan met **dual successCriteria** (`elapsedWall` + `app`/`apiSum`)
+- `functionalInvariants`: bv. "change-indicators blijven zichtbaar", "supplier ziet alleen eigen PO's"
 
-### Agent 3 — Fixer (Implementatie)
+**Output:** `perf-fix-plan-<id>.json`
 
-**Rol:** exact één fix-plan uitvoeren.
+### Agent 3 — Fixer
 
-- Minimale diff; bestaande conventions
-- Footer-versie bump
-- Commit: `perf: <titel> [B<id>]`
+- Eén fix-plan; tier L0→L5
+- Geen push — commit lokaal tot Adversary groen
 
-**Basis:** `refactor-opdracht` + label-specifieke regels per dominante post.
+### Agent 4 — Verifier
 
-### Agent 4 — Verifier (Kwaliteit + regressie)
-
-**Volgorde:**
-
-1. `npm test`
-2. `npm run build`
-3. `perf-review` modus **regression** op fix-plan successCriteria
-4. Optioneel: `browser-feature-test` op geraakte route
-
-**Beslissing (autonoom):**
+1. `npm test` + `npm run build`
+2. `perf-review regression` op **profiel S** (smoke)
+3. `perf-review regression` op **profiel M** (beslissend)
+4. `browser-feature-test` op geraakte route
+5. Check **functionalInvariants** uit fix-plan
 
 | Uitkomst | Actie |
 |----------|--------|
-| Groen + winst ≥ drempel + geen regressie | baseline bijwerken, item `done`, push |
-| Geen meetbare winst | revert, Architect krijgt andere tier |
-| Regressie (>+25% of >+200 ms) | revert, max 2× retry |
-| Tests rood | revert, item `blocked` |
+| Groen + UX-winst ≥ drempel | door naar Adversary |
+| Geen UX-winst | revert → Architect volgende tier |
+| Regressie UX **of** server | revert → retry (max 2×) |
+| Tests rood | revert → `blocked` |
 
-**Output:** `test-reports/perf-verify-<id>.md`
+### Agent 5 — Adversary (nieuw v1.1)
 
----
+**Doel:** perf-fixes breken die Verifier mist.
 
-## Beslisboom v2 (Architect-agent)
+Standaard-scenario's (Playwright):
 
-> Vervangt de eerdere platte beslisboom (“SQL → index”). Gebaseerd op nulmeting + `perf-review/reference.md`.
+| # | Scenario | Waarom |
+|---|----------|--------|
+| A1 | 2 tabs: `/` + `/rccp` parallel | duplicate-read / cache |
+| A2 | Supplier-login na admin-fix | scope-lek |
+| A3 | Hard refresh board tijdens load | race / stale |
+| A4 | Terugkeer `/` binnen 30 s na board-load | TTL-cache / revision |
+| A5 | Ledger-fix: kunstmatige D365-wijziging → indicator zichtbaar? | stale-indicators |
 
-### Laag 0 — Pre-flight
-
-1. Metingen valide? (`window.__perf`, Server-Timing, 3× mediaan)
-2. **Skip** als `app < 150 ms` EN `elapsedWall < 500 ms` EN frequency ≠ high
-3. **Accounting:** parallelle labels → gebruik **MAX(label)**, niet SUM; bij negatieve render → max(api) i.p.v. sum
-
-### Laag 1 — Gap-routing (waar zit de tijd echt?)
-
-| Conditie | Tak |
-|----------|-----|
-| `elapsedWall − max(api) ≥ 400 ms` | **R** (render/client) |
-| `max(api) − app ≥ 200 ms` | **N** (netwerk/payload) |
-| `app ≥ 300 ms` + bekend label | **S** (server/SQL) |
-| `app` hoog, labels ≪ `app` | **B** (backend-overig / ongemeten) |
-
-### Laag 2 — Label-specifieke fixes (tak S)
-
-| Label | Eerste hefboom |
-|-------|----------------|
-| `tb_ledger` | Ledger-venster verkleinen (sinceMs / viewed baseline) |
-| `tb_read_details` | Query scope; rowcount > 50k → ontwerp (L5) |
-| `tb_lookups` / `tb_lookup_*` | N+1 batch; materialiseren bij sync (L4) |
-| `rccp_po_read` / `rccp_vendor_list` | Revision-cache delen met board (L2) |
-| `tb_build_rows` | Backend-JS projectie — geen SQL-index |
-| `bi_meta` / `bi_aggregate` | Pre-aggregate bij sync of TTL-cache (L2–L4) |
-
-**Regel:** bij parallelle labels → **één label per iteratie** (critical path).
-
-### Laag 2 — Tak N (netwerk)
-
-1. Duplicate requests (zelfde path ≥2×) → in-flight dedupe (L1)
-2. Waterfall → `Promise.all` (L2)
-3. Grote payload (>500 KB) → kolomselectie (L3)
-4. Revision skip faalt → revision-fix (L1)
-
-### Laag 2 — Tak R (render/client)
-
-1. Longframe met bron → fix die functie (L2)
-2. Geen bron + board >100 rijen → virtualisatie (L4–L5)
-3. Diffuus → React Profiler drilldown (L0), daarna opnieuw meten
-
-### Laag 2 — Tak B (backend-overig)
-
-- Route zonder `time()` → L0 instrumentatie, **geen optimalisatie-gok**
-
-### Fix-tiers (volgorde)
-
-| Tier | Voorbeeld | Risico |
-|------|-----------|--------|
-| L0 | `time()`, `measure()`, Profiler | Geen |
-| L1 | Dedupe, revision skip | Laag |
-| L2 | Memo, `Promise.all`, TTL-cache 30 s | Laag |
-| L3 | Query scope, ledger window | Medium |
-| L4 | Index, sync-materialisatie | Medium–hoog |
-| L5 | Virtualisatie, paginatie-UX, ADR | Hoog |
-
-Tier ≥ L4 → Verifier test **alle** baseline-acties.
+**Output:** `test-reports/perf-adversary-<id>.md` — alleen bij **pass** mag Orchestrator pushen.
 
 ---
 
-## Scope-queue (hele codebase)
+## Beslisboom v2 (Architect) — ongewijzigd kern, extra regel
+
+**Nieuwe regel v1.1:** als `elapsedWall − max(api) ≥ 400 ms` → tak **R** heeft **voorrang** boven SQL-labels, ook als `app` hoog is op Azure.
+
+*(Laag 0–2, fix-tiers L0–L5: zie v1.0 — ongewijzigd.)*
+
+Tier ≥ L4 → Verifier op **S + M**; Adversary verplicht; menselijke PR-review **altijd**.
+
+---
+
+## Scope v1 (pilot) — bewust smal
 
 ```
-Fase 1 — User journeys (screening)
-  /           → board-load, tabs Charts/RCCP
-  /rccp       → dashboard load
-  /bi         → charts load
-  /admin      → Users, Analytics, OData, Data model (+ sub-tabs)
+Journey 1 — PO board-load (/)
+  hard reload, 80/500 PO profiel, board zichtbaar
 
-Fase 2 — Backend hotspots
-  Alle time()-labels uit reference.md zonder recente baseline
-  TableDataService.read(), RccpAnalysisService, bi-routes
+Journey 2 — RCCP (/rccp)
+  dashboard load, rccp_po_read labels
 
-Fase 3 — Drilldown
-  Items met dominant render/client zonder longframe-hit
-
-Fase 4 — Structuur (Architect-only scan)
-  Components >250 regels in hot paths
-  Raw fetch buiten apiRequest
-  Hooks met 5+ useState in board/supplier
+Journey 3 — Terugkeer board na RCCP
+  / → /rccp → / ; meet duplicate PO-fetch
 ```
 
-Per fase: Scout vult backlog → items af tot leeg → volgende fase.
+**Na v1 succes:** uitbreiden naar `/bi`, `/admin`, Fase 2 backend hotspots, Fase 3 drilldown.
+
+**Fase 4 (structuur, virtualisatie L5):** apart tech-debt epic — niet in autonome v1-loop.
 
 ---
 
-## Artifacts (contract tussen agents)
+## CI-gate (nieuw v1.1)
 
-| Bestand | Producer | Inhoud |
-|---------|----------|--------|
-| `perf-pipeline-state.json` | Orchestrator | fase, iteratie, huidig item |
-| `perf-backlog.json` | Scout | prioriteiten + metingen |
-| `perf-baseline.json` | Scout / Verifier | mediaan per actie (regressie) |
-| `perf-fix-plan-<id>.json` | Architect | approach, tier, files, successCriteria |
-| `perf-verify-<id>.md` | Verifier | test + regression resultaat |
-| `perf-optimize-policy.json` | Team (vast) | autonome grenzen |
-| `perf-review-<datum>.md` | Scout | menselijk rapport |
+Workflow `perf-regression.yml` (concept):
+
+- Trigger: PR naar `develop`
+- Profiel **S** seed + Playwright screening
+- Vergelijk met `test-reports/perf-baseline.json`
+- Fail PR bij regressie UX **of** server op v1-journeys
+- Cloud-agent pipeline en CI delen **dezelfde baseline**
 
 ---
 
-## Autonoom beleid (`perf-optimize-policy.json` — concept)
+## Artifacts
+
+| Bestand | Producer |
+|---------|----------|
+| `perf-pipeline-state.json` | Orchestrator |
+| `perf-backlog.json` | Scout (+ analytics weights) |
+| `perf-baseline.json` | Scout / Verifier (per profiel S/M) |
+| `perf-fix-plan-<id>.json` | Architect |
+| `perf-verify-<id>.md` | Verifier |
+| `perf-adversary-<id>.md` | Adversary |
+| `perf-optimize-policy.json` | Team (MC-beslissingen) |
+| `perf-review-<datum>.md` | Scout |
+
+---
+
+## Autonoom beleid (concept — velden ingevuld na MC-vragen)
 
 ```json
 {
-  "skipIf": { "appMs": 150, "elapsedWallMs": 500 },
+  "primaryMetric": "elapsedWall",
+  "secondaryMetric": "app",
+  "scaleProfiles": { "S": 80, "M": 500, "L": 2000 },
+  "scoutProfile": "M",
+  "verifyProfiles": ["S", "M"],
+  "skipIf": { "elapsedWallMs": 500, "appMs": 150, "unlessAnalyticsTopN": 5 },
   "gapRouting": {
     "renderIfElapsedMinusApiMsGte": 400,
     "networkIfApiMinusAppMsGte": 200,
     "serverIfAppMsGte": 300
   },
-  "cache": { "maxStaleSeconds": 30, "requireRevisionInvalidation": true },
-  "regression": { "thresholdPercent": 25, "thresholdMs": 200 },
-  "retry": { "maxAttemptsPerItem": 2, "maxTierBeforeSkip": 3 },
-  "stop": { "maxIterationsPerRun": 50, "minGainMsToContinue": 20 },
-  "environment": {
-    "preferPreviewOrDev": true,
-    "seedScriptFallback": "scripts/seed-perf-po-cache.js"
-  }
+  "cache": { "maxStaleSeconds": "TBD", "requireRevisionInvalidation": true },
+  "autonomyMaxTier": "TBD",
+  "regression": { "thresholdPercent": 25, "thresholdMs": 200, "bothMetrics": true },
+  "retry": { "maxAttemptsPerItem": 2 },
+  "stop": { "maxIterationsPerRun": 10, "minUxGainMs": 50 },
+  "frequencySource": "/admin/analytics/page-usage",
+  "environment": { "truth": "TBD", "seedScript": "scripts/seed-perf-po-cache.js" }
 }
 ```
 
 ---
 
-## Uitvoering & Git
-
-| Aspect | Keuze |
-|--------|-------|
-| Branch | `perf/autonomous-<datum>` of `feature/<id>-perf-pipeline` |
-| Commits | 1 fix per commit; revert bij falen |
-| Push | Na elke geslaagde verify (cloud agent) |
-| PR | Menselijke review vóór merge naar `develop` |
-| Omgeving meten | **DEV/preview** (Azure SQL); lokaal alleen met seed |
-
-### Pipeline-loop (pseudo)
+## Pipeline-loop (v1.1)
 
 ```
 WHILE backlog not empty AND iterations < max:
-  item = pop highest (gain × frequency)
-  plan = Architect(item)          // beslisboom v2
-  IF plan.tier == L0: Fixer → Verifier regression → CONTINUE
-  commit = Fixer(plan)
-  result = Verifier(plan.criteria)
-  IF ok: update baseline, mark done
-  ELIF regression: revert, retry Architect (attempt++)
-  ELSE: skip item
+  item = highest priorityScore
+  plan = Architect(item)
+  commit = Fixer(plan)                    // lokaal, geen push
+  IF NOT Verifier(plan, profiles S+M): revert; CONTINUE
+  IF NOT Adversary(plan.scenarios): revert; CONTINUE
+  push; update baseline; mark done
+  partial re-measure blast radius only
 END
-write summary report
 ```
 
 ---
 
-## Fasering (implementatie + rollout)
+## Fasering
 
-### Fase A — Foundation (review + bouw skills)
+### Fase A — Foundation
 
-- [ ] Teamreview dit plan
-- [ ] `perf-optimize-policy.json` + `perf-backlog.schema.json`
-- [ ] Skills: `perf-orchestrate`, `perf-architect`, `perf-optimize`, `perf-verify`
-- [ ] `scripts/perf-pipeline-run.js` — entrypoint voor cloud agent
+- [ ] MC-beslissingen product-owner (chat)
+- [ ] Policy JSON + backlog schema + seed M/L
+- [ ] Skills: orchestrate, architect, optimize, verify, **adversary**
+- [ ] CI workflow perf-regression.yml
 
-### Fase B — Pilot (max 10 iteraties)
+### Fase B — Pilot v1
 
-- [ ] Alleen Fase 1 user journeys
-- [ ] Meting op DEV Container App URL
-- [ ] Doel: pipeline stabiel (geen regressies, minstens 1 aantoonbare winst)
+- [ ] 3 journeys, profiel M, max 10 iteraties, DEV-URL
+- [ ] Minstens 1 UX-winst + 1 server-winst aantoonbaar
+- [ ] 0 adversary-fails on pushed commits
 
-### Fase C — Uitbreiding
+### Fase C — Uitbreiding (na v1)
 
-- [ ] Fase 2 backend hotspots
-- [ ] Fase 3 drilldown
-- [ ] Fase 4 structuur (optioneel)
+- [ ] `/bi`, `/admin`, profiel L voor L5
+- [ ] Continue cloud-agent schedule (optioneel)
 
 ### Fase D — ADR + DevOps
 
-- [ ] ADR voor architectuurkeuzes (cache, virtualisatie, indexen)
-- [ ] Optioneel: DevOps Feature + work items per fase
+- [ ] ADR cache/virtualisatie/index
+- [ ] DevOps Feature
 
 ---
 
-## Risico's en mitigatie
+## Risico's (v1.1)
 
 | Risico | Mitigatie |
 |--------|-----------|
-| Verkeerde laag geoptimaliseerd | Gap-routing + label-specifieke tak |
-| Stale/onjuiste data door cache | Policy: max 30 s + revision-invalidatie |
-| Oneindige loop | max attempts, skip, stop-criteria |
-| Lege DB / geen meting | Seed-script of verplicht DEV-URL |
-| UX breekt | browser-feature-test + npm test |
-| Te grote PR | 1 fix per commit |
-| Lokaal meten, prod concluderen | DEV/preview verplicht voor absolute ms |
-| Agent fix zonder winst | revert + volgende tier |
+| SQL fix, UX unchanged | elapsedWall primair + gap-routing |
+| Fix werkt op 80 PO, faalt op 500 | Profiel M verplicht |
+| Stale indicators | Adversary A5 + functionalInvariants |
+| Agent bias | Adversary-agent |
+| Baseline drift | CI + shared baseline.json |
+| Analytics leeg (dev) | Fallback frequency weights in policy |
 
 ---
 
-## Te bouwen skills (samenvatting)
+## Te bouwen skills
 
-| Skill | Gebaseerd op | Nieuw? |
-|-------|--------------|--------|
-| `perf-review` | bestaand | Scout gebruikt as-is |
-| `perf-orchestrate` | — | **nieuw** |
-| `perf-architect` | beslisboom v2 | **nieuw** |
-| `perf-optimize` | `refactor-opdracht` | **nieuw** |
-| `perf-verify` | `perf-review regression` + `browser-feature-test` | **nieuw** |
+| Skill | Nieuw? |
+|-------|--------|
+| `perf-review` | bestaand → Scout |
+| `perf-orchestrate` | **nieuw** |
+| `perf-architect` | **nieuw** |
+| `perf-optimize` | **nieuw** |
+| `perf-verify` | **nieuw** |
+| `perf-adversary` | **nieuw v1.1** |
 
 ---
 
-## Open vragen voor reviewers
+## Beslissingen — invullen via multiple choice (product-owner)
 
-1. **Autonomie-grens:** tier L4+ (index, materialisatie) zonder mens — akkoord?
-2. **Stale-data:** max 30 s cache — acceptabel voor board/RCCP?
-3. **Stop-criterium:** −30% op PO board-load voldoende, of hoger/lager?
-4. **Omgeving:** pilot op DEV Container App — wie levert test-credentials/URL?
-5. **PR-review:** blijft verplicht vóór merge — ok?
-6. **Scope Fase 4:** structurele refactors (grote components) in scope of apart tech-debt traject?
-7. **Preview-trigger:** `cursor/**` branches triggeren geen preview.yml — feature-branch prefix nodig?
+Zie chat-vragen Q1–Q12. Antwoorden worden verwerkt in `perf-optimize-policy.json` en succescriteria.
 
 ---
 
 ## Referenties
 
-- Plan nulmeting: `test-reports/perf-review-2026-07-20.md`
+- Nulmeting: `test-reports/perf-review-2026-07-20.md`
 - Baseline: `test-reports/perf-baseline.json`
-- Skill: `.cursor/skills/perf-review/SKILL.md`
-- Labelinventaris: `.cursor/skills/perf-review/reference.md`
-- Playwright screening: `playwright/perf-screening.js`
+- Analytics: `src/hooks/useRouteAnalytics.js`, `useAnalyticsData.js`
 - Seed: `scripts/seed-perf-po-cache.js`
-- PR nulmeting: https://github.com/reyniervanbommel-commits/vanbommel-app-template/pull/57
+- PR #57
 
 ---
 
-## Review-checklist (voor collega's)
+## Changelog
 
-- [ ] Doel en succescriteria helder en realistisch?
-- [ ] Vijf agent-rollen logisch gescheiden?
-- [ ] Beslisboom v2 dekt jullie bekende bottlenecks (board, RCCP, admin)?
-- [ ] Autonoom beleid (`perf-optimize-policy.json`) veilig genoeg?
-- [ ] Fasering B–C haalbaar zonder team-blocker?
-- [ ] Open vragen beantwoord / aangevuld?
+| Versie | Wijziging |
+|--------|-----------|
+| v1.0 | Initieel 5-agent voorstel |
+| v1.1 | UX primair, adversary, S/M/L profielen, CI, v1-scope, analytics frequency, partial re-measure |
