@@ -1,0 +1,38 @@
+{
+  "id": "BL-003",
+  "backlogItemId": "BL-003",
+  "journey": "J3",
+  "action": "Return / after /rccp (duplicate PO-fetch)",
+  "branch": "N",
+  "tier": "L4",
+  "hypothesis": "Terugkeer naar PO-board na RCCP triggert onnodig een volledige read() omdat applyData bij cache-hit de revision uit de session-wrapper kan overschrijven; daardoor faalt de revision-check en volgt een zware GET.",
+  "targetFiles": [
+    "src/hooks/usePurchaseOrdersPage.js",
+    "src/utils/boardSessionStore.js"
+  ],
+  "steps": [
+    "Behoud revision uit getCachedBoard()-wrapper bij applyData op cache-hit",
+    "Gebruik effectieve revision (wrapper ?? payload) in bootstrap revision-check",
+    "Voorkom setCachedBoard met revision=null wanneer wrapper-revision bestaat"
+  ],
+  "successCriteria": {
+    "primary": {
+      "metric": "elapsedWall",
+      "baselineMs": 160,
+      "targetReductionPercent": 30,
+      "minGainMs": 50
+    },
+    "secondary": {
+      "metric": "app",
+      "role": "informational"
+    }
+  },
+  "functionalInvariants": [
+    "Change indicators remain visible after D365 update",
+    "Board reloads fully when revision changes after sync or edit",
+    "Supplier users see only their PO scope"
+  ],
+  "adversaryScenarios": ["A1", "A5"],
+  "blastRadius": ["J1", "J3"],
+  "verifyProfiles": ["S", "M", "L"]
+}

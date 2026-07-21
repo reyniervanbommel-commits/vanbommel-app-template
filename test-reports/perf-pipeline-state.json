@@ -1,0 +1,33 @@
+{
+  "runId": "perf-2026-07-21T1258Z",
+  "status": "completed",
+  "runMode": "full",
+  "iteration": 4,
+  "maxIterations": 10,
+  "l5ExperimentsUsed": 1,
+  "currentPhase": "done",
+  "backlogItemId": null,
+  "lastCompletedItemId": "BL-005",
+  "environmentUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "azureDevUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "previewUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "draftPrUrl": "https://github.com/reyniervanbommel-commits/vanbommel-app-template/pull/61",
+  "autonomy": {
+    "askUserBetweenPhases": false,
+    "commitLocally": true,
+    "pushAfterGreen": true,
+    "deployPreviewBeforeAzureVerify": true
+  },
+  "completedItems": ["BL-006", "BL-003", "BL-005"],
+  "skippedItems": ["BL-001", "BL-002", "BL-004"],
+  "skipped": {
+    "scroll": "No scrollable overflow container on DEV/preview dataset",
+    "seed": "Local SQL firewall blocked seed-perf-po-cache.js",
+    "BL-001": "elapsedWall under skipIf 500ms",
+    "BL-002": "elapsedWall null"
+  },
+  "startedAt": "2026-07-21T12:58:00.000Z",
+  "finishedAt": "2026-07-21T14:32:00.000Z",
+  "updatedAt": "2026-07-21T14:32:00.000Z",
+  "appVersion": "v1.30.33"
+}

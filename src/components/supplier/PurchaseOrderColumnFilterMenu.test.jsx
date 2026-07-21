@@ -196,21 +196,23 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
   });
 
   it('past filter operator en waarde pas op bij Apply', async () => {
-    const onSetOperator = vi.fn();
-    const onSetValue = vi.fn();
-    renderMenu({ onSetOperator, onSetValue });
+    const onApplyFilter = vi.fn();
+    renderMenu({ onApplyFilter });
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Filter operator for Amount/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'is greater than' }));
-    expect(onSetOperator).not.toHaveBeenCalled();
+    expect(onApplyFilter).not.toHaveBeenCalled();
 
     const valueInput = await screen.findByLabelText(/Filter value for Amount/i);
     fireEvent.change(valueInput, { target: { value: '45' } });
     fireEvent.click(await screen.findByRole('button', { name: /^Apply$/i }));
 
     await waitFor(() => {
-      expect(onSetOperator).toHaveBeenCalledWith('amount', 'gt');
-      expect(onSetValue).toHaveBeenCalledWith('amount', '45');
+      expect(onApplyFilter).toHaveBeenCalledWith('amount', {
+        operator: 'gt',
+        value: '45',
+        secondaryValue: expect.anything(),
+      });
     });
   });
 

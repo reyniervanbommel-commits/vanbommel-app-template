@@ -144,7 +144,7 @@ export function usePurchaseOrdersPage() {
   const [pendingInsertAfter, setPendingInsertAfter] = useState(null);
 
   // Schrijft de response-body (van GET of POST refresh) weg in de losse state.
-  const applyData = useCallback((data) => {
+  const applyData = useCallback((data, revisionOverride) => {
     setOrders(Array.isArray(data?.orders) ? data.orders : []);
     setHeaderColumns(Array.isArray(data?.columns?.header) ? data.columns.header : []);
     setLineColumns(Array.isArray(data?.columns?.line) ? data.columns.line : []);
@@ -158,9 +158,8 @@ export function usePurchaseOrdersPage() {
     setTrackChangesMeta(data?.meta?.trackChanges ?? null);
     // Verse board-data betekent mogelijk verse sublijnen; opengeklapte orders halen ze opnieuw op.
     resetLines();
-    // Payload + revision atomair cachen (revision komt uit dezelfde read). Elke refresh-flow loopt
-    // via applyData, dus cache en revision blijven vanzelf in sync.
-    setCachedBoard(data, data?.revision ?? null);
+    const revision = revisionOverride ?? data?.revision ?? getCachedBoard()?.revision ?? null;
+    setCachedBoard(data, revision);
   }, [resetLines]);
 
   const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
@@ -237,20 +236,21 @@ export function usePurchaseOrdersPage() {
     const hasCachedData = Boolean(cached?.payload);
 
     if (hasCachedData) {
-      applyData(cached.payload);
+      applyData(cached.payload, cached.revision ?? cached.payload?.revision ?? null);
       setLoading(false);
     }
 
     const bootstrap = async () => {
       if (!active) return;
+      const effectiveRevision = cached?.revision ?? cached?.payload?.revision ?? null;
       // Met een cache-hit: eerst een lichtgewicht revision-check. Alleen bij een mismatch (data
       // gewijzigd) of een fout volgt een volledige read; is de revision gelijk, dan slaan we de
       // zware read() over. Zonder cache: gewoon de volledige read (ongewijzigd gedrag).
-      if (hasCachedData && cached.revision) {
+      if (hasCachedData && effectiveRevision) {
         try {
           const rev = await apiRequest(`${boardBase()}/revision`);
           if (!active) return;
-          if (rev?.revision && rev.revision === cached.revision) {
+          if (rev?.revision && rev.revision === effectiveRevision) {
             return; // ongewijzigd → geen volledige read
           }
         } catch {
@@ -778,6 +778,33 @@ export function usePurchaseOrdersPage() {
     lineColumns,
   ]);
 
+  // Coalesce text-style / small layout writes so UI is not blocked on PATCH latency.
+  const boardSettingsPersistTimerRef = useRef(null);
+  const boardSettingsPersistPendingRef = useRef(null);
+
+  const scheduleBoardSettingsPersist = useCallback((patch) => {
+    boardSettingsPersistPendingRef.current = {
+      ...(boardSettingsPersistPendingRef.current || {}),
+      ...patch,
+    };
+    if (boardSettingsPersistTimerRef.current) {
+      clearTimeout(boardSettingsPersistTimerRef.current);
+    }
+    boardSettingsPersistTimerRef.current = setTimeout(() => {
+      boardSettingsPersistTimerRef.current = null;
+      const pending = boardSettingsPersistPendingRef.current;
+      boardSettingsPersistPendingRef.current = null;
+      if (!pending) return;
+      void persistBoardSettings(pending);
+    }, 200);
+  }, [persistBoardSettings]);
+
+  useEffect(() => () => {
+    if (boardSettingsPersistTimerRef.current) {
+      clearTimeout(boardSettingsPersistTimerRef.current);
+    }
+  }, []);
+
   const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
     const headerColumn = headerColumns.find((column) => column.id === columnId);
     const lineColumn = lineColumns.find((column) => column.id === columnId);
@@ -977,8 +1004,13 @@ export function usePurchaseOrdersPage() {
     const nextHeaderTextStyles = { ...effectiveHeaderColumnTextStyles };
     if (!merged) delete nextHeaderTextStyles[key];
     else nextHeaderTextStyles[key] = merged;
-    await persistBoardSettings({ nextHeaderTextStyles });
-  }, [effectiveHeaderColumnTextStyles, persistBoardSettings]);
+    const normalized = normalizeColumnTextStyleMap(nextHeaderTextStyles, defaultHeaderKeys);
+    // Optimistic: paint immediately; PATCH is coalesced in the background.
+    setHeaderColumnTextStyles(normalized);
+    const cached = getCachedBoardSettings(BOARD_KEY) || {};
+    setCachedBoardSettings(BOARD_KEY, { ...cached, headerColumnTextStyles: normalized });
+    scheduleBoardSettingsPersist({ nextHeaderTextStyles: normalized });
+  }, [defaultHeaderKeys, effectiveHeaderColumnTextStyles, scheduleBoardSettingsPersist]);
 
   const saveHeaderColumnFormatRules = useCallback(async (columnKey, ruleSet) => {
     const key = String(columnKey || '').trim();
@@ -1031,8 +1063,12 @@ export function usePurchaseOrdersPage() {
     const nextLineTextStyles = { ...effectiveLineColumnTextStyles };
     if (!merged) delete nextLineTextStyles[key];
     else nextLineTextStyles[key] = merged;
-    await persistBoardSettings({ nextLineTextStyles });
-  }, [effectiveLineColumnTextStyles, persistBoardSettings]);
+    const normalized = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
+    setLineColumnTextStyles(normalized);
+    const cached = getCachedBoardSettings(BOARD_KEY) || {};
+    setCachedBoardSettings(BOARD_KEY, { ...cached, lineColumnTextStyles: normalized });
+    scheduleBoardSettingsPersist({ nextLineTextStyles: normalized });
+  }, [defaultLineKeys, effectiveLineColumnTextStyles, scheduleBoardSettingsPersist]);
 
   const reorderHeaderColumn = useCallback(async (sourceKey, targetKey, position = 'before') => {
     if (!sourceKey || !targetKey) return;

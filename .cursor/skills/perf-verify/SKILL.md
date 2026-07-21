@@ -9,7 +9,7 @@ description: >-
 
 # Perf Verify
 
-> **Rol:** Verifier (Agent 4). Beoordeelt of een fix veilig en sneller is.
+> **Rol:** Verifier · **Skill:** `perf-verify`. Beoordeelt of een fix veilig en sneller is.
 >
 > **Input:** `test-reports/perf-fix-plan-<id>.json` + lokale commit  
 > **Output:** `test-reports/perf-verify-<id>.md` + pass/fail  
@@ -26,7 +26,7 @@ Verify Progress:
 - [ ] Stap 2: Perf regression (S → M → L)
 - [ ] Stap 3: Browser feature test (blast radius)
 - [ ] Stap 4: Functional invariants
-- [ ] Stap 5: Rapport + oordeel
+- [ ] Stap 5: Rapport + oordeel + **gebruikersverslag**
 ```
 
 Template: [report-template.md](report-template.md)
@@ -123,6 +123,16 @@ Schrijf `test-reports/perf-verify-<id>.md` volgens template.
 
 **PASS** → orchestrator roept `perf-adversary` aan.  
 **FAIL** → orchestrator revert + retry/block.
+
+Schrijf altijd **twee** rapporten:
+
+| Bestand | Doel |
+|---------|------|
+| `test-reports/perf-verify-<id>.md` | Technisch (metrics, gates) |
+| `test-reports/perf-user-report-<id>.md` | Compact voor tester — zie perf-review `user-report-template.md` |
+
+Bij PASS: vermeld in user-report **vóór → na** ms en wat in PERF HUD (sectie *Vs baseline*) te zien is.
+Update `public/perf-baseline.json` alleen vóór fix; na fix vergelijkt de HUD live tegen die baseline.
 
 ---
 

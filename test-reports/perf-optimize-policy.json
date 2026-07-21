@@ -66,6 +66,41 @@
   },
   "prReview": "always-human",
   "frequencySource": "/admin/analytics/page-usage",
+  "frequencyFallback": {
+    "poBoard": 3.0,
+    "rccp": 1.5,
+    "returnBoard": 2.0
+  },
+  "scopePhases": {
+    "current": "v1.2",
+    "v1": "J1–J3 load journeys (perf-scout)",
+    "v1.1": "v1 + J4 scroll PO board (perf-scroll)",
+    "v1.2": "v1.1 + J7 filter Apply + J8 text style (perf-board-actions)",
+    "v2": "v1.2 + J5 expand + perf-review full route/tab screening",
+    "v3": "All authenticated routes including admin/BI"
+  },
+  "scrollTargets": {
+    "primaryMetric": "maxLongFrameMs",
+    "skipBelowMs": 80,
+    "reductionPercent": 30,
+    "expandStableReductionPercent": 25
+  },
+  "boardActionTargets": {
+    "primaryMetrics": {
+      "J7": "filterApplyMs",
+      "J8": "textStyleApplyMs"
+    },
+    "reductionPercent": 30,
+    "skipFilterBelowMs": 150,
+    "skipStyleBelowMs": 200
+  },
+  "deployPreview": {
+    "enabled": true,
+    "skill": "develop-from-devops",
+    "mode": "preview",
+    "note": "Bestaande OTAP-skill — orchestrate roept modus preview aan na lokale verify; geen nieuwe skill",
+    "beforeAzureVerify": true
+  },
   "decisions": {
     "Q1": "A",
     "Q2": "A",

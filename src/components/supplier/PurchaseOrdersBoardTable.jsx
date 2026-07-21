@@ -110,6 +110,7 @@ function PurchaseOrdersBoardTable({
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
+    applyColumnFilter,
     clearColumnFilter,
     applyFilterFromCellValue,
     setSortDirection,
@@ -262,6 +263,7 @@ function PurchaseOrdersBoardTable({
             setFilterOperator={setFilterOperator}
             setFilterValue={setFilterValue}
             setFilterSecondaryValue={setFilterSecondaryValue}
+            applyColumnFilter={applyColumnFilter}
             clearColumnFilter={clearColumnFilter}
             setGroupingColumn={setGroupingColumn}
             clearGrouping={clearGrouping}
@@ -291,6 +293,7 @@ function PurchaseOrdersBoardTable({
             selection={selection}
             contextMenu={contextMenu}
             remarks={remarks}
+            scrollRef={wrapperRef}
           />
         </table>
       </div>

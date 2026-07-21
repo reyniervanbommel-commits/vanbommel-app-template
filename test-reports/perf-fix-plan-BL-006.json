@@ -1,0 +1,39 @@
+{
+  "id": "BL-006",
+  "backlogItemId": "BL-006",
+  "journey": "J8",
+  "action": "Column text style Bold toggle",
+  "branch": "N",
+  "tier": "L4",
+  "hypothesis": "Bold toggle awaits full persistBoardSettings (many setStates + PATCH /supplier/board-settings). UX wall-clock is dominated by network + full board re-render; UI should update optimistically and coalesce the PATCH.",
+  "targetFiles": [
+    "src/hooks/usePurchaseOrdersPage.js",
+    "src/hooks/useColumnTextStyleActions.js"
+  ],
+  "steps": [
+    "Apply text-style state + session cache immediately in saveHeaderColumnTextStyle / saveLineColumnTextStyle",
+    "Debounce/coalesce board-settings PATCH for text-style writes (do not block the click handler on network)",
+    "Keep error toast + revert-on-failure path for failed PATCH",
+    "Bump APP_VERSION"
+  ],
+  "successCriteria": {
+    "primary": {
+      "metric": "textStyleApplyMs",
+      "baselineMs": 10149,
+      "targetReductionPercent": 30,
+      "minGainMs": 50
+    },
+    "secondary": {
+      "metric": "layoutSaveMs",
+      "role": "informational"
+    }
+  },
+  "functionalInvariants": [
+    "Text style still persists across reload",
+    "Failed save shows error and does not leave permanent wrong style",
+    "Supplier users cannot set text style without permission"
+  ],
+  "adversaryScenarios": ["A1", "A5"],
+  "blastRadius": ["J7", "J8"],
+  "verifyProfiles": ["S", "M", "L"]
+}

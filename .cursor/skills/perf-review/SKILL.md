@@ -36,7 +36,7 @@ van een evaluate-tool.
 
 | Modus | Wanneer | Wat |
 |-------|---------|-----|
-| `screening` (default) | Periodiek, vóór een PR, bij "voelt traag" | Alle routes + tabs meten, ranglijst, toerekening, rapport |
+| `screening` (default) | Periodiek, vóór een PR, bij "voelt traag" | Routes + tabs meten; in pipeline ook **perf-scroll** (J4) |
 | `drilldown` | Na screening, op één trage actie | Component-niveau: React `<Profiler>`, tijdelijke `measure()`/`time()` |
 | `regression` | Na een feature | Alleen de baseline-acties hermeten en vergelijken |
 
@@ -180,7 +180,12 @@ Alleen voor de **top 3** acties. Niet alles uitdiepen.
    actie die niemand doet is minder waard dan 15% op de tab die de hele dag open staat.
 3. Elke bevinding bevat: gemeten getal, toegerekende oorzaak, plek in de code, geschatte winst.
 4. **Baseline wegschrijven/bijwerken:** `test-reports/perf-baseline.json` met per actie de mediaan
-   en de vijf posten. Bestond er al een baseline, vergelijk dan:
+   en de vijf posten. **Spiegel** tegelijk naar `public/perf-baseline.json` (incl. `hudWatch[]`)
+   zodat de PERF HUD op localhost en DEV vóór/na kan vergelijken — zie [user-report-template.md](user-report-template.md).
+5. **Gebruikersverslag (verplicht):** compact bestand voor de tester volgens
+   [user-report-template.md](user-report-template.md) → `test-reports/perf-user-report-<datum>.md`.
+   Bevat: wat gedaan, wat testen, wat in de HUD te zien, verdict. **Geen code.**
+6. Bestond er al een baseline, vergelijk dan:
 
    | Verschil | Oordeel |
    |----------|---------|
@@ -242,5 +247,27 @@ Dit kost een tijdelijke codewijziging. Meld dat expliciet aan de gebruiker vóó
 - **Meet op preview, niet alleen lokaal.** Lokaal is er geen netwerklatentie richting Azure;
   transport-problemen zie je pas op een preview-URL.
 - **Rapporteer wat je niet kon meten.** Een ongemeten route is een bevinding, geen weglating.
-</content>
-</invoke>
+
+---
+
+## Pipeline-modus: Scout (via `perf-orchestrate`)
+
+Wanneer orchestrator `perf-review` aanroept voor screening:
+
+1. Meet v1-journeys **J1, J2, J3** op profielen **M + L** (policy `scoutProfiles`).
+2. Schrijf/update `test-reports/perf-baseline.json` per profiel.
+   Spiegel naar `public/perf-baseline.json` voor PERF HUD (zie perf-review user-report-template).
+3. Schrijf `test-reports/perf-backlog.json` volgens `test-reports/schemas/perf-backlog.schema.json`:
+
+Per item: `id` (BL-001…), `journey`, `action`, metrics, `dominantPost`, `labels`, `priorityScore`, `status: open`.
+
+```
+priorityScore = (elapsedWall_median − targetWall) × routeFrequencyWeight
+```
+
+4. Frequency uit `/admin/analytics/page-usage`; fallback weight 1.0 als leeg.
+5. Sorteer items aflopend op `priorityScore`.
+6. Schrijf **gebruikersverslag** (`test-reports/perf-user-report-<datum>.md`) — zie user-report-template.md.
+
+Geen fixes in Scout-modus — alleen meten en backlog vullen.
+

@@ -1,52 +1,57 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "perf-backlog.schema.json",
-  "title": "PerfBacklog",
+  "title": "perf-backlog",
   "type": "object",
-  "required": ["version", "generatedAt", "environment", "items"],
+  "required": ["version", "items"],
   "properties": {
     "version": { "type": "string" },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "scrollMeasuredAt": { "type": "string", "format": "date-time" },
     "environment": {
       "type": "object",
       "properties": {
         "url": { "type": "string" },
-        "profiles": {
-          "type": "array",
-          "items": { "enum": ["S", "M", "L"] }
-        }
+        "profiles": { "type": "array", "items": { "enum": ["S", "M", "L"] } }
       }
     },
     "items": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["id", "journey", "action", "elapsedWall", "dominantPost", "priorityScore", "status"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^BL-[0-9]{3}$" },
-          "journey": { "enum": ["J1", "J2", "J3"] },
-          "action": { "type": "string" },
-          "elapsedWall": { "type": "number" },
-          "app": { "type": "number" },
-          "apiSum": { "type": "number" },
-          "dominantPost": {
-            "enum": ["sql", "server", "network", "client", "render", "unknown"]
-          },
-          "labels": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "priorityScore": { "type": "number" },
-          "routeFrequencyWeight": { "type": "number" },
-          "status": {
-            "enum": ["open", "in_progress", "verifying", "adversary", "done", "blocked", "skipped"]
-          },
-          "attemptedTiers": {
-            "type": "array",
-            "items": { "enum": ["L0", "L1", "L2", "L3", "L4", "L5"] }
-          },
-          "targetWallMs": { "type": "number" }
-        }
+      "items": { "$ref": "#/definitions/backlogItem" }
+    }
+  },
+  "definitions": {
+    "journey": {
+      "enum": ["J1", "J2", "J3", "J4", "J5", "J6", "J7", "J8"],
+      "description": "J1–J3 load, J4 scroll, J5–J6 board, J7 filter, J8 text style"
+    },
+    "backlogItem": {
+      "type": "object",
+      "required": ["id", "journey", "action", "status"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^BL-[0-9]{3}$" },
+        "journey": { "$ref": "#/definitions/journey" },
+        "action": { "type": "string" },
+        "profile": { "enum": ["S", "M", "L"] },
+        "status": { "enum": ["open", "in-progress", "verifying", "done", "skipped", "blocked"] },
+        "elapsedWall": { "type": ["number", "null"] },
+        "maxLongFrameMs": { "type": ["number", "null"] },
+        "scrollJankMs": { "type": ["number", "null"] },
+        "scrollStableMs": { "type": ["number", "null"] },
+        "filterApplyMs": { "type": ["number", "null"] },
+        "textStyleApplyMs": { "type": ["number", "null"] },
+        "targetFilterMs": { "type": ["number", "null"] },
+        "targetStyleMs": { "type": ["number", "null"] },
+        "expandStableMs": { "type": ["number", "null"] },
+        "app": { "type": ["number", "null"] },
+        "apiSum": { "type": ["number", "null"] },
+        "duplicatePoFetchCount": { "type": ["number", "null"] },
+        "dominantPost": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "targetWallMs": { "type": ["number", "null"] },
+        "targetLongFrameMs": { "type": ["number", "null"] },
+        "routeFrequencyWeight": { "type": "number" },
+        "priorityScore": { "type": "number" },
+        "attemptedTiers": { "type": "array", "items": { "type": "string" } }
       }
     }
   }
