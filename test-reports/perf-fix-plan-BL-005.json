@@ -4,24 +4,28 @@
   "journey": "J7",
   "action": "Column filter Apply",
   "branch": "R",
-  "tier": "L4",
-  "attemptedTiers": ["L3"],
-  "hypothesis": "Filter Apply is client-render zwaar: batch setState + startTransition (L3) + useDeferredValue op filterByColumn (L4) zodat Apply/menu-close snappy blijft terwijl filter→sort deferred loopt.",
+  "tier": "L5",
+  "attemptedTiers": ["L3", "L4"],
+  "hypothesis": "Progressive render groeit tot alle ~2000 rijen in de DOM; filter-to-empty unmountt die boom (~10.6s). Viewport-window (alleen zichtbare + overscan rijen + spacers) houdt DOM klein zodat Apply/empty snappy wordt.",
   "targetFiles": [
-    "src/hooks/usePurchaseOrderTableView.js",
-    "src/hooks/usePurchaseOrderSortFilterActions.js",
-    "src/components/supplier/PurchaseOrderColumnFilterMenu.jsx",
-    "playwright/perf-board-actions.js"
+    "src/hooks/useBoardRowWindow.js",
+    "src/components/supplier/PurchaseOrdersBoardRows.jsx",
+    "src/components/supplier/PurchaseOrdersBoardTable.jsx",
+    "src/components/supplier/purchaseOrdersBoardRowsStyles.js",
+    "src/hooks/useProgressiveRenderLimit.js"
   ],
   "steps": [
-    "L3: applyColumnFilter batch + startTransition + menu close",
-    "L4: useDeferredValue(filterByColumn) voor processedItems",
-    "Meet J7 als time-to-empty (filter matcht niets) i.p.v. 2000ms longframe-cap"
+    "Extract board-rows styles (component onder 300 regels)",
+    "Add useBoardRowWindow (scrollTop → start/end + pad px)",
+    "Render only windowed slots with top/bottom spacer rows",
+    "Disable window when locateActive or any row expanded (fallback progressive/full)",
+    "Pass wrapperRef from BoardTable as scroll container",
+    "Bump version; verify J7 time-to-empty on preview L"
   ],
   "successCriteria": {
     "primary": {
       "metric": "filterApplyMs",
-      "baselineMs": 2000,
+      "baselineMs": 10611,
       "targetReductionPercent": 30,
       "minGainMs": 50
     },
@@ -32,11 +36,12 @@
   },
   "functionalInvariants": [
     "Filter Apply still filters board rows correctly",
-    "Between-operator still sets secondary value",
-    "Clear filter still removes the column filter",
-    "Saved views unchanged until explicitly saved"
+    "Scrolling still reaches all rows via spacers/window",
+    "Locate/remarks still finds rows (force full mount)",
+    "Expanded rows still work (window disabled while expanded)",
+    "Clear filter still removes the column filter"
   ],
   "adversaryScenarios": ["A1", "A5"],
-  "blastRadius": ["J7", "J1"],
+  "blastRadius": ["J7", "J1", "J4"],
   "verifyProfiles": ["S", "M", "L"]
 }

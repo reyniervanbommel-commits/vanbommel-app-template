@@ -1,211 +1,21 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderBoardRow from './PurchaseOrderBoardRow';
 import PurchaseOrdersGroupHeaderRow from './PurchaseOrdersGroupHeaderRow';
 import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
-import {
-  purchaseOrderBoardHeaderHeight,
-  purchaseOrderBoardRowHeight,
-} from './purchaseOrderBoardLayout';
-import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
-import { useProgressiveRenderLimit } from '../../hooks/useProgressiveRenderLimit';
+import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
+import { usePurchaseOrdersBoardRowsStyles } from './purchaseOrdersBoardRowsStyles';
+import { useBoardRowWindow } from '../../hooks/useBoardRowWindow';
+import { buildBoardRowSlots } from '../../utils/purchaseOrderBoardRowSlots';
 import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
 
-const fixedCellOverflow = {
-  boxSizing: 'border-box',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  verticalAlign: 'middle',
-};
-
-const useStyles = makeStyles({
-  groupRowCell: {
-    position: 'sticky',
-    top: purchaseOrderBoardHeaderHeight,
-    zIndex: 4,
-    backgroundColor: '#f4e6ed',
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('0'),
-    verticalAlign: 'middle',
-  },
-  groupButton: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('8px'),
-    ...shorthands.padding('3px', '12px'),
-    backgroundColor: 'transparent',
-    border: 'none',
-    textAlign: 'left',
-    cursor: 'pointer',
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground1,
-  },
-  groupCollapseButton: {
-    width: '24px',
-    height: '24px',
-    minWidth: '24px',
-    minHeight: '24px',
-    ...shorthands.padding('0'),
-    backgroundColor: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground1,
-  },
-  groupDot: {
-    color: '#c02f64',
-    fontSize: '12px',
-    lineHeight: '12px',
-  },
-  groupRowInner: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap('6px'),
-    width: '100%',
-  },
-  groupCheckbox: {
-    ...shorthands.padding('0'),
-    marginLeft: '6px',
-  },
-  itemRow: {
-    // Rijen buiten beeld hoeven niet gelayout/getekend te worden. De rijhoogte ligt vast
-    // (32px) en de tabel is table-layout: fixed, dus overslaan verschuift niets. Browsers die
-    // containment op tabelrijen niet toepassen negeren dit; dan verandert er simpelweg niets.
-    contentVisibility: 'auto',
-    containIntrinsicSize: `auto ${purchaseOrderBoardRowHeight}`,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-  },
-  removedRow: {
-    backgroundColor: tokens.colorNeutralBackgroundDisabled,
-  },
-  controlCell: {
-    position: 'sticky',
-    left: 0,
-    zIndex: 3,
-    width: '92px',
-    minWidth: '92px',
-    maxWidth: '92px',
-    height: purchaseOrderBoardRowHeight,
-    maxHeight: purchaseOrderBoardRowHeight,
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('0', '2px'),
-    textAlign: 'center',
-    boxSizing: 'border-box',
-    overflow: 'visible',
-    verticalAlign: 'middle',
-  },
-  controlCellInner: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minWidth: 0,
-    height: '100%',
-    maxHeight: purchaseOrderBoardRowHeight,
-    overflow: 'visible',
-  },
-  rowControlsCluster: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    ...shorthands.gap('0'),
-    flexShrink: 0,
-    maxHeight: '100%',
-    overflow: 'visible',
-  },
-  rowCheckbox: {
-    ...shorthands.padding('0'),
-    marginRight: '-2px',
-    flexShrink: 0,
-  },
-  rowStatusBadge: {
-    marginLeft: '2px',
-    flexShrink: 0,
-  },
-  compactToggleButton: {
-    minWidth: '18px',
-    width: '18px',
-    height: '18px',
-    minHeight: '18px',
-    ...shorthands.padding('0'),
-    marginLeft: '-1px',
-    flexShrink: 0,
-  },
-  itemCell: {
-    '--po-cell-padding-y': '2px',
-    '--po-cell-padding-x': '10px',
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px', '10px'),
-    height: purchaseOrderBoardRowHeight,
-    maxHeight: purchaseOrderBoardRowHeight,
-    fontSize: tokens.fontSizeBase300,
-    color: tokens.colorNeutralForeground1,
-    ...fixedCellOverflow,
-    ':has([data-cell-history-trigger="true"])': {
-      overflow: 'visible',
-    },
-  },
-  itemCellContent: {
-    display: 'block',
-    minWidth: 0,
-    maxWidth: '100%',
-    height: '100%',
-    maxHeight: `calc(${purchaseOrderBoardRowHeight} - 4px)`,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
-    ':has([data-cell-history-trigger="true"])': {
-      overflow: 'visible',
-    },
-  },
-  newRow: {
-    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteGreenBorderActive}`,
-  },
-  changedRow: {
-    boxShadow: `inset 3px 0 0 0 ${tokens.colorPaletteMarigoldBorderActive}`,
-  },
-  locateHighlightControlCell: {
-    backgroundColor: '#fff4ce',
-  },
-  subitemsContainer: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.padding('10px', '8px', '10px', '28px'),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    position: 'relative',
-    '::before': {
-      content: '""',
-      position: 'absolute',
-      left: '37px',
-      top: 0,
-      width: '2px',
-      height: '12px',
-      backgroundColor: SUBITEM_CONNECTOR_COLOR,
-    },
-  },
-});
-
-const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
+const PurchaseOrdersBoardGroupHeader = memo(function PurchaseOrdersBoardGroupHeader({
   group,
   collapsedGroups,
   rowLayout,
-  formatting,
-  actions,
-  links,
   selection,
-  contextMenu,
-  remarks,
-  maxEntries,
-  expandedOrders,
-  highlightedLocateKey,
+  groupActions,
 }) {
   const groupKey = group.groupKey || group.groupName;
-  const hidden = group.ancestorGroupKeys?.some((key) => collapsedGroups[key]);
   const isCollapsed = Boolean(collapsedGroups[groupKey]);
   const selectionEntries = Array.isArray(group.entriesForSelection)
     ? group.entriesForSelection
@@ -222,40 +32,24 @@ const PurchaseOrdersBoardGroup = memo(function PurchaseOrdersBoardGroup({
     }),
     [isCollapsed, rowLayout]
   );
-  // Progressief mounten: het restant van deze groep volgt in een volgend idle-blok.
-  const visibleEntries = useMemo(
-    () => (maxEntries >= group.entries.length ? group.entries : group.entries.slice(0, Math.max(maxEntries, 0))),
-    [group.entries, maxEntries]
-  );
-
-  if (hidden) return null;
-
   return (
-    <React.Fragment>
-      <PurchaseOrdersGroupHeaderRow
-        group={groupData}
-        layout={groupLayout}
-        selection={selection}
-        actions={actions.group}
-      />
-      {!isCollapsed ? visibleEntries.map((entry) => (
-        <PurchaseOrderBoardRow
-          key={entry.rowId}
-          entry={entry}
-          layout={rowLayout}
-          isExpanded={Boolean(expandedOrders[entry.rowId])}
-          isLocated={highlightedLocateKey === orderLocateKeyFromOrder(entry.order)}
-          formatting={formatting}
-          actions={actions.row}
-          links={links}
-          selection={selection}
-          contextMenu={contextMenu}
-          remarks={remarks}
-        />
-      )) : null}
-    </React.Fragment>
+    <PurchaseOrdersGroupHeaderRow
+      group={groupData}
+      layout={groupLayout}
+      selection={selection}
+      actions={groupActions}
+    />
   );
 });
+
+function SpacerRow({ heightPx, colCount }) {
+  if (!heightPx) return null;
+  return (
+    <tr aria-hidden="true">
+      <td colSpan={colCount} style={{ height: heightPx, padding: 0, border: 0 }} />
+    </tr>
+  );
+}
 
 function PurchaseOrdersBoardRows({
   data,
@@ -266,8 +60,9 @@ function PurchaseOrdersBoardRows({
   selection,
   contextMenu,
   remarks,
+  scrollRef = null,
 }) {
-  const styles = useStyles();
+  const styles = usePurchaseOrdersBoardRowsStyles();
   const effectiveHeaderColumnFormatRules = useMemo(
     () => normalizeColumnFormatRulesMap(formatting.headerColumnFormatRules),
     [formatting.headerColumnFormatRules]
@@ -291,8 +86,6 @@ function PurchaseOrdersBoardRows({
     });
   }, [selection, selectionEnabled]);
 
-  // expandedOrders/highlightedLocateKey horen NIET in rowLayout: dat maakt bij elke expand of
-  // locate een nieuw layout-object voor álle rijen en cellen. Ze gaan als losse booleans per rij.
   const rowLayout = useMemo(() => ({
     ...layout,
     styles,
@@ -311,40 +104,59 @@ function PurchaseOrdersBoardRows({
     },
   }), [actions, handleGroupSelection]);
 
-  // Rijen komen in blokken de DOM in (eerste ~50 direct, rest in idle-tijd). Het budget wordt
-  // in rendervolgorde over de groepen verdeeld; groepen die er nog niet in passen renderen
-  // alleen hun kopregel.
-  const totalEntryCount = useMemo(
-    () => data.groupedRows.reduce((count, group) => count + (group.entries?.length || 0), 0),
-    [data.groupedRows]
+  const slots = useMemo(
+    () => buildBoardRowSlots(data.groupedRows, data.collapsedGroups),
+    [data.collapsedGroups, data.groupedRows]
   );
-  const renderLimit = useProgressiveRenderLimit(totalEntryCount, data.groupedRows, data.locateActive);
-
-  let remainingBudget = renderLimit;
+  const hasExpanded = useMemo(
+    () => Object.values(data.expandedOrders || {}).some(Boolean),
+    [data.expandedOrders]
+  );
+  // Locate + expand need real DOM nodes / variable heights — disable window then.
+  const windowEnabled = !data.locateActive && !hasExpanded;
+  const { start, end, topPadPx, bottomPadPx } = useBoardRowWindow({
+    scrollRef,
+    totalCount: slots.length,
+    rowHeightPx: PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX,
+    overscan: 14,
+    enabled: windowEnabled,
+  });
+  const visibleSlots = useMemo(() => slots.slice(start, end), [end, slots, start]);
+  const colCount = Math.max(1, (layout.colCount || 1) + 1);
 
   return (
     <tbody>
-      {data.groupedRows.map((group) => {
-        const budget = remainingBudget;
-        remainingBudget -= group.entries?.length || 0;
+      <SpacerRow heightPx={topPadPx} colCount={colCount} />
+      {visibleSlots.map((slot) => {
+        if (slot.type === 'group') {
+          return (
+            <PurchaseOrdersBoardGroupHeader
+              key={`g-${slot.groupKey}`}
+              group={slot.group}
+              collapsedGroups={data.collapsedGroups}
+              rowLayout={rowLayout}
+              selection={selection}
+              groupActions={stableActions.group}
+            />
+          );
+        }
         return (
-          <PurchaseOrdersBoardGroup
-            key={group.groupKey || group.groupName}
-            group={group}
-            collapsedGroups={data.collapsedGroups}
-            rowLayout={rowLayout}
+          <PurchaseOrderBoardRow
+            key={slot.entry.rowId}
+            entry={slot.entry}
+            layout={rowLayout}
+            isExpanded={Boolean(data.expandedOrders[slot.entry.rowId])}
+            isLocated={data.highlightedLocateKey === orderLocateKeyFromOrder(slot.entry.order)}
             formatting={effectiveFormatting}
-            actions={stableActions}
+            actions={stableActions.row}
             links={links}
             selection={selection}
             contextMenu={contextMenu}
             remarks={remarks}
-            maxEntries={budget}
-            expandedOrders={data.expandedOrders}
-            highlightedLocateKey={data.highlightedLocateKey}
           />
         );
       })}
+      <SpacerRow heightPx={bottomPadPx} colCount={colCount} />
     </tbody>
   );
 }

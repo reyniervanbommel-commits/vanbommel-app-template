@@ -293,6 +293,7 @@ function PurchaseOrdersBoardTable({
             selection={selection}
             contextMenu={contextMenu}
             remarks={remarks}
+            scrollRef={wrapperRef}
           />
         </table>
       </div>
