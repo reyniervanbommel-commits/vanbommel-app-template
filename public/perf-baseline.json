@@ -10,7 +10,7 @@
       "pathIncludes": "/data/purchase-orders",
       "pathExcludes": "/revision",
       "method": "GET",
-      "baselineMs": 441,
+      "baselineMs": 1701,
       "journey": "J1"
     },
     {
@@ -32,17 +32,17 @@
   ],
   "scoutJourneys": {
     "J1": {
-      "elapsedWall": 98,
-      "apiSum": 441,
-      "app": 202
+      "elapsedWall": 86,
+      "apiSum": 1701,
+      "app": 1464
     },
     "J2": {
       "elapsedWall": null,
       "apiSum": 0
     },
     "J3": {
-      "elapsedWall": 256,
-      "apiSum": 10704,
+      "elapsedWall": 384,
+      "apiSum": 18662,
       "duplicatePoFetch": 0
     }
   }

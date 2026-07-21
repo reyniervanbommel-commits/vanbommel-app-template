@@ -218,6 +218,7 @@ export function usePurchaseOrderBoardView({
       setFilterOperator: tableView.setFilterOperator,
       setFilterValue: tableView.setFilterValue,
       setFilterSecondaryValue: tableView.setFilterSecondaryValue,
+      applyColumnFilter: tableView.applyColumnFilter,
       clearColumnFilter: tableView.clearColumnFilter,
       applyFilterFromCellValue: tableView.applyFilterFromCellValue,
       clearAllFilters: tableView.clearAllFilters,

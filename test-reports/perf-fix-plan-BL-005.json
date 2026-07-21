@@ -1,0 +1,41 @@
+{
+  "id": "BL-005",
+  "backlogItemId": "BL-005",
+  "journey": "J7",
+  "action": "Column filter Apply",
+  "branch": "R",
+  "tier": "L3",
+  "hypothesis": "Filter Apply triggert drie aparte setFilterByColumn-updates en synchrone filter→group→DOM-keten; batching + startTransition verkort time-to-stable zonder network (filters zijn client-only).",
+  "targetFiles": [
+    "src/hooks/usePurchaseOrderTableView.js",
+    "src/hooks/usePurchaseOrderSortFilterActions.js",
+    "src/components/supplier/PurchaseOrderColumnFilterMenu.jsx"
+  ],
+  "steps": [
+    "Voeg applyColumnFilter(columnKey, { operator, value, secondaryValue }) toe — één setState",
+    "Laat handleApplyFilter die batch-API gebruiken i.p.v. drie setters",
+    "Wrap filter-apply in startTransition zodat paint niet blokkeert op zware processedItems",
+    "Sluit kolommenu na Apply zodat focus/overlay niet meetelt in jank"
+  ],
+  "successCriteria": {
+    "primary": {
+      "metric": "filterApplyMs",
+      "baselineMs": 2000,
+      "targetReductionPercent": 30,
+      "minGainMs": 50
+    },
+    "secondary": {
+      "metric": "app",
+      "role": "informational"
+    }
+  },
+  "functionalInvariants": [
+    "Filter Apply still filters board rows correctly",
+    "Between-operator still sets secondary value",
+    "Clear filter still removes the column filter",
+    "Saved views unchanged until explicitly saved"
+  ],
+  "adversaryScenarios": ["A1", "A5"],
+  "blastRadius": ["J7", "J1"],
+  "verifyProfiles": ["S", "M", "L"]
+}

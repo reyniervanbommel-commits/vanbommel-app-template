@@ -118,7 +118,16 @@ function attributeAction({ interaction, timings, serverTimingEntries }) {
     render,
     dominantPost: dominantMap[dominantKey] || 'unknown',
     labels: [...new Set(labels)],
-    poApiCalls: apiCalls.filter((c) => c.path && c.path.includes('purchase-orders')),
+    // Full PO board reads only (GET /api/data/purchase-orders or /api/purchase-orders).
+    // Do not count revision, remarks, columns, board-settings, bi/meta, board-views, etc.
+    poApiCalls: apiCalls.filter((c) => {
+      const p = String(c.path || '').split('?')[0].replace(/\/$/, '');
+      return (
+        p.endsWith('/data/purchase-orders')
+        || p.endsWith('/api/purchase-orders')
+        || p === '/purchase-orders'
+      );
+    }),
   };
 }
 

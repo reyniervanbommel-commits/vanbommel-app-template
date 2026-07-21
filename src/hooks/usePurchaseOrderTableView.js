@@ -110,6 +110,23 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     });
   }, [columnByKey, datePeriodDisplayModes]);
 
+  // Single setState for Apply — avoids three sequential filterByColumn updates.
+  const applyColumnFilter = useCallback((columnKey, next) => {
+    setFilterByColumn((prev) => {
+      const column = columnByKey.get(columnKey);
+      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
+      return {
+        ...prev,
+        [columnKey]: {
+          ...current,
+          operator: next?.operator ?? current.operator,
+          value: next?.value ?? '',
+          secondaryValue: next?.operator === 'between' ? (next?.secondaryValue ?? '') : '',
+        },
+      };
+    });
+  }, [columnByKey, datePeriodDisplayModes]);
+
   const clearColumnFilter = useCallback((columnKey) => {
     setFilterByColumn((prev) => {
       if (!prev[columnKey]) return prev;
@@ -247,6 +264,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
+    applyColumnFilter,
     clearColumnFilter,
     applyFilterFromCellValue,
     clearAllFilters,
@@ -263,6 +281,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
+    applyColumnFilter,
     clearColumnFilter,
     applyFilterFromCellValue,
     clearAllFilters,

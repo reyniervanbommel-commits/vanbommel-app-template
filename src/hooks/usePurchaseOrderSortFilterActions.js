@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { startTransition, useCallback } from 'react';
 
 function persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue) {
   onSetValue(columnKey, draft.value);
@@ -16,6 +16,7 @@ export function usePurchaseOrderSortFilterActions({
   onSetOperator,
   onSetValue,
   onSetSecondaryValue,
+  onApplyFilter,
   onClearFilter,
   setDraft,
   setOpen,
@@ -52,9 +53,21 @@ export function usePurchaseOrderSortFilterActions({
   }, [setDraft]);
 
   const handleApplyFilter = useCallback(() => {
-    onSetOperator(columnKey, draft.operator);
-    persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
-  }, [columnKey, draft, onSetOperator, onSetSecondaryValue, onSetValue]);
+    const patch = {
+      operator: draft.operator,
+      value: draft.value,
+      secondaryValue: draft.secondaryValue,
+    };
+    startTransition(() => {
+      if (typeof onApplyFilter === 'function') {
+        onApplyFilter(columnKey, patch);
+      } else {
+        onSetOperator(columnKey, draft.operator);
+        persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
+      }
+    });
+    setOpen(false);
+  }, [columnKey, draft, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
 
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
