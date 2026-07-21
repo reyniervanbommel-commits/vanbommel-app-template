@@ -4,18 +4,19 @@
   "journey": "J7",
   "action": "Column filter Apply",
   "branch": "R",
-  "tier": "L3",
-  "hypothesis": "Filter Apply triggert drie aparte setFilterByColumn-updates en synchrone filter→group→DOM-keten; batching + startTransition verkort time-to-stable zonder network (filters zijn client-only).",
+  "tier": "L4",
+  "attemptedTiers": ["L3"],
+  "hypothesis": "Filter Apply is client-render zwaar: batch setState + startTransition (L3) + useDeferredValue op filterByColumn (L4) zodat Apply/menu-close snappy blijft terwijl filter→sort deferred loopt.",
   "targetFiles": [
     "src/hooks/usePurchaseOrderTableView.js",
     "src/hooks/usePurchaseOrderSortFilterActions.js",
-    "src/components/supplier/PurchaseOrderColumnFilterMenu.jsx"
+    "src/components/supplier/PurchaseOrderColumnFilterMenu.jsx",
+    "playwright/perf-board-actions.js"
   ],
   "steps": [
-    "Voeg applyColumnFilter(columnKey, { operator, value, secondaryValue }) toe — één setState",
-    "Laat handleApplyFilter die batch-API gebruiken i.p.v. drie setters",
-    "Wrap filter-apply in startTransition zodat paint niet blokkeert op zware processedItems",
-    "Sluit kolommenu na Apply zodat focus/overlay niet meetelt in jank"
+    "L3: applyColumnFilter batch + startTransition + menu close",
+    "L4: useDeferredValue(filterByColumn) voor processedItems",
+    "Meet J7 als time-to-empty (filter matcht niets) i.p.v. 2000ms longframe-cap"
   ],
   "successCriteria": {
     "primary": {

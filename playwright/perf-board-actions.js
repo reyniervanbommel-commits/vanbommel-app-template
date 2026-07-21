@@ -76,9 +76,9 @@ async function openFirstColumnMenu(page) {
   await page.getByRole('button', { name: 'Apply' }).waitFor({ state: 'visible', timeout: 15000 });
 }
 
-async function waitStableMs(page, startMs) {
+async function waitStableMs(page, startMs, capMs = 8000) {
   // Cap UX-wait: first paint/stable window, not full network round-trip.
-  const deadline = Date.now() + 2000;
+  const deadline = Date.now() + capMs;
   let last = Date.now() - startMs;
   while (Date.now() < deadline) {
     const stable = await page.evaluate(() => {
@@ -86,14 +86,17 @@ async function waitStableMs(page, startMs) {
       return !window.__lastLongframeAt || (now - window.__lastLongframeAt) > 120;
     });
     last = Date.now() - startMs;
-    if (stable && last >= 16) return Math.min(last, 2000);
+    if (stable && last >= 16) return last;
     await page.waitForTimeout(40);
   }
-  return Math.min(Date.now() - startMs, 2000);
+  return Date.now() - startMs;
 }
 
 async function measureFilterApply(page) {
-  await page.evaluate(() => window.__perf?.reset?.());
+  await page.evaluate(() => {
+    window.__perf?.reset?.();
+    window.__lastLongframeAt = 0;
+  });
   await openFirstColumnMenu(page);
 
   const valueInput = page.locator('input[aria-label*="Filter value for"]').first();
@@ -104,10 +107,18 @@ async function measureFilterApply(page) {
   await valueInput.fill('__perf_test_filter__');
   const t0 = Date.now();
   await page.getByRole('button', { name: 'Apply' }).click();
-  const filterApplyMs = await waitStableMs(page, t0);
+  // Prefer time-to-empty (filter matches nothing) — clearer UX signal than longframe cap.
+  const emptyVisible = await Promise.race([
+    page.getByText(/No purchase orders found/i).waitFor({ state: 'visible', timeout: 8000 }).then(() => true),
+    page.getByText(/No rows match/i).waitFor({ state: 'visible', timeout: 8000 }).then(() => true),
+    page.waitForTimeout(8000).then(() => false),
+  ]);
+  const filterApplyMs = emptyVisible
+    ? Date.now() - t0
+    : await waitStableMs(page, t0, 8000);
 
   await page.keyboard.press('Escape').catch(() => {});
-  return { filterApplyMs, maxLongFrameMs: null };
+  return { filterApplyMs, maxLongFrameMs: null, emptyVisible };
 }
 
 async function measureTextStyleBold(page) {
@@ -124,7 +135,7 @@ async function measureTextStyleBold(page) {
 
   const t0 = Date.now();
   await boldBtn.click();
-  const textStyleApplyMs = await waitStableMs(page, t0);
+  const textStyleApplyMs = await waitStableMs(page, t0, 8000);
 
   await page.keyboard.press('Escape').catch(() => {});
   return { textStyleApplyMs };
