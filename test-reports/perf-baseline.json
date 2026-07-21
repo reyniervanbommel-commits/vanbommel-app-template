@@ -221,16 +221,16 @@
       "label": "Column filter Apply",
       "profile": "L",
       "median": {
-        "filterApplyMs": 2000
+        "filterApplyMs": 8316
       }
     },
     "J8": {
       "label": "Text style Bold",
       "profile": "L",
       "median": {
-        "textStyleApplyMs": 2000
+        "textStyleApplyMs": 11372
       }
     },
-    "measuredAt": "2026-07-21T13:22:51.844Z"
+    "measuredAt": "2026-07-21T14:00:33.563Z"
   }
 }

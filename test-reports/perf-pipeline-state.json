@@ -1,12 +1,12 @@
 {
   "runId": "perf-2026-07-21T1258Z",
-  "status": "running",
+  "status": "completed",
   "runMode": "full",
   "iteration": 3,
   "maxIterations": 10,
   "l5ExperimentsUsed": 0,
-  "currentPhase": "deploy-preview",
-  "backlogItemId": "BL-005",
+  "currentPhase": "done",
+  "backlogItemId": null,
   "lastCompletedItemId": "BL-003",
   "environmentUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
   "azureDevUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
@@ -19,13 +19,16 @@
     "deployPreviewBeforeAzureVerify": true
   },
   "completedItems": ["BL-006", "BL-003"],
+  "skippedItems": ["BL-005", "BL-001", "BL-002", "BL-004"],
   "skipped": {
     "scroll": "No scrollable overflow container on DEV/preview dataset",
-    "seed": "Local SQL firewall blocked seed-perf-po-cache.js"
+    "seed": "Local SQL firewall blocked seed-perf-po-cache.js",
+    "BL-005": "L3+L4 insufficient; needs L5 virtualization (~10.6s time-to-empty)",
+    "BL-001": "elapsedWall under skipIf 500ms",
+    "BL-002": "elapsedWall null"
   },
   "startedAt": "2026-07-21T12:58:00.000Z",
-  "updatedAt": "2026-07-21T13:45:00.000Z",
-  "mode": "loop",
-  "scoutProfiles": ["L"],
-  "notes": "BL-003 closed (duplicatePoFetch=0, adversary PASS). BL-005 L3 filter Apply batch+startTransition pending preview verify."
+  "finishedAt": "2026-07-21T14:05:00.000Z",
+  "updatedAt": "2026-07-21T14:05:00.000Z",
+  "appVersion": "v1.30.32"
 }

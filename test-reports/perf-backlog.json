@@ -1,52 +1,47 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-07-21T13:33:08.519Z",
+  "generatedAt": "2026-07-21T14:05:00.000Z",
   "environment": {
     "url": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
-    "profiles": [
-      "L"
-    ]
+    "profiles": ["L"]
   },
   "frequencySource": "/admin/analytics/page-usage",
+  "boardActionsMeasuredAt": "2026-07-21T14:00:33.595Z",
   "items": [
+    {
+      "id": "BL-006",
+      "journey": "J8",
+      "action": "Column text style Bold toggle",
+      "profile": "L",
+      "textStyleApplyMs": 11372,
+      "dominantPost": "network",
+      "priorityScore": 0,
+      "status": "done",
+      "note": "Optimistic persist shipped; uncapped longframe metric is informational"
+    },
+    {
+      "id": "BL-005",
+      "journey": "J7",
+      "action": "Column filter Apply",
+      "profile": "L",
+      "filterApplyMs": 10611,
+      "dominantPost": "render",
+      "priorityScore": 7484,
+      "status": "skipped",
+      "attemptedTiers": ["L3", "L4"],
+      "note": "Time-to-empty ~10.6s on L; needs L5 board virtualization"
+    },
     {
       "id": "BL-003",
       "journey": "J3",
       "action": "Return / after /rccp (duplicate PO-fetch)",
       "profile": "L",
       "elapsedWall": 384,
-      "app": 117083,
-      "apiSum": 18662,
       "duplicatePoFetchCount": 0,
       "dominantPost": "server",
-      "labels": [
-        "tb_meta",
-        "tb_links",
-        "tb_history_hints",
-        "tb_read_masters",
-        "tb_sync_state",
-        "tb_read_custom",
-        "tb_read_cols",
-        "tb_viewed",
-        "tb_revision",
-        "tb_track_marks",
-        "tb_lookup_items",
-        "tb_lookup_vendors",
-        "tb_lookup_excel_map1",
-        "tb_read_details",
-        "tb_lookup_product_receipt_lines",
-        "tb_lookups",
-        "tb_ledger",
-        "tb_retention",
-        "bi_aggregate",
-        "rccp_po_read",
-        "rccp_capacity"
-      ],
-      "targetWallMs": 269,
-      "routeFrequencyWeight": 2,
-      "priorityScore": 230,
-      "status": "open",
-      "note": null
+      "priorityScore": 0,
+      "status": "done",
+      "note": "0 full PO reads; adversary A1/A5 PASS"
     },
     {
       "id": "BL-001",
@@ -54,14 +49,10 @@
       "action": "PO board-load / (hard reload)",
       "profile": "L",
       "elapsedWall": 86,
-      "app": 1464,
-      "apiSum": 1701,
       "dominantPost": "server",
-      "labels": [],
-      "targetWallMs": 60,
-      "routeFrequencyWeight": 3,
-      "priorityScore": 78,
-      "status": "open"
+      "priorityScore": 0,
+      "status": "skipped",
+      "note": "elapsedWall under skipIf 500ms"
     },
     {
       "id": "BL-002",
@@ -69,36 +60,10 @@
       "action": "Route /rccp dashboard load",
       "profile": "L",
       "elapsedWall": null,
-      "app": 0,
-      "apiSum": 0,
       "dominantPost": "sql",
-      "labels": [
-        "tb_meta",
-        "tb_history_hints",
-        "tb_viewed",
-        "tb_read_custom",
-        "tb_read_cols",
-        "tb_links",
-        "tb_sync_state",
-        "tb_revision",
-        "tb_track_marks",
-        "tb_lookup_product_receipt_lines",
-        "tb_lookup_items",
-        "tb_lookup_excel_map1",
-        "tb_lookup_vendors",
-        "tb_lookups",
-        "tb_ledger",
-        "tb_read_masters",
-        "tb_read_details",
-        "tb_retention",
-        "rccp_vendor_list",
-        "rccp_po_read",
-        "rccp_capacity"
-      ],
-      "targetWallMs": null,
-      "routeFrequencyWeight": 0.30413625304136255,
       "priorityScore": 0,
-      "status": "open"
+      "status": "skipped",
+      "note": "elapsedWall null / measurement noise"
     }
   ]
 }

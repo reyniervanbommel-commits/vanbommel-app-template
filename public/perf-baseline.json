@@ -28,6 +28,20 @@
       "method": "GET",
       "baselineMs": 800,
       "journey": "J2"
+    },
+    {
+      "id": "po-filter-apply",
+      "label": "PO filter Apply",
+      "journey": "J7",
+      "baselineMs": 8316,
+      "metric": "filterApplyMs"
+    },
+    {
+      "id": "po-text-style",
+      "label": "PO text style Bold",
+      "journey": "J8",
+      "baselineMs": 11372,
+      "metric": "textStyleApplyMs"
     }
   ],
   "scoutJourneys": {
@@ -45,5 +59,22 @@
       "apiSum": 18662,
       "duplicatePoFetch": 0
     }
+  },
+  "boardActionJourneys": {
+    "J7": {
+      "label": "Column filter Apply",
+      "profile": "L",
+      "median": {
+        "filterApplyMs": 8316
+      }
+    },
+    "J8": {
+      "label": "Text style Bold",
+      "profile": "L",
+      "median": {
+        "textStyleApplyMs": 11372
+      }
+    },
+    "measuredAt": "2026-07-21T14:00:33.563Z"
   }
 }

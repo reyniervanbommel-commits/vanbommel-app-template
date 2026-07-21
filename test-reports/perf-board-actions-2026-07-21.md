@@ -1,5 +1,5 @@
 # Perf board actions
 
 - Profile: L
-- J7 filterApplyMs: 2000
-- J8 textStyleApplyMs: 2000
+- J7 filterApplyMs: 8316
+- J8 textStyleApplyMs: 11372
