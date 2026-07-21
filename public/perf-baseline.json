@@ -1,0 +1,80 @@
+{
+  "label": "Scout baseline (pre-fix)",
+  "updatedAt": "2026-07-21",
+  "environment": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "profile": "L",
+  "hudWatch": [
+    {
+      "id": "po-full-read",
+      "label": "PO board — full read",
+      "pathIncludes": "/data/purchase-orders",
+      "pathExcludes": "/revision",
+      "method": "GET",
+      "baselineMs": 656,
+      "journey": "J1"
+    },
+    {
+      "id": "po-revision",
+      "label": "PO board — revision check",
+      "pathIncludes": "/revision",
+      "method": "GET",
+      "baselineMs": 80,
+      "journey": "J3"
+    },
+    {
+      "id": "rccp-analysis",
+      "label": "RCCP analysis load",
+      "pathIncludes": "/rccp",
+      "method": "GET",
+      "baselineMs": 800,
+      "journey": "J2"
+    },
+    {
+      "id": "po-filter-apply",
+      "label": "PO filter Apply",
+      "journey": "J7",
+      "baselineMs": 4609,
+      "metric": "filterApplyMs"
+    },
+    {
+      "id": "po-text-style",
+      "label": "PO text style Bold",
+      "journey": "J8",
+      "baselineMs": 10149,
+      "metric": "textStyleApplyMs"
+    }
+  ],
+  "scoutJourneys": {
+    "J1": {
+      "elapsedWall": 81,
+      "apiSum": 656,
+      "app": 489
+    },
+    "J2": {
+      "elapsedWall": null,
+      "apiSum": 0
+    },
+    "J3": {
+      "elapsedWall": 248,
+      "apiSum": 9152,
+      "duplicatePoFetch": 0
+    }
+  },
+  "boardActionJourneys": {
+    "J7": {
+      "label": "Column filter Apply",
+      "profile": "L",
+      "median": {
+        "filterApplyMs": 4609
+      }
+    },
+    "J8": {
+      "label": "Text style Bold",
+      "profile": "L",
+      "median": {
+        "textStyleApplyMs": 10149
+      }
+    },
+    "measuredAt": "2026-07-21T13:05:36.022Z"
+  }
+}
