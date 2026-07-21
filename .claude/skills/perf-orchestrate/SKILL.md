@@ -2,10 +2,10 @@
 name: perf-orchestrate
 description: >-
   Start en bestuurt de autonome perf-pipeline: leest policy, beheert state machine,
-  roept perf-review / perf-architect / perf-optimize / perf-verify / perf-adversary
-  aan in volgorde. Handmatig gestart; max 10 iteraties; push alleen na verify + adversary.
-  Gebruik bij "start perf pipeline", "perf-orchestrate", "autonome perf run",
-  "perf optimalisatie pipeline".
+  roept perf-review / perf-scroll / perf-board-actions / perf-architect / perf-optimize /
+  perf-verify / perf-adversary aan in volgorde. runMode full = volledig autonoom tot klaar.
+  Slash: /perf-pipeline, /perf-optimize (zonder BL-id). Gebruik bij "zet perf pipeline aan",
+  "autonome perf run", "perf optimalisatie pipeline".
 ---
 
 # Perf Orchestrate
@@ -15,15 +15,32 @@ description: >-
 > **Verwant:** `perf-review` (Scout), `perf-architect`, `perf-optimize`, `perf-verify`,
 > `perf-adversary`. Policy: `test-reports/perf-optimize-policy.json`.
 
-## Wanneer gebruiken
+## Slash commands (één startpunt)
 
-| Trigger | Actie |
-|---------|-------|
-| *"start perf pipeline"* | Volledige run (scout → loop) |
-| *"perf-orchestrate resume"* | Hervat `perf-pipeline-state.json` |
-| *"perf scout only"* | Alleen Scout-fase (backlog vullen) |
+| Commando | `runMode` | Wat gebeurt autonoom |
+|----------|-----------|----------------------|
+| **`/perf-pipeline`** | `full` | Scout → scroll → board-actions → loop (architect → **optimize** → verify → deploy → adversary → push) |
+| **`/perf-optimize`** | `full` | **Zelfde als `/perf-pipeline`** — alias voor “alles aan” |
+| `/perf-pipeline resume` | `resume` | Hervat `perf-pipeline-state.json` |
+| `/perf-pipeline scout` | `scout-only` | Alleen meten, geen fixes |
 
-Pipeline draait **handmatig** (policy `pipelineSchedule: manual`). Start nooit zelf op schema.
+> **`/perf-optimize` zonder backlog-id** = start orchestrator, niet alleen de Fixer-stap.
+> **`/perf-optimize BL-003`** of bestaand fix-plan = alleen Fixer (zie skill `perf-optimize`).
+
+**Eén zin volstaat:** typ **`/perf-optimize`** of **`/perf-pipeline`** — agent leest deze skill, zet `runMode: full`, werkt zonder tussenvragen door tot `completed` / `blocked`.
+
+---
+
+## Wanneer gebruiken (natuurlijke taal)
+
+| Trigger | `runMode` | Actie |
+|---------|-----------|-------|
+| **`/perf-pipeline`**, **`/perf-optimize`**, *"zet perf pipeline aan"* | **`full`** | Volledige autonome run |
+| *"start perf pipeline"* | `full` | Zelfde |
+| *"perf-orchestrate resume"*, `/perf-pipeline resume` | `resume` | Hervat state |
+| *"perf scout only"*, `/perf-pipeline scout` | `scout-only` | Alleen meten |
+
+Pipeline wordt **handmatig gestart** (policy `pipelineSchedule: manual`), maar **`runMode: full` draait daarna autonoom** door alle skills inclusief `perf-optimize` per backlog-item.
 
 ---
 
@@ -32,8 +49,10 @@ Pipeline draait **handmatig** (policy `pipelineSchedule: manual`). Start nooit z
 ```
 Orchestrate Progress:
 - [ ] Stap 0: Policy + env-check
-- [ ] Stap 1: State laden of initialiseren
-- [ ] Stap 2: Scout (perf-review screening)
+- [ ] Stap 1: State laden of initialiseren (runMode!)
+- [ ] Stap 2: Scout (perf-scout J1–J3)
+- [ ] Stap 2b: Scroll scout (perf-scroll J4+)
+- [ ] Stap 2c: Board actions (perf-board-actions J7/J8)
 - [ ] Stap 3: Pipeline-loop (max iteraties)
 - [ ] Stap 4: Afronden + samenvatting
 ```
@@ -67,12 +86,19 @@ Bestand: `test-reports/perf-pipeline-state.json`
 {
   "runId": "perf-2026-07-20T190000Z",
   "status": "running",
+  "runMode": "full",
   "iteration": 0,
   "maxIterations": 10,
   "l5ExperimentsUsed": 0,
   "currentPhase": "scout",
   "backlogItemId": null,
   "environmentUrl": "<azure-dev-url>",
+  "autonomy": {
+    "askUserBetweenPhases": false,
+    "commitLocally": true,
+    "pushAfterGreen": true,
+    "deployPreviewBeforeAzureVerify": true
+  },
   "startedAt": "<iso>"
 }
 ```
@@ -88,13 +114,41 @@ Bestand: `test-reports/perf-pipeline-state.json`
 
 ---
 
-## Stap 2 — Scout
+## Stap 2 — Scout (J1–J3)
 
-Roep **`perf-review`** aan (modus `screening`):
+Roep **`perf-review`** / **`playwright/perf-scout.js`** aan:
 
 - Profielen **M + L** (policy `scoutProfiles`)
-- Scope v1: journeys `/`, `/rccp`, terugkeer `/` na `/rccp`
+- Journeys J1–J3: `/`, `/rccp`, terugkeer `/` na `/rccp`
 - Output: `test-reports/perf-backlog.json` + update `perf-baseline.json`
+
+## Stap 2b — Scroll scout (J4+)
+
+Roep skill **`perf-scroll`** aan:
+
+```bash
+PERF_PROFILE=M TEST_BASE_URL=<url> node playwright/perf-scroll.js
+PERF_PROFILE=L TEST_BASE_URL=<url> node playwright/perf-scroll.js
+```
+
+- Voegt BL-004 (J4 scroll jank) toe aan backlog
+- Merge scroll-metrics in baseline + `public/perf-baseline.json` (HUD)
+
+Sla state op: `currentPhase: "board-actions"` → daarna `"loop"` (tenzij `runMode: scout-only` → `paused`).
+
+## Stap 2c — Board actions (J7/J8)
+
+Roep skill **`perf-board-actions`** aan (filter Apply + text style Bold):
+
+```bash
+PERF_PROFILE=M TEST_BASE_URL=<url> node playwright/perf-board-actions.js
+PERF_PROFILE=L TEST_BASE_URL=<url> node playwright/perf-board-actions.js
+```
+
+- Voegt BL-005 (J7), BL-006 (J8) toe aan backlog
+- Vereist **admin** login voor J8
+
+Sla state op: `currentPhase: "loop"` (tenzij `runMode: scout-only` → `paused`).
 
 Scout berekent `priorityScore` per item:
 
@@ -115,8 +169,12 @@ WHILE backlog not empty AND iteration < maxIterations:
   item = hoogste priorityScore (status: open)
   plan = perf-architect(item)
   commit = perf-optimize(plan)          // lokaal, GEEN push
-  result = perf-verify(plan)
-  IF NOT result.pass: revert; retry of skip (zie reference.md)
+  result = perf-verify(plan)          // lokaal test/build + profielen
+  IF runMode full AND policy deployPreview:
+    → lees skill develop-from-devops, modus preview (commit+push+preview URL)
+    → zet environmentUrl op nieuwe DEV/preview URL
+  resultAzure = partial journey re-measure on Azure
+  IF NOT result.pass AND NOT resultAzure.pass: revert; retry of skip
   adv = perf-adversary(plan)
   IF NOT adv.pass (blocking scenarios): revert; retry of skip
   push branch; update baseline; mark item done
@@ -137,6 +195,8 @@ END
 
 **PR-review:** policy `prReview: always-human`. Maak draft PR; merge nooit automatisch.
 
+**`runMode: full` — autonomie:** vraag de gebruiker **niet** om akkoord tussen fases. Commit lokaal, deploy preview, push draft PR. Alleen stoppen bij echte blockers (zie reference.md).
+
 **L5-limiet:** max `l5ExperimentsInV1` (default 1) per run. Tel bij in state `l5ExperimentsUsed`.
 
 ---
@@ -144,13 +204,15 @@ END
 ## Stap 4 — Afronden
 
 1. Update state: `status: completed|blocked`, `finishedAt`
-2. Schrijf `test-reports/perf-pipeline-summary-<datum>.md`:
+2. Schrijf `test-reports/perf-pipeline-summary-<datum>.md` (technisch) **en**
+   `test-reports/perf-user-report-<datum>.md` (compact, tester — zie perf-review user-report-template):
    - Iteraties uitgevoerd
    - Items opgelost / skipped / blocked
    - UX-winsten (elapsedWall) per journey
    - Server-metric (informatief)
    - Open backlog-items
    - Draft PR-URLs
+   - **Wat de gebruiker kan testen + PERF HUD vóór/na**
 
 ---
 

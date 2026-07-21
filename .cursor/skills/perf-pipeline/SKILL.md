@@ -1,9 +1,9 @@
 ---
 name: perf-pipeline
 description: >-
-  Overzicht van de autonome perf-pipeline: zes rollen, zes skills, één handmatige run.
-  Start via perf-orchestrate. Gebruik bij "perf pipeline", "perf skills", "autonome perf",
-  "welke perf skill", "perf rollen".
+  Overzicht van de autonome perf-pipeline: acht skills, één start via perf-orchestrate.
+  runMode full = autonoom tot klaar. Gebruik bij "perf pipeline", "perf skills", "autonome perf",
+  "welke perf skill", "perf rollen", "zet perf pipeline aan".
 ---
 
 # Perf Pipeline — Rollen + Skills
@@ -11,12 +11,17 @@ description: >-
 > **Geen losse cloud-agents.** Eén Cursor-run volgt achtereenvolgens **skills** (recepten in git).
 > **Rollen** beschrijven wie wat doet; **skills** beschrijven hoe.
 
-## Start
+## Start (slash)
 
-```
-Handmatig: "start perf pipeline"  →  lees perf-orchestrate
-Alleen meten: "perf check"        →  lees perf-review
-```
+| Commando | Skill | Effect |
+|----------|-------|--------|
+| **`/perf-pipeline`** | `perf-orchestrate` | Alles autonoom aan |
+| **`/perf-optimize`** | → `perf-orchestrate` | Zelfde alias |
+| `/perf-pipeline resume` | `perf-orchestrate` | Hervat BL-003 e.d. |
+| `/perf-check` | `perf-review` | Alleen meten |
+| `/perf-optimize BL-003` | `perf-optimize` | Alleen één fix |
+
+Natuurlijke taal equivalent: *"zet perf pipeline aan"* = `/perf-pipeline`.
 
 Policy: `test-reports/perf-optimize-policy.json`
 
@@ -26,8 +31,10 @@ Policy: `test-reports/perf-optimize-policy.json`
 
 | Rol | Skill | Doet | Artifact |
 |-----|-------|------|----------|
-| **Orchestrator** | `perf-orchestrate` | State machine, loop, push na groen | `perf-pipeline-state.json` |
-| **Scout** | `perf-review` | Meten, toerekenen, backlog | `perf-backlog.json`, `perf-baseline.json` |
+| **Orchestrator** | `perf-orchestrate` | State machine, runMode full/scout/resume | `perf-pipeline-state.json` |
+| **Scout (load)** | `perf-review` / perf-scout.js | J1–J3 meten, backlog | `perf-backlog.json`, `perf-baseline.json` |
+| **Scout (scroll)** | `perf-scroll` | J4+ scroll jank | `perf-scroll-*.md`, backlog BL-004+ |
+| **Scout (board UX)** | `perf-board-actions` | J7 filter, J8 text style | `perf-board-actions-*.md`, BL-005/006 |
 | **Architect** | `perf-architect` | Fix-plan, tier L0–L5 | `perf-fix-plan-<id>.json` |
 | **Fixer** | `perf-optimize` | Code wijzigen, lokaal commit | git commit (geen push) |
 | **Verifier** | `perf-verify` | test/build + regressie | `perf-verify-<id>.md` |
@@ -35,15 +42,20 @@ Policy: `test-reports/perf-optimize-policy.json`
 
 ---
 
-## Loop (v1)
+## Loop (v1.2)
 
 ```
-perf-orchestrate
-  → perf-review (screening, profielen M+L)
+perf-orchestrate (runMode: full)
+  → perf-scout (J1–J3, profielen M+L)
+  → perf-scroll (J4)
+  → perf-board-actions (J7/J8)
   WHILE iter < 10:
-    perf-architect → perf-optimize → perf-verify → perf-adversary
+    perf-architect → perf-optimize → perf-verify
+    → develop-from-devops (modus preview) → azure re-measure → perf-adversary
     push + draft PR (mens review altijd)
 ```
+
+Scope groeit via policy `scopePhases` (v1 load → v1.1 scroll → v2 hele app routes).
 
 ---
 
@@ -54,7 +66,7 @@ perf-orchestrate
 | Cursor | `.cursor/skills/perf-*/` |
 | Claude Code | `.claude/skills/perf-*/` |
 
-Schemas: `test-reports/schemas/`. Playwright: `playwright/perf-screening.js`, `playwright/perf-adversary.js`.
+Schemas: `test-reports/schemas/`. Playwright: `playwright/perf-scout.js`, `playwright/perf-scroll.js`, `playwright/perf-board-actions.js`, `playwright/perf-adversary.js`.
 
 Plan: `.cursor/plans/2026-07-20-autonome-perf-agent-pipeline.plan.md`
 

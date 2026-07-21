@@ -1,15 +1,33 @@
 ---
 name: perf-optimize
 description: >-
-  Voert één perf-fix-plan uit (tier L0–L5): code wijzigen, lokaal committen,
-  geen push. Respecteert policy (cache, autonomie, component-grootte).
-  Gebruik na perf-architect of wanneer orchestrator de Fixer-fase start.
-  Triggers: "perf optimize", "voer fix plan uit", "perf-fix implementeren".
+  Fixer-stap (tier L0–L5) OF entry alias voor volledige pipeline: /perf-optimize zonder BL-id
+  → lees perf-orchestrate runMode full. Met fix-plan of BL-id: implementeer één fix lokaal.
+  Triggers: /perf-optimize, /perf-optimize BL-003, "perf optimize", "voer fix plan uit".
 ---
 
 # Perf Optimize
 
-> **Rol:** Fixer · **Skill:** `perf-optimize`. Implementeert precies één fix-plan.
+> **Rol:** Fixer · **Skill:** `perf-optimize`
+>
+> **Twee modi — eerst routeren:**
+
+## Slash routing (lees dit eerst)
+
+| Invocatie | Actie |
+|-----------|-------|
+| **`/perf-optimize`** (geen args) | **Stop hier.** Lees skill **`perf-orchestrate`**, `runMode: full` — volledige autonome pipeline |
+| **`/perf-pipeline`** | Zelfde → `perf-orchestrate` full |
+| `/perf-optimize resume` | → `perf-orchestrate` resume |
+| `/perf-optimize scout` | → `perf-orchestrate` scout-only |
+| **`/perf-optimize BL-003`** of fix-plan aanwezig | **Deze skill** — Fixer voor dat ene item |
+| Orchestrator roept Fixer-fase aan | **Deze skill** — implementeer `perf-fix-plan-<id>.json` |
+
+De volledige pipeline roept **`perf-optimize` automatisch** aan per backlog-item (na architect, vóór verify). Je hoeft optimize niet apart te starten als je `/perf-pipeline` of `/perf-optimize` zonder args gebruikt.
+
+---
+
+> **Fixer-modus** (alleen wanneer bovenstaande routing naar deze skill wijst):
 >
 > **Input:** `test-reports/perf-fix-plan-<id>.json`  
 > **Output:** lokale git commit (geen push)  
