@@ -1,16 +1,19 @@
-# Perf — fix BL-005 (filter Apply)
+# Perf user report — BL-005
 
-**Omgeving:** Vendor Portal preview v1.30.32  
-**Datum:** 2026-07-21  
-**Verdict:** GEEN VOLDOENDE WINST — overgeslagen (L5 nodig)
+**Fix:** L5 viewport window (board rows)  
+**Preview:** v1.30.33  
+**Verdict:** PASS
 
-## Wat is gedaan
-- Filter Apply batched + startTransition + deferred board-compute
-- Hermeting: empty state na ~10,6 s op grote dataset
+## Resultaat
 
-## Wat jij kunt testen
-1. Kolommenu → Filter → onzinwaarde → Apply
-2. Verwacht: menu sluit snel; empty state kan nog lang duren
+| Metric | Baseline | After |
+|--------|---------:|------:|
+| filterApplyMs (L) | 10611 | **721** |
 
-## Nog open
-- Board virtualisatie (L5) voor snelle filter op ~2000 orders
+Filter Apply (lege match) voelt nu snel i.p.v. ~10 seconden.
+
+## Test
+
+1. Open preview  
+2. Kolomfilter met waarde die niets matcht → Apply  
+3. Empty state binnen ~1 s

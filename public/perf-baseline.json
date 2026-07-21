@@ -33,14 +33,14 @@
       "id": "po-filter-apply",
       "label": "PO filter Apply",
       "journey": "J7",
-      "baselineMs": 8316,
+      "baselineMs": 721,
       "metric": "filterApplyMs"
     },
     {
       "id": "po-text-style",
       "label": "PO text style Bold",
       "journey": "J8",
-      "baselineMs": 11372,
+      "baselineMs": 1073,
       "metric": "textStyleApplyMs"
     }
   ],
@@ -65,16 +65,16 @@
       "label": "Column filter Apply",
       "profile": "L",
       "median": {
-        "filterApplyMs": 8316
+        "filterApplyMs": 721
       }
     },
     "J8": {
       "label": "Text style Bold",
       "profile": "L",
       "median": {
-        "textStyleApplyMs": 11372
+        "textStyleApplyMs": 1073
       }
     },
-    "measuredAt": "2026-07-21T14:00:33.563Z"
+    "measuredAt": "2026-07-21T14:29:21.294Z"
   }
 }

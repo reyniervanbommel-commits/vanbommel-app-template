@@ -1,22 +1,31 @@
-# Perf — pipeline resume 2026-07-21
+# Perf — eindrapport 2026-07-21
 
-**Omgeving:** Vendor Portal preview  
-**Datum:** 2026-07-21  
-**Verdict:** DEELS KLAAR — 2 fixes live; filter Apply wacht op virtualisatie
+**Omgeving:** Vendor Portal preview **v1.30.33**  
+**URL:** https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io  
+**PR:** https://github.com/reyniervanbommel-commits/vanbommel-app-template/pull/61  
+**Verdict:** **KLAAR** — drie UX-fixes live gemeten
 
-## Wat is gedaan
-- **BL-006** text style Bold: UI reageert meteen (geen wachten op save)
-- **BL-003** terugkeer van RCCP: geen zware PO-herlaad meer (alleen revision-check)
-- **BL-005** filter Apply: snellere state-updates geprobeerd; bord legen blijft ~10 s bij grote datasets
+## Wat is sneller
+
+| Actie | Voorheen | Nu |
+|-------|----------|-----|
+| Filter toepassen (lege match) | ~10,6 s | **~0,7 s** |
+| Text style Bold | ~10 s wachten op save | **~1 s** (optimistic) |
+| Terug van RCCP naar PO-board | Zware herlaad | Alleen revision-check |
 
 ## Wat jij kunt testen
-1. Preview openen (v1.30.32)
-2. Purchase orders → RCCP → terug: Network alleen `…/revision`
-3. Kolommenu → Text style Bold: direct zichtbaar
-4. Kolommenu → Filter Apply met onzinwaarde: empty state komt, maar kan nog lang duren
+
+1. Open de preview (footer **v1.30.33**)
+2. Kolommenu → Filter → onzinwaarde → **Apply** → empty state moet snel komen
+3. Kolommenu → Text style → **Bold** → direct zichtbaar
+4. PO-board → RCCP → terug → Network: vooral `/revision`, geen volle PO-read
+5. Scroll het board: alle rijen bereikbaar (window + spacers)
 
 ## PERF HUD
-- Sectie **Vs baseline (pre-fix)** voor revision vs full read
 
-## Nog open
-- Filter Apply op grote boards → board virtualisatie (volgende pipeline / L5)
+- Sectie **Vs baseline** voor PO full-read / revision / filter / text-style
+
+## Niet gedaan deze run
+
+- Scroll-jank meting (geen overflow op huidige dataset)
+- Seed M/L lokaal (SQL-firewall)

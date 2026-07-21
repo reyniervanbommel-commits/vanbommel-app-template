@@ -1,42 +1,42 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-07-21T14:05:00.000Z",
+  "generatedAt": "2026-07-21T14:30:00.000Z",
   "environment": {
     "url": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
     "profiles": ["L"]
   },
   "frequencySource": "/admin/analytics/page-usage",
-  "boardActionsMeasuredAt": "2026-07-21T14:00:33.595Z",
+  "boardActionsMeasuredAt": "2026-07-21T14:28:00.000Z",
   "items": [
-    {
-      "id": "BL-006",
-      "journey": "J8",
-      "action": "Column text style Bold toggle",
-      "profile": "L",
-      "textStyleApplyMs": 11372,
-      "dominantPost": "network",
-      "priorityScore": 0,
-      "status": "done",
-      "note": "Optimistic persist shipped; uncapped longframe metric is informational"
-    },
     {
       "id": "BL-005",
       "journey": "J7",
       "action": "Column filter Apply",
       "profile": "L",
-      "filterApplyMs": 10611,
+      "filterApplyMs": 721,
+      "baselineFilterApplyMs": 10611,
       "dominantPost": "render",
-      "priorityScore": 7484,
-      "status": "skipped",
-      "attemptedTiers": ["L3", "L4"],
-      "note": "Time-to-empty ~10.6s on L; needs L5 board virtualization"
+      "priorityScore": 0,
+      "status": "done",
+      "attemptedTiers": ["L3", "L4", "L5"],
+      "note": "L5 viewport window: 10611→721 ms (−93%)"
+    },
+    {
+      "id": "BL-006",
+      "journey": "J8",
+      "action": "Column text style Bold toggle",
+      "profile": "L",
+      "textStyleApplyMs": 1073,
+      "dominantPost": "network",
+      "priorityScore": 0,
+      "status": "done",
+      "note": "Optimistic persist; re-measure after L5 ~1073 ms"
     },
     {
       "id": "BL-003",
       "journey": "J3",
       "action": "Return / after /rccp (duplicate PO-fetch)",
       "profile": "L",
-      "elapsedWall": 384,
       "duplicatePoFetchCount": 0,
       "dominantPost": "server",
       "priorityScore": 0,
@@ -49,7 +49,6 @@
       "action": "PO board-load / (hard reload)",
       "profile": "L",
       "elapsedWall": 86,
-      "dominantPost": "server",
       "priorityScore": 0,
       "status": "skipped",
       "note": "elapsedWall under skipIf 500ms"
@@ -60,10 +59,18 @@
       "action": "Route /rccp dashboard load",
       "profile": "L",
       "elapsedWall": null,
-      "dominantPost": "sql",
       "priorityScore": 0,
       "status": "skipped",
       "note": "elapsedWall null / measurement noise"
+    },
+    {
+      "id": "BL-004",
+      "journey": "J4",
+      "action": "PO board vertical scroll",
+      "profile": "L",
+      "priorityScore": 0,
+      "status": "skipped",
+      "note": "No scrollable overflow container on dataset"
     }
   ]
 }

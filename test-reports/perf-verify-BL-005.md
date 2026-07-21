@@ -1,22 +1,23 @@
-# Perf Verify — BL-005
+# Perf Verify — BL-005 (L5)
 
 **Datum:** 2026-07-21  
-**Fix:** L3 batch Apply + startTransition; L4 `useDeferredValue` op filterByColumn  
-**Omgeving:** preview v1.30.32
+**Fix:** Viewport window (`useBoardRowWindow`) — alleen zichtbare + overscan slots in DOM  
+**Omgeving:** preview v1.30.33  
+**URL:** https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io
 
 ## Checklist
 
 | Check | Resultaat |
 |-------|-----------|
-| `npm test` / build | **PASS** (L3 commit) |
-| J7 time-to-empty (L) | **~10.6 s** (`No rows match the active filters`) |
-| Target −30% vs 2000 ms cap-baseline | **FAIL** — echte UX ~10s; L3/L4 raken DOM-unmount niet |
-| functionalInvariants | Apply/filter gedrag OK in unit tests |
+| Unit tests (window + slots) | **PASS** |
+| `npm run build` | **PASS** |
+| Preview deploy | **PASS** |
+| J7 filterApplyMs (L, median 3×) | **721 ms** (was **10611 ms**) |
+| Target −30% vs 10611 | **PASS** (−93%, ≫ 30%) |
+| Min gain 50 ms | **PASS** (−9890 ms) |
+| functionalInvariants (Apply → empty) | **PASS** (time-to-empty) |
+| Adversary A1/A5 | **PASS** (herhaald op preview) |
 
 ## Verdict
 
-**FAIL / SKIP** — max attempts (L3→L4) zonder voldoende UX-winst. Volgende stap is **L5 board virtualisatie** (buiten snelle pipeline-iteratie; 1 L5-slot bewaren).
-
-## Note
-
-Eerdere J7=2000 ms was de longframe-**cap**, geen echte duur.
+**PASS** — L5 viewport window lost filter-to-empty unmount-bottleneck.
