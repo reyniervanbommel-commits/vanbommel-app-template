@@ -2,31 +2,26 @@
   "runId": "perf-2026-07-21T1258Z",
   "status": "running",
   "runMode": "full",
-  "iteration": 0,
+  "iteration": 1,
   "maxIterations": 10,
   "l5ExperimentsUsed": 0,
-  "currentPhase": "scroll",
+  "currentPhase": "loop",
   "backlogItemId": null,
-  "environmentUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "lastCompletedItemId": "BL-006",
+  "environmentUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "azureDevUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "previewUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
   "autonomy": {
     "askUserBetweenPhases": false,
     "commitLocally": true,
     "pushAfterGreen": true,
     "deployPreviewBeforeAzureVerify": true
   },
-  "priorRun": {
-    "runId": "perf-2026-07-21T0428Z",
-    "note": "BL-003 was deploy-wait/partial-pass; local fix retained",
-    "fixPlan": "test-reports/perf-fix-plan-BL-003.json"
+  "completedItems": ["BL-006"],
+  "skipped": {
+    "scroll": "No scrollable overflow container on DEV/preview dataset",
+    "seed": "Local SQL firewall blocked seed-perf-po-cache.js"
   },
   "startedAt": "2026-07-21T12:58:00.000Z",
-  "updatedAt": "2026-07-21T13:02:46.550Z",
-  "mode": "loop",
-  "scoutProfiles": [
-    "M",
-    "L"
-  ],
-  "scoutCompletedAt": "2026-07-21T13:02:46.550Z",
-  "backlogItems": 3,
-  "topBacklogItem": "BL-003"
+  "updatedAt": "2026-07-21T13:25:00.000Z"
 }

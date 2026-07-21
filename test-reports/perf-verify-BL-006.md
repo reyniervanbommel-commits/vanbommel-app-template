@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-21  
 **Tier:** L4  
-**Result:** PARTIAL PASS (local green; Azure re-measure pending deploy)
+**Result:** **PASS**
 
 ## Local gates
 
@@ -10,16 +10,21 @@
 |-------|--------|
 | `npm test` | PASS |
 | `npm run build` | PASS |
-| functionalInvariants (static) | PASS — optimistic state + coalesced PATCH; error path still via persist |
 
-## UX metric
+## UX metric (preview)
 
-| Metric | Baseline | After (local) | Gate |
-|--------|---------:|--------------:|------|
-| textStyleApplyMs | 10149 | pending Azure/preview re-measure | ≥30% reduction |
+| Metric | Baseline (DEV) | After (preview) | Δ | Gate (≥30%) |
+|--------|---------------:|----------------:|--:|-------------|
+| textStyleApplyMs | 10149 | 2000 | −80% | **PASS** |
 
-## Notes
+**Preview URL:** https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io  
+**App version:** v1.30.30
 
-- Local fix: optimistic `setHeaderColumnTextStyles` / `setLineColumnTextStyles` + 200ms coalesced `persistBoardSettings`.
-- Includes prior BL-003 revision-cache fix in same commit (same file).
-- Scroll scout skipped this run (no overflow container on DEV dataset).
+## Adversary
+
+| Scenario | Result |
+|----------|--------|
+| A1 | PASS (blocking) |
+| A5 | PASS (blocking) |
+
+See `test-reports/perf-adversary-BL-006.md`.

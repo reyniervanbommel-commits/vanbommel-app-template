@@ -17,9 +17,9 @@
 
 | Journey | Actie | elapsedWall | app | apiSum | Dominant | PO-fetches |
 |---------|-------|------------:|----:|-------:|----------|------------|
-| J1 | Board-load / | 81 | 489 | 656 | server | 3 |
+| J1 | Board-load / | 98 | 202 | 441 | network | 3 |
 | J2 | /rccp | — | 0 | 0 | sql | 0 |
-| J3 | Terugkeer / | 248 | 87289 | 9152 | server | **0** |
+| J3 | Terugkeer / | 256 | 8631 | 10704 | server | **0** |
 
 ---
 
@@ -27,8 +27,8 @@
 
 | ID | Journey | Actie | elapsedWall | targetWall | Dominant | priorityScore |
 |----|---------|-------|------------:|-----------:|----------|--------------:|
-| BL-003 | J3 | Return / after /rccp (duplicate PO-fetch) | 248 | 174 | server | 148 |
-| BL-001 | J1 | PO board-load / (hard reload) | 81 | 57 | server | 72 |
+| BL-003 | J3 | Return / after /rccp (duplicate PO-fetch) | 256 | 179 | server | 154 |
+| BL-001 | J1 | PO board-load / (hard reload) | 98 | 69 | network | 87 |
 | BL-002 | J2 | Route /rccp dashboard load | — | — | sql | 0 |
 
 ---
