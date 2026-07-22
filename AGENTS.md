@@ -1,5 +1,22 @@
 # AGENTS.md
 
+## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
+
+Geldt voor **elke agent** (Cursor, Claude Code, Codex) bij **elke feature en elke snelle fix** in
+`src/` of `server/` — niet alleen wanneer er expliciet om gevraagd wordt. Doorloop vóór het
+klaarmelden van het werk:
+
+1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
+   3+ UI-bestanden of nieuwe flyout/drawer/overlay → escaleer naar `ui-design-review` skill.
+2. **Snelheid** — geen onnodige extra `apiRequest`-calls, queries/berekeningen in loops, of
+   ontbrekende `useMemo`/`useCallback`. Kies bij twijfel de oplossing die de **ervaren** snelheid
+   ten goede komt (caching, optimistic UI, memoization). Hot path geraakt (PO-board, tab-switches,
+   grote lijsten) → escaleer naar `perf-review` (modus `regression`).
+3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
+   routes, SQL via parameters. Auth/route/data-laag gewijzigd → escaleer naar `security-review`.
+
+Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
+
 ## Cursor Cloud specific instructions
 
 ### Node / npm (cloud agents)
