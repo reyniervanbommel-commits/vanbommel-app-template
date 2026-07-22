@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@fluentui/react-components';
 import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
@@ -122,6 +123,8 @@ function PurchaseOrdersBoardTable({
     clearGrouping,
     setGroupingBarColor,
     setGroupSummaryColumn,
+    clearAllFilters,
+    activeFilterCount = 0,
   } = resolvedBoardView;
   const {
     collapsedGroups,
@@ -220,12 +223,14 @@ function PurchaseOrdersBoardTable({
     linkedLineTotalByHeaderKey,
     linkedLineValueByHeaderKey,
   }), [lineTotalColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
+  const hasFilteredEmptyState = processedItems.length === 0;
+  const totalColCount = 1 + decoratedColumns.length;
+  const handleClearAllFilters = useCallback(() => {
+    clearAllFilters?.();
+  }, [clearAllFilters]);
 
   if (!items.length) {
     return <div className={styles.empty}>No data found</div>;
-  }
-  if (!processedItems.length) {
-    return <div className={styles.empty}>No rows match the active filters</div>;
   }
 
   return (
@@ -284,17 +289,34 @@ function PurchaseOrdersBoardTable({
             onToggleColumnCollapsed={onToggleHeaderColumnCollapsed}
             />
           </thead>
-          <PurchaseOrdersBoardRows
-            data={rowsData}
-            layout={rowsLayout}
-            formatting={formatting}
-            actions={rowsActions}
-            links={rowsLinks}
-            selection={selection}
-            contextMenu={contextMenu}
-            remarks={remarks}
-            scrollRef={wrapperRef}
-          />
+          {hasFilteredEmptyState ? (
+            <tbody>
+              <tr>
+                <td colSpan={totalColCount} className={styles.emptyFilterCell}>
+                  <div className={styles.emptyFilterContent}>
+                    <span>No rows match the active filters</span>
+                    {activeFilterCount > 0 ? (
+                      <Button appearance="subtle" onClick={handleClearAllFilters}>
+                        Clear filters
+                      </Button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          ) : (
+            <PurchaseOrdersBoardRows
+              data={rowsData}
+              layout={rowsLayout}
+              formatting={formatting}
+              actions={rowsActions}
+              links={rowsLinks}
+              selection={selection}
+              contextMenu={contextMenu}
+              remarks={remarks}
+              scrollRef={wrapperRef}
+            />
+          )}
         </table>
       </div>
       <PurchaseOrderCellContextMenu

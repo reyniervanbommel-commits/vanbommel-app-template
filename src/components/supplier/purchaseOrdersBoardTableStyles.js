@@ -62,4 +62,15 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
   },
+  emptyFilterCell: {
+    ...shorthands.padding('24px', '16px'),
+    color: tokens.colorNeutralForeground3,
+    textAlign: 'center',
+  },
+  emptyFilterContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
 });
