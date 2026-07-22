@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
+import { resetProductImageFailureCache } from '../../utils/productImageFailureCache';
 
 function renderCell(props) {
   return render(
@@ -15,6 +16,7 @@ function renderCell(props) {
 describe('PurchaseOrderProductImageCell', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    resetProductImageFailureCache();
   });
 
   it('builds a same-origin URL with accessible English labels', () => {
@@ -50,6 +52,21 @@ describe('PurchaseOrderProductImageCell', () => {
     })).toBeNull();
     expect(screen.queryByRole('button', {
       name: 'Show product image for ITEM-1 and 2 additional unique items',
+    })).toBeNull();
+  });
+
+  it('does not retry a fetch for an image that already failed on a previous mount', () => {
+    const { unmount } = renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-2' });
+    fireEvent.error(screen.getByAltText('Product image for ITEM-2'));
+    expect(screen.queryByAltText('Product image for ITEM-2')).toBeNull();
+    unmount();
+
+    // Simulates the board virtualization remounting the same row after scrolling
+    // it out of view and back in — the cell must not attempt the fetch again.
+    renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-2' });
+    expect(screen.queryByAltText('Product image for ITEM-2')).toBeNull();
+    expect(screen.queryByRole('button', {
+      name: 'Show product image for ITEM-2',
     })).toBeNull();
   });
 

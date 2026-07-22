@@ -5,6 +5,7 @@ import {
   PRODUCT_IMAGE_CELL_HEIGHT,
   PRODUCT_IMAGE_HOVER_MAX_SIZE,
 } from '../../utils/purchaseOrderProductImageColumn';
+import { hasFailedProductImage, markProductImageFailed } from '../../utils/productImageFailureCache';
 
 const useStyles = makeStyles({
   root: {
@@ -86,8 +87,6 @@ function PurchaseOrderProductImageCell({
   isConditionalFormat = false,
 }) {
   const styles = useStyles();
-  const [imageAvailable, setImageAvailable] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const normalizedItemNumber = String(itemNumber || '').trim();
   const imageUrl = useMemo(() => {
     if (!dataAreaId || !normalizedItemNumber) return '';
@@ -97,15 +96,20 @@ function PurchaseOrderProductImageCell({
     });
     return `/api/media/product-image?${query.toString()}`;
   }, [dataAreaId, normalizedItemNumber]);
+  // Rows remount on every scroll into view (board virtualization). Start from the
+  // failure cache so an already-known-broken image doesn't retry the fetch each time.
+  const [imageAvailable, setImageAvailable] = useState(() => !hasFailedProductImage(imageUrl));
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    setImageAvailable(true);
+    setImageAvailable(!hasFailedProductImage(imageUrl));
     setDialogOpen(false);
   }, [imageUrl]);
 
   const handleImageError = useCallback(() => {
+    markProductImageFailed(imageUrl);
     setImageAvailable(false);
-  }, []);
+  }, [imageUrl]);
 
   const handleOpenDialog = useCallback(() => {
     if (imageUrl && imageAvailable) setDialogOpen(true);
