@@ -23,3 +23,31 @@ export function resolveRccpVendorFromFilter(filterByColumn, vendorColumnKey = 'v
 
   return undefined;
 }
+
+/**
+ * Bepaalt de vendor waarmee de RCCP-pagina moet openen: als de PO-pagina een vendor-filter
+ * (nr of naam, operator "equals") heeft staan én die vendor bestaat in de RCCP-vendorlijst,
+ * gebruik die. Anders de eerste vendor uit de lijst (of '' als er geen vendors zijn).
+ * @param {{ vendors: string[], vendorNames?: Record<string,string>, filterByColumn?: object, vendorColumnKey?: string }} params
+ * @returns {string}
+ */
+export function resolveDefaultRccpVendor({
+  vendors,
+  vendorNames = {},
+  filterByColumn,
+  vendorColumnKey = 'vendorAccount',
+}) {
+  const list = Array.isArray(vendors) ? vendors : [];
+  const candidate = resolveRccpVendorFromFilter(filterByColumn, vendorColumnKey);
+
+  if (candidate) {
+    if (list.includes(candidate)) return candidate;
+    const candidateLower = candidate.toLowerCase();
+    const matchByName = list.find(
+      (vendor) => (vendorNames?.[vendor] || '').toLowerCase() === candidateLower,
+    );
+    if (matchByName) return matchByName;
+  }
+
+  return list[0] || '';
+}

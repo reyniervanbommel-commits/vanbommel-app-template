@@ -15,6 +15,8 @@ import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { resolveDefaultRccpVendor } from './resolveRccpVendorFilter';
+import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -37,11 +39,13 @@ export default function RccpPageContent() {
     vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
 
-  // Selecteer standaard de eerste vendor zodra de vendorlijst geladen is, in plaats van "alle vendors"
+  // Selecteer standaard de vendor waarop de PO-pagina net gefilterd was (nr of naam); anders
+  // de eerste vendor uit de lijst — in plaats van altijd "alle vendors" te laden (traag).
   useEffect(() => {
     if (isSupplier || vendorsLoading || vendorAccount !== null) return;
-    setVendorAccount(vendors[0] || '');
-  }, [isSupplier, vendorsLoading, vendors, vendorAccount]);
+    const filterByColumn = readPoFilterByColumnForRccp();
+    setVendorAccount(resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn }));
+  }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount]);
 
   const vendorReady = isSupplier || vendorAccount !== null;
   const {

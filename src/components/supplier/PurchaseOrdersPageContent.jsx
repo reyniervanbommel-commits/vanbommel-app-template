@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
+import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   contentInset: {
@@ -36,6 +37,12 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
+
+  // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
+  // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
+  useEffect(() => {
+    savePoFilterByColumnForRccp(boardView.filterByColumn);
+  }, [boardView.filterByColumn]);
 
   // Track-changes worden centraal in Settings beheerd; hier alleen de header-indicator.
   const trackChangesActiveByColumnId = useMemo(
