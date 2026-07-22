@@ -42,13 +42,14 @@ export const devTestItems = [
     ],
   },
   {
-    id: 'feature-bi-date-filter-v1-37-5',
-    title: 'BI page generic week/year date filter (v1.37.5)',
+    id: 'feature-bi-date-filter-v1-37-7',
+    title: 'BI page generic week/year date filter (v1.37.7)',
     checks: [
       'The BI toolbar has a "Week filter" switch plus From/To year and week inputs (like RCCP)',
       'Enabling it filters every chart that uses a date as its dimension to that week range',
       'Charts without a date dimension are unaffected by the week filter',
-      'Turning the switch off shows the full period again',
+      'A small refresh button next to the inputs applies the changed weeks',
+      'The filter setting (on/off + weeks) is shared: it persists after reload and applies to every user',
     ],
   },
 ];

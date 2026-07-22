@@ -8,6 +8,7 @@ const express = require('express');
 const sql = require('mssql');
 const { body, param, validationResult } = require('express-validator');
 const dataService = require('../services/TableDataService');
+const settingsService = require('../services/SettingsService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
 const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS, resolveMeasures } = require('../utils/biAggregate');
@@ -18,6 +19,29 @@ const router = express.Router();
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const VISIBILITIES = ['private', 'shared'];
 const MAX_CHARTS_PER_AGGREGATE = 20;
+const BI_DATE_FILTER_KEY = 'BI_DATE_FILTER';
+
+function clampInt(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(num)));
+}
+
+// Genereert een veilige, gedeelde week/jaar-filterinstelling (voor iedereen).
+function normalizeBiDateFilter(raw) {
+  const input = raw && typeof raw === 'object' ? raw : {};
+  const win = input.isoWindow && typeof input.isoWindow === 'object' ? input.isoWindow : {};
+  const year = new Date().getUTCFullYear();
+  return {
+    enabled: input.enabled === true,
+    isoWindow: {
+      fromYear: clampInt(win.fromYear, 2000, 2100, year),
+      fromWeek: clampInt(win.fromWeek, 1, 53, 1),
+      toYear: clampInt(win.toYear, 2000, 2100, year),
+      toWeek: clampInt(win.toWeek, 1, 53, 53),
+    },
+  };
+}
 
 function validationError(req, res) {
   const errors = validationResult(req);
@@ -191,6 +215,33 @@ router.post('/aggregate',
         return aggregateCharts({ rows: data.rows || [], columns, charts });
       });
       return res.json(output);
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+// GET /api/bi/date-filter — gedeelde week/jaar-filterinstelling (geldt voor iedereen).
+router.get('/date-filter', async (req, res, next) => {
+  try {
+    const raw = await settingsService.getAsync(BI_DATE_FILTER_KEY, '');
+    let parsed = null;
+    try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+    return res.json({ dateFilter: parsed ? normalizeBiDateFilter(parsed) : null });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PUT /api/bi/date-filter — bewaart de gedeelde week/jaar-filterinstelling.
+router.put('/date-filter',
+  body('enabled').isBoolean(),
+  body('isoWindow').isObject(),
+  async (req, res, next) => {
+    try {
+      if (validationError(req, res)) return undefined;
+      const dateFilter = normalizeBiDateFilter(req.body);
+      await settingsService.set(BI_DATE_FILTER_KEY, JSON.stringify(dateFilter), req.user.id);
+      return res.json({ success: true, dateFilter });
     } catch (err) {
       return next(err);
     }
