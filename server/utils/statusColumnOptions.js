@@ -91,6 +91,19 @@ function buildStatusLabelRenames(previousOptions, nextOptions) {
   return renames;
 }
 
+// Labels die in previousOptions bestaan maar (op id) niet meer voorkomen in nextOptions —
+// d.w.z. de gebruiker heeft deze status verwijderd via de label-editor. Gebruikt om te bepalen
+// of er nog cellen zijn die deze status gebruiken vóórdat de kolomconfiguratie wordt bijgewerkt.
+function buildRemovedStatusOptions(previousOptions, nextOptions) {
+  const previous = Array.isArray(previousOptions) && previousOptions.length
+    ? previousOptions.map((entry, index) => normalizeStatusOption(entry, index)).filter(Boolean)
+    : [];
+  if (!previous.length) return [];
+  const next = normalizeStatusOptions(nextOptions);
+  const nextIds = new Set(next.map((option) => option.id));
+  return previous.filter((option) => !nextIds.has(option.id));
+}
+
 module.exports = {
   HEX_COLOR_PATTERN,
   STATUS_COLOR_PALETTE,
@@ -98,5 +111,6 @@ module.exports = {
   normalizeStatusOptions,
   getAllowedStatusLabels,
   buildStatusLabelRenames,
+  buildRemovedStatusOptions,
   slugifyLabel,
 };

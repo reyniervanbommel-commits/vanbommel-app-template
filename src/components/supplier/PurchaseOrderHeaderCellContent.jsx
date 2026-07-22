@@ -91,9 +91,9 @@ function PurchaseOrderHeaderCellContent({
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
-  const handleUpdateStatusOptions = useCallback((options) => {
+  const handleUpdateStatusOptions = useCallback((options, statusReassignments) => {
     if (typeof onUpdateStatusOptions !== 'function') return Promise.resolve();
-    return onUpdateStatusOptions(column.id, options, column.label);
+    return onUpdateStatusOptions(column.id, options, column.label, statusReassignments);
   }, [column.id, column.label, onUpdateStatusOptions]);
 
   const formattedTextStyle = isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined;

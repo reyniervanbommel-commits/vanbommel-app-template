@@ -142,8 +142,8 @@ function renderLineCellContent({
                 value,
               })
             }
-            onUpdateOptions={(options) =>
-              onUpdateStatusOptions?.(column.id, options, column.label)
+            onUpdateOptions={(options, statusReassignments) =>
+              onUpdateStatusOptions?.(column.id, options, column.label, statusReassignments)
             }
           />
           {showLineBadge ? lineBadge : null}

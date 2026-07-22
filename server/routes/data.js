@@ -331,12 +331,22 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
       : hasOptionsPayload
         ? await columnsService.updateColumn(
           columnId,
-          { label: req.body?.label, options: req.body?.options },
+          {
+            label: req.body?.label,
+            options: req.body?.options,
+            statusReassignments: req.body?.statusReassignments,
+          },
           req.user.id,
         )
         : await columnsService.renameColumn(columnId, req.body?.label, req.user.id);
     return res.json({ column });
   } catch (err) {
+    // Statuslabel-verwijdering die nog in gebruik is: details (welke labels, hoeveel items) zijn
+    // niet gevoelig en de UI heeft ze nodig om een reassign-keuze te tonen. De generieke
+    // errorHandler verbergt in productie het bericht + strip extra velden, dus hier expliciet.
+    if (err.status === 409 && err.code === 'STATUS_LABELS_IN_USE') {
+      return res.status(409).json({ error: err.message, code: err.code, details: err.details });
+    }
     return next(err);
   }
 });

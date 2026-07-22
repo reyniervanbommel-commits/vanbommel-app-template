@@ -6,7 +6,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { AddRegular } from '@fluentui/react-icons';
+import { AddRegular, DeleteRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { STATUS_COLOR_PALETTE } from '../../utils/statusColumnUtils';
 
@@ -17,9 +17,16 @@ const useStyles = makeStyles({
     alignItems: 'stretch',
     ...shorthands.gap('6px'),
     ...shorthands.padding('4px', '0'),
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  editItemRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('4px'),
   },
   labelInput: {
     width: '100%',
+    flexGrow: 1,
   },
   newLabelSection: {
     display: 'flex',
@@ -47,6 +54,7 @@ export default function StatusLabelsEditor({
   setNewColor,
   onCancel,
   onApply,
+  onRemoveOption,
   optionsSaving,
 }) {
   const styles = useStyles();
@@ -77,17 +85,28 @@ export default function StatusLabelsEditor({
     <>
       {draftOptions.map((option, index) => (
         <div key={option.id} className={styles.editItem}>
-          <Input
-            className={styles.labelInput}
-            size="small"
-            value={option.label}
-            onChange={(_, data) => {
-              const nextLabel = data.value;
-              setDraftOptions((current) => current.map((entry, entryIndex) => (
-                entryIndex === index ? { ...entry, label: nextLabel } : entry
-              )));
-            }}
-          />
+          <div className={styles.editItemRow}>
+            <Input
+              className={styles.labelInput}
+              size="small"
+              value={option.label}
+              onChange={(_, data) => {
+                const nextLabel = data.value;
+                setDraftOptions((current) => current.map((entry, entryIndex) => (
+                  entryIndex === index ? { ...entry, label: nextLabel } : entry
+                )));
+              }}
+            />
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DeleteRegular />}
+              aria-label={`Delete label ${option.label}`}
+              disabled={draftOptions.length <= 1}
+              title={draftOptions.length <= 1 ? 'At least one status label is required' : 'Delete label'}
+              onClick={() => onRemoveOption?.(index)}
+            />
+          </div>
           <ColorPalettePicker
             selectedColor={option.color}
             onSelect={(color) => {

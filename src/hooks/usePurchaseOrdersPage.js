@@ -555,6 +555,7 @@ export function usePurchaseOrdersPage() {
     if (patch && typeof patch === 'object') {
       if (patch.dataType !== undefined) body.dataType = patch.dataType;
       if (patch.options !== undefined) body.options = patch.options;
+      if (patch.statusReassignments !== undefined) body.statusReassignments = patch.statusReassignments;
     }
     if (!body.label && !body.options && !body.dataType) {
       body.label = label;
@@ -839,7 +840,7 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
-  const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
+  const updateStatusOptions = useCallback(async (columnId, options, columnLabel, statusReassignments) => {
     const headerColumn = headerColumns.find((column) => column.id === columnId);
     const lineColumn = lineColumns.find((column) => column.id === columnId);
     const targetColumn = headerColumn || lineColumn;
@@ -847,7 +848,7 @@ export function usePurchaseOrdersPage() {
     const columnKey = targetColumn?.key;
     const renames = buildStatusLabelRenames(previousOptions, options);
 
-    await renameColumn(columnId, columnLabel, { options });
+    await renameColumn(columnId, columnLabel, { options, statusReassignments });
 
     if (columnKey && renames.length) {
       const persistPayload = {};
