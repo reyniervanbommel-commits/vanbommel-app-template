@@ -260,6 +260,7 @@ function PurchaseOrderBoardRow({
   selection,
   contextMenu,
   remarks,
+  onMeasureExpanded,
 }) {
   const { order, rowId } = entry;
   // lineCount komt uit de server-rollup; de regels zelf worden pas bij het openklappen geladen.
@@ -288,6 +289,8 @@ function PurchaseOrderBoardRow({
     () => ({ summary: remarkSummary, open: remarks?.open }),
     [remarkSummary, remarks?.open]
   );
+  // Alleen afhankelijk van de lijn-specifieke slices. Een header-only opmaakwijziging geeft
+  // 'formatting'/'layout' een nieuwe referentie, maar mag de open subtabellen niet hertekenen.
   const expandedTableConfig = useMemo(() => ({
     colCount: layout.colCount,
     styles: layout.styles,
@@ -301,7 +304,19 @@ function PurchaseOrderBoardRow({
     collapsedLineColumnKeys: layout.collapsedLineColumnKeys,
     onToggleLineColumnCollapsed: actions.onToggleLineColumnCollapsed,
     ...links,
-  }), [actions.onSaveLineColumnWidth, actions.onToggleLineColumnCollapsed, formatting, layout, links]);
+  }), [
+    layout.colCount,
+    layout.styles,
+    layout.lineColumns,
+    layout.columns,
+    layout.collapsedLineColumnKeys,
+    formatting.lineColumnWidths,
+    formatting.lineColumnTextStyles,
+    formatting.lineColumnFormatRules,
+    actions.onSaveLineColumnWidth,
+    actions.onToggleLineColumnCollapsed,
+    links,
+  ]);
 
   return (
     <React.Fragment>
@@ -344,6 +359,7 @@ function PurchaseOrderBoardRow({
         rowData={expandedRowData}
         tableConfig={expandedTableConfig}
         cellActions={actions.cellActions}
+        onMeasureExpanded={onMeasureExpanded}
       />
     </React.Fragment>
   );

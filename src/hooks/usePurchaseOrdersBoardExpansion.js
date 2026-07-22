@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 
 export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingColumnKey }) {
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -40,7 +40,11 @@ export function usePurchaseOrdersBoardExpansion({ groupedRows, rows, groupingCol
   const handleToggleOrder = useCallback((event) => {
     const rowId = event.currentTarget.dataset.rowid || '';
     if (!rowId) return;
-    setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
+    // De hertekening (subtabel mounten + virtualisatie herberekenen) als niet-urgente update,
+    // zodat de klik/scroll responsief blijft terwijl de subregels verschijnen.
+    startTransition(() => {
+      setExpandedOrders((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
+    });
   }, []);
 
   const handleSetAllBoardsExpanded = useCallback((shouldExpand) => {

@@ -10,6 +10,7 @@ import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrd
 import { calculateLineColumnSum, filterSummableLineColumnKeys } from '../../utils/purchaseOrderTotals';
 import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrderTableView } from '../../hooks/usePurchaseOrderTableView';
+import { useProgressiveRenderLimit } from '../../hooks/useProgressiveRenderLimit';
 import { resolveLineColumnWidth } from './purchaseOrderColumnWidthUtils';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
@@ -210,6 +211,15 @@ export default function PurchaseOrdersSubitemsTable({
   const groupingColor = '';
   const noop = useCallback(() => {}, []);
   const visibleLines = useMemo(() => (Array.isArray(processedLines) ? processedLines : []), [processedLines]);
+  // Progressief renderen: eerst een klein blok regels, de rest in idle-brokken. Voorkomt dat een
+  // order met honderden regels de hoofdthread blokkeert bij het uitklappen. Sommen blijven op de
+  // volledige set. resetKey verandert bij een andere order of gewijzigd filter/sortering.
+  const renderResetKey = `${rowId}|${visibleLines.length}|${sortState.columnKey}|${sortState.direction}`;
+  const renderLimit = useProgressiveRenderLimit(visibleLines.length, renderResetKey);
+  const limitedLines = useMemo(
+    () => (renderLimit >= visibleLines.length ? visibleLines : visibleLines.slice(0, renderLimit)),
+    [renderLimit, visibleLines]
+  );
   const summedColumnsSet = useMemo(
     () => new Set(filterSummableLineColumnKeys(summedLineColumnKeys, lineColumns)),
     [summedLineColumnKeys, lineColumns]
@@ -345,7 +355,7 @@ export default function PurchaseOrdersSubitemsTable({
         rowId={rowId}
         order={order}
         lineColumns={lineColumns}
-        visibleLines={visibleLines}
+        visibleLines={limitedLines}
         columnWidths={effectiveColumnWidths}
         columnTextStyles={columnTextStyles}
         columnFormatRules={columnFormatRules}
