@@ -43,6 +43,15 @@ export const devTestItems = [
       '"Count rows" op de Itemen-tab toont het aantal items binnen de PO-scope en het filter',
     ],
   },
+  {
+    id: 'feature-items-d365-sync-filter-board-v1-36-4',
+    title: 'Items D365 sync filter - PO-bord filtering (v1.36.4)',
+    checks: [
+      'Met een opgeslagen items-filter toont het inkooporder-bord alleen regels waarvan het item aan de filter voldoet',
+      'Inkooporders zonder enkele matchende regel worden verborgen op het bord',
+      'Zonder items-filter toont het bord alle orders en regels zoals voorheen (geen neveneffect)',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
