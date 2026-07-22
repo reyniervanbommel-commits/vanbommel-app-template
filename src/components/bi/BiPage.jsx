@@ -13,6 +13,7 @@ import { useBiMeta } from './hooks/useBiMeta';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useStarterCharts } from './hooks/useStarterCharts';
+import { useBiVendorFilter } from './hooks/useBiVendorFilter';
 import { BOARD_KEY } from './biConstants';
 
 const useStyles = makeStyles({
@@ -39,6 +40,7 @@ export default function BiPage() {
   const meta = useBiMeta(BOARD_KEY);
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
   const seedStarters = useStarterCharts({ columns: meta.columns, createChart });
+  const vendorFilter = useBiVendorFilter();
 
   const [builderMode, setBuilderMode] = useState(null);
   const [draftPayload, setDraftPayload] = useState(null);
@@ -86,7 +88,10 @@ export default function BiPage() {
     ));
   }, [charts, builderMode, draftPayload, user?.id]);
 
-  const { resultsById, loadingById } = useChartData({ charts: chartsForFetch });
+  const { resultsById, loadingById } = useChartData({
+    charts: chartsForFetch,
+    externalFilterByColumn: vendorFilter.externalFilterByColumn,
+  });
 
   const handleNew = useCallback(() => {
     setDraftPayload(null);
@@ -168,7 +173,17 @@ export default function BiPage() {
   return (
     <div className={styles.pageLayout}>
       <div className={styles.dashboardArea}>
-        <BiToolbar chartCount={charts.length} onNewChart={handleNew} onRefresh={reload} />
+        <BiToolbar
+          chartCount={charts.length}
+          onNewChart={handleNew}
+          onRefresh={reload}
+          vendorAccount={vendorFilter.vendorAccount}
+          onVendorChange={vendorFilter.setVendorAccount}
+          vendors={vendorFilter.vendors}
+          vendorNames={vendorFilter.vendorNames}
+          vendorsLoading={vendorFilter.loading}
+          vendorsError={vendorFilter.error}
+        />
 
         {error ? (
           <MessageBar intent="error" className={styles.message}>

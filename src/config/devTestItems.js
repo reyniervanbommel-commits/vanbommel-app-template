@@ -32,6 +32,15 @@ export const devTestItems = [
       'Kolom text-style (bold/cursief/onderstreept) togglen gaat vlot en blijft na een reload behouden',
     ],
   },
+  {
+    id: 'feature-bi-vendor-filter-v1-37-0',
+    title: 'BI page vendor filter (v1.37.0)',
+    checks: [
+      'The BI page shows a searchable vendor filter (by vendor no. or name) in the toolbar',
+      'When a PO board filter on a vendor is active, opening the BI page pre-selects that same vendor',
+      'Selecting a vendor filters all charts to that vendor; "All vendors" shows the full dataset again',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
