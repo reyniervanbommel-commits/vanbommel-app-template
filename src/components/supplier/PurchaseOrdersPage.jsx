@@ -82,6 +82,7 @@ export default function PurchaseOrdersPage() {
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
     datePeriodDisplayModes,
+    columnFormatRules: headerColumnFormatRules,
   });
   const remarks = usePurchaseOrderRemarksBoard({
     enabled: !loading,

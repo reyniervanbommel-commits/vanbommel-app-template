@@ -177,15 +177,18 @@ export default function StatusCell({
     popoverContent = (
       <StatusLabelsEditor
         draftOptions={editor.draftOptions}
-        setDraftOptions={editor.setDraftOptions}
+        labelDrafts={editor.labelDrafts}
         newLabel={editor.newLabel}
         setNewLabel={editor.setNewLabel}
         newColor={editor.newColor}
         setNewColor={editor.setNewColor}
-        onCancel={() => setMode('select')}
-        onApply={editor.handleApplyOptions}
-        onRemoveOption={editor.handleRemoveDraftOption}
         optionsSaving={editor.optionsSaving}
+        onDone={() => setMode('select')}
+        onAddLabel={editor.handleAddLabel}
+        onRemoveOption={editor.handleRemoveDraftOption}
+        onLabelInputChange={editor.handleLabelInputChange}
+        onCommitLabelEdit={editor.commitLabelEdit}
+        onColorChange={editor.handleColorChange}
       />
     );
   }

@@ -6,6 +6,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   styles,
   column,
   columnTypeMeta,
+  columnSourceMeta,
   connectionTargets,
   activeSubmenu,
   submenuTop,
@@ -53,6 +54,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   handleSecondaryValueChange,
   handleApplyFilter,
   handleClearFilter,
+  colorFilter,
   handleAddType,
   remarksAlreadyAdded,
   textStyleDraft,
@@ -82,8 +84,10 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
     <PopoverSurface className={styles.surface}>
       <FilterMenuMainPane
         styles={styles}
+        column={column}
         columnLabel={column.label}
         columnTypeMeta={columnTypeMeta}
+        columnSourceMeta={columnSourceMeta}
         connectionTargets={connectionTargets}
         showGrouping={showGrouping}
         showColumnMutations={showColumnMutations}
@@ -135,6 +139,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         handleSecondaryValueChange={handleSecondaryValueChange}
         handleApplyFilter={handleApplyFilter}
         handleClearFilter={handleClearFilter}
+        colorFilter={colorFilter}
       />
       <FilterMenuSubPane
         styles={styles}

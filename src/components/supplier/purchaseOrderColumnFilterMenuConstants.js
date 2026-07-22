@@ -1,4 +1,5 @@
 import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
+import { COLOR_FILTER_OPERATOR } from '../../utils/tableViewFilterUtils';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -33,8 +34,21 @@ const COLUMN_TYPE_META = {
 
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-export function getColumnTypeMeta(column, { isConnected = false } = {}) {
-  if (isConnected) return COLUMN_TYPE_META.connected;
+const COLUMN_SOURCE_META = {
+  d365: { key: 'd365', label: 'Dynamics 365' },
+  connected: { key: 'connected', label: 'Connected' },
+  formula: { key: 'formula', label: 'Formula' },
+  user: { key: 'user', label: 'Custom' },
+};
+
+export function getColumnSourceMeta(column, { isConnected = false, hasConnectionTargets = false } = {}) {
+  if (isConnected || hasConnectionTargets) return COLUMN_SOURCE_META.connected;
+  if (String(column?.formulaExpr || '').trim()) return COLUMN_SOURCE_META.formula;
+  if (column?.source !== 'custom') return COLUMN_SOURCE_META.d365;
+  return COLUMN_SOURCE_META.user;
+}
+
+export function getColumnTypeMeta(column) {
   if (String(column?.formulaExpr || '').trim()) return COLUMN_TYPE_META.formula;
   const typeKey = String(column?.dataType || 'text').trim().toLowerCase();
   return COLUMN_TYPE_META[typeKey] || COLUMN_TYPE_META.text;
@@ -55,15 +69,23 @@ function getDefaultOperator(column, datePeriodDisplayModes = {}) {
 }
 
 export function getDraftFromFilter(column, filter, datePeriodDisplayModes = {}) {
+  // Een actief kleurfilter is losgekoppeld van het waarde-filter; val terug op de
+  // standaard-operator zodat de waarde-invoer niet met 'colorIs' breekt.
+  const operator = filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR
+    ? filter.operator
+    : getDefaultOperator(column, datePeriodDisplayModes);
   return {
-    operator: filter?.operator || getDefaultOperator(column, datePeriodDisplayModes),
-    value: filter?.value || '',
-    secondaryValue: filter?.secondaryValue || '',
+    operator,
+    value: filter?.operator === COLOR_FILTER_OPERATOR ? '' : (filter?.value || ''),
+    secondaryValue: filter?.operator === COLOR_FILTER_OPERATOR ? '' : (filter?.secondaryValue || ''),
   };
 }
 
 export function isColumnFilterActive(column, filter, datePeriodDisplayModes = {}) {
   if (!filter) return false;
+  if (filter.operator === COLOR_FILTER_OPERATOR) {
+    return Array.isArray(filter.colors) && filter.colors.length > 0;
+  }
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
