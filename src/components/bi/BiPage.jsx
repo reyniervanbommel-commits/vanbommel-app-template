@@ -174,7 +174,6 @@ export default function BiPage() {
     <div className={styles.pageLayout}>
       <div className={styles.dashboardArea}>
         <BiToolbar
-          chartCount={charts.length}
           onNewChart={handleNew}
           onRefresh={reload}
           vendorAccount={vendorFilter.vendorAccount}

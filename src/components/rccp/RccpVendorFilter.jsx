@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Combobox, Field, Option, Spinner, makeStyles } from '@fluentui/react-components';
+import {
+  Combobox, Field, Option, Spinner, makeStyles, mergeClasses,
+} from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   field: { maxWidth: '280px', minWidth: '220px' },
@@ -25,6 +27,7 @@ export default function RccpVendorFilter({
   error,
   autoFocus = false,
   onHighlightVendor,
+  className,
 }) {
   const styles = useStyles();
   const selectedLabel = value ? vendorLabel(value, vendorNames) : ALL_VENDORS_LABEL;
@@ -83,7 +86,7 @@ export default function RccpVendorFilter({
 
   return (
     <Field
-      className={styles.field}
+      className={mergeClasses(styles.field, className)}
       label="Vendor filter"
       validationState={error ? 'error' : 'none'}
       validationMessage={error || undefined}
