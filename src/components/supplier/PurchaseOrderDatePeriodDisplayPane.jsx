@@ -4,7 +4,9 @@ import { DATE_PERIOD_DISPLAY_MODES, normalizeDatePeriodDisplayMode } from '../..
 
 const useStyles = makeStyles({
   subPaneTitle: {
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     marginBottom: '4px',
   },
   modeButton: {

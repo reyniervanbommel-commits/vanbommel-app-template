@@ -346,6 +346,17 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
+  // Patcht herberekende formulewaarden (van de save-response) direct in de order-rij, zodat
+  // formulekolommen die de bewerkte kolom refereren meteen kloppen — zonder board-refresh.
+  // Alleen aanroepen met een niet-leeg object; anders een onnodige setOrders-render over alle rijen.
+  const applyFormulaValuesToOrder = useCallback((dataAreaId, orderNumber, formulaValues) => {
+    setOrders((prev) => prev.map((order) => (
+      order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber
+        ? order
+        : { ...order, values: { ...order.values, ...formulaValues } }
+    )));
+  }, []);
+
   // Optimistic update van één cel; bij fout wordt de oude waarde teruggezet.
   const saveValue = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value }) => {
     const isLine = lineNumber !== null && lineNumber !== undefined;
@@ -378,7 +389,7 @@ export function usePurchaseOrdersPage() {
 
     try {
       if (BOARD_TB_SOURCE) {
-        await apiRequest(`${DATA_BASE}/value`, {
+        const response = await apiRequest(`${DATA_BASE}/value`, {
           method: 'PUT',
           body: {
             columnId,
@@ -388,6 +399,12 @@ export function usePurchaseOrdersPage() {
             value,
           },
         });
+        // Formulekolommen die deze kolom refereren zijn server-side al herberekend
+        // (zie TableDataService.saveCustomValue); direct patchen zodat de UI meteen
+        // klopt zonder wachten op een volgende board-refresh.
+        if (response?.formulaValues && Object.keys(response.formulaValues).length) {
+          applyFormulaValuesToOrder(dataAreaId, orderNumber, response.formulaValues);
+        }
       } else {
         await apiRequest('/purchase-orders/values', {
           method: 'PUT',
@@ -400,7 +417,7 @@ export function usePurchaseOrdersPage() {
       if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, [applyLineValues, restoreLines]);
+  }, [applyLineValues, restoreLines, applyFormulaValuesToOrder]);
 
   // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
@@ -431,10 +448,13 @@ export function usePurchaseOrdersPage() {
     }
     try {
       if (BOARD_TB_SOURCE) {
-        await apiRequest(`${DATA_BASE}/correct`, {
+        const response = await apiRequest(`${DATA_BASE}/correct`, {
           method: 'POST',
           body: { columnId, partitionKey: dataAreaId, recordKey: orderNumber, detailKey: isLine ? lineNumber : null, value, basedOnValue },
         });
+        if (response?.formulaValues && Object.keys(response.formulaValues).length) {
+          applyFormulaValuesToOrder(dataAreaId, orderNumber, response.formulaValues);
+        }
       } else {
         await apiRequest('/purchase-orders/correct', {
           method: 'POST',
@@ -446,7 +466,7 @@ export function usePurchaseOrdersPage() {
       if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, [applyLineValues, restoreLines]);
+  }, [applyLineValues, restoreLines, applyFormulaValuesToOrder]);
 
   const resolveColumnScopeById = useCallback((columnId) => {
     if (headerColumns.some((column) => column.id === columnId)) return 'master';

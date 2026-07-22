@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@fluentui/react-components';
+import { ArrowCounterclockwiseRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFormatRulesSection from './PurchaseOrderColumnFormatRulesSection';
 
 export default function PurchaseOrderColumnFormatRulesPane({
@@ -25,7 +26,15 @@ export default function PurchaseOrderColumnFormatRulesPane({
         removeFormatRule={removeFormatRule}
       />
       <div className={styles.actionRow}>
-        <Button size="small" appearance="secondary" onClick={handleClearFormatRules}>Reset to default</Button>
+        <Button
+          className={styles.subPaneFullWidthButton}
+          size="small"
+          appearance="subtle"
+          icon={<ArrowCounterclockwiseRegular />}
+          onClick={handleClearFormatRules}
+        >
+          Reset to default
+        </Button>
       </div>
     </>
   );

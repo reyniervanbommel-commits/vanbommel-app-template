@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button, Field, Input, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
@@ -6,6 +6,7 @@ import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icon
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
+import { useRccpVendorPrefetch } from '../../hooks/useRccpVendorPrefetch';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
@@ -15,6 +16,8 @@ import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { resolveDefaultRccpVendor, resolveRccpVendorFromFilter } from './resolveRccpVendorFilter';
+import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -22,6 +25,7 @@ const useStyles = makeStyles({
   yearInput: { width: '104px' },
   weekInput: { width: '84px' },
   error: { color: tokens.colorPaletteRedForeground1 },
+  hint: { color: tokens.colorNeutralForeground3 },
 });
 
 export default function RccpPageContent() {
@@ -29,16 +33,47 @@ export default function RccpPageContent() {
   const { user } = useAuth();
   const isAdmin = user?.role === ROLES.ADMIN;
   const isSupplier = user?.role === ROLES.SUPPLIER;
-  const [vendorAccount, setVendorAccount] = useState('');
+  // null = nog geen vendor gekozen (voorkomt dat de dashboard-analyse voor ALLE vendors laadt, wat traag is)
+  const [vendorAccount, setVendorAccount] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const {
     vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
+
+  // Was er bij het openen van de pagina al een vendor-filter (nr of naam) actief op de
+  // PO-tabelpagina? Bepaal dit één keer bij mount (los van of de vendorlijst al geladen is) —
+  // zo weten we meteen of het zoekveld autofocus moet krijgen (geen PO-filter → gebruiker gaat
+  // zelf zoeken) of niet (PO-filter aanwezig → vendor wordt automatisch voor-ingevuld).
+  const [hadPoFilterHandoff] = useState(() => (
+    Boolean(resolveRccpVendorFromFilter(readPoFilterByColumnForRccp()))
+  ));
+
+  // Neem de vendor over waarop de PO-pagina net gefilterd was (nr of naam); is er geen
+  // PO-filter, laat de vendor dan leeg (in plaats van automatisch de eerste vendor te laden,
+  // wat traag is) — de gebruiker zoekt dan zelf een vendor op via het zoekveld.
+  useEffect(() => {
+    if (isSupplier || vendorsLoading || vendorAccount !== null) return;
+    const filterByColumn = readPoFilterByColumnForRccp();
+    setVendorAccount(resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn }));
+  }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount]);
+
+  // hasVendor bepaalt of er daadwerkelijk data geladen wordt (en dus of chart/matrix/capacity
+  // planning vullen) — pas waar wanneer er echt een vendor gekozen is, niet zodra het
+  // resolve-effect hierboven eenmalig is afgerond (dat kan ook naar '' resolven).
+  const hasVendor = isSupplier || Boolean(vendorAccount);
   const {
     window, setWindow, analysis, loading, error, readOnly,
     measureRows, periods, cellMap, reload,
-  } = useRccpPage({ vendorAccount: isSupplier ? undefined : vendorAccount });
+  } = useRccpPage({
+    vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
+    enabled: hasVendor,
+  });
+
+  // Terwijl de gebruiker een vendor zoekt (hover/keyboard-highlight in de dropdown, of een
+  // exacte match tijdens het typen), laad de analyse voor die vendor alvast op de achtergrond —
+  // zodra hij/zij die vendor echt selecteert, komt de data al (grotendeels) uit cache.
+  const handleHighlightVendor = useRccpVendorPrefetch(window);
 
   const [drillCell, setDrillCell] = useState(null);
   const capacityReloadRef = useRef(null);
@@ -90,12 +125,14 @@ export default function RccpPageContent() {
       <div className={styles.toolbar}>
         {!isSupplier && (
           <RccpVendorFilter
-            value={vendorAccount}
+            value={vendorAccount || ''}
             onChange={setVendorAccount}
             vendors={vendors}
             vendorNames={vendorNames}
             loading={vendorsLoading}
             error={vendorsError}
+            autoFocus={!hadPoFilterHandoff}
+            onHighlightVendor={handleHighlightVendor}
           />
         )}
         {activeTab === 'dashboard' && (
@@ -119,6 +156,12 @@ export default function RccpPageContent() {
           <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
         )}
       </div>
+
+      {!hasVendor && (
+        <Text className={styles.hint}>
+          Search for a vendor above to load the dashboard and capacity planning data.
+        </Text>
+      )}
 
       {activeTab === 'dashboard' && (
         <>
@@ -152,8 +195,8 @@ export default function RccpPageContent() {
 
       {activeTab === 'capacity-planning' && (
         <RccpCapacityPlanningTab
-          vendorAccount={isSupplier ? undefined : vendorAccount}
-          enabled={activeTab === 'capacity-planning'}
+          vendorAccount={isSupplier ? undefined : (vendorAccount || undefined)}
+          enabled={activeTab === 'capacity-planning' && hasVendor}
           isAdmin={isAdmin}
           onImported={handleImportCompleted}
           onChanged={handleCapacityChanged}

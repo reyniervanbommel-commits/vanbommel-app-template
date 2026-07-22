@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button, Text } from '@fluentui/react-components';
+import { ArrowCounterclockwiseRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
 
 export default function PurchaseOrderColumnTextStylePane({
@@ -62,7 +63,15 @@ export default function PurchaseOrderColumnTextStylePane({
         Preview text
       </Text>
       <div className={styles.actionRow}>
-        <Button size="small" appearance="secondary" onClick={handleClearTextStyle}>Reset to default</Button>
+        <Button
+          className={styles.subPaneFullWidthButton}
+          size="small"
+          appearance="subtle"
+          icon={<ArrowCounterclockwiseRegular />}
+          onClick={handleClearTextStyle}
+        >
+          Reset to default
+        </Button>
       </div>
     </>
   );

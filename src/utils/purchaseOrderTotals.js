@@ -31,11 +31,11 @@ export function filterSummableLineColumnKeys(columnKeys, lineColumns) {
   return (Array.isArray(columnKeys) ? columnKeys : []).filter((key) => isSummableLineColumn(byKey.get(key)));
 }
 
-// Ontdubbelde, geformatteerde weergave van een reeks regelwaarden. De board-read levert
-// deze ruwe waarden per gekoppelde header-kolom mee (linkedLineValues), zodat de sublijnen
-// zelf niet in de payload hoeven te zitten.
-export function formatLinkedLineValues(rawValues, lineDataType = 'text', columnKey = '') {
-  if (!Array.isArray(rawValues)) return '-';
+// Ontdubbelde, geformatteerde lijst regelwaarden. Gedeeld door formatLinkedLineValues
+// (platte tekst) en getLinkedLineValuePreview (eerste waarde + "+N"-badge), zodat beide
+// weergaven altijd hetzelfde ontdubbelde resultaat gebruiken.
+function dedupeFormattedLineValues(rawValues, lineDataType, columnKey) {
+  if (!Array.isArray(rawValues)) return [];
   const uniqueValues = [];
   const seen = new Set();
   rawValues.forEach((raw) => {
@@ -46,8 +46,28 @@ export function formatLinkedLineValues(rawValues, lineDataType = 'text', columnK
     seen.add(display);
     uniqueValues.push(display);
   });
+  return uniqueValues;
+}
+
+// Ontdubbelde, geformatteerde weergave van een reeks regelwaarden. De board-read levert
+// deze ruwe waarden per gekoppelde header-kolom mee (linkedLineValues), zodat de sublijnen
+// zelf niet in de payload hoeven te zitten.
+export function formatLinkedLineValues(rawValues, lineDataType = 'text', columnKey = '') {
+  const uniqueValues = dedupeFormattedLineValues(rawValues, lineDataType, columnKey);
   if (!uniqueValues.length) return '-';
   return uniqueValues.length === 1 ? uniqueValues[0] : uniqueValues.join(', ');
+}
+
+// Zelfde ontdubbeling als formatLinkedLineValues, maar als eerste-waarde + aantal-overige,
+// analoog aan de "+N"-badge van de productafbeelding-kolom (getPurchaseOrderProductImageSummary).
+export function getLinkedLineValuePreview(rawValues, lineDataType = 'text', columnKey = '') {
+  const uniqueValues = dedupeFormattedLineValues(rawValues, lineDataType, columnKey);
+  if (!uniqueValues.length) return { firstValue: '-', additionalCount: 0, allValuesLabel: '-' };
+  return {
+    firstValue: uniqueValues[0],
+    additionalCount: Math.max(uniqueValues.length - 1, 0),
+    allValuesLabel: uniqueValues.join(', '),
+  };
 }
 
 export function calculateLineColumnValues(lines, columnKey, lineDataType = 'text') {

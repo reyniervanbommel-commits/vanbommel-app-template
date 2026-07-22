@@ -366,7 +366,116 @@ function addDays(date, amount) {
   return out;
 }
 
-function evalNode(node, rowValues, depth = 0) {
+// Middernacht UTC van de gegeven datum (of nu). Datumkolommen worden al als
+// UTC-middernacht opgeslagen (zie daysBetween/addDays), dus TODAY() sluit
+// daar 1-op-1 op aan en levert altijd een heel aantal dagen op, ongeacht het
+// tijdstip van de dag waarop de formule wordt uitgerekend.
+function getUtcMidnight(referenceDate = new Date()) {
+  const out = new Date(referenceDate.getTime());
+  out.setUTCHours(0, 0, 0, 0);
+  return out;
+}
+
+function roundToDecimals(value, decimals) {
+  const digits = Math.trunc(decimals);
+  if (digits < 0 || digits > 10) throw new Error('AFRONDEN/ROUND decimals must be between 0 and 10');
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function requireDateArg(value, label) {
+  const date = toDateOrNull(value);
+  if (!date) throw new Error(`${label} must be a date`);
+  return date;
+}
+
+// Telt hoeveel van de `days` dagen ná `fromDate` een werkdag (ma-vr) zijn.
+function countWeekdaysForward(fromDate, days) {
+  let dow = fromDate.getUTCDay();
+  let count = 0;
+  for (let i = 0; i < days; i += 1) {
+    dow = (dow + 1) % 7;
+    if (dow !== 0 && dow !== 6) count += 1;
+  }
+  return count;
+}
+
+// Aantal werkdagen (ma-vr) tussen twee datums. Zelfde teken/nul-gedrag als
+// daysBetween: gelijke datum = 0, `endDate` ná `startDate` = positief. Puur
+// dag-van-de-week-rekenwerk (geen feestdagenkalender/DB-lookup nodig), dus
+// even goedkoop als de andere formule-functies — geen invloed op de
+// board-snelheid, ook niet bij 2000 rijen.
+function networkDaysBetween(startDate, endDate) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  let sign = 1;
+  let from = startDate;
+  let to = endDate;
+  if (from.getTime() > to.getTime()) {
+    sign = -1;
+    [from, to] = [to, from];
+  }
+  const totalCalendarDays = Math.round((to.getTime() - from.getTime()) / msPerDay);
+  if (totalCalendarDays === 0) return 0;
+  const fullWeeks = Math.floor(totalCalendarDays / 7);
+  const remainderDays = totalCalendarDays % 7;
+  const workdays = fullWeeks * 5 + countWeekdaysForward(from, remainderDays);
+  return sign * workdays;
+}
+
+// Functie-dispatchtabel voor formule-calls. Elke functie krijgt de reeds
+// geëvalueerde argumentwaarden (geen AST-nodes) en het evaluatiecontext
+// (o.a. `today`). Nieuwe functies toevoegen = hier één entry toevoegen; de
+// tokenizer/parser ondersteunen willekeurige `NAAM(...)`-calls al generiek.
+const FORMULA_FUNCTIONS = {
+  TODAY: {
+    minArgs: 0,
+    maxArgs: 0,
+    apply: (args, context) => context.today,
+  },
+  AFRONDEN: {
+    minArgs: 1,
+    maxArgs: 2,
+    apply: (args) => roundToDecimals(
+      toNumericOperand(args[0], 'AFRONDEN/ROUND value'),
+      args.length > 1 ? toNumericOperand(args[1], 'AFRONDEN/ROUND decimals') : 0
+    ),
+  },
+  ROUND: {
+    minArgs: 1,
+    maxArgs: 2,
+    apply: (args) => FORMULA_FUNCTIONS.AFRONDEN.apply(args),
+  },
+  ABS: {
+    minArgs: 1,
+    maxArgs: 1,
+    apply: (args) => Math.abs(toNumericOperand(args[0], 'ABS value')),
+  },
+  MAX: {
+    minArgs: 1,
+    maxArgs: 64,
+    apply: (args) => Math.max(...args.map((value, index) => toNumericOperand(value, `MAX argument ${index + 1}`))),
+  },
+  MIN: {
+    minArgs: 1,
+    maxArgs: 64,
+    apply: (args) => Math.min(...args.map((value, index) => toNumericOperand(value, `MIN argument ${index + 1}`))),
+  },
+  NETWERKDAGEN: {
+    minArgs: 2,
+    maxArgs: 2,
+    apply: (args) => networkDaysBetween(
+      requireDateArg(args[0], 'NETWERKDAGEN/NETWORKDAYS start'),
+      requireDateArg(args[1], 'NETWERKDAGEN/NETWORKDAYS end')
+    ),
+  },
+  NETWORKDAYS: {
+    minArgs: 2,
+    maxArgs: 2,
+    apply: (args) => FORMULA_FUNCTIONS.NETWERKDAGEN.apply(args),
+  },
+};
+
+function evalNode(node, rowValues, depth = 0, context = {}) {
   if (!node || typeof node !== 'object') throw new Error('Invalid formula node');
   if (depth > MAX_EVAL_DEPTH) throw new Error(`Evaluation too deep (max ${MAX_EVAL_DEPTH})`);
 
@@ -380,24 +489,33 @@ function evalNode(node, rowValues, depth = 0) {
     return rowValues[key];
   }
   if (node.type === 'unary') {
-    const value = evalNode(node.argument, rowValues, depth + 1);
+    const value = evalNode(node.argument, rowValues, depth + 1, context);
     if (node.op === '+') return toNumericOperand(value, 'Unary plus');
     if (node.op === '-') return -toNumericOperand(value, 'Unary minus');
     throw new Error(`Unknown unary operator '${node.op}'`);
   }
   if (node.type === 'call') {
-    if (node.name !== 'ALS') throw new Error(`Unknown function '${node.name}'`);
-    if (!Array.isArray(node.args) || node.args.length !== 3) {
-      throw new Error('IF expects exactly 3 arguments');
+    if (node.name === 'ALS' || node.name === 'IF') {
+      if (!Array.isArray(node.args) || node.args.length !== 3) {
+        throw new Error('IF expects exactly 3 arguments');
+      }
+      const condition = evalNode(node.args[0], rowValues, depth + 1, context);
+      return toBoolean(condition)
+        ? evalNode(node.args[1], rowValues, depth + 1, context)
+        : evalNode(node.args[2], rowValues, depth + 1, context);
     }
-    const condition = evalNode(node.args[0], rowValues, depth + 1);
-    return toBoolean(condition)
-      ? evalNode(node.args[1], rowValues, depth + 1)
-      : evalNode(node.args[2], rowValues, depth + 1);
+    const fn = FORMULA_FUNCTIONS[node.name];
+    if (!fn) throw new Error(`Unknown function '${node.name}'`);
+    const argCount = Array.isArray(node.args) ? node.args.length : 0;
+    if (argCount < fn.minArgs || argCount > fn.maxArgs) {
+      throw new Error(`${node.name} expects ${fn.minArgs === fn.maxArgs ? fn.minArgs : `${fn.minArgs}-${fn.maxArgs}`} argument(s)`);
+    }
+    const args = (node.args || []).map((arg) => evalNode(arg, rowValues, depth + 1, context));
+    return fn.apply(args, context);
   }
   if (node.type === 'binary') {
-    const left = evalNode(node.left, rowValues, depth + 1);
-    const right = evalNode(node.right, rowValues, depth + 1);
+    const left = evalNode(node.left, rowValues, depth + 1, context);
+    const right = evalNode(node.right, rowValues, depth + 1, context);
 
     if (['=', '<>', '>', '<', '>=', '<='].includes(node.op)) {
       return compareValues(left, right, node.op);
@@ -449,8 +567,12 @@ function evaluateCompiledFormula(compiled, rowValues = {}, options = {}) {
   if (!compiled || !compiled.ast) {
     return { value: null, error: 'Formula is not compiled' };
   }
+  // `today` wordt idealiter één keer per read/aanroep-batch meegegeven (zie
+  // TableDataService), zodat TODAY() voor alle rijen en formules identiek is
+  // en er geen extra Date-object per rij nodig is dan wat hier al gebeurt.
+  const context = { today: options.today instanceof Date ? options.today : getUtcMidnight() };
   try {
-    const rawValue = evalNode(compiled.ast, rowValues, 0);
+    const rawValue = evalNode(compiled.ast, rowValues, 0, context);
     const value = castResult(rawValue, options.resultType || 'text');
     return { value, error: null };
   } catch (err) {
@@ -469,8 +591,10 @@ module.exports = {
   MAX_FORMULA_LENGTH,
   MAX_TOKENS,
   MAX_EVAL_DEPTH,
+  FORMULA_FUNCTIONS,
   FormulaSyntaxError,
   compileFormula,
   evaluateCompiledFormula,
   extractFormulaReferences,
+  getUtcMidnight,
 };
