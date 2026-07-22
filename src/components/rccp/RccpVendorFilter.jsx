@@ -23,6 +23,8 @@ export default function RccpVendorFilter({
   vendorNames,
   loading,
   error,
+  autoFocus = false,
+  onHighlightVendor,
 }) {
   const styles = useStyles();
   const selectedLabel = value ? vendorLabel(value, vendorNames) : ALL_VENDORS_LABEL;
@@ -43,6 +45,18 @@ export default function RccpVendorFilter({
       return vendor.toLowerCase().includes(term) || name.includes(term);
     });
   }, [vendors, vendorNames, query, isSearching]);
+
+  // Terwijl de gebruiker zoekt en er nog maar één match overblijft, laad die vendor alvast op
+  // de achtergrond (zie useRccpVendorPrefetch) — dekt het geval waarin iemand het volledige
+  // vendornummer/naam intikt en direct kiest, zonder eerst door de lijst te navigeren.
+  useEffect(() => {
+    if (!onHighlightVendor || !isSearching || filteredVendors.length !== 1) return;
+    onHighlightVendor(filteredVendors[0]);
+  }, [onHighlightVendor, isSearching, filteredVendors]);
+
+  const handleActiveOptionChange = useCallback((_, data) => {
+    if (data.nextOption?.value) onHighlightVendor?.(data.nextOption.value);
+  }, [onHighlightVendor]);
 
   const showAllOption = !isSearching
     || ALL_VENDORS_LABEL.toLowerCase().includes(query.trim().toLowerCase());
@@ -78,7 +92,9 @@ export default function RccpVendorFilter({
         value={query}
         selectedOptions={[value || '']}
         placeholder="Search by vendor no. or name..."
+        input={{ autoFocus }}
         onOptionSelect={handleOptionSelect}
+        onActiveOptionChange={handleActiveOptionChange}
         onChange={handleInputChange}
         onBlur={handleBlur}
       >
@@ -88,7 +104,12 @@ export default function RccpVendorFilter({
         {filteredVendors.map((vendor) => {
           const label = vendorLabel(vendor, vendorNames);
           return (
-            <Option key={vendor} value={vendor} text={label}>
+            <Option
+              key={vendor}
+              value={vendor}
+              text={label}
+              onMouseEnter={() => onHighlightVendor?.(vendor)}
+            >
               {label}
             </Option>
           );

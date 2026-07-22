@@ -27,7 +27,8 @@ export function resolveRccpVendorFromFilter(filterByColumn, vendorColumnKey = 'v
 /**
  * Bepaalt de vendor waarmee de RCCP-pagina moet openen: als de PO-pagina een vendor-filter
  * (nr of naam, operator "equals") heeft staan én die vendor bestaat in de RCCP-vendorlijst,
- * gebruik die. Anders de eerste vendor uit de lijst (of '' als er geen vendors zijn).
+ * gebruik die. Anders '' (geen vendor) — de gebruiker zoekt dan zelf een vendor op, in plaats
+ * van dat de pagina automatisch de eerste vendor uit de lijst laadt.
  * @param {{ vendors: string[], vendorNames?: Record<string,string>, filterByColumn?: object, vendorColumnKey?: string }} params
  * @returns {string}
  */
@@ -49,5 +50,5 @@ export function resolveDefaultRccpVendor({
     if (matchByName) return matchByName;
   }
 
-  return list[0] || '';
+  return '';
 }

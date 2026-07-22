@@ -49,18 +49,18 @@ describe('resolveDefaultRccpVendor', () => {
     expect(result).toBe('V000696');
   });
 
-  it('falls back to the first vendor when there is no PO filter', () => {
+  it('returns an empty string when there is no PO filter (user searches instead of auto-select)', () => {
     const result = resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn: null });
-    expect(result).toBe('V000583');
+    expect(result).toBe('');
   });
 
-  it('falls back to the first vendor when the filtered vendor no longer exists', () => {
+  it('returns an empty string when the filtered vendor no longer exists', () => {
     const result = resolveDefaultRccpVendor({
       vendors,
       vendorNames,
       filterByColumn: { vendorAccount: { operator: 'equals', value: 'V999999' } },
     });
-    expect(result).toBe('V000583');
+    expect(result).toBe('');
   });
 
   it('returns an empty string when there are no vendors at all', () => {

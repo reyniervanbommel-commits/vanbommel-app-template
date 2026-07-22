@@ -73,4 +73,36 @@ describe('RccpVendorFilter', () => {
 
     expect(onChange).toHaveBeenCalledWith('');
   });
+
+  it('autofocuses the search input when autoFocus is true', () => {
+    renderFilter({ autoFocus: true });
+    const input = screen.getByRole('combobox');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('does not autofocus the search input by default', () => {
+    renderFilter();
+    const input = screen.getByRole('combobox');
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('calls onHighlightVendor on hover (background prefetch signal)', () => {
+    const onHighlightVendor = vi.fn();
+    renderFilter({ onHighlightVendor });
+    const input = screen.getByRole('combobox');
+    fireEvent.click(input);
+    fireEvent.mouseEnter(screen.getByRole('option', { name: /V000696/ }));
+
+    expect(onHighlightVendor).toHaveBeenCalledWith('V000696');
+  });
+
+  it('calls onHighlightVendor when typing narrows the list to a single exact match', () => {
+    const onHighlightVendor = vi.fn();
+    renderFilter({ onHighlightVendor });
+    const input = screen.getByRole('combobox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: '696' } });
+
+    expect(onHighlightVendor).toHaveBeenCalledWith('V000696');
+  });
 });
