@@ -6,10 +6,17 @@ import {
   hasActiveFilter,
   isDateColumn,
   resolveFilterModel,
+  COLOR_FILTER_OPERATOR,
   DATE_FILTER_OPERATORS as DATE_OPS,
   NUMBER_FILTER_OPERATORS as NUMBER_OPS,
   TEXT_FILTER_OPERATORS as TEXT_OPS,
 } from '../utils/tableViewFilterUtils';
+import {
+  NO_COLOR_FILTER_VALUE,
+  normalizeFilterColors,
+  resolveColumnFilterCellColor,
+  resolveRowFilterColor,
+} from '../components/supplier/columnFilterColorUtils';
 
 // Re-export zodat bestaande imports vanaf deze hook blijven werken.
 export const TEXT_FILTER_OPERATORS = TEXT_OPS;
@@ -59,7 +66,7 @@ function compareValues(a, b, column, datePeriodDisplayModes = {}) {
   return left.localeCompare(right, 'nl-NL', { sensitivity: 'base' });
 }
 
-export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {} }) {
+export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {}, columnFormatRules = {} }) {
   const [sortState, setSortState] = useState({ columnKey: '', direction: SORT_DIRECTIONS.none });
   const [filterByColumn, setFilterByColumn] = useState({});
   // Keep header filter chips snappy; defer the heavy filter→sort pass for board rows.
@@ -135,6 +142,28 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
       const next = { ...prev };
       delete next[columnKey];
       return next;
+    });
+  }, []);
+
+  // Zet (of wist) een kleurfilter voor één kolom. Een lege lijst verwijdert het filter.
+  const setColumnColorFilter = useCallback((columnKey, colors) => {
+    setFilterByColumn((prev) => {
+      const normalized = normalizeFilterColors(colors);
+      if (!normalized.length) {
+        if (!prev[columnKey]) return prev;
+        const next = { ...prev };
+        delete next[columnKey];
+        return next;
+      }
+      return {
+        ...prev,
+        [columnKey]: {
+          operator: COLOR_FILTER_OPERATOR,
+          colors: normalized,
+          value: '',
+          secondaryValue: '',
+        },
+      };
     });
   }, []);
 
@@ -217,11 +246,27 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
       .map((column) => [column, resolveFilterModel(column, deferredFilterByColumn[column.key], datePeriodDisplayModes)])
       .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
 
-    const filtered = activeFilters.length
+    // Kleurfilters worden apart afgehandeld: ze hebben de volledige rij + de
+    // format-regelset nodig i.p.v. alleen de ruwe celwaarde.
+    const valueFilters = activeFilters.filter(([, filter]) => filter.operator !== COLOR_FILTER_OPERATOR);
+    const colorFilters = activeFilters.filter(([, filter]) => filter.operator === COLOR_FILTER_OPERATOR);
+
+    const filtered = (valueFilters.length || colorFilters.length)
       ? items.filter((order) => {
-        return activeFilters.every(([column, filter]) => {
-          const rawValue = order?.values?.[column.key];
-          return columnValueMatchesFilter(column, rawValue, filter, datePeriodDisplayModes);
+        const valueMatch = valueFilters.every(([column, filter]) => (
+          columnValueMatchesFilter(column, order?.values?.[column.key], filter, datePeriodDisplayModes)
+        ));
+        if (!valueMatch) return false;
+        if (!colorFilters.length) return true;
+        // Rij-brede kleur (row-target regels) één keer per order bepalen zodat een
+        // kleurfilter op élke kolom ook op een rijkleur matcht.
+        const rowColor = resolveRowFilterColor(order, columns, columnFormatRules);
+        return colorFilters.every(([column, filter]) => {
+          const cellColor = resolveColumnFilterCellColor(column, order, columnFormatRules[column.key]);
+          const hasColor = Boolean(cellColor) || Boolean(rowColor);
+          if (!hasColor) return filter.colors.includes(NO_COLOR_FILTER_VALUE);
+          if (cellColor && filter.colors.includes(cellColor)) return true;
+          return Boolean(rowColor) && filter.colors.includes(rowColor);
         });
       })
       : items;
@@ -243,7 +288,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
       return base;
     });
     return sorted;
-  }, [columns, deferredFilterByColumn, items, sortState, columnByKey, datePeriodDisplayModes]);
+  }, [columns, deferredFilterByColumn, items, sortState, columnByKey, datePeriodDisplayModes, columnFormatRules]);
 
   const activeFilterCount = useMemo(
     () => columns.reduce(
@@ -268,6 +313,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterSecondaryValue,
     applyColumnFilter,
     clearColumnFilter,
+    setColumnColorFilter,
     applyFilterFromCellValue,
     clearAllFilters,
     toggleSort,
@@ -285,6 +331,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterSecondaryValue,
     applyColumnFilter,
     clearColumnFilter,
+    setColumnColorFilter,
     applyFilterFromCellValue,
     clearAllFilters,
     toggleSort,

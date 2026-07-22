@@ -100,6 +100,7 @@ function PurchaseOrdersBoardTable({
     items,
     columns: decoratedColumns,
     datePeriodDisplayModes,
+    columnFormatRules: headerColumnFormatRules,
   });
   const resolvedBoardView = boardView || fallbackBoardView;
   const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
@@ -113,6 +114,7 @@ function PurchaseOrdersBoardTable({
     setFilterSecondaryValue,
     applyColumnFilter,
     clearColumnFilter,
+    setColumnColorFilter,
     applyFilterFromCellValue,
     setSortDirection,
     groupedRows,
@@ -270,6 +272,7 @@ function PurchaseOrdersBoardTable({
             setFilterSecondaryValue={setFilterSecondaryValue}
             applyColumnFilter={applyColumnFilter}
             clearColumnFilter={clearColumnFilter}
+            setColumnColorFilter={setColumnColorFilter}
             setGroupingColumn={setGroupingColumn}
             clearGrouping={clearGrouping}
             setGroupingBarColor={setGroupingBarColor}

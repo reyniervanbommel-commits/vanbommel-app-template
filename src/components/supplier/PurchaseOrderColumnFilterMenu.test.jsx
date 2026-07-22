@@ -72,11 +72,11 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(typeLabel.textContent).toBe('Number');
   });
 
-  it('toont Connected type voor gelinkte value-headerkolommen', async () => {
+  it('toont kolomtype rechts en bron links voor gelinkte value-headerkolommen', async () => {
     renderMenu({ isConnectedType: true });
     openColumnMenu();
     const typeLabel = await screen.findByTestId('column-type-label');
-    expect(typeLabel.textContent).toBe('Connected');
+    expect(typeLabel.textContent).toBe('Number');
   });
 
   it('maakt de kolomnaam klikbaar voor hernoemen (ook d365)', async () => {

@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterSubmenuButton from './PurchaseOrderColumnFilterSubmenuButton';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
+import D365LogoIcon from './D365LogoIcon';
 import { menuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 
 export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
@@ -147,7 +148,7 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
             {canToggleWriteback ? (
               <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
                 <span className={styles.d365SyncLabel}>
-                  <img className={styles.d365SyncIcon} src="/d365-sync-cloud.png" alt="" />
+                  <D365LogoIcon size="small" alt="" />
                   {writable ? 'Disable sync' : 'Enable sync'}
                 </span>
               </PurchaseOrderColumnFilterMenuButton>
