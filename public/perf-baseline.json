@@ -1,7 +1,7 @@
 {
   "label": "Scout baseline (pre-fix)",
-  "updatedAt": "2026-07-21",
-  "environment": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "updatedAt": "2026-07-22",
+  "environment": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
   "profile": "L",
   "hudWatch": [
     {
@@ -10,7 +10,7 @@
       "pathIncludes": "/data/purchase-orders",
       "pathExcludes": "/revision",
       "method": "GET",
-      "baselineMs": 1701,
+      "baselineMs": 941,
       "journey": "J1"
     },
     {
@@ -33,48 +33,48 @@
       "id": "po-filter-apply",
       "label": "PO filter Apply",
       "journey": "J7",
-      "baselineMs": 721,
+      "baselineMs": 805,
       "metric": "filterApplyMs"
     },
     {
       "id": "po-text-style",
       "label": "PO text style Bold",
       "journey": "J8",
-      "baselineMs": 1073,
+      "baselineMs": 1821,
       "metric": "textStyleApplyMs"
     }
   ],
   "scoutJourneys": {
     "J1": {
-      "elapsedWall": 86,
-      "apiSum": 1701,
-      "app": 1464
+      "elapsedWall": 178,
+      "apiSum": 941,
+      "app": 853
     },
     "J2": {
       "elapsedWall": null,
       "apiSum": 0
     },
     "J3": {
-      "elapsedWall": 384,
-      "apiSum": 18662,
+      "elapsedWall": null,
+      "apiSum": 2800,
       "duplicatePoFetch": 0
     }
   },
   "boardActionJourneys": {
     "J7": {
       "label": "Column filter Apply",
-      "profile": "L",
+      "profile": "Mlocal-after2b",
       "median": {
-        "filterApplyMs": 721
+        "filterApplyMs": 805
       }
     },
     "J8": {
       "label": "Text style Bold",
-      "profile": "L",
+      "profile": "Mlocal-after2b",
       "median": {
-        "textStyleApplyMs": 1073
+        "textStyleApplyMs": 1821
       }
     },
-    "measuredAt": "2026-07-21T14:29:21.294Z"
+    "measuredAt": "2026-07-22T10:30:21.419Z"
   }
 }

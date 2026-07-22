@@ -1,57 +1,56 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-07-21T14:30:00.000Z",
+  "generatedAt": "2026-07-22T09:29:45.200Z",
   "environment": {
-    "url": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
-    "profiles": ["L"]
+    "url": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
+    "profiles": [
+      "L"
+    ]
   },
   "frequencySource": "/admin/analytics/page-usage",
-  "boardActionsMeasuredAt": "2026-07-21T14:28:00.000Z",
   "items": [
-    {
-      "id": "BL-005",
-      "journey": "J7",
-      "action": "Column filter Apply",
-      "profile": "L",
-      "filterApplyMs": 721,
-      "baselineFilterApplyMs": 10611,
-      "dominantPost": "render",
-      "priorityScore": 0,
-      "status": "done",
-      "attemptedTiers": ["L3", "L4", "L5"],
-      "note": "L5 viewport window: 10611→721 ms (−93%)"
-    },
     {
       "id": "BL-006",
       "journey": "J8",
       "action": "Column text style Bold toggle",
       "profile": "L",
-      "textStyleApplyMs": 1073,
-      "dominantPost": "network",
-      "priorityScore": 0,
-      "status": "done",
-      "note": "Optimistic persist; re-measure after L5 ~1073 ms"
+      "textStyleApplyMs": 799,
+      "dominantPost": "render",
+      "targetStyleMs": 559,
+      "routeFrequencyWeight": 3,
+      "priorityScore": 719,
+      "status": "done-local",
+      "attemptedTiers": ["L1"],
+      "note": "Azure DEV truth-baseline = 799ms. L1 render-fix (arePropsEqual per-kolom + ref-stabiele stijl-map + network-only text-style persist). Lokale proxy-harnas (dev-build): ~2941 -> ~1880ms (~36%), J7 geen regressie, 35/35 tests. Azure DEV-bevestiging pending preview-deploy."
     },
     {
-      "id": "BL-003",
-      "journey": "J3",
-      "action": "Return / after /rccp (duplicate PO-fetch)",
+      "id": "BL-005",
+      "journey": "J7",
+      "action": "Column filter Apply",
       "profile": "L",
-      "duplicatePoFetchCount": 0,
-      "dominantPost": "server",
-      "priorityScore": 0,
-      "status": "done",
-      "note": "0 full PO reads; adversary A1/A5 PASS"
+      "filterApplyMs": 572,
+      "dominantPost": "render",
+      "targetFilterMs": 400,
+      "routeFrequencyWeight": 3,
+      "priorityScore": 515,
+      "status": "skipped",
+      "note": "Azure DEV truth = 572ms (M=404). Al geoptimaliseerd (L5 windowing v1.3); zit binnen meetruis. Blast radius van BL-006-fix: J7 geen regressie op harnas."
     },
     {
       "id": "BL-001",
       "journey": "J1",
       "action": "PO board-load / (hard reload)",
       "profile": "L",
-      "elapsedWall": 86,
-      "priorityScore": 0,
+      "elapsedWall": 178,
+      "app": 853,
+      "apiSum": 941,
+      "dominantPost": "server",
+      "labels": [],
+      "targetWallMs": 125,
+      "routeFrequencyWeight": 3,
+      "priorityScore": 159,
       "status": "skipped",
-      "note": "elapsedWall under skipIf 500ms"
+      "note": "elapsedWall 178ms < skipIf 500ms"
     },
     {
       "id": "BL-002",
@@ -59,18 +58,75 @@
       "action": "Route /rccp dashboard load",
       "profile": "L",
       "elapsedWall": null,
+      "app": 0,
+      "apiSum": 0,
+      "dominantPost": "sql",
+      "labels": [
+        "tb_meta",
+        "tb_history_hints",
+        "tb_links",
+        "tb_sync_state",
+        "tb_revision",
+        "tb_read_custom",
+        "tb_viewed",
+        "tb_read_cols",
+        "tb_track_marks",
+        "tb_read_masters",
+        "tb_lookup_items",
+        "tb_lookup_vendors",
+        "tb_lookup_excel_map1",
+        "tb_lookup_product_receipt_lines",
+        "tb_lookups",
+        "tb_read_details",
+        "tb_ledger",
+        "tb_retention",
+        "rccp_vendor_list",
+        "rccp_po_read",
+        "rccp_capacity"
+      ],
+      "targetWallMs": null,
+      "routeFrequencyWeight": 0.3156708004509583,
       "priorityScore": 0,
       "status": "skipped",
-      "note": "elapsedWall null / measurement noise"
+      "note": "elapsedWall null (meetruis)"
     },
     {
-      "id": "BL-004",
-      "journey": "J4",
-      "action": "PO board vertical scroll",
+      "id": "BL-003",
+      "journey": "J3",
+      "action": "Return / after /rccp (duplicate PO-fetch)",
       "profile": "L",
+      "elapsedWall": null,
+      "app": 2448,
+      "apiSum": 2800,
+      "duplicatePoFetchCount": 0,
+      "dominantPost": "sql",
+      "labels": [
+        "tb_meta",
+        "tb_history_hints",
+        "tb_links",
+        "tb_viewed",
+        "tb_revision",
+        "tb_sync_state",
+        "tb_read_custom",
+        "tb_read_cols",
+        "tb_track_marks",
+        "tb_read_masters",
+        "tb_lookup_vendors",
+        "tb_lookup_items",
+        "tb_lookup_excel_map1",
+        "tb_lookup_product_receipt_lines",
+        "tb_lookups",
+        "tb_ledger",
+        "tb_read_details",
+        "tb_retention",
+        "bi_meta"
+      ],
+      "targetWallMs": null,
+      "routeFrequencyWeight": 2,
       "priorityScore": 0,
       "status": "skipped",
-      "note": "No scrollable overflow container on dataset"
+      "note": "elapsedWall null; duplicate PO-fetch = 0 (cache-fix v1.3 houdt stand)"
     }
-  ]
+  ],
+  "boardActionsMeasuredAt": "2026-07-22T10:30:21.473Z"
 }
