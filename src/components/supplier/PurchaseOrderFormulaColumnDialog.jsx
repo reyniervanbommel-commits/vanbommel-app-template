@@ -18,6 +18,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import PurchaseOrderColumnFormatRulesSection from './PurchaseOrderColumnFormatRulesSection';
+import PurchaseOrderFormulaHelpPanel from './PurchaseOrderFormulaHelpPanel';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -38,21 +39,6 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('14px'),
-  },
-  pickerWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('8px'),
-  },
-  refButtons: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    ...shorthands.gap('6px'),
-    maxHeight: '168px',
-    overflowY: 'auto',
-    ...shorthands.padding('4px'),
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    borderRadius: tokens.borderRadiusMedium,
   },
   helperText: {
     color: tokens.colorNeutralForeground3,
@@ -124,6 +110,9 @@ export default function PurchaseOrderFormulaColumnDialog({
   const insertReference = useCallback((columnKey) => {
     const ref = `(${columnKey})`;
     setFormulaExpr((prev) => `${String(prev || '')}${ref}`);
+  }, []);
+  const insertFunctionSnippet = useCallback((snippet) => {
+    setFormulaExpr((prev) => `${String(prev || '')}${snippet}`);
   }, []);
   const addFormatRule = useCallback(() => {
     setFormatRules((prev) => [...prev, {
@@ -220,7 +209,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </Dropdown>
               </Field>
 
-              <Field label="Formula" required hint="Example: ALS((a)>(b);'Fout';(a)+(b))">
+              <Field label="Formula" required hint="Example: IF((a)>(b);'Too late';(a)+(b)). Also see Today and Round below.">
                 <Textarea
                   value={formulaExpr}
                   onChange={(_, data) => {
@@ -245,21 +234,11 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </div>
               </Field>
 
-              <div className={styles.pickerWrap}>
-                <Text weight="semibold">Column references</Text>
-                <div className={styles.refButtons}>
-                  {referenceColumns.map((column) => (
-                    <Button
-                      key={column.key}
-                      size="small"
-                      appearance="secondary"
-                      onClick={() => insertReference(column.key)}
-                    >
-                      {column.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+              <PurchaseOrderFormulaHelpPanel
+                referenceColumns={referenceColumns}
+                onInsertReference={insertReference}
+                onInsertFunction={insertFunctionSnippet}
+              />
 
               <PurchaseOrderColumnFormatRulesSection
                 formatTarget={formatTarget}

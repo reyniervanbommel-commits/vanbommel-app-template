@@ -25,7 +25,7 @@ const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
-const { compileFormula, evaluateCompiledFormula } = require('../utils/tableFormulaEngine');
+const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
@@ -2554,7 +2554,7 @@ function withCaseInsensitiveKeys(values) {
 
 function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {}) {
   const formulaErrors = {};
-  const { evaluationValues: providedEvaluationValues = null } = options;
+  const { evaluationValues: providedEvaluationValues = null, today = null } = options;
   const evaluationValues = providedEvaluationValues
     ? withCaseInsensitiveKeys(providedEvaluationValues)
     : withCaseInsensitiveKeys(rowValues);
@@ -2568,7 +2568,7 @@ function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {
       formulaErrors[formulaKey] = item.compileError;
       continue;
     }
-    const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType });
+    const result = evaluateCompiledFormula(item.compiled, evaluationValues, { resultType: item.column.dataType, today });
     rowValues[formulaKey] = result.value;
     evaluationValues[formulaKey] = result.value;
     evaluationValues[String(formulaKey).toLowerCase()] = result.value;
@@ -3146,6 +3146,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     syncRulesPromise,
   ]);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  // Eén keer per read berekend (niet per rij/formule) zodat TODAY() voor alle
+  // rijen in deze response identiek is en er geen extra rekenkosten bijkomen.
+  const formulaToday = getUtcMidnight();
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
@@ -3217,7 +3220,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
     const linkedLineValues = applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
-    const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas);
+    const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas, { today: formulaToday });
 
     // Lege objecten/arrays laten we weg: de client vult ze zelf aan met dezelfde defaults, en bij
     // ~2000 rijen scheelt dat honderden kilobytes aan "historyByColumnId":{} in de payload.
