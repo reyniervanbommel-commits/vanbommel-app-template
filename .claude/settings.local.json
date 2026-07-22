@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash",
+      "Edit",
+      "PowerShell"
+    ]
+  },
+  "worktree": {
+    "baseRef": "head"
+  }
+}

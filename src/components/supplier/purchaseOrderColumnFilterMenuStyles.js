@@ -62,11 +62,9 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     overflow: 'visible',
   },
   sectionTitle: {
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     marginTop: '2px',
   },
   sectionBlock: {
@@ -91,11 +89,15 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     zIndex: 1,
   },
   subPaneTitle: {
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     marginBottom: '4px',
   },
   submenuButton: {
     justifyContent: 'space-between',
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
   },
   submenuButtonActive: {
     backgroundColor: tokens.colorNeutralBackground1Selected,
@@ -107,10 +109,14 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   },
   sortButton: {
     justifyContent: 'flex-start',
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
   },
   menuItemContent: {
     display: 'inline-flex',
     alignItems: 'center',
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     ...shorthands.gap('8px'),
     color: tokens.colorNeutralForeground1,
   },
@@ -140,6 +146,8 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   submenuItemLabel: {
     display: 'inline-flex',
     alignItems: 'center',
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     ...shorthands.gap('8px'),
   },
   divider: {
@@ -237,7 +245,7 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     ...shorthands.gap('4px'),
   },
   filterSectionLabel: {
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
     fontSize: tokens.fontSizeBase300,
     lineHeight: tokens.lineHeightBase300,
   },
@@ -325,18 +333,24 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     flex: '0 0 auto',
     minWidth: 'auto',
     height: '24px',
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     ...shorthands.padding('0', '6px'),
   },
   filterApplyButton: {
     flex: '0 0 auto',
     minWidth: 'auto',
     height: '24px',
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     ...shorthands.padding('0', '6px'),
   },
   filterActionRow: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     ...shorthands.gap('6px'),
     width: '100%',
     marginTop: '2px',
@@ -354,6 +368,12 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   actionRow: {
     display: 'flex',
     ...shorthands.gap('6px'),
+  },
+  subPaneFullWidthButton: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
   },
   hint: {
     color: tokens.colorNeutralForeground3,

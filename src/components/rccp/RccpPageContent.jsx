@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button, Field, Input, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
@@ -15,6 +15,8 @@ import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { resolveDefaultRccpVendor } from './resolveRccpVendorFilter';
+import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -29,16 +31,30 @@ export default function RccpPageContent() {
   const { user } = useAuth();
   const isAdmin = user?.role === ROLES.ADMIN;
   const isSupplier = user?.role === ROLES.SUPPLIER;
-  const [vendorAccount, setVendorAccount] = useState('');
+  // null = nog geen vendor gekozen (voorkomt dat de dashboard-analyse voor ALLE vendors laadt, wat traag is)
+  const [vendorAccount, setVendorAccount] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const {
     vendors, vendorNames, loading: vendorsLoading, error: vendorsError,
   } = useRccpVendorOptions();
+
+  // Selecteer standaard de vendor waarop de PO-pagina net gefilterd was (nr of naam); anders
+  // de eerste vendor uit de lijst — in plaats van altijd "alle vendors" te laden (traag).
+  useEffect(() => {
+    if (isSupplier || vendorsLoading || vendorAccount !== null) return;
+    const filterByColumn = readPoFilterByColumnForRccp();
+    setVendorAccount(resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn }));
+  }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount]);
+
+  const vendorReady = isSupplier || vendorAccount !== null;
   const {
     window, setWindow, analysis, loading, error, readOnly,
     measureRows, periods, cellMap, reload,
-  } = useRccpPage({ vendorAccount: isSupplier ? undefined : vendorAccount });
+  } = useRccpPage({
+    vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
+    enabled: vendorReady,
+  });
 
   const [drillCell, setDrillCell] = useState(null);
   const capacityReloadRef = useRef(null);
@@ -90,7 +106,7 @@ export default function RccpPageContent() {
       <div className={styles.toolbar}>
         {!isSupplier && (
           <RccpVendorFilter
-            value={vendorAccount}
+            value={vendorAccount || ''}
             onChange={setVendorAccount}
             vendors={vendors}
             vendorNames={vendorNames}
@@ -152,8 +168,8 @@ export default function RccpPageContent() {
 
       {activeTab === 'capacity-planning' && (
         <RccpCapacityPlanningTab
-          vendorAccount={isSupplier ? undefined : vendorAccount}
-          enabled={activeTab === 'capacity-planning'}
+          vendorAccount={isSupplier ? undefined : (vendorAccount || undefined)}
+          enabled={activeTab === 'capacity-planning' && vendorReady}
           isAdmin={isAdmin}
           onImported={handleImportCompleted}
           onChanged={handleCapacityChanged}

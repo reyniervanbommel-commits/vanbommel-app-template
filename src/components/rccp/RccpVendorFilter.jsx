@@ -1,6 +1,21 @@
-import React, { useCallback } from 'react';
-import { Field, Select, Spinner } from '@fluentui/react-components';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Combobox, Field, Option, Spinner, makeStyles } from '@fluentui/react-components';
 
+const useStyles = makeStyles({
+  field: { maxWidth: '280px', minWidth: '220px' },
+});
+
+const ALL_VENDORS_LABEL = 'All vendors';
+
+function vendorLabel(vendor, vendorNames) {
+  const name = vendorNames?.[vendor];
+  return name ? `${vendor} — ${name}` : vendor;
+}
+
+/**
+ * Searchable vendor filter for the RCCP dashboard.
+ * Typing filters the vendor list by vendor number OR vendor name.
+ */
 export default function RccpVendorFilter({
   value,
   onChange,
@@ -9,9 +24,44 @@ export default function RccpVendorFilter({
   loading,
   error,
 }) {
-  const handleChange = useCallback((event) => {
-    onChange(event.target.value);
+  const styles = useStyles();
+  const selectedLabel = value ? vendorLabel(value, vendorNames) : ALL_VENDORS_LABEL;
+  const [query, setQuery] = useState(selectedLabel);
+
+  // Keep the input text in sync when the selection changes from outside (e.g. default vendor on load)
+  useEffect(() => {
+    setQuery(selectedLabel);
+  }, [selectedLabel]);
+
+  const isSearching = query.trim() !== '' && query !== selectedLabel;
+
+  const filteredVendors = useMemo(() => {
+    if (!isSearching) return vendors;
+    const term = query.trim().toLowerCase();
+    return vendors.filter((vendor) => {
+      const name = (vendorNames?.[vendor] || '').toLowerCase();
+      return vendor.toLowerCase().includes(term) || name.includes(term);
+    });
+  }, [vendors, vendorNames, query, isSearching]);
+
+  const showAllOption = !isSearching
+    || ALL_VENDORS_LABEL.toLowerCase().includes(query.trim().toLowerCase());
+
+  const handleOptionSelect = useCallback((_, data) => {
+    // Fluent's Combobox auto-clears the selection (optionValue undefined) while the typed
+    // text no longer matches the current selection — that's not a real user pick, ignore it.
+    if (data.optionValue === undefined) return;
+    onChange(data.optionValue || '');
+    setQuery(data.optionText || ALL_VENDORS_LABEL);
   }, [onChange]);
+
+  const handleInputChange = useCallback((event) => {
+    setQuery(event.target.value);
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    setQuery(selectedLabel);
+  }, [selectedLabel]);
 
   if (loading) {
     return <Spinner size="tiny" label="Loading vendors..." />;
@@ -19,21 +69,31 @@ export default function RccpVendorFilter({
 
   return (
     <Field
+      className={styles.field}
       label="Vendor filter"
       validationState={error ? 'error' : 'none'}
       validationMessage={error || undefined}
     >
-      <Select value={value} onChange={handleChange}>
-        <option value="">All vendors</option>
-        {vendors.map((vendor) => {
-          const name = vendorNames?.[vendor];
+      <Combobox
+        value={query}
+        selectedOptions={[value || '']}
+        placeholder="Search by vendor no. or name..."
+        onOptionSelect={handleOptionSelect}
+        onChange={handleInputChange}
+        onBlur={handleBlur}
+      >
+        {showAllOption && (
+          <Option value="" text={ALL_VENDORS_LABEL}>{ALL_VENDORS_LABEL}</Option>
+        )}
+        {filteredVendors.map((vendor) => {
+          const label = vendorLabel(vendor, vendorNames);
           return (
-            <option key={vendor} value={vendor}>
-              {name ? `${vendor} — ${name}` : vendor}
-            </option>
+            <Option key={vendor} value={vendor} text={label}>
+              {label}
+            </Option>
           );
         })}
-      </Select>
+      </Combobox>
     </Field>
   );
 }
