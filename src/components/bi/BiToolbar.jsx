@@ -6,10 +6,9 @@ import RccpVendorFilter from '../rccp/RccpVendorFilter';
 const useStyles = makeStyles({
   root: {
     display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    ...shorthands.gap(tokens.spacingVerticalS),
     marginBottom: tokens.spacingVerticalL,
   },
   heading: {
