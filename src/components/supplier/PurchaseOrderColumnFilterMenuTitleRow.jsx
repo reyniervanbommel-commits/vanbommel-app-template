@@ -1,13 +1,15 @@
 import React, { useCallback, useState } from 'react';
-import { mergeClasses, Text } from '@fluentui/react-components';
-import { CheckmarkRegular, LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
+import { Text } from '@fluentui/react-components';
+import { LockClosedRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 import { renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUtils';
+import PurchaseOrderColumnSourceIndicator from './PurchaseOrderColumnSourceIndicator';
 
 export default function PurchaseOrderColumnFilterMenuTitleRow({
   styles,
   columnLabel,
   columnTypeMeta,
+  columnSourceMeta,
   connectionTargets = [],
   canRenameColumn,
   handleRenameColumn,
@@ -15,6 +17,7 @@ export default function PurchaseOrderColumnFilterMenuTitleRow({
   closeSubmenu,
 }) {
   const resolvedTypeMeta = columnTypeMeta || { key: 'text', label: 'Text' };
+  const resolvedSourceMeta = columnSourceMeta || { key: 'user', label: 'Custom' };
   const normalizedConnectionTargets = Array.isArray(connectionTargets)
     ? connectionTargets.filter((target) => String(target || '').trim())
     : [];
@@ -28,6 +31,12 @@ export default function PurchaseOrderColumnFilterMenuTitleRow({
     <>
       <div className={styles.titleRow}>
         <span className={styles.titleLabelWrap}>
+          <PurchaseOrderColumnSourceIndicator
+            sourceMeta={resolvedSourceMeta}
+            connectionTargets={normalizedConnectionTargets}
+            connectionsExpanded={connectionsExpanded}
+            onToggleConnections={toggleConnections}
+          />
           {canRenameColumn ? (
             <PurchaseOrderColumnFilterMenuButton
               className={styles.titleLabelButton}
@@ -51,18 +60,6 @@ export default function PurchaseOrderColumnFilterMenuTitleRow({
             {renderColumnTypeIcon(resolvedTypeMeta.key)}
           </span>
           <span className={styles.typeText} data-testid="column-type-label">{resolvedTypeMeta.label}</span>
-          {normalizedConnectionTargets.length ? (
-            <PurchaseOrderColumnFilterMenuButton
-              className={mergeClasses(styles.typeMetaConnectionButton, connectionsExpanded && styles.typeMetaConnectionButtonActive)}
-              appearance="transparent"
-              size="small"
-              closeSubmenu={closeSubmenu}
-              icon={<LinkRegular />}
-              aria-label={`Show connected columns for ${columnLabel}`}
-              aria-expanded={connectionsExpanded}
-              onClick={toggleConnections}
-            />
-          ) : null}
         </span>
       </div>
       {connectionsExpanded && normalizedConnectionTargets.length ? (

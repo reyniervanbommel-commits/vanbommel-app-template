@@ -12,6 +12,13 @@ export const PRODUCT_IMAGE_CELL_HEIGHT = PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX;
 export const PRODUCT_IMAGE_SUB_CELL_HEIGHT = PURCHASE_ORDER_SUB_ROW_HEIGHT_PX;
 export const PRODUCT_IMAGE_HOVER_SCALE = 5;
 export const PRODUCT_IMAGE_HOVER_MAX_SIZE = DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH * PRODUCT_IMAGE_HOVER_SCALE;
+/**
+ * Delay before a mounted image cell actually starts fetching its thumbnail.
+ * Rows mount/unmount rapidly while flicking through the virtualized board —
+ * without this delay, every row that briefly passes through the viewport
+ * would trigger its own (often wasted) image request.
+ */
+export const PRODUCT_IMAGE_LOAD_DELAY_MS = 180;
 
 export function getProductImageCellStyle(baseStyle, heightPx = PRODUCT_IMAGE_CELL_HEIGHT) {
   return {

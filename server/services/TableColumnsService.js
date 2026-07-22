@@ -24,7 +24,11 @@ const {
   ensureRemarksColumn,
   validateRemarksColumnRequest,
 } = require('./RemarksColumnService');
-const { normalizeStatusOptions, buildStatusLabelRenames } = require('../utils/statusColumnOptions');
+const {
+  normalizeStatusOptions,
+  buildStatusLabelRenames,
+  buildRemovedStatusOptions,
+} = require('../utils/statusColumnOptions');
 const { validateDatePeriodOptions } = require('../utils/datePeriodColumn');
 
 const MAX_LABEL_LENGTH = 128;
@@ -300,7 +304,28 @@ async function renameColumn(columnId, label, userId) {
   return mapColumnRow(result.recordset[0]);
 }
 
-async function updateColumn(columnId, { label, options }, userId) {
+// Telt hoeveel cellen in tb_custom_values elk van de opgegeven statuslabels gebruikt — nodig om
+// te bepalen of een verwijderd label nog "in gebruik" is voordat de kolomconfiguratie wijzigt.
+async function countStatusLabelUsage(pool, columnId, labels) {
+  const counts = new Map();
+  if (!labels.length) return counts;
+  const request = pool.request().input('columnId', sql.BigInt, columnId);
+  const placeholders = labels.map((label, index) => {
+    const paramName = `label${index}`;
+    request.input(paramName, sql.NVarChar(64), label);
+    return `@${paramName}`;
+  });
+  const result = await request.query(`
+    SELECT value_text, COUNT(*) AS cnt
+    FROM dbo.tb_custom_values
+    WHERE column_id = @columnId AND value_text IN (${placeholders.join(', ')})
+    GROUP BY value_text
+  `);
+  result.recordset.forEach((row) => counts.set(row.value_text, Number(row.cnt) || 0));
+  return counts;
+}
+
+async function updateColumn(columnId, { label, options, statusReassignments }, userId) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
   if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be changed'), { status: 400 });
@@ -332,6 +357,53 @@ async function updateColumn(columnId, { label, options }, userId) {
   const pool = await getPool();
 
   if (hasOptions && existing.dataType === 'status' && normalizedStatusOptions) {
+    // Labels die de gebruiker uit de kolom heeft verwijderd (aanwezig in existing.options,
+    // afwezig in de nieuwe lijst). Vóór het opslaan controleren we of die labels nog in gebruik
+    // zijn — zo niet, gewoon verwijderen; zo wel, verplicht een reassign-keuze (of blokkeren).
+    const removedOptions = buildRemovedStatusOptions(existing.options, normalizedStatusOptions);
+    if (removedOptions.length) {
+      const usageCounts = await countStatusLabelUsage(pool, columnId, removedOptions.map((o) => o.label));
+      const conflicts = removedOptions
+        .map((option) => ({ ...option, count: usageCounts.get(option.label) || 0 }))
+        .filter((option) => option.count > 0);
+      if (conflicts.length) {
+        const reassignments = statusReassignments && typeof statusReassignments === 'object' && !Array.isArray(statusReassignments)
+          ? statusReassignments
+          : {};
+        const unresolved = conflicts.filter((conflict) => !Object.prototype.hasOwnProperty.call(reassignments, conflict.label));
+        if (unresolved.length) {
+          throw Object.assign(
+            new Error(`${conflicts.length} status label(s) are still in use and cannot be deleted without reassigning affected items first`),
+            {
+              status: 409,
+              code: 'STATUS_LABELS_IN_USE',
+              details: conflicts.map(({ id, label: conflictLabel, count }) => ({ id, label: conflictLabel, count })),
+            }
+          );
+        }
+        const nextLabels = new Set(normalizedStatusOptions.map((option) => option.label));
+        for (const conflict of conflicts) {
+          const target = String(reassignments[conflict.label] || '').trim();
+          if (target && !nextLabels.has(target)) {
+            throw badRequest(`Reassign target '${target}' is not a valid remaining status label`);
+          }
+          await pool.request()
+            .input('columnId', sql.BigInt, columnId)
+            .input('oldLabel', sql.NVarChar(64), conflict.label)
+            .input('newLabel', sql.NVarChar(64), target || null)
+            .input('userId', sql.Int, userId || null)
+            .query(`
+              UPDATE dbo.tb_custom_values
+              SET value_text = @newLabel,
+                  updated_by = @userId,
+                  updated_at = SYSUTCDATETIME()
+              WHERE column_id = @columnId
+                AND value_text = @oldLabel
+            `);
+        }
+      }
+    }
+
     const renames = buildStatusLabelRenames(existing.options, normalizedStatusOptions);
     for (const rename of renames) {
       await pool.request()

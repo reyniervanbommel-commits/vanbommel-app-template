@@ -4,7 +4,9 @@ import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImageP
 import {
   PRODUCT_IMAGE_CELL_HEIGHT,
   PRODUCT_IMAGE_HOVER_MAX_SIZE,
+  PRODUCT_IMAGE_LOAD_DELAY_MS,
 } from '../../utils/purchaseOrderProductImageColumn';
+import { hasFailedProductImage, markProductImageFailed } from '../../utils/productImageFailureCache';
 
 const useStyles = makeStyles({
   root: {
@@ -39,6 +41,11 @@ const useStyles = makeStyles({
     maxWidth: '100%',
     maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
     objectFit: 'contain',
+  },
+  // Kept invisible (but still laid out) until `onLoad` fires, so a failing image
+  // never briefly shows the browser's native broken-image icon + alt text.
+  imagePending: {
+    visibility: 'hidden',
   },
   hoverPreviewFrame: {
     display: 'flex',
@@ -86,8 +93,6 @@ function PurchaseOrderProductImageCell({
   isConditionalFormat = false,
 }) {
   const styles = useStyles();
-  const [imageAvailable, setImageAvailable] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const normalizedItemNumber = String(itemNumber || '').trim();
   const imageUrl = useMemo(() => {
     if (!dataAreaId || !normalizedItemNumber) return '';
@@ -97,15 +102,39 @@ function PurchaseOrderProductImageCell({
     });
     return `/api/media/product-image?${query.toString()}`;
   }, [dataAreaId, normalizedItemNumber]);
+  // Rows remount on every scroll into view (board virtualization). Start from the
+  // failure cache so an already-known-broken image doesn't retry the fetch each time.
+  const [imageAvailable, setImageAvailable] = useState(() => !hasFailedProductImage(imageUrl));
+  // Only mount the actual <img src=...> once the row has stayed in view for a
+  // moment — a fast scroll flick unmounts the row again before this fires, so no
+  // request is ever made for rows you scroll straight past.
+  const [shouldLoadImage, setShouldLoadImage] = useState(false);
+  // Kept false until the browser confirms the image loaded, so we can hide the
+  // <img> (via imagePending) for as long as we don't know it's actually good.
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    setImageAvailable(true);
     setDialogOpen(false);
+    setImageLoaded(false);
+    setShouldLoadImage(false);
+    if (hasFailedProductImage(imageUrl)) {
+      setImageAvailable(false);
+      return undefined;
+    }
+    setImageAvailable(true);
+    const timer = setTimeout(() => setShouldLoadImage(true), PRODUCT_IMAGE_LOAD_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [imageUrl]);
 
-  const handleImageError = useCallback(() => {
-    setImageAvailable(false);
+  const handleImageLoad = useCallback(() => {
+    setImageLoaded(true);
   }, []);
+
+  const handleImageError = useCallback(() => {
+    markProductImageFailed(imageUrl);
+    setImageAvailable(false);
+  }, [imageUrl]);
 
   const handleOpenDialog = useCallback(() => {
     if (imageUrl && imageAvailable) setDialogOpen(true);
@@ -145,14 +174,17 @@ function PurchaseOrderProductImageCell({
               onClick={handleOpenDialog}
               aria-label={`Show product image for ${normalizedItemNumber}`}
             >
-              <img
-                className={styles.image}
-                src={imageUrl}
-                alt={`Product image for ${normalizedItemNumber}`}
-                loading="lazy"
-                draggable={false}
-                onError={handleImageError}
-              />
+              {shouldLoadImage ? (
+                <img
+                  className={mergeClasses(styles.image, imageLoaded ? undefined : styles.imagePending)}
+                  src={imageUrl}
+                  alt={`Product image for ${normalizedItemNumber}`}
+                  loading="lazy"
+                  draggable={false}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                />
+              ) : null}
             </button>
           </Tooltip>
         ) : null}

@@ -1,7 +1,7 @@
 {
-  "date": "2026-07-21",
+  "date": "2026-07-22",
   "hermetingDate": "2026-07-20T12:15:00+00:00",
-  "environment": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "environment": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
   "database": "local SQL Server — 80 PO masters, 240 detail lines (seed-perf-po-cache)",
   "runsPerAction": 3,
   "navigation": {
@@ -131,13 +131,13 @@
     "J1": {
       "label": "PO board-load /",
       "median": {
-        "elapsedWall": 86,
-        "app": 1464,
-        "apiSum": 1701,
+        "elapsedWall": 178,
+        "app": 853,
+        "apiSum": 941,
         "sql": 0,
-        "network": 237,
+        "network": 88,
         "client": 0,
-        "render": null
+        "render": 0
       },
       "dominant": "server",
       "labels": []
@@ -157,21 +157,21 @@
       "labels": [
         "tb_meta",
         "tb_history_hints",
-        "tb_viewed",
-        "tb_read_custom",
-        "tb_read_cols",
         "tb_links",
         "tb_sync_state",
         "tb_revision",
+        "tb_read_custom",
+        "tb_viewed",
+        "tb_read_cols",
         "tb_track_marks",
-        "tb_lookup_product_receipt_lines",
-        "tb_lookup_items",
-        "tb_lookup_excel_map1",
-        "tb_lookup_vendors",
-        "tb_lookups",
-        "tb_ledger",
         "tb_read_masters",
+        "tb_lookup_items",
+        "tb_lookup_vendors",
+        "tb_lookup_excel_map1",
+        "tb_lookup_product_receipt_lines",
+        "tb_lookups",
         "tb_read_details",
+        "tb_ledger",
         "tb_retention",
         "rccp_vendor_list",
         "rccp_po_read",
@@ -181,37 +181,35 @@
     "J3": {
       "label": "Return / after /rccp",
       "median": {
-        "elapsedWall": 384,
-        "app": 117083,
-        "apiSum": 18662,
+        "elapsedWall": null,
+        "app": 2448,
+        "apiSum": 2800,
         "sql": 0,
-        "network": 0,
+        "network": 352,
         "client": 0,
-        "render": 328
+        "render": null
       },
-      "dominant": "server",
+      "dominant": "sql",
       "labels": [
         "tb_meta",
-        "tb_links",
         "tb_history_hints",
-        "tb_read_masters",
+        "tb_links",
+        "tb_viewed",
+        "tb_revision",
         "tb_sync_state",
         "tb_read_custom",
         "tb_read_cols",
-        "tb_viewed",
-        "tb_revision",
         "tb_track_marks",
-        "tb_lookup_items",
+        "tb_read_masters",
         "tb_lookup_vendors",
+        "tb_lookup_items",
         "tb_lookup_excel_map1",
-        "tb_read_details",
         "tb_lookup_product_receipt_lines",
         "tb_lookups",
         "tb_ledger",
+        "tb_read_details",
         "tb_retention",
-        "bi_aggregate",
-        "rccp_po_read",
-        "rccp_capacity"
+        "bi_meta"
       ],
       "duplicatePoFetchMedian": 0
     }
@@ -219,18 +217,18 @@
   "boardActionJourneys": {
     "J7": {
       "label": "Column filter Apply",
-      "profile": "L",
+      "profile": "Mlocal-after2b",
       "median": {
-        "filterApplyMs": 721
+        "filterApplyMs": 805
       }
     },
     "J8": {
       "label": "Text style Bold",
-      "profile": "L",
+      "profile": "Mlocal-after2b",
       "median": {
-        "textStyleApplyMs": 1073
+        "textStyleApplyMs": 1821
       }
     },
-    "measuredAt": "2026-07-21T14:29:21.294Z"
+    "measuredAt": "2026-07-22T10:30:21.419Z"
   }
 }

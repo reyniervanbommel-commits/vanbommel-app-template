@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Button,
   Popover,
@@ -13,10 +13,10 @@ import {
 import { EditRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
 import StatusLabelsEditor from './StatusLabelsEditor';
+import StatusLabelsConflictResolver from './StatusLabelsConflictResolver';
+import { useStatusLabelsEditor } from '../../hooks/useStatusLabelsEditor';
 import {
-  STATUS_COLOR_PALETTE,
   getStatusOptionByValue,
-  normalizeStatusOptions,
   resolveStatusCellColor,
 } from '../../utils/statusColumnUtils';
 import { purchaseOrderBoardRowHeight } from './purchaseOrderBoardLayout';
@@ -90,10 +90,6 @@ const useStyles = makeStyles({
   },
 });
 
-function createDraftOptions(options) {
-  return normalizeStatusOptions(options).map((option) => ({ ...option }));
-}
-
 export default function StatusCell({
   value,
   options,
@@ -105,57 +101,16 @@ export default function StatusCell({
   hasHistory = false,
 }) {
   const styles = useStyles();
-  const normalizedOptions = useMemo(() => normalizeStatusOptions(options), [options]);
+  const { normalizedOptions, mode, setMode, selection, editor, conflict } = useStatusLabelsEditor({
+    value,
+    options,
+    onSave,
+    onUpdateOptions,
+    isAdmin,
+  });
   const selectedOption = useMemo(() => getStatusOptionByValue(value, normalizedOptions), [value, normalizedOptions]);
   const backgroundColor = resolveStatusCellColor(value, normalizedOptions);
   const textColor = selectedOption ? STATUS_TEXT_COLOR : tokens.colorNeutralForeground3;
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState('select');
-  const [saving, setSaving] = useState(false);
-  const [draftOptions, setDraftOptions] = useState(() => createDraftOptions(normalizedOptions));
-  const [newLabel, setNewLabel] = useState('');
-  const [newColor, setNewColor] = useState(STATUS_COLOR_PALETTE[1]);
-  const [optionsSaving, setOptionsSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setMode('select');
-      setDraftOptions(createDraftOptions(normalizedOptions));
-      setNewLabel('');
-      setNewColor(STATUS_COLOR_PALETTE[1]);
-    }
-  }, [open, normalizedOptions]);
-
-  const handleSelect = useCallback(async (nextValue) => {
-    const currentValue = selectedOption?.label || '';
-    if (nextValue === currentValue) {
-      setOpen(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(nextValue);
-      setOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  }, [onSave, selectedOption?.label]);
-
-  const handleApplyOptions = useCallback(async () => {
-    if (!isAdmin || typeof onUpdateOptions !== 'function') return;
-    const cleanedOptions = draftOptions
-      .map((option) => ({ ...option, label: String(option.label || '').trim() }))
-      .filter((option) => option.label);
-    if (!cleanedOptions.length) return;
-    setOptionsSaving(true);
-    try {
-      await onUpdateOptions(cleanedOptions);
-      setMode('select');
-      setOpen(false);
-    } finally {
-      setOptionsSaving(false);
-    }
-  }, [draftOptions, isAdmin, onUpdateOptions]);
 
   const triggerButton = (
     <button
@@ -168,69 +123,90 @@ export default function StatusCell({
     </button>
   );
 
-  const popoverContent = mode === 'select' ? (
-    <>
-      <button
-        type="button"
-        className={mergeClasses(styles.optionButton, styles.emptyOption)}
-        onClick={() => handleSelect('')}
-      >
-        —
-      </button>
-      {normalizedOptions.map((option) => (
+  let popoverContent;
+  if (mode === 'select') {
+    popoverContent = (
+      <>
         <button
-          key={option.id}
           type="button"
-          className={styles.optionButton}
-          style={{
-            backgroundColor: option.color,
-            color: STATUS_TEXT_COLOR,
-          }}
-          onClick={() => handleSelect(option.label)}
+          className={mergeClasses(styles.optionButton, styles.emptyOption)}
+          onClick={() => selection.handleSelect('')}
         >
-          {option.label}
+          —
         </button>
-      ))}
-      {isAdmin && typeof onUpdateOptions === 'function' ? (
-        <Button
-          className={styles.footerButton}
-          appearance="subtle"
-          size="small"
-          icon={<EditRegular />}
-          onClick={() => setMode('edit')}
-        >
-          Edit labels
-        </Button>
-      ) : null}
-    </>
-  ) : (
-    <StatusLabelsEditor
-      draftOptions={draftOptions}
-      setDraftOptions={setDraftOptions}
-      newLabel={newLabel}
-      setNewLabel={setNewLabel}
-      newColor={newColor}
-      setNewColor={setNewColor}
-      onCancel={() => setMode('select')}
-      onApply={handleApplyOptions}
-      optionsSaving={optionsSaving}
-    />
-  );
+        {normalizedOptions.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={styles.optionButton}
+            style={{
+              backgroundColor: option.color,
+              color: STATUS_TEXT_COLOR,
+            }}
+            onClick={() => selection.handleSelect(option.label)}
+          >
+            {option.label}
+          </button>
+        ))}
+        {isAdmin && typeof onUpdateOptions === 'function' ? (
+          <Button
+            className={styles.footerButton}
+            appearance="subtle"
+            size="small"
+            icon={<EditRegular />}
+            onClick={() => setMode('edit')}
+          >
+            Edit labels
+          </Button>
+        ) : null}
+      </>
+    );
+  } else if (mode === 'conflict') {
+    popoverContent = (
+      <StatusLabelsConflictResolver
+        conflicts={conflict.conflicts}
+        remainingOptions={conflict.remainingOptions}
+        reassignChoices={conflict.reassignChoices}
+        onChangeChoice={conflict.setReassignChoice}
+        onCancel={conflict.handleCancelConflict}
+        onConfirm={conflict.handleConfirmConflict}
+        saving={conflict.saving}
+      />
+    );
+  } else {
+    popoverContent = (
+      <StatusLabelsEditor
+        draftOptions={editor.draftOptions}
+        labelDrafts={editor.labelDrafts}
+        newLabel={editor.newLabel}
+        setNewLabel={editor.setNewLabel}
+        newColor={editor.newColor}
+        setNewColor={editor.setNewColor}
+        optionsSaving={editor.optionsSaving}
+        onDone={() => setMode('select')}
+        onAddLabel={editor.handleAddLabel}
+        onRemoveOption={editor.handleRemoveDraftOption}
+        onLabelInputChange={editor.handleLabelInputChange}
+        onCommitLabelEdit={editor.commitLabelEdit}
+        onColorChange={editor.handleColorChange}
+      />
+    );
+  }
 
   const cellContent = (
     <div className={styles.wrapper}>
-      <Popover open={open} onOpenChange={(_, data) => setOpen(!!data.open)} positioning="below-start" trapFocus>
+      <Popover open={selection.open} onOpenChange={(_, data) => selection.setOpen(!!data.open)} positioning="below-start" trapFocus>
         <PopoverTrigger disableButtonEnhancement>
           {triggerButton}
         </PopoverTrigger>
         <PopoverSurface
-          className={mergeClasses(styles.popoverSurface, mode === 'edit' ? styles.popoverSurfaceEdit : undefined)}
+          className={mergeClasses(styles.popoverSurface, mode !== 'select' ? styles.popoverSurfaceEdit : undefined)}
           tabIndex={-1}
         >
           {popoverContent}
         </PopoverSurface>
       </Popover>
-      {saving ? (
+      {selection.saving ? (
         <span className={styles.savingOverlay} aria-hidden>
           <Spinner size="extra-tiny" />
         </span>

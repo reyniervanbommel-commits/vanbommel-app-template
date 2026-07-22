@@ -28,6 +28,7 @@ export function usePurchaseOrderBoardView({
   lineTotalHeaderLinks = [],
   lineValueHeaderLinks = [],
   datePeriodDisplayModes = {},
+  columnFormatRules = {},
 }) {
   const [activityFilter, setActivityFilter] = useState(ACTIVITY_FILTER_ALL);
   const linkedLineTotalByHeaderKey = useMemo(
@@ -168,6 +169,7 @@ export function usePurchaseOrderBoardView({
     items: filteredItems,
     columns,
     datePeriodDisplayModes,
+    columnFormatRules,
   });
 
   const rows = useMemo(
@@ -220,6 +222,7 @@ export function usePurchaseOrderBoardView({
       setFilterSecondaryValue: tableView.setFilterSecondaryValue,
       applyColumnFilter: tableView.applyColumnFilter,
       clearColumnFilter: tableView.clearColumnFilter,
+      setColumnColorFilter: tableView.setColumnColorFilter,
       applyFilterFromCellValue: tableView.applyFilterFromCellValue,
       clearAllFilters: tableView.clearAllFilters,
       toggleSort: tableView.toggleSort,

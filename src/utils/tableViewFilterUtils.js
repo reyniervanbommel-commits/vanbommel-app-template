@@ -5,6 +5,11 @@
 
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
 
+// Kleurfilter (client-only): matcht op de getoonde celkleur (status/conditional
+// formatting). Bewust NIET onderdeel van columnValueMatchesFilter, want kleur wordt
+// client-side afgeleid en heeft geen server/BI-tegenhanger (biAggregate.js).
+export const COLOR_FILTER_OPERATOR = 'colorIs';
+
 export const TEXT_FILTER_OPERATORS = {
   equals: 'is exactly',
   contains: 'contains',
@@ -83,6 +88,14 @@ function startOfNextWeek() {
 
 // Bepaalt het standaard filter-model voor een kolomtype.
 export function resolveFilterModel(column, filter, datePeriodDisplayModes = {}) {
+  if (filter?.operator === COLOR_FILTER_OPERATOR) {
+    return {
+      operator: COLOR_FILTER_OPERATOR,
+      colors: Array.isArray(filter.colors) ? filter.colors.filter(Boolean) : [],
+      value: '',
+      secondaryValue: '',
+    };
+  }
   if (isDateColumn(column)) {
     return {
       operator: filter?.operator || 'before',
@@ -106,6 +119,9 @@ export function resolveFilterModel(column, filter, datePeriodDisplayModes = {}) 
 
 export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
   if (!filter) return false;
+  if (filter.operator === COLOR_FILTER_OPERATOR) {
+    return Array.isArray(filter.colors) && filter.colors.length > 0;
+  }
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);

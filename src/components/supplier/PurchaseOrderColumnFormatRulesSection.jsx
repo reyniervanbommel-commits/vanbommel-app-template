@@ -16,7 +16,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { DeleteRegular } from '@fluentui/react-icons';
+import { DeleteRegular, SettingsRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { FORMAT_RULE_OPERATORS } from './columnFormatRuleUtils';
 
@@ -45,6 +45,9 @@ const useStyles = makeStyles({
     overflowY: 'auto',
     overflowX: 'hidden',
   },
+  targetField: {
+    maxWidth: '220px',
+  },
   ruleList: {
     display: 'flex',
     flexDirection: 'column',
@@ -52,7 +55,7 @@ const useStyles = makeStyles({
   },
   ruleRow: {
     display: 'grid',
-    gridTemplateColumns: '80px 120px minmax(150px, 220px) 40px 76px',
+    gridTemplateColumns: '92px 116px minmax(140px, 1fr) 40px 84px',
     ...shorthands.gap('6px'),
     alignItems: 'center',
     '@media (max-width: 900px)': {
@@ -64,7 +67,7 @@ const useStyles = makeStyles({
   },
   compactControl: {
     width: '100%',
-    maxWidth: '220px',
+    minWidth: 0,
   },
   emptyState: {
     color: tokens.colorNeutralForeground3,
@@ -76,6 +79,20 @@ const useStyles = makeStyles({
     height: '26px',
     ...shorthands.padding('0', '10px'),
     fontSize: tokens.fontSizeBase200,
+  },
+  manageRulesButton: {
+    width: '100%',
+    justifyContent: 'flex-start',
+  },
+  ruleColorControl: {
+    minWidth: 0,
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  deleteRuleButton: {
+    minWidth: 0,
+    width: '100%',
   },
 });
 
@@ -115,7 +132,13 @@ export default function PurchaseOrderColumnFormatRulesSection({
     <div className={styles.pickerWrap}>
       <Text weight="semibold">Conditional formatting</Text>
       <Text className={styles.helperText}>{summaryText}</Text>
-      <Button size="small" appearance="secondary" onClick={openRulesDialog}>
+      <Button
+        className={styles.manageRulesButton}
+        size="small"
+        appearance="subtle"
+        icon={<SettingsRegular />}
+        onClick={openRulesDialog}
+      >
         Manage formatting rules
       </Button>
 
@@ -124,7 +147,7 @@ export default function PurchaseOrderColumnFormatRulesSection({
           <DialogBody>
             <DialogTitle>Conditional formatting</DialogTitle>
             <DialogContent className={styles.rulesDialogBody}>
-              <Field label="Target">
+              <Field label="Target" className={styles.targetField}>
                 <Dropdown
                   value={RULE_TARGET_LABELS[formatTarget]}
                   selectedOptions={[formatTarget]}
@@ -179,21 +202,22 @@ export default function PurchaseOrderColumnFormatRulesSection({
                         placeholder="Compare value"
                       />
                     )}
-                    <ColorPalettePicker
-                      layout="compact"
-                      selectedColor={rule.color}
-                      onSelect={(color) => updateFormatRule(rule.id, { color })}
-                      ariaLabel="Rule color"
-                    />
+                    <div className={styles.ruleColorControl}>
+                      <ColorPalettePicker
+                        layout="popover"
+                        selectedColor={rule.color}
+                        onSelect={(color) => updateFormatRule(rule.id, { color })}
+                        ariaLabel="Rule color"
+                      />
+                    </div>
                     <Button
+                      className={styles.deleteRuleButton}
                       size="small"
                       appearance="subtle"
                       icon={<DeleteRegular />}
                       onClick={() => removeFormatRule(rule.id)}
                       aria-label="Delete rule"
-                    >
-                      Delete
-                    </Button>
+                    />
                   </div>
                 ))}
               </div>

@@ -4,7 +4,9 @@ import EditableCell from './EditableCell';
 import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
+import PurchaseOrderLinkedValueCell from './PurchaseOrderLinkedValueCell';
 import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { getLinkedLineValuePreview } from '../../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
   normalizeDatePeriodDisplayMode,
@@ -89,9 +91,9 @@ function PurchaseOrderHeaderCellContent({
     });
   }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
-  const handleUpdateStatusOptions = useCallback((options) => {
+  const handleUpdateStatusOptions = useCallback((options, statusReassignments) => {
     if (typeof onUpdateStatusOptions !== 'function') return Promise.resolve();
-    return onUpdateStatusOptions(column.id, options, column.label);
+    return onUpdateStatusOptions(column.id, options, column.label, statusReassignments);
   }, [column.id, column.label, onUpdateStatusOptions]);
 
   const formattedTextStyle = isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined;
@@ -122,7 +124,31 @@ function PurchaseOrderHeaderCellContent({
       : formattedDisplayNode;
   }
 
-  if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey && !linkedLineValueMeta) {
+  if (linkedLineValueMeta) {
+    // Ruwe, ontdubbelde regelwaarden komen mee met de board-rollup (order.linkedLineValues);
+    // val terug op order.lines zodra die (bijv. na expand) wel beschikbaar zijn.
+    const rawLineValues = order?.linkedLineValues?.[key]
+      ?? (Array.isArray(order?.lines)
+        ? order.lines.map((line) => line?.values?.[linkedLineValueMeta.lineColumnKey])
+        : null);
+    const preview = getLinkedLineValuePreview(rawLineValues, linkedLineValueMeta.lineDataType, linkedLineValueMeta.lineColumnKey);
+    const linkedValueNode = (
+      <PurchaseOrderLinkedValueCell
+        firstValue={preview.firstValue}
+        additionalCount={preview.additionalCount}
+        allValuesLabel={preview.allValuesLabel}
+        isConditionalFormat={isConditionalFormat}
+      />
+    );
+    const wrappedLinkedValueNode = isChangedCell && !cellBackgroundColor
+      ? <span className={styles.changedCell}>{linkedValueNode}</span>
+      : linkedValueNode;
+    return order.removedInD365
+      ? <span className={styles.removedText}>{wrappedLinkedValueNode}</span>
+      : wrappedLinkedValueNode;
+  }
+
+  if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey) {
     if (isStatusColumn(column)) {
       return (
         <StatusCell
@@ -185,13 +211,10 @@ function PurchaseOrderHeaderCellContent({
     );
   }
 
-  // Gekoppelde kolommen staan al in order.values: het totaal komt uit de board-read, de
-  // value-link is door usePurchaseOrderBoardView geformatteerd uit de ruwe regelwaarden.
+  // Gekoppelde totaal-kolommen staan al in order.values: de waarde komt uit de board-read.
   const display = linkedLineTotalColumnKey
     ? formatCellValue(rawValue, column.dataType)
-    : linkedLineValueMeta
-      ? (rawValue ?? '-')
-      : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
+    : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
   const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>

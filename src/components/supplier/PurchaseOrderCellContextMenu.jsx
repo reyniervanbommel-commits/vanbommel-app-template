@@ -6,6 +6,12 @@ import {
   MenuList,
   MenuPopover,
 } from '@fluentui/react-components';
+import {
+  ArrowResetRegular,
+  ChatRegular,
+  CopyRegular,
+  FilterRegular,
+} from '@fluentui/react-icons';
 import { copyCellValueToClipboard } from '../../utils/tableViewFilterUtils';
 
 function PurchaseOrderCellContextMenu({ context, actions }) {
@@ -47,16 +53,16 @@ function PurchaseOrderCellContextMenu({ context, actions }) {
     >
       <MenuPopover>
         <MenuList>
-          <MenuItem onClick={handleOpenRemarks}>Remarks</MenuItem>
+          <MenuItem icon={<ChatRegular />} onClick={handleOpenRemarks}>Remarks</MenuItem>
           {showValueActions ? (
             <>
               <MenuDivider />
-              <MenuItem onClick={handleFilterCell}>Filter column on this cell</MenuItem>
+              <MenuItem icon={<FilterRegular />} onClick={handleFilterCell}>Filter column on this cell</MenuItem>
               {context.filterActive ? (
-                <MenuItem onClick={handleClearFilter}>Clear column filter</MenuItem>
+                <MenuItem icon={<ArrowResetRegular />} onClick={handleClearFilter}>Clear column filter</MenuItem>
               ) : null}
               <MenuDivider />
-              <MenuItem onClick={handleCopyValue}>Copy cell value</MenuItem>
+              <MenuItem icon={<CopyRegular />} onClick={handleCopyValue}>Copy cell value</MenuItem>
             </>
           ) : null}
         </MenuList>

@@ -3,11 +3,15 @@ import PurchaseOrderColumnFilterMenuTitleRow from './PurchaseOrderColumnFilterMe
 import PurchaseOrderColumnFilterMenuFilterSection from './PurchaseOrderColumnFilterMenuFilterSection';
 import PurchaseOrderColumnFilterMenuSortSection from './PurchaseOrderColumnFilterMenuSortSection';
 import PurchaseOrderColumnFilterMenuColumnActionsSection from './PurchaseOrderColumnFilterMenuColumnActionsSection';
+import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
 
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
+  column,
   columnLabel,
   columnTypeMeta,
+  columnSourceMeta,
+  connectionTargets = [],
   showSortAndFilter = true,
   showGrouping = true,
   showColumnMutations = true,
@@ -58,7 +62,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   handleSecondaryValueChange,
   handleApplyFilter,
   handleClearFilter,
-  connectionTargets = [],
+  colorFilter,
 }) {
   const handleFilterRowMouseEnter = useCallback(() => {
     closeSubmenu?.();
@@ -100,6 +104,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         styles={styles}
         columnLabel={columnLabel}
         columnTypeMeta={columnTypeMeta}
+        columnSourceMeta={columnSourceMeta}
         connectionTargets={connectionTargets}
         canRenameColumn={canRenameColumn}
         handleRenameColumn={handleRenameColumn}
@@ -138,6 +143,21 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             handleClearFilter={handleClearFilter}
             onMouseEnter={handleFilterRowMouseEnter}
           />
+          {colorFilter?.supported ? (
+            <>
+              <div className={styles.divider} />
+              <PurchaseOrderColumnColorFilterSection
+                styles={styles}
+                columnLabel={columnLabel}
+                availableColors={colorFilter.availableColors}
+                selectedColors={colorFilter.selectedColors}
+                onToggleColor={colorFilter.toggleColor}
+                onClear={colorFilter.clear}
+                closeSubmenu={closeSubmenu}
+                onMouseEnter={handleFilterRowMouseEnter}
+              />
+            </>
+          ) : null}
         </>
       ) : null}
       {showAppearanceSection || showColumnSection ? <div className={styles.divider} /> : null}

@@ -346,6 +346,17 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
+  // Patcht herberekende formulewaarden (van de save-response) direct in de order-rij, zodat
+  // formulekolommen die de bewerkte kolom refereren meteen kloppen — zonder board-refresh.
+  // Alleen aanroepen met een niet-leeg object; anders een onnodige setOrders-render over alle rijen.
+  const applyFormulaValuesToOrder = useCallback((dataAreaId, orderNumber, formulaValues) => {
+    setOrders((prev) => prev.map((order) => (
+      order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber
+        ? order
+        : { ...order, values: { ...order.values, ...formulaValues } }
+    )));
+  }, []);
+
   // Optimistic update van één cel; bij fout wordt de oude waarde teruggezet.
   const saveValue = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value }) => {
     const isLine = lineNumber !== null && lineNumber !== undefined;
@@ -378,7 +389,7 @@ export function usePurchaseOrdersPage() {
 
     try {
       if (BOARD_TB_SOURCE) {
-        await apiRequest(`${DATA_BASE}/value`, {
+        const response = await apiRequest(`${DATA_BASE}/value`, {
           method: 'PUT',
           body: {
             columnId,
@@ -388,6 +399,12 @@ export function usePurchaseOrdersPage() {
             value,
           },
         });
+        // Formulekolommen die deze kolom refereren zijn server-side al herberekend
+        // (zie TableDataService.saveCustomValue); direct patchen zodat de UI meteen
+        // klopt zonder wachten op een volgende board-refresh.
+        if (response?.formulaValues && Object.keys(response.formulaValues).length) {
+          applyFormulaValuesToOrder(dataAreaId, orderNumber, response.formulaValues);
+        }
       } else {
         await apiRequest('/purchase-orders/values', {
           method: 'PUT',
@@ -400,7 +417,7 @@ export function usePurchaseOrdersPage() {
       if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, [applyLineValues, restoreLines]);
+  }, [applyLineValues, restoreLines, applyFormulaValuesToOrder]);
 
   // D365-veldcorrectie terugschrijven (#134). Optimistic; bij fout terugdraaien + fout doorgeven.
   const correctField = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value, basedOnValue }) => {
@@ -431,10 +448,13 @@ export function usePurchaseOrdersPage() {
     }
     try {
       if (BOARD_TB_SOURCE) {
-        await apiRequest(`${DATA_BASE}/correct`, {
+        const response = await apiRequest(`${DATA_BASE}/correct`, {
           method: 'POST',
           body: { columnId, partitionKey: dataAreaId, recordKey: orderNumber, detailKey: isLine ? lineNumber : null, value, basedOnValue },
         });
+        if (response?.formulaValues && Object.keys(response.formulaValues).length) {
+          applyFormulaValuesToOrder(dataAreaId, orderNumber, response.formulaValues);
+        }
       } else {
         await apiRequest('/purchase-orders/correct', {
           method: 'POST',
@@ -446,7 +466,7 @@ export function usePurchaseOrdersPage() {
       if (previousLines) restoreLines(dataAreaId, orderNumber, previousLines);
       throw err;
     }
-  }, [applyLineValues, restoreLines]);
+  }, [applyLineValues, restoreLines, applyFormulaValuesToOrder]);
 
   const resolveColumnScopeById = useCallback((columnId) => {
     if (headerColumns.some((column) => column.id === columnId)) return 'master';
@@ -535,6 +555,7 @@ export function usePurchaseOrdersPage() {
     if (patch && typeof patch === 'object') {
       if (patch.dataType !== undefined) body.dataType = patch.dataType;
       if (patch.options !== undefined) body.options = patch.options;
+      if (patch.statusReassignments !== undefined) body.statusReassignments = patch.statusReassignments;
     }
     if (!body.label && !body.options && !body.dataType) {
       body.label = label;
@@ -639,10 +660,18 @@ export function usePurchaseOrdersPage() {
     ),
     [lineColumnWidths, defaultLineKeys]
   );
-  const effectiveHeaderColumnTextStyles = useMemo(
-    () => normalizeColumnTextStyleMap(headerColumnTextStyles, defaultHeaderKeys),
-    [headerColumnTextStyles, defaultHeaderKeys]
-  );
+  // Ref-cache: bewaar per-kolom stijl-referenties tussen renders, zodat een wijziging aan één
+  // kolom niet de identiteit van álle andere kolom-stijlen breekt (React.memo op board-cellen).
+  const effectiveHeaderTextStylesRef = useRef(null);
+  const effectiveHeaderColumnTextStyles = useMemo(() => {
+    const next = normalizeColumnTextStyleMap(
+      headerColumnTextStyles,
+      defaultHeaderKeys,
+      effectiveHeaderTextStylesRef.current
+    );
+    effectiveHeaderTextStylesRef.current = next;
+    return next;
+  }, [headerColumnTextStyles, defaultHeaderKeys]);
   const effectiveHeaderColumnFormatRules = useMemo(
     () => normalizeColumnFormatRulesMap(headerColumnFormatRules, defaultHeaderKeys),
     [headerColumnFormatRules, defaultHeaderKeys]
@@ -680,7 +709,7 @@ export function usePurchaseOrdersPage() {
     nextCollapsedHeaderColumnKeys = collapsedHeaderColumnKeys,
     nextCollapsedLineColumnKeys = collapsedLineColumnKeys,
     nextProductImageColumnVisible = productImageColumnVisible,
-  } = {}) => {
+  } = {}, { applyState = true } = {}) => {
     const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
     const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
     const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
@@ -711,21 +740,26 @@ export function usePurchaseOrdersPage() {
       defaultLineKeys
     );
 
-    setVisibleColumnKeys(normalizedVisible);
-    setColumnOrder(normalizedHeaderOrder);
-    setLineColumnOrder(normalizedLineOrder);
-    setHeaderColumnWidths(normalizedHeaderWidths);
-    setLineColumnWidths(normalizedLineWidths);
-    setHeaderColumnTextStyles(normalizedHeaderTextStyles);
-    setHeaderColumnFormatRules(normalizedHeaderFormatRules);
-    setLineColumnTextStyles(normalizedLineTextStyles);
-    setLineColumnFormatRules(normalizedLineFormatRules);
-    setLineTotalColumns(normalizedLineTotalColumns);
-    setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
-    setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
-    setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
-    setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
-    setProductImageColumnVisible(nextProductImageColumnVisible !== false);
+    // applyState=false: de aanroeper heeft de wijziging al optimistisch in state gezet (text-style).
+    // De volledige setter-blast dan overslaan voorkomt een tweede render-golf waarbij o.a. format-
+    // rules/orders nieuwe referenties krijgen en board-cellen onnodig hertekenen (BL-006).
+    if (applyState) {
+      setVisibleColumnKeys(normalizedVisible);
+      setColumnOrder(normalizedHeaderOrder);
+      setLineColumnOrder(normalizedLineOrder);
+      setHeaderColumnWidths(normalizedHeaderWidths);
+      setLineColumnWidths(normalizedLineWidths);
+      setHeaderColumnTextStyles(normalizedHeaderTextStyles);
+      setHeaderColumnFormatRules(normalizedHeaderFormatRules);
+      setLineColumnTextStyles(normalizedLineTextStyles);
+      setLineColumnFormatRules(normalizedLineFormatRules);
+      setLineTotalColumns(normalizedLineTotalColumns);
+      setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
+      setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
+      setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
+      setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
+      setProductImageColumnVisible(nextProductImageColumnVisible !== false);
+    }
     // Houd de sessie-cache in sync met wat we opslaan, zodat een volgende mount de nieuwe layout
     // meteen seedt en er geen "oude layout → correctie"-flits ontstaat.
     const persistedSettings = {
@@ -795,7 +829,8 @@ export function usePurchaseOrdersPage() {
       const pending = boardSettingsPersistPendingRef.current;
       boardSettingsPersistPendingRef.current = null;
       if (!pending) return;
-      void persistBoardSettings(pending);
+      // Network-only: state is al optimistisch gezet; sla de setter-blast over (geen tweede golf).
+      void persistBoardSettings(pending, { applyState: false });
     }, 200);
   }, [persistBoardSettings]);
 
@@ -805,7 +840,7 @@ export function usePurchaseOrdersPage() {
     }
   }, []);
 
-  const updateStatusOptions = useCallback(async (columnId, options, columnLabel) => {
+  const updateStatusOptions = useCallback(async (columnId, options, columnLabel, statusReassignments) => {
     const headerColumn = headerColumns.find((column) => column.id === columnId);
     const lineColumn = lineColumns.find((column) => column.id === columnId);
     const targetColumn = headerColumn || lineColumn;
@@ -813,7 +848,7 @@ export function usePurchaseOrdersPage() {
     const columnKey = targetColumn?.key;
     const renames = buildStatusLabelRenames(previousOptions, options);
 
-    await renameColumn(columnId, columnLabel, { options });
+    await renameColumn(columnId, columnLabel, { options, statusReassignments });
 
     if (columnKey && renames.length) {
       const persistPayload = {};

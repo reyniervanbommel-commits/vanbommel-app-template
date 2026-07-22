@@ -69,20 +69,34 @@ export function normalizeColumnTextStyle(rawStyle) {
   return style;
 }
 
-export function normalizeColumnTextStyleMap(rawStyles, allowedKeys) {
+// Vlakke gelijkheid voor genormaliseerde stijl-objecten (alleen primitieve velden).
+function columnTextStyleEquals(left, right) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return left.textColor === right.textColor
+    && left.bold === right.bold
+    && left.italic === right.italic
+    && left.underline === right.underline;
+}
+
+// `previous` (optioneel): behoud de referentie van ongewijzigde kolom-entries zodat een wijziging
+// aan één kolom niet de identiteit van álle andere kolom-stijlen breekt. Dat houdt React.memo op
+// board-cellen van niet-gewijzigde kolommen intact (perf: BL-006 bold-toggle re-render).
+export function normalizeColumnTextStyleMap(rawStyles, allowedKeys, previous = null) {
   if (!rawStyles || typeof rawStyles !== 'object' || Array.isArray(rawStyles)) {
     return {};
   }
   const allowed = Array.isArray(allowedKeys) && allowedKeys.length
     ? new Set(allowedKeys)
     : null;
+  const prev = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : null;
   return Object.entries(rawStyles).reduce((acc, [rawKey, rawStyle]) => {
     const key = String(rawKey || '').trim();
     if (!key) return acc;
     if (allowed && !allowed.has(key)) return acc;
     const style = normalizeColumnTextStyle(rawStyle);
     if (!style) return acc;
-    acc[key] = style;
+    acc[key] = prev && columnTextStyleEquals(prev[key], style) ? prev[key] : style;
     return acc;
   }, {});
 }

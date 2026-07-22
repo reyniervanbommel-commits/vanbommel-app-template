@@ -11,6 +11,11 @@ description: >-
 
 # Develop from DevOps
 
+> **Relatie met `otap-local-first`:** deze skill **overschrijft** de standaard local-first-regel
+> (geen push zonder akkoord). Alleen actief wanneer expliciet DevOps/OTAP ontwikkeld wordt
+> (work item, feature-branch, preview). Bij ad-hoc werk zonder deze skill: localhost-first,
+> geen push naar `develop` zonder expliciet verzoek.
+
 ## Modi — kies automatisch op basis van de prompt
 
 | Modus | Trigger | Stappen |

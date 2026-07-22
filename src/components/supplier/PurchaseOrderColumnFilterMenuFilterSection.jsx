@@ -169,7 +169,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
       <div className={styles.filterActionRow}>
         <PurchaseOrderColumnFilterMenuButton
           className={styles.filterApplyButton}
-          size="small"
+          size="extra-small"
           appearance="primary"
           closeSubmenu={closeSubmenu}
           onClick={handleApplyFilter}
@@ -178,7 +178,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
         </PurchaseOrderColumnFilterMenuButton>
         <PurchaseOrderColumnFilterMenuButton
           className={styles.filterClearButton}
-          size="small"
+          size="extra-small"
           appearance="outline"
           closeSubmenu={closeSubmenu}
           onClick={handleClearFilter}

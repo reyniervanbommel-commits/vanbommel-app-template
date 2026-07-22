@@ -73,9 +73,39 @@ Triggers voor UI review: *check de ui*, *ui controleren*, *review UI design*, *d
 - When refactoring existing Dutch labels, convert them to English.
 - Full rules: `.cursor/rules/app-taal.mdc`
 
+## OTAP local-first (standaard)
+
+Geldt voor **Claude Code** (en alle agents) tenzij `develop-from-devops` actief is.
+
+| Laag | Omgeving |
+|------|----------|
+| ACC | `localhost` (`npm run dev:all`) — default ontwikkelen/testen |
+| DEV | `develop` → Azure DEV — **alleen** na expliciet "push naar dev" |
+| PROD | `main` → productie |
+
+Ad-hoc: geen `git push`, geen commit zonder expliciet verzoek. DevOps-flow: feature-branch + preview via `develop-from-devops`.
+
+Volledige regel: `.cursor/rules/otap-local-first.mdc`.
+
 ## Cursor rules
 
-`.cursor/rules/` bevat: app-taal, code-kwaliteit, versiebeheer, data-en-security, fluentui-valkuilen.
+`.cursor/rules/` bevat: otap-local-first, app-taal, code-kwaliteit, kwaliteitspoort, versiebeheer, data-en-security, fluentui-valkuilen.
+
+## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
+
+Bij **elke feature en elke snelle fix** in `src/` of `server/` — ook buiten `develop-from-devops` —
+doorloop je vóór het klaarmelden van het werk:
+
+1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
+   3+ UI-bestanden of nieuwe flyout/drawer/overlay → escaleer naar `ui-design-review` skill.
+2. **Snelheid** — geen onnodige extra `apiRequest`-calls, queries/berekeningen in loops, of
+   ontbrekende `useMemo`/`useCallback`. Kies bij twijfel de oplossing die de **ervaren** snelheid
+   ten goede komt (caching, optimistic UI, memoization). Hot path geraakt (PO-board, tab-switches,
+   grote lijsten) → escaleer naar `perf-review` (modus `regression`).
+3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
+   routes, SQL via parameters. Auth/route/data-laag gewijzigd → escaleer naar `security-review`.
+
+Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
 
 ## Performance / timing (verplicht bij nieuwe code)
 

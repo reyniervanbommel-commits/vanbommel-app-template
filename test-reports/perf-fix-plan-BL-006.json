@@ -3,37 +3,52 @@
   "backlogItemId": "BL-006",
   "journey": "J8",
   "action": "Column text style Bold toggle",
-  "branch": "N",
-  "tier": "L4",
-  "hypothesis": "Bold toggle awaits full persistBoardSettings (many setStates + PATCH /supplier/board-settings). UX wall-clock is dominated by network + full board re-render; UI should update optimistically and coalesce the PATCH.",
+  "branch": "R",
+  "tier": "L1",
+  "measuredAt": "2026-07-22T09:34:48Z",
+  "environment": "azure-dev-container-app",
+  "hypothesis": "Bold toggle is al optimistisch (geen await op netwerk). De ~799 ms settle is RENDER: setHeaderColumnTextStyles vervangt de hele headerColumnTextStyles-map -> nieuw 'formatting'-object -> de layout-useMemo in PurchaseOrderBoardRow (dep op heel 'formatting') recomputet voor ELKE zichtbare cel van ELKE kolom, en getColumnCellStyle levert per cel een nieuw style-object -> React.memo op PurchaseOrderBoardCell/DataCell breekt board-breed. Alleen de getogglede kolom hoeft te hertekenen.",
   "targetFiles": [
-    "src/hooks/usePurchaseOrdersPage.js",
-    "src/hooks/useColumnTextStyleActions.js"
+    "src/components/supplier/PurchaseOrderBoardRow.jsx",
+    "src/components/supplier/columnTextStyleUtils.js"
   ],
   "steps": [
-    "Apply text-style state + session cache immediately in saveHeaderColumnTextStyle / saveLineColumnTextStyle",
-    "Debounce/coalesce board-settings PATCH for text-style writes (do not block the click handler on network)",
-    "Keep error toast + revert-on-failure path for failed PATCH",
-    "Bump APP_VERSION"
+    "Versmal de layout-useMemo deps in PurchaseOrderBoardRow (regel 189) van heel 'formatting' naar de daadwerkelijk gebruikte per-kolom waarden: formatting.headerColumnWidths[column.key] en formatting.headerColumnTextStyles[column.key]",
+    "Voeg een module-level result-cache toe aan getColumnCellStyle (keyed op columnKey + width + geserialiseerde textStyle + bg + options) zodat ongewijzigde kolommen dezelfde style-referentie behouden en downstream React.memo intact blijft",
+    "Optioneel L1: wrap setHeaderColumnTextStyles in startTransition (zelfde patroon als filter Apply J7)",
+    "Bump src/config/version.js (user-visible: sneller opmaken)"
   ],
   "successCriteria": {
     "primary": {
       "metric": "textStyleApplyMs",
-      "baselineMs": 10149,
+      "baselineMs": 799,
       "targetReductionPercent": 30,
+      "targetMs": 559,
       "minGainMs": 50
     },
     "secondary": {
-      "metric": "layoutSaveMs",
+      "metric": "app",
       "role": "informational"
     }
   },
   "functionalInvariants": [
-    "Text style still persists across reload",
-    "Failed save shows error and does not leave permanent wrong style",
-    "Supplier users cannot set text style without permission"
+    "Text style (bold/italic/underline/kleur) blijft correct per kolom en persist na reload",
+    "Conditional formatting, image-kolommen en status-kolommen behouden hun styling",
+    "Supplier zonder permissie kan geen text style zetten"
   ],
   "adversaryScenarios": ["A1", "A5"],
   "blastRadius": ["J7", "J8"],
-  "verifyProfiles": ["S", "M", "L"]
+  "verifyProfiles": ["S", "M", "L"],
+  "verifyBlocker": "Verificatie vereist meting op de truth-omgeving (Azure DEV). Een lokale codewijziging is daar pas zichtbaar na een preview-deploy. In deze sessie zijn geen preview-deploy/GitHub-push credentials beschikbaar en draait er geen geseede lokale app+DB, dus de perf-verify gate (textStyleApplyMs -30%) kan niet autonoom worden bevestigd.",
+  "localVerify": {
+    "method": "vite-frontend (dev-build) via VITE_API_PROXY_TARGET -> Azure DEV backend, VITE_PROXY_STRIP_SECURE=true",
+    "harnessCaveat": "Dev-build + http-proxy heeft veel eigen overhead en hoge run-tot-run ruis; absolute waarden ~4x hoger dan de geminificeerde build op Azure DEV.",
+    "unitTests": "35/35 pass (boardColumnSettings, PurchaseOrderColumnFilterMenu incl. 'toggle bold', useBoardRowWindow)",
+    "textStyleApplyMs": { "before": 2941, "afterIter1": 3331, "afterIter2": 1938, "afterIter2Confirm": 1821 },
+    "filterApplyMs": { "before": 830, "afterIter2": 843, "afterIter2Confirm": 805 },
+    "verdict": "PASS op lokale harnas: iteratie 2 (comparator + network-only persist) ~2941 -> ~1880 ms = ~36% sneller; J7 geen regressie."
+  },
+  "secondWaveFinding": "Iteratie 1 (alleen comparator) gaf geen winst: ~200ms na de optimistische update draaide persistBoardSettings de volledige setter-blast (o.a. format-rules kregen nieuwe referenties) -> tweede render-golf. Iteratie 2 lost dit op: de gecoalesceerde text-style-persist draait network-only (applyState:false), zonder setter-blast. Dat leverde de gemeten winst.",
+  "attemptedTiers": ["L1"],
+  "recommendation": "Bevestig definitief op Azure DEV (preview-deploy, geminificeerde build). Lokale harnas (dev-build+proxy) toont reproduceerbaar ~36% winst en geen J7-regressie."
 }

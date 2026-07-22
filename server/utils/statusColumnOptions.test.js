@@ -5,6 +5,7 @@ const {
   normalizeStatusOptions,
   getAllowedStatusLabels,
   buildStatusLabelRenames,
+  buildRemovedStatusOptions,
 } = require('../utils/statusColumnOptions');
 
 describe('statusColumnOptions', () => {
@@ -40,5 +41,29 @@ describe('statusColumnOptions', () => {
       [{ id: 'done', label: 'Completed', color: '#00c875' }],
     );
     expect(renames).toEqual([{ from: 'Done', to: 'Completed' }]);
+  });
+
+  it('detects removed labels by stable option id', () => {
+    const removed = buildRemovedStatusOptions(
+      [
+        { id: 'new', label: 'New', color: '#e2445c' },
+        { id: 'done', label: 'Done', color: '#00c875' },
+      ],
+      [{ id: 'new', label: 'New', color: '#e2445c' }],
+    );
+    expect(removed).toEqual([{ id: 'done', label: 'Done', color: '#00c875' }]);
+  });
+
+  it('does not flag a rename as a removal', () => {
+    const removed = buildRemovedStatusOptions(
+      [{ id: 'done', label: 'Done', color: '#00c875' }],
+      [{ id: 'done', label: 'Completed', color: '#00c875' }],
+    );
+    expect(removed).toEqual([]);
+  });
+
+  it('returns an empty array when there is nothing to remove', () => {
+    expect(buildRemovedStatusOptions(null, [{ label: 'New', color: '#e2445c' }])).toEqual([]);
+    expect(buildRemovedStatusOptions([], [{ label: 'New', color: '#e2445c' }])).toEqual([]);
   });
 });
