@@ -1,0 +1,57 @@
+---
+description: Verplichte poort — UI/Fluent, snelheid en security bij elke wijziging
+alwaysApply: true
+---
+
+# UI, snelheid & security — verplichte poort bij elke wijziging
+
+Bij **elke feature en elke snelle fix** — ook los van `develop-from-devops` of enige skill-trigger —
+doorloopt de agent vóór het klaarmelden van het werk de drie checks hieronder. Dit geldt voor
+iedere wijziging in `src/` of `server/`, niet alleen wanneer de gebruiker er expliciet om vraagt.
+
+## 1. UI & Fluent design-consistentie
+
+- Toets gewijzigde JSX tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`
+- Check: Fluent v9 tokens (geen hardcoded kleuren/spacing), `Field`-wrappers, `maxWidth` op
+  formuliervelden, geen `<Tooltip>` in herhaalde lijsten, geen portal-componenten in list-items,
+  geen Nederlandse UI-teksten (zie `.cursor/rules/app-taal.mdc`)
+- **Escaleer naar de volledige `ui-design-review` skill** wanneer: 3+ UI-bestanden gewijzigd, een
+  nieuwe flyout/drawer/overlay/modal, of een navigatie-wijziging
+
+## 2. Snelheid & ervaren performance
+
+- Nieuwe code mag de ervaren snelheid van de app niet verslechteren: geen extra onnodige
+  `apiRequest`-calls, geen queries/berekeningen in loops, geen ontbrekende `useMemo`/`useCallback`
+  rond bestaande dure berekeningen
+- Bij twijfel tussen meerdere technische oplossingen: **kies altijd de variant die de door de
+  gebruiker ervaren snelheid ten goede komt** (optimistic UI, caching, memoization, kleinere
+  payloads) boven de simpelste variant
+- Nieuwe backend-calls en zware client-berekeningen krijgen meetpunten (`apiRequest`, `time()`,
+  `measure()`) — zie `CLAUDE.md` → Performance/timing
+- **Escaleer naar de volledige `perf-review` skill (modus `regression`)** wanneer: de wijziging een
+  bestaand hot path raakt (PO-board, tab-switches, grote lijsten/tabellen)
+
+## 3. Security & privacy
+
+- Alle user-input wordt gevalideerd, server én client
+- Geen API keys of secrets in code — altijd environment variables
+- Nieuwe routes krijgen `requireSession` / `requireRole`-middleware waar nodig
+  (`server/middleware/auth.js`)
+- SQL altijd via parameters, nooit string-concatenatie
+- Zie ook `.cursor/rules/data-en-security.mdc`
+- **Escaleer naar de `security-review` subagent** wanneer: nieuwe auth-, route- of
+  data-laag-wijziging, of wijziging in sessie/permissie-logica
+
+## Wanneer deze poort niet van toepassing is
+
+- Pure documentatie-wijzigingen (`.md`, `docs/`)
+- Wijzigingen zonder impact op `src/` of `server/` (bv. `.cursor/rules/`, `scripts/db/migrations/`)
+
+## Relatie met andere skills
+
+| Skill | Rol |
+|---|---|
+| `ui-design-review` | Volledige UI-audit — alleen bij escalatie hierboven |
+| `perf-review` / `perf-pipeline` | Volledige performance-audit — alleen bij escalatie hierboven |
+| `security-review` | Volledige security-audit — alleen bij escalatie hierboven |
+| `develop-from-devops` | Roept deze drie skills al aan in modus `full`; deze rule vult het gat voor snelle fixes buiten die flow |
