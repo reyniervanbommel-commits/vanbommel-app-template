@@ -32,6 +32,17 @@ export const devTestItems = [
       'Kolom text-style (bold/cursief/onderstreept) togglen gaat vlot en blijft na een reload behouden',
     ],
   },
+  {
+    id: 'feature-items-d365-sync-filter-v1-36-2',
+    title: 'Items D365 sync filter op instellingen (v1.36.2)',
+    checks: [
+      'Admin > Data model > tab Itemen toont een bewerkbare filterbuilder (Add/Save/Count), niet meer "Inherited"',
+      'Vendors en Ontvangstregels blijven read-only inherited',
+      'Een hint legt uit dat items beperkt blijven tot itemnummers uit gesyncte inkooporders',
+      'Een items-filter opslaan lukt zonder fout; na Sync now komen alleen items binnen die aan filter én PO-scope voldoen',
+      '"Count rows" op de Itemen-tab toont het aantal items binnen de PO-scope en het filter',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

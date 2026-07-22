@@ -37,7 +37,13 @@ const MAX_BOARD_LINKS = 80;
 // staging-temptabel + één MERGE), i.p.v. een transactie + losse INSERTs per order/regel. Dat brengt het
 // aantal SQL-round-trips van O(orders × regels) terug naar O(chunks), de grootste refresh-versneller.
 const SAVE_CHUNK_SIZE = 500;
-const INHERITED_PO_FILTER_TABLE_KEYS = new Set(['vendors', 'items', 'product-receipt-lines']);
+// Tabellen waarvan de D365-fetch wordt beperkt tot de sleutelwaarden die via lookups aan de
+// PO-cache hangen (PO lookup scope). 'items' houdt deze scope én krijgt daarnaast een eigen
+// bewerkbaar sync-filter dat binnen die scope wordt gecombineerd (AND).
+const PO_LOOKUP_SCOPED_TABLE_KEYS = new Set(['vendors', 'items', 'product-receipt-lines']);
+// Tabellen waarvan het sync-filter in de admin-UI/API read-only is (erven de PO-filter, geen eigen
+// regels). 'items' staat hier bewust NIET in: die krijgt een eigen filter binnen de PO lookup scope.
+const READ_ONLY_SYNC_FILTER_TABLE_KEYS = new Set(['vendors', 'product-receipt-lines']);
 const INHERITED_FILTER_CHUNK_SIZE = 20;
 const EMPTY_REFRESH_PROGRESS = Object.freeze({
   status: 'idle',
@@ -727,7 +733,7 @@ function ensureKeyFieldColumnsInProjection(activeColumns, allColumns, keyFields)
 
 async function getInheritedPoLookupScopes(table) {
   const tableKey = String(table?.key || '').trim().toLowerCase();
-  if (!INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey)) return [];
+  if (!PO_LOOKUP_SCOPED_TABLE_KEYS.has(tableKey)) return [];
 
   let purchaseOrdersTable;
   try {
@@ -803,7 +809,7 @@ async function getTableSyncRules(table) {
     const fromSettings = await getPurchaseOrderSyncRules();
     if (fromSettings.length) return fromSettings;
   }
-  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     return [];
   }
   return parseDefaultFilterRules(table.defaultFilter);
@@ -879,7 +885,7 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const maxItems = resolveConfiguredMaxItems(null, table.maxRows, 2000);
   const tableKey = String(table.key || '').trim().toLowerCase();
-  const usesInheritedPoFilter = INHERITED_PO_FILTER_TABLE_KEYS.has(tableKey);
+  const usesInheritedPoFilter = PO_LOOKUP_SCOPED_TABLE_KEYS.has(tableKey);
 
   let extraFilter = '';
   try {
@@ -4412,10 +4418,11 @@ async function getDataModel(tableKey) {
   const syncRules = await getTableSyncRules(table);
   let compiledFilter = '';
   try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
-  const isInheritedSyncFilterTable = INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
+  const isInheritedSyncFilterTable = READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
+  const usesPoLookupScope = PO_LOOKUP_SCOPED_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
   let inheritedSyncRules = [];
   let inheritedCompiledFilter = '';
-  if (isInheritedSyncFilterTable) {
+  if (isInheritedSyncFilterTable || usesPoLookupScope) {
     inheritedSyncRules = await getPurchaseOrderSyncRules();
     try { inheritedCompiledFilter = compileSyncRules(inheritedSyncRules); } catch { inheritedCompiledFilter = ''; }
   }
@@ -4531,6 +4538,16 @@ async function getDataModel(tableKey) {
         operators: OPERATORS,
         maxRules: MAX_RULES,
         templates: syncTemplatesForTable(table.key),
+        // Items zijn bewerkbaar maar blijven beperkt tot de PO lookup scope (itemnummers uit
+        // gesyncte inkooporders). De PO-filter tonen we informatief; het eigen filter werkt binnen die scope.
+        ...(usesPoLookupScope
+          ? {
+              poLookupScoped: true,
+              inheritedCompiled: inheritedCompiledFilter,
+              inheritedFromTable: 'purchase-orders',
+              poScopeHint: 'Items are limited to item numbers on synced purchase orders. Filters below apply within that scope.',
+            }
+          : {}),
       };
 
   return {
@@ -4571,7 +4588,7 @@ async function saveTableDefaultFilter(tableId, rules) {
 // Sync-filter-regels per tabel opslaan.
 async function saveSyncFilters(tableKey, rules) {
   const table = await getTableByKey(tableKey);
-  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     throw Object.assign(new Error('This table automatically inherits the Purchase Orders filter and cannot be changed manually.'), { status: 400 });
   }
   const list = Array.isArray(rules) ? rules : [];
@@ -4591,10 +4608,36 @@ async function saveSyncFilters(tableKey, rules) {
 // Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen).
 async function countSyncFilter(tableKey, rules) {
   const table = await getTableByKey(tableKey);
-  if (INHERITED_PO_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
   }
   const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
+
+  // PO lookup scoped tabellen (items): tel binnen de PO-scope. Combineer het eigen filter (AND) met
+  // de one-of clausules op de lookup-sleutels. Chunks zijn disjuncte itemnummers → som is exact.
+  if (PO_LOOKUP_SCOPED_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    const scopes = await getInheritedPoLookupScopes(table);
+    if (!scopes.length) return { total: 0, compiled };
+    let total = 0;
+    for (const scope of scopes) {
+      for (const chunk of chunkList(scope.values, INHERITED_FILTER_CHUNK_SIZE)) {
+        const oneOf = buildOneOfFilterClause(scope.targetField, chunk);
+        if (!oneOf) continue;
+        const chunkResult = await fetchEntityRecords({
+          sourceEntity: table.sourceEntity,
+          top: 1,
+          skip: 0,
+          fetchAll: false,
+          extraFilter: combineODataFilters(compiled, oneOf),
+          maxItems: 1,
+          selectFields: null,
+        });
+        total += Number(chunkResult.total) || 0;
+      }
+    }
+    return { total, compiled };
+  }
+
   let result;
   if (table.key === 'purchase-orders') {
     result = await fetchPurchaseOrders({
@@ -4680,5 +4723,7 @@ module.exports = {
   resolveLookupProjectionColumns,
   buildLookupDedupeSignature,
   buildLookupTargetAliases,
+  combineODataFilters,
+  buildOneOfFilterClause,
   FETCH_ADAPTERS,
 };

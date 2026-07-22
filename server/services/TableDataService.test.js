@@ -36,6 +36,8 @@ const {
   resolveLookupProjectionColumns,
   buildLookupDedupeSignature,
   buildLookupTargetAliases,
+  combineODataFilters,
+  buildOneOfFilterClause,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -514,6 +516,34 @@ describe('TableDataService fetch adapters (#195)', () => {
     expect(typeof FETCH_ADAPTERS['purchase-orders']).toBe('function');
     expect(typeof FETCH_ADAPTERS.vendors).toBe('function');
     expect(typeof FETCH_ADAPTERS.items).toBe('function');
+  });
+});
+
+// Kern van de items-count binnen PO-scope: eigen items-filter (AND) gecombineerd met de
+// one-of clausule op de lookup-sleutels (itemnummers uit de PO-cache).
+describe('TableDataService items sync filter binnen PO-scope', () => {
+  it('bouwt een one-of clausule op ItemNumber', () => {
+    expect(buildOneOfFilterClause('ItemNumber', ['A-1']))
+      .toBe("ItemNumber eq 'A-1'");
+    expect(buildOneOfFilterClause('ItemNumber', ['A-1', 'A-2']))
+      .toBe("(ItemNumber eq 'A-1' or ItemNumber eq 'A-2')");
+  });
+
+  it('escaped enkele quotes in de one-of waarden', () => {
+    expect(buildOneOfFilterClause('ItemNumber', ["O'Brien"]))
+      .toBe("ItemNumber eq 'O''Brien'");
+  });
+
+  it('combineert het items-filter (AND) met de PO-scope clausule', () => {
+    const itemsFilter = "ItemGroupId eq 'FINISHED'";
+    const poScope = "(ItemNumber eq 'A-1' or ItemNumber eq 'A-2')";
+    expect(combineODataFilters(itemsFilter, poScope))
+      .toBe("(ItemGroupId eq 'FINISHED') and ((ItemNumber eq 'A-1' or ItemNumber eq 'A-2'))");
+  });
+
+  it('valt terug op alleen de PO-scope wanneer er geen items-filter is (lege regels)', () => {
+    const poScope = "ItemNumber eq 'A-1'";
+    expect(combineODataFilters('', poScope)).toBe(poScope);
   });
 });
 
