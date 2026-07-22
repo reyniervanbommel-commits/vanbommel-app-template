@@ -22,6 +22,16 @@ export const devTestItems = [
       'Bewerken van een formulekolom zelf blijft geblokkeerd (read-only)',
     ],
   },
+  {
+    id: 'feature-perf-subregels-v1-35-0',
+    title: 'Performance inkooporder-bord (v1.35.0)',
+    checks: [
+      'Subregels uitklappen gaat vlot; het bord blijft soepel scrollen, ook bij een order met veel regels',
+      'Alles uitklappen loopt niet meer vast en de scroll blijft responsief',
+      'Product-afbeeldingen in subregels laden zonder 429-fouten (geen ontbrekende/knipperende thumbnails)',
+      'Kolom text-style (bold/cursief/onderstreept) togglen gaat vlot en blijft na een reload behouden',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

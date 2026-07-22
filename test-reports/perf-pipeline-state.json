@@ -1,33 +1,45 @@
 {
-  "runId": "perf-2026-07-21T1258Z",
-  "status": "completed",
+  "runId": "perf-2026-07-22T0920Z",
+  "status": "paused",
   "runMode": "full",
-  "iteration": 4,
+  "iteration": 1,
   "maxIterations": 10,
-  "l5ExperimentsUsed": 1,
-  "currentPhase": "done",
-  "backlogItemId": null,
-  "lastCompletedItemId": "BL-005",
-  "environmentUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "l5ExperimentsUsed": 0,
+  "currentPhase": "push",
+  "backlogItemId": "BL-006",
+  "lastCompletedItemId": "BL-006",
+  "environmentUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
   "azureDevUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
-  "previewUrl": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
-  "draftPrUrl": "https://github.com/reyniervanbommel-commits/vanbommel-app-template/pull/61",
+  "pausedReason": "Lokale verify PASS (proxy-harnas, ~36% winst J8). Push + preview-deploy + Azure DEV her-meting vereisen menselijke goedkeuring (git-regel) en preview-deploy credentials.",
   "autonomy": {
     "askUserBetweenPhases": false,
     "commitLocally": true,
     "pushAfterGreen": true,
     "deployPreviewBeforeAzureVerify": true
   },
-  "completedItems": ["BL-006", "BL-003", "BL-005"],
-  "skippedItems": ["BL-001", "BL-002", "BL-004"],
+  "completedItems": ["BL-006 (done-local, Azure-verify pending)"],
+  "skippedItems": ["BL-001", "BL-002", "BL-003", "BL-004", "BL-005"],
   "skipped": {
-    "scroll": "No scrollable overflow container on DEV/preview dataset",
-    "seed": "Local SQL firewall blocked seed-perf-po-cache.js",
-    "BL-001": "elapsedWall under skipIf 500ms",
-    "BL-002": "elapsedWall null"
+    "BL-001": "elapsedWall 178ms < skipIf 500ms",
+    "BL-002": "elapsedWall null (ruis)",
+    "BL-003": "elapsedWall null; duplicate PO-fetch = 0 (v1.3 cache houdt stand)",
+    "BL-004": "geen scrollbare overflow-container op DEV-dataset",
+    "BL-005": "al geoptimaliseerd (v1.3 windowing); binnen meetruis"
   },
-  "startedAt": "2026-07-21T12:58:00.000Z",
-  "finishedAt": "2026-07-21T14:32:00.000Z",
-  "updatedAt": "2026-07-21T14:32:00.000Z",
-  "appVersion": "v1.30.33"
+  "scoutFindings": {
+    "J1_boardLoad_ms": 178,
+    "J2_rccp": null,
+    "J3_return": null,
+    "J4_scroll": "no overflow container",
+    "J7_filterApply_ms": {"M": 404, "L": 572},
+    "J8_textStyle_ms_azureDev": {"M": 891, "L": 799}
+  },
+  "localHarness": {
+    "method": "vite dev-build -> Azure DEV backend via proxy (VITE_PROXY_STRIP_SECURE)",
+    "J8_textStyleApplyMs": {"before": 2941, "afterIter1": 3331, "afterIter2": 1938, "afterIter2Confirm": 1821},
+    "J7_filterApplyMs": {"before": 830, "afterIter2": 843, "afterIter2Confirm": 805}
+  },
+  "startedAt": "2026-07-22T09:20:00.000Z",
+  "updatedAt": "2026-07-22T10:32:00.000Z",
+  "appVersion": "v1.30.35"
 }
