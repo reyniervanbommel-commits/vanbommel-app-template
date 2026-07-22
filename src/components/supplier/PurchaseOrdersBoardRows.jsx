@@ -5,7 +5,11 @@ import { normalizeColumnFormatRulesMap } from './columnFormatRuleUtils';
 import { PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX } from './purchaseOrderBoardLayout';
 import { usePurchaseOrdersBoardRowsStyles } from './purchaseOrdersBoardRowsStyles';
 import { useBoardRowWindow } from '../../hooks/useBoardRowWindow';
-import { buildBoardRowSlots } from '../../utils/purchaseOrderBoardRowSlots';
+import {
+  buildBoardRowSlots,
+  collectGroupSlotIndices,
+  findActiveGroupSlotIndex,
+} from '../../utils/purchaseOrderBoardRowSlots';
 import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
 
 const PurchaseOrdersBoardGroupHeader = memo(function PurchaseOrdersBoardGroupHeader({
@@ -108,6 +112,7 @@ function PurchaseOrdersBoardRows({
     () => buildBoardRowSlots(data.groupedRows, data.collapsedGroups),
     [data.collapsedGroups, data.groupedRows]
   );
+  const groupSlotIndices = useMemo(() => collectGroupSlotIndices(slots), [slots]);
   const hasExpanded = useMemo(
     () => Object.values(data.expandedOrders || {}).some(Boolean),
     [data.expandedOrders]
@@ -122,11 +127,36 @@ function PurchaseOrdersBoardRows({
     enabled: windowEnabled,
   });
   const visibleSlots = useMemo(() => slots.slice(start, end), [end, slots, start]);
+  // De categorie-header staat sticky (CSS position: sticky), maar dat werkt alleen
+  // zolang de rij ook echt in de DOM staat. Als de eigen groep-header-slot buiten het
+  // gevirtualiseerde venster is geschoven, mounten we hem hier apart terug zodat hij
+  // zichtbaar blijft zolang je nog tussen de rijen van die groep scrolt. De top-spacer
+  // wordt exact één rijhoogte kleiner gemaakt zodat de totale scrollhoogte gelijk blijft.
+  const activeGroupSlotIndex = useMemo(
+    () => findActiveGroupSlotIndex(groupSlotIndices, start),
+    [groupSlotIndices, start]
+  );
+  const pinnedGroupSlot = (activeGroupSlotIndex !== -1 && activeGroupSlotIndex < start)
+    ? slots[activeGroupSlotIndex]
+    : null;
+  const pinnedTopPadPx = pinnedGroupSlot
+    ? Math.max(0, topPadPx - PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
+    : topPadPx;
   const colCount = Math.max(1, (layout.colCount || 1) + 1);
 
   return (
     <tbody>
-      <SpacerRow heightPx={topPadPx} colCount={colCount} />
+      <SpacerRow heightPx={pinnedTopPadPx} colCount={colCount} />
+      {pinnedGroupSlot ? (
+        <PurchaseOrdersBoardGroupHeader
+          key={`g-${pinnedGroupSlot.groupKey}`}
+          group={pinnedGroupSlot.group}
+          collapsedGroups={data.collapsedGroups}
+          rowLayout={rowLayout}
+          selection={selection}
+          groupActions={stableActions.group}
+        />
+      ) : null}
       {visibleSlots.map((slot) => {
         if (slot.type === 'group') {
           return (
