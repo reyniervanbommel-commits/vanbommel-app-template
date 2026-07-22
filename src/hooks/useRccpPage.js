@@ -3,7 +3,7 @@ import { apiRequest } from '../utils/api';
 import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 import { useRccpWindow } from './useRccpWindow';
 
-export function useRccpPage({ vendorAccount = '' } = {}) {
+export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   const { isoWindow, setIsoWindow, loaded: windowLoaded } = useRccpWindow();
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,7 +12,7 @@ export function useRccpPage({ vendorAccount = '' } = {}) {
   const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!windowLoaded) return;
+    if (!windowLoaded || !enabled) return;
 
     const requestId = ++requestIdRef.current;
     setLoading(true);
@@ -29,7 +29,7 @@ export function useRccpPage({ vendorAccount = '' } = {}) {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [isoWindow, vendorAccount, windowLoaded]);
+  }, [isoWindow, vendorAccount, windowLoaded, enabled]);
 
   useEffect(() => { load(); }, [load]);
 
