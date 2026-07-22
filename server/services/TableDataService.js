@@ -2835,6 +2835,18 @@ function buildDetailRow(d, ctx) {
   };
 }
 
+// Bepaalt of een PO-detailregel binnen de actieve items-syncfilter valt. De items-lookup byKey-map
+// bevat na de sync alleen nog aanwezige (removed_at_source = 0) items = de gefilterde set, dus een
+// treffer in byKey betekent dat het item aan de filter voldoet. We hergebruiken exact dezelfde
+// sleutel-logica als de verrijking, zodat er geen veldnaam-aannames nodig zijn. Alleen aangeroepen
+// wanneer er een items-filter actief is (anders geen extra kosten op het board-hot-path).
+function detailMatchesItemsLookup(d, itemsLookup) {
+  const detailJson = parseJson(d.data_json);
+  const sourceValues = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
+  const lookupKey = buildLookupCacheKey(d.partition_key, sourceValues, itemsLookup);
+  return Boolean(lookupKey) && itemsLookup.byKey.has(lookupKey);
+}
+
 // Wat het board van de sublijnen nodig heeft zolang de order dichtgeklapt is.
 // Hiermee kan details[] uit de board-payload blijven.
 function buildDetailRollup(details) {
@@ -3274,13 +3286,38 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   const masterJsonByRecKey = new Map(
     mastersResult.recordset.map((m) => [`${m.partition_key}|${m.record_key}`, parseJson(m.data_json)])
   );
+
+  // PO-bord: als er een items-syncfilter actief is, tonen we per order alleen de regels waarvan het
+  // item binnen die filter valt, en verbergen we orders zonder enkele matchende regel. Bewust
+  // gekoppeld aan de items-filter en alleen actief zodra die is ingesteld (anders geen overhead).
+  let itemsFilterRules = [];
+  if (table.key === 'purchase-orders') {
+    try {
+      const itemsTable = await getTableByKey('items');
+      itemsFilterRules = parseDefaultFilterRules(itemsTable.defaultFilter);
+    } catch {
+      itemsFilterRules = [];
+    }
+  }
+  const itemsLookup = (enrichment.lookups || []).find(
+    (lk) => String(lk.targetTableKey || '').trim().toLowerCase() === 'items' && lk.sourceScope === 'detail'
+  );
+  const itemsLineFilterActive = table.key === 'purchase-orders'
+    && itemsFilterRules.length > 0 && Boolean(itemsLookup);
+  const ordersHiddenByItemsFilter = new Set();
+
   await time('tb_build_rows', async () => {
   const rows = mastersResult.recordset.map((m) => {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
     let hasLineChanges = false;
-    const details = (detailsByRecord.get(recKey) || []).map((d) => {
+    let rawDetailRows = detailsByRecord.get(recKey) || [];
+    if (itemsLineFilterActive) {
+      rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsLookup(d, itemsLookup));
+      if (!rawDetailRows.length && !Boolean(m.sync_retained)) ordersHiddenByItemsFilter.add(recKey);
+    }
+    const details = rawDetailRows.map((d) => {
       const detail = buildDetailRow(d, detailContext);
       if (detail.isNew || detail.isChanged || detail.hasRemovalChange) hasLineChanges = true;
       delete detail.hasRemovalChange;
@@ -3329,13 +3366,19 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   });
 
   let visibleRows = rows;
-  if (table.key === 'purchase-orders' && activeSyncRules.length) {
+  if (table.key === 'purchase-orders' && (activeSyncRules.length || itemsLineFilterActive)) {
     visibleRows = rows.filter((row) => {
-      if (row.syncRetained) return true;
       const recKey = `${row.partitionKey}|${row.recordKey}`;
-      const masterJson = masterJsonByRecKey.get(recKey) || {};
-      const lineRecords = (detailsByRecord.get(recKey) || []).map((d) => parseJson(d.data_json));
-      return recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords);
+      // Items-filter: verberg orders zonder enkele matchende regel (retained orders blijven staan,
+      // net als bij de PO-syncregels hieronder).
+      if (itemsLineFilterActive && !row.syncRetained && ordersHiddenByItemsFilter.has(recKey)) return false;
+      if (activeSyncRules.length) {
+        if (row.syncRetained) return true;
+        const masterJson = masterJsonByRecKey.get(recKey) || {};
+        const lineRecords = (detailsByRecord.get(recKey) || []).map((d) => parseJson(d.data_json));
+        return recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords);
+      }
+      return true;
     });
     newCount = visibleRows.filter((row) => row.isNew).length;
     changedCount = visibleRows.filter((row) => row.isChanged).length;
@@ -4670,6 +4713,7 @@ module.exports = {
   read,
   readRowDetails,
   buildDetailRollup,
+  detailMatchesItemsLookup,
   invalidateLookupEnrichmentCache,
   saveCustomValue,
   correctField,
