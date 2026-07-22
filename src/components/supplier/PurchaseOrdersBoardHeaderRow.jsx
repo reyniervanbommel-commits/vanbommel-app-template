@@ -41,6 +41,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   setFilterOperator,
   setFilterValue,
   setFilterSecondaryValue,
+  applyColumnFilter,
   clearColumnFilter,
   setGroupingColumn,
   clearGrouping,
@@ -163,6 +164,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetOperator={setFilterOperator}
                 onSetValue={setFilterValue}
                 onSetSecondaryValue={setFilterSecondaryValue}
+                onApplyFilter={applyColumnFilter}
                 onClearFilter={clearColumnFilter}
                 onSetGroupingColumn={setGroupingColumn}
                 onClearGrouping={clearGrouping}

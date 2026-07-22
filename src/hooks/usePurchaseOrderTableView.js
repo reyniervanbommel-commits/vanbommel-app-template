@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { columnUsesNumberSemantics } from '../utils/datePeriodColumnUtils';
 import {
   buildFilterFromCellValue,
@@ -62,6 +62,8 @@ function compareValues(a, b, column, datePeriodDisplayModes = {}) {
 export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {} }) {
   const [sortState, setSortState] = useState({ columnKey: '', direction: SORT_DIRECTIONS.none });
   const [filterByColumn, setFilterByColumn] = useState({});
+  // Keep header filter chips snappy; defer the heavy filter→sort pass for board rows.
+  const deferredFilterByColumn = useDeferredValue(filterByColumn);
 
   const columnByKey = useMemo(
     () => new Map(columns.map((column) => [column.key, column])),
@@ -105,6 +107,23 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
         [columnKey]: {
           ...current,
           secondaryValue,
+        },
+      };
+    });
+  }, [columnByKey, datePeriodDisplayModes]);
+
+  // Single setState for Apply — avoids three sequential filterByColumn updates.
+  const applyColumnFilter = useCallback((columnKey, next) => {
+    setFilterByColumn((prev) => {
+      const column = columnByKey.get(columnKey);
+      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
+      return {
+        ...prev,
+        [columnKey]: {
+          ...current,
+          operator: next?.operator ?? current.operator,
+          value: next?.value ?? '',
+          secondaryValue: next?.operator === 'between' ? (next?.secondaryValue ?? '') : '',
         },
       };
     });
@@ -195,7 +214,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
 
   const processedItems = useMemo(() => {
     const activeFilters = columns
-      .map((column) => [column, resolveFilterModel(column, filterByColumn[column.key], datePeriodDisplayModes)])
+      .map((column) => [column, resolveFilterModel(column, deferredFilterByColumn[column.key], datePeriodDisplayModes)])
       .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
 
     const filtered = activeFilters.length
@@ -224,7 +243,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
       return base;
     });
     return sorted;
-  }, [columns, filterByColumn, items, sortState, columnByKey, datePeriodDisplayModes]);
+  }, [columns, deferredFilterByColumn, items, sortState, columnByKey, datePeriodDisplayModes]);
 
   const activeFilterCount = useMemo(
     () => columns.reduce(
@@ -247,6 +266,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
+    applyColumnFilter,
     clearColumnFilter,
     applyFilterFromCellValue,
     clearAllFilters,
@@ -263,6 +283,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     setFilterOperator,
     setFilterValue,
     setFilterSecondaryValue,
+    applyColumnFilter,
     clearColumnFilter,
     applyFilterFromCellValue,
     clearAllFilters,

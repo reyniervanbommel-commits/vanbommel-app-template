@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { TopSpeedRegular, Dismiss24Regular } from '@fluentui/react-icons';
 import { getApiTimings, subscribePerf, getNavigationTiming, getResourceTransferKB } from '../../utils/perf';
+import { loadPerfBaseline, buildBaselineCompareRows } from '../../utils/perfBaseline';
 
 // Dev/preview-only performance-HUD: laadtijd (Navigation Timing), backend-sync-KPI's
 // (Fase D metrics via /refresh/progress) en de duur van recente API-calls. Off-by-default;
@@ -30,7 +31,9 @@ const useStyles = makeStyles({
     bottom: '52px',
     width: '320px',
     maxHeight: '70vh',
-    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
     zIndex: 9999,
     ...shorthands.padding('12px'),
     ...shorthands.borderRadius('10px'),
@@ -39,6 +42,21 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow16,
     fontSize: '11px',
     color: tokens.colorNeutralForeground1,
+  },
+  panelScroll: {
+    flexGrow: 1,
+    minHeight: 0,
+    overflowY: 'scroll',
+    overflowX: 'hidden',
+    paddingRight: '4px',
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${tokens.colorNeutralStroke1} transparent`,
+    '::-webkit-scrollbar': { width: '8px' },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStroke1,
+      ...shorthands.borderRadius('4px'),
+    },
+    '::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
   },
   header: {
     display: 'flex',
@@ -74,6 +92,19 @@ function fmtMs(ms) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
+function fmtDelta(ms) {
+  if (ms == null) return '—';
+  const sign = ms > 0 ? '+' : '';
+  return `${sign}${ms}ms`;
+}
+
+function deltaColor(ms) {
+  if (ms == null) return tokens.colorNeutralForeground3;
+  if (ms <= -50) return tokens.colorPaletteGreenForeground1;
+  if (ms >= 50) return tokens.colorPaletteRedForeground1;
+  return tokens.colorNeutralForeground2;
+}
+
 export default function DevPerfOverlay() {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
@@ -81,6 +112,7 @@ export default function DevPerfOverlay() {
   const [nav, setNav] = useState(null);
   const [transferKB, setTransferKB] = useState(null);
   const [syncMetrics, setSyncMetrics] = useState(null);
+  const [baseline, setBaseline] = useState(null);
 
   // Her-render bij elke nieuwe API-timing.
   useEffect(() => subscribePerf(() => forceRender((n) => n + 1)), []);
@@ -114,6 +146,7 @@ export default function DevPerfOverlay() {
 
   useEffect(() => {
     if (!open) return undefined;
+    loadPerfBaseline().then(setBaseline).catch(() => setBaseline(null));
     pollSync();
     const t = window.setInterval(pollSync, 5000);
     return () => window.clearInterval(t);
@@ -121,6 +154,7 @@ export default function DevPerfOverlay() {
 
   const timings = getApiTimings();
   const lastApi = timings[0];
+  const baselineRows = buildBaselineCompareRows(baseline, timings);
 
   if (!open) {
     return (
@@ -140,6 +174,7 @@ export default function DevPerfOverlay() {
         <Dismiss24Regular className={styles.close} fontSize={16} onClick={() => setOpen(false)} />
       </div>
 
+      <div className={styles.panelScroll}>
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Load time (this page)</div>
         {nav ? (
@@ -170,12 +205,35 @@ export default function DevPerfOverlay() {
       </div>
 
       <div className={styles.section}>
+        <div className={styles.sectionTitle}>
+          Vs baseline (pre-fix)
+          {baseline?.updatedAt ? ` · ${baseline.updatedAt}` : ''}
+        </div>
+        {!baseline?.hudWatch?.length ? (
+          <div className={styles.empty}>no baseline — run scout or add public/perf-baseline.json</div>
+        ) : (
+          baselineRows.map((row) => (
+            <div className={styles.row} key={row.id}>
+              <span className={styles.path} title={row.matchedPath || row.label}>{row.label}</span>
+              <span className={styles.mono}>
+                {row.currentMs != null ? fmtMs(row.currentMs) : '—'}
+                {' / '}
+                {row.baselineMs != null ? fmtMs(row.baselineMs) : '—'}
+                {' '}
+                <span style={{ color: deltaColor(row.delta) }}>({fmtDelta(row.delta)})</span>
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className={styles.section}>
         <div className={styles.sectionTitle}>Recent API calls ({timings.length})</div>
         {timings.length === 0 ? (
           <div className={styles.empty}>no calls yet</div>
         ) : (
-          timings.slice(0, 12).map((t, i) => (
-            <div className={styles.row} key={i}>
+          timings.map((t, i) => (
+            <div className={styles.row} key={`${t.at}-${t.path}-${i}`}>
               <span className={styles.path} title={`${t.method} ${t.path}`}>
                 <span className={styles.mono}>{t.method}</span> {t.path}
               </span>
@@ -183,6 +241,7 @@ export default function DevPerfOverlay() {
             </div>
           ))
         )}
+      </div>
       </div>
     </div>
   );

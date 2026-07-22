@@ -20,6 +20,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     if: github.event_name == 'push' || github.event.inputs.confirm == 'deploy-prod'
 
     steps:

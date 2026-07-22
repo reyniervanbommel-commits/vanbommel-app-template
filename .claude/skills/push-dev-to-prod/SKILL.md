@@ -76,19 +76,18 @@ gh pr create \
   --body "DEV getest en akkoord. Klaar voor productie."
 ```
 
-> Het PR-guard script blokkeert directe pushes naar main — gebruik altijd een PR.
+> Branch protection op `main` blokkeert directe pushes — gebruik altijd een PR.
 
 ---
 
-## Stap 4 — Wacht op merge en GitHub Actions deploy
+## Stap 4 — Wacht op merge, goedkeuring en GitHub Actions deploy
 
 Na het aanmaken:
 
 1. Merge de PR: `gh pr merge <nr> --merge`
-2. GitHub Actions `deploy-prod.yml` start automatisch:
-   - Docker image bouwen met PROD-configuratie
-   - DB migraties uitvoeren op PROD database
-   - `<prod-container-app-naam>` bijwerken
+2. GitHub Actions start `deploy-prod.yml` — job pauzeert op environment **`production`**
+3. Goedkeurder: GitHub → Actions → lopende run → **Review deployments** → **Approve and deploy**
+4. Pas daarna: Docker image (PROD-config), DB-migraties op PROD, Container App update
 
 Volg de voortgang:
 

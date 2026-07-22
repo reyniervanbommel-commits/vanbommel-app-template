@@ -1,0 +1,80 @@
+{
+  "label": "Scout baseline (pre-fix)",
+  "updatedAt": "2026-07-21",
+  "environment": "https://preview-perf-pipeline-skills-v1.graysand-65442c41.northeurope.azurecontainerapps.io",
+  "profile": "L",
+  "hudWatch": [
+    {
+      "id": "po-full-read",
+      "label": "PO board — full read",
+      "pathIncludes": "/data/purchase-orders",
+      "pathExcludes": "/revision",
+      "method": "GET",
+      "baselineMs": 1701,
+      "journey": "J1"
+    },
+    {
+      "id": "po-revision",
+      "label": "PO board — revision check",
+      "pathIncludes": "/revision",
+      "method": "GET",
+      "baselineMs": 80,
+      "journey": "J3"
+    },
+    {
+      "id": "rccp-analysis",
+      "label": "RCCP analysis load",
+      "pathIncludes": "/rccp",
+      "method": "GET",
+      "baselineMs": 800,
+      "journey": "J2"
+    },
+    {
+      "id": "po-filter-apply",
+      "label": "PO filter Apply",
+      "journey": "J7",
+      "baselineMs": 721,
+      "metric": "filterApplyMs"
+    },
+    {
+      "id": "po-text-style",
+      "label": "PO text style Bold",
+      "journey": "J8",
+      "baselineMs": 1073,
+      "metric": "textStyleApplyMs"
+    }
+  ],
+  "scoutJourneys": {
+    "J1": {
+      "elapsedWall": 86,
+      "apiSum": 1701,
+      "app": 1464
+    },
+    "J2": {
+      "elapsedWall": null,
+      "apiSum": 0
+    },
+    "J3": {
+      "elapsedWall": 384,
+      "apiSum": 18662,
+      "duplicatePoFetch": 0
+    }
+  },
+  "boardActionJourneys": {
+    "J7": {
+      "label": "Column filter Apply",
+      "profile": "L",
+      "median": {
+        "filterApplyMs": 721
+      }
+    },
+    "J8": {
+      "label": "Text style Bold",
+      "profile": "L",
+      "median": {
+        "textStyleApplyMs": 1073
+      }
+    },
+    "measuredAt": "2026-07-21T14:29:21.294Z"
+  }
+}

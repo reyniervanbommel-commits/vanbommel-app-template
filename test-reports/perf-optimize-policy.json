@@ -1,0 +1,118 @@
+{
+  "version": "1.0.0",
+  "decidedAt": "2026-07-20",
+  "decidedBy": "product-owner",
+  "targetAudience": "all-logged-in-users",
+  "primaryMetric": "elapsedWall",
+  "secondaryMetric": "app",
+  "secondaryMetricRole": "informational",
+  "successCriteria": {
+    "boardLoad": {
+      "elapsedWallReductionPercent": 30,
+      "appMsTarget": null,
+      "appMsNote": "informational only — no gate"
+    },
+    "rccp": {
+      "elapsedWallReductionPercent": 25
+    }
+  },
+  "scaleProfiles": {
+    "S": 80,
+    "M": 500,
+    "L": 2000
+  },
+  "scoutProfiles": ["M", "L"],
+  "verifyProfiles": ["S", "M", "L"],
+  "adversaryProfiles": ["M", "L"],
+  "skipIf": {
+    "elapsedWallMs": 500,
+    "appMs": 150,
+    "unlessAnalyticsTopN": 5
+  },
+  "gapRouting": {
+    "renderIfElapsedMinusApiMsGte": 400,
+    "networkIfApiMinusAppMsGte": 200,
+    "serverIfAppMsGte": 300
+  },
+  "cache": {
+    "crossPageTtlSeconds": null,
+    "crossPageTtlPolicy": "unlimited-until-revision",
+    "description": "PO board cache may persist indefinitely when user navigates away (e.g. BI) and returns; invalidate only on revision change or explicit refresh",
+    "requireRevisionInvalidation": true
+  },
+  "autonomyMaxTier": "L5",
+  "l5ExperimentsInV1": 1,
+  "pipelineSchedule": "manual",
+  "environment": {
+    "truth": "azure-dev-container-app",
+    "seedScript": "scripts/seed-perf-po-cache.js"
+  },
+  "adversary": {
+    "blockingScenarios": ["A1", "A5"],
+    "warningOnlyScenarios": ["A2", "A3", "A4"]
+  },
+  "regression": {
+    "thresholdPercent": 25,
+    "thresholdMs": 200,
+    "primaryMetricBlocks": true,
+    "secondaryMetricBlocks": false
+  },
+  "retry": {
+    "maxAttemptsPerItem": 2
+  },
+  "stop": {
+    "maxIterationsPerRun": 10,
+    "minUxGainMs": 50
+  },
+  "prReview": "always-human",
+  "frequencySource": "/admin/analytics/page-usage",
+  "frequencyFallback": {
+    "poBoard": 3.0,
+    "rccp": 1.5,
+    "returnBoard": 2.0
+  },
+  "scopePhases": {
+    "current": "v1.2",
+    "v1": "J1–J3 load journeys (perf-scout)",
+    "v1.1": "v1 + J4 scroll PO board (perf-scroll)",
+    "v1.2": "v1.1 + J7 filter Apply + J8 text style (perf-board-actions)",
+    "v2": "v1.2 + J5 expand + perf-review full route/tab screening",
+    "v3": "All authenticated routes including admin/BI"
+  },
+  "scrollTargets": {
+    "primaryMetric": "maxLongFrameMs",
+    "skipBelowMs": 80,
+    "reductionPercent": 30,
+    "expandStableReductionPercent": 25
+  },
+  "boardActionTargets": {
+    "primaryMetrics": {
+      "J7": "filterApplyMs",
+      "J8": "textStyleApplyMs"
+    },
+    "reductionPercent": 30,
+    "skipFilterBelowMs": 150,
+    "skipStyleBelowMs": 200
+  },
+  "deployPreview": {
+    "enabled": true,
+    "skill": "develop-from-devops",
+    "mode": "preview",
+    "note": "Bestaande OTAP-skill — orchestrate roept modus preview aan na lokale verify; geen nieuwe skill",
+    "beforeAzureVerify": true
+  },
+  "decisions": {
+    "Q1": "A",
+    "Q2": "A",
+    "Q3": "C",
+    "Q4": "D",
+    "Q5": "D",
+    "Q6": "custom-unlimited-cross-page-cache",
+    "Q7": "A",
+    "Q8": "A",
+    "Q9": "B",
+    "Q10": "A",
+    "Q11": "A",
+    "Q12": "B"
+  }
+}
