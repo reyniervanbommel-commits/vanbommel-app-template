@@ -43,6 +43,44 @@ function normalizeBiDateFilter(raw) {
   };
 }
 
+// --- Board-snapshotcache (punt 3+4): deelt één zware read() over alle aggregates -----------------
+// De rijen komen uit tb_cache (cache-is-leidend) en veranderen alleen bij een sync/refresh,
+// exclusions, custom values of kolomwijzigingen. We cachen { rows, columns } per board en
+// hergebruiken die zolang de content-signatuur gelijk is (los van user- en app-instellingen).
+// Zo kost een vendor-/weekfilterwijziging alleen nog de goedkope JS-aggregatie, geen board-read.
+const BI_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const biSnapshotCache = new Map();
+
+// Alleen content-bepalende delen; user-/settings-delen (bv. de gedeelde weekfilter) laten de
+// rijen ongemoeid en horen dus niet in de signatuur.
+function contentSignature(parts = {}) {
+  return JSON.stringify({
+    syncedAt: parts.syncedAt ?? null,
+    maxContentChangedAt: parts.maxContentChangedAt ?? null,
+    maxFirstSeenAt: parts.maxFirstSeenAt ?? null,
+    maxCustomValueAt: parts.maxCustomValueAt ?? null,
+    maxLedgerAt: parts.maxLedgerAt ?? null,
+    maxColumnsAt: parts.maxColumnsAt ?? null,
+    exclusionCount: parts.exclusionCount ?? 0,
+    maxExclusionAt: parts.maxExclusionAt ?? null,
+  });
+}
+
+// Leest het board voor BI met snapshot-hergebruik. Geeft { rows, columns, revision } terug.
+async function readBiBoard(boardKey, userId) {
+  const { revision, parts } = await time('bi_revision', () => dataService.getRevision({ tableKey: boardKey, userId }));
+  const signature = contentSignature(parts);
+  const cached = biSnapshotCache.get(boardKey);
+  if (cached && cached.signature === signature && (Date.now() - cached.cachedAt) < BI_SNAPSHOT_TTL_MS) {
+    return { rows: cached.rows, columns: cached.columns, revision };
+  }
+  const data = await time('bi_board_read', () => dataService.read({ tableKey: boardKey, userId }));
+  const columns = data.meta?.columns?.master || [];
+  const rows = data.rows || [];
+  biSnapshotCache.set(boardKey, { rows, columns, signature, cachedAt: Date.now() });
+  return { rows, columns, revision };
+}
+
 function validationError(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -184,8 +222,9 @@ router.get('/meta/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) return res.status(400).json({ error: 'Invalid board key' });
-    const data = await time('bi_meta', () => dataService.read({ tableKey: boardKey, userId: req.user.id }));
-    const columns = (data.meta?.columns?.master || []).map((c) => ({
+    // Alleen kolomdefinities — geen volledige board-read (punt 2).
+    const defs = await time('bi_meta', () => dataService.getBoardColumnDefinitions(boardKey, { scope: 'master' }));
+    const columns = (defs.master || []).map((c) => ({
       key: c.key,
       label: c.label,
       dataType: c.dataType,
@@ -209,16 +248,26 @@ router.post('/aggregate',
       if (validationError(req, res)) return undefined;
       const boardKey = BOARD_KEY_PATTERN.test(String(req.body.boardKey || '')) ? req.body.boardKey : 'purchase-orders';
       const charts = req.body.charts.map(normalizeConfig);
-      const output = await time('bi_aggregate', async () => {
-        const data = await dataService.read({ tableKey: boardKey, userId: req.user.id });
-        const columns = data.meta?.columns?.master || [];
-        return aggregateCharts({ rows: data.rows || [], columns, charts });
-      });
-      return res.json(output);
+      const { rows, columns, revision } = await readBiBoard(boardKey, req.user.id);
+      const output = await time('bi_aggregate', async () => aggregateCharts({ rows, columns, charts }));
+      return res.json({ ...output, revision });
     } catch (err) {
       return next(err);
     }
   });
+
+// GET /api/bi/revision/:boardKey — lichtgewicht "is het board gewijzigd?"-token (punt 1).
+// Laat de client bij terugkeer beslissen of de gecachte grafiekdata nog actueel is.
+router.get('/revision/:boardKey', async (req, res, next) => {
+  try {
+    const boardKey = String(req.params.boardKey || '').trim();
+    if (!BOARD_KEY_PATTERN.test(boardKey)) return res.status(400).json({ error: 'Invalid board key' });
+    const { revision } = await dataService.getRevision({ tableKey: boardKey, userId: req.user.id });
+    return res.json({ boardKey, revision });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 // GET /api/bi/date-filter — gedeelde week/jaar-filterinstelling (geldt voor iedereen).
 router.get('/date-filter', async (req, res, next) => {

@@ -95,6 +95,7 @@ export default function BiPage() {
     externalFilterByColumn: vendorFilter.externalFilterByColumn,
     columns: meta.columns,
     dateRange: dateFilter.dateRange,
+    checkRevision: true,
   });
 
   const handleNew = useCallback(() => {

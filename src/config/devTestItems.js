@@ -52,6 +52,16 @@ export const devTestItems = [
       'The filter setting (on/off + weeks) is shared: it persists after reload and applies to every user',
     ],
   },
+  {
+    id: 'feature-bi-fast-loading-v1-38-0',
+    title: 'BI faster loading & caching (v1.38.0)',
+    checks: [
+      'Returning to the BI page renders charts instantly from cache (no full reload) when nothing changed',
+      'Changing vendor or week filter updates charts quickly without a noticeable full board reload',
+      'After a data refresh/sync the BI charts show the new data on the next visit',
+      'Opening BI still shows correct columns in the chart builder (metadata loads without a full read)',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
