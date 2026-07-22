@@ -41,6 +41,16 @@ export const devTestItems = [
       'Selecting a vendor filters all charts to that vendor; "All vendors" shows the full dataset again',
     ],
   },
+  {
+    id: 'feature-bi-date-filter-v1-37-4',
+    title: 'BI page week/year date filter (v1.37.4)',
+    checks: [
+      'The BI toolbar has a "Date field" selector plus From/To year and week inputs (like RCCP)',
+      'Choosing a date field and a week/year range filters all charts to that period',
+      'Setting the date field back to "All dates" removes the date filter again',
+      'The chart builder flyout scrolls internally without scrolling the whole page',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

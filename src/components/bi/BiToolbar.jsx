@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { Button, makeStyles, shorthands, Text, tokens } from '@fluentui/react-components';
 import { AddRegular, ArrowClockwiseRegular } from '@fluentui/react-icons';
 import RccpVendorFilter from '../rccp/RccpVendorFilter';
+import BiDateRangeFilter from './BiDateRangeFilter';
 
 const useStyles = makeStyles({
   root: {
@@ -26,10 +27,7 @@ const useStyles = makeStyles({
   vendorField: { maxWidth: '420px', minWidth: '320px' },
 });
 
-function BiToolbar({
-  onNewChart, onRefresh,
-  vendorAccount, onVendorChange, vendors, vendorNames, vendorsLoading, vendorsError,
-}) {
+function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter }) {
   const styles = useStyles();
   return (
     <div className={styles.root}>
@@ -41,12 +39,19 @@ function BiToolbar({
         </div>
         <RccpVendorFilter
           className={styles.vendorField}
-          value={vendorAccount}
-          onChange={onVendorChange}
-          vendors={vendors}
-          vendorNames={vendorNames}
-          loading={vendorsLoading}
-          error={vendorsError}
+          value={vendorFilter.vendorAccount}
+          onChange={vendorFilter.setVendorAccount}
+          vendors={vendorFilter.vendors}
+          vendorNames={vendorFilter.vendorNames}
+          loading={vendorFilter.loading}
+          error={vendorFilter.error}
+        />
+        <BiDateRangeFilter
+          dateColumns={dateFilter.dateColumns}
+          dateColumnKey={dateFilter.dateColumnKey}
+          onDateColumnChange={dateFilter.setDateColumnKey}
+          isoWindow={dateFilter.isoWindow}
+          onWindowChange={dateFilter.setWindowField}
         />
       </div>
     </div>

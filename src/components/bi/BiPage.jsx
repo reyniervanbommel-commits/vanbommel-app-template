@@ -14,6 +14,7 @@ import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useStarterCharts } from './hooks/useStarterCharts';
 import { useBiVendorFilter } from './hooks/useBiVendorFilter';
+import { useBiDateFilter } from './hooks/useBiDateFilter';
 import { BOARD_KEY } from './biConstants';
 
 const useStyles = makeStyles({
@@ -41,6 +42,12 @@ export default function BiPage() {
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
   const seedStarters = useStarterCharts({ columns: meta.columns, createChart });
   const vendorFilter = useBiVendorFilter();
+  const dateFilter = useBiDateFilter(meta.columns);
+
+  const externalFilterByColumn = useMemo(() => {
+    const merged = { ...(vendorFilter.externalFilterByColumn || {}), ...(dateFilter.externalFilterByColumn || {}) };
+    return Object.keys(merged).length ? merged : undefined;
+  }, [vendorFilter.externalFilterByColumn, dateFilter.externalFilterByColumn]);
 
   const [builderMode, setBuilderMode] = useState(null);
   const [draftPayload, setDraftPayload] = useState(null);
@@ -90,7 +97,7 @@ export default function BiPage() {
 
   const { resultsById, loadingById } = useChartData({
     charts: chartsForFetch,
-    externalFilterByColumn: vendorFilter.externalFilterByColumn,
+    externalFilterByColumn,
   });
 
   const handleNew = useCallback(() => {
@@ -176,12 +183,8 @@ export default function BiPage() {
         <BiToolbar
           onNewChart={handleNew}
           onRefresh={reload}
-          vendorAccount={vendorFilter.vendorAccount}
-          onVendorChange={vendorFilter.setVendorAccount}
-          vendors={vendorFilter.vendors}
-          vendorNames={vendorFilter.vendorNames}
-          vendorsLoading={vendorFilter.loading}
-          vendorsError={vendorFilter.error}
+          vendorFilter={vendorFilter}
+          dateFilter={dateFilter}
         />
 
         {error ? (
