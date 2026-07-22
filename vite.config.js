@@ -6,6 +6,11 @@ export default defineConfig(({ mode }) => {
   const devPort = Number.parseInt(env.VITE_DEV_PORT || '5178', 10);
   const backendPort = env.PORT || '3008';
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${backendPort}`;
+  // Perf-pipeline hulpmiddel: laat de lokale frontend tegen een HTTPS remote-backend (Azure DEV)
+  // meten. Een remote-backend zet Secure-cookies die de browser niet bewaart over http://localhost.
+  // Alleen wanneer expliciet aangezet strippen we Secure/Domain uit Set-Cookie zodat de sessie werkt.
+  // Standaard inert -> productie/dev-gedrag ongewijzigd.
+  const stripSecureCookies = env.VITE_PROXY_STRIP_SECURE === 'true';
 
   return {
   plugins: [react()],
@@ -15,6 +20,18 @@ export default defineConfig(({ mode }) => {
       '/api': {
         target: apiProxyTarget,
         changeOrigin: true,
+        cookieDomainRewrite: stripSecureCookies ? '' : undefined,
+        configure: stripSecureCookies
+          ? (proxy) => {
+            proxy.on('proxyRes', (proxyRes) => {
+              const setCookie = proxyRes.headers['set-cookie'];
+              if (Array.isArray(setCookie)) {
+                proxyRes.headers['set-cookie'] = setCookie.map((c) =>
+                  c.replace(/;\s*Secure/gi, '').replace(/;\s*Domain=[^;]+/gi, ''));
+              }
+            });
+          }
+          : undefined,
       },
     },
   },

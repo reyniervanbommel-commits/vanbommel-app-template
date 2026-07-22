@@ -129,6 +129,33 @@ const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   );
 });
 
+// Custom memo-vergelijking: een cel hangt alleen af van de opmaak van ZIJN eigen kolom. Bij een
+// text-style/format/breedte-wijziging aan één kolom krijgt het hele 'formatting'-object een nieuwe
+// referentie; door hier alleen de per-kolom slices te vergelijken slaan cellen van niet-gewijzigde
+// kolommen hun re-render over (BL-006). Alle overige props worden strikt (Object.is) vergeleken —
+// wijkt er iets af, dan hertekenen we (veilig). Vereist referentie-stabiele slices (zie
+// normalizeColumnTextStyleMap previous-param + effectiveHeaderTextStylesRef).
+function areBoardCellPropsEqual(prev, next) {
+  if (prev.column !== next.column) return false;
+  const key = next.column?.key;
+  const pf = prev.formatting;
+  const nf = next.formatting;
+  if (pf !== nf) {
+    if (pf?.headerColumnWidths?.[key] !== nf?.headerColumnWidths?.[key]) return false;
+    if (pf?.headerColumnTextStyles?.[key] !== nf?.headerColumnTextStyles?.[key]) return false;
+    if (pf?.headerColumnFormatRules?.[key] !== nf?.headerColumnFormatRules?.[key]) return false;
+  }
+  return prev.order === next.order
+    && prev.styles === next.styles
+    && prev.actions === next.actions
+    && prev.links === next.links
+    && prev.contextMenu === next.contextMenu
+    && prev.remarks === next.remarks
+    && prev.rowFormatColor === next.rowFormatColor
+    && prev.isLocated === next.isLocated
+    && prev.isCollapsed === next.isCollapsed;
+}
+
 const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
   order,
   column,
@@ -220,7 +247,7 @@ const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
       )}
     </PurchaseOrderDataCell>
   );
-});
+}, areBoardCellPropsEqual);
 
 function PurchaseOrderBoardRow({
   entry,

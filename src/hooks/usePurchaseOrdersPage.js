@@ -639,10 +639,18 @@ export function usePurchaseOrdersPage() {
     ),
     [lineColumnWidths, defaultLineKeys]
   );
-  const effectiveHeaderColumnTextStyles = useMemo(
-    () => normalizeColumnTextStyleMap(headerColumnTextStyles, defaultHeaderKeys),
-    [headerColumnTextStyles, defaultHeaderKeys]
-  );
+  // Ref-cache: bewaar per-kolom stijl-referenties tussen renders, zodat een wijziging aan één
+  // kolom niet de identiteit van álle andere kolom-stijlen breekt (React.memo op board-cellen).
+  const effectiveHeaderTextStylesRef = useRef(null);
+  const effectiveHeaderColumnTextStyles = useMemo(() => {
+    const next = normalizeColumnTextStyleMap(
+      headerColumnTextStyles,
+      defaultHeaderKeys,
+      effectiveHeaderTextStylesRef.current
+    );
+    effectiveHeaderTextStylesRef.current = next;
+    return next;
+  }, [headerColumnTextStyles, defaultHeaderKeys]);
   const effectiveHeaderColumnFormatRules = useMemo(
     () => normalizeColumnFormatRulesMap(headerColumnFormatRules, defaultHeaderKeys),
     [headerColumnFormatRules, defaultHeaderKeys]
@@ -680,7 +688,7 @@ export function usePurchaseOrdersPage() {
     nextCollapsedHeaderColumnKeys = collapsedHeaderColumnKeys,
     nextCollapsedLineColumnKeys = collapsedLineColumnKeys,
     nextProductImageColumnVisible = productImageColumnVisible,
-  } = {}) => {
+  } = {}, { applyState = true } = {}) => {
     const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
     const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
     const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
@@ -711,21 +719,26 @@ export function usePurchaseOrdersPage() {
       defaultLineKeys
     );
 
-    setVisibleColumnKeys(normalizedVisible);
-    setColumnOrder(normalizedHeaderOrder);
-    setLineColumnOrder(normalizedLineOrder);
-    setHeaderColumnWidths(normalizedHeaderWidths);
-    setLineColumnWidths(normalizedLineWidths);
-    setHeaderColumnTextStyles(normalizedHeaderTextStyles);
-    setHeaderColumnFormatRules(normalizedHeaderFormatRules);
-    setLineColumnTextStyles(normalizedLineTextStyles);
-    setLineColumnFormatRules(normalizedLineFormatRules);
-    setLineTotalColumns(normalizedLineTotalColumns);
-    setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
-    setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
-    setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
-    setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
-    setProductImageColumnVisible(nextProductImageColumnVisible !== false);
+    // applyState=false: de aanroeper heeft de wijziging al optimistisch in state gezet (text-style).
+    // De volledige setter-blast dan overslaan voorkomt een tweede render-golf waarbij o.a. format-
+    // rules/orders nieuwe referenties krijgen en board-cellen onnodig hertekenen (BL-006).
+    if (applyState) {
+      setVisibleColumnKeys(normalizedVisible);
+      setColumnOrder(normalizedHeaderOrder);
+      setLineColumnOrder(normalizedLineOrder);
+      setHeaderColumnWidths(normalizedHeaderWidths);
+      setLineColumnWidths(normalizedLineWidths);
+      setHeaderColumnTextStyles(normalizedHeaderTextStyles);
+      setHeaderColumnFormatRules(normalizedHeaderFormatRules);
+      setLineColumnTextStyles(normalizedLineTextStyles);
+      setLineColumnFormatRules(normalizedLineFormatRules);
+      setLineTotalColumns(normalizedLineTotalColumns);
+      setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
+      setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
+      setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
+      setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
+      setProductImageColumnVisible(nextProductImageColumnVisible !== false);
+    }
     // Houd de sessie-cache in sync met wat we opslaan, zodat een volgende mount de nieuwe layout
     // meteen seedt en er geen "oude layout → correctie"-flits ontstaat.
     const persistedSettings = {
@@ -795,7 +808,8 @@ export function usePurchaseOrdersPage() {
       const pending = boardSettingsPersistPendingRef.current;
       boardSettingsPersistPendingRef.current = null;
       if (!pending) return;
-      void persistBoardSettings(pending);
+      // Network-only: state is al optimistisch gezet; sla de setter-blast over (geen tweede golf).
+      void persistBoardSettings(pending, { applyState: false });
     }, 200);
   }, [persistBoardSettings]);
 
