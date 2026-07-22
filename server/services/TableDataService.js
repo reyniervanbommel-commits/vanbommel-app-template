@@ -673,6 +673,28 @@ async function listDistinctMasterRecordKeys(tableId) {
     .filter(Boolean);
 }
 
+// Set van aanwezige item-sleutels (partition|itemnummer) uit de items-cache — de gefilterde set na
+// de sync. Alleen aangeroepen wanneer er een items-syncfilter actief is.
+async function loadPresentItemFilterKeys(itemsTableId) {
+  if (!itemsTableId) return new Set();
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, itemsTableId)
+    .query(`
+      SELECT DISTINCT partition_key, record_key
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'master'
+        AND detail_key = ${MASTER_DETAIL_KEY}
+        AND removed_at_source = 0
+    `);
+  const set = new Set();
+  for (const row of result.recordset || []) {
+    const key = buildItemFilterKey(row.partition_key, row.record_key);
+    if (key) set.add(key);
+  }
+  return set;
+}
+
 function usesMasterRecordKeysForInheritedLookup(lookup) {
   const joinKeys = Array.isArray(lookup?.joinKeys) ? lookup.joinKeys : [];
   return (
@@ -2835,16 +2857,21 @@ function buildDetailRow(d, ctx) {
   };
 }
 
-// Bepaalt of een PO-detailregel binnen de actieve items-syncfilter valt. De items-lookup byKey-map
-// bevat na de sync alleen nog aanwezige (removed_at_source = 0) items = de gefilterde set, dus een
-// treffer in byKey betekent dat het item aan de filter voldoet. We hergebruiken exact dezelfde
-// sleutel-logica als de verrijking, zodat er geen veldnaam-aannames nodig zijn. Alleen aangeroepen
-// wanneer er een items-filter actief is (anders geen extra kosten op het board-hot-path).
-function detailMatchesItemsLookup(d, itemsLookup) {
+// Sleutel om een PO-regel-item te vergelijken met de items-cache. Het itemnummer is de record_key
+// van de items-tabel (niet een veld in de item-json), dus we matchen op partition|itemnummer.
+function buildItemFilterKey(partitionKey, itemNumber) {
+  const value = String(itemNumber ?? '').trim();
+  if (!value) return null;
+  return `${String(partitionKey || '').trim().toLowerCase()}|${value}`;
+}
+
+// Bepaalt of een PO-detailregel binnen de actieve items-syncfilter valt. allowedItemKeys bevat de
+// aanwezige (removed_at_source = 0) item-record_keys = de gefilterde set na de sync. Alleen
+// aangeroepen wanneer er een items-filter actief is (anders geen extra kosten op het hot-path).
+function detailMatchesItemsFilter(d, itemFieldKey, allowedItemKeys) {
   const detailJson = parseJson(d.data_json);
-  const sourceValues = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
-  const lookupKey = buildLookupCacheKey(d.partition_key, sourceValues, itemsLookup);
-  return Boolean(lookupKey) && itemsLookup.byKey.has(lookupKey);
+  const key = buildItemFilterKey(d.partition_key, detailJson?.[itemFieldKey]);
+  return Boolean(key) && allowedItemKeys.has(key);
 }
 
 // Wat het board van de sublijnen nodig heeft zolang de order dichtgeklapt is.
@@ -3290,20 +3317,25 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // PO-bord: als er een items-syncfilter actief is, tonen we per order alleen de regels waarvan het
   // item binnen die filter valt, en verbergen we orders zonder enkele matchende regel. Bewust
   // gekoppeld aan de items-filter en alleen actief zodra die is ingesteld (anders geen overhead).
-  let itemsFilterRules = [];
+  let itemsFilterKeys = null;
+  let itemsFilterField = 'itemNumber';
   if (table.key === 'purchase-orders') {
     try {
       const itemsTable = await getTableByKey('items');
-      itemsFilterRules = parseDefaultFilterRules(itemsTable.defaultFilter);
+      const itemsFilterRules = parseDefaultFilterRules(itemsTable.defaultFilter);
+      if (itemsFilterRules.length) {
+        const itemsLookup = (enrichment.lookups || []).find(
+          (lk) => String(lk.targetTableKey || '').trim().toLowerCase() === 'items' && lk.sourceScope === 'detail'
+        );
+        const derivedField = String(itemsLookup?.sourceFieldKey || '').trim();
+        if (derivedField) itemsFilterField = derivedField;
+        itemsFilterKeys = await loadPresentItemFilterKeys(itemsTable.id);
+      }
     } catch {
-      itemsFilterRules = [];
+      itemsFilterKeys = null;
     }
   }
-  const itemsLookup = (enrichment.lookups || []).find(
-    (lk) => String(lk.targetTableKey || '').trim().toLowerCase() === 'items' && lk.sourceScope === 'detail'
-  );
-  const itemsLineFilterActive = table.key === 'purchase-orders'
-    && itemsFilterRules.length > 0 && Boolean(itemsLookup);
+  const itemsLineFilterActive = table.key === 'purchase-orders' && itemsFilterKeys !== null;
   const ordersHiddenByItemsFilter = new Set();
 
   await time('tb_build_rows', async () => {
@@ -3314,8 +3346,8 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     let hasLineChanges = false;
     let rawDetailRows = detailsByRecord.get(recKey) || [];
     if (itemsLineFilterActive) {
-      rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsLookup(d, itemsLookup));
-      if (!rawDetailRows.length && !Boolean(m.sync_retained)) ordersHiddenByItemsFilter.add(recKey);
+      rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsFilter(d, itemsFilterField, itemsFilterKeys));
+      if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
     }
     const details = rawDetailRows.map((d) => {
       const detail = buildDetailRow(d, detailContext);
@@ -3369,9 +3401,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   if (table.key === 'purchase-orders' && (activeSyncRules.length || itemsLineFilterActive)) {
     visibleRows = rows.filter((row) => {
       const recKey = `${row.partitionKey}|${row.recordKey}`;
-      // Items-filter: verberg orders zonder enkele matchende regel (retained orders blijven staan,
-      // net als bij de PO-syncregels hieronder).
-      if (itemsLineFilterActive && !row.syncRetained && ordersHiddenByItemsFilter.has(recKey)) return false;
+      // Items-filter: verberg orders zonder enkele matchende regel (ook retained orders — de
+      // gebruiker wil een schoon, op de items-filter gefilterd bord).
+      if (itemsLineFilterActive && ordersHiddenByItemsFilter.has(recKey)) return false;
       if (activeSyncRules.length) {
         if (row.syncRetained) return true;
         const masterJson = masterJsonByRecKey.get(recKey) || {};
@@ -4713,7 +4745,8 @@ module.exports = {
   read,
   readRowDetails,
   buildDetailRollup,
-  detailMatchesItemsLookup,
+  detailMatchesItemsFilter,
+  buildItemFilterKey,
   invalidateLookupEnrichmentCache,
   saveCustomValue,
   correctField,

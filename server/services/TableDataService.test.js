@@ -19,7 +19,7 @@ const {
   resolveRecordKeys,
   buildLookupCacheKey,
   buildDetailLookupSourceValues,
-  detailMatchesItemsLookup,
+  detailMatchesItemsFilter,
   enrichLookupSourceFromCacheRow,
   usesMasterRecordKeysForInheritedLookup,
   calculateLinkedLineTotal,
@@ -549,29 +549,24 @@ describe('TableDataService items sync filter binnen PO-scope', () => {
 });
 
 // PO-bord-filtering op de items-syncfilter: een regel is zichtbaar zolang zijn item nog in de
-// (gefilterde) items-cache staat. byKey bevat na de sync alleen aanwezige items = de gefilterde set.
-describe('TableDataService.detailMatchesItemsLookup (items-filter op PO-bord)', () => {
-  const itemsLookup = {
-    sourceScope: 'detail',
-    sourceFieldKey: 'itemNumber',
-    partitionless: false,
-    byKey: new Map([['whsl|CFM-10075-10-02', { searchName: '7520622_Black' }]]),
-  };
+// (gefilterde) items-cache staat. allowedItemKeys = partition|itemnummer van aanwezige items.
+describe('TableDataService.detailMatchesItemsFilter (items-filter op PO-bord)', () => {
+  const allowed = new Set(['whsl|CFM-10075-10-02']);
 
   it('houdt regels waarvan het item in de gefilterde items-cache zit', () => {
     const d = {
       partition_key: 'whsl', record_key: 'PO-1', detail_key: 10,
       data_json: JSON.stringify({ itemNumber: 'CFM-10075-10-02' }),
     };
-    expect(detailMatchesItemsLookup(d, itemsLookup)).toBe(true);
+    expect(detailMatchesItemsFilter(d, 'itemNumber', allowed)).toBe(true);
   });
 
-  it('verbergt regels waarvan het item is weggefilterd (niet in byKey)', () => {
+  it('verbergt regels waarvan het item is weggefilterd (niet in de set)', () => {
     const d = {
       partition_key: 'whsl', record_key: 'PO-1', detail_key: 20,
       data_json: JSON.stringify({ itemNumber: 'BFM-30002-10-01' }),
     };
-    expect(detailMatchesItemsLookup(d, itemsLookup)).toBe(false);
+    expect(detailMatchesItemsFilter(d, 'itemNumber', allowed)).toBe(false);
   });
 
   it('respecteert de partition (andere dataAreaId => geen match)', () => {
@@ -579,7 +574,7 @@ describe('TableDataService.detailMatchesItemsLookup (items-filter op PO-bord)', 
       partition_key: 'other', record_key: 'PO-1', detail_key: 10,
       data_json: JSON.stringify({ itemNumber: 'CFM-10075-10-02' }),
     };
-    expect(detailMatchesItemsLookup(d, itemsLookup)).toBe(false);
+    expect(detailMatchesItemsFilter(d, 'itemNumber', allowed)).toBe(false);
   });
 });
 
