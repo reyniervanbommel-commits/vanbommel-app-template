@@ -14,6 +14,7 @@ const {
   compileMasterFormulaColumns,
   compileFormulaColumns,
   applyFormulaColumnsToRowValues,
+  recalculateMasterRowFormulas,
   resolveSourceColumnValue,
   resolveRecordKeys,
   buildLookupCacheKey,
@@ -306,6 +307,33 @@ describe('TableDataService.formule-evaluatie in read-flow', () => {
     const errors = applyFormulaColumnsToRowValues(values, formulas);
     expect(values.statusCheck).toBe('kleiner');
     expect(errors).toEqual({});
+  });
+});
+
+describe('TableDataService.recalculateMasterRowFormulas (live update na cel-edit)', () => {
+  it('doet geen enkele database-call als de tabel geen formulekolommen heeft (perf-guard)', async () => {
+    // Geen mock van getPool/sql nodig: als de functie tóch een query zou proberen
+    // uit te voeren zonder echte databaseverbinding, zou deze test crashen/timeouten.
+    // Slagen bevestigt dus zowel het resultaat als de "geen DB-call"-garantie.
+    const result = await recalculateMasterRowFormulas({
+      table: { id: 1, key: 'purchase-orders' },
+      masterCols: [{ key: 'budget', dataType: 'number', source: 'source' }],
+      partitionKey: 'whsl',
+      recordKey: 'PO-1',
+      userId: 7,
+    });
+    expect(result).toEqual({ formulaValues: {}, formulaErrors: {} });
+  });
+
+  it('geeft ook zonder database-call een leeg resultaat bij ontbrekende rij-sleutels', async () => {
+    const result = await recalculateMasterRowFormulas({
+      table: { id: 1, key: 'purchase-orders' },
+      masterCols: [{ key: 'delta', dataType: 'number', formulaExpr: '(a)-(b)' }],
+      partitionKey: '',
+      recordKey: '',
+      userId: 7,
+    });
+    expect(result).toEqual({ formulaValues: {}, formulaErrors: {} });
   });
 });
 

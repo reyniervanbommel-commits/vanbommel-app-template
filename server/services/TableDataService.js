@@ -2577,6 +2577,81 @@ function applyFormulaColumnsToRowValues(rowValues, compiledFormulas, options = {
   return formulaErrors;
 }
 
+// ---------------------------------------------------------------------------
+// Eén rij herberekenen na een cel-edit: zodat een formulekolom die de bewerkte
+// kolom refereert direct het nieuwe resultaat toont, zonder een volledige
+// board-refresh (2000+ rijen). Alleen déze ene rij wordt opnieuw opgebouwd
+// (master-cache-record + customs + lookups + evt. gekoppelde regel-totalen);
+// er wordt niets herberekend als de tabel geen formulekolommen heeft.
+async function recalculateMasterRowFormulas({ table, masterCols, partitionKey, recordKey, userId }) {
+  const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  if (!compiledMasterFormulas.length) return { formulaValues: {}, formulaErrors: {} };
+
+  const part = String(partitionKey || '').trim();
+  const record = String(recordKey || '').trim();
+  if (!part || !record) return { formulaValues: {}, formulaErrors: {} };
+
+  const pool = await getPool();
+  const [masterRowResult, customResult, enrichment, runtimeLinks] = await Promise.all([
+    pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('partitionKey', sql.NVarChar(32), part)
+      .input('recordKey', sql.NVarChar(128), record)
+      .query(`
+        SELECT data_json FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'master'
+          AND partition_key = @partitionKey AND record_key = @recordKey
+      `),
+    pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .input('partitionKey', sql.NVarChar(32), part)
+      .input('recordKey', sql.NVarChar(128), record)
+      .input('detailKey', sql.Int, MASTER_DETAIL_KEY)
+      .query(`
+        SELECT c.[key], cv.value_text, cv.value_number, cv.value_date, cv.value_bool
+        FROM dbo.tb_custom_values cv WITH (NOLOCK)
+        INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
+        WHERE cv.table_id = @tableId AND c.is_active = 1
+          AND cv.partition_key = @partitionKey AND cv.record_key = @recordKey AND cv.detail_key = @detailKey
+      `),
+    loadLookupEnrichmentCached(table),
+    loadUserRuntimeHeaderLinks(pool, userId, table.key),
+  ]);
+
+  if (!masterRowResult.recordset.length) return { formulaValues: {}, formulaErrors: {} };
+
+  const masterJson = parseJson(masterRowResult.recordset[0].data_json);
+  const masterCustom = {};
+  for (const row of customResult.recordset) {
+    masterCustom[row.key] = pickTypedValue({
+      text: row.value_text, number: row.value_number, date: row.value_date, bool: row.value_bool,
+    });
+  }
+
+  const masterValues = buildValuesFromColumns(masterCols, masterJson, masterCustom);
+  applyLookups(masterValues, part, enrichment.lookups, 'master', masterJson);
+
+  // Gekoppelde regel-totalen/-waarden vullen alleen ophalen als de gebruiker
+  // die koppeling daadwerkelijk heeft ingesteld — anders is dit een no-op en
+  // besparen we de (kleine) extra detail-query.
+  const hasRuntimeLinks = Boolean(
+    runtimeLinks?.lineTotalHeaderLinks?.length || runtimeLinks?.lineValueHeaderLinks?.length
+  );
+  if (hasRuntimeLinks) {
+    const { details } = await readRowDetails({ tableKey: table.key, partitionKey: part, recordKey: record });
+    applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
+  }
+
+  const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas, { today: getUtcMidnight() });
+
+  const formulaValues = {};
+  for (const item of compiledMasterFormulas) {
+    const key = item?.column?.key;
+    if (key) formulaValues[key] = masterValues[key];
+  }
+  return { formulaValues, formulaErrors };
+}
+
 function resolveSourceColumnValue(sourceJson, column) {
   const safeSource = sourceJson && typeof sourceJson === 'object' ? sourceJson : {};
   const sourceFieldKey = String(column?.sourceField || '').trim();
@@ -3748,7 +3823,30 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
     }
   }
 
-  return { columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: empty ? null : value };
+  // Formulekolommen die deze kolom refereren direct meesturen (#formulekolom live-update),
+  // zodat de UI de rij in één keer kan patchen zonder een volledige board-refresh. Alleen
+  // relevant voor master-scope: formules mogen nooit een detail-kolom refereren, en de
+  // helper zelf is al een no-op zonder actieve formulekolommen.
+  let formulaValues = {};
+  let formulaErrors = {};
+  if (column.scope === 'master') {
+    try {
+      const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+      const recalculated = await recalculateMasterRowFormulas({
+        table, masterCols, partitionKey: part, recordKey: record, userId,
+      });
+      formulaValues = recalculated.formulaValues;
+      formulaErrors = recalculated.formulaErrors;
+    } catch (err) {
+      // Best-effort: de waarde zelf is al opgeslagen; de formule volgt anders bij de volgende board-refresh.
+      logger.warn('Formulekolommen herberekenen na cel-edit mislukt (waarde zelf is opgeslagen)', { error: err.message });
+    }
+  }
+
+  return {
+    columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: empty ? null : value,
+    formulaValues, formulaErrors,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -4041,7 +4139,27 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
     logger.warn('tb_cache bijwerken na write-back mislukt (niet-kritiek)', { error: err.message });
   }
 
-  return { success: true, columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: newValue };
+  // Zie saveCustomValue: formulekolommen die deze kolom refereren direct meesturen zodat de
+  // UI de rij kan patchen zonder volledige board-refresh. Alleen relevant voor header-scope.
+  let formulaValues = {};
+  let formulaErrors = {};
+  if (level === 'header') {
+    try {
+      const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+      const recalculated = await recalculateMasterRowFormulas({
+        table, masterCols, partitionKey: part, recordKey: record, userId,
+      });
+      formulaValues = recalculated.formulaValues;
+      formulaErrors = recalculated.formulaErrors;
+    } catch (err) {
+      logger.warn('Formulekolommen herberekenen na write-back mislukt (waarde zelf is opgeslagen)', { error: err.message });
+    }
+  }
+
+  return {
+    success: true, columnId, partitionKey: part, recordKey: record, detailKey: resolvedDetail, value: newValue,
+    formulaValues, formulaErrors,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -4537,6 +4655,7 @@ module.exports = {
   compileMasterFormulaColumns,
   compileFormulaColumns,
   applyFormulaColumnsToRowValues,
+  recalculateMasterRowFormulas,
   resolveSourceColumnValue,
   resolveRecordKeys,
   buildLookupCacheKey,

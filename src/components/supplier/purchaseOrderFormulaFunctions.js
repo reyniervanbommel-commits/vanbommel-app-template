@@ -33,4 +33,9 @@ export const FORMULA_FUNCTIONS_HELP = [
     snippet: 'MIN(;)',
     description: 'Smallest of the given numbers.',
   },
+  {
+    name: 'NETWERKDAGEN(start;end)',
+    snippet: 'NETWERKDAGEN(;)',
+    description: 'Number of weekdays (Mon-Fri) between two dates, weekends excluded. Divide by 5 for work weeks.',
+  },
 ];

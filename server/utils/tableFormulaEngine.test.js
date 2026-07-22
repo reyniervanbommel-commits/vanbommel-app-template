@@ -170,3 +170,73 @@ describe('tableFormulaEngine — AFRONDEN/ROUND, ABS, MAX, MIN', () => {
     expect(res.error).toContain('ABS expects 1 argument');
   });
 });
+
+describe('tableFormulaEngine — NETWERKDAGEN/NETWORKDAYS (weekend uitgesloten)', () => {
+  it('telt alleen de maandag mee tussen vrijdag en de maandag erna', () => {
+    // vrijdag 3 juli t/m maandag 6 juli 2026: za+zo tellen niet mee, alleen de maandag = 1 werkdag
+    const compiled = compileFormula('NETWERKDAGEN((start);(eind))');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { start: '2026-07-03T00:00:00.000Z', eind: '2026-07-06T00:00:00.000Z' },
+      { resultType: 'number' }
+    );
+    expect(res).toEqual({ value: 1, error: null });
+  });
+
+  it('een volle kalenderweek (maandag t/m volgende maandag) is 5 werkdagen', () => {
+    const compiled = compileFormula('NETWERKDAGEN((start);(eind))');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { start: '2026-07-06T00:00:00.000Z', eind: '2026-07-13T00:00:00.000Z' },
+      { resultType: 'number' }
+    );
+    expect(res).toEqual({ value: 5, error: null });
+  });
+
+  it('4 kalenderweken (28 dagen) tussen twee maandagen = 20 werkdagen = 4 werkweken', () => {
+    const compiled = compileFormula('AFRONDEN(NETWERKDAGEN((leverdatum);(TODAY()))/5;0)');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { leverdatum: '2026-06-22T00:00:00.000Z' },
+      { resultType: 'number', today: new Date('2026-07-20T00:00:00.000Z') }
+    );
+    expect(res).toEqual({ value: 4, error: null });
+  });
+
+  it('geeft 0 bij dezelfde datum', () => {
+    const compiled = compileFormula('NETWERKDAGEN((start);(eind))');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { start: '2026-07-06T00:00:00.000Z', eind: '2026-07-06T00:00:00.000Z' },
+      { resultType: 'number' }
+    );
+    expect(res).toEqual({ value: 0, error: null });
+  });
+
+  it('geeft een negatief aantal wanneer eind vóór start ligt', () => {
+    const compiled = compileFormula('NETWERKDAGEN((start);(eind))');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { start: '2026-07-06T00:00:00.000Z', eind: '2026-07-03T00:00:00.000Z' },
+      { resultType: 'number' }
+    );
+    expect(res).toEqual({ value: -1, error: null });
+  });
+
+  it('NETWORKDAYS is een gelijkwaardige Engelse alias', () => {
+    const compiled = compileFormula('NETWORKDAYS((start);(eind))');
+    const res = evaluateCompiledFormula(
+      compiled,
+      { start: '2026-07-06T00:00:00.000Z', eind: '2026-07-13T00:00:00.000Z' },
+      { resultType: 'number' }
+    );
+    expect(res).toEqual({ value: 5, error: null });
+  });
+
+  it('geeft een duidelijke fout wanneer een argument geen datum is', () => {
+    const compiled = compileFormula('NETWERKDAGEN(5;(eind))');
+    const res = evaluateCompiledFormula(compiled, { eind: '2026-07-06T00:00:00.000Z' }, { resultType: 'number' });
+    expect(res.value).toBeNull();
+    expect(res.error).toContain('must be a date');
+  });
+});

@@ -383,6 +383,45 @@ function roundToDecimals(value, decimals) {
   return Math.round(value * factor) / factor;
 }
 
+function requireDateArg(value, label) {
+  const date = toDateOrNull(value);
+  if (!date) throw new Error(`${label} must be a date`);
+  return date;
+}
+
+// Telt hoeveel van de `days` dagen ná `fromDate` een werkdag (ma-vr) zijn.
+function countWeekdaysForward(fromDate, days) {
+  let dow = fromDate.getUTCDay();
+  let count = 0;
+  for (let i = 0; i < days; i += 1) {
+    dow = (dow + 1) % 7;
+    if (dow !== 0 && dow !== 6) count += 1;
+  }
+  return count;
+}
+
+// Aantal werkdagen (ma-vr) tussen twee datums. Zelfde teken/nul-gedrag als
+// daysBetween: gelijke datum = 0, `endDate` ná `startDate` = positief. Puur
+// dag-van-de-week-rekenwerk (geen feestdagenkalender/DB-lookup nodig), dus
+// even goedkoop als de andere formule-functies — geen invloed op de
+// board-snelheid, ook niet bij 2000 rijen.
+function networkDaysBetween(startDate, endDate) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  let sign = 1;
+  let from = startDate;
+  let to = endDate;
+  if (from.getTime() > to.getTime()) {
+    sign = -1;
+    [from, to] = [to, from];
+  }
+  const totalCalendarDays = Math.round((to.getTime() - from.getTime()) / msPerDay);
+  if (totalCalendarDays === 0) return 0;
+  const fullWeeks = Math.floor(totalCalendarDays / 7);
+  const remainderDays = totalCalendarDays % 7;
+  const workdays = fullWeeks * 5 + countWeekdaysForward(from, remainderDays);
+  return sign * workdays;
+}
+
 // Functie-dispatchtabel voor formule-calls. Elke functie krijgt de reeds
 // geëvalueerde argumentwaarden (geen AST-nodes) en het evaluatiecontext
 // (o.a. `today`). Nieuwe functies toevoegen = hier één entry toevoegen; de
@@ -420,6 +459,19 @@ const FORMULA_FUNCTIONS = {
     minArgs: 1,
     maxArgs: 64,
     apply: (args) => Math.min(...args.map((value, index) => toNumericOperand(value, `MIN argument ${index + 1}`))),
+  },
+  NETWERKDAGEN: {
+    minArgs: 2,
+    maxArgs: 2,
+    apply: (args) => networkDaysBetween(
+      requireDateArg(args[0], 'NETWERKDAGEN/NETWORKDAYS start'),
+      requireDateArg(args[1], 'NETWERKDAGEN/NETWORKDAYS end')
+    ),
+  },
+  NETWORKDAYS: {
+    minArgs: 2,
+    maxArgs: 2,
+    apply: (args) => FORMULA_FUNCTIONS.NETWERKDAGEN.apply(args),
   },
 };
 
