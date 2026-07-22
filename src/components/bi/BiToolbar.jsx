@@ -51,6 +51,7 @@ function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter }) {
           onEnabledChange={dateFilter.setEnabled}
           isoWindow={dateFilter.isoWindow}
           onWindowChange={dateFilter.setWindowField}
+          onApply={dateFilter.applyWindow}
         />
       </div>
     </div>
