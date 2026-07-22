@@ -42,12 +42,7 @@ export default function BiPage() {
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
   const seedStarters = useStarterCharts({ columns: meta.columns, createChart });
   const vendorFilter = useBiVendorFilter();
-  const dateFilter = useBiDateFilter(meta.columns);
-
-  const externalFilterByColumn = useMemo(() => {
-    const merged = { ...(vendorFilter.externalFilterByColumn || {}), ...(dateFilter.externalFilterByColumn || {}) };
-    return Object.keys(merged).length ? merged : undefined;
-  }, [vendorFilter.externalFilterByColumn, dateFilter.externalFilterByColumn]);
+  const dateFilter = useBiDateFilter();
 
   const [builderMode, setBuilderMode] = useState(null);
   const [draftPayload, setDraftPayload] = useState(null);
@@ -97,7 +92,9 @@ export default function BiPage() {
 
   const { resultsById, loadingById } = useChartData({
     charts: chartsForFetch,
-    externalFilterByColumn,
+    externalFilterByColumn: vendorFilter.externalFilterByColumn,
+    columns: meta.columns,
+    dateRange: dateFilter.dateRange,
   });
 
   const handleNew = useCallback(() => {

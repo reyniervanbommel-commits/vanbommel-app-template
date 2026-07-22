@@ -14,12 +14,29 @@ function filtersFromColumnMap(filterByColumn) {
     }));
 }
 
-function chartFetchKey(chart, inheritedFilters, dataRevision) {
+function chartFetchKey(chart, inheritedFilters, dataRevision, dateFilter) {
   return JSON.stringify({
     config: chart?.config || {},
     inheritedFilters,
+    dateFilter: dateFilter || null,
     dataRevision: dataRevision ?? null,
   });
+}
+
+/**
+ * Genereert het generieke week/jaar-filter voor één chart: alleen wanneer de dimensie van die
+ * chart een datumkolom is, wordt een `between`-filter op díe kolom toegevoegd.
+ */
+function dateFilterForChart(chart, columnTypeByKey, dateRange) {
+  if (!dateRange) return null;
+  const dimension = chart?.config?.dimension;
+  if (!dimension || columnTypeByKey[dimension] !== 'date') return null;
+  return {
+    columnKey: dimension,
+    operator: 'between',
+    value: dateRange.start,
+    secondaryValue: dateRange.end,
+  };
 }
 
 function chartIdKey(id) {
@@ -30,7 +47,9 @@ function chartIdKey(id) {
  * Haalt geaggregeerde series op voor charts via POST /api/bi/aggregate.
  * @returns {{ resultsById, loadingById, loading, error }}
  */
-export function useChartData({ charts, externalFilterByColumn, dataRevision, boardKey = BOARD_KEY }) {
+export function useChartData({
+  charts, externalFilterByColumn, columns, dateRange, dataRevision, boardKey = BOARD_KEY,
+}) {
   const [resultsById, setResultsById] = useState({});
   const [loadingById, setLoadingById] = useState({});
   const [error, setError] = useState(null);
@@ -42,17 +61,32 @@ export function useChartData({ charts, externalFilterByColumn, dataRevision, boa
     [externalFilterByColumn],
   );
 
+  const columnTypeByKey = useMemo(() => {
+    const map = {};
+    (columns || []).forEach((col) => { if (col?.key) map[col.key] = col.dataType; });
+    return map;
+  }, [columns]);
+
   const payload = useMemo(() => {
     const list = Array.isArray(charts) ? charts : [];
     return {
       ids: list.map((chart) => chart.id),
-      charts: list.map((chart) => ({
-        ...chart.config,
-        filters: [...(chart.config?.filters || []), ...inheritedFilters],
-      })),
-      configKeys: list.map((chart) => chartFetchKey(chart, inheritedFilters, dataRevision)),
+      charts: list.map((chart) => {
+        const dateFilter = dateFilterForChart(chart, columnTypeByKey, dateRange);
+        return {
+          ...chart.config,
+          filters: [
+            ...(chart.config?.filters || []),
+            ...inheritedFilters,
+            ...(dateFilter ? [dateFilter] : []),
+          ],
+        };
+      }),
+      configKeys: list.map((chart) => chartFetchKey(
+        chart, inheritedFilters, dataRevision, dateFilterForChart(chart, columnTypeByKey, dateRange),
+      )),
     };
-  }, [charts, inheritedFilters, dataRevision]);
+  }, [charts, inheritedFilters, dataRevision, columnTypeByKey, dateRange]);
 
   const payloadKey = useMemo(
     () => JSON.stringify({ payload, boardKey, dataRevision: dataRevision ?? null }),

@@ -1,50 +1,30 @@
 import React, { memo, useCallback } from 'react';
 import {
-  Dropdown, Field, Input, makeStyles, Option, shorthands, tokens,
+  Field, Input, makeStyles, shorthands, Switch, tokens,
 } from '@fluentui/react-components';
-
-const ALL_DATES = '__all__';
 
 const useStyles = makeStyles({
   root: { display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', ...shorthands.gap(tokens.spacingHorizontalM) },
-  dateField: { minWidth: '180px', maxWidth: '220px' },
+  switchField: { alignSelf: 'flex-end' },
   yearInput: { width: '96px' },
   weekInput: { width: '76px' },
 });
 
 /**
- * Week/jaar-datumfilter (zelfde velden als RCCP): datumkolom + From/To jaar & week.
- * De week/jaar-velden verschijnen zodra er een datumkolom is gekozen.
+ * Generiek week/jaar-datumfilter (zelfde velden als RCCP). Werkt op de datum-dimensie die elke
+ * chart zelf gebruikt; charts zonder datum-dimensie blijven ongewijzigd. Een switch schakelt het
+ * filter in/uit; de week/jaar-velden verschijnen zodra het aan staat.
  */
-function BiDateRangeFilter({ dateColumns, dateColumnKey, onDateColumnChange, isoWindow, onWindowChange }) {
+function BiDateRangeFilter({ enabled, onEnabledChange, isoWindow, onWindowChange }) {
   const styles = useStyles();
 
-  const handleColumnSelect = useCallback((_, data) => {
-    onDateColumnChange(data.optionValue === ALL_DATES ? '' : (data.optionValue || ''));
-  }, [onDateColumnChange]);
-
-  const handleField = useCallback((field) => (_, data) => {
-    onWindowChange(field, data.value);
-  }, [onWindowChange]);
-
-  const selectedColumn = dateColumns.find((col) => col.key === dateColumnKey);
-  const selectedLabel = selectedColumn ? selectedColumn.label : 'All dates';
+  const handleToggle = useCallback((_, data) => onEnabledChange(data.checked), [onEnabledChange]);
+  const handleField = useCallback((field) => (_, data) => onWindowChange(field, data.value), [onWindowChange]);
 
   return (
     <div className={styles.root}>
-      <Field label="Date field" className={styles.dateField}>
-        <Dropdown
-          selectedOptions={[dateColumnKey || ALL_DATES]}
-          value={selectedLabel}
-          onOptionSelect={handleColumnSelect}
-        >
-          <Option value={ALL_DATES} text="All dates">All dates</Option>
-          {dateColumns.map((col) => (
-            <Option key={col.key} value={col.key} text={col.label}>{col.label}</Option>
-          ))}
-        </Dropdown>
-      </Field>
-      {dateColumnKey ? (
+      <Switch className={styles.switchField} label="Week filter" checked={enabled} onChange={handleToggle} />
+      {enabled ? (
         <>
           <Field label="From year">
             <Input className={styles.yearInput} type="number" value={String(isoWindow.fromYear)} onChange={handleField('fromYear')} />

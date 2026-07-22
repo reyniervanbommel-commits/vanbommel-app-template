@@ -47,9 +47,8 @@ function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter }) {
           error={vendorFilter.error}
         />
         <BiDateRangeFilter
-          dateColumns={dateFilter.dateColumns}
-          dateColumnKey={dateFilter.dateColumnKey}
-          onDateColumnChange={dateFilter.setDateColumnKey}
+          enabled={dateFilter.enabled}
+          onEnabledChange={dateFilter.setEnabled}
           isoWindow={dateFilter.isoWindow}
           onWindowChange={dateFilter.setWindowField}
         />

@@ -42,13 +42,13 @@ export const devTestItems = [
     ],
   },
   {
-    id: 'feature-bi-date-filter-v1-37-4',
-    title: 'BI page week/year date filter (v1.37.4)',
+    id: 'feature-bi-date-filter-v1-37-5',
+    title: 'BI page generic week/year date filter (v1.37.5)',
     checks: [
-      'The BI toolbar has a "Date field" selector plus From/To year and week inputs (like RCCP)',
-      'Choosing a date field and a week/year range filters all charts to that period',
-      'Setting the date field back to "All dates" removes the date filter again',
-      'The chart builder flyout scrolls internally without scrolling the whole page',
+      'The BI toolbar has a "Week filter" switch plus From/To year and week inputs (like RCCP)',
+      'Enabling it filters every chart that uses a date as its dimension to that week range',
+      'Charts without a date dimension are unaffected by the week filter',
+      'Turning the switch off shows the full period again',
     ],
   },
 ];
