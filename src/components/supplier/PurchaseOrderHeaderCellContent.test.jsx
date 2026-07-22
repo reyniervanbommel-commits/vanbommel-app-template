@@ -16,7 +16,7 @@ function renderHeaderCell(props) {
 describe('PurchaseOrderHeaderCellContent', () => {
   // De samenvatting komt sinds de lazy-lines-payload als rollup uit de board-read;
   // de cel berekent zelf niets meer over de sublijnen.
-  it('renders the product image column from the rollup summary', () => {
+  it('renders the product image column from the rollup summary', async () => {
     renderHeaderCell({
       order: {
         dataAreaId: 'nl01',
@@ -27,7 +27,8 @@ describe('PurchaseOrderHeaderCellContent', () => {
       productImageSummary: { firstItemNumber: 'VISIBLE-ITEM', additionalItemCount: 0 },
     });
 
-    expect(screen.getByAltText('Product image for VISIBLE-ITEM')).toBeTruthy();
+    // The <img> only mounts after the load-settle delay (debounced against fast scrolling).
+    expect(await screen.findByAltText('Product image for VISIBLE-ITEM')).toBeTruthy();
     expect(screen.queryByAltText('Product image for HIDDEN-ITEM')).toBeNull();
   });
 

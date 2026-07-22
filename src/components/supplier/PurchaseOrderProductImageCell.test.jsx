@@ -19,14 +19,15 @@ describe('PurchaseOrderProductImageCell', () => {
     resetProductImageFailureCache();
   });
 
-  it('builds a same-origin URL with accessible English labels', () => {
+  it('builds a same-origin URL with accessible English labels', async () => {
     renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM/1', additionalItemCount: 2 });
 
     const imageButton = screen.getByRole('button', {
       name: 'Show product image for ITEM/1',
     });
     const imageUrl = '/api/media/product-image?dataAreaId=NL01&itemNumber=ITEM%2F1';
-    expect(screen.getByAltText('Product image for ITEM/1').getAttribute('src')).toBe(imageUrl);
+    // The <img> only mounts after the load-settle delay (debounced against fast scrolling).
+    expect((await screen.findByAltText('Product image for ITEM/1')).getAttribute('src')).toBe(imageUrl);
     expect(screen.getByRole('button', {
       name: 'Show product image for ITEM/1 and 2 additional unique items',
     })).toBeTruthy();
@@ -42,9 +43,16 @@ describe('PurchaseOrderProductImageCell', () => {
     expect(container.querySelector('img')).toBeNull();
   });
 
-  it('hides a failed image without a broken-image icon', () => {
+  it('does not mount the image immediately — only after the load-settle delay', () => {
+    renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-3' });
+    // A row that is scrolled straight past unmounts again before this point,
+    // so no fetch should have started yet.
+    expect(screen.queryByAltText('Product image for ITEM-3')).toBeNull();
+  });
+
+  it('hides a failed image without a broken-image icon', async () => {
     renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-1', additionalItemCount: 2 });
-    fireEvent.error(screen.getByAltText('Product image for ITEM-1'));
+    fireEvent.error(await screen.findByAltText('Product image for ITEM-1'));
 
     expect(screen.queryByAltText('Product image for ITEM-1')).toBeNull();
     expect(screen.queryByRole('button', {
@@ -55,9 +63,9 @@ describe('PurchaseOrderProductImageCell', () => {
     })).toBeNull();
   });
 
-  it('does not retry a fetch for an image that already failed on a previous mount', () => {
+  it('does not retry a fetch for an image that already failed on a previous mount', async () => {
     const { unmount } = renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-2' });
-    fireEvent.error(screen.getByAltText('Product image for ITEM-2'));
+    fireEvent.error(await screen.findByAltText('Product image for ITEM-2'));
     expect(screen.queryByAltText('Product image for ITEM-2')).toBeNull();
     unmount();
 
