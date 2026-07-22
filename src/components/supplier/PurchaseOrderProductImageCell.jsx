@@ -1,6 +1,7 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Badge, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
+import { useProductImage } from '../../hooks/useProductImage';
 import {
   PRODUCT_IMAGE_CELL_HEIGHT,
   PRODUCT_IMAGE_HOVER_MAX_SIZE,
@@ -86,7 +87,6 @@ function PurchaseOrderProductImageCell({
   isConditionalFormat = false,
 }) {
   const styles = useStyles();
-  const [imageAvailable, setImageAvailable] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const normalizedItemNumber = String(itemNumber || '').trim();
   const imageUrl = useMemo(() => {
@@ -98,18 +98,14 @@ function PurchaseOrderProductImageCell({
     return `/api/media/product-image?${query.toString()}`;
   }, [dataAreaId, normalizedItemNumber]);
 
-  useEffect(() => {
-    setImageAvailable(true);
-    setDialogOpen(false);
-  }, [imageUrl]);
-
-  const handleImageError = useCallback(() => {
-    setImageAvailable(false);
-  }, []);
+  // Gedeelde loader: dedupliceert per item, limiteert concurrency en retryt op 429.
+  // Thumbnail én tooltip-preview delen dezelfde geladen afbeelding (1 request per item).
+  const { status, src } = useProductImage(imageUrl);
+  const imageAvailable = status === 'loaded' && !!src;
 
   const handleOpenDialog = useCallback(() => {
-    if (imageUrl && imageAvailable) setDialogOpen(true);
-  }, [imageAvailable, imageUrl]);
+    if (imageAvailable) setDialogOpen(true);
+  }, [imageAvailable]);
 
   const handleDialogOpenChange = useCallback((open) => {
     setDialogOpen(open);
@@ -127,7 +123,7 @@ function PurchaseOrderProductImageCell({
     <div className={styles.hoverPreviewFrame}>
       <img
         className={styles.hoverPreviewImage}
-        src={imageUrl}
+        src={src}
         alt=""
         draggable={false}
       />
@@ -147,11 +143,9 @@ function PurchaseOrderProductImageCell({
             >
               <img
                 className={styles.image}
-                src={imageUrl}
+                src={src}
                 alt={`Product image for ${normalizedItemNumber}`}
-                loading="lazy"
                 draggable={false}
-                onError={handleImageError}
               />
             </button>
           </Tooltip>
@@ -182,7 +176,7 @@ function PurchaseOrderProductImageCell({
       <PurchaseOrderProductImagePreviewDialog
         open={dialogOpen}
         onOpenChange={handleDialogOpenChange}
-        imageUrl={imageUrl}
+        imageUrl={src}
         itemNumber={normalizedItemNumber}
       />
     </>
