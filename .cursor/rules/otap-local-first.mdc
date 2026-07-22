@@ -1,0 +1,69 @@
+---
+description: Standaard OTAP — eerst localhost (ACC), push naar DEV alleen op expliciet verzoek
+alwaysApply: true
+---
+
+# OTAP local-first (standaard)
+
+Geldt voor **alle agents** (Cursor, Claude Code, Codex) tenzij de **`develop-from-devops`** skill actief is.
+
+## Omgevingen
+
+| Laag | Waar | Wanneer |
+|------|------|---------|
+| **ACC (persoonlijk)** | `localhost` — `npm run dev:all` (5178 + 3008) | Default voor ontwikkelen en testen |
+| **DEV (gedeeld)** | Git branch `develop` → Azure `vendorportal-dev` | Alleen na expliciet verzoek van de gebruiker |
+| **PROD** | Git branch `main` → productie | Alleen via bestaande prod-flow (PR/merge/deploy) |
+
+## Standaardflow (ad-hoc — geen DevOps-feature)
+
+Gebruik deze flow wanneer **geen** van deze van toepassing is:
+- actieve `develop-from-devops` sessie met work item;
+- feature-branch `feature/<id>-…` in een worktree;
+- expliciete prompt om preview/OTAP-straat te volgen.
+
+### Verplicht
+
+1. **Ontwikkel en test op localhost** — geen remote deploy als doel.
+2. **Geen `git push`** naar `origin` (in het bijzonder **niet** naar `develop` of `main`).
+3. **Geen commit** tenzij de gebruiker expliciet om een commit vraagt.
+4. Meld na afloop wat lokaal getest kan worden (`http://localhost:5178`).
+
+### Push naar DEV — alleen op expliciet verzoek
+
+Voer `git push` (naar `develop` of een feature-branch) **alleen** uit wanneer de gebruiker dat **expliciet** vraagt, bijvoorbeeld:
+
+- "push naar dev"
+- "deploy naar dev"
+- "zet dit op develop"
+
+Vraag **niet** proactief "wil je pushen?" — wacht op zo'n opdracht.
+
+### Herkenning ad-hoc sessie
+
+Ad-hoc = je werkt op `develop`/`main` **zonder** feature-branch/worktree, **zonder** DevOps work item in de prompt, **zonder** develop-from-devops-trigger.
+
+## DevOps OTAP-flow (overschrijft local-first)
+
+Wanneer de skill **`develop-from-devops`** actief is (work item, feature-branch, preview):
+
+- Maak branch `feature/<id>-<naam>` (+ worktree indien van toepassing).
+- Commit + push naar feature-branch → preview-URL (`preview.yml`).
+- **Niet** direct naar `develop` pushen; merge via PR.
+- Preview-URL is dan de gedeelde ACC — localhost is secundair.
+
+Zie `.cursor/skills/develop-from-devops/SKILL.md`.
+
+## Conflictoplossing
+
+| Situatie | Wint |
+|----------|------|
+| Ad-hoc bouwen op `develop` | **local-first** — geen push |
+| `develop-from-devops` / work item #ID | **develop-from-devops** — push naar feature + preview |
+| Gebruiker zegt "push naar dev" | Expliciet verzoek — push naar `develop` |
+
+## Agent mag nooit
+
+- Automatisch naar `develop` pushen na ad-hoc code-wijzigingen.
+- DEV-deploy triggeren zonder expliciet verzoek (push naar `develop` = deploy via `deploy-dev.yml`).
+- Alleen git-commando's geven terwijl de gebruiker lokaal wil blijven testen — tenzij expliciet om commit/push gevraagd.

@@ -1,5 +1,21 @@
 # AGENTS.md
 
+## OTAP local-first (standaard)
+
+Geldt voor **Cursor, Claude Code en Codex** tenzij `develop-from-devops` actief is.
+
+| Laag | Omgeving |
+|------|----------|
+| ACC | `localhost` (`npm run dev:all`) — default ontwikkelen/testen |
+| DEV | `develop` in git → Azure DEV — **alleen** na expliciet "push naar dev" |
+| PROD | `main` → productie-deploy |
+
+**Ad-hoc (geen feature-branch/worktree, geen DevOps-workflow):** geen `git push`, geen commit zonder expliciet verzoek. Test op localhost.
+
+**DevOps OTAP:** skill `develop-from-devops` → feature-branch + preview-URL (overschrijft local-first).
+
+Volledige regel: `.cursor/rules/otap-local-first.mdc`.
+
 ## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
 
 Geldt voor **elke agent** (Cursor, Claude Code, Codex) bij **elke feature en elke snelle fix** in

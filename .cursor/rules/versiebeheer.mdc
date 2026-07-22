@@ -19,8 +19,9 @@ alwaysApply: true
 
 - Werk zelf met Git wanneer nodig (commit, branch, merge, push, etc.)
 - Geef altijd expliciet aan wanneer je een Git-actie hebt gedaan
-- **`develop-from-devops` / OTAP-feature-flow:** voer `git push` en `gh pr create` zelf uit na commit — geen akkoord vragen
-- **Overige wijzigingen:** voer commit/push zelf uit tenzij de gebruiker expliciet om akkoord vraagt; meld achteraf de uitgevoerde commando's
+- **Standaard (ad-hoc):** zie `.cursor/rules/otap-local-first.mdc` — ontwikkel/test op localhost; **geen** `git push` zonder expliciet verzoek; **geen** commit zonder expliciet verzoek
+- **`develop-from-devops` / OTAP-feature-flow:** voer `git push` (feature-branch) en `gh pr create` zelf uit na commit — geen akkoord vragen; overschrijft local-first
+- **Push naar DEV (`develop`):** alleen wanneer de gebruiker expliciet vraagt (bijv. "push naar dev") — triggert `deploy-dev.yml`
 - Commit message prefix: `feat`, `fix`, `refactor`, `docs`, `perf`
 - Branch naamgeving: `feature/naam`, `fix/naam`, `refactor/naam`, `docs/naam`
 - Zie `BRANCH_STRATEGY.md` voor details

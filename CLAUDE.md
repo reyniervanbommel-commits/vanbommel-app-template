@@ -73,9 +73,23 @@ Triggers voor UI review: *check de ui*, *ui controleren*, *review UI design*, *d
 - When refactoring existing Dutch labels, convert them to English.
 - Full rules: `.cursor/rules/app-taal.mdc`
 
+## OTAP local-first (standaard)
+
+Geldt voor **Claude Code** (en alle agents) tenzij `develop-from-devops` actief is.
+
+| Laag | Omgeving |
+|------|----------|
+| ACC | `localhost` (`npm run dev:all`) — default ontwikkelen/testen |
+| DEV | `develop` → Azure DEV — **alleen** na expliciet "push naar dev" |
+| PROD | `main` → productie |
+
+Ad-hoc: geen `git push`, geen commit zonder expliciet verzoek. DevOps-flow: feature-branch + preview via `develop-from-devops`.
+
+Volledige regel: `.cursor/rules/otap-local-first.mdc`.
+
 ## Cursor rules
 
-`.cursor/rules/` bevat: app-taal, code-kwaliteit, kwaliteitspoort, versiebeheer, data-en-security, fluentui-valkuilen.
+`.cursor/rules/` bevat: otap-local-first, app-taal, code-kwaliteit, kwaliteitspoort, versiebeheer, data-en-security, fluentui-valkuilen.
 
 ## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
 
