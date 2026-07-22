@@ -5,7 +5,9 @@ import { renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUti
 
 const useStyles = makeStyles({
   subPaneTitle: {
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
     marginBottom: '4px',
   },
   typeButton: {
