@@ -31,6 +31,7 @@ const useStyles = makeStyles({
   filterTitle: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2 },
   row: { display: 'flex', ...shorthands.gap(tokens.spacingHorizontalSNudge), alignItems: 'center', minWidth: 0 },
   grow: { flexGrow: 1, minWidth: 0 },
+  control: { width: '100%', maxWidth: '100%' },
   label: { color: tokens.colorNeutralForeground2, fontWeight: tokens.fontWeightSemibold },
   labelCompact: { fontSize: tokens.fontSizeBase100 },
   empty: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
@@ -82,6 +83,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
           </div>
           <Field label="Column" size={controlSize}>
             <Dropdown
+              className={styles.control}
               size={controlSize}
               selectedOptions={[filter.columnKey]}
               value={column?.label || ''}
@@ -98,6 +100,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
           </Field>
           <Field label="Operator" size={controlSize}>
             <Dropdown
+              className={styles.control}
               size={controlSize}
               selectedOptions={[filter.operator]}
               value={operatorLabels[filter.operator] || ''}
@@ -111,6 +114,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
           {filter.operator !== 'nextWeek' ? (
             <Field label="Value" size={controlSize}>
               <Input
+                className={styles.control}
                 size={controlSize}
                 type={inputType}
                 value={filter.value}
@@ -122,6 +126,7 @@ function ChartFilterEditor({ columns, filters, onChange, compact = false, stacke
           {filter.operator === 'between' ? (
             <Field label="To" size={controlSize}>
               <Input
+                className={styles.control}
                 size={controlSize}
                 type={inputType}
                 value={filter.secondaryValue}

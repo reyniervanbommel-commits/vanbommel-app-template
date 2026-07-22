@@ -93,6 +93,15 @@ Defaults: `position="end"`, `size="medium"` for settings; `size="small"` for sim
 - `z-index`: rail 1500, panel 1800, tooltips/overlays ≥ 2000 — never below decorative elements
 - Dropdowns that clip on `overflow: hidden` → portal to `document.body` (see `fluentui-valkuilen.mdc`)
 
+### Documented exception: inline side-panel (BI chart builder)
+
+`src/components/bi/ChartBuilderFlyout.jsx` is a **non-modal inline side-panel** (an `<aside>` that
+pushes the dashboard layout rather than overlaying it). It intentionally does **not** use the Fluent
+`Drawer`, because it must remain open alongside the live dashboard while editing. It still mirrors the
+drawer anatomy manually: header (editable name + close), scrollable body, and its own focus management
+(`tabIndex=-1`, `aria-label`, focus restore). New multi-field editors should still prefer `Drawer`
+(see `RccpSettingsFlyout.jsx`); use this inline pattern only when simultaneous editing + preview is required.
+
 ---
 
 ## 5. Fluent UI pitfalls (blockers)
