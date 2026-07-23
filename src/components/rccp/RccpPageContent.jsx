@@ -55,20 +55,35 @@ export default function RccpPageContent() {
   useEffect(() => {
     if (isSupplier || vendorsLoading || vendorAccount !== null) return;
     const filterByColumn = readPoFilterByColumnForRccp();
-    setVendorAccount(resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn }));
-  }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount]);
+    const fromFilter = resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn });
+    if (fromFilter) { setVendorAccount(fromFilter); return; }
+    // Geen PO-handoff: wacht tot de opgeslagen voorkeur geladen is en herstel de laatste vendor
+    // (indien die nog in de lijst voorkomt); anders leeg laten zodat de gebruiker zelf zoekt.
+    if (!windowLoaded) return;
+    if (lastVendor && vendors.includes(lastVendor)) { setVendorAccount(lastVendor); return; }
+    setVendorAccount('');
+  }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount, windowLoaded, lastVendor]);
 
   // hasVendor bepaalt of er daadwerkelijk data geladen wordt (en dus of chart/matrix/capacity
   // planning vullen) — pas waar wanneer er echt een vendor gekozen is, niet zodra het
   // resolve-effect hierboven eenmalig is afgerond (dat kan ook naar '' resolven).
   const hasVendor = isSupplier || Boolean(vendorAccount);
   const {
-    window, setWindow, analysis, loading, error, readOnly,
+    window, setWindow, windowLoaded, lastVendor, setLastVendor,
+    analysis, loading, error, readOnly,
     measureRows, periods, cellMap, reload,
   } = useRccpPage({
     vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
     enabled: hasVendor,
   });
+
+  // Onthoud de gekozen vendor als voorkeur (samen met de week in board-settings/rccp), zodat de
+  // pagina bij terugkeer exact dezelfde vendor-week-combinatie toont. Lege selectie wist de
+  // voorkeur niet (dan blijft de laatste bewaard).
+  const handleVendorChange = useCallback((account) => {
+    setVendorAccount(account);
+    if (account) setLastVendor(account);
+  }, [setLastVendor]);
 
   // Terwijl de gebruiker een vendor zoekt (hover/keyboard-highlight in de dropdown, of een
   // exacte match tijdens het typen), laad de analyse voor die vendor alvast op de achtergrond —
@@ -126,7 +141,7 @@ export default function RccpPageContent() {
         {!isSupplier && (
           <RccpVendorFilter
             value={vendorAccount || ''}
-            onChange={setVendorAccount}
+            onChange={handleVendorChange}
             vendors={vendors}
             vendorNames={vendorNames}
             loading={vendorsLoading}

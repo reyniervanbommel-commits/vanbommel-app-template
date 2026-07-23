@@ -201,11 +201,19 @@ function normalizeIsoWindow(value) {
   };
 }
 
+// RCCP laatst gekozen vendor-account (#AB:224 vervolg): onthoudt de vendor-week-combinatie zodat
+// de RCCP-pagina bij openen exact terugkomt. Gesanitiseerde string, leeg = geen voorkeur.
+function normalizeLastVendorAccount(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 64);
+}
+
 function normalizeBoardSettings(rawSettings) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   return {
     biSplitPane: normalizeBiSplitPane(input.biSplitPane),
     isoWindow: normalizeIsoWindow(input.isoWindow),
+    lastVendorAccount: normalizeLastVendorAccount(input.lastVendorAccount),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),

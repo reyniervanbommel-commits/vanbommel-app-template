@@ -53,7 +53,7 @@ function chartFetchKey(chart, inheritedFilters, dataRevision, dateFilter) {
  */
 export function useChartData({
   charts, externalFilterByColumn, columns, dateRange, dataRevision,
-  checkRevision = false, boardKey = BOARD_KEY,
+  checkRevision = false, revisionNonce = 0, boardKey = BOARD_KEY,
 }) {
   const [resultsById, setResultsById] = useState({});
   const [loadingById, setLoadingById] = useState({});
@@ -112,15 +112,19 @@ export function useChartData({
   }, [payloadKey, payload]);
 
   // Lichtgewicht revision-check (alleen BiPage): leegt de cache als het board is gewijzigd.
+  // `revisionNonce` laat de check opnieuw draaien bij keep-alive-terugkeer (component blijft
+  // gemount). We zetten revisionReady eerst op false zodat de fetch-effect na een eventuele
+  // cache-leging opnieuw evalueert; is de revisie ongewijzigd, dan blijft de cache staan (instant).
   useEffect(() => {
     if (!checkRevision) return undefined;
     let active = true;
+    setRevisionReady(false);
     apiRequest(`/bi/revision/${boardKey}`)
       .then((data) => { if (active) setBiRevision(data?.revision ?? null); })
       .catch(() => { /* val terug op fetch */ })
       .finally(() => { if (active) setRevisionReady(true); });
     return () => { active = false; };
-  }, [checkRevision, boardKey]);
+  }, [checkRevision, boardKey, revisionNonce]);
 
   // Haal alleen de charts op die (nog) niet in de cache staan.
   useEffect(() => {

@@ -3,9 +3,13 @@ import { apiRequest } from '../utils/api';
 import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 import { getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
 import { useRccpWindow } from './useRccpWindow';
+import { usePageActive } from './usePageActive';
+import { useBoardRevisionGate } from './useBoardRevisionGate';
 
 export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
-  const { isoWindow, setIsoWindow, loaded: windowLoaded } = useRccpWindow();
+  const {
+    isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded: windowLoaded,
+  } = useRccpWindow();
   const [analysis, setAnalysis] = useState(null);
   // false, niet true: zolang er geen vendor gekozen is (enabled=false) mag er geen spinner
   // getoond worden — de dashboard toont dan een "kies een vendor"-lege-staat.
@@ -44,6 +48,24 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Keep-alive: bij terugkeer naar de (verborgen gehouden) RCCP-pagina checkt de gate de
+  // PO-revisie. Alleen PO muteert data die de RCCP-analyse raakt, dus bij een gewijzigde revisie
+  // herladen we de analyse; bij gelijke revisie gebeurt er niets (instant terugkeer).
+  const pageActive = usePageActive();
+  const seenRevisionRef = useRef(null);
+  const handleRevision = useCallback((rev) => {
+    if (!rev) return;
+    if (seenRevisionRef.current === null) {
+      seenRevisionRef.current = rev; // baseline bij eerste activatie
+      return;
+    }
+    if (rev !== seenRevisionRef.current) {
+      seenRevisionRef.current = rev;
+      load();
+    }
+  }, [load]);
+  useBoardRevisionGate({ active: pageActive, onRevision: handleRevision, runOnMount: true });
+
   const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
   const periods = useMemo(() => analysis?.periods || [], [analysis]);
   const cells = useMemo(() => analysis?.cells || [], [analysis]);
@@ -60,6 +82,8 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     window: isoWindow,
     setWindow: setIsoWindow,
     windowLoaded,
+    lastVendor,
+    setLastVendor,
     analysis,
     loading,
     error,

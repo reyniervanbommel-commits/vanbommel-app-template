@@ -53,6 +53,17 @@ export const devTestItems = [
       'Opening BI still shows correct columns in the chart builder (metadata loads without a full read)',
     ],
   },
+  {
+    id: 'instant-paginanavigatie-v1-41-0',
+    title: 'Instant paginanavigatie (keep-alive + versheidscheck) (v1.41.0)',
+    checks: [
+      'PO -> RCCP -> PO: het tweede bezoek toont de tabel direct zonder spinner, met behouden scrollpositie, filters en sortering',
+      'BI en RCCP komen bij terugkeer eveneens direct terug (geen laadspinner)',
+      'RCCP: de gekozen vendor + week komen na wegnavigeren en terugkeren terug, en blijven ook na een harde refresh bewaard',
+      'Na een celwijziging op de PO-pagina worden RCCP en BI bij terugkeer ververst; zonder wijziging gebeurt er niets',
+      'Een leverancier krijgt geen BI-pagina te zien (rol-respect blijft intact)',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

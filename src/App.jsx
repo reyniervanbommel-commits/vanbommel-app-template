@@ -5,7 +5,7 @@ import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
 import LoginPage from './components/auth/LoginPage';
 import { ROLES } from './constants/roles';
-import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay } from './components/layout';
+import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
 import AppToaster from './components/shared/AppToaster';
 import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
 import { usePreventTrackpadNavigation } from './hooks/usePreventTrackpadNavigation';
@@ -20,13 +20,8 @@ const ForgotPasswordPage = lazy(() => import('./components/auth/ForgotPasswordPa
 const ResetPasswordPage = lazy(() => import('./components/auth/ResetPasswordPage'));
 const MfaPage = lazy(() => import('./components/auth/MfaPage'));
 const AdminPage = lazy(() => import('./components/admin/AdminPage'));
-const BiPage = lazy(() =>
-  import('./components/bi').then((m) => ({ default: m.BiPage })),
-);
-const PurchaseOrdersPage = lazy(() =>
-  import('./components/supplier').then((m) => ({ default: m.PurchaseOrdersPage })),
-);
-const RccpPage = lazy(() => import('./components/rccp/RccpPage'));
+// De drie datapagina's (/, /rccp, /bi) worden via KeepAliveDataPages gemount-gehouden; hun
+// lazy-imports staan daar. Zo delen ze één AppLayout-instantie en blijft terugkeren instant.
 
 const useStyles = makeStyles({
   appShell: {
@@ -52,6 +47,21 @@ function AppInner({ isDarkMode, onToggleTheme }) {
   const isPerfEnabled = isDevEnvironment || import.meta.env.VITE_APP_ENV === 'preview';
   useRouteAnalytics();
 
+  // Eén gedeeld shell-element voor de drie datapagina's. Doordat /, /rccp en /bi hetzelfde
+  // element renderen, houdt react-router AppLayout + KeepAliveDataPages gemount bij navigatie
+  // tussen deze paden (geen unmount → instant terugkeren). Sessiecontrole via AuthGuard;
+  // rol-controle per pagina in KeepAliveDataPages.
+  const dataPagesElement = useMemo(
+    () => (
+      <AuthGuard>
+        <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+          <KeepAliveDataPages />
+        </AppLayout>
+      </AuthGuard>
+    ),
+    [isDarkMode, onToggleTheme],
+  );
+
   return (
     <div className={styles.appShell}>
       <SecretExpiryWarning />
@@ -73,36 +83,9 @@ function AppInner({ isDarkMode, onToggleTheme }) {
               </AuthGuard>
             }
           />
-          <Route
-            path="/bi"
-            element={
-              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
-                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
-                  <BiPage />
-                </AppLayout>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/rccp"
-            element={
-              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
-                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
-                  <RccpPage />
-                </AppLayout>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <AuthGuard>
-                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
-                  <PurchaseOrdersPage />
-                </AppLayout>
-              </AuthGuard>
-            }
-          />
+          <Route path="/bi" element={dataPagesElement} />
+          <Route path="/rccp" element={dataPagesElement} />
+          <Route path="/" element={dataPagesElement} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

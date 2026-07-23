@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
+import { usePageActive } from './usePageActive';
+import { useBoardRevisionGate } from './useBoardRevisionGate';
 import { getCachedBoard, setCachedBoard } from '../utils/boardSessionStore';
 import { getCachedBoardSettings, setCachedBoardSettings } from '../utils/boardPresentationCache';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
@@ -267,6 +269,20 @@ export function usePurchaseOrdersPage() {
       active = false;
     };
   }, [applyData, loadPurchaseOrders, loadBoardSettings]);
+
+  // Keep-alive: de mount-effect draait maar één keer. Bij terugkeer naar de (verborgen gehouden)
+  // pagina doet deze gate een lichte revisie-check; alleen bij een gewijzigde revisie volgt een
+  // stille herlaad (skipLoading → geen full-page spinner). runOnMount=false: de eerste load is
+  // al door de mount-effect afgehandeld.
+  const pageActive = usePageActive();
+  const handleRevisionOnReturn = useCallback((rev) => {
+    if (!rev) return;
+    const currentRevision = getCachedBoard()?.revision ?? null;
+    if (currentRevision && rev !== currentRevision) {
+      loadPurchaseOrders({ skipLoading: true, autoRefresh: false });
+    }
+  }, [loadPurchaseOrders]);
+  useBoardRevisionGate({ active: pageActive, onRevision: handleRevisionOnReturn });
 
   // Start een D365-refresh op de achtergrond; de tabeldata blijft staan tot expliciete reload.
   const refresh = useCallback(async () => {

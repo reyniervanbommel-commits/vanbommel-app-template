@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
   makeStyles, MessageBar, MessageBarActions, MessageBarBody, shorthands, Spinner, tokens,
@@ -16,6 +16,7 @@ import { useStarterCharts } from './hooks/useStarterCharts';
 import { useBiVendorFilter } from './hooks/useBiVendorFilter';
 import { useBiDateFilter } from './hooks/useBiDateFilter';
 import { BOARD_KEY } from './biConstants';
+import { usePageActive } from '../../hooks/usePageActive';
 
 const useStyles = makeStyles({
   pageLayout: {
@@ -90,12 +91,25 @@ export default function BiPage() {
     ));
   }, [charts, builderMode, draftPayload, user?.id]);
 
+  // Keep-alive: useChartData doet de lichte /bi/revision-check normaal alleen bij mount. Omdat de
+  // BI-pagina gemount blijft (keep-alive), bumpen we bij elke terugkeer een nonce zodat die check
+  // opnieuw draait; alleen bij een gewijzigde revisie herladen de charts, anders instant uit cache.
+  const pageActive = usePageActive();
+  const [revisionNonce, setRevisionNonce] = useState(0);
+  const prevActiveRef = useRef(pageActive);
+  useEffect(() => {
+    const prev = prevActiveRef.current;
+    prevActiveRef.current = pageActive;
+    if (prev === false && pageActive === true) setRevisionNonce((n) => n + 1);
+  }, [pageActive]);
+
   const { resultsById, loadingById } = useChartData({
     charts: chartsForFetch,
     externalFilterByColumn: vendorFilter.externalFilterByColumn,
     columns: meta.columns,
     dateRange: dateFilter.dateRange,
     checkRevision: true,
+    revisionNonce,
   });
 
   const handleNew = useCallback(() => {
