@@ -14,6 +14,8 @@ import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useStarterCharts } from './hooks/useStarterCharts';
 import { BOARD_KEY } from './biConstants';
+import { usePageActive } from '../../hooks/usePageActive';
+import { useBoardRevisionGate } from '../../hooks/useBoardRevisionGate';
 
 const useStyles = makeStyles({
   pageLayout: {
@@ -86,7 +88,12 @@ export default function BiPage() {
     ));
   }, [charts, builderMode, draftPayload, user?.id]);
 
-  const { resultsById, loadingById } = useChartData({ charts: chartsForFetch });
+  // Keep-alive: bij terugkeer naar de (verborgen gehouden) BI-pagina checkt de gate de PO-revisie.
+  // BI leest uitsluitend PO-data, dus die revisie is het volledige versheidssignaal; we geven hem
+  // door als dataRevision zodat charts alleen herrekenen als de PO-data echt veranderde.
+  const pageActive = usePageActive();
+  const { revision: poRevision } = useBoardRevisionGate({ active: pageActive, runOnMount: true });
+  const { resultsById, loadingById } = useChartData({ charts: chartsForFetch, dataRevision: poRevision });
 
   const handleNew = useCallback(() => {
     setDraftPayload(null);
