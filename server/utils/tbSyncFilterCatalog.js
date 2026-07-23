@@ -5,8 +5,11 @@
 // (buildCatalogFromColumns/createFilterCatalogPayload) zodat po_* verwijderd kan worden. Preview is leeg
 // (v1): de sync-filter-UI heeft alleen de veldenlijst + valueType nodig.
 
+const { isEnumField } = require('./d365EnumFields');
+
 function toCatalogValueType(column) {
-  if (column.d365Field === 'PurchaseOrderStatus') return 'enum';
+  // Enum-velden komen uit de centrale registry (d365EnumFields.js), niet uit een hardcoded lijst.
+  if (isEnumField(column.d365Field)) return 'enum';
   if (column.dataType === 'number') return 'number';
   if (column.dataType === 'date') return 'date';
   return 'text';
