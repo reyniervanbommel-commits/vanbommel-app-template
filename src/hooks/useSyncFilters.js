@@ -4,12 +4,19 @@ import { apiRequest } from '../utils/api';
 // Sync-filter-endpoints op de generieke tb_*-laag (po_* is verwijderd, #AB:177).
 const syncBase = (tableKey) => `/data/${tableKey}`;
 
-// Enum-metadata voor D365-velden die geen vrije tekst zijn. De Status-kolom gebruikt
-// de PurchStatus-enum; OData vereist daarvoor de notatie EnumType'Member'.
+// Centrale registry van D365-enumvelden (single source of truth, frontend-zijde). Enum-velden zijn
+// geen vrije tekst: OData vereist de notatie Microsoft.Dynamics.DataEntities.<enumType>'<Member>'.
+// `enumType` bepaalt de OData-namespace, `members` vult de waarde-dropdown in de sync-filter-UI.
+// Een nieuw enum-veld toevoegen = één entry hieronder. Backend-mirror: server/utils/d365EnumFields.js
+// (veld → enumType). Houd beide in sync.
 export const ENUM_FIELDS = {
   PurchaseOrderStatus: {
     enumType: 'PurchStatus',
     members: ['None', 'Backorder', 'Received', 'Invoiced', 'Canceled'],
+  },
+  ProductType: {
+    enumType: 'EcoResProductType',
+    members: ['Item', 'Service'],
   },
 };
 

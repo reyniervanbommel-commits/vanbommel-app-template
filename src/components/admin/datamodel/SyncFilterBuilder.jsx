@@ -10,7 +10,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
-import { useSyncFilters } from '../../../hooks/useSyncFilters';
+import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
 import FilterFieldPickerDialog from './FilterFieldPickerDialog';
 import SyncFilterRuleRow from './SyncFilterRuleRow';
 
@@ -120,7 +120,9 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       field: field.field,
       label: field.label,
       valueType: field.valueType || 'text',
-      enumType: field.valueType === 'enum' ? 'PurchStatus' : undefined,
+      // enumType komt uit de centrale registry per veld (niet hardcoded), zodat bv. ProductType
+      // de EcoResProductType-namespace krijgt en niet abusievelijk PurchStatus.
+      enumType: field.valueType === 'enum' ? ENUM_FIELDS[field.field]?.enumType : undefined,
       operator,
       value: '',
     });
