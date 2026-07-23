@@ -3483,6 +3483,36 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 }
 
 // ---------------------------------------------------------------------------
+// listVendorValues — lichte read die alleen de master-`data_json` ophaalt om er de
+// vendor-kolom(men) uit te projecteren. De volledige board-read() doet daarnaast details,
+// custom values, lookups, formules, history, track-marks en ledger over ~2000 orders; dat is
+// verspilling wanneer we enkel de vendorlijst nodig hebben (RCCP /vendors). Dit voert één
+// SQL-query uit en projecteert exact zoals de board-read (buildValuesFromColumns), zodat de
+// waarden identiek zijn. Alleen source-kolommen zijn relevant; details/lookups niet nodig.
+// ---------------------------------------------------------------------------
+async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved = false } = {}) {
+  const table = await getTableByKey(tableKey);
+  const pool = await getPool();
+  const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
+  const wanted = new Set(valueColumnKeys.filter(Boolean));
+  const cols = masterCols.filter((c) => wanted.has(c.key));
+  const result = await time('tb_vendor_master_only', () => pool.request()
+    .input('tableId', sql.BigInt, table.id)
+    .query(`
+      SELECT c.data_json
+      FROM dbo.tb_cache c WITH (NOLOCK)
+      WHERE c.table_id = @tableId AND c.scope = 'master'
+      ${includeRemoved ? '' : `AND NOT EXISTS (
+          SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
+          WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
+        )`}
+    `));
+  return result.recordset.map((m) => ({
+    values: buildValuesFromColumns(cols, parseJson(m.data_json), null),
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // readRowDetails — sublijnen van één order, voor het lazy openklappen op het board.
 // Dezelfde projectie als de board-read (buildDetailRow), maar met alle queries
 // gefilterd op één order in plaats van de hele tabel.
@@ -4743,6 +4773,7 @@ module.exports = {
   refresh,
   getRefreshProgress,
   read,
+  listVendorValues,
   readRowDetails,
   buildDetailRollup,
   detailMatchesItemsFilter,
