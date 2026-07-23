@@ -3259,7 +3259,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     syncStatePromise,
     viewedPromise,
     readCacheRows(pool, table.id, includeRemoved),
-    time('tb_lookups', () => loadLookupEnrichment(table)),
+    time('tb_lookups', () => loadLookupEnrichmentCached(table)),
     ledgerPromise,
     historyByCellPromise,
     trackMarksPromise,
@@ -3524,17 +3524,37 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
 const LOOKUP_ENRICHMENT_TTL_MS = 30 * 1000;
 const lookupEnrichmentCache = new Map();
 
+// In-flight loads per tabel, zodat gelijktijdige koude aanvragen (board-read + /columns + bi/meta
+// vuren vaak samen bij page-load) op dezelfde load wachten i.p.v. elk de volledige vendor/items-
+// doeltabellen te lezen. Voorkomt een "thundering herd" van identieke lookup-reads.
+const lookupEnrichmentInflight = new Map();
+
 async function loadLookupEnrichmentCached(table) {
   const cached = lookupEnrichmentCache.get(table.id);
   if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) return cached.value;
-  const value = await loadLookupEnrichment(table);
-  lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
-  return value;
+  const pending = lookupEnrichmentInflight.get(table.id);
+  if (pending) return pending;
+  const promise = (async () => {
+    try {
+      const value = await loadLookupEnrichment(table);
+      lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
+      return value;
+    } finally {
+      lookupEnrichmentInflight.delete(table.id);
+    }
+  })();
+  lookupEnrichmentInflight.set(table.id, promise);
+  return promise;
 }
 
 function invalidateLookupEnrichmentCache(tableId = null) {
-  if (tableId === null) lookupEnrichmentCache.clear();
-  else lookupEnrichmentCache.delete(tableId);
+  if (tableId === null) {
+    lookupEnrichmentCache.clear();
+    lookupEnrichmentInflight.clear();
+  } else {
+    lookupEnrichmentCache.delete(tableId);
+    lookupEnrichmentInflight.delete(tableId);
+  }
 }
 
 // Supplier-scoping gebeurt in de route met assertSupplierPurchaseOrderRow (zelfde guard als de
@@ -4468,7 +4488,7 @@ function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
 // Board-kolomdefinities inclusief lookup-verrijking (zelfde set als de board-read).
 async function getBoardColumnDefinitions(tableKey, { scope = null } = {}) {
   const table = await getTableByKey(tableKey);
-  const enrichment = await loadLookupEnrichment(table);
+  const enrichment = await loadLookupEnrichmentCached(table);
   const scopes = scope && ['master', 'detail'].includes(scope) ? [scope] : ['master', 'detail'];
   const result = { master: [], detail: [] };
   await Promise.all(scopes.map(async (entryScope) => {
