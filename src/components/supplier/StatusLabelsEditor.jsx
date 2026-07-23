@@ -8,7 +8,6 @@ import {
 } from '@fluentui/react-components';
 import { AddRegular, DeleteRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
-import { STATUS_COLOR_PALETTE } from '../../utils/statusColumnUtils';
 
 const useStyles = makeStyles({
   editItem: {
@@ -39,47 +38,41 @@ const useStyles = makeStyles({
   },
   editActions: {
     display: 'flex',
-    justifyContent: 'space-between',
-    ...shorthands.gap('8px'),
+    justifyContent: 'flex-end',
     marginTop: '4px',
   },
 });
 
 export default function StatusLabelsEditor({
   draftOptions,
-  setDraftOptions,
+  labelDrafts,
   newLabel,
   setNewLabel,
   newColor,
   setNewColor,
-  onCancel,
-  onApply,
-  onRemoveOption,
   optionsSaving,
+  onDone,
+  onAddLabel,
+  onRemoveOption,
+  onLabelInputChange,
+  onCommitLabelEdit,
+  onColorChange,
 }) {
   const styles = useStyles();
-
-  const handleAddLabel = useCallback(() => {
-    const label = newLabel.trim();
-    if (!label) return;
-    const duplicate = draftOptions.some(
-      (option) => option.label.trim().toLowerCase() === label.toLowerCase(),
-    );
-    if (duplicate) return;
-    setDraftOptions((current) => [
-      ...current,
-      { id: `status_${Date.now()}`, label, color: newColor },
-    ]);
-    setNewLabel('');
-    setNewColor(STATUS_COLOR_PALETTE[(draftOptions.length + 1) % STATUS_COLOR_PALETTE.length]);
-  }, [draftOptions, newColor, newLabel, setDraftOptions, setNewColor, setNewLabel]);
 
   const handleNewLabelKeyDown = useCallback((event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      handleAddLabel();
+      onAddLabel();
     }
-  }, [handleAddLabel]);
+  }, [onAddLabel]);
+
+  const handleLabelKeyDown = useCallback((event, optionId) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      onCommitLabelEdit(optionId);
+    }
+  }, [onCommitLabelEdit]);
 
   return (
     <>
@@ -89,13 +82,10 @@ export default function StatusLabelsEditor({
             <Input
               className={styles.labelInput}
               size="small"
-              value={option.label}
-              onChange={(_, data) => {
-                const nextLabel = data.value;
-                setDraftOptions((current) => current.map((entry, entryIndex) => (
-                  entryIndex === index ? { ...entry, label: nextLabel } : entry
-                )));
-              }}
+              value={labelDrafts[option.id] ?? option.label}
+              onChange={(_, data) => onLabelInputChange(option.id, data.value)}
+              onBlur={() => onCommitLabelEdit(option.id)}
+              onKeyDown={(event) => handleLabelKeyDown(event, option.id)}
             />
             <Button
               appearance="subtle"
@@ -104,16 +94,12 @@ export default function StatusLabelsEditor({
               aria-label={`Delete label ${option.label}`}
               disabled={draftOptions.length <= 1}
               title={draftOptions.length <= 1 ? 'At least one status label is required' : 'Delete label'}
-              onClick={() => onRemoveOption?.(index)}
+              onClick={() => onRemoveOption(index)}
             />
           </div>
           <ColorPalettePicker
             selectedColor={option.color}
-            onSelect={(color) => {
-              setDraftOptions((current) => current.map((entry, entryIndex) => (
-                entryIndex === index ? { ...entry, color } : entry
-              )));
-            }}
+            onSelect={(color) => onColorChange(index, color)}
             ariaLabel="Status color"
           />
         </div>
@@ -132,18 +118,15 @@ export default function StatusLabelsEditor({
           appearance="subtle"
           size="small"
           icon={<AddRegular />}
-          onClick={handleAddLabel}
+          onClick={onAddLabel}
           disabled={!newLabel.trim()}
         >
           New label
         </Button>
       </div>
       <div className={styles.editActions}>
-        <Button appearance="subtle" size="small" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button appearance="primary" size="small" onClick={onApply} disabled={optionsSaving}>
-          {optionsSaving ? 'Applying...' : 'Apply'}
+        <Button appearance="primary" size="small" onClick={onDone} disabled={optionsSaving}>
+          {optionsSaving ? 'Saving...' : 'Done'}
         </Button>
       </div>
     </>

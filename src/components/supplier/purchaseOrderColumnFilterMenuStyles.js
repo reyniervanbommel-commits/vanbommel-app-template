@@ -360,6 +360,30 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     fontSize: tokens.fontSizeBase100,
     lineHeight: tokens.lineHeightBase200,
   },
+  colorFilterSwatches: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    ...shorthands.gap('6px'),
+    width: '100%',
+  },
+  colorFilterSwatch: {
+    width: '22px',
+    height: '22px',
+    ...shorthands.padding('0'),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusSmall,
+    cursor: 'pointer',
+    flexShrink: 0,
+    boxSizing: 'border-box',
+  },
+  colorFilterSwatchActive: {
+    ...shorthands.borderColor(tokens.colorNeutralForeground1),
+    boxShadow: `inset 0 0 0 2px ${tokens.colorNeutralBackground1}, 0 0 0 1px ${tokens.colorNeutralForeground1}`,
+  },
+  colorFilterNoColorSwatch: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundImage: `linear-gradient(to top left, transparent calc(50% - 1px), ${tokens.colorPaletteRedForeground1} calc(50% - 1px), ${tokens.colorPaletteRedForeground1} calc(50% + 1px), transparent calc(50% + 1px))`,
+  },
   filterRow: {
     display: 'flex',
     flexDirection: 'column',

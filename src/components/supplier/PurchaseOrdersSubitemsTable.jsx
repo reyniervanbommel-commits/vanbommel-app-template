@@ -305,10 +305,6 @@ export default function PurchaseOrdersSubitemsTable({
                       isAdmin={isAdmin}
                       onToggleWriteback={onToggleWriteback}
                       showActionsMenu={false}
-                      showFilterIndicator={hasActiveFilter}
-                      showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                      showSumIndicator={summedColumnsSet.has(column.key)}
-                      showConnectionIndicator={connectionTargets.length > 0}
                     />
                   )}
                 </div>

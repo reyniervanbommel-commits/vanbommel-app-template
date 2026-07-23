@@ -9,6 +9,7 @@ import { usePurchaseOrderColumnMutationActions } from '../../hooks/usePurchaseOr
 import { usePurchaseOrderSortFilterActions } from '../../hooks/usePurchaseOrderSortFilterActions';
 import { usePurchaseOrderColumnMenuFlags } from '../../hooks/usePurchaseOrderColumnMenuFlags';
 import { usePurchaseOrderColumnMenuQuickActions } from '../../hooks/usePurchaseOrderColumnMenuQuickActions';
+import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { useAppToast } from '../../hooks/useAppToast';
 import PurchaseOrderColumnMutationDialogs from './PurchaseOrderColumnMutationDialogs';
 import PurchaseOrderColumnFilterMenuPopoverContent from './PurchaseOrderColumnFilterMenuPopoverContent';
@@ -34,6 +35,7 @@ function PurchaseOrderColumnFilterMenu({
   onSetSecondaryValue,
   onApplyFilter,
   onClearFilter,
+  onSetColumnColorFilter,
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
@@ -52,6 +54,7 @@ function PurchaseOrderColumnFilterMenu({
   onSetColumnTextStyle,
   columnFormatRuleSet = null,
   onSetColumnFormatRules,
+  columnFormatRules = {},
   referenceColumns = [],
   isConnectedType = false,
   connectionTargets = [],
@@ -96,7 +99,7 @@ function PurchaseOrderColumnFilterMenu({
   const filterActive = isColumnFilterActive(column, filter, datePeriodFilterModes);
   const writable = !!column.writableToD365;
   const { notifyError } = useAppToast();
-  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, canHideColumn, readOnlyColumnMenu, columnTypeMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, onToggleColumnCollapsed, isConnectedType });
+  const { canToggleWriteback, showWritebackLocked, canRenameColumn, canRemoveColumn, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canSetColumnTextStyle, canSetColumnFormatRules, canPromoteToSticky, canUnstickSticky, canToggleStickyAction, canAddColumn, canEditFormulaColumn, canConfigureDatePeriodDisplay, canHideColumn, readOnlyColumnMenu, columnTypeMeta, columnSourceMeta } = usePurchaseOrderColumnMenuFlags({ column, isAdmin, isStaff, onToggleWriteback, onRenameColumn, onRemoveColumn, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onSetColumnTextStyle, onSetColumnFormatRules, onAddColumnRightOf, canMakeColumnSticky, isStickyColumn, isStickyActionEnabled, onMakeColumnSticky, onToggleColumnCollapsed, isConnectedType, connectionTargets });
   const closeMenu = useCallback(() => {
     setOpen(false);
     setActiveSubmenu('none');
@@ -197,6 +200,14 @@ function PurchaseOrderColumnFilterMenu({
     onSetColumnFormatRules,
     onError: notifyError,
   });
+  const colorFilter = usePurchaseOrderColorFilter({
+    column,
+    filter,
+    columnFormatRuleSet,
+    columns: referenceColumns,
+    columnFormatRules,
+    onSetColumnColorFilter,
+  });
   const { handleToggleWriteback, handleToggleLineTotal, handleToggleGroupSummary, handlePushLineTotalToHeader, handlePushLineValuesToHeader, handleMakeColumnSticky, handleHideColumn } = usePurchaseOrderColumnMenuQuickActions({ column, writable, isLineColumnSummed, isGroupSummaryColumn, canToggleWriteback, canToggleLineTotal, canToggleGroupSummary, canPushLineTotalToHeader, canPushLineValuesToHeader, canToggleStickyAction, onToggleWriteback, onToggleLineColumnSum, onSetGroupSummaryColumn, onPushLineTotalToHeader, onPushLineValuesToHeader, onMakeColumnSticky, onToggleColumnCollapsed, setOpen });
   const triggerClassName = [
     styles.trigger,
@@ -223,7 +234,7 @@ function PurchaseOrderColumnFilterMenu({
         </Button>
       </PopoverTrigger>
       <PurchaseOrderColumnFilterMenuPopoverContent
-        styles={styles} column={column} columnTypeMeta={columnTypeMeta} connectionTargets={connectionTargets}
+        styles={styles} column={column} columnTypeMeta={columnTypeMeta} columnSourceMeta={columnSourceMeta} connectionTargets={connectionTargets}
         activeSubmenu={activeSubmenu} submenuTop={submenuTop} openSubmenu={openSubmenu} closeSubmenu={closeSubmenu}
         showGrouping={isStaff && !readOnlyColumnMenu}
         showColumnMutations={isStaff}
@@ -242,7 +253,7 @@ function PurchaseOrderColumnFilterMenu({
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
-        handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} handleAddType={handleAddType}
+        handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} colorFilter={colorFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline} handleClearTextStyle={handleClearTextStyle}

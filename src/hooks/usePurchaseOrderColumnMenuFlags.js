@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { getColumnTypeMeta } from '../components/supplier/purchaseOrderColumnFilterMenuConstants';
+import { getColumnSourceMeta, getColumnTypeMeta } from '../components/supplier/purchaseOrderColumnFilterMenuConstants';
 import { isDatePeriodColumn } from '../utils/datePeriodColumnUtils';
 
 export function usePurchaseOrderColumnMenuFlags({
@@ -22,6 +22,7 @@ export function usePurchaseOrderColumnMenuFlags({
   onMakeColumnSticky,
   onToggleColumnCollapsed,
   isConnectedType,
+  connectionTargets = [],
 }) {
   const isRemarksColumn = column?.dataType === 'remarks';
   const isImageColumn = column?.dataType === 'image' || isRemarksColumn;
@@ -65,7 +66,14 @@ export function usePurchaseOrderColumnMenuFlags({
     && typeof onToggleColumnCollapsed === 'function'
   );
   const readOnlyColumnMenu = isImageColumn;
-  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column, { isConnected: isConnectedType }), [column, isConnectedType]);
+  const columnTypeMeta = useMemo(() => getColumnTypeMeta(column), [column]);
+  const columnSourceMeta = useMemo(
+    () => getColumnSourceMeta(column, {
+      isConnected: isConnectedType,
+      hasConnectionTargets: Array.isArray(connectionTargets) && connectionTargets.length > 0,
+    }),
+    [column, isConnectedType, connectionTargets]
+  );
 
   return {
     canToggleWriteback,
@@ -89,5 +97,6 @@ export function usePurchaseOrderColumnMenuFlags({
     isImageColumn,
     readOnlyColumnMenu,
     columnTypeMeta,
+    columnSourceMeta,
   };
 }

@@ -4,53 +4,14 @@ import {
   Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
-import {
-  ArrowClockwiseRegular,
-  CalendarLtrRegular,
-  CheckmarkRegular,
-  Chat24Regular,
-  CloudRegular,
-  EditRegular,
-  HistoryRegular,
-  LinkRegular,
-  MoreVerticalRegular,
-  NumberSymbolRegular,
-  PaintBrushRegular,
-  TextBulletList20Regular,
-} from '@fluentui/react-icons';
+import D365LogoIcon from './D365LogoIcon';
+import { FilterRegular, MoreVerticalRegular, PaintBrushRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
-  labelWrap: { display: 'flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, ...shorthands.gap('4px') },
-  d365LabelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, lineHeight: 1.2, ...shorthands.gap('4px') },
+  labelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, ...shorthands.gap('4px') },
   labelText: { minWidth: 0, maxWidth: '100%', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  writeBackCloud: { width: '16px', height: '16px', objectFit: 'contain', flexShrink: 0 },
-  customIcon: {
-    color: tokens.colorBrandForeground1,
-    fontSize: tokens.fontSizeBase300,
-    width: '16px',
-    minWidth: '16px',
-    lineHeight: 1,
-    flexShrink: 0,
-  },
-  formulaTypeIcon: {
-    color: tokens.colorBrandForeground1,
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: tokens.fontWeightSemibold,
-    width: '16px',
-    minWidth: '16px',
-    lineHeight: 1,
-    textAlign: 'center',
-    flexShrink: 0,
-  },
-  indicatorIcon: {
-    color: tokens.colorBrandForeground1,
-    fontSize: tokens.fontSizeBase300,
-    width: '16px',
-    minWidth: '16px',
-    lineHeight: 1,
-    flexShrink: 0,
-  },
+  menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   conditionalFormattingIndicator: {
     color: tokens.colorPaletteDarkOrangeForeground2,
     fontSize: tokens.fontSizeBase300,
@@ -59,7 +20,14 @@ const useStyles = makeStyles({
     lineHeight: 1,
     flexShrink: 0,
   },
-  menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
+  filterIndicator: {
+    color: tokens.colorBrandForeground1,
+    fontSize: tokens.fontSizeBase300,
+    width: '16px',
+    minWidth: '16px',
+    lineHeight: 1,
+    flexShrink: 0,
+  },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
@@ -74,31 +42,22 @@ export default function PurchaseOrderColumnHeader({
   onEditingDone,
   showFilterIndicator = false,
   showConditionalFormattingIndicator = false,
-  showSumIndicator = false,
-  showConnectionIndicator = false,
-  showTrackChangesIndicator = false,
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
-  const isFormulaColumn = Boolean(String(column.formulaExpr || '').trim());
-  const customTypeKey = String(column.dataType || 'text').trim().toLowerCase();
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  // Inline hernoemen direct na "Kolom rechts toevoegen" (Monday-stijl): typ de naam
-  // in de header, Enter/blur bevestigt, Escape laat de standaardnaam staan.
   const [inlineValue, setInlineValue] = useState(column.label);
   const inlineInputRef = useRef(null);
   useEffect(() => {
     if (autoEdit) setInlineValue(column.label);
   }, [autoEdit, column.label]);
 
-  // Focus het veld zónder de tabel te scrollen (preventScroll). Het gericht scrollen
-  // naar de nieuwe kolom gebeurt in de board-tabel, ná het verplaatsen.
   useEffect(() => {
     if (autoEdit && inlineInputRef.current) {
       inlineInputRef.current.focus({ preventScroll: true });
@@ -130,31 +89,27 @@ export default function PurchaseOrderColumnHeader({
     setBusy(true); setError('');
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
-  const trackChangesIndicator = showTrackChangesIndicator ? (
-    <Tooltip content="Track changes active" relationship="label">
-      <HistoryRegular className={styles.indicatorIcon} />
-    </Tooltip>
-  ) : null;
-  const connectionIndicator = showConnectionIndicator ? (
-    <Tooltip content="Connected column" relationship="label">
-      <LinkRegular className={styles.indicatorIcon} />
-    </Tooltip>
-  ) : null;
-  const showCustomTypeIndicator = !showConnectionIndicator;
-  const renderCustomTypeIcon = () => {
-    if (isFormulaColumn) return <span className={styles.formulaTypeIcon} aria-hidden>fx</span>;
-    switch (customTypeKey) {
-      case 'number': return <NumberSymbolRegular className={styles.customIcon} title="Number column" />;
-      case 'date': return <ArrowClockwiseRegular className={styles.customIcon} title="Date column" />;
-      case 'date_period': return <CalendarLtrRegular className={styles.customIcon} title="Date W/M column" />;
-      case 'boolean': return <CheckmarkRegular className={styles.customIcon} title="Yes/No column" />;
-      case 'status': return <span className={styles.formulaTypeIcon} title="Status column">●</span>;
-      case 'remarks': return <Chat24Regular className={styles.customIcon} title="Remarks column" />;
-      case 'select': return <TextBulletList20Regular className={styles.customIcon} title="Choice list column" />;
-      case 'text':
-      default: return <EditRegular className={styles.customIcon} title="Text column" />;
-    }
-  };
+
+  const columnLabel = (
+    <span className={styles.labelWrap}>
+      {!isCustom && writable ? (
+        <Tooltip content="Write-back to D365 enabled" relationship="label">
+          <D365LogoIcon alt="" />
+        </Tooltip>
+      ) : null}
+      {showConditionalFormattingIndicator ? (
+        <Tooltip content="Conditional formatting active" relationship="label">
+          <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
+        </Tooltip>
+      ) : null}
+      {showFilterIndicator ? (
+        <Tooltip content="Filter active" relationship="label">
+          <FilterRegular className={styles.filterIndicator} />
+        </Tooltip>
+      ) : null}
+      <span className={styles.labelText}>{column.label}</span>
+    </span>
+  );
 
   if (autoEdit) {
     return (
@@ -189,38 +144,16 @@ export default function PurchaseOrderColumnHeader({
   );
 
   if (!isCustom) {
-    const labelWithWriteBack = (
-      <span className={styles.d365LabelWrap}>
-        <Tooltip content={writable ? 'D365 sync enabled' : 'D365 source column'} relationship="label">
-          {writable
-            ? <img className={styles.writeBackCloud} src="/d365-sync-cloud.png" alt="D365 sync" />
-            : <CloudRegular className={styles.indicatorIcon} />}
-        </Tooltip>
-        {connectionIndicator}
-        {showConditionalFormattingIndicator ? (
-          <Tooltip content="Conditional formatting active" relationship="label">
-            <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
-          </Tooltip>
-        ) : null}
-        {showSumIndicator ? (
-          <Tooltip content="Column sum enabled" relationship="label">
-            <NumberSymbolRegular className={styles.indicatorIcon} />
-          </Tooltip>
-        ) : null}
-        {trackChangesIndicator}
-        <span className={styles.labelText}>{column.label}</span>
-      </span>
-    );
-    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{labelWithWriteBack}</div>;
+    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{columnLabel}</div>;
     if (column.writeBackAllowed === false) {
-      return <div className={styles.header}>{labelWithWriteBack}</div>;
+      return <div className={styles.header}>{columnLabel}</div>;
     }
     if (!showActionsMenu) {
-      return <div className={styles.header}>{labelWithWriteBack}</div>;
+      return <div className={styles.header}>{columnLabel}</div>;
     }
     return (
       <div className={styles.header}>
-        {labelWithWriteBack}
+        {columnLabel}
         <Menu>
           <MenuTrigger disableButtonEnhancement>
             <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back options for ${column.label}`} />
@@ -237,26 +170,7 @@ export default function PurchaseOrderColumnHeader({
 
   return (
     <div className={styles.header}>
-      <span className={styles.labelWrap}>
-        {showCustomTypeIndicator ? (
-          <Tooltip content={isFormulaColumn ? 'Formula column' : 'Custom column'} relationship="label">
-            {renderCustomTypeIcon()}
-          </Tooltip>
-        ) : null}
-        {connectionIndicator}
-        {showConditionalFormattingIndicator ? (
-          <Tooltip content="Conditional formatting active" relationship="label">
-            <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
-          </Tooltip>
-        ) : null}
-        {showSumIndicator ? (
-          <Tooltip content="Column sum enabled" relationship="label">
-            <NumberSymbolRegular className={styles.indicatorIcon} />
-          </Tooltip>
-        ) : null}
-        {trackChangesIndicator}
-        <span className={styles.labelText}>{column.label}</span>
-      </span>
+      {columnLabel}
       {showActionsMenu ? columnOptionsMenu : null}
 
       <PurchaseOrderColumnHeaderDialogs

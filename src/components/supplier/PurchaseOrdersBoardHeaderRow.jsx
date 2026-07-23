@@ -43,6 +43,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   setFilterSecondaryValue,
   applyColumnFilter,
   clearColumnFilter,
+  setColumnColorFilter,
   setGroupingColumn,
   clearGrouping,
   setGroupingBarColor,
@@ -88,10 +89,6 @@ export default function PurchaseOrdersBoardHeaderRow({
           const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedValueMeta.lineColumnKey)?.label || linkedValueMeta.lineColumnKey;
           connectionTargets.push(`Subitem column "${lineColumnLabel}" (values)`);
         }
-        const trackChangesEnabled = Boolean(
-          trackChangesActiveByColumnId
-          && Object.prototype.hasOwnProperty.call(trackChangesActiveByColumnId, String(column.id))
-        );
         const stickyLeft = Number(column?.stickyLeft);
         const isStickyColumn = Number.isFinite(stickyLeft);
         const canPromoteToSticky = column.key === firstNonStickyColumnKey;
@@ -143,9 +140,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                     onEditingDone={onEditingDone}
                     showFilterIndicator={hasActiveFilter}
                     showConditionalFormattingIndicator={hasActiveConditionalFormatting}
-                    showSumIndicator={hasGroupSummary}
-                    showConnectionIndicator={Boolean(linkedLineTotalByHeaderKey[column.key] || linkedLineValueByHeaderKey[column.key])}
-                    showTrackChangesIndicator={trackChangesEnabled}
                   />
                 )}
               </div>
@@ -166,6 +160,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetSecondaryValue={setFilterSecondaryValue}
                 onApplyFilter={applyColumnFilter}
                 onClearFilter={clearColumnFilter}
+                onSetColumnColorFilter={setColumnColorFilter}
                 onSetGroupingColumn={setGroupingColumn}
                 onClearGrouping={clearGrouping}
                 onSetGroupingColor={setGroupingBarColor}
@@ -179,6 +174,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetColumnTextStyle={onSaveHeaderColumnTextStyle}
                 columnFormatRuleSet={headerColumnFormatRules[column.key]}
                 onSetColumnFormatRules={onSaveHeaderColumnFormatRules}
+                columnFormatRules={headerColumnFormatRules}
                 referenceColumns={referenceColumns}
                 isConnectedType={Boolean(linkedLineValueByHeaderKey[column.key])}
                 connectionTargets={connectionTargets}
