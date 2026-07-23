@@ -23,6 +23,36 @@ export const devTestItems = [
       'Zonder items-filter toont het bord alle orders en regels zoals voorheen (geen neveneffect)',
     ],
   },
+  {
+    id: 'feature-bi-vendor-filter-v1-37-0',
+    title: 'BI page vendor filter (v1.37.0)',
+    checks: [
+      'The BI page shows a searchable vendor filter (by vendor no. or name) in the toolbar',
+      'When a PO board filter on a vendor is active, opening the BI page pre-selects that same vendor',
+      'Selecting a vendor filters all charts to that vendor; "All vendors" shows the full dataset again',
+    ],
+  },
+  {
+    id: 'feature-bi-date-filter-v1-37-7',
+    title: 'BI page generic week/year date filter (v1.37.7)',
+    checks: [
+      'The BI toolbar has a "Week filter" switch plus From/To year and week inputs (like RCCP)',
+      'Enabling it filters every chart that uses a date as its dimension to that week range',
+      'Charts without a date dimension are unaffected by the week filter',
+      'A small refresh button next to the inputs applies the changed weeks',
+      'The filter setting (on/off + weeks) is shared: it persists after reload and applies to every user',
+    ],
+  },
+  {
+    id: 'feature-bi-fast-loading-v1-40-0',
+    title: 'BI faster loading & caching (v1.40.0)',
+    checks: [
+      'Returning to the BI page renders charts instantly from cache (no full reload) when nothing changed',
+      'Changing vendor or week filter updates charts quickly without a noticeable full board reload',
+      'After a data refresh/sync the BI charts show the new data on the next visit',
+      'Opening BI still shows correct columns in the chart builder (metadata loads without a full read)',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

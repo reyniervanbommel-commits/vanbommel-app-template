@@ -1,5 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Dropdown, Field, Option } from '@fluentui/react-components';
+import { Dropdown, Field, makeStyles, Option } from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  control: { width: '100%', maxWidth: '100%' },
+});
 
 function ChartMeasureMultiSelect({
   columns,
@@ -8,6 +12,7 @@ function ChartMeasureMultiSelect({
   disabled = false,
   size = 'medium',
 }) {
+  const styles = useStyles();
   const uniqueColumns = useMemo(() => {
     const seen = new Set();
     return (columns || []).filter((col) => {
@@ -37,6 +42,7 @@ function ChartMeasureMultiSelect({
   return (
     <Field label="Values (measures)" hint="Select one or more numeric columns" size={size === 'small' ? 'small' : undefined}>
       <Dropdown
+        className={size === 'small' ? styles.control : undefined}
         multiselect
         size={size}
         disabled={disabled}

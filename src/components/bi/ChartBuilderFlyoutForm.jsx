@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Dropdown, Field, Input, Option } from '@fluentui/react-components';
+import { Dropdown, Field, Input, makeStyles, Option } from '@fluentui/react-components';
 import ChartBuilderFlyoutSection from './ChartBuilderFlyoutSection';
 import ChartColorEditor from './ChartColorEditor';
 import ChartFilterEditor from './ChartFilterEditor';
@@ -16,6 +16,11 @@ const CONTROL_SIZE = 'small';
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
 
+const useStyles = makeStyles({
+  // Full-width controls in het smalle flyout-paneel — via eigen class i.p.v. Fluent-interne selectors.
+  control: { width: '100%', maxWidth: '100%' },
+});
+
 function ChartBuilderFlyoutForm({
   builder,
   columns,
@@ -26,6 +31,7 @@ function ChartBuilderFlyoutForm({
   selectedMeasures,
   countMode,
 }) {
+  const styles = useStyles();
   const colorMode = resolveColorMode(config);
   const valueDisplay = resolveValueDisplay(config);
   const chartOptions = config.options || {};
@@ -39,6 +45,7 @@ function ChartBuilderFlyoutForm({
       <ChartBuilderFlyoutSection title="General">
         <Field label="Visibility" size={CONTROL_SIZE}>
           <Dropdown
+            className={styles.control}
             size={CONTROL_SIZE}
             selectedOptions={[builder.visibility]}
             value={findLabel(VISIBILITY_OPTIONS, builder.visibility)}
@@ -52,6 +59,7 @@ function ChartBuilderFlyoutForm({
         {(config.type === 'bar' || config.type === 'line') ? (
           <Field label="Chart size" size={CONTROL_SIZE}>
             <Dropdown
+              className={styles.control}
               size={CONTROL_SIZE}
               selectedOptions={[resolveChartSize({ config })]}
               value={findLabel(CHART_SIZE_OPTIONS_BAR_LINE, resolveChartSize({ config }))}
@@ -70,6 +78,7 @@ function ChartBuilderFlyoutForm({
       <ChartBuilderFlyoutSection title="Data">
         <Field label="Chart type" size={CONTROL_SIZE}>
           <Dropdown
+            className={styles.control}
             size={CONTROL_SIZE}
             selectedOptions={[config.type]}
             value={findLabel(CHART_TYPE_OPTIONS, config.type)}
@@ -83,6 +92,7 @@ function ChartBuilderFlyoutForm({
 
         <Field label="Aggregation" size={CONTROL_SIZE}>
           <Dropdown
+            className={styles.control}
             size={CONTROL_SIZE}
             selectedOptions={[config.aggregation]}
             value={findLabel(AGGREGATION_OPTIONS, config.aggregation)}
@@ -97,6 +107,7 @@ function ChartBuilderFlyoutForm({
         {config.type !== 'kpi' ? (
           <Field label="Dimension" size={CONTROL_SIZE}>
             <Dropdown
+              className={styles.control}
               size={CONTROL_SIZE}
               selectedOptions={config.dimension ? [config.dimension] : [NONE_OPTION.key]}
               value={dimensionLabel}
@@ -116,6 +127,7 @@ function ChartBuilderFlyoutForm({
         {config.type !== 'kpi' && isDateDimension ? (
           <Field label="Date grouping" size={CONTROL_SIZE}>
             <Dropdown
+              className={styles.control}
               size={CONTROL_SIZE}
               selectedOptions={[config.dateGrouping]}
               value={findLabel(DATE_GROUPING_OPTIONS, config.dateGrouping)}
@@ -152,6 +164,7 @@ function ChartBuilderFlyoutForm({
             size={CONTROL_SIZE}
           >
             <Dropdown
+              className={styles.control}
               size={CONTROL_SIZE}
               disabled={countMode}
               selectedOptions={config.measure ? [config.measure] : [NONE_OPTION.key]}
@@ -174,6 +187,7 @@ function ChartBuilderFlyoutForm({
         {config.type === 'kpi' ? (
           <Field label="Unit" hint="Shown under the value on the card" size={CONTROL_SIZE}>
             <Input
+              className={styles.control}
               size={CONTROL_SIZE}
               value={chartOptions.unit || ''}
               onChange={(_, data) => builder.setOption('unit', data.value)}
@@ -185,6 +199,7 @@ function ChartBuilderFlyoutForm({
         {(config.type === 'bar' || config.type === 'line' || config.type === 'pie') ? (
           <Field label="Data labels" size={CONTROL_SIZE}>
             <Dropdown
+              className={styles.control}
               size={CONTROL_SIZE}
               selectedOptions={[valueDisplay]}
               value={findLabel(VALUE_DISPLAY_OPTIONS, valueDisplay)}

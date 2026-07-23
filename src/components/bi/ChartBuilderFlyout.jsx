@@ -1,6 +1,11 @@
 import React, { memo, useEffect, useRef } from 'react';
 import { Button, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { DismissRegular } from '@fluentui/react-icons';
+import { layout } from '../../styles/brandTokens';
+
+// Hoogte begrensd op de zichtbare viewport (header + main-padding eraf) zodat alléén de
+// flyout-body scrollt en niet de hele pagina. 48px = boven+onder padding van <main>.
+const PANEL_HEIGHT = `calc(100vh - ${layout.headerHeight + 48}px)`;
 
 const useStyles = makeStyles({
   flyout: {
@@ -9,7 +14,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
-    alignSelf: 'stretch',
+    alignSelf: 'flex-start',
+    height: PANEL_HEIGHT,
+    maxHeight: PANEL_HEIGHT,
     position: 'sticky',
     top: '0',
     backgroundColor: tokens.colorNeutralBackground1,
