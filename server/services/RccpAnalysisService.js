@@ -464,17 +464,46 @@ function extractVendorNamesFromRows(rows, vendorColumnKey) {
   return names;
 }
 
+// Revisie-gated cache voor de vendorlijst. De lijst verandert alleen als de PO-masterdata wijzigt;
+// die wijziging weerspiegelt zich in de PO-revision (zelfde hash als het board gebruikt). We bewaren
+// per supplier-scope het laatst berekende resultaat en serveren dat instant zolang de revision
+// gelijk blijft. Zo kost /vendors na de eerste keer nog maar één goedkope revision-query i.p.v. een
+// volledige tabel-read.
+const vendorListCache = new Map();
+
 async function listMainTableVendors({ supplierAccount = null } = {}) {
   const config = await settingsService.getConfig();
-  const poData = await time('rccp_vendor_list', () => tableDataService.read({
+  const cacheKey = supplierAccount || '__all__';
+
+  let revision = null;
+  try {
+    ({ revision } = await time('rccp_vendor_revision', () => tableDataService.getRevision({
+      tableKey: PO_TABLE_KEY,
+      supplierAccount: supplierAccount || null,
+    })));
+    const cached = vendorListCache.get(cacheKey);
+    if (cached && revision && cached.revision === revision) return cached.payload;
+  } catch {
+    // Revision-check faalt (bv. DB-hik) → val terug op een verse berekening zonder cache.
+    revision = null;
+  }
+
+  const rows = await time('rccp_vendor_list', () => tableDataService.listVendorValues({
     tableKey: PO_TABLE_KEY,
-    supplierAccount: supplierAccount || null,
+    valueColumnKeys: [config.vendorColumnKey, 'vendorName'],
   }));
-  return {
+  const scoped = supplierAccount
+    ? rows.filter((r) => String(pickValue(r.values, config.vendorColumnKey) || '').trim()
+        === String(supplierAccount).trim())
+    : rows;
+
+  const payload = {
     vendorColumnKey: config.vendorColumnKey,
-    vendors: extractVendorsFromRows(poData.rows, config.vendorColumnKey),
-    vendorNames: extractVendorNamesFromRows(poData.rows, config.vendorColumnKey),
+    vendors: extractVendorsFromRows(scoped, config.vendorColumnKey),
+    vendorNames: extractVendorNamesFromRows(scoped, config.vendorColumnKey),
   };
+  if (revision) vendorListCache.set(cacheKey, { revision, payload });
+  return payload;
 }
 
 module.exports = {
