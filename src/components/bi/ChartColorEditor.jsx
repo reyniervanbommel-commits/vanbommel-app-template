@@ -10,6 +10,7 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     ...shorthands.padding(tokens.spacingVerticalXS, '0'),
   },
+  control: { width: '100%', maxWidth: '100%' },
 });
 
 const findLabel = (options, key) => options.find((option) => String(option.key) === String(key))?.label || '';
@@ -33,6 +34,7 @@ function ChartColorEditor({
     <>
       <Field label="Color mode" size={embedded ? controlSize : undefined}>
         <Dropdown
+          className={embedded ? styles.control : undefined}
           size={controlSize}
           selectedOptions={[colorMode]}
           value={findLabel(COLOR_MODE_OPTIONS, colorMode)}

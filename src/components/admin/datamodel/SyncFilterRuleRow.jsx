@@ -17,7 +17,7 @@ function operatorsForType(valueType) {
   return ['eq', 'ne', 'oneof'];
 }
 
-function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styles }) {
+function SyncFilterRuleRow({ rule, index, hasLineLevel = true, onUpdate, onRemove, onOpenPicker, styles }) {
   const enumMeta = rule.field ? ENUM_FIELDS[rule.field] : null;
   const operators = operatorsForType(rule.valueType);
   const selectedOperator = operators.includes(rule.operator) ? rule.operator : operators[0];
@@ -29,16 +29,18 @@ function SyncFilterRuleRow({ rule, index, onUpdate, onRemove, onOpenPicker, styl
 
   return (
     <div className={styles.ruleRow}>
-      <Dropdown
-        className={styles.levelDropdown}
-        size="small"
-        selectedOptions={[rule.level || 'header']}
-        value={rule.level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)'}
-        onOptionSelect={(_, data) => onUpdate(index, { level: data.optionValue, field: '', value: '', valueType: 'text', operator: 'eq' })}
-      >
-        <Option value="header" text="Main items (Headers)">Main items (Headers)</Option>
-        <Option value="line" text="Subitems (Lines)">Subitems (Lines)</Option>
-      </Dropdown>
+      {hasLineLevel ? (
+        <Dropdown
+          className={styles.levelDropdown}
+          size="small"
+          selectedOptions={[rule.level || 'header']}
+          value={rule.level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)'}
+          onOptionSelect={(_, data) => onUpdate(index, { level: data.optionValue, field: '', value: '', valueType: 'text', operator: 'eq' })}
+        >
+          <Option value="header" text="Main items (Headers)">Main items (Headers)</Option>
+          <Option value="line" text="Subitems (Lines)">Subitems (Lines)</Option>
+        </Dropdown>
+      ) : null}
 
       <Button
         size="small"
