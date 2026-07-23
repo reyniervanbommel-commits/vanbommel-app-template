@@ -49,9 +49,23 @@ export default function RccpPageContent() {
     Boolean(resolveRccpVendorFromFilter(readPoFilterByColumnForRccp()))
   ));
 
+  // hasVendor bepaalt of er daadwerkelijk data geladen wordt (en dus of chart/matrix/capacity
+  // planning vullen) — pas waar wanneer er echt een vendor gekozen is, niet zodra het
+  // resolve-effect hieronder eenmalig is afgerond (dat kan ook naar '' resolven).
+  const hasVendor = isSupplier || Boolean(vendorAccount);
+  const {
+    window, setWindow, windowLoaded, lastVendor, setLastVendor,
+    analysis, loading, error, readOnly,
+    measureRows, periods, cellMap, reload,
+  } = useRccpPage({
+    vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
+    enabled: hasVendor,
+  });
+
   // Neem de vendor over waarop de PO-pagina net gefilterd was (nr of naam); is er geen
   // PO-filter, laat de vendor dan leeg (in plaats van automatisch de eerste vendor te laden,
-  // wat traag is) — de gebruiker zoekt dan zelf een vendor op via het zoekveld.
+  // wat traag is) — de gebruiker zoekt dan zelf een vendor op via het zoekveld. Dit effect staat
+  // bewust ná useRccpPage: het leunt op windowLoaded/lastVendor uit die hook (TDZ voorkomen).
   useEffect(() => {
     if (isSupplier || vendorsLoading || vendorAccount !== null) return;
     const filterByColumn = readPoFilterByColumnForRccp();
@@ -63,19 +77,6 @@ export default function RccpPageContent() {
     if (lastVendor && vendors.includes(lastVendor)) { setVendorAccount(lastVendor); return; }
     setVendorAccount('');
   }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount, windowLoaded, lastVendor]);
-
-  // hasVendor bepaalt of er daadwerkelijk data geladen wordt (en dus of chart/matrix/capacity
-  // planning vullen) — pas waar wanneer er echt een vendor gekozen is, niet zodra het
-  // resolve-effect hierboven eenmalig is afgerond (dat kan ook naar '' resolven).
-  const hasVendor = isSupplier || Boolean(vendorAccount);
-  const {
-    window, setWindow, windowLoaded, lastVendor, setLastVendor,
-    analysis, loading, error, readOnly,
-    measureRows, periods, cellMap, reload,
-  } = useRccpPage({
-    vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
-    enabled: hasVendor,
-  });
 
   // Onthoud de gekozen vendor als voorkeur (samen met de week in board-settings/rccp), zodat de
   // pagina bij terugkeer exact dezelfde vendor-week-combinatie toont. Lege selectie wist de
