@@ -298,9 +298,9 @@ async function summarizeRemarks(tableKey, actor) {
   if (normalizedActor.isSupplier) {
     const supplierFilterColumn = await getSupplierFilterColumnKey();
     const visibleKeys = await loadSupplierVisibleRowKeys(
-      table.id,
       getSupplierAccount(actor),
-      supplierFilterColumn
+      supplierFilterColumn,
+      actor?.id ?? null,
     );
     rows = filterRowsForSupplier(rows, visibleKeys);
   }

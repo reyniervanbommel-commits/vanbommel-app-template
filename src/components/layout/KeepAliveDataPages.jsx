@@ -26,7 +26,7 @@ const BiPage = lazy(() => import('../bi').then((m) => ({ default: m.BiPage })));
 const PAGES = [
   { path: '/', Component: PurchaseOrdersPage, roles: null },
   { path: '/rccp', Component: RccpPage, roles: [ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER] },
-  { path: '/bi', Component: BiPage, roles: [ROLES.ADMIN, ROLES.EMPLOYEE] },
+  { path: '/bi', Component: BiPage, roles: [ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER] },
 ];
 
 const useStyles = makeStyles({

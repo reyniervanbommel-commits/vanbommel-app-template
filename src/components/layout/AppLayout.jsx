@@ -140,8 +140,9 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
       { id: 'rccp', label: 'RCCP', icon: CalendarDataBar24Regular, path: '/rccp' },
+      // BI is voor alle rollen zichtbaar; suppliers zien uitsluitend hun eigen (server-gescopete) data.
+      { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
       ...(isAdminLike ? [
-        { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
         { type: 'divider' },
         { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
       ] : []),

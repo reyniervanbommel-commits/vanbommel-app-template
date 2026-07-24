@@ -1,10 +1,7 @@
 'use strict';
 
-const sql = require('mssql');
 const { ROLES } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
-const { getTableByKey, listColumns } = require('../services/TableRegistryService');
-const { getSqlPool } = require('./sqlPool');
 const { getSupplierAccount } = require('./supplierScope');
 
 const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
@@ -15,29 +12,6 @@ function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }
 
-function parseJson(value) {
-  if (!value) return {};
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
-}
-
-function resolveSourceColumnValue(sourceJson, column) {
-  const safeSource = sourceJson && typeof sourceJson === 'object' ? sourceJson : {};
-  const sourceFieldKey = String(column?.sourceField || '').trim();
-  if (sourceFieldKey && Object.prototype.hasOwnProperty.call(safeSource, sourceFieldKey)) {
-    return safeSource[sourceFieldKey];
-  }
-  const columnKey = String(column?.key || '').trim();
-  if (columnKey && Object.prototype.hasOwnProperty.call(safeSource, columnKey)) {
-    return safeSource[columnKey];
-  }
-  return null;
-}
-
 function buildRowKey(partitionKey, recordKey) {
   return `${partitionKey}|${recordKey}`;
 }
@@ -46,26 +20,24 @@ async function getSupplierFilterColumnKey() {
   return settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN);
 }
 
-async function loadSupplierVisibleRowKeys(tableId, supplierAccount, supplierFilterColumn) {
-  const masterCols = await listColumns({ tableId, scope: 'master', includeInactive: false });
-  const filterCol = masterCols.find((col) => col.key === supplierFilterColumn);
-  if (!filterCol) return new Set();
-
-  const wanted = String(supplierAccount).trim().toLowerCase();
-  const pool = await getSqlPool();
-  const result = await pool.request()
-    .input('tableId', sql.BigInt, tableId)
-    .query(`
-      SELECT partition_key, record_key, data_json
-      FROM dbo.tb_cache
-      WHERE table_id = @tableId AND scope = 'master' AND detail_key = -1
-    `);
-
+// Bepaalt welke orders een supplier mag zien. Hergebruikt bewust de board-read
+// (TableDataService.read) zodat exact dezelfde scoping geldt als op het PO-board — inclusief de
+// lookup-/formula-verrijking van de filterkolom. Zo kan een order nooit wél op het board staan
+// en toch door de remark-scopecheck worden geweigerd (de oude check las alleen de ruwe data_json,
+// wat afweek van de verrijkte waarde waarop het board filtert).
+async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, userId = null) {
+  // Lazy require voorkomt een module-cycle bij het laden.
+  const dataService = require('../services/TableDataService');
+  const data = await dataService.read({
+    tableKey: PURCHASE_ORDERS_TABLE,
+    userId,
+    supplierAccount,
+    supplierFilterColumn,
+    includeDetails: false,
+  });
   const keys = new Set();
-  for (const row of result.recordset) {
-    const json = parseJson(row.data_json);
-    const value = String(resolveSourceColumnValue(json, filterCol) ?? '').trim().toLowerCase();
-    if (value === wanted) keys.add(buildRowKey(row.partition_key, row.record_key));
+  for (const row of Array.isArray(data?.rows) ? data.rows : []) {
+    keys.add(buildRowKey(row.partitionKey, row.recordKey));
   }
   return keys;
 }
@@ -82,8 +54,7 @@ async function assertSupplierPurchaseOrderRow(user, { tableKey, partitionKey, re
 
   const supplierAccount = getSupplierAccount(user);
   const supplierFilterColumn = await getSupplierFilterColumnKey();
-  const table = await getTableByKey(PURCHASE_ORDERS_TABLE);
-  const keys = await loadSupplierVisibleRowKeys(table.id, supplierAccount, supplierFilterColumn);
+  const keys = await loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, user.id);
   if (!keys.has(buildRowKey(partition, record))) {
     throw httpError(403, 'Access denied — order not in your vendor scope');
   }
