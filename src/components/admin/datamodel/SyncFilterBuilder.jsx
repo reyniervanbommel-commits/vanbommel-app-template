@@ -10,7 +10,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
-import { useSyncFilters } from '../../../hooks/useSyncFilters';
+import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
 import FilterFieldPickerDialog from './FilterFieldPickerDialog';
 import SyncFilterRuleRow from './SyncFilterRuleRow';
 
@@ -70,14 +70,15 @@ function ReimportBaselineButton({ onReimportBaseline, busy }) {
 function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow, onReimportBaseline, baselineBusy = false }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
-  const isInheritedTable = tableKey === 'vendors' || tableKey === 'items' || tableKey === 'product-receipt-lines';
-  const isReadOnly = isInheritedTable || Boolean(syncFilter?.readOnly);
+  // Read-only leunt op de server (syncFilter.readOnly). vendors/product-receipt-lines blijven
+  // altijd inherited; items is bewerkbaar maar blijft binnen de PO lookup scope.
+  const isReadOnly = Boolean(syncFilter?.readOnly)
+    || tableKey === 'vendors' || tableKey === 'product-receipt-lines';
   const readOnlyMessage = String(syncFilter?.message || '').trim();
-  const inheritedCompiled = String(
-    syncFilter?.inheritedCompiled
-    || (isInheritedTable ? syncFilter?.compiled : '')
-    || ''
-  ).trim();
+  const inheritedCompiled = String(syncFilter?.inheritedCompiled || '').trim();
+  const poScopeHint = String(syncFilter?.poScopeHint || '').trim();
+  // Master-only tabellen (bv. items op ReleasedProductsV2) hebben geen regel-niveau.
+  const hasLineLevel = (filterCatalog?.line?.length || 0) > 0;
   const {
     rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
     save, saving, error, savedAt, queryCount, countLoading, countError,
@@ -119,7 +120,9 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       field: field.field,
       label: field.label,
       valueType: field.valueType || 'text',
-      enumType: field.valueType === 'enum' ? 'PurchStatus' : undefined,
+      // enumType komt uit de centrale registry per veld (niet hardcoded), zodat bv. ProductType
+      // de EcoResProductType-namespace krijgt en niet abusievelijk PurchStatus.
+      enumType: field.valueType === 'enum' ? ENUM_FIELDS[field.field]?.enumType : undefined,
       operator,
       value: '',
     });
@@ -159,6 +162,12 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
         network traffic and sync time. Use Discover D365 fields to register all entity columns first.
       </Text>
+      {poScopeHint ? (
+        <Text className={styles.hint} block>{poScopeHint}</Text>
+      ) : null}
+      {poScopeHint && inheritedCompiled ? (
+        <div className={styles.preview}>Purchase Orders $filter (scope) = {inheritedCompiled}</div>
+      ) : null}
       {retentionHint ? (
         <Text className={styles.hint} block>
           {retentionHint}
@@ -207,6 +216,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
             availableFieldCount: fieldsForLevel(rule.level || 'header').length,
           }}
           index={index}
+          hasLineLevel={hasLineLevel}
           onUpdate={updateRule}
           onRemove={removeRule}
           onOpenPicker={openPicker}

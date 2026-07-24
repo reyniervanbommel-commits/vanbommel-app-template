@@ -25,8 +25,6 @@ const useStyles = makeStyles({
     ...shorthands.gap(tokens.spacingVerticalMNudge),
     minWidth: 0,
     width: '100%',
-    '& .fui-Dropdown': { width: '100%', maxWidth: '100%' },
-    '& .fui-Input': { width: '100%', maxWidth: '100%' },
   },
 });
 
