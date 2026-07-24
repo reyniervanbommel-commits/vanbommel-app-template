@@ -159,8 +159,10 @@ async function fetchRemark(ctx, remarkId) {
 }
 
 async function addRemark(input, actor) {
+  // context() dwingt de rij-scope af: een supplier kan alleen een remark toevoegen op een
+  // order binnen zijn eigen vendor-scope (assertSupplierPurchaseOrderRow). Staff heeft
+  // volledige toegang. Suppliers mogen hun eigen comments plaatsen (#vendor-remarks).
   const ctx = await context(input.tableKey, input.partitionKey, input.recordKey, actor);
-  if (ctx.actor.isSupplier) throw httpError(403, 'Suppliers cannot add remarks');
   const body = normalizeBody(input.body);
   const columnId = normalizeOptionalColumnId(input.columnId);
   const result = await remarkRequest(ctx.pool.request(), {

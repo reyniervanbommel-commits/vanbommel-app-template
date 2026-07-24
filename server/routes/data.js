@@ -71,7 +71,9 @@ router.get('/:tableKey/remarks', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
-router.post('/:tableKey/remarks', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
+// Staff + suppliers: suppliers mogen uitsluitend op orders binnen hun eigen vendor-scope
+// reageren; die rij-scope wordt afgedwongen in RowRemarksService.context().
+router.post('/:tableKey/remarks', async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);

@@ -13,6 +13,8 @@ const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
 const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS, resolveMeasures } = require('../utils/biAggregate');
 const { normalizeConfig } = require('../utils/biChartConfig');
+const { ROLES } = require('../constants/roles');
+const { getSupplierAccount } = require('../utils/supplierScope');
 
 const router = express.Router();
 
@@ -20,6 +22,30 @@ const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const VISIBILITIES = ['private', 'shared'];
 const MAX_CHARTS_PER_AGGREGATE = 20;
 const BI_DATE_FILTER_KEY = 'BI_DATE_FILTER';
+const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
+const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
+
+// Bepaalt de supplier-scope voor een BI-request: staff (admin/employee) ziet alle vendors
+// (scope = null); een supplier wordt beperkt tot zijn eigen leveranciersaccount, gescoped op
+// dezelfde admin-instelbare kolom als het PO-board (TableDataService.read).
+async function resolveBiScope(user) {
+  if (user?.role !== ROLES.SUPPLIER) {
+    return { supplierAccount: null, supplierFilterColumn: DEFAULT_SUPPLIER_FILTER_COLUMN };
+  }
+  const supplierFilterColumn = await settingsService.getAsync(
+    SUPPLIER_FILTER_COLUMN_KEY,
+    DEFAULT_SUPPLIER_FILTER_COLUMN,
+  );
+  return { supplierAccount: getSupplierAccount(user), supplierFilterColumn };
+}
+
+// Weigert schrijfacties voor suppliers (read-only BI, net als RCCP).
+function blockSupplierWrites(req, res, next) {
+  if (req.user?.role === ROLES.SUPPLIER) {
+    return res.status(403).json({ error: 'Suppliers have read-only BI access' });
+  }
+  return next();
+}
 
 function clampInt(value, min, max, fallback) {
   const num = Number(value);
@@ -67,17 +93,25 @@ function contentSignature(parts = {}) {
 }
 
 // Leest het board voor BI met snapshot-hergebruik. Geeft { rows, columns, revision } terug.
-async function readBiBoard(boardKey, userId) {
-  const { revision, parts } = await time('bi_revision', () => dataService.getRevision({ tableKey: boardKey, userId }));
+// De scope (supplierAccount/filterColumn) wordt doorgegeven aan read() zodat een supplier
+// alleen zijn eigen rijen aggregeert; de snapshotcache is per account gescheiden zodat er
+// nooit data van een andere leverancier terugkomt.
+async function readBiBoard(boardKey, user) {
+  const userId = user?.id ?? null;
+  const { supplierAccount, supplierFilterColumn } = await resolveBiScope(user);
+  const cacheKey = `${boardKey}|${supplierAccount || ''}`;
+  const { revision, parts } = await time('bi_revision', () => dataService.getRevision({ tableKey: boardKey, userId, supplierAccount }));
   const signature = contentSignature(parts);
-  const cached = biSnapshotCache.get(boardKey);
+  const cached = biSnapshotCache.get(cacheKey);
   if (cached && cached.signature === signature && (Date.now() - cached.cachedAt) < BI_SNAPSHOT_TTL_MS) {
     return { rows: cached.rows, columns: cached.columns, revision };
   }
-  const data = await time('bi_board_read', () => dataService.read({ tableKey: boardKey, userId }));
+  const data = await time('bi_board_read', () => dataService.read({
+    tableKey: boardKey, userId, supplierAccount, supplierFilterColumn,
+  }));
   const columns = data.meta?.columns?.master || [];
   const rows = data.rows || [];
-  biSnapshotCache.set(boardKey, { rows, columns, signature, cachedAt: Date.now() });
+  biSnapshotCache.set(cacheKey, { rows, columns, signature, cachedAt: Date.now() });
   return { rows, columns, revision };
 }
 
@@ -132,8 +166,8 @@ const chartWriteValidator = [
   body('config.aggregation').optional().isIn(AGGREGATIONS),
 ];
 
-// POST /api/bi/charts — nieuwe grafiek (eigenaar = huidige gebruiker).
-router.post('/charts', chartWriteValidator, async (req, res, next) => {
+// POST /api/bi/charts — nieuwe grafiek (eigenaar = huidige gebruiker). Suppliers: read-only.
+router.post('/charts', blockSupplierWrites, chartWriteValidator, async (req, res, next) => {
   try {
     if (validationError(req, res)) return undefined;
     const boardKey = BOARD_KEY_PATTERN.test(String(req.body.boardKey || '')) ? req.body.boardKey : 'purchase-orders';
@@ -168,8 +202,8 @@ async function loadChart(pool, id) {
   return result.recordset.length ? result.recordset[0] : null;
 }
 
-// PATCH /api/bi/charts/:id — alleen de eigenaar mag muteren.
-router.patch('/charts/:id', param('id').isInt({ min: 1 }), chartWriteValidator, async (req, res, next) => {
+// PATCH /api/bi/charts/:id — alleen de eigenaar mag muteren. Suppliers: read-only.
+router.patch('/charts/:id', blockSupplierWrites, param('id').isInt({ min: 1 }), chartWriteValidator, async (req, res, next) => {
   try {
     if (validationError(req, res)) return undefined;
     const id = Number(req.params.id);
@@ -199,8 +233,8 @@ router.patch('/charts/:id', param('id').isInt({ min: 1 }), chartWriteValidator, 
   }
 });
 
-// DELETE /api/bi/charts/:id — alleen de eigenaar mag verwijderen.
-router.delete('/charts/:id', param('id').isInt({ min: 1 }), async (req, res, next) => {
+// DELETE /api/bi/charts/:id — alleen de eigenaar mag verwijderen. Suppliers: read-only.
+router.delete('/charts/:id', blockSupplierWrites, param('id').isInt({ min: 1 }), async (req, res, next) => {
   try {
     if (validationError(req, res)) return undefined;
     const id = Number(req.params.id);
@@ -248,7 +282,7 @@ router.post('/aggregate',
       if (validationError(req, res)) return undefined;
       const boardKey = BOARD_KEY_PATTERN.test(String(req.body.boardKey || '')) ? req.body.boardKey : 'purchase-orders';
       const charts = req.body.charts.map(normalizeConfig);
-      const { rows, columns, revision } = await readBiBoard(boardKey, req.user.id);
+      const { rows, columns, revision } = await readBiBoard(boardKey, req.user);
       const output = await time('bi_aggregate', async () => aggregateCharts({ rows, columns, charts }));
       return res.json({ ...output, revision });
     } catch (err) {
@@ -262,7 +296,8 @@ router.get('/revision/:boardKey', async (req, res, next) => {
   try {
     const boardKey = String(req.params.boardKey || '').trim();
     if (!BOARD_KEY_PATTERN.test(boardKey)) return res.status(400).json({ error: 'Invalid board key' });
-    const { revision } = await dataService.getRevision({ tableKey: boardKey, userId: req.user.id });
+    const { supplierAccount } = await resolveBiScope(req.user);
+    const { revision } = await dataService.getRevision({ tableKey: boardKey, userId: req.user.id, supplierAccount });
     return res.json({ boardKey, revision });
   } catch (err) {
     return next(err);
@@ -281,8 +316,9 @@ router.get('/date-filter', async (req, res, next) => {
   }
 });
 
-// PUT /api/bi/date-filter — bewaart de gedeelde week/jaar-filterinstelling.
+// PUT /api/bi/date-filter — bewaart de gedeelde week/jaar-filterinstelling. Suppliers: read-only.
 router.put('/date-filter',
+  blockSupplierWrites,
   body('enabled').isBoolean(),
   body('isoWindow').isObject(),
   async (req, res, next) => {

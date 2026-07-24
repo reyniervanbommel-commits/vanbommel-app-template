@@ -2,8 +2,9 @@
 
 // Toegangscontrole voor de generieke Table Builder-data-API (/api/data).
 // - admin / employee: volledige toegang (lezen, muteren, admin-functies).
-// - supplier: lezen van eigen purchase-orders + read-only remarks/history/activity
-//   op eigen rijen, plus reaction-toggle op remarks (geen comments plaatsen).
+// - supplier: lezen van eigen purchase-orders + remarks/history/activity op eigen rijen,
+//   reaction-toggle op remarks en het plaatsen van eigen comments (scope-check op rijniveau
+//   gebeurt in RowRemarksService.context -> assertSupplierPurchaseOrderRow).
 const { ROLES } = require('../constants/roles');
 
 const SUPPLIER_READ_PATHS = new Set(['/purchase-orders', '/purchase-orders/columns']);
@@ -27,6 +28,10 @@ function isSupplierAllowedDataRequest(req) {
   }
 
   if (method === 'PUT' && /^\/purchase-orders\/remarks\/\d+\/reaction$/.test(rel)) return true;
+
+  // Suppliers mogen een eigen comment plaatsen op een order binnen hun scope. De
+  // rij-scope wordt server-side afgedwongen in RowRemarksService.context().
+  if (method === 'POST' && rel === '/purchase-orders/remarks') return true;
 
   return false;
 }
