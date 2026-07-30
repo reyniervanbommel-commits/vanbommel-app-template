@@ -54,6 +54,18 @@ export const devTestItems = [
     ],
   },
   {
+    id: 'rccp-chart-stacked-bars-v1-43-0',
+    title: 'RCCP grafiek: gestapelde balken + overload-kleur + waarschuwingslijn (v1.43.0)',
+    checks: [
+      'Balken in de RCCP-grafiek zijn gestapeld (meerdere bar-measures staan op elkaar)',
+      'Periodes waarbij de totale load de capaciteit overschrijdt worden rood weergegeven',
+      'Een oranje gestippelde lijn toont de waarschuwingsdrempel (standaard 80% van capaciteit)',
+      'De groene capaciteitslijn blijft zichtbaar als bovengrens',
+      'De "Warning threshold"-rij verschijnt NIET in de matrixtabel eronder, alleen in de grafiek',
+      'De legenda toont "Warning threshold" met oranje kleur en schakelaar',
+    ],
+  },
+  {
     id: 'instant-paginanavigatie-v1-41-0',
     title: 'Instant paginanavigatie (keep-alive + versheidscheck) (v1.41.0)',
     checks: [
