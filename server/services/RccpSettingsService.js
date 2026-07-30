@@ -17,6 +17,9 @@ const CAPACITY_MEASURE_KEY = '__capacity__';
 // Synthetische measure-sleutel voor de "overcapaciteit"-regel (capaciteit min de openstaande
 // measure). Geen tb_columns-kolom; alleen een afgeleide matrix/chart-regel.
 const OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
+// Synthetische measure-sleutel voor de waarschuwingsdrempel (greenMax % van capaciteit).
+// Getoond als gestippelde lijn in de grafiek; niet zichtbaar in de matrix.
+const WARNING_MEASURE_KEY = '__warning__';
 
 function defaultQuantityMeasures() {
   return [{
@@ -220,6 +223,7 @@ module.exports = {
   CONFIG_KEY,
   CAPACITY_MEASURE_KEY,
   OVERCAPACITY_MEASURE_KEY,
+  WARNING_MEASURE_KEY,
   defaultConfig,
   normalizeQuantityMeasures,
   normalizeChartWeekRanges,
