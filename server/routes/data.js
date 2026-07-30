@@ -156,22 +156,10 @@ router.get('/:tableKey/revision', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
+// GET /api/data/:tableKey — lezen.
 router.get('/:tableKey', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    const autoRefresh = req.query.autoRefresh === '1' || req.query.autoRefresh === 'true';
-    const canRefresh = req.user?.role === ROLES.ADMIN;
-    let refreshed = false;
-    let refreshError = null;
-    if (autoRefresh && canRefresh && (await dataService.isStale(tableKey))) {
-      try {
-        await dataService.refresh(tableKey);
-        refreshed = true;
-      } catch (refreshErr) {
-        refreshError = 'Refresh failed';
-      }
-    }
     // Suppliers zien uitsluitend hun eigen orders: geef het leveranciersaccount + de
     // admin-gekozen filterkolom door zodat de read de rijen filtert. Staff geeft null door.
     const isSupplier = req.user?.role === ROLES.SUPPLIER;
@@ -186,7 +174,7 @@ router.get('/:tableKey', async (req, res, next) => {
     const data = await dataService.read({
       tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails,
     });
-    return res.json({ ...data, refreshed, refreshError });
+    return res.json(data);
   } catch (err) {
     return next(err);
   }

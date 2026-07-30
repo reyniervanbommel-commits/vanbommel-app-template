@@ -2,6 +2,7 @@
 
 const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
+const { readBoardSnapshot } = require('./BoardSnapshotCache');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
 const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY } = require('./RccpSettingsService');
@@ -317,12 +318,12 @@ async function analyze({
     toWeek: Number(toWeek),
   };
 
-  const poData = await time('rccp_po_read', () => tableDataService.read({
+  const { rows: poRows } = await time('rccp_po_read', () => readBoardSnapshot({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
 
-  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poData.rows || [], config, window);
+  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poRows, config, window);
 
   const capacityRows = await time('rccp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,
@@ -423,10 +424,10 @@ async function getDrillDown(params) {
     toYear: Number(params.toYear),
     toWeek: Number(params.toWeek),
   };
-  const poData = await tableDataService.read({
+  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readBoardSnapshot({
     tableKey: PO_TABLE_KEY,
     supplierAccount: params.supplierAccount || null,
-  });
+  }));
   const cell = {
     vendorAccount: params.vendorAccount,
     periodYear: Number(params.periodYear),
@@ -435,7 +436,7 @@ async function getDrillDown(params) {
   };
   return {
     cell,
-    rows: buildDrillDownRows(poData.rows || [], config, cell, window),
+    rows: buildDrillDownRows(poRows, config, cell, window),
   };
 }
 

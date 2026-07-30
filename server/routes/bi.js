@@ -9,6 +9,7 @@ const sql = require('mssql');
 const { body, param, validationResult } = require('express-validator');
 const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
+const { readBoardSnapshot } = require('../services/BoardSnapshotCache');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
 const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS, resolveMeasures } = require('../utils/biAggregate');
@@ -41,44 +42,6 @@ function normalizeBiDateFilter(raw) {
       toWeek: clampInt(win.toWeek, 1, 53, 53),
     },
   };
-}
-
-// --- Board-snapshotcache (punt 3+4): deelt één zware read() over alle aggregates -----------------
-// De rijen komen uit tb_cache (cache-is-leidend) en veranderen alleen bij een sync/refresh,
-// exclusions, custom values of kolomwijzigingen. We cachen { rows, columns } per board en
-// hergebruiken die zolang de content-signatuur gelijk is (los van user- en app-instellingen).
-// Zo kost een vendor-/weekfilterwijziging alleen nog de goedkope JS-aggregatie, geen board-read.
-const BI_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const biSnapshotCache = new Map();
-
-// Alleen content-bepalende delen; user-/settings-delen (bv. de gedeelde weekfilter) laten de
-// rijen ongemoeid en horen dus niet in de signatuur.
-function contentSignature(parts = {}) {
-  return JSON.stringify({
-    syncedAt: parts.syncedAt ?? null,
-    maxContentChangedAt: parts.maxContentChangedAt ?? null,
-    maxFirstSeenAt: parts.maxFirstSeenAt ?? null,
-    maxCustomValueAt: parts.maxCustomValueAt ?? null,
-    maxLedgerAt: parts.maxLedgerAt ?? null,
-    maxColumnsAt: parts.maxColumnsAt ?? null,
-    exclusionCount: parts.exclusionCount ?? 0,
-    maxExclusionAt: parts.maxExclusionAt ?? null,
-  });
-}
-
-// Leest het board voor BI met snapshot-hergebruik. Geeft { rows, columns, revision } terug.
-async function readBiBoard(boardKey, userId) {
-  const { revision, parts } = await time('bi_revision', () => dataService.getRevision({ tableKey: boardKey, userId }));
-  const signature = contentSignature(parts);
-  const cached = biSnapshotCache.get(boardKey);
-  if (cached && cached.signature === signature && (Date.now() - cached.cachedAt) < BI_SNAPSHOT_TTL_MS) {
-    return { rows: cached.rows, columns: cached.columns, revision };
-  }
-  const data = await time('bi_board_read', () => dataService.read({ tableKey: boardKey, userId }));
-  const columns = data.meta?.columns?.master || [];
-  const rows = data.rows || [];
-  biSnapshotCache.set(boardKey, { rows, columns, signature, cachedAt: Date.now() });
-  return { rows, columns, revision };
 }
 
 function validationError(req, res) {
@@ -248,7 +211,7 @@ router.post('/aggregate',
       if (validationError(req, res)) return undefined;
       const boardKey = BOARD_KEY_PATTERN.test(String(req.body.boardKey || '')) ? req.body.boardKey : 'purchase-orders';
       const charts = req.body.charts.map(normalizeConfig);
-      const { rows, columns, revision } = await readBiBoard(boardKey, req.user.id);
+      const { rows, columns, revision } = await readBoardSnapshot({ tableKey: boardKey, userId: req.user.id });
       const output = await time('bi_aggregate', async () => aggregateCharts({ rows, columns, charts }));
       return res.json({ ...output, revision });
     } catch (err) {
