@@ -63,6 +63,10 @@ function defaultConfig() {
     vendorColumnKey: 'vendorAccount',
     quantityMeasures: defaultQuantityMeasures(),
     openMeasureKey: '',
+    deliveredMeasureKey: '',
+    remainingMeasureKey: '',
+    showCapacityLine: true,
+    showWarningLine: true,
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     thresholds: { greenMax: 80, orangeMax: 100 },
@@ -132,6 +136,19 @@ function validateConfig(raw) {
     ? openMeasureKeyRaw
     : '';
 
+  // Delivered measure: waarden worden negatief getoond (onder de x-as).
+  const deliveredMeasureKeyRaw = String(raw.deliveredMeasureKey ?? '').trim();
+  const deliveredMeasureKey = quantityMeasures.some((m) => m.columnKey === deliveredMeasureKeyRaw)
+    ? deliveredMeasureKeyRaw : '';
+
+  // Remaining measure: getoond als positieve balk (boven de x-as), aparte kleur.
+  const remainingMeasureKeyRaw = String(raw.remainingMeasureKey ?? '').trim();
+  const remainingMeasureKey = quantityMeasures.some((m) => m.columnKey === remainingMeasureKeyRaw)
+    ? remainingMeasureKeyRaw : '';
+
+  const showCapacityLine = raw.showCapacityLine !== false;
+  const showWarningLine = raw.showWarningLine !== false;
+
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
@@ -158,6 +175,10 @@ function validateConfig(raw) {
       vendorColumnKey,
       quantityMeasures,
       openMeasureKey,
+      deliveredMeasureKey,
+      remainingMeasureKey,
+      showCapacityLine,
+      showWarningLine,
       chartWeekRanges,
       excludedStatuses,
       thresholds: { greenMax, orangeMax },

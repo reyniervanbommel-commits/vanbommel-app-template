@@ -170,6 +170,7 @@ function buildMatrixCells({
 }) {
   const measures = config.quantityMeasures || [];
   const openMeasureKey = config.openMeasureKey || '';
+  const deliveredMeasureKey = config.deliveredMeasureKey || '';
   const capacityTotals = sumCapacityByVendorWeek(capacityRows, vendorFilter);
   const periods = buildWeekRange(window.fromYear, window.fromWeek, window.toYear, window.toWeek);
   const cells = [];
@@ -266,13 +267,14 @@ function buildMatrixCells({
       color: m.color,
       showInChart: m.showInChart !== false,
       isCapacity: false,
+      isDelivered: Boolean(deliveredMeasureKey && m.columnKey === deliveredMeasureKey),
     })),
     {
       measureKey: CAPACITY_MEASURE_KEY,
       label: 'Available capacity',
       chartType: 'line',
       color: '#107C10',
-      showInChart: true,
+      showInChart: config.showCapacityLine !== false,
       isCapacity: true,
     },
     ...(openMeasureKey ? [{
@@ -289,7 +291,7 @@ function buildMatrixCells({
       label: 'Warning threshold',
       chartType: 'line',
       color: '#FF8C00',
-      showInChart: true,
+      showInChart: config.showWarningLine !== false,
       isCapacity: false,
       isWarning: true,
       isDashed: true,
@@ -312,9 +314,9 @@ function buildKpis(cells, measures) {
 }
 
 function buildChartSeries(cells, periods, measureRows) {
-  // Sleutels van gebruikersmeasures (geen afgeleiden) voor de overload-berekening.
+  // Open/remaining measures (niet delivered, niet afgeleid) voor de overload-berekening.
   const userLoadKeys = measureRows
-    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning)
+    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered)
     .map((r) => r.measureKey);
 
   return periods.map(({ year, week, key }) => {
@@ -329,10 +331,17 @@ function buildChartSeries(cells, periods, measureRows) {
       );
     }
 
-    // Overload vlag: som van alle user-measures overschrijdt beschikbare capaciteit.
+    // Overload vlag: open/remaining load overschrijdt beschikbare capaciteit.
     const capacityQty = point[CAPACITY_MEASURE_KEY] || 0;
     const totalLoad = userLoadKeys.reduce((s, k) => s + (point[k] || 0), 0);
     point.__overloaded__ = capacityQty > 0 && totalLoad > capacityQty;
+
+    // Delivered waarden worden negatief gespiegeld (weergave onder de x-as).
+    for (const row of measureRows) {
+      if (row.isDelivered && point[row.measureKey] > 0) {
+        point[row.measureKey] = -point[row.measureKey];
+      }
+    }
 
     return point;
   });

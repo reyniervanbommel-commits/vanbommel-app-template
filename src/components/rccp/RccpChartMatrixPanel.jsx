@@ -132,7 +132,7 @@ function RccpChartMatrixPanel({
                     dataKey={row.measureKey}
                     name={row.label}
                     fill={row.color}
-                    stackId="rccp_load"
+                    stackId={row.isDelivered ? 'rccp_delivered' : 'rccp_load'}
                     barSize={compact ? 10 : 14}
                   >
                     {(chart || []).map((point, index) => (
