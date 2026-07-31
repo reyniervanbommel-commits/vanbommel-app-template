@@ -1918,11 +1918,12 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
     }
   }
   if (refreshFailures.length) {
-    throw Object.assign(
-      new Error(`Lookup target tables were not fully refreshed (${refreshFailures.join('; ')})`),
-      { status: 502 }
-    );
+    logger.warn('Lookup-doeltabellen konden niet volledig ververst worden; PO-data is opgeslagen', {
+      tableKey: table.key,
+      failures: refreshFailures,
+    });
   }
+  return refreshFailures;
 }
 
 async function refresh(tableKey, options = {}) {
@@ -2211,7 +2212,7 @@ async function refresh(tableKey, options = {}) {
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
 
-    await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
+    const lookupWarnings = await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
     updateRefreshProgress(tableKey, {
@@ -2230,6 +2231,7 @@ async function refresh(tableKey, options = {}) {
       retentionFetchTruncated,
       finishedAt: new Date().toISOString(),
       error: null,
+      lookupWarnings: lookupWarnings ?? [],
     });
     try {
       const pruned = await pruneChangeLedger(pool, table.id);
@@ -2238,7 +2240,12 @@ async function refresh(tableKey, options = {}) {
       logger.warn('Change-ledger opschonen mislukt; refresh is verder klaar', { tableKey, error: pruneErr.message });
     }
 
-    return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+    return {
+      orders: records.length,
+      truncated: Boolean(truncated),
+      syncedAt: refreshStart.toISOString(),
+      lookupWarnings: lookupWarnings ?? [],
+    };
   } catch (err) {
     updateRefreshProgress(tableKey, {
       status: 'error',
