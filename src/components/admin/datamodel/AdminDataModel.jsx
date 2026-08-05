@@ -89,7 +89,6 @@ export default function AdminDataModel() {
               filterCatalog={selectedModel.filterCatalog}
               syncFilter={selectedModel.syncFilter}
               cache={selectedModel.cache}
-              onSyncNow={selectedModel.syncNow}
               onReimportBaseline={selectedModel.reimportBaseline}
               baselineBusy={selectedModel.togglingKey === 'baseline-import'}
             />
