@@ -217,12 +217,13 @@ router.get('/analytics/page-usage', async (req, res, next) => {
 
 router.get('/analytics/sessions', async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
     const request = pool.request();
     let where = "activity_type = 'login'";
     if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
     if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    if (userId) { where += ' AND user_id = @userId'; request.input('userId', sql.Int, parseInt(userId)); }
     const result = await request.query(`
       SELECT COUNT(*) as total_sessions,
              AVG(CAST(session_duration_seconds AS FLOAT)) as avg_duration_seconds,
@@ -235,12 +236,13 @@ router.get('/analytics/sessions', async (req, res, next) => {
 
 router.get('/analytics/login-stats', async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
     const request = pool.request();
     let where = "action = 'LOGIN'";
     if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
     if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    if (userId) { where += ' AND user_id = @userId'; request.input('userId', sql.Int, parseInt(userId)); }
     const result = await request.query(`
       SELECT CAST(created_at AS DATE) as date, COUNT(*) as count
       FROM dbo.audit_log WHERE ${where}
@@ -251,12 +253,13 @@ router.get('/analytics/login-stats', async (req, res, next) => {
 
 router.get('/analytics/user-login-stats', async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
     const request = pool.request();
     let where = "action = 'LOGIN'";
     if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
     if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    if (userId) { where += ' AND user_id = @userId'; request.input('userId', sql.Int, parseInt(userId)); }
     const result = await request.query(`
       SELECT user_email, COUNT(*) as login_count
       FROM dbo.audit_log WHERE ${where}
@@ -267,12 +270,13 @@ router.get('/analytics/user-login-stats', async (req, res, next) => {
 
 router.get('/analytics/click-stats', async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
     const request = pool.request();
     let where = "activity_type = 'click'";
     if (startDate) { where += ' AND created_at >= @startDate'; request.input('startDate', sql.DateTime2, new Date(startDate)); }
     if (endDate) { where += ' AND created_at <= @endDate'; request.input('endDate', sql.DateTime2, new Date(endDate + 'T23:59:59')); }
+    if (userId) { where += ' AND user_id = @userId'; request.input('userId', sql.Int, parseInt(userId)); }
     const result = await request.query(`
       SELECT page_name, element_type, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users
       FROM dbo.user_activity WHERE ${where}
