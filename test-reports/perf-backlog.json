@@ -22,7 +22,9 @@
       "targetLongFrameMs": 766,
       "routeFrequencyWeight": 3,
       "priorityScore": 984,
-      "status": "open"
+      "status": "open",
+      "attemptedTiers": ["L1"],
+      "note": "L1 render-fix: rAF-gate op scroll-listener in useBoardRowWindow.js (voorkomt >1x setRange per animation frame bij snel wheel-scrollen), plus measure('board:window-update') instrumentatie. Verify pending."
     },
     {
       "id": "BL-006",
