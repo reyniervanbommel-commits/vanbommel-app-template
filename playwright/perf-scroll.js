@@ -60,11 +60,21 @@ async function login(page) {
   await page.getByRole('button', { name: /^(Sign in|Log in)$/i }).click();
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 45000 });
 
+  await goToAllOrders(page);
+  return { ok: true };
+}
+
+// "Master plan purchase orders" lands on the D365F&O integration-status tab by default;
+// the actual scrollable board is under the "All orders" tab. A full page reload (each
+// scroll run does one) drops back to that default tab, so this must run after every goto.
+async function goToAllOrders(page) {
   const poNav = page.getByRole('button', { name: /Master plan purchase orders|Purchase orders/i });
   if ((await poNav.count()) > 0) await poNav.first().click({ timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const allOrdersTab = page.getByRole('button', { name: 'All orders', exact: false });
+  if ((await allOrdersTab.count()) > 0) await allOrdersTab.first().click({ timeout: 30000 }).catch(() => {});
   await waitForBoard(page);
   await page.waitForTimeout(1200);
-  return { ok: true };
 }
 
 async function waitForBoard(page) {
@@ -340,7 +350,7 @@ async function main() {
   for (let r = 0; r < RUNS; r += 1) {
     process.stdout.write(`Scroll run ${r + 1}/${RUNS}…\n`);
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await waitForBoard(page);
+    await goToAllOrders(page);
     const sample = await runScrollSample(page);
     if (sample.error) {
       console.warn(sample.error);
