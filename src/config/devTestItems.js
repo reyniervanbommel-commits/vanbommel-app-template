@@ -64,6 +64,16 @@ export const devTestItems = [
       'Een leverancier krijgt geen BI-pagina te zien (rol-respect blijft intact)',
     ],
   },
+  {
+    id: 'test-coverage-security-core-v1-33-0',
+    title: 'Vitest-testdekking security-kern (auth, sessies, PO-board hooks) (v1.33.0)',
+    checks: [
+      'Inloggen, uitloggen, wachtwoord vergeten/resetten en account-vergrendeling na 3 mislukte pogingen werken zoals voorheen (geen gedragswijziging, alleen nieuwe tests)',
+      'Supplier-gebruikers zien nog steeds alleen hun eigen inkooporders op het bord en in RCCP',
+      'PO-board: groeperen, bulk-bewerken van geselecteerde orders, en de Excel-koppeling-wizard (Admin > Data model) werken ongewijzigd',
+      'Admin > Data model: kolom-toggles (zichtbaarheid/writeback/RCCP-measure) en bulk-toggle werken ongewijzigd',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
