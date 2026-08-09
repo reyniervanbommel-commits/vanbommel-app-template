@@ -6,7 +6,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: [],
+    setupFiles: ['./src/test-utils/setupTests.js'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+    },
     exclude: [
       '**/node_modules/**',
       '**/.worktrees/**',

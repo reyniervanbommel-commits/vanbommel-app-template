@@ -1,0 +1,235 @@
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { useDataModelAdmin } from './useDataModelAdmin';
+import { apiRequest } from '../utils/api';
+
+vi.mock('../utils/api', () => ({ apiRequest: vi.fn() }));
+
+const DATAMODEL_PATH = '/data/purchase-orders/datamodel';
+
+function columnFixture(overrides = {}) {
+  return {
+    id: 1,
+    key: 'poNumber',
+    label: 'PO Number',
+    level: 'header',
+    dataType: 'string',
+    source: 'd365',
+    sourceField: 'PurchaseOrderNumber',
+    isActive: true,
+    writable: false,
+    rccpMeasure: false,
+    visibleAtDelete: false,
+    ...overrides,
+  };
+}
+
+function datamodelPayload(overrides = {}) {
+  return {
+    entities: [],
+    relation: null,
+    columns: { header: [columnFixture()], line: [] },
+    cache: null,
+    ...overrides,
+  };
+}
+
+async function renderReady(payload = datamodelPayload()) {
+  apiRequest.mockResolvedValueOnce(payload);
+  const view = renderHook(() => useDataModelAdmin('purchase-orders'));
+  await waitFor(() => expect(view.result.current.loading).toBe(false));
+  apiRequest.mockClear();
+  return view;
+}
+
+beforeEach(() => {
+  apiRequest.mockReset();
+});
+
+describe('useDataModelAdmin — laden', () => {
+  it('laadt het datamodel bij mount en mapt de kolommen', async () => {
+    const { result } = await renderReady();
+
+    expect(result.current.columns.header[0]).toMatchObject({
+      key: 'poNumber',
+      writeBackAllowed: true,
+      hideAllowed: true,
+      rccpMeasureAllowed: false,
+    });
+    expect(result.current.error).toBe('');
+  });
+
+  it('zet een foutmelding als het laden mislukt', async () => {
+    apiRequest.mockRejectedValue(new Error('datamodel unavailable'));
+    const { result } = renderHook(() => useDataModelAdmin('purchase-orders'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('datamodel unavailable');
+  });
+});
+
+describe('useDataModelAdmin — losse kolom-toggles', () => {
+  it('toggleVisibility PATCHt de zichtbaarheid en vervangt de kolom in de state', async () => {
+    const { result } = await renderReady();
+    apiRequest.mockResolvedValue({ column: columnFixture({ isActive: false }) });
+
+    await act(async () => { await result.current.toggleVisibility(result.current.columns.header[0]); });
+
+    expect(apiRequest).toHaveBeenCalledWith(`${DATAMODEL_PATH.replace('/datamodel', '')}/columns/1/visibility`, {
+      method: 'PATCH',
+      body: { visible: false },
+    });
+    expect(result.current.columns.header[0].isActive).toBe(false);
+    expect(result.current.togglingKey).toBeNull();
+  });
+
+  it('toggleWriteback PATCHt naar het writeback-endpoint met het omgekeerde writable-gedrag', async () => {
+    const { result } = await renderReady();
+    apiRequest.mockResolvedValue({ column: columnFixture({ writable: true }) });
+
+    await act(async () => { await result.current.toggleWriteback(result.current.columns.header[0]); });
+
+    expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/columns/1/writeback', {
+      method: 'PATCH',
+      body: { writable: true, mechanism: 'patch' },
+    });
+    expect(result.current.columns.header[0].writableToD365).toBe(true);
+  });
+
+  it('zet een foutmelding en reset togglingKey als een toggle mislukt', async () => {
+    const { result } = await renderReady();
+    apiRequest.mockRejectedValue(new Error('forbidden'));
+
+    await act(async () => { await result.current.toggleVisibility(result.current.columns.header[0]); });
+
+    expect(result.current.error).toBe('forbidden');
+    expect(result.current.togglingKey).toBeNull();
+  });
+
+  it('deleteColumn verwijdert alleen custom kolommen — d365-kolommen worden genegeerd', async () => {
+    const { result } = await renderReady();
+
+    await act(async () => { await result.current.deleteColumn(result.current.columns.header[0]); });
+
+    expect(apiRequest).not.toHaveBeenCalled(); // source is 'd365', geen custom kolom
+  });
+
+  it('deleteColumn verwijdert een custom kolom uit de state na succesvolle DELETE', async () => {
+    const payload = datamodelPayload({ columns: { header: [columnFixture({ id: 2, source: 'custom' })], line: [] } });
+    const { result } = await renderReady(payload);
+    apiRequest.mockResolvedValue({});
+
+    await act(async () => { await result.current.deleteColumn(result.current.columns.header[0]); });
+
+    expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/columns/2', { method: 'DELETE' });
+    expect(result.current.columns.header).toHaveLength(0);
+  });
+});
+
+describe('useDataModelAdmin — bulk-toggle (setColumnToggleState)', () => {
+  it('PATCHt alleen kolommen die daadwerkelijk van state veranderen (idempotent)', async () => {
+    const payload = datamodelPayload({
+      columns: {
+        header: [
+          columnFixture({ id: 1, isActive: false }), // gaat aan → eligible
+          columnFixture({ id: 2, isActive: true }), // al aan → niet eligible
+        ],
+        line: [],
+      },
+    });
+    const { result } = await renderReady(payload);
+    apiRequest.mockResolvedValue({ column: columnFixture({ id: 1, isActive: true }) });
+
+    await act(async () => {
+      await result.current.setColumnToggleState({
+        columns: result.current.columns.header,
+        toggleType: 'visibility',
+        enabled: true,
+      });
+    });
+
+    expect(apiRequest).toHaveBeenCalledTimes(1);
+    expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/columns/1/visibility', {
+      method: 'PATCH',
+      body: { visible: true },
+    });
+  });
+
+  it('verwerkt gedeeltelijke fouten: succesvolle kolommen worden bijgewerkt, gefaalde tellen mee in de foutmelding', async () => {
+    const payload = datamodelPayload({
+      columns: {
+        header: [
+          columnFixture({ id: 1, isActive: false }),
+          columnFixture({ id: 2, isActive: false }),
+        ],
+        line: [],
+      },
+    });
+    const { result } = await renderReady(payload);
+    apiRequest
+      .mockResolvedValueOnce({ column: columnFixture({ id: 1, isActive: true }) })
+      .mockRejectedValueOnce(new Error('locked'));
+
+    await act(async () => {
+      await result.current.setColumnToggleState({
+        columns: result.current.columns.header,
+        toggleType: 'visibility',
+        enabled: true,
+      });
+    });
+
+    expect(result.current.columns.header.find((c) => c.id === 1).isActive).toBe(true);
+    expect(result.current.columns.header.find((c) => c.id === 2).isActive).toBe(false);
+    expect(result.current.error).toContain('Bulk update failed for 1 column');
+    expect(result.current.error).toContain('locked');
+  });
+
+  it('doet niets als geen enkele kolom eligible is', async () => {
+    const { result } = await renderReady();
+
+    await act(async () => {
+      await result.current.setColumnToggleState({
+        columns: result.current.columns.header, // al isActive:true, enabled:true → niet eligible
+        toggleType: 'visibility',
+        enabled: true,
+      });
+    });
+
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('useDataModelAdmin — sync/refresh-acties', () => {
+  it('syncNow triggert een refresh en herlaadt het datamodel', async () => {
+    const { result } = await renderReady();
+    apiRequest.mockResolvedValueOnce({}).mockResolvedValueOnce(datamodelPayload());
+
+    await act(async () => { await result.current.syncNow(); });
+
+    expect(apiRequest).toHaveBeenNthCalledWith(1, '/data/purchase-orders/refresh', { method: 'POST' });
+    expect(apiRequest).toHaveBeenNthCalledWith(2, DATAMODEL_PATH);
+  });
+
+  it('reimportBaseline stuurt baseline:true mee zodat wijzigingen niet als nieuw gelogd worden', async () => {
+    const { result } = await renderReady();
+    apiRequest.mockResolvedValueOnce({}).mockResolvedValueOnce(datamodelPayload());
+
+    await act(async () => { await result.current.reimportBaseline(); });
+
+    expect(apiRequest).toHaveBeenNthCalledWith(1, '/data/purchase-orders/refresh', {
+      method: 'POST',
+      body: { baseline: true },
+    });
+  });
+
+  it('discoverFields haalt nieuwe velden op en voegt discovery toe aan de state', async () => {
+    const { result } = await renderReady();
+    apiRequest
+      .mockResolvedValueOnce({ discovered: ['newField'] })
+      .mockResolvedValueOnce(datamodelPayload());
+
+    await act(async () => { await result.current.discoverFields(); });
+
+    expect(result.current.discovery).toEqual({ discovered: ['newField'] });
+  });
+});
