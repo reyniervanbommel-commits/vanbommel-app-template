@@ -164,15 +164,13 @@ export function usePurchaseOrdersPage() {
     setCachedBoard(data, revision);
   }, [resetLines]);
 
-  const loadPurchaseOrders = useCallback(async ({ skipLoading = false, autoRefresh = false } = {}) => {
+  const loadPurchaseOrders = useCallback(async ({ skipLoading = false } = {}) => {
     if (!skipLoading) {
       setLoading(true);
     }
     setError('');
     try {
-      const base = boardBase();
-      const endpoint = autoRefresh ? `${base}?autoRefresh=1` : base;
-      const raw = await apiRequest(endpoint);
+      const raw = await apiRequest(boardBase());
       const data = BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw;
       applyData(data);
       return data;
@@ -261,7 +259,7 @@ export function usePurchaseOrdersPage() {
         }
         if (!active) return;
       }
-      await loadPurchaseOrders({ skipLoading: hasCachedData, autoRefresh: false });
+      await loadPurchaseOrders({ skipLoading: hasCachedData });
     };
     bootstrap();
     loadBoardSettings();
@@ -279,7 +277,7 @@ export function usePurchaseOrdersPage() {
     if (!rev) return;
     const currentRevision = getCachedBoard()?.revision ?? null;
     if (currentRevision && rev !== currentRevision) {
-      loadPurchaseOrders({ skipLoading: true, autoRefresh: false });
+      loadPurchaseOrders({ skipLoading: true });
     }
   }, [loadPurchaseOrders]);
   useBoardRevisionGate({ active: pageActive, onRevision: handleRevisionOnReturn });
@@ -308,7 +306,7 @@ export function usePurchaseOrdersPage() {
 
   const reloadAfterRefresh = useCallback(async () => {
     try {
-      await loadPurchaseOrders({ skipLoading: true, autoRefresh: false });
+      await loadPurchaseOrders({ skipLoading: true });
     } catch (err) {
       setError(err.message);
     } finally {
