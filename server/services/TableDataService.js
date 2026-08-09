@@ -1918,11 +1918,12 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
     }
   }
   if (refreshFailures.length) {
-    throw Object.assign(
-      new Error(`Lookup target tables were not fully refreshed (${refreshFailures.join('; ')})`),
-      { status: 502 }
-    );
+    logger.warn('Lookup-doeltabellen konden niet volledig ververst worden; PO-data is opgeslagen', {
+      tableKey: table.key,
+      failures: refreshFailures,
+    });
   }
+  return refreshFailures;
 }
 
 async function refresh(tableKey, options = {}) {
@@ -2211,7 +2212,7 @@ async function refresh(tableKey, options = {}) {
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
 
-    await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
+    const lookupWarnings = await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
     updateRefreshProgress(tableKey, {
@@ -2230,6 +2231,7 @@ async function refresh(tableKey, options = {}) {
       retentionFetchTruncated,
       finishedAt: new Date().toISOString(),
       error: null,
+      lookupWarnings: lookupWarnings ?? [],
     });
     try {
       const pruned = await pruneChangeLedger(pool, table.id);
@@ -2238,7 +2240,12 @@ async function refresh(tableKey, options = {}) {
       logger.warn('Change-ledger opschonen mislukt; refresh is verder klaar', { tableKey, error: pruneErr.message });
     }
 
-    return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+    return {
+      orders: records.length,
+      truncated: Boolean(truncated),
+      syncedAt: refreshStart.toISOString(),
+      lookupWarnings: lookupWarnings ?? [],
+    };
   } catch (err) {
     updateRefreshProgress(tableKey, {
       status: 'error',
@@ -2388,11 +2395,20 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   for (const r of cacheRes.recordset) {
     const parsed = parseJson(r.data_json);
     const lookupSource = enrichLookupSourceFromCacheRow(lk.targetTableKey, r.record_key, parsed);
-    const mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
+    let mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
       ...lk,
       partitionless,
       sourceFieldKey: resolvedSourceField,
     });
+    // Fallback: data_json mist het FK-veld (bijv. itemNumber niet in items masterSource opgenomen).
+    // record_key IS de natuurlijke sleutel van de doelentiteit en heeft dezelfde waarde als het
+    // FK-veld op de bronkant (bijv. PO-regelkolom 'itemNumber' = ItemNumber = record_key van items).
+    // Alleen toepassen als het veld écht ontbreekt, anders wordt een al-gebouwde key overschreven.
+    if (!mapKey && r.record_key) {
+      mapKey = partitionless
+        ? String(r.record_key).trim()
+        : `${String(r.partition_key || '').toLowerCase()}|${String(r.record_key).trim()}`;
+    }
     if (mapKey) byKey.set(mapKey, parsed);
   }
 
@@ -4827,6 +4843,7 @@ module.exports = {
   read,
   listVendorValues,
   readRowDetails,
+  loadLookupEnrichment,
   buildDetailRollup,
   detailMatchesItemsFilter,
   buildItemFilterKey,

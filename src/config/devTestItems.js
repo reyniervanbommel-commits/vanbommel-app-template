@@ -54,6 +54,18 @@ export const devTestItems = [
     ],
   },
   {
+    id: 'rccp-chart-stacked-bars-v1-43-0',
+    title: 'RCCP grafiek: gestapelde balken + overload-kleur + waarschuwingslijn (v1.43.0)',
+    checks: [
+      'Balken in de RCCP-grafiek zijn gestapeld (meerdere bar-measures staan op elkaar)',
+      'Periodes waarbij de totale load de capaciteit overschrijdt worden rood weergegeven',
+      'Een oranje gestippelde lijn toont de waarschuwingsdrempel (standaard 80% van capaciteit)',
+      'De groene capaciteitslijn blijft zichtbaar als bovengrens',
+      'De "Warning threshold"-rij verschijnt NIET in de matrixtabel eronder, alleen in de grafiek',
+      'De legenda toont "Warning threshold" met oranje kleur en schakelaar',
+    ],
+  },
+  {
     id: 'instant-paginanavigatie-v1-41-0',
     title: 'Instant paginanavigatie (keep-alive + versheidscheck) (v1.41.0)',
     checks: [
@@ -62,6 +74,20 @@ export const devTestItems = [
       'RCCP: de gekozen vendor + week komen na wegnavigeren en terugkeren terug, en blijven ook na een harde refresh bewaard',
       'Na een celwijziging op de PO-pagina worden RCCP en BI bij terugkeer ververst; zonder wijziging gebeurt er niets',
       'Een leverancier krijgt geen BI-pagina te zien (rol-respect blijft intact)',
+    ],
+  },
+  {
+    id: 'rccp-chart-stacked-bars-v1-47-0',
+    title: 'RCCP divergerende balken + items lookup fix + label fixes (v1.47.0)',
+    checks: [
+      'RCCP-grafiek toont geleverde aantallen als negatieve balken onder de X-as en openstaande aantallen als positieve balken erboven',
+      'Instellingen > RCCP: twee toggles (Capaciteitslijn aan/uit en Waarschuwingslijn aan/uit) werken correct',
+      'Instellingen > RCCP: velden om "Open PO", "Geleverd PO" en "Resterend PO" measure te kiezen zijn beschikbaar',
+      'Data Model tabblad heet nu "Items" (niet meer "Itemen")',
+      'Artikelkolommen op PO-orderregels tonen echte data: Artikelnaam (Artikelen) en Artikelgroep (Artikelen) zijn gevuld',
+      'Na een D365F&O refresh zijn de artikelgegevens zichtbaar op uitgeklapte inkooporderregels',
+      'De laadindicator (spinner) voor PO-regels staat links in beeld bij horizontaal scrollen',
+      'Sync Now knoppen zijn verwijderd van de Data Model admin-pagina',
     ],
   },
 ];

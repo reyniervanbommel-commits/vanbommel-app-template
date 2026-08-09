@@ -58,7 +58,9 @@ function ExpandedRowContent({ rowData, tableConfig, cellActions, onMeasureExpand
               <MessageBarBody>{entry.error || 'Loading order lines failed'}</MessageBarBody>
             </MessageBar>
           ) : (
+            <div className={styles.spinnerWrapper}>
             <Spinner size="tiny" labelPosition="after" label="Loading order lines..." />
+          </div>
           )
         ) : (
           <PurchaseOrdersSubitemsTable

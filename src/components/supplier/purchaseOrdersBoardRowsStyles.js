@@ -179,4 +179,10 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
       backgroundColor: SUBITEM_CONNECTOR_COLOR,
     },
   },
+  // Sticky zodat de spinner zichtbaar blijft bij horizontaal scrollen van de tabel.
+  spinnerWrapper: {
+    position: 'sticky',
+    left: '16px',
+    display: 'inline-block',
+  },
 });
