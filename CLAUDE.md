@@ -104,6 +104,13 @@ doorloop je vóór het klaarmelden van het werk:
    grote lijsten) → escaleer naar `perf-review` (modus `regression`).
 3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
    routes, SQL via parameters. Auth/route/data-laag gewijzigd → escaleer naar `security-review`.
+4. **Testen** — nieuwe of gewijzigde pure/business-logica in `server/services/`, `server/middleware/`,
+   `server/utils/`, `src/utils/` of `src/hooks/` (de kernmappen) → verwacht een `.test.js`/`.test.jsx`
+   ernaast, co-located zoals de rest van de repo (zie bestaande tests als voorbeeld). Dunne
+   route-glue en styling-componenten zijn hiervan uitgezonderd. Geen harde CI-gate — een
+   niet-blokkerende CI-job (`test-coverage-hint`, `scripts/check-core-test-coverage.js`) signaleert
+   kernbestanden zonder test in de PR-jobsummary, zodat het niet op menselijk onthouden hoeft te
+   steunen.
 
 Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
 
