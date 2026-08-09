@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { measure } from '../utils/perf';
 
 /**
  * Viewport window for board rows.
@@ -103,27 +102,13 @@ export function useBoardRowWindow({
       setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
     };
 
-    // Native 'scroll' events can fire more than once per animation frame (fast wheel/trackpad
-    // input). Collapsing them to a single rAF-scheduled update avoids stacking multiple
-    // setRange-triggered re-renders (row mount/unmount + reconciliation) inside one task, which
-    // otherwise compounds into long blocking frames during fast scroll.
-    let rafId = null;
-    const scheduleUpdate = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        measure('board:window-update', update);
-      });
-    };
-
     update();
-    el.addEventListener('scroll', scheduleUpdate, { passive: true });
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleUpdate) : null;
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
     ro?.observe(el);
     return () => {
-      el.removeEventListener('scroll', scheduleUpdate);
+      el.removeEventListener('scroll', update);
       ro?.disconnect();
-      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [enabled, overscan, offsets, scrollRef, totalCount]);
 
