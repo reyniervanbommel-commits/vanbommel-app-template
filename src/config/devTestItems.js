@@ -76,6 +76,20 @@ export const devTestItems = [
       'Een leverancier krijgt geen BI-pagina te zien (rol-respect blijft intact)',
     ],
   },
+  {
+    id: 'rccp-chart-stacked-bars-v1-47-0',
+    title: 'RCCP divergerende balken + items lookup fix + label fixes (v1.47.0)',
+    checks: [
+      'RCCP-grafiek toont geleverde aantallen als negatieve balken onder de X-as en openstaande aantallen als positieve balken erboven',
+      'Instellingen > RCCP: twee toggles (Capaciteitslijn aan/uit en Waarschuwingslijn aan/uit) werken correct',
+      'Instellingen > RCCP: velden om "Open PO", "Geleverd PO" en "Resterend PO" measure te kiezen zijn beschikbaar',
+      'Data Model tabblad heet nu "Items" (niet meer "Itemen")',
+      'Artikelkolommen op PO-orderregels tonen echte data: Artikelnaam (Artikelen) en Artikelgroep (Artikelen) zijn gevuld',
+      'Na een D365F&O refresh zijn de artikelgegevens zichtbaar op uitgeklapte inkooporderregels',
+      'De laadindicator (spinner) voor PO-regels staat links in beeld bij horizontaal scrollen',
+      'Sync Now knoppen zijn verwijderd van de Data Model admin-pagina',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
