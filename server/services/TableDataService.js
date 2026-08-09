@@ -4834,6 +4834,7 @@ module.exports = {
   read,
   listVendorValues,
   readRowDetails,
+  loadLookupEnrichment,
   buildDetailRollup,
   detailMatchesItemsFilter,
   buildItemFilterKey,
