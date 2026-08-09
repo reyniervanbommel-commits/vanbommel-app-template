@@ -47,7 +47,7 @@
       "id": "po-scroll-jank",
       "label": "PO board scroll — max long frame",
       "journey": "J4",
-      "baselineMs": 1094,
+      "baselineMs": 2031,
       "metric": "maxLongFrameMs"
     }
   ],
@@ -89,13 +89,13 @@
       "label": "PO board vertical scroll",
       "profile": "L",
       "median": {
-        "maxLongFrameMs": 1094,
-        "scrollJankMs": 2237,
+        "maxLongFrameMs": 2031,
+        "scrollJankMs": 4415,
         "scrollStableMs": 400,
         "slowInteractionCount": 0,
-        "longframeCount": 15
+        "longframeCount": 8
       },
-      "measuredAt": "2026-08-06T11:05:32.386Z"
+      "measuredAt": "2026-08-06T12:15:21.037Z"
     }
   }
 }

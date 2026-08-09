@@ -14,17 +14,20 @@
       "journey": "J4",
       "action": "PO board vertical scroll (wheel)",
       "profile": "L",
-      "maxLongFrameMs": 1094,
-      "scrollJankMs": 2237,
+      "maxLongFrameMs": 2031,
+      "scrollJankMs": 4415,
       "scrollStableMs": 400,
       "slowInteractionCount": 0,
       "dominantPost": "render",
-      "targetLongFrameMs": 766,
+      "targetLongFrameMs": 1422,
       "routeFrequencyWeight": 3,
-      "priorityScore": 984,
+      "priorityScore": 1827,
       "status": "open",
-      "attemptedTiers": ["L1"],
-      "note": "L1 render-fix: rAF-gate op scroll-listener in useBoardRowWindow.js (voorkomt >1x setRange per animation frame bij snel wheel-scrollen), plus measure('board:window-update') instrumentatie. Verify pending."
+      "attemptedTiers": [
+        "L1"
+      ],
+      "status": "blocked-unverified",
+      "note": "L1 render-fix: rAF-gate op scroll-listener in useBoardRowWindow.js (voorkomt >1x setRange per animation frame bij snel wheel-scrollen), plus measure('board:window-update') instrumentatie. Gecommit op feature/BL-004-po-board-scroll-jank + preview gedeployed. Verify (20 runs elk): pre-fix DEV maxLongFrameMs=1681/scrollJankMs=2924/longframeCount=7 vs post-fix preview maxLongFrameMs=2031/scrollJankMs=4415/longframeCount=8 - haalt targetReductionPercent (30%) niet, geen van de metrics verbeterde. Vergelijking heeft een methodologisch mankement: pre-fix gemeten op de bestaande warme DEV-app, post-fix noodgedwongen op een nieuwe preview-Container-App (andere infra-instance) - infra-verschil niet uit te sluiten als (mede)oorzaak. Geen lokale/same-instance verificatie mogelijk deze sessie (geen lokale SQL Server bereikbaar). Fix blijft staan (correcte engineeringpraktijk, 633/633 tests groen, geen functionele regressie) maar telt niet als geverifieerde L1-winst. Vervolg: lokale same-instance meting, of L5-tuning (overscan verlagen, per-cel Fluent-wrappers uitstellen) als volgende tier op tak R."
     },
     {
       "id": "BL-006",
@@ -148,5 +151,5 @@
     }
   ],
   "boardActionsMeasuredAt": "2026-07-22T10:30:21.473Z",
-  "scrollMeasuredAt": "2026-08-06T11:05:32.401Z"
+  "scrollMeasuredAt": "2026-08-06T12:15:21.047Z"
 }
