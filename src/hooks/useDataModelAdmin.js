@@ -302,12 +302,27 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
   }, [adminBasePath, removeColumnFromState]);
 
   const syncNow = useCallback(async () => {
+    setTogglingKey('sync-now');
     setError('');
     try {
-      await apiRequest(`${adminBasePath}/refresh`, { method: 'POST' });
+      await apiRequest(`${adminBasePath}/refresh/start`, { method: 'POST' });
+      // Poll voortgang tot de sync klaar is (max. 3 minuten, elke 2 seconden).
+      const maxAttempts = 90;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const { running, progress } = await apiRequest(`${adminBasePath}/refresh/progress`);
+        if (!running) {
+          if (progress?.lookupWarnings?.length) {
+            setError(`Sync voltooid, maar sommige gekoppelde tabellen konden niet ververst worden: ${progress.lookupWarnings.join('; ')}`);
+          }
+          break;
+        }
+      }
       await reload();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setTogglingKey(null);
     }
   }, [adminBasePath, reload]);
 

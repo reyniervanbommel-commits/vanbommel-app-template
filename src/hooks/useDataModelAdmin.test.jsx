@@ -46,6 +46,13 @@ beforeEach(() => {
   apiRequest.mockReset();
 });
 
+// Vangnet: als een test met vi.useFakeTimers() faalt vóórdat hij zelf vi.useRealTimers()
+// aanroept, blijven fake timers actief en hangt renderReady()'s waitFor() in élke volgende
+// test. useRealTimers() op al-echte timers is een veilige no-op.
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('useDataModelAdmin — laden', () => {
   it('laadt het datamodel bij mount en mapt de kolommen', async () => {
     const { result } = await renderReady();
@@ -200,14 +207,66 @@ describe('useDataModelAdmin — bulk-toggle (setColumnToggleState)', () => {
 });
 
 describe('useDataModelAdmin — sync/refresh-acties', () => {
-  it('syncNow triggert een refresh en herlaadt het datamodel', async () => {
+  it('syncNow start een achtergrond-refresh, pollt tot running:false, en herlaadt dan het datamodel', async () => {
     const { result } = await renderReady();
-    apiRequest.mockResolvedValueOnce({}).mockResolvedValueOnce(datamodelPayload());
+    vi.useFakeTimers();
+    apiRequest
+      .mockResolvedValueOnce({ started: true }) // refresh/start
+      .mockResolvedValueOnce({ running: false, progress: {} }) // refresh/progress — klaar na 1 poll
+      .mockResolvedValueOnce(datamodelPayload()); // reload
 
-    await act(async () => { await result.current.syncNow(); });
+    await act(async () => {
+      const syncPromise = result.current.syncNow();
+      await vi.advanceTimersByTimeAsync(2000);
+      await syncPromise;
+    });
 
-    expect(apiRequest).toHaveBeenNthCalledWith(1, '/data/purchase-orders/refresh', { method: 'POST' });
-    expect(apiRequest).toHaveBeenNthCalledWith(2, DATAMODEL_PATH);
+    expect(apiRequest).toHaveBeenNthCalledWith(1, '/data/purchase-orders/refresh/start', { method: 'POST' });
+    expect(apiRequest).toHaveBeenNthCalledWith(2, '/data/purchase-orders/refresh/progress');
+    expect(apiRequest).toHaveBeenNthCalledWith(3, DATAMODEL_PATH);
+    expect(result.current.togglingKey).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('syncNow blijft pollen zolang running:true is, pas daarna wordt herladen', async () => {
+    const { result } = await renderReady();
+    vi.useFakeTimers();
+    apiRequest
+      .mockResolvedValueOnce({ started: true })
+      .mockResolvedValueOnce({ running: true, progress: {} }) // eerste poll: nog bezig
+      .mockResolvedValueOnce({ running: false, progress: {} }) // tweede poll: klaar
+      .mockResolvedValueOnce(datamodelPayload());
+
+    await act(async () => {
+      const syncPromise = result.current.syncNow();
+      await vi.advanceTimersByTimeAsync(4000);
+      await syncPromise;
+    });
+
+    expect(apiRequest).toHaveBeenCalledTimes(4);
+    expect(apiRequest).toHaveBeenNthCalledWith(4, DATAMODEL_PATH);
+  });
+
+  // Bekende quirk (gevonden tijdens deze test, niet in scope om hier te fixen): syncNow() roept
+  // na het zetten van de lookupWarnings-foutmelding altijd meteen reload() aan, en reload() doet
+  // zelf setError('') als allereerste statement — de warning wordt dus onmiddellijk overschreven
+  // en is voor de gebruiker nooit zichtbaar. Deze test legt het HUIDIGE (vermoedelijk onbedoelde)
+  // gedrag vast als regressiemarkering, zodat een toekomstige fix hier zichtbaar wordt.
+  it('lookupWarnings-melding wordt direct overschreven doordat reload() na afloop setError(\'\') doet', async () => {
+    const { result } = await renderReady();
+    vi.useFakeTimers();
+    apiRequest
+      .mockResolvedValueOnce({ started: true })
+      .mockResolvedValueOnce({ running: false, progress: { lookupWarnings: ['Vendors kon niet verversen'] } })
+      .mockResolvedValueOnce(datamodelPayload());
+
+    await act(async () => {
+      const syncPromise = result.current.syncNow();
+      await vi.advanceTimersByTimeAsync(2000);
+      await syncPromise;
+    });
+
+    expect(result.current.error).toBe('');
   });
 
   it('reimportBaseline stuurt baseline:true mee zodat wijzigingen niet als nieuw gelogd worden', async () => {
