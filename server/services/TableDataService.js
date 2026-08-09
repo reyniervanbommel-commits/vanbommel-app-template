@@ -2395,11 +2395,20 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   for (const r of cacheRes.recordset) {
     const parsed = parseJson(r.data_json);
     const lookupSource = enrichLookupSourceFromCacheRow(lk.targetTableKey, r.record_key, parsed);
-    const mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
+    let mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
       ...lk,
       partitionless,
       sourceFieldKey: resolvedSourceField,
     });
+    // Fallback: data_json mist het FK-veld (bijv. itemNumber niet in items masterSource opgenomen).
+    // record_key IS de natuurlijke sleutel van de doelentiteit en heeft dezelfde waarde als het
+    // FK-veld op de bronkant (bijv. PO-regelkolom 'itemNumber' = ItemNumber = record_key van items).
+    // Alleen toepassen als het veld écht ontbreekt, anders wordt een al-gebouwde key overschreven.
+    if (!mapKey && r.record_key) {
+      mapKey = partitionless
+        ? String(r.record_key).trim()
+        : `${String(r.partition_key || '').toLowerCase()}|${String(r.record_key).trim()}`;
+    }
     if (mapKey) byKey.set(mapKey, parsed);
   }
 
