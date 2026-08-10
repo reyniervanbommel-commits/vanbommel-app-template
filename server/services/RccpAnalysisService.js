@@ -2,9 +2,10 @@
 
 const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
+const { readBoardSnapshot } = require('./BoardSnapshotCache');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
-const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY } = require('./RccpSettingsService');
+const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = require('./RccpSettingsService');
 
 // Vaste kleur voor de afgeleide overcapaciteit-lijn (Fluent purple). Niet configureerbaar: het is
 // geen door de gebruiker toegevoegde measure maar een berekende regel.
@@ -169,6 +170,7 @@ function buildMatrixCells({
 }) {
   const measures = config.quantityMeasures || [];
   const openMeasureKey = config.openMeasureKey || '';
+  const deliveredMeasureKey = config.deliveredMeasureKey || '';
   const capacityTotals = sumCapacityByVendorWeek(capacityRows, vendorFilter);
   const periods = buildWeekRange(window.fromYear, window.fromWeek, window.toYear, window.toWeek);
   const cells = [];
@@ -216,6 +218,22 @@ function buildMatrixCells({
         statusLabel: 'OK',
       });
 
+      // Waarschuwingsdrempel = greenMax% van de beschikbare capaciteit; getoond als gestippelde
+      // lijn in de grafiek zodat de gebruiker de "comfortzone" snel afleest.
+      const greenMax = Number(config.thresholds?.greenMax ?? 80);
+      cells.push({
+        vendorAccount: vendor,
+        periodYear: period.year,
+        isoWeek: period.week,
+        measureKey: WARNING_MEASURE_KEY,
+        availableQty: available,
+        confirmedQty: available > 0 ? Math.round(available * greenMax / 100 * 10) / 10 : 0,
+        remainingQty: 0,
+        utilPercent: null,
+        statusColor: 'grey',
+        statusLabel: 'N/A',
+      });
+
       // Overcapaciteit = beschikbare capaciteit − de als "openstaand" gekozen measure. Negatief =
       // tekort; dat toont de matrix rood en de grafiek onder de nullijn.
       if (openMeasureKey) {
@@ -249,13 +267,14 @@ function buildMatrixCells({
       color: m.color,
       showInChart: m.showInChart !== false,
       isCapacity: false,
+      isDelivered: Boolean(deliveredMeasureKey && m.columnKey === deliveredMeasureKey),
     })),
     {
       measureKey: CAPACITY_MEASURE_KEY,
       label: 'Available capacity',
       chartType: 'line',
       color: '#107C10',
-      showInChart: true,
+      showInChart: config.showCapacityLine !== false,
       isCapacity: true,
     },
     ...(openMeasureKey ? [{
@@ -267,6 +286,16 @@ function buildMatrixCells({
       isCapacity: false,
       isOvercapacity: true,
     }] : []),
+    {
+      measureKey: WARNING_MEASURE_KEY,
+      label: 'Warning threshold',
+      chartType: 'line',
+      color: '#FF8C00',
+      showInChart: config.showWarningLine !== false,
+      isCapacity: false,
+      isWarning: true,
+      isDashed: true,
+    },
   ];
 
   return { cells, measureRows, periods };
@@ -285,6 +314,11 @@ function buildKpis(cells, measures) {
 }
 
 function buildChartSeries(cells, periods, measureRows) {
+  // Open/remaining measures (niet delivered, niet afgeleid) voor de overload-berekening.
+  const userLoadKeys = measureRows
+    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered)
+    .map((r) => r.measureKey);
+
   return periods.map(({ year, week, key }) => {
     const point = { key, year, week };
     for (const row of measureRows) {
@@ -296,6 +330,19 @@ function buildChartSeries(cells, periods, measureRows) {
         0,
       );
     }
+
+    // Overload vlag: open/remaining load overschrijdt beschikbare capaciteit.
+    const capacityQty = point[CAPACITY_MEASURE_KEY] || 0;
+    const totalLoad = userLoadKeys.reduce((s, k) => s + (point[k] || 0), 0);
+    point.__overloaded__ = capacityQty > 0 && totalLoad > capacityQty;
+
+    // Delivered waarden worden negatief gespiegeld (weergave onder de x-as).
+    for (const row of measureRows) {
+      if (row.isDelivered && point[row.measureKey] > 0) {
+        point[row.measureKey] = -point[row.measureKey];
+      }
+    }
+
     return point;
   });
 }
@@ -317,12 +364,12 @@ async function analyze({
     toWeek: Number(toWeek),
   };
 
-  const poData = await time('rccp_po_read', () => tableDataService.read({
+  const { rows: poRows } = await time('rccp_po_read', () => readBoardSnapshot({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
 
-  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poData.rows || [], config, window);
+  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poRows, config, window);
 
   const capacityRows = await time('rccp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,
@@ -423,10 +470,10 @@ async function getDrillDown(params) {
     toYear: Number(params.toYear),
     toWeek: Number(params.toWeek),
   };
-  const poData = await tableDataService.read({
+  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readBoardSnapshot({
     tableKey: PO_TABLE_KEY,
     supplierAccount: params.supplierAccount || null,
-  });
+  }));
   const cell = {
     vendorAccount: params.vendorAccount,
     periodYear: Number(params.periodYear),
@@ -435,7 +482,7 @@ async function getDrillDown(params) {
   };
   return {
     cell,
-    rows: buildDrillDownRows(poData.rows || [], config, cell, window),
+    rows: buildDrillDownRows(poRows, config, cell, window),
   };
 }
 

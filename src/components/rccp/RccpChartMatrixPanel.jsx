@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
+  ComposedChart, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
 } from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
@@ -11,6 +11,7 @@ import {
   RCCP_CHART_Y_AXIS_WIDTH,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
+  RCCP_WARNING_MEASURE_KEY,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
 
@@ -131,8 +132,17 @@ function RccpChartMatrixPanel({
                     dataKey={row.measureKey}
                     name={row.label}
                     fill={row.color}
+                    stackId={row.isDelivered ? 'rccp_delivered' : 'rccp_load'}
                     barSize={compact ? 10 : 14}
-                  />
+                  >
+                    {(chart || []).map((point, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={point.__overloaded__ ? '#D13438' : row.color}
+                        fillOpacity={point.__overloaded__ ? 0.85 : 1}
+                      />
+                    ))}
+                  </Bar>
                 ) : (
                   <Line
                     key={row.measureKey}
@@ -140,15 +150,16 @@ function RccpChartMatrixPanel({
                     dataKey={row.measureKey}
                     name={row.label}
                     stroke={row.color}
-                    strokeWidth={2}
+                    strokeWidth={row.measureKey === RCCP_WARNING_MEASURE_KEY ? 1.5 : 2}
                     dot={false}
+                    strokeDasharray={row.isDashed ? '6 3' : undefined}
                   />
                 )
               ))}
           </ComposedChart>
         </div>
         <RccpMatrixTable
-          measureRows={measureRows}
+          measureRows={measureRows.filter((r) => !r.isWarning)}
           periods={periods}
           cellMap={cellMap}
           visibleKeys={visibleKeys}

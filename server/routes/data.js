@@ -156,22 +156,10 @@ router.get('/:tableKey/revision', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
+// GET /api/data/:tableKey — lezen.
 router.get('/:tableKey', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    const autoRefresh = req.query.autoRefresh === '1' || req.query.autoRefresh === 'true';
-    const canRefresh = req.user?.role === ROLES.ADMIN;
-    let refreshed = false;
-    let refreshError = null;
-    if (autoRefresh && canRefresh && (await dataService.isStale(tableKey))) {
-      try {
-        await dataService.refresh(tableKey);
-        refreshed = true;
-      } catch (refreshErr) {
-        refreshError = 'Refresh failed';
-      }
-    }
     // Suppliers zien uitsluitend hun eigen orders: geef het leveranciersaccount + de
     // admin-gekozen filterkolom door zodat de read de rijen filtert. Staff geeft null door.
     const isSupplier = req.user?.role === ROLES.SUPPLIER;
@@ -186,7 +174,7 @@ router.get('/:tableKey', async (req, res, next) => {
     const data = await dataService.read({
       tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails,
     });
-    return res.json({ ...data, refreshed, refreshError });
+    return res.json(data);
   } catch (err) {
     return next(err);
   }
@@ -528,6 +516,41 @@ router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   try {
     const result = await dataService.listHiddenInFilterRows(req.params.tableKey);
     return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/purchase-orders/lookup-debug — diagnostisch: toont lookup-state voor items (admin only)
+router.get('/purchase-orders/lookup-debug', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey('purchase-orders');
+    const pool = await registry.getPool();
+    const enrichment = await dataService.loadLookupEnrichment(table);
+    const itemsLookup = enrichment.lookups.find((lk) => lk.targetTableKey === 'items');
+    if (!itemsLookup) return res.json({ error: 'Items lookup niet gevonden in enrichment' });
+
+    const sampleKeys = [...itemsLookup.byKey.keys()].slice(0, 10);
+    const sampleEntries = sampleKeys.map((k) => {
+      const v = itemsLookup.byKey.get(k);
+      return { key: k, itemNumber: v?.itemNumber, searchName: v?.searchName };
+    });
+
+    const detailSample = await pool.request()
+      .input('tableId', require('mssql').BigInt, table.id)
+      .query(`SELECT TOP 5 partition_key, record_key, detail_key,
+                JSON_VALUE(data_json, '$.itemNumber') AS item_number_in_json
+              FROM dbo.tb_cache
+              WHERE table_id = @tableId AND scope = 'detail' AND removed_at_source = 0`);
+
+    return res.json({
+      sourceScope: itemsLookup.sourceScope,
+      sourceFieldKey: itemsLookup.sourceFieldKey,
+      byKeySize: itemsLookup.byKey.size,
+      sampleByKeyEntries: sampleEntries,
+      fieldEntries: itemsLookup.fieldEntries,
+      poDetailSample: detailSample.recordset,
+    });
   } catch (err) {
     return next(err);
   }

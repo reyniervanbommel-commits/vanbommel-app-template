@@ -42,6 +42,20 @@ iedere wijziging in `src/` of `server/`, niet alleen wanneer de gebruiker er exp
 - **Escaleer naar de `security-review` subagent** wanneer: nieuwe auth-, route- of
   data-laag-wijziging, of wijziging in sessie/permissie-logica
 
+## 4. Testen
+
+- Nieuwe of gewijzigde pure/business-logica in de **kernmappen** — `server/services/`,
+  `server/middleware/`, `server/utils/`, `src/utils/`, `src/hooks/` — krijgt een co-located
+  `.test.js`/`.test.jsx` ernaast, in dezelfde stijl als de bestaande tests in die map
+- **Uitgezonderd**: dunne route-glue (`server/routes/`, tenzij de route zelf non-triviale
+  scoping-/business-logica bevat), pure UI-styling-componenten, `scripts/db/migrations/`
+- Geen harde CI-gate — dit wordt gehandhaafd bij code review / de `/review`-skill, niet door een
+  falende build. Een **niet-blokkerende** CI-job (`test-coverage-hint` in `.github/workflows/ci.yml`,
+  script `scripts/check-core-test-coverage.js`) signaleert gewijzigde kernbestanden zonder
+  bijbehorend testbestand in de PR-jobsummary — puur informatief, faalt de build nooit
+- Bestaande dekking (en het patroon voor nieuwe mocks/test-utils) staat in
+  `server/test-utils/`, `src/test-utils/` en de reeds aanwezige `*.test.js`-bestanden
+
 ## Wanneer deze poort niet van toepassing is
 
 - Pure documentatie-wijzigingen (`.md`, `docs/`)

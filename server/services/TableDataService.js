@@ -1604,15 +1604,6 @@ async function getSyncState(tableId) {
   return { watermark: row.watermark || null, lastFullSyncAt: row.last_full_sync_at || null };
 }
 
-async function isStale(tableKey) {
-  const table = await getTableByKey(tableKey);
-  if (table.cacheMode === 'never') return false;
-  const { lastFullSyncAt } = await getSyncState(table.id);
-  if (!lastFullSyncAt) return true;
-  const thresholdMs = (await getStaleThresholdMinutes(table)) * 60 * 1000;
-  return Date.now() - new Date(lastFullSyncAt).getTime() > thresholdMs;
-}
-
 function dedupeDetailRows(detailRows) {
   const rows = Array.isArray(detailRows) ? detailRows : [];
   const byCompositeKey = new Map();
@@ -1927,11 +1918,12 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
     }
   }
   if (refreshFailures.length) {
-    throw Object.assign(
-      new Error(`Lookup target tables were not fully refreshed (${refreshFailures.join('; ')})`),
-      { status: 502 }
-    );
+    logger.warn('Lookup-doeltabellen konden niet volledig ververst worden; PO-data is opgeslagen', {
+      tableKey: table.key,
+      failures: refreshFailures,
+    });
   }
+  return refreshFailures;
 }
 
 async function refresh(tableKey, options = {}) {
@@ -2220,7 +2212,7 @@ async function refresh(tableKey, options = {}) {
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
 
-    await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
+    const lookupWarnings = await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
     updateRefreshProgress(tableKey, {
@@ -2239,6 +2231,7 @@ async function refresh(tableKey, options = {}) {
       retentionFetchTruncated,
       finishedAt: new Date().toISOString(),
       error: null,
+      lookupWarnings: lookupWarnings ?? [],
     });
     try {
       const pruned = await pruneChangeLedger(pool, table.id);
@@ -2247,7 +2240,12 @@ async function refresh(tableKey, options = {}) {
       logger.warn('Change-ledger opschonen mislukt; refresh is verder klaar', { tableKey, error: pruneErr.message });
     }
 
-    return { orders: records.length, truncated: Boolean(truncated), syncedAt: refreshStart.toISOString() };
+    return {
+      orders: records.length,
+      truncated: Boolean(truncated),
+      syncedAt: refreshStart.toISOString(),
+      lookupWarnings: lookupWarnings ?? [],
+    };
   } catch (err) {
     updateRefreshProgress(tableKey, {
       status: 'error',
@@ -2397,11 +2395,20 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
   for (const r of cacheRes.recordset) {
     const parsed = parseJson(r.data_json);
     const lookupSource = enrichLookupSourceFromCacheRow(lk.targetTableKey, r.record_key, parsed);
-    const mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
+    let mapKey = buildLookupCacheKey(r.partition_key, lookupSource, {
       ...lk,
       partitionless,
       sourceFieldKey: resolvedSourceField,
     });
+    // Fallback: data_json mist het FK-veld (bijv. itemNumber niet in items masterSource opgenomen).
+    // record_key IS de natuurlijke sleutel van de doelentiteit en heeft dezelfde waarde als het
+    // FK-veld op de bronkant (bijv. PO-regelkolom 'itemNumber' = ItemNumber = record_key van items).
+    // Alleen toepassen als het veld écht ontbreekt, anders wordt een al-gebouwde key overschreven.
+    if (!mapKey && r.record_key) {
+      mapKey = partitionless
+        ? String(r.record_key).trim()
+        : `${String(r.partition_key || '').toLowerCase()}|${String(r.record_key).trim()}`;
+    }
     if (mapKey) byKey.set(mapKey, parsed);
   }
 
@@ -3486,9 +3493,20 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 // listVendorValues — lichte read die alleen de master-`data_json` ophaalt om er de
 // vendor-kolom(men) uit te projecteren. De volledige board-read() doet daarnaast details,
 // custom values, lookups, formules, history, track-marks en ledger over ~2000 orders; dat is
-// verspilling wanneer we enkel de vendorlijst nodig hebben (RCCP /vendors). Dit voert één
-// SQL-query uit en projecteert exact zoals de board-read (buildValuesFromColumns), zodat de
-// waarden identiek zijn. Alleen source-kolommen zijn relevant; details/lookups niet nodig.
+// verspilling wanneer we enkel de vendorlijst nodig hebben (RCCP /vendors, BI-vendorfilter). Dit
+// voert één SQL-query uit en projecteert exact zoals de board-read (buildValuesFromColumns), zodat
+// de waarden identiek zijn. Alleen source-kolommen zijn relevant; custom values/lookups niet nodig.
+//
+// Belangrijk: dezelfde zichtbaarheidsregels als read() toepassen — anders blijven vendors in de
+// dropdown staan terwijl ze nergens op het bord of in een RCCP/BI-analyse te zien zijn:
+// - removed_at_source = 0, zodat orders die D365 niet meer teruggeeft (verwijderd, of nooit
+//   bestaande test-/seed-rijen die bij de eerstvolgende volledige sync als removed gemarkeerd
+//   worden) niet langer meetellen — dit ontbrak hier terwijl elke andere read-helper in dit
+//   bestand het wél toepast.
+// - dezelfde actieve-syncfilter-check als read(): orders die niet (meer) aan het D365-syncfilter
+//   voldoen (bv. oude demo-data van vóór het instellen van het filter) tellen ook niet mee.
+// Regelniveau 'line' vereist regel-data; die halen we alleen op als er ook echt een
+// regel-niveau-filterregel actief is (anders blijft dit de lichte master-only-read).
 // ---------------------------------------------------------------------------
 async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved = false } = {}) {
   const table = await getTableByKey(tableKey);
@@ -3496,20 +3514,50 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const masterCols = await listColumns({ tableId: table.id, scope: 'master', includeInactive: false });
   const wanted = new Set(valueColumnKeys.filter(Boolean));
   const cols = masterCols.filter((c) => wanted.has(c.key));
-  const result = await time('tb_vendor_master_only', () => pool.request()
+
+  const activeSyncRules = table.key === 'purchase-orders' ? await getTableSyncRules(table) : [];
+  const needsLineRecords = activeSyncRules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+
+  const mastersResult = await time('tb_vendor_master_only', () => pool.request()
     .input('tableId', sql.BigInt, table.id)
     .query(`
-      SELECT c.data_json
+      SELECT c.partition_key, c.record_key, c.data_json, c.sync_retained
       FROM dbo.tb_cache c WITH (NOLOCK)
       WHERE c.table_id = @tableId AND c.scope = 'master'
-      ${includeRemoved ? '' : `AND NOT EXISTS (
+      ${includeRemoved ? '' : `AND c.removed_at_source = 0
+        AND NOT EXISTS (
           SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
           WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
         )`}
     `));
-  return result.recordset.map((m) => ({
-    values: buildValuesFromColumns(cols, parseJson(m.data_json), null),
-  }));
+
+  let lineRecordsByRecKey = null;
+  if (needsLineRecords) {
+    const detailsResult = await time('tb_vendor_line_only', () => pool.request()
+      .input('tableId', sql.BigInt, table.id)
+      .query(`
+        SELECT partition_key, record_key, data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'detail'${includeRemoved ? '' : ' AND removed_at_source = 0'}
+      `));
+    lineRecordsByRecKey = new Map();
+    for (const d of detailsResult.recordset) {
+      const key = `${d.partition_key}|${d.record_key}`;
+      if (!lineRecordsByRecKey.has(key)) lineRecordsByRecKey.set(key, []);
+      lineRecordsByRecKey.get(key).push(parseJson(d.data_json));
+    }
+  }
+
+  const rows = [];
+  for (const m of mastersResult.recordset) {
+    const masterJson = parseJson(m.data_json);
+    if (activeSyncRules.length && !Boolean(m.sync_retained)) {
+      const lineRecords = lineRecordsByRecKey?.get(`${m.partition_key}|${m.record_key}`) || [];
+      if (!recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords)) continue;
+    }
+    rows.push({ values: buildValuesFromColumns(cols, masterJson, null) });
+  }
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -4795,6 +4843,7 @@ module.exports = {
   read,
   listVendorValues,
   readRowDetails,
+  loadLookupEnrichment,
   buildDetailRollup,
   detailMatchesItemsFilter,
   buildItemFilterKey,
@@ -4808,7 +4857,6 @@ module.exports = {
   saveSyncFilters,
   countSyncFilter,
   getSyncState,
-  isStale,
   getLastViewedAt,
   getRevision,
   computeRevision,

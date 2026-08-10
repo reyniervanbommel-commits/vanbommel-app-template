@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh run watch *)",
+      "Bash(az containerapp list *)",
+      "Bash(az containerapp show *)",
+      "Bash(az version)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages",
+      "mcp__Devops__core_list_projects"
+    ]
+  }
+}

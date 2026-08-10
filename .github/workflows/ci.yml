@@ -40,3 +40,20 @@ jobs:
 
       - name: Typecheck uitvoeren
         run: npm run typecheck
+
+  test-coverage-hint:
+    name: test-coverage-hint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Niet-blokkerend (zie CLAUDE.md → Kwaliteitspoort, punt 4 "Testen"): signaleert gewijzigde
+      # kernbestanden zonder co-located test in de jobsummary. Faalt de build nooit.
+      - name: Kernmappen zonder test signaleren
+        run: node scripts/check-core-test-coverage.js

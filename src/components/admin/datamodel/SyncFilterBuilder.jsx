@@ -67,7 +67,7 @@ function ReimportBaselineButton({ onReimportBaseline, busy }) {
   );
 }
 
-function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onSyncNow, onReimportBaseline, baselineBusy = false }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onReimportBaseline, baselineBusy = false }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
   // Read-only leunt op de server (syncFilter.readOnly). vendors/product-receipt-lines blijven
@@ -142,7 +142,6 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         </Text>
         {inheritedCompiled ? <div className={styles.preview}>Inherited $filter = {inheritedCompiled}</div> : null}
         <div className={styles.actions}>
-          <Button appearance="secondary" onClick={onSyncNow}>Sync now</Button>
           <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
         </div>
       </div>
@@ -190,7 +189,6 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
             <Option key={template.id} value={template.id} text={template.label}>{template.label}</Option>
           ))}
         </Dropdown>
-        <Button size="small" appearance="secondary" onClick={onSyncNow}>Sync now</Button>
         <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
         <Button
           size="small"
