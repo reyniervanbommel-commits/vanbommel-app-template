@@ -308,17 +308,21 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
       await apiRequest(`${adminBasePath}/refresh/start`, { method: 'POST' });
       // Poll voortgang tot de sync klaar is (max. 3 minuten, elke 2 seconden).
       const maxAttempts = 90;
+      let lookupWarnings = null;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const { running, progress } = await apiRequest(`${adminBasePath}/refresh/progress`);
         if (!running) {
-          if (progress?.lookupWarnings?.length) {
-            setError(`Sync voltooid, maar sommige gekoppelde tabellen konden niet ververst worden: ${progress.lookupWarnings.join('; ')}`);
-          }
+          lookupWarnings = progress?.lookupWarnings?.length ? progress.lookupWarnings : null;
           break;
         }
       }
+      // reload() begint zelf met setError('') — de lookup-waarschuwing pas ná de reload zetten,
+      // anders wordt hij door die reset meteen weer overschreven en ziet de gebruiker 'm nooit.
       await reload();
+      if (lookupWarnings) {
+        setError(`Sync voltooid, maar sommige gekoppelde tabellen konden niet ververst worden: ${lookupWarnings.join('; ')}`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
