@@ -247,12 +247,10 @@ describe('useDataModelAdmin — sync/refresh-acties', () => {
     expect(apiRequest).toHaveBeenNthCalledWith(4, DATAMODEL_PATH);
   });
 
-  // Bekende quirk (gevonden tijdens deze test, niet in scope om hier te fixen): syncNow() roept
-  // na het zetten van de lookupWarnings-foutmelding altijd meteen reload() aan, en reload() doet
-  // zelf setError('') als allereerste statement — de warning wordt dus onmiddellijk overschreven
-  // en is voor de gebruiker nooit zichtbaar. Deze test legt het HUIDIGE (vermoedelijk onbedoelde)
-  // gedrag vast als regressiemarkering, zodat een toekomstige fix hier zichtbaar wordt.
-  it('lookupWarnings-melding wordt direct overschreven doordat reload() na afloop setError(\'\') doet', async () => {
+  it('toont de lookupWarnings-melding na afloop, ook al roept reload() zelf setError(\'\') aan', async () => {
+    // Regressietest voor een gevonden bug: syncNow zette de warning vóór reload(), en reload()
+    // begint zelf met setError('') — de warning werd zo altijd meteen overschreven en was voor de
+    // gebruiker nooit zichtbaar. Fix: de warning wordt nu pas ná reload() gezet.
     const { result } = await renderReady();
     vi.useFakeTimers();
     apiRequest
@@ -266,7 +264,7 @@ describe('useDataModelAdmin — sync/refresh-acties', () => {
       await syncPromise;
     });
 
-    expect(result.current.error).toBe('');
+    expect(result.current.error).toContain('Vendors kon niet verversen');
   });
 
   it('reimportBaseline stuurt baseline:true mee zodat wijzigingen niet als nieuw gelogd worden', async () => {

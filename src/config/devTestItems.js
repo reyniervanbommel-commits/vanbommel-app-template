@@ -2,7 +2,15 @@
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
-export const devTestItems = [];
+export const devTestItems = [
+  {
+    id: 'lookup-warning-timing',
+    title: 'Admin data-model sync: lookup-waarschuwing zichtbaar',
+    checks: [
+      'Trigger een sync die een lookup-tabel niet kan verversen — de waarschuwing blijft nu zichtbaar na afloop i.p.v. direct te verdwijnen',
+    ],
+  },
+];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
 export function buildDevChecklistItems(items = devTestItems) {
