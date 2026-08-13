@@ -22,6 +22,8 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('0'),
     verticalAlign: 'middle',
+    // B4: GPU compositor layer op sticky group headers
+    transform: 'translateZ(0)',
   },
   groupButton: {
     flex: 1,
@@ -90,6 +92,8 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     boxSizing: 'border-box',
     overflow: 'visible',
     verticalAlign: 'middle',
+    // B4: GPU compositor layer — hardware scroll i.p.v. CPU-repaint
+    transform: 'translateZ(0)',
   },
   controlCellInner: {
     display: 'flex',
@@ -136,9 +140,12 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     maxHeight: purchaseOrderBoardRowHeight,
     fontSize: tokens.fontSizeBase300,
     color: tokens.colorNeutralForeground1,
+    // A4: layout-isolatie per cel — voorkomt reflow-cascade bij ~500 cellen
+    contain: 'layout',
     ...fixedCellOverflow,
     ':has([data-cell-history-trigger="true"])': {
       overflow: 'visible',
+      // contain:layout is compatibel met overflow:visible — portals blijven werken
     },
   },
   itemCellContent: {
