@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import {
-  Button, Field, Input, Select, Spinner, Text, makeStyles, tokens, shorthands, mergeClasses,
+  Button, Field, Input, Select, Switch, Spinner, Text, makeStyles, tokens, shorthands, mergeClasses,
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
@@ -131,6 +131,56 @@ function RccpSettingsForm({
             ))}
           </Select>
         </Field>
+        <Field
+          label="Delivered measure (below x-axis)"
+          hint="Bars for this measure are mirrored below the baseline to visualise delivered quantity."
+          className={isFlyout ? styles.fieldFlyout : undefined}
+        >
+          <Select
+            className={isFlyout ? styles.compactControl : undefined}
+            size={isFlyout ? 'small' : 'medium'}
+            value={config.deliveredMeasureKey ?? ''}
+            onChange={(e) => onUpdateField('deliveredMeasureKey', e.target.value)}
+          >
+            <option value="">None</option>
+            {(config.quantityMeasures || []).map((m) => (
+              <option key={m.columnKey} value={m.columnKey}>{m.label || m.columnKey}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label="Remaining measure"
+          hint="Shows remaining open orders as a positive bar (above x-axis)."
+          className={isFlyout ? styles.fieldFlyout : undefined}
+        >
+          <Select
+            className={isFlyout ? styles.compactControl : undefined}
+            size={isFlyout ? 'small' : 'medium'}
+            value={config.remainingMeasureKey ?? ''}
+            onChange={(e) => onUpdateField('remainingMeasureKey', e.target.value)}
+          >
+            <option value="">None</option>
+            {(config.quantityMeasures || []).map((m) => (
+              <option key={m.columnKey} value={m.columnKey}>{m.label || m.columnKey}</option>
+            ))}
+          </Select>
+        </Field>
+        <div className={mergeClasses(styles.grid, isFlyout && styles.gridFlyout)}>
+          <Field label="Show capacity line" className={isFlyout ? styles.fieldFlyout : undefined}>
+            <Switch
+              checked={config.showCapacityLine !== false}
+              onChange={(_, data) => onUpdateField('showCapacityLine', data.checked)}
+              label={config.showCapacityLine !== false ? 'Visible' : 'Hidden'}
+            />
+          </Field>
+          <Field label="Show warning threshold line" className={isFlyout ? styles.fieldFlyout : undefined}>
+            <Switch
+              checked={config.showWarningLine !== false}
+              onChange={(_, data) => onUpdateField('showWarningLine', data.checked)}
+              label={config.showWarningLine !== false ? 'Visible' : 'Hidden'}
+            />
+          </Field>
+        </div>
       </div>
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>

@@ -124,6 +124,17 @@ router.delete('/capacity/:id', requireRole(ROLES.ADMIN), async (req, res, next) 
   }
 });
 
+// POST /capacity/delete-bulk — verwijder een geselecteerde set rijen in één round-trip.
+router.post('/capacity/delete-bulk', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const result = await capacityService.deleteCapacityRows(req.body?.ids);
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
 router.get('/import/template', requireRole(ROLES.ADMIN), (_req, res) => {
   const buffer = importService.buildTemplateWorkbook();
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

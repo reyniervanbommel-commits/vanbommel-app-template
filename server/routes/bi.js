@@ -9,6 +9,7 @@ const sql = require('mssql');
 const { body, param, validationResult } = require('express-validator');
 const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
+const { readBoardSnapshot } = require('../services/BoardSnapshotCache');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
 const { aggregateCharts, AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS, resolveMeasures } = require('../utils/biAggregate');

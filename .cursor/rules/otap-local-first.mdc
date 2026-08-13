@@ -67,3 +67,4 @@ Zie `.cursor/skills/develop-from-devops/SKILL.md`.
 - Automatisch naar `develop` pushen na ad-hoc code-wijzigingen.
 - DEV-deploy triggeren zonder expliciet verzoek (push naar `develop` = deploy via `deploy-dev.yml`).
 - Alleen git-commando's geven terwijl de gebruiker lokaal wil blijven testen — tenzij expliciet om commit/push gevraagd.
+- **Van branch wisselen** (`git checkout` / `git switch`) zonder eerst te vragen: "Wil je wisselen naar branch `<naam>`?" — wacht altijd op expliciete bevestiging van de gebruiker. Dit geldt ook binnen de `develop-from-devops`-flow, tenzij de gebruiker de switch al in de prompt heeft opgedragen.

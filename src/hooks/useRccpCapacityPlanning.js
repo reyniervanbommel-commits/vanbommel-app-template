@@ -126,26 +126,27 @@ export function useRccpCapacityPlanning({ vendorAccount = '', enabled = true } =
     }
   }, [removeRow]);
 
+  // Eén bulk-call i.p.v. een DELETE-per-rij-lus: bij een grotere selectie scheelt dat evenveel
+  // round-trips als er rijen zijn.
   const deleteRows = useCallback(async (rowsToDelete) => {
     setRowError('');
     if (!rowsToDelete.length) return true;
 
-    let ok = true;
-    for (const row of rowsToDelete) {
-      if (!row.id) {
-        removeRow(row.localKey);
-        continue;
-      }
-      try {
-        await apiRequest(`/rccp/capacity/${row.id}`, { method: 'DELETE' });
-        removeRow(row.localKey);
-      } catch (err) {
-        setRowError(err.message || 'Failed to delete selected capacity rows');
-        ok = false;
-        break;
-      }
+    const localOnlyRows = rowsToDelete.filter((row) => !row.id);
+    const persistedIds = rowsToDelete.filter((row) => row.id).map((row) => row.id);
+
+    localOnlyRows.forEach((row) => removeRow(row.localKey));
+    if (!persistedIds.length) return true;
+
+    try {
+      await apiRequest('/rccp/capacity/delete-bulk', { method: 'POST', body: { ids: persistedIds } });
+      const deletedKeys = new Set(rowsToDelete.map((row) => row.localKey));
+      setRows((prev) => prev.filter((row) => !deletedKeys.has(row.localKey)));
+      return true;
+    } catch (err) {
+      setRowError(err.message || 'Failed to delete selected capacity rows');
+      return false;
     }
-    return ok;
   }, [removeRow]);
 
   const deleteAllRows = useCallback(async () => {

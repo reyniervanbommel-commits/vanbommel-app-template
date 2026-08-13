@@ -106,6 +106,10 @@ export default function BiPage() {
     if (prev === false && pageActive === true) setRevisionNonce((n) => n + 1);
   }, [pageActive]);
 
+  // Debounce alleen tijdens live-bewerken in de builder: elke wijziging aan de draft-config geeft
+  // meteen een nieuwe fetch-key, en zonder debounce vuurt dat per toetsaanslag/dropdown-wijziging
+  // een POST /bi/aggregate. Buiten de builder (normale dashboard-loads, vendor-/datumfilter) blijft
+  // het instant.
   const { resultsById, loadingById } = useChartData({
     charts: chartsForFetch,
     // Suppliers sturen geen eigen vendor-filter mee; de backend forceert hun leveranciersaccount.
@@ -114,6 +118,7 @@ export default function BiPage() {
     dateRange: dateFilter.dateRange,
     checkRevision: true,
     revisionNonce,
+    debounceMs: builderMode ? 300 : 0,
   });
 
   const handleNew = useCallback(() => {

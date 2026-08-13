@@ -53,7 +53,7 @@ function chartFetchKey(chart, inheritedFilters, dataRevision, dateFilter) {
  */
 export function useChartData({
   charts, externalFilterByColumn, columns, dateRange, dataRevision,
-  checkRevision = false, revisionNonce = 0, boardKey = BOARD_KEY,
+  checkRevision = false, revisionNonce = 0, boardKey = BOARD_KEY, debounceMs = 0,
 }) {
   const [resultsById, setResultsById] = useState({});
   const [loadingById, setLoadingById] = useState({});
@@ -147,35 +147,41 @@ export function useChartData({
     });
     setError(null);
 
-    apiRequest('/bi/aggregate', { method: 'POST', body: { boardKey, charts: dirtyCharts } })
-      .then((data) => {
-        if (requestIdRef.current !== requestId) return;
-        setResultsById((prev) => {
-          const next = { ...prev };
-          (data.results || []).forEach((result, index) => {
-            const meta = dirtyMeta[index];
-            if (!meta) return;
-            const series = result.series || [];
-            next[String(meta.id)] = series;
-            setBiSeries(meta.key, series);
+    // Gedebouncet (debounceMs > 0) tijdens live-bewerken in de chart-builder: elke wijziging aan
+    // dimensie/measure/filter geeft daar meteen een nieuwe payloadKey, en zonder debounce vuurt dat
+    // per toetsaanslag een POST /bi/aggregate. Normale dashboard-loads geven debounceMs=0 mee (geen
+    // vertraging op de eerste paint).
+    const timeoutId = window.setTimeout(() => {
+      apiRequest('/bi/aggregate', { method: 'POST', body: { boardKey, charts: dirtyCharts } })
+        .then((data) => {
+          if (requestIdRef.current !== requestId) return;
+          setResultsById((prev) => {
+            const next = { ...prev };
+            (data.results || []).forEach((result, index) => {
+              const meta = dirtyMeta[index];
+              if (!meta) return;
+              const series = result.series || [];
+              next[String(meta.id)] = series;
+              setBiSeries(meta.key, series);
+            });
+            return next;
           });
-          return next;
+        })
+        .catch((err) => {
+          if (requestIdRef.current === requestId) setError(err.message || 'Failed to load chart data');
+        })
+        .finally(() => {
+          if (requestIdRef.current !== requestId) return;
+          setLoadingById((prev) => {
+            const next = { ...prev };
+            dirtyMeta.forEach(({ id }) => { next[String(id)] = false; });
+            return next;
+          });
         });
-      })
-      .catch((err) => {
-        if (requestIdRef.current === requestId) setError(err.message || 'Failed to load chart data');
-      })
-      .finally(() => {
-        if (requestIdRef.current !== requestId) return;
-        setLoadingById((prev) => {
-          const next = { ...prev };
-          dirtyMeta.forEach(({ id }) => { next[String(id)] = false; });
-          return next;
-        });
-      });
+    }, debounceMs);
 
-    return undefined;
-  }, [revisionReady, payloadKey, payload, boardKey]);
+    return () => window.clearTimeout(timeoutId);
+  }, [revisionReady, payloadKey, payload, boardKey, debounceMs]);
 
   useEffect(() => {
     if (!payload.charts.length) { setResultsById({}); setLoadingById({}); }

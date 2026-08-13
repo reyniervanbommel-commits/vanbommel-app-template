@@ -61,6 +61,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   onMakeColumnSticky,
   collapsedColumnKeys = [],
   onToggleColumnCollapsed,
+  items = [],
 }) {
   return (
     <tr>
@@ -147,6 +148,9 @@ export default function PurchaseOrdersBoardHeaderRow({
                 <PurchaseOrderColumnFilterMenu
                 column={column}
                 filter={filterByColumn[column.key]}
+                items={items}
+                allFilters={filterByColumn}
+                allDatePeriodDisplayModes={datePeriodDisplayModes}
                 sortState={sortState}
                 groupingColumnKey={groupingColumnKey}
                 groupingColor={groupingColorsByColumn[column.key] || '#f4e6ed'}

@@ -68,7 +68,7 @@ export default function AdminDataModel() {
       <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)}>
         <Tab value="purchase-orders">Purchase orders</Tab>
         <Tab value="vendors">Vendors</Tab>
-        <Tab value="items">Itemen</Tab>
+        <Tab value="items">Items</Tab>
         <Tab value="product-receipt-lines">Ontvangstregels</Tab>
         <Tab value="excel-links">External links</Tab>
       </TabList>
@@ -89,7 +89,6 @@ export default function AdminDataModel() {
               filterCatalog={selectedModel.filterCatalog}
               syncFilter={selectedModel.syncFilter}
               cache={selectedModel.cache}
-              onSyncNow={selectedModel.syncNow}
               onReimportBaseline={selectedModel.reimportBaseline}
               baselineBusy={selectedModel.togglingKey === 'baseline-import'}
             />

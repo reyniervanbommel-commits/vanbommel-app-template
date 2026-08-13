@@ -5,6 +5,12 @@ import {
   copyCellValueToClipboard,
   isCellContextMenuDisabled,
   serializeRawValueForFilter,
+  hasActiveFilter,
+  resolveFilterModel,
+  textMatchesFilter,
+  NUMBER_FILTER_OPERATORS,
+  numberMatchesFilter,
+  filterItemsByColumnFilters,
 } from './tableViewFilterUtils';
 
 describe('tableViewFilterUtils', () => {
@@ -65,5 +71,96 @@ describe('tableViewFilterUtils', () => {
     expect(columnValueMatchesFilter(column, '12', { operator: 'gt', value: '5' }, modes)).toBe(true);
     expect(columnValueMatchesFilter(column, '4', { operator: 'gt', value: '5' }, modes)).toBe(false);
     expect(columnValueMatchesFilter(column, '12', { operator: 'between', value: '10', secondaryValue: '20' }, modes)).toBe(true);
+  });
+});
+
+describe('oneOf filter — array-based waarde + backward compat', () => {
+  const textColumn = { key: 'vendor', dataType: 'text' };
+
+  it('resolveFilterModel normaliseert een array-waarde ongewijzigd', () => {
+    const model = resolveFilterModel(textColumn, { operator: 'oneOf', value: ['Acme', 'Beta'] });
+    expect(model).toEqual({ operator: 'oneOf', value: ['Acme', 'Beta'], secondaryValue: '' });
+  });
+
+  it('resolveFilterModel zet een legacy kommagescheiden string om naar een array', () => {
+    const model = resolveFilterModel(textColumn, { operator: 'oneOf', value: 'Acme, Inc.,Beta' });
+    expect(model).toEqual({ operator: 'oneOf', value: ['Acme, Inc.', 'Beta'], secondaryValue: '' });
+  });
+
+  it('resolveFilterModel geeft een lege array zonder bestaand filter', () => {
+    const model = resolveFilterModel(textColumn, { operator: 'oneOf' });
+    expect(model.value).toEqual([]);
+  });
+
+  it('hasActiveFilter is alleen actief met een niet-lege oneOf-array', () => {
+    expect(hasActiveFilter(textColumn, { operator: 'oneOf', value: [] })).toBe(false);
+    expect(hasActiveFilter(textColumn, { operator: 'oneOf', value: ['Acme'] })).toBe(true);
+  });
+
+  it('textMatchesFilter matcht case-insensitive tegen de oneOf-array', () => {
+    const filter = { operator: 'oneOf', value: ['Acme, Inc.', 'Beta'] };
+    expect(textMatchesFilter('acme, inc.', filter)).toBe(true);
+    expect(textMatchesFilter('Gamma', filter)).toBe(false);
+  });
+
+  it('textMatchesFilter valt terug op een legacy string-waarde', () => {
+    const filter = { operator: 'oneOf', value: 'Acme,Beta' };
+    expect(textMatchesFilter('beta', filter)).toBe(true);
+  });
+});
+
+describe('oneOf filter — number-kolommen', () => {
+  it('NUMBER_FILTER_OPERATORS bevat oneOf', () => {
+    expect(NUMBER_FILTER_OPERATORS.oneOf).toBe('is one of');
+  });
+
+  it('numberMatchesFilter matcht een waarde uit de oneOf-array', () => {
+    const filter = { operator: 'oneOf', value: [100, 250] };
+    expect(numberMatchesFilter(100, filter)).toBe(true);
+    expect(numberMatchesFilter('250', filter)).toBe(true);
+    expect(numberMatchesFilter(300, filter)).toBe(false);
+  });
+
+  it('numberMatchesFilter met lege oneOf-array matcht alles', () => {
+    expect(numberMatchesFilter(42, { operator: 'oneOf', value: [] })).toBe(true);
+  });
+
+  it('numberMatchesFilter negeert niet-numerieke rijwaarden', () => {
+    expect(numberMatchesFilter('n/a', { operator: 'oneOf', value: [1] })).toBe(false);
+  });
+});
+
+describe('filterItemsByColumnFilters', () => {
+  const columns = [
+    { key: 'vendor', dataType: 'text' },
+    { key: 'status', dataType: 'text' },
+  ];
+  const items = [
+    { values: { vendor: 'Acme', status: 'Open' } },
+    { values: { vendor: 'Acme', status: 'Closed' } },
+    { values: { vendor: 'Beta', status: 'Open' } },
+  ];
+
+  it('geeft alle items terug zonder actieve filters', () => {
+    expect(filterItemsByColumnFilters(items, columns, {}, {}, 'status')).toEqual(items);
+  });
+
+  it('past filters van andere kolommen toe, maar niet die van excludeColumnKey', () => {
+    const filterByColumn = {
+      vendor: { operator: 'equals', value: 'Acme' },
+      status: { operator: 'equals', value: 'Open' },
+    };
+    const result = filterItemsByColumnFilters(items, columns, filterByColumn, {}, 'status');
+    expect(result).toEqual([
+      { values: { vendor: 'Acme', status: 'Open' } },
+      { values: { vendor: 'Acme', status: 'Closed' } },
+    ]);
+  });
+
+  it('negeert kleurfilters (colorIs) op andere kolommen', () => {
+    const filterByColumn = {
+      vendor: { operator: 'colorIs', colors: ['#ff0000'] },
+    };
+    expect(filterItemsByColumnFilters(items, columns, filterByColumn, {}, 'status')).toEqual(items);
   });
 });

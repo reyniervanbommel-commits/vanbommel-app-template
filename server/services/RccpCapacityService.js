@@ -166,6 +166,27 @@ async function deleteAllCapacity({ vendorAccount = null } = {}) {
   return { deletedCount: result.recordset.length };
 }
 
+// Verwijdert een geselecteerde set rijen in één round-trip (i.p.v. één DELETE per rij vanuit de
+// client) — gebruikt door de "verwijder geselecteerde" actie in de capacity-planning-grid.
+async function deleteCapacityRows(ids) {
+  const validIds = (Array.isArray(ids) ? ids : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  if (!validIds.length) return { deletedCount: 0 };
+
+  const pool = await getPool();
+  const request = pool.request();
+  const placeholders = validIds.map((id, index) => {
+    const paramName = `id${index}`;
+    request.input(paramName, sql.BigInt, id);
+    return `@${paramName}`;
+  });
+  const result = await request.query(
+    `DELETE FROM dbo.rccp_capacity OUTPUT DELETED.id WHERE id IN (${placeholders.join(', ')})`
+  );
+  return { deletedCount: result.recordset.length };
+}
+
 module.exports = {
   listCapacity,
   createCapacity,
@@ -173,4 +194,5 @@ module.exports = {
   upsertCapacity,
   deleteCapacity,
   deleteAllCapacity,
+  deleteCapacityRows,
 };
