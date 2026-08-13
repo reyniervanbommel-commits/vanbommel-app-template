@@ -131,7 +131,7 @@ function compareActivity(a, b) {
 function enrichRemarkActivity(item, reactions, currentUser) {
   if (item.type !== 'remark') return item;
   const author = item.actor
-    ? { id: item.actor.id, displayName: item.actor.name }
+    ? { id: item.actor.id, displayName: item.actor.name || item.actor.email || null }
     : null;
   return {
     ...item,
