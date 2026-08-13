@@ -230,5 +230,19 @@
       }
     },
     "measuredAt": "2026-07-22T10:30:21.419Z"
+  },
+  "scrollJourneys": {
+    "J4": {
+      "label": "PO board vertical scroll",
+      "profile": "L",
+      "median": {
+        "maxLongFrameMs": 767,
+        "scrollJankMs": 818,
+        "scrollStableMs": 400,
+        "slowInteractionCount": 0,
+        "longframeCount": 3
+      },
+      "measuredAt": "2026-08-13T17:19:03.443Z"
+    }
   }
 }
