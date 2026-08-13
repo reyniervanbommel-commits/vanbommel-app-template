@@ -1,4 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { clearCachedBoard } from '../utils/boardSessionStore';
+import { clearBoardPresentationCache } from '../utils/boardPresentationCache';
+
+// Leegt alle in-memory board-caches (data + presentatie). Nodig bij een sessiewissel zodat
+// bijv. een supplier niet kortstondig het (ongescopete) bord/totaal van een vorige gebruiker
+// ziet — de caches zijn niet per gebruiker gescheiden.
+function clearBoardCaches() {
+  clearCachedBoard();
+  clearBoardPresentationCache();
+}
 
 async function apiRequest(path, options) {
   const opts = options || {};
@@ -36,6 +46,8 @@ export function useSessionAuth() {
   useEffect(() => { checkAuth(); }, [checkAuth]);
 
   const login = useCallback(async (email, password) => {
+    // Wis eventuele board-caches van een vorige sessie vóór de nieuwe gebruiker landt.
+    clearBoardCaches();
     const data = await apiRequest('/login', { method: 'POST', body: { email, password } });
     if (data.user) setUser(data.user);
     return data;
@@ -48,7 +60,10 @@ export function useSessionAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    try { await apiRequest('/logout', { method: 'POST', body: {} }); } finally { setUser(null); }
+    try { await apiRequest('/logout', { method: 'POST', body: {} }); } finally {
+      clearBoardCaches();
+      setUser(null);
+    }
   }, []);
 
   const actions = useMemo(() => ({ login, logout, checkAuth, setPassword }), [login, logout, checkAuth, setPassword]);

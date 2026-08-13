@@ -34,7 +34,7 @@ const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
 const router = express.Router();
 
 function remarksActor(req) {
-  return { id: req.user?.id, role: req.user?.role };
+  return { id: req.user?.id, role: req.user?.role, vendor_account: req.user?.vendor_account || null };
 }
 
 function toColumnId(raw) {
@@ -71,7 +71,9 @@ router.get('/:tableKey/remarks', async (req, res, next) => {
 });
 
 // POST /api/data/:tableKey/remarks â€” immutable remark toevoegen aan een bestaande masterrij.
-router.post('/:tableKey/remarks', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
+// Staff + suppliers: suppliers mogen uitsluitend op orders binnen hun eigen vendor-scope
+// reageren; die rij-scope wordt afgedwongen in RowRemarksService.context().
+router.post('/:tableKey/remarks', async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
@@ -156,7 +158,7 @@ router.get('/:tableKey/revision', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey â€” lezen.
+// GET /api/data/:tableKey?autoRefresh=1 â€” lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
@@ -521,7 +523,7 @@ router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   }
 });
 
-// GET /api/data/purchase-orders/lookup-debug â€” diagnostisch: toont lookup-state voor items (admin only)
+// GET /api/data/purchase-orders/lookup-debug — diagnostisch: toont lookup-state voor items (admin only)
 router.get('/purchase-orders/lookup-debug', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const table = await registry.getTableByKey('purchase-orders');
@@ -556,6 +558,7 @@ router.get('/purchase-orders/lookup-debug', requireRole(ROLES.ADMIN), async (req
   }
 });
 
+// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details — sublijnen van één rij.
 // GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details â€” sublijnen van Ã©Ã©n rij.
 // Het board krijgt de regels niet meer mee in de board-read (die zou bij ~2000 orders
 // tientallen MB's worden) en haalt ze hiermee op zodra een order wordt opengeklapt.

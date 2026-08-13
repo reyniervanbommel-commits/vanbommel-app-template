@@ -88,7 +88,7 @@ async function assertMasterRow(ctx, requestFactory = () => ctx.pool.request()) {
 
 const REMARK_SELECT = `
   SELECT p.id, p.partition_key, p.record_key, p.column_id, p.body, p.created_by,
-         p.created_at, p.is_deleted, p.deleted_at, u.display_name AS author_name,
+         p.created_at, p.is_deleted, p.deleted_at, COALESCE(u.display_name, u.email) AS author_name,
          c.[key] AS column_key, c.label AS column_label, rx.emoji,
          rx.reaction_count, rx.reacted_by_current_user
   FROM paged p
@@ -159,8 +159,10 @@ async function fetchRemark(ctx, remarkId) {
 }
 
 async function addRemark(input, actor) {
+  // context() dwingt de rij-scope af: een supplier kan alleen een remark toevoegen op een
+  // order binnen zijn eigen vendor-scope (assertSupplierPurchaseOrderRow). Staff heeft
+  // volledige toegang. Suppliers mogen hun eigen comments plaatsen (#vendor-remarks).
   const ctx = await context(input.tableKey, input.partitionKey, input.recordKey, actor);
-  if (ctx.actor.isSupplier) throw httpError(403, 'Suppliers cannot add remarks');
   const body = normalizeBody(input.body);
   const columnId = normalizeOptionalColumnId(input.columnId);
   const result = await remarkRequest(ctx.pool.request(), {
@@ -283,7 +285,7 @@ async function summarizeRemarks(tableKey, actor) {
         GROUP BY partition_key, record_key
       ) counts
       CROSS APPLY (
-        SELECT TOP (1) r.id, r.body, u.display_name AS author_name, r.created_at
+        SELECT TOP (1) r.id, r.body, COALESCE(u.display_name, u.email) AS author_name, r.created_at
         FROM dbo.tb_row_remarks r
         LEFT JOIN dbo.users u ON u.id = r.created_by
         WHERE r.table_id = @tableId AND r.partition_key = counts.partition_key
@@ -296,9 +298,9 @@ async function summarizeRemarks(tableKey, actor) {
   if (normalizedActor.isSupplier) {
     const supplierFilterColumn = await getSupplierFilterColumnKey();
     const visibleKeys = await loadSupplierVisibleRowKeys(
-      table.id,
       getSupplierAccount(actor),
-      supplierFilterColumn
+      supplierFilterColumn,
+      actor?.id ?? null,
     );
     rows = filterRowsForSupplier(rows, visibleKeys);
   }

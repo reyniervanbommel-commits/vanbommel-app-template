@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+﻿import React, { useCallback, useMemo, useState } from 'react';
 import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import {
   CalendarDataBar24Regular,
@@ -8,6 +8,7 @@ import {
 } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useVendorCompanyName } from '../../hooks/useVendorCompanyName';
 import { ROLES } from '../../constants/roles';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
 import AppNavItem from './AppNavItem';
@@ -134,14 +135,16 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const isAdminLike = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+  const vendorCompanyName = useVendorCompanyName(user);
   const isPurchaseOrdersRoute = location.pathname === '/';
 
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
       { id: 'rccp', label: 'RCCP', icon: CalendarDataBar24Regular, path: '/rccp' },
+      // BI is voor alle rollen zichtbaar; suppliers zien uitsluitend hun eigen (server-gescopete) data.
+      { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
       ...(isAdminLike ? [
-        { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
         { type: 'divider' },
         { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
       ] : []),
@@ -192,6 +195,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
         onToggleUserMenu={handleToggleUserMenu}
         onCloseUserMenu={handleCloseUserMenu}
         canAccessAdmin={isAdminLike}
+        vendorCompanyName={vendorCompanyName}
         onNavigateAdmin={handleNavigateAdmin}
         onLogout={handleLogout}
       />
