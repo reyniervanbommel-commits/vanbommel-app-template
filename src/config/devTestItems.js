@@ -64,6 +64,21 @@ export const devTestItems = [
       'Een leverancier krijgt geen BI-pagina te zien (rol-respect blijft intact)',
     ],
   },
+  {
+    id: 'vendor-scope-remarks-split-v1-43-7',
+    title: 'Vendor BI-toegang, remarks scope en bedrijfsnaam in header (v1.43.7)',
+    checks: [
+      'Vendor ziet alleen eigen data op de BI-pagina (read-only, eigen vendor scope)',
+      'Vendor ziet geen New chart knop op de BI-pagina',
+      'D365 write-back is uitgeschakeld voor vendor-logins',
+      'Vendor kan een opmerking plaatsen op een order in zijn scope (geen Access denied)',
+      'Vendor ziet zijn bedrijfsnaam naast Vendor Collaboration App in de header',
+      'Bij het openen van het remarks-panel verschijnt een Spinner tijdens laden',
+      'Na het plaatsen van een remark is de auteursnaam zichtbaar (email, niet Unknown user)',
+      'Admin/employee ziet ook de auteursnaam van vendor-remarks (niet Unknown user)',
+      'Remarks panel opent zonder A remarks request is already in progress melding',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
