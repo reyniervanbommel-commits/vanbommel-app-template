@@ -30,6 +30,9 @@ export default defineConfig({
       '**/node_modules/**',
       '**/.worktrees/**',
       '**/.claude/worktrees/**',
+      // Playwright Test-suite (e2e/*.spec.js) — aparte runner (`npm run test:e2e`), Vitest's
+      // default include-patroon matcht anders ook *.spec.js en crasht op test.describe().
+      '**/e2e/**',
     ],
   },
 });
