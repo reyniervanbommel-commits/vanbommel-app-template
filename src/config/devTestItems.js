@@ -2,7 +2,22 @@
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
-export const devTestItems = [];
+export const devTestItems = [
+  {
+    id: 'po-filter-238',
+    title: 'PO-board waarde-filter (equals/oneOf combobox) #238',
+    checks: [
+      'Equals-operator: typen in het filterveld toont typeahead-suggesties uit de boarddata',
+      'Equals-operator: klikken op een suggestie vult het veld en filtert correct',
+      'Is one of: typen + Enter voegt een chip toe; Apply filtert op alle chips',
+      'Is one of: meerdere regels plakken (Excel/D365-stijl) voegt in één keer meerdere chips toe',
+      'Is one of: chip verwijderen via de x-knop werkt correct',
+      'Cascading: suggesties tonen alleen waarden die nog voorkomen gegeven andere actieve filters',
+      'Backward compat: een opgeslagen view met kommagescheiden oneOf-string laadt en filtert correct',
+      'Date-kolommen: filter ongewijzigd (geen typeahead, geen chips)',
+    ],
+  },
+];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
 export function buildDevChecklistItems(items = devTestItems) {
