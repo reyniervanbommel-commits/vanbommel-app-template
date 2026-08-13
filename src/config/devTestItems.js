@@ -17,6 +17,19 @@ export const devTestItems = [
       'Date-kolommen: filter ongewijzigd (geen typeahead, geen chips)',
     ],
   },
+  {
+    id: 'feature-238-value-filter-ux-v1-47-5',
+    title: 'Feature 238 - PO-board value filter UX-fixes (v1.47.5)',
+    checks: [
+      'Is exactly: klik op suggestie plaatst de waarde direct in het invoervak',
+      'Is exactly: tabel filtert direct na klikken op een suggestie (geen Apply nodig)',
+      'Is exactly: kolommenumenu blijft open na auto-apply',
+      'Clear: kolommenumenu blijft open na Clear',
+      'Reopen filter: invoervak toont de actieve filterwaarde, geen suggestie-dropdown',
+      'Lange leveranciersnamen: dropdown wordt breder in plaats van over 2 regels',
+      'Suggesties: lijst is links uitgelijnd en verticaal scrollbaar',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
