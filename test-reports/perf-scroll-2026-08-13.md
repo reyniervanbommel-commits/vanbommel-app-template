@@ -1,6 +1,6 @@
 # Perf scroll — 2026-08-13
 
-- **URL:** https://preview-po-board-scroll-opti.graysand-65442c41.northeurope.azurecontainerapps.io
+- **URL:** https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io
 - **Profile:** L
 - **Runs:** 20
 - **Login:** OK
@@ -9,10 +9,10 @@
 
 | Metric | Value |
 |--------|------:|
-| maxLongFrameMs | 767 |
-| scrollJankMs | 818 |
+| maxLongFrameMs | 982 |
+| scrollJankMs | 3893 |
 | scrollStableMs | 400 |
 | slowInteractionCount | 0 |
-| longframeCount | 3 |
+| longframeCount | 18 |
 
 Merged into `perf-backlog.json` (BL-004) and `perf-baseline.json`.

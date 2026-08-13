@@ -236,13 +236,13 @@
       "label": "PO board vertical scroll",
       "profile": "L",
       "median": {
-        "maxLongFrameMs": 767,
-        "scrollJankMs": 818,
+        "maxLongFrameMs": 982,
+        "scrollJankMs": 3893,
         "scrollStableMs": 400,
         "slowInteractionCount": 0,
-        "longframeCount": 3
+        "longframeCount": 18
       },
-      "measuredAt": "2026-08-13T17:19:03.443Z"
+      "measuredAt": "2026-08-13T17:39:39.307Z"
     }
   }
 }
