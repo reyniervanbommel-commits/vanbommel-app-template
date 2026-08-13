@@ -47,6 +47,10 @@ export function usePurchaseOrderSortFilterActions({
     setDraft((prev) => ({ ...prev, value: nextValue }));
   }, [setDraft]);
 
+  const handleDraftValueChange = useCallback((nextValue) => {
+    setDraft((prev) => ({ ...prev, value: nextValue }));
+  }, [setDraft]);
+
   const handleSecondaryValueChange = useCallback((event) => {
     const nextValue = event.target.value;
     setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
@@ -80,6 +84,7 @@ export function usePurchaseOrderSortFilterActions({
     clearSort,
     handleOperatorSelect,
     handleValueChange,
+    handleDraftValueChange,
     handleSecondaryValueChange,
     handleApplyFilter,
     handleClearFilter,
