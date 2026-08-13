@@ -1,6 +1,7 @@
-import React, { useCallback } from 'react';
+﻿import React, { useCallback } from 'react';
 import {
   Avatar,
+  Badge,
   Button,
   Text,
   makeStyles,
@@ -15,6 +16,7 @@ import {
 } from '@fluentui/react-icons';
 import { APP_DISPLAY_NAME } from '../../config/app';
 import { APP_VERSION } from '../../config/version';
+import { ROLES } from '../../constants/roles';
 
 const useStyles = makeStyles({
   header: {
@@ -29,7 +31,7 @@ const useStyles = makeStyles({
     top: 0,
     zIndex: 1000,
   },
-  headerLeft: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
+  headerLeft: { display: 'flex', alignItems: 'center', ...shorthands.gap('12px') },
   headerCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 },
   headerRight: { display: 'flex', alignItems: 'center', ...shorthands.gap('16px') },
   userMenuAnchor: { position: 'relative' },
@@ -77,9 +79,21 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
   },
+  vendorDivider: {
+    color: tokens.colorNeutralForeground4,
+    userSelect: 'none',
+  },
+  vendorName: {
+    color: tokens.colorNeutralForeground2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '260px',
+  },
 });
 
 export default function AppShellHeader({
+  vendorCompanyName = null,
   sidebarOpen,
   onToggleSidebar,
   isDarkMode,
@@ -94,6 +108,8 @@ export default function AppShellHeader({
 }) {
   const styles = useStyles();
   const avatarName = user?.display_name || user?.email || 'User';
+  const isSupplier = user?.role === ROLES.SUPPLIER;
+  const vendorLabel = vendorCompanyName || user?.vendor_account || null;
 
   const handleAdminClick = useCallback(() => {
     onNavigateAdmin();
@@ -112,6 +128,14 @@ export default function AppShellHeader({
         <Text size={500} weight="semibold" style={{ userSelect: 'none', whiteSpace: 'nowrap' }}>
           {APP_DISPLAY_NAME}
         </Text>
+        {isSupplier && vendorLabel && (
+          <>
+            <Text size={400} className={styles.vendorDivider} aria-hidden="true">—</Text>
+            <Text size={400} weight="medium" className={styles.vendorName}>
+              {vendorLabel}
+            </Text>
+          </>
+        )}
       </div>
 
       <div className={styles.headerCenter} />
@@ -144,6 +168,11 @@ export default function AppShellHeader({
                     <div>
                       <Text weight="semibold" block>{avatarName}</Text>
                       <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>{user.email}</Text>
+                      {isSupplier && user.vendor_account && (
+                        <Badge appearance="tint" color="informative" size="small" style={{ marginTop: '4px' }}>
+                          {user.vendor_account}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <div className={styles.menuDivider}>

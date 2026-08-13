@@ -88,7 +88,8 @@ export default function PurchaseOrdersPage() {
     enabled: !loading,
     currentUser: user,
     columns: visibleHeaderColumns,
-    canCompose: isStaff,
+    // Suppliers mogen comments plaatsen op hun eigen orders (scope server-side afgedwongen).
+    canCompose: isStaff || isSupplier,
   });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });

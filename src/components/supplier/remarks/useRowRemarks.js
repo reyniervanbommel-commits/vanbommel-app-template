@@ -41,6 +41,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   const newestCursorRef = useRef(null);
   const timerRef = useRef(null);
   const backoffRef = useRef(INITIAL_DELAY);
+  const loadingRef = useRef(false);
 
   const request = useCallback(async (path, options = {}) => {
     if (requestInFlightRef.current) {
@@ -61,6 +62,8 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
 
   const loadInitial = useCallback(async () => {
     if (!enabled || !tableKey || !row?.partitionKey || !row?.recordKey) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -72,11 +75,12 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       newestCursorRef.current = activityData?.newestCursor || null;
       backoffRef.current = INITIAL_DELAY;
     } catch (requestError) {
-      if (requestError?.name !== 'AbortError') {
+      if (requestError?.name !== 'AbortError' && requestError?.code !== 'REQUEST_IN_PROGRESS') {
         setError(requestError?.message || 'Failed to load remarks');
       }
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [enabled, request, row, tableKey]);
 
@@ -165,6 +169,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
     return () => {
       controllersRef.current.forEach((controller) => controller.abort());
       controllersRef.current.clear();
+      loadingRef.current = false;
       requestInFlightRef.current = false;
     };
   }, [loadInitial]);

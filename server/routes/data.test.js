@@ -96,7 +96,7 @@ describe('PUT /:tableKey/remarks/:id/reaction — open voor supplier (read-only 
 
     expect(remarksService.setReaction).toHaveBeenCalledWith(
       expect.objectContaining({ tableKey: 'purchase-orders', id: 42, emoji: '👍', active: true }),
-      { id: 9, role: 'supplier' },
+      { id: 9, role: 'supplier', vendor_account: null },
     );
   });
 

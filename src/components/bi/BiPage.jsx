@@ -4,6 +4,7 @@ import {
   makeStyles, MessageBar, MessageBarActions, MessageBarBody, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
 import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../constants/roles';
 import { useAppToast } from '../../hooks/useAppToast';
 import BiToolbar from './BiToolbar';
 import BiDashboardGrid from './BiDashboardGrid';
@@ -38,6 +39,8 @@ const useStyles = makeStyles({
 export default function BiPage() {
   const styles = useStyles();
   const { user } = useAuth();
+  // Suppliers zien BI read-only en uitsluitend hun eigen data (server-side gescoped in /api/bi).
+  const isSupplier = user?.role === ROLES.SUPPLIER;
   const { notifyError, notifySuccess } = useAppToast();
   const meta = useBiMeta(BOARD_KEY);
   const { charts, loading: chartsLoading, error, reload, createChart, updateChart, deleteChart } = useBiCharts();
@@ -109,7 +112,8 @@ export default function BiPage() {
   // het instant.
   const { resultsById, loadingById } = useChartData({
     charts: chartsForFetch,
-    externalFilterByColumn: vendorFilter.externalFilterByColumn,
+    // Suppliers sturen geen eigen vendor-filter mee; de backend forceert hun leveranciersaccount.
+    externalFilterByColumn: isSupplier ? undefined : vendorFilter.externalFilterByColumn,
     columns: meta.columns,
     dateRange: dateFilter.dateRange,
     checkRevision: true,
@@ -202,6 +206,7 @@ export default function BiPage() {
           onRefresh={reload}
           vendorFilter={vendorFilter}
           dateFilter={dateFilter}
+          canManage={!isSupplier}
         />
 
         {error ? (
@@ -210,7 +215,7 @@ export default function BiPage() {
           </MessageBar>
         ) : null}
 
-        {!charts.length && !builderMode ? (
+        {!isSupplier && !charts.length && !builderMode ? (
           <MessageBar intent="info" className={styles.message}>
             <MessageBarBody>Start with a set of ready-made example charts.</MessageBarBody>
             <MessageBarActions>

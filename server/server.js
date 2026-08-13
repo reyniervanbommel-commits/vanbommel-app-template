@@ -155,8 +155,10 @@ app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.E
 // Staff (admin/employee) heeft volledige toegang; suppliers mogen uitsluitend hun eigen
 // purchase-orders lezen (rij-filter op leveranciersaccount in TableDataService.read).
 app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
-// BI-grafieken (#AB:218/#AB:219) — v1 staff-only (admin/employee), geen supplier-scoping.
-app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), biRouter);
+// BI-grafieken (#AB:218/#AB:219). Staff (admin/employee) zien alle vendors. Suppliers hebben
+// read-only toegang en zien uitsluitend hun eigen data: de board-read in bi.js wordt op het
+// leveranciersaccount gescoped en schrijf-routes worden voor suppliers geweigerd.
+app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), biRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
 app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
 app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);

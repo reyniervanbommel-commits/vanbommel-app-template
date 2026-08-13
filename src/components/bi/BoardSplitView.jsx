@@ -11,6 +11,8 @@ import { useChartData } from './hooks/useChartData';
 import { useBiMeta } from './hooks/useBiMeta';
 import { BOARD_KEY } from './biConstants';
 import { buildTableDataRevision } from './tableDataRevision';
+import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../constants/roles';
 
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
@@ -57,6 +59,11 @@ const useStyles = makeStyles({
 
 export default function BoardSplitView({ filterByColumn, tableRows, isStaff, children }) {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isSupplier = user?.role === ROLES.SUPPLIER;
+  // Staff en suppliers krijgen beide de split-view; suppliers zien uitsluitend hun eigen data
+  // (RCCP + BI worden server-side op hun leveranciersaccount gescoped).
+  const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
   const { isoWindow } = useRccpWindow();
   const { charts } = useBiCharts();
@@ -74,9 +81,13 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
   );
 
   const dataRevision = useMemo(() => buildTableDataRevision(tableRows), [tableRows]);
+  // Staff leidt de vendor af uit een actief kolomfilter; een supplier is altijd zijn eigen
+  // leveranciersaccount (het bord is voor hem al op die vendor gescoped).
   const vendorAccount = useMemo(
-    () => resolveRccpVendorFromFilter(filterByColumn),
-    [filterByColumn],
+    () => (isSupplier
+      ? (user?.vendor_account || '')
+      : resolveRccpVendorFromFilter(filterByColumn)),
+    [isSupplier, user?.vendor_account, filterByColumn],
   );
   const rccpRefreshKey = useMemo(
     () => `${dataRevision}|${vendorAccount || ''}`,
@@ -96,7 +107,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
     [charts, resultsById],
   );
 
-  if (!isStaff) return children;
+  if (!showSplit) return children;
 
   return (
     <div className={styles.root}>

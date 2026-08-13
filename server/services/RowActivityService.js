@@ -131,7 +131,7 @@ function compareActivity(a, b) {
 function enrichRemarkActivity(item, reactions, currentUser) {
   if (item.type !== 'remark') return item;
   const author = item.actor
-    ? { id: item.actor.id, displayName: item.actor.name }
+    ? { id: item.actor.id, displayName: item.actor.name || item.actor.email || null }
     : null;
   return {
     ...item,
@@ -166,7 +166,7 @@ function buildQuery() {
         CAST(NULL AS DECIMAL(38,10)) new_value_number, CAST(NULL AS DATETIME2) new_value_date,
         CAST(NULL AS BIT) new_value_bool, CAST(NULL AS NVARCHAR(16)) status,
         CAST(NULL AS NVARCHAR(MAX)) error, CAST(NULL AS NVARCHAR(2000)) body,
-        CAST(0 AS BIT) is_deleted, u.id user_id, u.display_name user_name, u.email user_email
+        CAST(0 AS BIT) is_deleted, u.id user_id, COALESCE(u.display_name, u.email) user_name, u.email user_email
       FROM dbo.tb_change_ledger l
       OUTER APPLY (
         SELECT TOP (1) matched.id, matched.label
@@ -184,7 +184,7 @@ function buildQuery() {
       SELECT h.id, 'custom', 2, h.changed_at, h.action, c.[key], c.id, c.label,
         h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
         h.new_value_text, h.new_value_number, h.new_value_date, h.new_value_bool,
-        NULL, NULL, NULL, CAST(0 AS BIT), u.id, u.display_name, u.email
+        NULL, NULL, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email
       FROM dbo.tb_cell_history h
       INNER JOIN dbo.tb_columns c ON c.id=h.column_id
       LEFT JOIN dbo.users u ON u.id=h.changed_by
@@ -194,7 +194,7 @@ function buildQuery() {
       UNION ALL
       SELECT f.id, 'writeback', 1, f.created_at, 'correct', c.[key], c.id, c.label,
         f.old_value, NULL, NULL, NULL, f.new_value, NULL, NULL, NULL,
-        f.status, f.error, NULL, CAST(0 AS BIT), u.id, u.display_name, u.email
+        f.status, f.error, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email
       FROM dbo.tb_field_corrections f
       INNER JOIN dbo.tb_columns c ON c.id=f.column_id
       LEFT JOIN dbo.users u ON u.id=f.created_by
@@ -205,7 +205,7 @@ function buildQuery() {
       SELECT r.id, 'remark', 5, r.created_at, 'remark', NULL, r.column_id, c.label,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
         CASE WHEN r.is_deleted=1 THEN NULL ELSE r.body END, r.is_deleted,
-        u.id, u.display_name, u.email
+        u.id, COALESCE(u.display_name, u.email), u.email
       FROM dbo.tb_row_remarks r
       LEFT JOIN dbo.tb_columns c ON c.id=r.column_id
       LEFT JOIN dbo.users u ON u.id=r.created_by
