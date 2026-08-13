@@ -237,6 +237,7 @@ describe('PurchaseOrderColumnFilterMenu — unieke waarden', () => {
     renderMenu({ items, filter: { operator: 'oneOf', value: [] } });
     openColumnMenu();
     const input = await screen.findByLabelText(/Filter value for Amount/i);
+    fireEvent.focus(input);
     fireEvent.change(input, { target: { value: '1' } });
     const suggestion = await screen.findByRole('option', { name: '100' });
     expect(suggestion).toBeTruthy();

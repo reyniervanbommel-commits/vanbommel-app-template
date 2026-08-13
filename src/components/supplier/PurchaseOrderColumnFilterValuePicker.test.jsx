@@ -28,6 +28,7 @@ describe('PurchaseOrderColumnFilterValuePicker — single mode', () => {
     const onChange = vi.fn();
     renderPicker({ mode: 'single', value: '', onChange, uniqueValues: ['Acme', 'Beta'] });
     const input = screen.getByLabelText(/Filter value for Vendor/i);
+    fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'Ac' } });
     const suggestion = screen.getByRole('option', { name: 'Acme' });
     fireEvent.click(suggestion);

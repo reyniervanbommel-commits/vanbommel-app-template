@@ -19,6 +19,7 @@ export default function PurchaseOrderColumnFilterValuePicker({
   mode,
   value,
   onChange,
+  onAutoApply,
   uniqueValues = [],
   isNumber = false,
   columnLabel,
@@ -35,10 +36,12 @@ export default function PurchaseOrderColumnFilterValuePicker({
 
   const chips = isMulti && Array.isArray(value) ? value : [];
 
+  // Suggesties alleen tonen als het veld actief gefocust is, zodat bij reopen van
+  // de filtermenu de bestaande waarde in het invoerveld staat zonder dropdown.
   const suggestions = useMemo(() => {
+    if (!focused) return { items: [], totalMatches: 0, truncated: false };
     if (inputText.trim()) return getValueSuggestions(uniqueValues, inputText);
-    // Toon max. 10 waarden bij focus op leeg veld (browse-bij-focus, D365-stijl).
-    if (focused && uniqueValues.length) return getValueSuggestions(uniqueValues, '', 10);
+    if (uniqueValues.length) return getValueSuggestions(uniqueValues, '', 10);
     return { items: [], totalMatches: 0, truncated: false };
   }, [uniqueValues, inputText, focused]);
 
@@ -116,9 +119,11 @@ export default function PurchaseOrderColumnFilterValuePicker({
       const val = String(suggestionValue);
       commitSingleValue(val);
       setInputText(val);
+      // Auto-apply: filter direct activeren na suggestie-klik (equals-modus).
+      onAutoApply?.(val);
     }
     setFocused(false);
-  }, [addMultiValues, commitSingleValue, isMulti]);
+  }, [addMultiValues, commitSingleValue, isMulti, onAutoApply]);
 
   const handleRemoveChip = useCallback((index) => {
     onChange(chips.filter((_, chipIndex) => chipIndex !== index));

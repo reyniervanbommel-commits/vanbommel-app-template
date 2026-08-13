@@ -73,6 +73,26 @@ export function usePurchaseOrderSortFilterActions({
     setOpen(false);
   }, [columnKey, draft, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
 
+  // Gebruikt voor auto-apply vanuit de value picker na een suggestie-klik.
+  // Neemt de nieuwe waarde direct mee zodat de draft-closure niet stale is.
+  const handleApplyFilterWithValue = useCallback((explicitValue) => {
+    const patch = {
+      operator: draft.operator,
+      value: explicitValue,
+      secondaryValue: draft.secondaryValue,
+    };
+    startTransition(() => {
+      if (typeof onApplyFilter === 'function') {
+        onApplyFilter(columnKey, patch);
+      } else {
+        onSetOperator(columnKey, draft.operator);
+        onSetValue(columnKey, explicitValue);
+        onSetSecondaryValue(columnKey, '');
+      }
+    });
+    setOpen(false);
+  }, [columnKey, draft.operator, draft.secondaryValue, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
+
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
     setOpen(false);
@@ -87,6 +107,7 @@ export function usePurchaseOrderSortFilterActions({
     handleDraftValueChange,
     handleSecondaryValueChange,
     handleApplyFilter,
+    handleApplyFilterWithValue,
     handleClearFilter,
   };
 }

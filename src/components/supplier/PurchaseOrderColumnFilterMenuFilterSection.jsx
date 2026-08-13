@@ -16,6 +16,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   handleOperatorSelect,
   handleValueChange,
   handleDraftValueChange,
+  handleApplyFilterWithValue,
   uniqueColumnValues = [],
   handleSecondaryValueChange,
   handleApplyFilter,
@@ -87,6 +88,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             mode={draft.operator === 'oneOf' ? 'multi' : 'single'}
             value={draft.value}
             onChange={handleDraftValueChange}
+            onAutoApply={handleApplyFilterWithValue}
             uniqueValues={uniqueColumnValues}
             isNumber={isNumber}
             columnLabel={columnLabel}
