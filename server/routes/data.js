@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // Generieke Table Builder-data-API (#AB:152, Fase A). Gemonteerd op /api/data achter requireSession +
 // medewerker/admin-rol (zie server.js). tableKey-gedreven; lezen gaat uit tb_cache, bron alleen via refresh.
@@ -34,7 +34,7 @@ const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
 const router = express.Router();
 
 function remarksActor(req) {
-  return { id: req.user?.id, role: req.user?.role };
+  return { id: req.user?.id, role: req.user?.role, vendor_account: req.user?.vendor_account || null };
 }
 
 function toColumnId(raw) {
@@ -43,7 +43,7 @@ function toColumnId(raw) {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
-// GET /api/data/:tableKey/remarks/summary — actieve remarktellers per masterrij.
+// GET /api/data/:tableKey/remarks/summary â€” actieve remarktellers per masterrij.
 router.get('/:tableKey/remarks/summary', async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
@@ -54,7 +54,7 @@ router.get('/:tableKey/remarks/summary', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/remarks — stabiel cursor-gepagineerde remarks, inclusief tombstones.
+// GET /api/data/:tableKey/remarks â€” stabiel cursor-gepagineerde remarks, inclusief tombstones.
 router.get('/:tableKey/remarks', async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
@@ -70,7 +70,7 @@ router.get('/:tableKey/remarks', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
+// POST /api/data/:tableKey/remarks â€” immutable remark toevoegen aan een bestaande masterrij.
 // Staff + suppliers: suppliers mogen uitsluitend op orders binnen hun eigen vendor-scope
 // reageren; die rij-scope wordt afgedwongen in RowRemarksService.context().
 router.post('/:tableKey/remarks', async (req, res, next) => {
@@ -89,7 +89,7 @@ router.post('/:tableKey/remarks', async (req, res, next) => {
   }
 });
 
-// DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
+// DELETE /api/data/:tableKey/remarks/:id â€” owner/admin soft delete met rijbinding.
 router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
@@ -105,7 +105,7 @@ router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLO
   }
 });
 
-// PUT /api/data/:tableKey/remarks/:id/reaction — atomische, idempotente reaction-toggle.
+// PUT /api/data/:tableKey/remarks/:id/reaction â€” atomische, idempotente reaction-toggle.
 router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
@@ -123,7 +123,7 @@ router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/activity — row history of gecombineerde remarks/activity-feed.
+// GET /api/data/:tableKey/activity â€” row history of gecombineerde remarks/activity-feed.
 router.get('/:tableKey/activity', async (req, res, next) => {
   try {
     const activity = await getRowActivity({
@@ -144,8 +144,8 @@ router.get('/:tableKey/activity', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/revision — lichtgewicht "is het board gewijzigd?"-token.
-// Statisch pad, dus geregistreerd vóór GET /:tableKey (anders vangt de tableKey-route 'revision' op).
+// GET /api/data/:tableKey/revision â€” lichtgewicht "is het board gewijzigd?"-token.
+// Statisch pad, dus geregistreerd vÃ³Ã³r GET /:tableKey (anders vangt de tableKey-route 'revision' op).
 router.get('/:tableKey/revision', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
@@ -158,7 +158,7 @@ router.get('/:tableKey/revision', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey?autoRefresh=1 — lezen (lazy refresh bij stale cache).
+// GET /api/data/:tableKey?autoRefresh=1 â€” lezen (lazy refresh bij stale cache).
 router.get('/:tableKey', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
@@ -183,7 +183,7 @@ router.get('/:tableKey', async (req, res, next) => {
       : DEFAULT_SUPPLIER_FILTER_COLUMN;
     // Sublijnen blijven standaard buiten de board-payload; het board haalt ze per order op bij
     // het openklappen (GET .../rows/:partitionKey/:recordKey/details). ?includeDetails=1 geeft
-    // de oude, volledige vorm terug — handig om te vergelijken bij het debuggen.
+    // de oude, volledige vorm terug â€” handig om te vergelijken bij het debuggen.
     const includeDetails = req.query.includeDetails === '1' || req.query.includeDetails === 'true';
     const data = await dataService.read({
       tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails,
@@ -194,9 +194,9 @@ router.get('/:tableKey', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/refresh — forceer een bron-refresh.
+// POST /api/data/:tableKey/refresh â€” forceer een bron-refresh.
 // body.baseline = true: nulmeting. Haalt alles opnieuw op zonder wijzigingen in het dagboek te
-// zetten — bedoeld na een datamodel-wijziging, zodat de nieuwe uitgangssituatie niet als duizenden
+// zetten â€” bedoeld na een datamodel-wijziging, zodat de nieuwe uitgangssituatie niet als duizenden
 // "nieuwe" rijen op het bord verschijnt.
 router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
@@ -210,7 +210,7 @@ router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, nex
   }
 });
 
-// POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
+// POST /api/data/:tableKey/refresh/start â€” start refresh op de achtergrond.
 router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
@@ -221,7 +221,7 @@ router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, re
   }
 });
 
-// GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
+// GET /api/data/:tableKey/refresh/progress â€” voortgang van de lopende/laatste bron-refresh.
 router.get('/:tableKey/refresh/progress', async (req, res, next) => {
   try {
     const { tableKey } = req.params;
@@ -234,7 +234,7 @@ router.get('/:tableKey/refresh/progress', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/viewed — markeer alles als gezien (admin baseline voor alle gebruikers).
+// POST /api/data/:tableKey/viewed â€” markeer alles als gezien (admin baseline voor alle gebruikers).
 router.post('/:tableKey/viewed', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const result = await dataService.markViewed(req.user.id, req.params.tableKey);
@@ -267,7 +267,7 @@ router.get('/:tableKey/columns', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/columns — app-native kolom toevoegen.
+// POST /api/data/:tableKey/columns â€” app-native kolom toevoegen.
 router.post('/:tableKey/columns', async (req, res, next) => {
   try {
     const { scope, label, dataType, options, formulaExpr } = req.body || {};
@@ -281,7 +281,7 @@ router.post('/:tableKey/columns', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/columns/validate-formula — valideer formule + refs zonder opslaan.
+// POST /api/data/:tableKey/columns/validate-formula â€” valideer formule + refs zonder opslaan.
 router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
   try {
     const table = await registry.getTableByKey(req.params.tableKey);
@@ -310,7 +310,7 @@ router.post('/:tableKey/columns/validate-formula', async (req, res, next) => {
   }
 });
 
-// PATCH /api/data/:tableKey/columns/:id — app-native kolom hernoemen.
+// PATCH /api/data/:tableKey/columns/:id â€” app-native kolom hernoemen.
 router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
@@ -353,7 +353,7 @@ router.patch('/:tableKey/columns/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/data/:tableKey/columns/:id — soft-delete (waarden blijven behouden).
+// DELETE /api/data/:tableKey/columns/:id â€” soft-delete (waarden blijven behouden).
 // Admin-only: een kolom weghalen raakt het bord voor iedereen (grootste blast radius van de
 // datamodel-routes). De overige beheerroutes blijven bewust open voor employees.
 router.delete('/:tableKey/columns/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
@@ -367,7 +367,7 @@ router.delete('/:tableKey/columns/:id', requireRole(ROLES.ADMIN), async (req, re
   }
 });
 
-// PATCH /api/data/:tableKey/columns/:id/visibility — kolom tonen/verbergen op het bord (is_active). #AB:170
+// PATCH /api/data/:tableKey/columns/:id/visibility â€” kolom tonen/verbergen op het bord (is_active). #AB:170
 router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
@@ -379,7 +379,7 @@ router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
   }
 });
 
-// PATCH /api/data/:tableKey/columns/:id/visible-at-delete — zichtbaar in de verborgen-orders-popup. #AB:170
+// PATCH /api/data/:tableKey/columns/:id/visible-at-delete â€” zichtbaar in de verborgen-orders-popup. #AB:170
 router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
@@ -391,7 +391,7 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
   }
 });
 
-// PATCH /api/data/:tableKey/columns/:id/rccp-measure — kolom vrijgeven als RCCP-waardekolom.
+// PATCH /api/data/:tableKey/columns/:id/rccp-measure â€” kolom vrijgeven als RCCP-waardekolom.
 router.patch('/:tableKey/columns/:id/rccp-measure', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
@@ -404,7 +404,7 @@ router.patch('/:tableKey/columns/:id/rccp-measure', requireRole(ROLES.ADMIN), as
   }
 });
 
-// PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
+// PATCH /api/data/:tableKey/columns/:id/writeback â€” write-back-config (writable + mechanisme). #AB:170
 router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
@@ -420,7 +420,7 @@ router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   }
 });
 
-// PUT /api/data/:tableKey/value — app-native kolomwaarde opslaan (instant).
+// PUT /api/data/:tableKey/value â€” app-native kolomwaarde opslaan (instant).
 router.put('/:tableKey/value', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
@@ -436,7 +436,7 @@ router.put('/:tableKey/value', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/datamodel — admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
+// GET /api/data/:tableKey/datamodel â€” admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
 router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     return res.json(await dataService.getDataModel(req.params.tableKey));
@@ -445,7 +445,7 @@ router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, ne
   }
 });
 
-// POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
+// POST /api/data/:tableKey/discover-fields â€” admin: ontdek alle beschikbare bronvelden (kleine sample,
 // geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
 router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
@@ -455,7 +455,7 @@ router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, 
   }
 });
 
-// PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
+// PUT /api/data/:tableKey/sync-filters â€” admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
 router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
@@ -464,7 +464,7 @@ router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res,
   }
 });
 
-// POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
+// POST /api/data/:tableKey/sync-filters/count â€” admin: tel hoeveel bron-rijen de filter matcht. #AB:174
 router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
@@ -473,7 +473,7 @@ router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (re
   }
 });
 
-// GET /api/data/:tableKey/history?columnId=&partitionKey=&recordKey=&detailKey= — cel-geschiedenis. #AB:173
+// GET /api/data/:tableKey/history?columnId=&partitionKey=&recordKey=&detailKey= â€” cel-geschiedenis. #AB:173
 router.get('/:tableKey/history', async (req, res, next) => {
   try {
     const id = toColumnId(req.query.columnId);
@@ -496,7 +496,7 @@ router.get('/:tableKey/history', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/correct — D365-veldcorrectie terugschrijven (write-back). #AB:172
+// POST /api/data/:tableKey/correct â€” D365-veldcorrectie terugschrijven (write-back). #AB:172
 router.post('/:tableKey/correct', async (req, res, next) => {
   try {
     const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
@@ -512,7 +512,7 @@ router.post('/:tableKey/correct', async (req, res, next) => {
   }
 });
 
-// POST /api/data/:tableKey/rows/exclude — bulk "verwijderen" (persistente exclusion). #AB:171
+// POST /api/data/:tableKey/rows/exclude â€” bulk "verwijderen" (persistente exclusion). #AB:171
 router.post('/:tableKey/rows/exclude', async (req, res, next) => {
   try {
     const result = await dataService.excludeRows(
@@ -525,7 +525,7 @@ router.post('/:tableKey/rows/exclude', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/rows/hidden-in-filter — verborgen rijen die nog binnen de bron-scope vallen. #AB:171
+// GET /api/data/:tableKey/rows/hidden-in-filter â€” verborgen rijen die nog binnen de bron-scope vallen. #AB:171
 router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   try {
     const result = await dataService.listHiddenInFilterRows(req.params.tableKey);
@@ -535,7 +535,7 @@ router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   }
 });
 
-// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details — sublijnen van één rij.
+// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details â€” sublijnen van Ã©Ã©n rij.
 // Het board krijgt de regels niet meer mee in de board-read (die zou bij ~2000 orders
 // tientallen MB's worden) en haalt ze hiermee op zodra een order wordt opengeklapt.
 router.get('/:tableKey/rows/:partitionKey/:recordKey/details', async (req, res, next) => {
@@ -549,7 +549,7 @@ router.get('/:tableKey/rows/:partitionKey/:recordKey/details', async (req, res, 
   }
 });
 
-// POST /api/data/:tableKey/rows/include — "terugzetten": hef de exclusion op. #AB:171
+// POST /api/data/:tableKey/rows/include â€” "terugzetten": hef de exclusion op. #AB:171
 router.post('/:tableKey/rows/include', async (req, res, next) => {
   try {
     const result = await dataService.includeRows(
