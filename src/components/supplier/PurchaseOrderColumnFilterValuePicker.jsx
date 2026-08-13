@@ -104,16 +104,20 @@ export default function PurchaseOrderColumnFilterValuePicker({
   }, [addMultiValues, commitSingleValue, isMulti]);
 
   const handleFocus = useCallback(() => setFocused(true), []);
+
   // Kort timeout zodat een klik op een suggestie-optie de blur overleeft.
   const handleBlur = useCallback(() => setTimeout(() => setFocused(false), 150), []);
 
   const handleSuggestionClick = useCallback((suggestionValue) => {
     if (isMulti) {
       addMultiValues([String(suggestionValue)]);
+      setInputText('');
     } else {
-      commitSingleValue(String(suggestionValue));
+      const val = String(suggestionValue);
+      commitSingleValue(val);
+      setInputText(val);
     }
-    setInputText('');
+    setFocused(false);
   }, [addMultiValues, commitSingleValue, isMulti]);
 
   const handleRemoveChip = useCallback((index) => {
@@ -135,7 +139,11 @@ export default function PurchaseOrderColumnFilterValuePicker({
         aria-label={`Filter value for ${columnLabel}`}
       />
       {suggestions.items.length ? (
-        <div className={styles.pickerSuggestions} role="listbox" aria-label={`Suggestions for ${columnLabel}`}>
+        <div
+          className={styles.pickerSuggestions}
+          role="listbox"
+          aria-label={`Suggestions for ${columnLabel}`}
+        >
           {suggestions.items.map((suggestion) => (
             <Button
               key={String(suggestion)}
