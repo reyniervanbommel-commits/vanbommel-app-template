@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const { ROLES } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
@@ -20,11 +20,9 @@ async function getSupplierFilterColumnKey() {
   return settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN);
 }
 
-// Bepaalt welke orders een supplier mag zien. Hergebruikt bewust de board-read
-// (TableDataService.read) zodat exact dezelfde scoping geldt als op het PO-board — inclusief de
-// lookup-/formula-verrijking van de filterkolom. Zo kan een order nooit wél op het board staan
-// en toch door de remark-scopecheck worden geweigerd (de oude check las alleen de ruwe data_json,
-// wat afweek van de verrijkte waarde waarop het board filtert).
+// Bepaalt welke orders een supplier mag zien via dezelfde board-read (TableDataService.read)
+// als het PO-board — inclusief lookup-/formula-verrijking. Zo is de zichtbare keyset altijd
+// consistent met wat de vendor op het board ziet.
 async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, userId = null) {
   // Lazy require voorkomt een module-cycle bij het laden.
   const dataService = require('../services/TableDataService');
@@ -42,6 +40,9 @@ async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn,
   return keys;
 }
 
+// Per-rij scope-check via dezelfde board-read als loadSupplierVisibleRowKeys. De oude aanpak
+// (checkRowInSupplierScope) las de ruwe data_json zonder lookup-verrijking en week daarmee af
+// van de waarden waarop het board filtert — wat de "Access denied" bug op geldige orders veroorzaakte.
 async function assertSupplierPurchaseOrderRow(user, { tableKey, partitionKey, recordKey }) {
   if (!user || user.role !== ROLES.SUPPLIER) return;
   if (String(tableKey || '').trim() !== PURCHASE_ORDERS_TABLE) {
