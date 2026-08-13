@@ -22,8 +22,8 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('0'),
     verticalAlign: 'middle',
-    // B4: GPU compositor layer op sticky group headers
-    transform: 'translateZ(0)',
+    // Geen transform op sticky-top element: GPU-layer op een verticaal-sticky element
+    // kan een visuele frame-vertraging geven waardoor de header lijkt mee te scrollen.
   },
   groupButton: {
     flex: 1,

@@ -162,7 +162,7 @@ function PurchaseOrdersBoardRows({
   const { colStart, colEnd, leftSpanCount, rightSpanCount } = useBoardColumnWindow({
     scrollRef,
     columns: layout.columns ?? [],
-    columnWidths: layout.headerColumnWidths ?? {},
+    columnWidths: formatting.headerColumnWidths ?? {},
     overscanCols: 2,
     enabled: windowEnabled,
   });

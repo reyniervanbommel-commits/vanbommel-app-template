@@ -100,10 +100,12 @@ export function useBoardRowWindow({
       const viewH = el.clientHeight || 600;
       const scrollTop = el.scrollTop;
       // B2: asymmetrische overscan op basis van scrollrichting — D365 F&O VirtualScrollViewer patroon
+      // overscanBefore minimaal 4 zodat sticky group headers voldoende in het window blijven
+      // voor een vloeiende overgang naar het pin-mechanisme (geen zichtbare sprong).
       const scrollingDown = scrollTop >= prevScrollTop;
       prevScrollTop = scrollTop;
-      const overscanBefore = scrollingDown ? 2 : overscan;
-      const overscanAfter = scrollingDown ? overscan : 2;
+      const overscanBefore = scrollingDown ? 4 : overscan;
+      const overscanAfter = scrollingDown ? overscan : 4;
 
       const first = findStartIndex(offsets, scrollTop);
       const start = Math.max(0, first - overscanBefore);
