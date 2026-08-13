@@ -47,6 +47,10 @@ export function usePurchaseOrderSortFilterActions({
     setDraft((prev) => ({ ...prev, value: nextValue }));
   }, [setDraft]);
 
+  const handleDraftValueChange = useCallback((nextValue) => {
+    setDraft((prev) => ({ ...prev, value: nextValue }));
+  }, [setDraft]);
+
   const handleSecondaryValueChange = useCallback((event) => {
     const nextValue = event.target.value;
     setDraft((prev) => ({ ...prev, secondaryValue: nextValue }));
@@ -69,10 +73,30 @@ export function usePurchaseOrderSortFilterActions({
     setOpen(false);
   }, [columnKey, draft, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
 
+  // Gebruikt voor auto-apply vanuit de value picker na een suggestie-klik.
+  // Neemt de nieuwe waarde direct mee zodat de draft-closure niet stale is.
+  // Sluit de popover NIET — de gebruiker moet het menu kunnen blijven gebruiken.
+  const handleApplyFilterWithValue = useCallback((explicitValue) => {
+    const patch = {
+      operator: draft.operator,
+      value: explicitValue,
+      secondaryValue: draft.secondaryValue,
+    };
+    startTransition(() => {
+      if (typeof onApplyFilter === 'function') {
+        onApplyFilter(columnKey, patch);
+      } else {
+        onSetOperator(columnKey, draft.operator);
+        onSetValue(columnKey, explicitValue);
+        onSetSecondaryValue(columnKey, '');
+      }
+    });
+  }, [columnKey, draft.operator, draft.secondaryValue, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue]);
+
+  // Sluit de popover NIET na clear — de gebruiker blijft in het menu.
   const handleClearFilter = useCallback(() => {
     onClearFilter(columnKey);
-    setOpen(false);
-  }, [columnKey, onClearFilter, setOpen]);
+  }, [columnKey, onClearFilter]);
 
   return {
     setSortAsc,
@@ -80,8 +104,10 @@ export function usePurchaseOrderSortFilterActions({
     clearSort,
     handleOperatorSelect,
     handleValueChange,
+    handleDraftValueChange,
     handleSecondaryValueChange,
     handleApplyFilter,
+    handleApplyFilterWithValue,
     handleClearFilter,
   };
 }

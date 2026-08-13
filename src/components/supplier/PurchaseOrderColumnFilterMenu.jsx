@@ -19,6 +19,9 @@ import {
   isDateColumn,
   isNumberColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
+import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
+
+const EMPTY_UNIQUE_VALUES = [];
 
 function PurchaseOrderColumnFilterMenu({
   column,
@@ -64,6 +67,9 @@ function PurchaseOrderColumnFilterMenu({
   stickyColumnCount = 0,
   onMakeColumnSticky,
   onToggleColumnCollapsed,
+  items = [],
+  allFilters = {},
+  allDatePeriodDisplayModes = {},
 }) {
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
@@ -95,6 +101,10 @@ function PurchaseOrderColumnFilterMenu({
       ? NUMBER_FILTER_OPERATORS
       : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
+  const uniqueColumnValues = useMemo(() => {
+    if (!open || isDate) return EMPTY_UNIQUE_VALUES;
+    return getUniqueColumnValues(column, items, referenceColumns, allFilters, allDatePeriodDisplayModes);
+  }, [open, isDate, column, items, referenceColumns, allFilters, allDatePeriodDisplayModes]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
   const filterActive = isColumnFilterActive(column, filter, datePeriodFilterModes);
   const writable = !!column.writableToD365;
@@ -181,7 +191,7 @@ function PurchaseOrderColumnFilterMenu({
     onSetDatePeriodDisplayMode(column.key, displayMode);
     setActiveSubmenu('none');
   }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
-  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleSecondaryValueChange, handleApplyFilter, handleClearFilter } = usePurchaseOrderSortFilterActions({
+  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleDraftValueChange, handleSecondaryValueChange, handleApplyFilter, handleApplyFilterWithValue, handleClearFilter } = usePurchaseOrderSortFilterActions({
     columnKey: column.key,
     draft,
     onSetSortDirection,
@@ -253,6 +263,9 @@ function PurchaseOrderColumnFilterMenu({
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
         isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
+        handleDraftValueChange={handleDraftValueChange}
+        handleApplyFilterWithValue={handleApplyFilterWithValue}
+        uniqueColumnValues={uniqueColumnValues}
         handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} colorFilter={colorFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}

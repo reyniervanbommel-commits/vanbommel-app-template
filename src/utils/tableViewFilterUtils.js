@@ -4,6 +4,7 @@
 // hetzelfde resultaat geeft als in een grafiek (#AB:220).
 
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
+import { dateMatchesFilter } from './dateFilterUtils';
 
 // Kleurfilter (client-only): matcht op de getoonde celkleur (status/conditional
 // formatting). Bewust NIET onderdeel van columnValueMatchesFilter, want kleur wordt
@@ -31,6 +32,7 @@ export const DATE_FILTER_OPERATORS = {
 
 export const NUMBER_FILTER_OPERATORS = {
   equals: 'is exactly',
+  oneOf: 'is one of',
   gt: 'is greater than',
   lt: 'is less than',
   gte: 'is greater than or equal to',
@@ -62,28 +64,33 @@ function parseOneOfValues(value) {
     .filter(Boolean);
 }
 
-function parseDateValue(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
-}
-
 function parseNumberValue(value) {
   if (value === null || value === undefined || value === '') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 }
 
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+// Zet een legacy kommagescheiden 'oneOf'-string om naar een array met behoud van originele
+// casing/spelling (voor weergave als chips) — matching normaliseert apart via normalizeText.
+// Commas gevolgd door een spatie (bijv. "Acme, Inc.") worden als onderdeel van de waarde
+// beschouwd; alleen bare commas worden als scheidingsteken gebruikt.
+function splitLegacyOneOfString(value) {
+  const parts = String(value || '').split(',');
+  const result = [];
+  for (const part of parts) {
+    if (part.startsWith(' ') && result.length > 0) {
+      result[result.length - 1] += ',' + part;
+    } else {
+      result.push(part);
+    }
+  }
+  return result.map((part) => part.trim()).filter(Boolean);
 }
 
-function startOfNextWeek() {
-  const now = new Date();
-  const day = now.getDay();
-  const daysUntilMonday = ((8 - day) % 7) || 7;
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMonday).getTime();
+function normalizeOneOfValue(rawValue) {
+  if (Array.isArray(rawValue)) return rawValue;
+  if (typeof rawValue === 'string' && rawValue) return splitLegacyOneOfString(rawValue);
+  return [];
 }
 
 // Bepaalt het standaard filter-model voor een kolomtype.
@@ -93,6 +100,13 @@ export function resolveFilterModel(column, filter, datePeriodDisplayModes = {}) 
       operator: COLOR_FILTER_OPERATOR,
       colors: Array.isArray(filter.colors) ? filter.colors.filter(Boolean) : [],
       value: '',
+      secondaryValue: '',
+    };
+  }
+  if (filter?.operator === 'oneOf') {
+    return {
+      operator: 'oneOf',
+      value: normalizeOneOfValue(filter.value),
       secondaryValue: '',
     };
   }
@@ -122,6 +136,9 @@ export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
   if (filter.operator === COLOR_FILTER_OPERATOR) {
     return Array.isArray(filter.colors) && filter.colors.length > 0;
   }
+  if (filter.operator === 'oneOf') {
+    return Array.isArray(filter.value) && filter.value.length > 0;
+  }
   if (isDateColumn(column)) {
     if (filter.operator === 'nextWeek') return true;
     if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
@@ -136,66 +153,33 @@ export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
   return Boolean(filter.value);
 }
 
-export function dateMatchesFilter(rawValue, filter) {
-  const rowTime = parseDateValue(rawValue);
-  if (rowTime === null) return false;
-  if (filter.operator === 'before') {
-    const target = parseDateValue(filter.value);
-    return target !== null ? rowTime < target : true;
-  }
-  if (filter.operator === 'after') {
-    const target = parseDateValue(filter.value);
-    return target !== null ? rowTime > target : true;
-  }
-  if (filter.operator === 'between') {
-    const from = parseDateValue(filter.value);
-    const to = parseDateValue(filter.secondaryValue);
-    if (from === null || to === null) return true;
-    return rowTime >= Math.min(from, to) && rowTime <= Math.max(from, to);
-  }
-  if (filter.operator === 'inNextWeeks') {
-    const count = Number(filter.value);
-    if (!Number.isFinite(count) || count <= 0) return true;
-    const start = startOfToday();
-    return rowTime >= start && rowTime <= start + (count * 7 * 24 * 60 * 60 * 1000);
-  }
-  if (filter.operator === 'inNextDays') {
-    const count = Number(filter.value);
-    if (!Number.isFinite(count) || count <= 0) return true;
-    const start = startOfToday();
-    return rowTime >= start && rowTime <= start + (count * 24 * 60 * 60 * 1000);
-  }
-  if (filter.operator === 'nextWeek') {
-    const weekStart = startOfNextWeek();
-    return rowTime >= weekStart && rowTime < weekStart + (7 * 24 * 60 * 60 * 1000);
-  }
-  if (filter.operator === 'equals') {
-    const target = parseDateValue(filter.value);
-    if (target === null) return false;
-    const a = new Date(rowTime);
-    const b = new Date(target);
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  }
-  return true;
-}
-
 export function textMatchesFilter(rawValue, filter) {
   const normalized = normalizeText(rawValue);
+  if (filter.operator === 'oneOf') {
+    const options = (Array.isArray(filter.value) ? filter.value : parseOneOfValues(filter.value))
+      .map(normalizeText);
+    return options.length ? options.includes(normalized) : true;
+  }
   const query = normalizeText(filter.value);
-  if (!query && filter.operator !== 'oneOf' && filter.operator !== 'equals') return true;
+  if (!query && filter.operator !== 'equals') return true;
   if (filter.operator === 'equals') return normalized === query;
   if (filter.operator === 'contains') return normalized.includes(query);
   if (filter.operator === 'notContains') return !normalized.includes(query);
   if (filter.operator === 'startsWith') return normalized.startsWith(query);
   if (filter.operator === 'notStartsWith') return !normalized.startsWith(query);
-  if (filter.operator === 'oneOf') {
-    const options = parseOneOfValues(filter.value);
-    return options.length ? options.includes(normalized) : true;
-  }
   return true;
 }
 
 export function numberMatchesFilter(rawValue, filter) {
+  if (filter.operator === 'oneOf') {
+    const targets = (Array.isArray(filter.value) ? filter.value : [])
+      .map(parseNumberValue)
+      .filter((num) => num !== null);
+    if (!targets.length) return true;
+    const rowNum = parseNumberValue(rawValue);
+    if (rowNum === null) return false;
+    return targets.includes(rowNum);
+  }
   if (filter.operator === 'between') {
     const from = parseNumberValue(filter.value);
     const to = parseNumberValue(filter.secondaryValue);
@@ -221,6 +205,24 @@ export function columnValueMatchesFilter(column, rawValue, filter, datePeriodDis
   if (isDateColumn(column)) return dateMatchesFilter(rawValue, filter);
   if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) return numberMatchesFilter(rawValue, filter);
   return textMatchesFilter(rawValue, filter);
+}
+
+/**
+ * Filtert items op alle actieve waarde-filters, met uitzondering van het filter op
+ * `excludeColumnKey` en van kleurfilters (colorIs — die hebben de volledige rij + format-regels
+ * nodig, niet alleen de ruwe celwaarde, en vallen buiten deze cascading-berekening).
+ */
+export function filterItemsByColumnFilters(items, columns, filterByColumn, datePeriodDisplayModes = {}, excludeColumnKey = null) {
+  const activeFilters = columns
+    .filter((column) => column.key !== excludeColumnKey)
+    .map((column) => [column, resolveFilterModel(column, filterByColumn?.[column.key], datePeriodDisplayModes)])
+    .filter(([column, filter]) => (
+      filter.operator !== COLOR_FILTER_OPERATOR && hasActiveFilter(column, filter, datePeriodDisplayModes)
+    ));
+  if (!activeFilters.length) return items;
+  return items.filter((item) => activeFilters.every(([column, filter]) => (
+    columnValueMatchesFilter(column, item?.values?.[column.key], filter, datePeriodDisplayModes)
+  )));
 }
 
 /**

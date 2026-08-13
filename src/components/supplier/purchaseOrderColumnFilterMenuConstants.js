@@ -1,5 +1,5 @@
 import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
-import { COLOR_FILTER_OPERATOR } from '../../utils/tableViewFilterUtils';
+import { COLOR_FILTER_OPERATOR, hasActiveFilter } from '../../utils/tableViewFilterUtils';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -74,6 +74,13 @@ export function getDraftFromFilter(column, filter, datePeriodDisplayModes = {}) 
   const operator = filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR
     ? filter.operator
     : getDefaultOperator(column, datePeriodDisplayModes);
+  if (operator === 'oneOf') {
+    return {
+      operator,
+      value: filter?.operator === 'oneOf' && Array.isArray(filter.value) ? filter.value : [],
+      secondaryValue: '',
+    };
+  }
   return {
     operator,
     value: filter?.operator === COLOR_FILTER_OPERATOR ? '' : (filter?.value || ''),
@@ -82,22 +89,7 @@ export function getDraftFromFilter(column, filter, datePeriodDisplayModes = {}) 
 }
 
 export function isColumnFilterActive(column, filter, datePeriodDisplayModes = {}) {
-  if (!filter) return false;
-  if (filter.operator === COLOR_FILTER_OPERATOR) {
-    return Array.isArray(filter.colors) && filter.colors.length > 0;
-  }
-  if (isDateColumn(column)) {
-    if (filter.operator === 'nextWeek') return true;
-    if (filter.operator === 'between') return Boolean(filter.value && filter.secondaryValue);
-    if (filter.operator === 'equals' && filter.value === '') return true;
-    return Boolean(filter.value);
-  }
-  if (isNumberColumn(column, datePeriodDisplayModes)) {
-    if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
-    return filter.value !== '' && filter.value !== null && filter.value !== undefined;
-  }
-  if (filter.operator === 'equals' && filter.value === '') return true;
-  return Boolean(filter.value);
+  return hasActiveFilter(column, filter, datePeriodDisplayModes);
 }
 
 export function isColumnFormatRuleSetActive(columnFormatRuleSet) {
