@@ -15,6 +15,8 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      fqdn: ${{ steps.deploy-validate.outputs.fqdn }}
 
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +69,7 @@ jobs:
             --image "$IMAGE"
 
       - name: Deploy-validatie (health + revision)
+        id: deploy-validate
         run: |
           FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$ACA_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
           REVISION="$(az containerapp show --name "$APP_NAME" --resource-group "$ACA_RESOURCE_GROUP" --query properties.latestRevisionName -o tsv)"
@@ -75,6 +78,7 @@ jobs:
           echo "Laatste revision: $REVISION"
 
           curl --fail --silent --show-error "https://${FQDN}/api/health"
+          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
 
       - name: Oude dev-images opruimen
         run: |
@@ -85,3 +89,43 @@ jobs:
             [ -n "$TAG" ] && az acr repository delete --name "$ACR_NAME" --image "vendorportal:$TAG" --yes 2>/dev/null || true
           done
           echo "Dev-images opgeschoond (laatste 5 behouden)"
+
+  # Niet-blokkerend: draait pas ná een geslaagde deploy, faalt de deploy zelf nooit. Serieel
+  # (workers:1 in playwright.config.js) en met retries op CI om resource-contentie tegen de
+  # gedeelde DEV-instance te absorberen — zie e2e/*.spec.js voor de aanleiding.
+  e2e:
+    name: e2e (niet-blokkerend)
+    needs: deploy
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci --legacy-peer-deps
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E-tests draaien tegen DEV
+        env:
+          TEST_BASE_URL: https://${{ needs.deploy.outputs.fqdn }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          E2E_SUPPLIER_EMAIL: ${{ secrets.E2E_SUPPLIER_EMAIL }}
+          E2E_SUPPLIER_PASSWORD: ${{ secrets.E2E_SUPPLIER_PASSWORD }}
+        run: npx playwright test
+
+      - name: Playwright-rapport uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
