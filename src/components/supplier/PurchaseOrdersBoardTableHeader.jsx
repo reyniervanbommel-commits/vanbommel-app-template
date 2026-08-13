@@ -19,6 +19,7 @@ export default function PurchaseOrdersBoardTableHeader({
   lineColumns,
   stickyState,
   collapsedHeaderColumnKeys,
+  items = [],
 }) {
   const {
     filterByColumn, sortState, setSortDirection, setFilterOperator, setFilterValue,
@@ -46,6 +47,7 @@ export default function PurchaseOrdersBoardTableHeader({
         styles={styles}
         selection={selection}
         onSetExpansion={onSetExpansion}
+        items={items}
         productImageColumnVisible={productImageColumnVisible}
         onToggleProductImageColumn={onToggleProductImageColumn}
         columns={columns}

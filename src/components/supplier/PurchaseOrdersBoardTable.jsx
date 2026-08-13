@@ -219,6 +219,7 @@ function PurchaseOrdersBoardTable({
             styles={styles}
             selection={selection}
             onSetExpansion={handleSetExpansion}
+            items={items}
             columns={decoratedColumns}
             headerColumnWidths={effectiveHeaderColumnWidths}
             boardView={resolvedBoardView}

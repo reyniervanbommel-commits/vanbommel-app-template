@@ -59,6 +59,8 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   operatorEntries,
   handleOperatorSelect,
   handleValueChange,
+  handleDraftValueChange,
+  uniqueColumnValues,
   handleSecondaryValueChange,
   handleApplyFilter,
   handleClearFilter,
@@ -138,6 +140,8 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             operatorEntries={operatorEntries}
             handleOperatorSelect={handleOperatorSelect}
             handleValueChange={handleValueChange}
+            handleDraftValueChange={handleDraftValueChange}
+            uniqueColumnValues={uniqueColumnValues}
             handleSecondaryValueChange={handleSecondaryValueChange}
             handleApplyFilter={handleApplyFilter}
             handleClearFilter={handleClearFilter}
