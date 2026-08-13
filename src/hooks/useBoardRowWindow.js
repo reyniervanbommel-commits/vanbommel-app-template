@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
+import { measure } from '../utils/perf';
 
 /**
  * Viewport window for board rows.
@@ -92,23 +93,48 @@ export function useBoardRowWindow({
       return undefined;
     }
 
+    // B2: vorige scrollTop bijhouden voor directional overscan
+    let prevScrollTop = el.scrollTop;
+
     const update = () => {
       const viewH = el.clientHeight || 600;
       const scrollTop = el.scrollTop;
+      // B2: asymmetrische overscan op basis van scrollrichting — D365 F&O VirtualScrollViewer patroon
+      // overscanBefore minimaal 4 zodat sticky group headers voldoende in het window blijven
+      // voor een vloeiende overgang naar het pin-mechanisme (geen zichtbare sprong).
+      const scrollingDown = scrollTop >= prevScrollTop;
+      prevScrollTop = scrollTop;
+      const overscanBefore = scrollingDown ? 4 : overscan;
+      const overscanAfter = scrollingDown ? overscan : 4;
+
       const first = findStartIndex(offsets, scrollTop);
-      const start = Math.max(0, first - overscan);
+      const start = Math.max(0, first - overscanBefore);
       const last = findEndIndex(offsets, scrollTop + viewH);
-      const end = Math.min(totalCount, last + overscan);
-      setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+      const end = Math.min(totalCount, last + overscanAfter);
+      // A3: window-updates zijn niet-urgent — input/animatie krijgt prioriteit
+      startTransition(() => {
+        setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+      });
+    };
+
+    // A0: rAF-gate — batcht scroll-events op de browser-refresh-rate (BL-004)
+    let rafId = null;
+    const scheduleUpdate = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        measure('board:window-update', update);
+      });
     };
 
     update();
-    el.addEventListener('scroll', update, { passive: true });
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    el.addEventListener('scroll', scheduleUpdate, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleUpdate) : null;
     ro?.observe(el);
     return () => {
-      el.removeEventListener('scroll', update);
+      el.removeEventListener('scroll', scheduleUpdate);
       ro?.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [enabled, overscan, offsets, scrollRef, totalCount]);
 

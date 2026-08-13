@@ -8,6 +8,7 @@ import {
 } from './purchaseOrderBoardLayout';
 import { usePurchaseOrdersBoardRowsStyles } from './purchaseOrdersBoardRowsStyles';
 import { useBoardRowWindow } from '../../hooks/useBoardRowWindow';
+import { useBoardColumnWindow } from '../../hooks/useBoardColumnWindow';
 import {
   buildBoardRowSlots,
   collectGroupSlotIndices,
@@ -154,9 +155,21 @@ function PurchaseOrdersBoardRows({
     totalCount: slots.length,
     rowHeightPx: PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX,
     rowHeights,
-    overscan: 14,
+    overscan: 8,
     enabled: windowEnabled,
   });
+  // B1: Horizontale kolom-virtualisatie — alleen zichtbare kolommen renderen per rij
+  const { colStart, colEnd, leftSpanCount, rightSpanCount } = useBoardColumnWindow({
+    scrollRef,
+    columns: layout.columns ?? [],
+    columnWidths: formatting.headerColumnWidths ?? {},
+    overscanCols: 2,
+    enabled: windowEnabled,
+  });
+  const colWindow = useMemo(
+    () => ({ colStart, colEnd, leftSpanCount, rightSpanCount }),
+    [colStart, colEnd, leftSpanCount, rightSpanCount]
+  );
   const visibleSlots = useMemo(() => slots.slice(start, end), [end, slots, start]);
   // De categorie-header staat sticky (CSS position: sticky), maar dat werkt alleen
   // zolang de rij ook echt in de DOM staat. Als de eigen groep-header-slot buiten het
@@ -215,6 +228,7 @@ function PurchaseOrdersBoardRows({
             contextMenu={contextMenu}
             remarks={remarks}
             onMeasureExpanded={handleMeasureExpanded}
+            colWindow={colWindow}
           />
         );
       })}
