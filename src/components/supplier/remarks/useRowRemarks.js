@@ -61,6 +61,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
 
   const loadInitial = useCallback(async () => {
     if (!enabled || !tableKey || !row?.partitionKey || !row?.recordKey) return;
+    if (requestInFlightRef.current) return;
     setLoading(true);
     setError('');
     try {
