@@ -21,8 +21,20 @@ jobs:
       - name: Dependencies installeren
         run: npm ci --legacy-peer-deps
 
-      - name: Tests uitvoeren
-        run: npm test
+      - name: Tests uitvoeren (met coverage)
+        run: npm run test:coverage
+
+      - name: Coverage-samenvatting naar job-summary
+        if: always()
+        run: node scripts/print-coverage-summary.js
+
+      - name: Coverage-rapport uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
   typecheck:
     name: typecheck

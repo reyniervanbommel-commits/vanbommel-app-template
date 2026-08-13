@@ -1,249 +1,342 @@
-# PO-bord scroll-optimalisaties (vervolg BL-004) — Tier A, B, C
+---
+name: po-board-scroll-optimalisaties
+overview: >
+  Vervolgoptimalisaties voor verticaal én horizontaal scrollen op het PO-bord,
+  gebaseerd op best practices van monday.com (mondayDB) en Microsoft D365 F&O.
+  BL-004 (rAF-gate, -40% jank) is al geïmplementeerd. Dit plan pakt de resterende
+  render- en scroll-bottlenecks aan in drie tiers: snelle CSS/React-wins (A),
+  directional windowing + tooltip-mount (B), en architecturale verbeteringen
+  zoals horizontale kolom-virtualisatie en paint-then-hydrate (C).
+todos:
+  # --- Tier A: hoge impact, kleine ingreep ---
+  - id: a1-overscan-verlaging
+    content: >
+      Overscan verlagen van 14 naar 8 in PurchaseOrdersBoardRows.jsx.
+      Vermindert mount-werk per scroll-stap met ~40%.
+    status: pending
+  - id: a2-content-visibility
+    content: >
+      CSS content-visibility auto + contain-intrinsic-size op tabelrijen.
+      Browser slaat layout/paint over voor off-screen rijen — D365 F&O patroon.
+    status: pending
+  - id: a3-start-transition
+    content: >
+      React.startTransition rond setRange() in useBoardRowWindow.js.
+      Markeert window-update als niet-urgent zodat input-events prioriteit houden
+      boven rij-mount — monday.com board-update patroon.
+    status: pending
+  - id: a4-contain-content
+    content: >
+      CSS contain content op tabelcellen. Isoleert layout per cel,
+      voorkomt reflow-cascade bij scroll over ~500 cellen (25 kolommen × 20 rijen).
+    status: pending
+  # --- Tier B: hoge impact, gemiddelde ingreep ---
+  - id: b1-horizontal-virtualisatie
+    content: >
+      Horizontale kolom-virtualisatie via useBoardColumnWindow hook. Nu worden alle
+      25 kolommen gerenderd per rij, ook buiten het horizontale viewport. monday.com
+      en D365 F&O virtualiseren altijd zowel rijen als kolommen. Grootste
+      onbenutte optimalisatie: 60% minder render per rij als 10 van 25 kolommen zichtbaar.
+    status: pending
+  - id: b2-directional-overscan
+    content: >
+      Asymmetrische overscan op basis van scrollrichting. Meer buffer in
+      scrollrichting (12), minder tegengesteld (2). Detectie via scrollTop-delta
+      tussen rAF-cycli. D365 F&O VirtualScrollViewer-patroon.
+    status: pending
+  - id: b3-tooltip-hover-mount
+    content: >
+      Tooltip in PurchaseOrderProductImageCell pas mounten op mouseenter (200ms delay),
+      niet bij rij-mount. Nu registreert elke gemounte rij direct een Tooltip-instantie
+      met event-listeners — onnodig bij scroll.
+    status: pending
+  - id: b4-sticky-kolommen-gpu
+    content: >
+      position sticky + transform translateZ(0) voor controlekolom en eerste
+      datakolom. Bevriest context tijdens horizontaal scrollen (D365 F&O + Excel
+      patroon). GPU-layer promotion voorkomt repaint bij horizontale scroll.
+    status: pending
+  # --- Tier C: architecturaal, grotere ingreep ---
+  - id: c1-paint-then-hydrate
+    content: >
+      Eerste 30 rijen renderen als statische shell (plain HTML/CSS, geen React
+      event handlers) en daarna hydrateren. Bord is perceptueel zichtbaar in ~50ms,
+      interactief in ~300ms. monday.com core-patroon voor initiële boardload.
+    status: pending
+  - id: c2-idle-callback-cel
+    content: >
+      requestIdleCallback voor niet-kritieke cel-content (badges, statuspills,
+      format-kleuren). Cellen renderen eerst container + achtergrond (zichtbaar
+      tijdens scroll), inhoud volgt in idle-tijd. D365 F&O two-phase cell render.
+    status: pending
+  - id: c3-perf-meting-na-tier-a
+    content: >
+      Perf-meting na Tier A (20 runs, profiel L, J4-journey, same-instance op DEV).
+      Baseline voor Tier B-beslissing.
+    status: pending
+  - id: c4-perf-meting-na-tier-b
+    content: >
+      Perf-meting na Tier B (20 runs, zelfde methodiek). Beslissing over Tier C op
+      basis van meetresultaten.
+    status: pending
+isProject: true
+---
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
-> (recommended) or superpowers:executing-plans to implement this plan task-by-task.
-> Steps use checkbox (`- [ ]`) syntax for tracking.
->
-> **DevOps:** Feature [#252](https://dev.azure.com/ReyniervanBommel0745/Vendor-App/_workitems/edit/252)
-> · Stories [#253](https://dev.azure.com/ReyniervanBommel0745/Vendor-App/_workitems/edit/253) (Tier A),
-> [#254](https://dev.azure.com/ReyniervanBommel0745/Vendor-App/_workitems/edit/254) (Tier B),
-> [#255](https://dev.azure.com/ReyniervanBommel0745/Vendor-App/_workitems/edit/255) (Tier C — geparkeerd).
-> Repo-doc: `docs/devops/252-po-board-scroll-optimalisaties.md`.
+# Implementatieplan — PO-bord scroll-optimalisaties (vervolg BL-004)
 
-**Goal:** Resterende scroll-/render-bottlenecks op het PO-bord aanpakken (vervolg op BL-004),
-gebaseerd op monday.com- en D365 F&O-patronen, in drie tiers. Doel na Tier A+B:
-`maxLongFrameMs ≤ 700ms` (mediaan, 20 runs, profiel L, J4, same-instance DEV).
+## Context en aanleiding
 
-**Architecture:** Puur frontend. Rij-windowing blijft in `useBoardRowWindow`; Tier A verbetert
-scheduling + CSS containments; Tier B voegt kolom-windowing + directional overscan toe en
-optimaliseert bestaande sticky/Tooltip-paden; Tier C (paint-then-hydrate / idle cells) blijft
-**geparkeerd** tot een expliciete go na meting.
+BL-004 (rAF-gate op scroll-listener) is geïmplementeerd en gemeten: **−39,8% maxLongFrameMs** (1681ms → 1012ms mediaan, 20 runs). Target van 30% gehaald.
 
-**Tech Stack:** React 18, Fluent UI v9, Vitest, Playwright `perf-scroll` (J4).
+Dit plan pakt de resterende bottlenecks aan op basis van:
+- Meting na BL-004: 1012ms mediaan, 2 long frames per sessie, `scrollJankMs` 1493ms
+- Codeanalyse van `useBoardRowWindow.js`, `PurchaseOrdersBoardRows.jsx`, `PurchaseOrderBoardRow.jsx`, `PurchaseOrderProductImageCell.jsx`
+- Best practices van **monday.com** (mondayDB-architectuur) en **Microsoft D365 F&O** (VirtualScrollViewer)
 
-**User story:**
-Als gebruiker van het PO-bord wil ik vloeiend verticaal én horizontaal kunnen scrollen
-(met vaste contextkolommen), zodat grote orderlijsten (~2000) aanvoelen als een professionele
-ERP-grid zonder merkbare jank.
+## Wat al geoptimaliseerd is (niet opnieuw aanraken)
 
-**Acceptatiecriteria (globaal — Definition of Done Feature #252):**
-- [ ] Tier A (#253) haalt `maxLongFrameMs ≤ 800ms` (mediaan 20 runs, profiel L, J4, same-instance).
-- [ ] Tier B (#254) haalt `maxLongFrameMs ≤ 700ms` onder dezelfde meetmethode; geen header/body
-      misalignment; sticky correct bij zoom 100/125/150%.
-- [ ] Tier C (#255) is **niet** geïmplementeerd tenzij schriftelijke go na Tier-B-meting
-      (`maxLongFrameMs` nog > 700ms).
-- [ ] Geen regressie op `useBoardRowWindow` / board unit tests; gewijzigde bestanden ≤ 300 regels
-      (split eerst waar nodig).
-- [ ] Versienummer verhoogd in `src/config/version.js`; `devTestItem` toegevoegd.
-- [ ] Commits met `#AB:252` (en child-id waar relevant).
+| Techniek | Locatie | Status |
+|---|---|---|
+| Verticale virtualisatie (binary search, variabele rijhoogtes, spacers) | `useBoardRowWindow.js` | ✅ L5 |
+| rAF-gate scroll-listener | `useBoardRowWindow.js` | ✅ BL-004 |
+| React.memo rijen + custom equality per kolom (`areBoardCellPropsEqual`) | `PurchaseOrderBoardRow.jsx` | ✅ |
+| Lazy image load met delay + failure cache | `PurchaseOrderProductImageCell.jsx` | ✅ |
+| Passive scroll listener | `useBoardRowWindow.js` | ✅ |
+| Sticky group headers die remounten als slot buiten venster valt | `PurchaseOrdersBoardRows.jsx` | ✅ |
+| `measure('board:window-update')` instrumentatie | `useBoardRowWindow.js` | ✅ |
 
-**Tags:** `performance; po-board; scroll; virtualization; BL-004-vervolg`
+## Huidige meetresultaten (na BL-004)
+
+| Metric | Baseline (pre-BL-004) | Na BL-004 | Delta |
+|---|---:|---:|---:|
+| maxLongFrameMs (mediaan, 20 runs) | 1681ms | 1012ms | **−39,8%** |
+| scrollJankMs | 2924ms | 1493ms | −49% |
+| longframeCount | 7 | 2 | −5 |
+| slowInteractionCount | — | 0 | — |
+
+Volgende doelstelling: `maxLongFrameMs` ≤ **700ms** (−30% op de huidige 1012ms na Tier A+B samen).
 
 ---
 
-## Feiten & constraints (vastgelegd — geen open keuzes)
+## Tier A — Hoge impact, kleine ingreep
 
-1. **BL-004 rAF-gate staat NIET op `develop`.** De fix is gemerged en daarna gerevert
-   (o.a. `2673410`). Feature-tekst “−40% al gehaald / rAF live” is **onjuist**. Tier A begint
-   daarom met **herstel van de rAF-gate** (referentie: `752b563` / `87c662e`), daarna A1–A4.
-2. **Meetmethode (verplicht, alle tiers):** `playwright/perf-scroll.js` journey **J4**,
-   profiel **L** (~2000 orders), **20 runs**, mediaan `maxLongFrameMs`, **same-instance**
-   Azure DEV (of localhost ACC met gelijke seed). Pre- én post-meting op dezelfde omgeving.
-3. **Sticky bestaat al** via `usePurchaseOrdersBoardStickyColumns` + `stickyLeft`.
-   B4 = alleen GPU compositing-hints op bestaande sticky cellen — **geen** nieuwe sticky UX.
-4. **`PurchaseOrderBoardRow.jsx` ≈ 368 regels** → harde stop. Vóór B1 eerst splitsen tot <300.
-5. **Engelse UI** (aria/hints indien toegevoegd). Geen backend/SQL.
-6. **A2/A4 veiligheidsgrenzen:**
-   - A2 `content-visibility: auto` alleen op niet-expanded order-rijen; nooit op expanded slots.
-   - A4 gebruik `contain: layout` (niet `content`) of beperk tot pure tekstcellen — geen
-     image/remarks/controls-cellen (voorkomt knippen van popovers/Tooltips).
-7. **Tier C geparkeerd** tot go na Tier-B-meting.
+### A1: Overscan verlagen (14 → 8)
 
-### Referentiecijfers (historisch; niet als huidige stand lezen)
+**Bestand:** `src/components/supplier/PurchaseOrdersBoardRows.jsx`
 
-| Metric | Baseline (pre-BL-004) | Claim “na BL-004” (niet meer op develop) |
-|--------|----------------------|------------------------------------------|
-| maxLongFrameMs | 1681ms | 1012ms (−39.8%) — **niet herhaalbaar tot rAF terug is** |
-| scrollJankMs | 2924ms | 1493ms |
-| longframeCount | 7 | 2 |
+**Probleem:** De huidige overscan van 14 rijen boven én onder de viewport monteert bij elke scroll-stap tot 28 extra rijen. Elk van die rijen heeft ~25 kolommen met Fluent UI-wrappers. Bij snel scrollen compound dit.
 
-Nieuwe baseline meten ná herstel rAF, vóór A1–A4-claim.
+**Fix:** `overscan: 14` → `overscan: 8`. Vermindert mount-last per stap met ~40%.
 
-### Wat is al gedaan
+**Trade-off:** Iets meer zichtbare "pop-in" bij extreem snel scrollen (>5000px/s). Niet merkbaar bij normale scrollsnelheid. Te meten via J4-journey.
 
-| Item | Locatie |
-|------|---------|
-| Rij-virtualisatie L5 | `src/hooks/useBoardRowWindow.js` |
-| Overscan = 14 | `src/components/supplier/PurchaseOrdersBoardRows.jsx` |
-| Sticky kolommen | `src/hooks/usePurchaseOrdersBoardStickyColumns.js` |
-| Tooltip in image-cel (portal-risico) | `src/components/supplier/PurchaseOrderProductImageCell.jsx` |
-| Scroll-meetscript J4 | `playwright/perf-scroll.js` |
-| Analyse BL-004 | `.cursor/plans/dev_2026-08-09-po-board-scroll-jank.plan.md` |
-| BL-004 rAF-implementatie (historie) | commits `752b563`, `87c662e` |
+**Referentie:** monday.com gebruikt een overscan van 3–5 slots. D365 F&O gebruikt 8–10.
 
 ---
 
-## Story #253 — Tier A: CSS/React quick-wins (+ rAF-herstel)
+### A2: `content-visibility: auto` op tabelrijen
 
-**Files:**
-- Modify: `src/hooks/useBoardRowWindow.js`
-- Modify: `src/hooks/useBoardRowWindow.test.jsx`
-- Modify: `src/components/supplier/PurchaseOrdersBoardRows.jsx`
-- Modify: `src/components/supplier/purchaseOrdersBoardRowsStyles.js` (of row/cell styles waar rijen/cellen gestyled worden)
-- Modify: `src/config/version.js`, `src/config/devTestItems.js` (aan einde Tier A of Feature)
+**Bestand:** CSS (purchaseOrdersBoardRowsStyles of inline)
 
-### Task A0: Herstel rAF-gate (prerequisite)
+**Probleem:** Spacer-rijen en gemounte-maar-niet-zichtbare rijen (net buiten viewport) doen mee aan de browser-layout-boom. Bij 2000 totale slots (ook al zijn de meeste niet gemount) is de virtuele hoogte groot genoeg dat reflow-cascades optreden.
 
-- [ ] **Step 1:** Schrijf/breid tests in `useBoardRowWindow.test.jsx` zodat scroll-coalescing
-      aantoonbaar is (of bestaand gedrag blijft groen na rAF).
-- [ ] **Step 2:** Herstel rAF-gate in `useBoardRowWindow.js` volgens `752b563`/`87c662e`:
-      `scheduleUpdate` via `requestAnimationFrame`, cleanup met `cancelAnimationFrame`,
-      wrap update in `measure('board:window-update', …)`.
-- [ ] **Step 3:** `npm test -- useBoardRowWindow` → PASS.
-- [ ] **Step 4:** Commit: `perf: herstel rAF-gate scroll-window PO-board #AB:253`
+**Fix:**
+```css
+.itemRow {
+  content-visibility: auto;
+  contain-intrinsic-block-size: 44px; /* PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX */
+}
+```
 
-### Task A1: Overscan 14 → 8
+De browser slaat layout én paint over voor rijen die buiten de viewport vallen, zelfs als ze in de DOM staan. Dit is het D365 F&O grid-patroon: de browser doet zelf een tweede laag virtualisatie bovenop de JS-virtualisatie.
 
-- [ ] **Step 1:** In `PurchaseOrdersBoardRows.jsx` zet `overscan: 8`.
-- [ ] **Step 2:** Handmatig / browser: snelle wheel — geen witte gaten / ontbrekende rijen.
-- [ ] **Step 3:** Commit: `perf: verlaag board-row overscan 14→8 #AB:253`
-
-### Task A2: `content-visibility: auto` op niet-expanded rijen
-
-- [ ] **Step 0 (validatie):** Pas `content-visibility: auto` toe op één test-rij en
-      controleer in DevTools (Rendering-paneel / Performance-trace) dat de browser
-      off-screen rijen daadwerkelijk skipt. `<tr>` is een intern table-boxtype —
-      `contain`/`content-visibility` kunnen hierop een no-op zijn per CSS Containment-
-      spec. Geen effect aantoonbaar → wrap rij-inhoud in een `display:block`-proxy
-      of schrap A2 en herverdeel het budget naar overscan/rAF-tuning.
-- [ ] **Step 1:** Voeg style toe (Fluent `makeStyles` + tokens, geen hex) op order-rijen die
-      **niet** expanded zijn. Expanded / group-header / spacer rijen uitsluiten.
-- [ ] **Step 2:** Verifieer dat `rowHeights` / expand nog kloppen (virtualisatie-offsets).
-- [ ] **Step 3:** Commit: `perf: content-visibility op non-expanded board rows #AB:253`
-
-### Task A3: `startTransition` rond `setRange`
-
-- [ ] **Step 1:** In `useBoardRowWindow.js`, wrap `setRange(…)` in `startTransition` (naast rAF).
-- [ ] **Step 2:** Tests groen; geen regressie op initiële range.
-- [ ] **Step 3:** Commit: `perf: startTransition voor board window setRange #AB:253`
-
-### Task A4: `contain: layout` op veilige cellen
-
-- [ ] **Step 1:** Voeg `contain: 'layout'` toe aan styles van pure data/tekstcellen
-      (niet image, remarks, row-controls, sticky-controls).
-- [ ] **Step 2:** Open filter-popover / image hover — geen clipping.
-- [ ] **Step 3:** Commit: `perf: contain layout op veilige board cellen #AB:253`
-
-### Task A5: Meting + afronding Tier A
-
-- [ ] **Step 1:** Meet 20× J4, same-instance, ná alle A0–A4-wijzigingen. Vergelijk tegen de
-      historische referentiecijfers (tabel "Feiten & constraints") als context — geen aparte
-      tussentijdse "na A0"-meting vereist, de AC is een absolute drempel.
-- [ ] **Step 2:** Doel: mediaan `maxLongFrameMs ≤ 800ms`. Resultaat vastleggen in
-      `test-reports/` (markdown rapport) en comment op #253.
-- [ ] **Step 3:** Alle gewijzigde bestanden ≤ 300 regels; `npm test` groen.
-- [ ] **Step 4:** Versie PATCH-bump + desgewenst `devTestItem` “PO board scroll Tier A”.
+**Let op:** `contain-intrinsic-block-size` moet kloppen met `PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX` (44px). Opengeklapte orders (variabele hoogte) hebben dit niet nodig — die zijn altijd in het viewport als ze open zijn.
 
 ---
 
-## Story #254 — Tier B: kolom-virtualisatie, directional overscan, Tooltip, sticky GPU
+### A3: `React.startTransition` voor `setRange`
 
-**Volgorde:** B0 (split) → B3 (laag risico) → B2 → B4 → B1 (hoogste risico) → meting.
+**Bestand:** `src/hooks/useBoardRowWindow.js`
 
-### Task B0: Prerequisite — split `PurchaseOrderBoardRow.jsx`
+**Probleem:** `setRange()` triggert een synchrone re-render met hoge prioriteit. React 18 kent twee prioriteiten: urgent (input, animatie) en transitie (state-updates die wachten mogen). Window-updates zijn transitie-kandidaat.
 
-**Waarom:** Bestand ≈ 368 regels (hard stop). B1 raakt row/cell rendering.
+**Fix:** `setRange(...)` → `startTransition(() => setRange(...))`.
 
-- [ ] **Step 1:** Extraheer logische stukken (bijv. row-controls, cell-map, expanded wiring)
-      naar co-located componenten onder `src/components/supplier/` zodat
-      `PurchaseOrderBoardRow.jsx` < 300 blijft.
-- [ ] **Step 2:** Bestaande board/row tests groen.
-- [ ] **Step 3:** Commit: `refactor(po-board): split PurchaseOrderBoardRow onder 300 regels #AB:254`
+React kan dan tussendoor input-events afhandelen (scroll-events, touch-events) zonder te wachten op de rij-mount. De render wordt gesplitst over meerdere frames als dat nodig is. Dit is exact het patroon dat monday.com beschrijft in hun engineering blog voor board-updates: "input is always synchronous, render is always deferred."
 
-### Task B3: Tooltip hover-only in `PurchaseOrderProductImageCell`
-
-- [ ] **Step 1:** Mount Fluent `<Tooltip>` pas na `pointerenter` (of vervang door native `title`
-      tot hover). Geen Tooltip-portal op elke gemounte rij.
-- [ ] **Step 2:** Unit/RTL-test of smoke: Tooltip niet in DOM vóór hover.
-- [ ] **Step 3:** Commit: `perf: lazy Tooltip mount product image cell #AB:254`
-
-### Task B2: Directional overscan
-
-- [ ] **Step 1:** Breid `useBoardRowWindow` uit: onthoud laatste scroll-delta; asymmetrische
-      overscan (meer in scrollrichting, minder tegengesteld). Default totaal = 8 (gelijk aan
-      A1-budget): **5 vooruit / 3 terug**, exacte constanten als named exports.
-- [ ] **Step 2:** Tests voor richting wisselen.
-- [ ] **Step 3:** Commit: `perf: directional overscan in useBoardRowWindow #AB:254`
-
-### Task B4: GPU-layer op bestaande sticky cellen
-
-- [ ] **Step 1:** Op cellen/headers die al `position: sticky` + `stickyLeft` hebben: voeg
-      `transform: 'translateZ(0)'` (of equivalente token-safe compositing-hint) toe.
-      **Geen** wijziging aan sticky-selectie/UX.
-- [ ] **Step 2:** Visueel bij zoom 100%, 125%, 150% — sticky alignment OK.
-- [ ] **Step 3:** Commit: `perf: GPU layer promotion op sticky board cellen #AB:254`
-
-### Task B1: `useBoardColumnWindow` — horizontale kolom-virtualisatie
-
-**Interfaces:**
-- Create: `src/hooks/useBoardColumnWindow.js` + `.test.js`
-- Consumes: scroll-container horizontale `scrollLeft`, kolombreedtes (gemeten of vaste layout),
-  sticky keys (altijd gemount).
-- Produces: `{ start, end, leftPadPx, rightPadPx, visibleColumnKeys }` — sticky kolommen altijd
-  in de zichtbare set; spacers houden totale breedte.
-
-**Constraints:**
-- Header-rij en body-rijen gebruiken **dezelfde** window-state (één hook-eigenaar hoger in de boom,
-  props doorgeven) — voorkomt misalignment.
-- Collapsed columns, product-image kolom, selection/controls-kolom: altijd gemount of expliciet
-  buiten windowing.
-- Geen shotgun: wijzigingen beperken tot board table/header/row cell-map; geen unrelated refactors.
-
-- [ ] **Step 1:** Failing tests voor window-berekening + sticky altijd zichtbaar.
-- [ ] **Step 2:** Implementeer hook.
-- [ ] **Step 3:** Integreer in `PurchaseOrdersBoardTable` / header / rows — één gedeelde range.
-- [ ] **Step 4:** AC: geen header/body misalignment bij horizontaal scrollen; ~60% minder
-      cel-renders bij 10 zichtbaar van 25 (meetbaar via count of React profiler note in rapport).
-- [ ] **Step 5:** Commit: `perf: horizontale kolom-virtualisatie useBoardColumnWindow #AB:254`
-
-### Task B5: Meting Tier B
-
-- [ ] **Step 1:** 20× J4 same-instance; doel `maxLongFrameMs ≤ 700ms`.
-- [ ] **Step 2:** Rapport + comment op #254. Als nog > 700ms → vraag go voor Tier C (#255);
-      implementeer Tier C **niet** automatisch.
-- [ ] **Step 3:** Versie PATCH-bump.
+**Vereiste:** React 18 (al in gebruik).
 
 ---
 
-## Story #255 — Tier C: paint-then-hydrate / idle cells (GEPARKEERD)
+### A4: `contain: content` op tabelcellen
 
-**Status:** geparkeerd. Geen code tot expliciete go van de gebruiker ná Tier-B-meting.
+**Bestand:** CSS
 
-**Conditie (uit DevOps, aangescherpt):** alleen starten als mediaan `maxLongFrameMs` na Tier B
-nog **> 700ms** (same-instance, 20 runs, J4) én gebruiker akkoord geeft.
+**Probleem:** Bij 25 kolommen × ~20 zichtbare rijen = 500 cellen die de browser in één geconnecte layout-boom bijhoudt. Een breedte-wijziging aan één kolom kan een reflow van alle 500 cellen triggeren.
 
-**Dan pas (outline, niet bouwen nu):**
-- C1: paint-then-hydrate — lichte skeleton/placeholder rows binnen bestaand data-pad
-  (geen claim op Lighthouse FCP 100ms zolang volledige PO-fetch synchroon blijft; herdefiniëren
-  naar “first meaningful board chrome ≤ 100ms na data-ready” of data-fetch parallel trekken).
-- C2: `requestIdleCallback` voor niet-kritieke cel-content; AC: geen zichtbare pop-in bij
-  normale scrollsnelheid.
+**Fix:**
+```css
+.itemCell {
+  contain: content; /* = layout + style + paint */
+}
+```
 
----
+Elke cel wordt een geïsoleerd layout-eiland. Reflows propageren niet meer door de tabel.
 
-## Afronding Feature #252
-
-- [ ] PR vanaf `feature/252-po-board-scroll-optimalisaties` → `develop` (niet direct `main`).
-- [ ] `/perf-check` of `perf-scroll` regressie gedocumenteerd.
-- [ ] DevOps comments op #252/#253/#254 met meetcijfers.
-- [ ] `docs/devops/252-po-board-scroll-optimalisaties.md` synchroon houden met dit plan.
+**Kanttekening:** `contain: strict` is sterker maar kan problemen geven met `position: sticky` van de group-headers. `contain: content` is veiliger.
 
 ---
 
-## Self-review notes
+## Tier B — Hoge impact, gemiddelde ingreep
 
-- Spec/DevOps-dekking: A0–A4, B0–B5, C geparkeerd — open knopen uit review weggenomen.
-- Geen SQL/migratie.
-- Performance-chokepoints: `measure('board:window-update')` bij rAF; kolom-window updates
-  eveneens `measure('board:column-window-update')` wanneer B1 landt.
-- UI: geen nieuwe Tooltip in `.map()` zonder lazy mount (B3).
+### B1: Horizontale kolom-virtualisatie
+
+**Bestanden:** `useBoardColumnWindow.js` (nieuw), `PurchaseOrderBoardRow.jsx`, `PurchaseOrdersBoardRows.jsx`
+
+**Probleem:** Dit is de grootste onbenutte optimalisatie. Nu worden **alle kolommen** gerenderd per rij — ook kolommen die horizontaal buiten het viewport vallen. Bij 25 kolommen waarvan er gemiddeld 10 zichtbaar zijn: 60% van het render-werk is onzichtbaar voor de gebruiker.
+
+**monday.com patroon:** Kolommen zijn een eigen virtuele lijst. `columnStart`/`columnEnd` worden bijgehouden via een horizontale scroll-listener op de `<thead>`-container. Spacer-cellen links/rechts vullen de breedte op.
+
+**D365 F&O patroon:** `VirtualScrollViewer` virtualiseert rijen én kolommen onafhankelijk. Elke rij rendert alleen `[colLeft, colRight)`.
+
+**Implementatie:**
+1. Nieuwe hook `useBoardColumnWindow(scrollRef, columns, columnWidths)` — analoog aan `useBoardRowWindow` maar horizontaal
+2. Berekent `colStart`/`colEnd` + `leftPadPx`/`rightPadPx`
+3. `PurchaseOrderBoardRow` rendert alleen kolommen `[colStart, colEnd)` + twee spacer-cellen
+4. `rAF-gate` ook op horizontale scroll-listener
+
+**Trade-off:** Vaste kolombreedtes zijn vereist voor de offset-berekening (al aanwezig via `headerColumnWidths`). Kolommen zonder expliciete breedte krijgen een geschatte breedte.
+
+**Verwachte winst:** Bij 10/25 zichtbare kolommen: ~60% minder cel-render-werk per rij.
+
+---
+
+### B2: Directional overscan
+
+**Bestand:** `src/hooks/useBoardRowWindow.js`
+
+**Probleem:** Symmetrische overscan (8 rijen voor én achter) buffert even veel in de richting die je net verlaten hebt als in de richting waar je naartoe scrolt. Dat is verspild mount-werk.
+
+**Fix:** Delta van `scrollTop` bijhouden tussen twee rAF-cycli. Als `delta > 0` (neerwaarts): `overscanBefore = 2, overscanAfter = 12`. Als `delta < 0` (opwaarts): andersom.
+
+```js
+const direction = scrollTop - prevScrollTopRef.current > 0 ? 'down' : 'up';
+const overscanBefore = direction === 'down' ? 2 : overscan;
+const overscanAfter = direction === 'down' ? overscan : 2;
+```
+
+**Referentie:** D365 F&O `VirtualScrollViewer` implementeert exact dit patroon. React-window heeft ook een `overscanCount` maar geen richtings-awareness — dit is een verbetering erop.
+
+---
+
+### B3: Tooltip hover-only mount
+
+**Bestand:** `src/components/supplier/PurchaseOrderProductImageCell.jsx`
+
+**Probleem:** De Fluent UI `<Tooltip>` registreert event-listeners bij mount van elke rij. Bij 20 zichtbare rijen = 20 Tooltip-instanties die tegelijk actief zijn. Mount-kosten van Fluent Tooltip zijn niet triviaal (portaal-registratie, aria-describedby koppeling).
+
+**Fix:** Tooltip pas mounten nadat de gebruiker 200ms stil staat op de cel (via `onMouseEnter`-timer, `onMouseLeave`-cancel). Dezelfde delay als `PRODUCT_IMAGE_LOAD_DELAY_MS`. Voordat de Tooltip gemount is: gewone `<button>` zonder wrapper.
+
+```jsx
+const [showTooltip, setShowTooltip] = useState(false);
+// onMouseEnter: setTimeout(200ms) → setShowTooltip(true)
+// onMouseLeave: clearTimeout → setShowTooltip(false)
+```
+
+---
+
+### B4: Sticky kolommen + GPU-layer promotion
+
+**Bestanden:** CSS, `purchaseOrderBoardLayout.js`
+
+**Probleem:** Tijdens horizontaal scrollen verdwijnt de controlekolom (checkbox/expand/badge) én de eerste datakolom uit beeld. Gebruikers verliezen hun context.
+
+**Fix:**
+1. `position: sticky; left: 0` op de controlekolom (al deels aanwezig)
+2. `position: sticky; left: <controlColWidth>px` op eerste datakolom (leverancier/ordercode)
+3. `transform: translateZ(0)` op de scroll-container — GPU compositor layer, scroll via hardware in plaats van CPU-repaint
+
+**Referentie:** D365 F&O bevriest altijd de eerste 2-3 kolommen. Excel bevriest tot 5 kolommen. monday.com bevriest de naam-kolom altijd.
+
+---
+
+## Tier C — Architecturaal, grotere ingreep (plan voor latere sprint)
+
+### C1: Paint-then-hydrate (perceptuele initiële load)
+
+**Patroon:** monday.com
+
+Render de eerste 30 rijen als statische HTML-tabel (plain `<tr>/<td>` zonder React-wrappers) tijdens initiële load. Gebruiker ziet meteen data. Hydreer daarna met React in de achtergrond.
+
+**Technisch:** SSR of pre-render van de bovenste dataslice via `renderToStaticMarkup`, inject als `dangerouslySetInnerHTML` in een shell-component, vervang zodra React-mount klaar is.
+
+**Perceptueel effect:** Bord zichtbaar in ~50ms, interactief in ~300ms.
+
+---
+
+### C2: `requestIdleCallback` voor cel-content
+
+**Patroon:** D365 F&O two-phase cell render
+
+Fase 1 (direct bij mount): container + achtergrondkleur + breedte/hoogte.
+Fase 2 (idle): tekst, badges, statuspills, formatkleur-berekening.
+
+Implementatie: `useIdleEffect(callback)` hook die `requestIdleCallback` wraps (met `setTimeout`-fallback voor Safari).
+
+**Verwachte winst:** Mount-last gespreider over idle-frames, minder blockerend per scroll-stap.
+
+---
+
+### C3: Perf-meting na elke tier
+
+Na Tier A én na Tier B: volledige perf-meting (20 runs, profiel L, J4-journey, same-instance op Azure DEV). Resultaten bepalen of Tier C noodzakelijk is.
+
+**Huidige stand:** 1012ms. Doel na Tier A+B: ≤ 700ms.
+
+---
+
+## Fasering en acceptatiecriteria
+
+### Tier A (één sprint)
+
+- [ ] A1–A4 geïmplementeerd op `feature/po-board-scroll-tier-a`
+- [ ] Geen regressie op bestaande unit tests (`useBoardRowWindow.test.jsx`, board-cell tests)
+- [ ] Alle gewijzigde componenten onder 300 regels
+- [ ] Perf-meting na Tier A: `maxLongFrameMs` ≤ **800ms** (mediaan, 20 runs, profiel L, same-instance DEV)
+- [ ] PR gemerged naar `develop`
+
+### Tier B (één sprint)
+
+- [ ] B1–B4 geïmplementeerd op `feature/po-board-scroll-tier-b`
+- [ ] Horizontale kolom-virtualisatie: geen zichtbare misalignment in header vs. body
+- [ ] Sticky kolommen blijven op juiste positie bij alle zoom-levels (100%, 125%, 150%)
+- [ ] Perf-meting na Tier B: `maxLongFrameMs` ≤ **700ms** (mediaan, 20 runs, profiel L, same-instance DEV)
+- [ ] PR gemerged naar `develop`
+
+### Tier C (aparte sprint, conditioneel)
+
+- [ ] Alleen uitvoeren als na Tier B `maxLongFrameMs` > 700ms
+- [ ] Paint-then-hydrate: bord zichtbaar ≤ 100ms na navigatie (meting via Lighthouse FCP)
+- [ ] `requestIdleCallback`: geen zichtbare "pop-in" van cel-content bij normale scrollsnelheid
+
+---
+
+## Relevante bestanden
+
+| Bestand | Tier A | Tier B | Tier C |
+|---|---|---|---|
+| `src/hooks/useBoardRowWindow.js` | A3 | B2 | — |
+| `src/components/supplier/PurchaseOrdersBoardRows.jsx` | A1 | B1 | — |
+| `src/components/supplier/PurchaseOrderBoardRow.jsx` | — | B1 | C2 |
+| `src/components/supplier/PurchaseOrderProductImageCell.jsx` | — | B3 | — |
+| `src/hooks/useBoardColumnWindow.js` (nieuw) | — | B1 | — |
+| CSS (purchaseOrdersBoardRowsStyles) | A2, A4 | B4 | — |
+| `playwright/perf-scroll.js` | C3 | C3 | C3 |
+
+## Referenties
+
+- monday.com engineering blog: [mondayDB-architectuur](https://engineering.monday.com/nice-to-meet-you-mondaydb-architecture/)
+- D365 F&O VirtualScrollViewer: grid virtualiseert rijen + kolommen onafhankelijk, directional overscan, two-phase cell render
+- React 18 `startTransition` docs: [react.dev/reference/react/startTransition](https://react.dev/reference/react/startTransition)
+- MDN `content-visibility`: [developer.mozilla.org/en-US/docs/Web/CSS/content-visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/content-visibility)
+- CSS `contain`: [developer.mozilla.org/en-US/docs/Web/CSS/contain](https://developer.mozilla.org/en-US/docs/Web/CSS/contain)
