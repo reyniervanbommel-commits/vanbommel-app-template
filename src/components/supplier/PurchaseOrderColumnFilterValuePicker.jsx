@@ -26,6 +26,7 @@ export default function PurchaseOrderColumnFilterValuePicker({
   const styles = usePurchaseOrderColumnFilterValuePickerStyles();
   const [inputText, setInputText] = useState('');
   const [ignoredHint, setIgnoredHint] = useState('');
+  const [focused, setFocused] = useState(false);
   const isMulti = mode === 'multi';
 
   useEffect(() => {
@@ -34,10 +35,12 @@ export default function PurchaseOrderColumnFilterValuePicker({
 
   const chips = isMulti && Array.isArray(value) ? value : [];
 
-  const suggestions = useMemo(
-    () => (inputText.trim() ? getValueSuggestions(uniqueValues, inputText) : { items: [], totalMatches: 0, truncated: false }),
-    [uniqueValues, inputText]
-  );
+  const suggestions = useMemo(() => {
+    if (inputText.trim()) return getValueSuggestions(uniqueValues, inputText);
+    // Toon max. 10 waarden bij focus op leeg veld (browse-bij-focus, D365-stijl).
+    if (focused && uniqueValues.length) return getValueSuggestions(uniqueValues, '', 10);
+    return { items: [], totalMatches: 0, truncated: false };
+  }, [uniqueValues, inputText, focused]);
 
   const commitSingleValue = useCallback((nextValue) => {
     setIgnoredHint('');
@@ -100,6 +103,10 @@ export default function PurchaseOrderColumnFilterValuePicker({
     }
   }, [addMultiValues, commitSingleValue, isMulti]);
 
+  const handleFocus = useCallback(() => setFocused(true), []);
+  // Kort timeout zodat een klik op een suggestie-optie de blur overleeft.
+  const handleBlur = useCallback(() => setTimeout(() => setFocused(false), 150), []);
+
   const handleSuggestionClick = useCallback((suggestionValue) => {
     if (isMulti) {
       addMultiValues([String(suggestionValue)]);
@@ -122,6 +129,8 @@ export default function PurchaseOrderColumnFilterValuePicker({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         placeholder={isMulti ? 'Type a value or paste a list' : 'Value'}
         aria-label={`Filter value for ${columnLabel}`}
       />
