@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Button, Input, Text } from '@fluentui/react-components';
 import { ChevronDownRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
+import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
 
 export default function PurchaseOrderColumnFilterMenuFilterSection({
   styles,
@@ -14,6 +15,8 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   operatorEntries,
   handleOperatorSelect,
   handleValueChange,
+  handleDraftValueChange,
+  uniqueColumnValues = [],
   handleSecondaryValueChange,
   handleApplyFilter,
   handleClearFilter,
@@ -40,6 +43,8 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
     || (isNumber && draft.operator === 'between')
     || (isDate && draft.operator === 'nextWeek')
   );
+
+  const usesValuePicker = draft.operator === 'equals' || draft.operator === 'oneOf';
 
   return (
     <div className={styles.filterBlock} onMouseEnter={handleFilterRowMouseEnter}>
@@ -77,7 +82,17 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             </div>
           ) : null}
         </div>
-        {showSingleValue && isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
+        {usesValuePicker ? (
+          <PurchaseOrderColumnFilterValuePicker
+            mode={draft.operator === 'oneOf' ? 'multi' : 'single'}
+            value={draft.value}
+            onChange={handleDraftValueChange}
+            uniqueValues={uniqueColumnValues}
+            isNumber={isNumber}
+            columnLabel={columnLabel}
+          />
+        ) : null}
+        {!usesValuePicker && showSingleValue && isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
           <Input
             className={styles.filterValueField}
             type="date"
@@ -87,7 +102,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             aria-label={`Filter value for ${columnLabel}`}
           />
         ) : null}
-        {showSingleValue && isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
+        {!usesValuePicker && showSingleValue && isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
           <Input
             className={styles.filterValueField}
             type="number"
@@ -99,7 +114,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             aria-label={`Filter amount for ${columnLabel}`}
           />
         ) : null}
-        {showSingleValue && isNumber && draft.operator !== 'between' ? (
+        {!usesValuePicker && showSingleValue && isNumber && draft.operator !== 'between' ? (
           <Input
             className={styles.filterValueField}
             type="number"
@@ -110,13 +125,13 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             aria-label={`Filter value for ${columnLabel}`}
           />
         ) : null}
-        {showSingleValue && !isDate && !isNumber ? (
+        {!usesValuePicker && showSingleValue && !isDate && !isNumber ? (
           <Input
             className={styles.filterValueField}
             size="small"
             value={draft.value}
             onChange={handleValueChange}
-            placeholder={draft.operator === 'oneOf' ? 'Value1, Value2' : 'Value'}
+            placeholder="Value"
             aria-label={`Filter value for ${columnLabel}`}
           />
         ) : null}

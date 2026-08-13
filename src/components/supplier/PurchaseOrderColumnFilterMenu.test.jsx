@@ -226,3 +226,48 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(onToggleColumnCollapsed).toHaveBeenCalledWith('amount');
   });
 });
+
+describe('PurchaseOrderColumnFilterMenu — unieke waarden', () => {
+  it('berekent uniqueColumnValues pas nadat de popover is geopend', async () => {
+    const items = [
+      { values: { amount: 100 } },
+      { values: { amount: 250 } },
+      { values: { amount: 100 } },
+    ];
+    renderMenu({ items, filter: { operator: 'oneOf', value: [] } });
+    openColumnMenu();
+    const input = await screen.findByLabelText(/Filter value for Amount/i);
+    fireEvent.change(input, { target: { value: '1' } });
+    const suggestion = await screen.findByRole('option', { name: '100' });
+    expect(suggestion).toBeTruthy();
+  });
+});
+
+describe('PurchaseOrderColumnFilterMenu — value picker wiring', () => {
+  it('toont de picker (met chips) voor oneOf op een tekstkolom', async () => {
+    renderMenu({
+      column: { key: 'vendor', label: 'Vendor', dataType: 'text' },
+      filter: { operator: 'oneOf', value: ['Acme'] },
+    });
+    openColumnMenu();
+    expect(await screen.findByText('Acme')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Remove Acme/i })).toBeTruthy();
+  });
+
+  it('toont een plain input voor contains (ongewijzigd)', async () => {
+    renderMenu({
+      column: { key: 'vendor', label: 'Vendor', dataType: 'text' },
+      filter: { operator: 'contains', value: 'Ac' },
+    });
+    openColumnMenu();
+    const input = await screen.findByLabelText(/Filter value for Vendor/i);
+    expect(input).toHaveValue('Ac');
+  });
+
+  it('toont de single-value picker voor equals op een number-kolom', async () => {
+    renderMenu({ filter: { operator: 'equals', value: '100' } });
+    openColumnMenu();
+    const input = await screen.findByLabelText(/Filter value for Amount/i);
+    expect(input).toHaveValue('100');
+  });
+});
