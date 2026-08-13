@@ -33,8 +33,10 @@
 | Sticky kolommen bestaan al | B4 = alleen GPU `translateZ(0)` op bestaande sticky cellen |
 | `PurchaseOrderBoardRow.jsx` ≈ 368 regels | B0 split verplicht vóór kolom-virtualisatie |
 | Tier C is conditioneel | Status **geparkeerd** tot go na meting |
+| Bord is een écht HTML-`<table>` (`<tr>`/`<td>`) | A2/A4: `contain`/`content-visibility` zijn per CSS-spec no-ops op interne table-boxtypes — A2 start met een validatiestap (DevTools-check) vóór productiecode |
+| Overscan-budget na A1 = 8 | B2 directional overscan: **5 vooruit / 3 terug** (totaal 8), niet 10/4 |
 
-Historische “na BL-004”-cijfers (1012ms / −40%) zijn **niet** de huidige stand op develop — opnieuw meten na A0.
+Historische “na BL-004”-cijfers (1012ms / −40%) zijn **niet** de huidige stand op develop — opnieuw meten na A0. Tier A-meting (A5) gebeurt in één run ná A0–A4; geen aparte tussentijdse "na A0"-baseline vereist (AC is een absolute drempel, geen delta).
 
 ---
 
@@ -103,4 +105,5 @@ perf: beschrijving #AB:253
 ## Versie document
 
 Aangemaakt/bijgewerkt op basis van [.cursor/plans/dev_2026-08-13-po-board-scroll-optimalisaties.plan.md](../.cursor/plans/dev_2026-08-13-po-board-scroll-optimalisaties.plan.md) na plan-review 2026-08-13.
+Bijgewerkt na tweede plan-review 2026-08-13: A2-validatiestap (content-visibility op table-row-risico), B2-overscan gecorrigeerd (8, niet 14), A5-meetvolgorde vereenvoudigd.
 Repo-document: docs/devops/252-po-board-scroll-optimalisaties.md

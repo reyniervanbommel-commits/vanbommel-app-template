@@ -110,6 +110,12 @@ Nieuwe baseline meten ná herstel rAF, vóór A1–A4-claim.
 
 ### Task A2: `content-visibility: auto` op niet-expanded rijen
 
+- [ ] **Step 0 (validatie):** Pas `content-visibility: auto` toe op één test-rij en
+      controleer in DevTools (Rendering-paneel / Performance-trace) dat de browser
+      off-screen rijen daadwerkelijk skipt. `<tr>` is een intern table-boxtype —
+      `contain`/`content-visibility` kunnen hierop een no-op zijn per CSS Containment-
+      spec. Geen effect aantoonbaar → wrap rij-inhoud in een `display:block`-proxy
+      of schrap A2 en herverdeel het budget naar overscan/rAF-tuning.
 - [ ] **Step 1:** Voeg style toe (Fluent `makeStyles` + tokens, geen hex) op order-rijen die
       **niet** expanded zijn. Expanded / group-header / spacer rijen uitsluiten.
 - [ ] **Step 2:** Verifieer dat `rowHeights` / expand nog kloppen (virtualisatie-offsets).
@@ -130,7 +136,9 @@ Nieuwe baseline meten ná herstel rAF, vóór A1–A4-claim.
 
 ### Task A5: Meting + afronding Tier A
 
-- [ ] **Step 1:** Baseline (na A0) + na-meting (na A1–A4), 20× J4, same-instance.
+- [ ] **Step 1:** Meet 20× J4, same-instance, ná alle A0–A4-wijzigingen. Vergelijk tegen de
+      historische referentiecijfers (tabel "Feiten & constraints") als context — geen aparte
+      tussentijdse "na A0"-meting vereist, de AC is een absolute drempel.
 - [ ] **Step 2:** Doel: mediaan `maxLongFrameMs ≤ 800ms`. Resultaat vastleggen in
       `test-reports/` (markdown rapport) en comment op #253.
 - [ ] **Step 3:** Alle gewijzigde bestanden ≤ 300 regels; `npm test` groen.
@@ -162,8 +170,8 @@ Nieuwe baseline meten ná herstel rAF, vóór A1–A4-claim.
 ### Task B2: Directional overscan
 
 - [ ] **Step 1:** Breid `useBoardRowWindow` uit: onthoud laatste scroll-delta; asymmetrische
-      overscan (meer in scrollrichting, minder tegengesteld). Default totaal ≈ huidig budget
-      na A1 (8), bv. 10 vooruit / 4 terug — exacte constanten als named exports.
+      overscan (meer in scrollrichting, minder tegengesteld). Default totaal = 8 (gelijk aan
+      A1-budget): **5 vooruit / 3 terug**, exacte constanten als named exports.
 - [ ] **Step 2:** Tests voor richting wisselen.
 - [ ] **Step 3:** Commit: `perf: directional overscan in useBoardRowWindow #AB:254`
 
