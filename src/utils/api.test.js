@@ -1,9 +1,15 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mockFetchSequence } from '../test-utils/mockApi';
 import { apiRequest } from './api';
+import {
+  resetSessionExpiredHandler,
+  SESSION_END_REASON,
+  setSessionExpiredHandler,
+} from './sessionExpiry';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  resetSessionExpiredHandler();
 });
 
 describe('apiRequest', () => {
@@ -71,6 +77,25 @@ describe('apiRequest', () => {
       message: 'Request failed',
       status: 500,
     });
+  });
+
+  it('meldt een 401 op een beschermde route als verlopen sessie', async () => {
+    const handler = vi.fn();
+    setSessionExpiredHandler(handler);
+    mockFetchSequence([{ status: 401, body: { error: 'Not authenticated' } }]);
+
+    await expect(apiRequest('/purchase-orders')).rejects.toMatchObject({ status: 401 });
+    expect(handler).toHaveBeenCalledWith(SESSION_END_REASON.EXPIRED);
+  });
+
+  it('meldt geen 401 op auth-routes', async () => {
+    const handler = vi.fn();
+    setSessionExpiredHandler(handler);
+    mockFetchSequence([{ status: 401, body: { error: 'Invalid credentials' } }]);
+
+    await expect(apiRequest('/auth/login', { method: 'POST', body: {} }))
+      .rejects.toMatchObject({ status: 401 });
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('gooit alsnog een status-fout als de foutresponse geen geldige JSON-body heeft', async () => {

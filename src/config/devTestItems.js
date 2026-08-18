@@ -70,6 +70,19 @@ export const devTestItems = [
       'Remarks panel opent zonder A remarks request is already in progress melding',
     ],
   },
+  {
+    id: 'idle-logout-45m-v1-49-0',
+    title: 'Idle logout after 45 minutes (v1.49.0)',
+    checks: [
+      'Open /login?reason=idle shows: You were signed out due to inactivity.',
+      'Open /login?reason=session shows: Your session expired. Please sign in again.',
+      'Manual Log out still works and returns to the login page',
+      'After ~43 minutes without click/key/scroll/touch, the Still there? dialog appears',
+      'Stay signed in closes the dialog and keeps the session',
+      'Sign out now or waiting out the remaining 2 minutes lands on login with the inactivity message',
+      'Remarks/activity polling does not keep a forgotten tab signed in',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

@@ -1,4 +1,5 @@
 import { recordApiTiming } from './perf';
+import { notifySessionExpired, SESSION_END_REASON, shouldNotifyUnauthorized } from './sessionExpiry';
 
 // Perf-instrumentatie alleen in dev/preview (niet in productie), zodat we per API-call de duur
 // zien in de console én in het DevPerfOverlay. VITE_APP_ENV wordt bij de build gezet.
@@ -24,6 +25,9 @@ export async function apiRequest(path, options) {
     status = res.status;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (shouldNotifyUnauthorized(path, res.status)) {
+        notifySessionExpired(SESSION_END_REASON.EXPIRED);
+      }
       const message = data.error || (res.status === 503 ? 'Service unavailable' : 'Request failed');
       throw Object.assign(new Error(message), { status: res.status, data });
     }
