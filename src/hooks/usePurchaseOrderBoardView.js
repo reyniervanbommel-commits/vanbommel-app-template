@@ -213,6 +213,8 @@ export function usePurchaseOrderBoardView({
     () => ({
       // filter/sort API + processedItems
       processedItems: tableView.processedItems,
+      // volledige dataset (alle rijen, afgeleide waarden, zonder filter/sort) voor exports
+      allItems: itemsWithDerivedDatePeriods,
       sortState: tableView.sortState,
       filterByColumn: tableView.filterByColumn,
       activeFilterCount: tableView.activeFilterCount,
@@ -249,6 +251,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

@@ -25,6 +25,7 @@ import {
   TableRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
+import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
 import { SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
@@ -107,6 +108,7 @@ export default function PurchaseOrderSavedViewsControl({
   onSetDefault,
   onDeleteView,
   onToggleShowHistory = () => {},
+  onExportExcel = null,
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -201,6 +203,13 @@ export default function PurchaseOrderSavedViewsControl({
             >
               {NO_VIEW_LABEL}
             </MenuItem>
+
+            {onExportExcel ? (
+              <>
+                <MenuDivider />
+                <PurchaseOrderExportMenu onExportExcel={onExportExcel} />
+              </>
+            ) : null}
 
             {activeCanManage ? (
               <>
