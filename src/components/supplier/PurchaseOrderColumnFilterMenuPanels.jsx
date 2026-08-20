@@ -1,9 +1,11 @@
 import React from 'react';
+import { mergeClasses } from '@fluentui/react-components';
 import PurchaseOrderColumnGroupingSection from './PurchaseOrderColumnGroupingSection';
 import PurchaseOrderAddColumnPane from './PurchaseOrderAddColumnPane';
 import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRulesPane';
 import PurchaseOrderColumnTextStylePane from './PurchaseOrderColumnTextStylePane';
 import FilterMenuMainPane from './PurchaseOrderColumnFilterMenuMainPane';
+import { usePurchaseOrderColumnMenuFlyoutPlacement } from './usePurchaseOrderColumnMenuFlyoutPlacement';
 
 export { FilterMenuMainPane };
 
@@ -38,6 +40,11 @@ export function FilterMenuSubPane({
   isGroupSummaryColumn,
   handleToggleGroupSummary,
 }) {
+  const flyout = usePurchaseOrderColumnMenuFlyoutPlacement({
+    active: activeSubmenu !== 'none',
+    requestedTop: submenuTop || 0,
+    placementKey: activeSubmenu,
+  });
   let content = null;
 
   if (activeSubmenu === 'add') {
@@ -101,7 +108,12 @@ export function FilterMenuSubPane({
   if (!content) return null;
 
   return (
-    <div className={styles.subPane} style={{ top: `${submenuTop || 0}px` }}>
+    <div
+      ref={flyout.ref}
+      className={mergeClasses(styles.subPane, flyout.alignLeft && styles.subPaneAlignLeft)}
+      style={{ top: `${flyout.top}px` }}
+      data-flyout-side={flyout.alignLeft ? 'left' : 'right'}
+    >
       {content}
     </div>
   );

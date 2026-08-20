@@ -2846,7 +2846,12 @@ function buildDetailRow(d, ctx) {
   const isNew = Boolean(ledgerState?.isNew) || (!hasLedgerWindow && compareAgainstBaseline(detailFirstSeenMs));
   const isChanged = !isNew
     && (Boolean(ledgerState?.isChanged) || (!hasLedgerWindow && compareAgainstBaseline(detailChangedMs)));
-  const isRemoved = Boolean(d.removed_at_source) || Boolean(ledgerState?.isRemoved);
+  const isRemovedAtSource = Boolean(d.removed_at_source);
+  // isRemoved = de regel is nu weg in D365 (blijvende staat, o.a. strikethrough / RCCP).
+  // hasRemovalChange = ongeziene DELETE in het ledger-venster; Mark as seen moet díe vlag wissen.
+  const hasRemovalChange = Boolean(ledgerState?.isRemoved)
+    || (!hasLedgerWindow && isRemovedAtSource);
+  const isRemoved = isRemovedAtSource || Boolean(ledgerState?.isRemoved);
   const detailHistory = historyByCell.get(cellKey);
   const detailTrackMarks = trackMarks.trackMarksByCell.get(cellKey);
   return {
@@ -2857,9 +2862,7 @@ function buildDetailRow(d, ctx) {
     isNew,
     isChanged,
     isRemoved,
-    // Alleen recente removal-events tellen als "gewijzigd" voor de order-rollup; historisch
-    // removed-at-source mag changedCount niet elke refresh opnieuw opblazen.
-    hasRemovalChange: Boolean(ledgerState?.isRemoved),
+    hasRemovalChange,
     changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
   };
 }
@@ -2894,7 +2897,8 @@ function buildDetailRollup(details) {
   for (const detail of details) {
     if (detail.isNew) hasNewLine = true;
     if (detail.isChanged || detail.changedFieldKeys?.length) hasChangedLine = true;
-    if (detail.isRemoved) hasRemovedLine = true;
+    // Alleen ongeziene removals; historisch removed-at-source mag de activity-bar niet vullen.
+    if (detail.hasRemovalChange) hasRemovedLine = true;
     if (detail.isRemoved) continue;
     const itemNumber = String(detail.values?.itemNumber ?? '').trim();
     if (!itemNumber || seenItemNumbers.has(itemNumber)) continue;
@@ -2916,7 +2920,7 @@ function buildDetailRollup(details) {
 }
 
 function createOrderChangeState() {
-  return { isNew: false, isChanged: false, changedFieldKeys: new Set() };
+  return { isNew: false, isChanged: false, isRemoved: false, changedFieldKeys: new Set() };
 }
 
 function createLineChangeState() {
@@ -2939,8 +2943,20 @@ function buildD365ChangeState(ledgerRows) {
     const action = String(row.action || '').toUpperCase();
 
     if (detailKey === MASTER_DETAIL_KEY) {
-      if (action === 'INSERT') orderState.isNew = true;
-      else if (action === 'UPDATE') orderState.isChanged = true;
+      // Zelfde last-action-wint als bij regels: DELETE+INSERT (retained restore) mag
+      // de order niet als verwijderd laten staan.
+      if (action === 'INSERT') {
+        orderState.isNew = true;
+        orderState.isRemoved = false;
+      } else if (action === 'UPDATE') {
+        orderState.isChanged = true;
+        orderState.isRemoved = false;
+      } else if (action === 'DELETE') {
+        orderState.isRemoved = true;
+        orderState.isNew = false;
+        orderState.isChanged = false;
+        orderState.changedFieldKeys.clear();
+      }
       if (fieldKey) orderState.changedFieldKeys.add(fieldKey);
       continue;
     }
@@ -2959,7 +2975,12 @@ function buildD365ChangeState(ledgerRows) {
     } else if (action === 'UPDATE') {
       lineState.isChanged = true;
       lineState.isRemoved = false;
-    } else if (action === 'DELETE') lineState.isRemoved = true;
+    } else if (action === 'DELETE') {
+      lineState.isRemoved = true;
+      lineState.isNew = false;
+      lineState.isChanged = false;
+      lineState.changedFieldKeys.clear();
+    }
     if (fieldKey) lineState.changedFieldKeys.add(fieldKey);
   }
 
@@ -3358,11 +3379,11 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     }
     const details = rawDetailRows.map((d) => {
       const detail = buildDetailRow(d, detailContext);
-      if (detail.isNew || detail.isChanged || detail.hasRemovalChange) hasLineChanges = true;
-      delete detail.hasRemovalChange;
+      if (detail.isNew || detail.isChanged) hasLineChanges = true;
       return detail;
     });
     const detailRollup = buildDetailRollup(details);
+    for (const detail of details) delete detail.hasRemovalChange;
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
@@ -3371,6 +3392,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const isBaseChanged = compareAgainstBaseline(changedMs);
     const isNew = Boolean(orderLedgerState?.isNew) || (!hasLedgerWindow && isBaseNew);
     const isChanged = !isNew && (Boolean(orderLedgerState?.isChanged) || (!hasLedgerWindow && isBaseChanged) || hasLineChanges);
+    const isRemovedAtSource = Boolean(m.removed_at_source) && !Boolean(m.sync_retained);
+    const hasRemovalChange = Boolean(orderLedgerState?.isRemoved)
+      || (!hasLedgerWindow && isRemovedAtSource);
     if (isNew) newCount += 1;
     else if (isChanged) changedCount += 1;
 
@@ -3393,6 +3417,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
       syncRetained: Boolean(m.sync_retained),
       isNew,
       isChanged,
+      ...(hasRemovalChange ? { hasRemovalChange: true } : {}),
       ...(changedFieldKeys.length ? { changedFieldKeys } : {}),
       values: masterValues,
       ...(historyByColumnId ? { historyByColumnId } : {}),

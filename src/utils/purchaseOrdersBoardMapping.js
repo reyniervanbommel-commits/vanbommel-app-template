@@ -75,6 +75,7 @@ export function mapTbResponseToBoard(data) {
       isChanged: Boolean(r.isChanged),
       changedFieldKeys: Array.isArray(r.changedFieldKeys) ? r.changedFieldKeys : [],
       removedInD365: Boolean(r.removedAtSource) && !Boolean(r.syncRetained),
+      hasRemovalChange: Boolean(r.hasRemovalChange),
       syncRetained: Boolean(r.syncRetained),
       lineCount: Number(r.detailCount) || 0,
       hasNewLine: Boolean(r.hasNewLine),

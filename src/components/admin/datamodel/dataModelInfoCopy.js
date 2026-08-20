@@ -1,0 +1,15 @@
+// Korte Engelse toelichtingen voor de klikbare (i) op de Data model-pagina.
+export const DATA_MODEL_INFO = {
+  page: 'This page controls what is synced from D365 and which columns appear in the app. Sync filters choose the starting set. After that, orders that leave the filter stay on the board (retained) and are refreshed individually. New D365 orders that still match the filter appear as new.',
+  syncFilters: 'These rules are sent to D365 as an OData $filter on every refresh. Only matching purchase orders enter the cache as the starting set. Changing and saving filters clears retention and can hide orders that no longer match.',
+  reimportBaseline: 'Re-import fetches all rows again with the current sync filter and treats that result as a new starting point. Changes are not written to history, so the board will not mark every row as new or changed. Use this after a data-model change. It does not switch to a wider filter for later refreshes.',
+  countRows: 'Counts how many D365 rows match the filters currently shown, before you save. Use this to check the impact of a filter change.',
+  saveFilters: 'Saves the filters and uses them on the next D365 refresh. Saving purchase-order filters also clears retention for orders that were kept after they left the previous filter.',
+  discoverFields: 'Reads all fields from the D365 entity and adds any missing columns, hidden by default. Turn on “Visible in table” to show a column on the board.',
+  visibleInTable: 'Shows this column on the purchase-order board. Hidden columns stay in the data model and can be turned on later.',
+  visibleAtDelete: 'Keeps this column visible in the hidden-rows panel after a user removes a row from the board. The row is only hidden in the app, not deleted in D365.',
+  writeBack: 'Allows edits in the app to be written back to this D365 field. Only source columns that D365 accepts for update can be enabled.',
+  rccp: 'Marks this numeric column as an RCCP capacity value. Choose this per column; there is no bulk toggle because each measure is a deliberate planning choice.',
+  retention: 'Orders that first matched this filter stay on the board after they fall out of it, for example when status changes from Backorder to Invoiced. They are fetched again from D365 on every refresh and show as changed, not removed. New D365 orders that match the filter still appear as new. The retention cap is set on the OData tab under Cache sync.',
+  externalLinks: 'Excel or CSV files linked here become read-only lookup columns on a main table. They enrich the board; they are not written back to D365.',
+};

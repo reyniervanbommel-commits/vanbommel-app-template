@@ -25,7 +25,7 @@ function PurchaseOrderRowStatusBadge({ order, className }) {
   const styles = useStyles();
   const badgeClassName = mergeClasses(styles.compactRoundBadge, className);
 
-  if (order?.removedInD365) {
+  if (order?.hasRemovalChange || order?.hasRemovedLine) {
     return (
       <Badge className={badgeClassName} color="danger" appearance="tint" size="small">
         rem

@@ -481,13 +481,22 @@ describe('TableDataService.buildDetailRollup', () => {
     });
   });
 
-  it('telt vervallen regels niet mee in de image-preview maar wel in de vlaggen', () => {
+  it('telt vervallen regels niet mee in de image-preview', () => {
     const rollup = buildDetailRollup([
       { values: { itemNumber: 'GONE' }, isRemoved: true },
       { values: { itemNumber: 'ITEM-9' } },
     ]);
-    expect(rollup.hasRemovedLine).toBe(true);
+    expect(rollup.hasRemovedLine).toBeUndefined();
     expect(rollup.productImageSummary).toEqual({ firstItemNumber: 'ITEM-9', additionalItemCount: 0 });
+  });
+
+  it('zet hasRemovedLine alleen bij een ongeziene verwijdering', () => {
+    expect(buildDetailRollup([
+      { values: { itemNumber: 'GONE' }, isRemoved: true, hasRemovalChange: true },
+    ]).hasRemovedLine).toBe(true);
+    expect(buildDetailRollup([
+      { values: { itemNumber: 'GONE' }, isRemoved: true },
+    ]).hasRemovedLine).toBeUndefined();
   });
 
   it('laat false-vlaggen en een lege image-preview weg uit de payload', () => {
@@ -938,6 +947,24 @@ describe('TableDataService.buildD365ChangeState', () => {
       line('DELETE', '2026-07-15T18:00:00Z'),
     ]);
     expect(state.isRemoved).toBe(true);
+    expect(state.isNew).toBe(false);
+  });
+
+  it('markeert een order-header als verwijderd bij DELETE', () => {
+    const state = buildD365ChangeState([{
+      partition_key: 'whsl', record_key: 'WSPO-1', detail_key: -1, field_key: null, action: 'DELETE',
+    }]).orderChanges.get('whsl|WSPO-1');
+    expect(state.isRemoved).toBe(true);
+    expect(state.isChanged).toBe(false);
+  });
+
+  it('heft een header-verwijdering op bij een latere INSERT', () => {
+    const state = buildD365ChangeState([
+      { partition_key: 'whsl', record_key: 'WSPO-1', detail_key: -1, field_key: null, action: 'DELETE' },
+      { partition_key: 'whsl', record_key: 'WSPO-1', detail_key: -1, field_key: null, action: 'INSERT' },
+    ]).orderChanges.get('whsl|WSPO-1');
+    expect(state.isRemoved).toBe(false);
+    expect(state.isNew).toBe(true);
   });
 });
 

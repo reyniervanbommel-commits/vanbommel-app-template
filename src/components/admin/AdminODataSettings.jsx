@@ -12,11 +12,12 @@ import {
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
-import ODataInfoDialog from './ODataInfoDialog';
+import AdminInfoHint from './AdminInfoHint';
+import { ODATA_SETTINGS_INFO } from './odataSettingsInfoCopy';
 
 const useStyles = makeStyles({
   root: { maxWidth: '720px', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
-  pageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  pageHeader: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   dbHint: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -32,20 +33,19 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     ...shorthands.gap('16px'),
   },
-  sectionTitle: { marginBottom: '4px' },
+  sectionTitleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   statusGrid: { display: 'flex', flexDirection: 'column', ...shorthands.gap('6px') },
   statusRow: { display: 'flex', ...shorthands.gap('8px'), alignItems: 'center', flexWrap: 'wrap' },
   statusLabel: { color: tokens.colorNeutralForeground3, minWidth: '170px', fontSize: tokens.fontSizeBase200 },
-  mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200, wordBreak: 'break-all' },
-  feedback: { color: tokens.colorPaletteGreenForeground1 },
-  error: { color: tokens.colorPaletteRedForeground1 },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   actions: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'center', flexWrap: 'wrap' },
+  feedback: { color: tokens.colorPaletteGreenForeground1 },
+  error: { color: tokens.colorPaletteRedForeground1 },
 });
 
 const AUTH_LABELS = {
-  oauth_client_credentials: { label: 'OAuth2 client-credentials', color: 'success' },
-  static_bearer_token: { label: 'Static bearer token (legacy)', color: 'warning' },
+  oauth_client_credentials: { label: 'OAuth2 client credentials', color: 'success' },
+  static_bearer_token: { label: 'Legacy bearer token', color: 'warning' },
   none: { label: 'Not configured', color: 'danger' },
 };
 
@@ -59,6 +59,7 @@ const EMPTY_FORM = {
   D365_ODATA_CLIENT_SECRET: '',
   D365_ODATA_CLIENT_SECRET_EXPIRES_AT: '',
   PO_SYNC_MAX_ORDERS: '',
+  PO_SYNC_RETAINED_MAX_AUTO: '',
   PO_CACHE_STALE_MINUTES: '',
 };
 
@@ -69,7 +70,6 @@ const EXPIRY_BADGE = {
   unknown: { color: 'informative', label: 'Not set' },
 };
 
-// Input type="date" verwacht yyyy-MM-dd; de backend levert een volledige ISO-timestamp.
 const toDateInputValue = (raw) => {
   if (!raw) return '';
   const date = new Date(raw);
@@ -77,9 +77,18 @@ const toDateInputValue = (raw) => {
   return date.toISOString().slice(0, 10);
 };
 
+function SectionTitle({ title, info, infoLabel }) {
+  const styles = useStyles();
+  return (
+    <div className={styles.sectionTitleRow}>
+      <Text weight="semibold">{title}</Text>
+      <AdminInfoHint text={info} label={infoLabel} />
+    </div>
+  );
+}
+
 export default function AdminODataSettings() {
   const styles = useStyles();
-
   const [form, setForm] = useState(EMPTY_FORM);
   const [derived, setDerived] = useState({});
   const [secretSet, setSecretSet] = useState({ clientSecret: false });
@@ -97,9 +106,7 @@ export default function AdminODataSettings() {
       const s = data.settings || {};
       setDbSource(data.source || 'app_settings');
       setDerived(data.derived || {});
-      setSecretSet({
-        clientSecret: !!s.D365_ODATA_CLIENT_SECRET_SET,
-      });
+      setSecretSet({ clientSecret: !!s.D365_ODATA_CLIENT_SECRET_SET });
       setForm({
         D365_ODATA_BASE_URL: s.D365_ODATA_BASE_URL || '',
         D365_ODATA_PURCHASE_ORDERS_PATH: s.D365_ODATA_PURCHASE_ORDERS_PATH || '/data/PurchaseOrderHeadersV2',
@@ -110,6 +117,7 @@ export default function AdminODataSettings() {
         D365_ODATA_CLIENT_SECRET: '',
         D365_ODATA_CLIENT_SECRET_EXPIRES_AT: toDateInputValue(s.D365_ODATA_CLIENT_SECRET_EXPIRES_AT),
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
+        PO_SYNC_RETAINED_MAX_AUTO: s.PO_SYNC_RETAINED_MAX_AUTO || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
       });
     } catch (err) {
@@ -131,7 +139,6 @@ export default function AdminODataSettings() {
     setFeedback('');
     setError('');
     try {
-      // Lege secret niet meesturen → bestaande waarde blijft behouden.
       const payload = { ...form };
       if (!payload.D365_ODATA_CLIENT_SECRET) delete payload.D365_ODATA_CLIENT_SECRET;
       await apiRequest('/admin/settings/odata', { method: 'POST', body: payload });
@@ -152,28 +159,22 @@ export default function AdminODataSettings() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.pageHeader}>
-        <Text size={600} weight="semibold">OData connection (D365)</Text>
-        <ODataInfoDialog />
+      <div>
+        <div className={styles.pageHeader}>
+          <Text size={600} weight="semibold">OData connection (D365)</Text>
+          <AdminInfoHint text={ODATA_SETTINGS_INFO.page} label="About the OData page" />
+        </div>
+        <Text className={styles.dbHint} block>
+          Saved in SQL table dbo.{dbSource}. Filters and columns: Data model tab.
+        </Text>
       </div>
 
-      <Text className={styles.dbHint} block>
-        Settings are loaded from and saved to SQL table <strong>dbo.{dbSource}</strong>.
-        Secrets (client secret) are never returned to this page; leave the field empty to keep
-        the existing value. Which tables and columns are fetched is managed on the{' '}
-        <strong>Data model</strong> tab. The path below configures headers; lines are linked automatically.
-      </Text>
-
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Current status</Text>
+        <Text weight="semibold">Current status</Text>
         <div className={styles.statusGrid}>
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Authentication</span>
             <Badge appearance="tint" color={auth.color}>{auth.label}</Badge>
-          </div>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Company</span>
-            <span className={styles.mono}>{form.D365_ODATA_COMPANY || '—'}</span>
           </div>
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Client secret</span>
@@ -184,52 +185,48 @@ export default function AdminODataSettings() {
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Secret expiry</span>
             <Badge appearance="tint" color={expiryBadge.color}>{expiryBadge.label}</Badge>
-            {expiry.expiresAt && (
+            {expiry.expiresAt ? (
               <span className={styles.hint}>
                 {toDateInputValue(expiry.expiresAt)}
                 {typeof expiry.daysRemaining === 'number' && expiry.daysRemaining > 0
                   ? ` — ${expiry.daysRemaining} days left`
                   : ''}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Connection</Text>
-        <Field label="OData base URL">
+        <SectionTitle title="Connection" info={ODATA_SETTINGS_INFO.connection} infoLabel="About connection" />
+        <Field label="OData base URL" hint="D365 environment URL from LCS or Help → About.">
           <Input
             placeholder="https://vanbommel-acc.sandbox.operations.dynamics.com"
             value={form.D365_ODATA_BASE_URL}
             onChange={handleChange('D365_ODATA_BASE_URL')}
           />
         </Field>
-        <Field label="Purchase order headers path (entity)">
+        <Field label="Purchase order headers path (entity)" hint="Header entity. Lines load via $expand.">
           <Input
             placeholder="/data/PurchaseOrderHeadersV2"
             value={form.D365_ODATA_PURCHASE_ORDERS_PATH}
             onChange={handleChange('D365_ODATA_PURCHASE_ORDERS_PATH')}
           />
         </Field>
-        <Text className={styles.hint} block>
-          Lines are loaded from the related entity via <span className={styles.mono}>$expand=PurchaseOrderLines</span>.
-          Line-level write-back targets <span className={styles.mono}>/data/PurchaseOrderLinesV2</span>.
-        </Text>
-        <Field label="Company code">
+        <Field label="Company code" hint="Legal entity (dataAreaId).">
           <Input placeholder="WHSL" value={form.D365_ODATA_COMPANY} onChange={handleChange('D365_ODATA_COMPANY')} />
         </Field>
-        <Field label="Timeout (ms)">
+        <Field label="Timeout (ms)" hint="Maximum wait per OData request.">
           <Input type="number" placeholder="20000" value={form.D365_ODATA_TIMEOUT_MS} onChange={handleChange('D365_ODATA_TIMEOUT_MS')} />
         </Field>
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Authentication — OAuth2 client-credentials</Text>
-        <Text className={styles.hint} block>
-          Recommended method. The app fetches a token from Azure AD and refreshes it automatically
-          before expiry. Scope = base URL + <span className={styles.mono}>/.default</span>.
-        </Text>
+        <SectionTitle
+          title="Authentication — OAuth2 client credentials"
+          info={ODATA_SETTINGS_INFO.authentication}
+          infoLabel="About authentication"
+        />
         <Field label="Tenant ID">
           <Input placeholder="00000000-0000-0000-0000-000000000000" value={form.D365_ODATA_TENANT_ID} onChange={handleChange('D365_ODATA_TENANT_ID')} />
         </Field>
@@ -244,25 +241,24 @@ export default function AdminODataSettings() {
         </Field>
         <Field
           label="Client secret expires on"
-          hint="Admins are warned in the app from 30 days before this date, and keep being warned until it is updated. Set this to the new expiry date whenever you rotate the secret."
+          hint="Admins are warned from 30 days before this date. Update it when you rotate the secret."
         >
-          <Input
-            type="date"
-            value={form.D365_ODATA_CLIENT_SECRET_EXPIRES_AT}
-            onChange={handleChange('D365_ODATA_CLIENT_SECRET_EXPIRES_AT')}
-          />
+          <Input type="date" value={form.D365_ODATA_CLIENT_SECRET_EXPIRES_AT} onChange={handleChange('D365_ODATA_CLIENT_SECRET_EXPIRES_AT')} />
         </Field>
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold" className={styles.sectionTitle}>Cache sync</Text>
-        <Text className={styles.hint} block>
-          Controls cache limits and freshness. Purchase order filters are managed on the Data model tab.
-        </Text>
-        <Field label="Max orders per sync (cap)">
+        <SectionTitle title="Cache sync" info={ODATA_SETTINGS_INFO.cache} infoLabel="About cache sync" />
+        <Field label="Max orders per sync (cap)" hint="Safety cap on the filtered D365 fetch.">
           <Input type="number" placeholder="2000" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
         </Field>
-        <Field label="Cache stale after (minutes)">
+        <Field
+          label="Max retained orders"
+          hint="Orders that leave the Data model filter stay on the board and are re-fetched by key. Warning levels follow this limit. Maximum 10,000."
+        >
+          <Input type="number" min="1" max="10000" placeholder="2000" value={form.PO_SYNC_RETAINED_MAX_AUTO} onChange={handleChange('PO_SYNC_RETAINED_MAX_AUTO')} />
+        </Field>
+        <Field label="Cache stale after (minutes)" hint="How long the cache may sit before the board treats it as out of date.">
           <Input type="number" placeholder="15" value={form.PO_CACHE_STALE_MINUTES} onChange={handleChange('PO_CACHE_STALE_MINUTES')} />
         </Field>
       </div>
@@ -271,8 +267,8 @@ export default function AdminODataSettings() {
         <Button appearance="primary" icon={<Save24Regular />} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save to database'}
         </Button>
-        {feedback && <Text className={styles.feedback}>{feedback}</Text>}
-        {error && <Text className={styles.error}>{error}</Text>}
+        {feedback ? <Text className={styles.feedback}>{feedback}</Text> : null}
+        {error ? <Text className={styles.error}>{error}</Text> : null}
       </div>
     </div>
   );

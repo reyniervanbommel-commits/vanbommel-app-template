@@ -84,7 +84,7 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   onSelectDatePeriodDisplayMode,
 }) {
   return (
-    <PopoverSurface className={styles.surface}>
+    <PopoverSurface className={styles.surface} data-column-menu-surface="true">
       <FilterMenuMainPane
         styles={styles}
         column={column}

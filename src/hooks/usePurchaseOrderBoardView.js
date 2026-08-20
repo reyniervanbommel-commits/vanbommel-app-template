@@ -123,7 +123,7 @@ export function usePurchaseOrderBoardView({
   ), []);
 
   const hasRemovedData = useCallback((order) => (
-    Boolean(order?.removedInD365) || Boolean(order?.hasRemovedLine)
+    Boolean(order?.hasRemovalChange) || Boolean(order?.hasRemovedLine)
   ), []);
 
   const hasChangedData = useCallback((order) => {
