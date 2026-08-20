@@ -157,3 +157,36 @@ export function buildAnalysisQuery(window, vendorAccount) {
   if (vendorAccount) params.set('vendorAccount', vendorAccount);
   return `/rccp/analysis?${params.toString()}`;
 }
+
+/**
+ * Applies visual RCCP settings (chart type, colour, visibility, week bands) onto an
+ * already-loaded analysis so the chart updates immediately after Save, before the
+ * background refetch returns.
+ */
+export function applyRccpChartSettings(analysis, config) {
+  if (!analysis || !config) return analysis;
+  const byKey = new Map((config.quantityMeasures || []).map((measure) => [measure.columnKey, measure]));
+  return {
+    ...analysis,
+    config: { ...analysis.config, ...config },
+    measureRows: (analysis.measureRows || []).map((row) => {
+      const measure = byKey.get(row.measureKey);
+      if (measure) {
+        return {
+          ...row,
+          label: measure.label || row.label,
+          chartType: measure.chartType || row.chartType,
+          color: measure.color || row.color,
+          showInChart: measure.showInChart !== false,
+        };
+      }
+      if (row.isCapacity) {
+        return { ...row, showInChart: config.showCapacityLine !== false };
+      }
+      if (row.isWarning) {
+        return { ...row, showInChart: config.showWarningLine !== false };
+      }
+      return row;
+    }),
+  };
+}

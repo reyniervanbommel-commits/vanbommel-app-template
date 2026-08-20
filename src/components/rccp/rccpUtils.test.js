@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyRccpChartSettings,
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
   formatIsoWeekMondayLabel,
@@ -88,5 +89,38 @@ describe('isMatrixCellEmpty', () => {
       availableQty: 0,
       confirmedQty: 5,
     })).toBe(false);
+  });
+});
+
+describe('applyRccpChartSettings', () => {
+  it('updates chart type, colour and visibility on matching measures', () => {
+    const analysis = {
+      config: { showCapacityLine: true },
+      measureRows: [
+        { measureKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+        { measureKey: '__capacity__', label: 'Available capacity', chartType: 'line', isCapacity: true, showInChart: true },
+        { measureKey: '__warning__', label: 'Warning threshold', chartType: 'line', isWarning: true, showInChart: true },
+      ],
+    };
+    const next = applyRccpChartSettings(analysis, {
+      quantityMeasures: [
+        { columnKey: 'quantity', label: 'Qty', chartType: 'bar', color: '#0078D4', showInChart: false },
+      ],
+      showCapacityLine: false,
+      showWarningLine: false,
+      chartWeekRanges: [{ fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 4, color: '#00c875' }],
+    });
+    expect(next.measureRows[0]).toMatchObject({
+      label: 'Qty', chartType: 'bar', color: '#0078D4', showInChart: false,
+    });
+    expect(next.measureRows[1].showInChart).toBe(false);
+    expect(next.measureRows[2].showInChart).toBe(false);
+    expect(next.config.chartWeekRanges).toHaveLength(1);
+  });
+
+  it('returns the original analysis when config is missing', () => {
+    const analysis = { measureRows: [] };
+    expect(applyRccpChartSettings(analysis, null)).toBe(analysis);
+    expect(applyRccpChartSettings(null, {})).toBeNull();
   });
 });

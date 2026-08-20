@@ -84,6 +84,12 @@ function RccpChartMatrixPanel({
     () => measureRows.filter((row) => visibleKeys[row.measureKey]),
     [measureRows, visibleKeys],
   );
+  // Force Recharts to remount series when bar/line (or colour) changes; same dataKey
+  // otherwise keeps the previous Line/Bar instance.
+  const seriesSignature = useMemo(
+    () => activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|'),
+    [activeRows],
+  );
 
   if (!periodHeaders.length) return null;
 
@@ -98,6 +104,7 @@ function RccpChartMatrixPanel({
           }}
         >
           <ComposedChart
+            key={seriesSignature}
             width={chartWidth}
             height={chartHeight}
             data={chart}
@@ -128,7 +135,7 @@ function RccpChartMatrixPanel({
               {activeRows.map((row) => (
                 row.chartType === 'bar' ? (
                   <Bar
-                    key={row.measureKey}
+                    key={`${row.measureKey}-bar`}
                     dataKey={row.measureKey}
                     name={row.label}
                     fill={row.color}
@@ -145,7 +152,7 @@ function RccpChartMatrixPanel({
                   </Bar>
                 ) : (
                   <Line
-                    key={row.measureKey}
+                    key={`${row.measureKey}-line`}
                     type="monotone"
                     dataKey={row.measureKey}
                     name={row.label}
