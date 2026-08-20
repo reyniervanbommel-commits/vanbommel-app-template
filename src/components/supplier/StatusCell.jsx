@@ -19,7 +19,6 @@ import {
   getStatusOptionByValue,
   resolveStatusCellColor,
 } from '../../utils/statusColumnUtils';
-import { purchaseOrderBoardRowHeight } from './purchaseOrderBoardLayout';
 
 const STATUS_TEXT_COLOR = '#ffffff';
 
@@ -27,13 +26,15 @@ const useStyles = makeStyles({
   wrapper: {
     position: 'relative',
     width: '100%',
-    minHeight: purchaseOrderBoardRowHeight,
+    height: '100%',
+    minHeight: 0,
     display: 'flex',
     alignItems: 'stretch',
   },
   trigger: {
     width: '100%',
-    minHeight: purchaseOrderBoardRowHeight,
+    height: '100%',
+    minHeight: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

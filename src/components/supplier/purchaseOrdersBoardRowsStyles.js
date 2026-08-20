@@ -143,10 +143,8 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     // A4: layout-isolatie per cel — voorkomt reflow-cascade bij ~500 cellen
     contain: 'layout',
     ...fixedCellOverflow,
-    ':has([data-cell-history-trigger="true"])': {
-      overflow: 'visible',
-      // contain:layout is compatibel met overflow:visible — portals blijven werken
-    },
+    // overflow blijft hidden zodat de celrand (kader) niet wordt overschilderd
+    // door status-fill of het history-hoekje.
   },
   itemCellContent: {
     display: 'block',

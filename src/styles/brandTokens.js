@@ -25,6 +25,7 @@ export const brandColor = {
   surfaceWarm: '#F5F3F0',
   surfaceCard: '#FFFFFF',
   surfaceRail: '#F0EDE9',
+  cellHistoryFoldPaper: '#FFFFFF',
 };
 
 export const typography = {
@@ -46,4 +47,7 @@ export const layout = {
 export const interaction = {
   tableRowHover: 'rgba(22, 38, 61, 0.06)',
   editableCellHover: 'rgba(22, 38, 61, 0.08)',
+  cellHistoryFoldShadow: 'rgba(22, 38, 61, 0.18)',
+  cellHistoryFoldShadowHover: 'rgba(22, 38, 61, 0.28)',
+  cellHistoryFoldDivider: 'rgba(22, 38, 61, 0.22)',
 };

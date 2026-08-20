@@ -107,13 +107,19 @@ export const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
     );
     return {
       className: styles.itemCell,
-      contentClassName: isImageColumn ? undefined : styles.itemCellContent,
-      contentStyle: getFormattedCellContentStyle(useFormattedText),
+      contentClassName: (isImageColumn || isStatus) ? undefined : styles.itemCellContent,
+      contentStyle: isStatus
+        ? { height: '100%', minHeight: 0, overflow: 'visible' }
+        : getFormattedCellContentStyle(useFormattedText),
       style: isImageColumn
         ? getProductImageCellStyle(baseStyle, PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX)
         : {
           ...baseStyle,
-          ...(isStatus ? { padding: 0 } : {}),
+          ...(isStatus ? {
+            padding: 0,
+            '--po-cell-padding-y': '0px',
+            '--po-cell-padding-x': '0px',
+          } : {}),
         },
       isLocated,
     };

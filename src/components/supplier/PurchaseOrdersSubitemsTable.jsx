@@ -118,9 +118,6 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     verticalAlign: 'middle',
-    ':has([data-cell-history-trigger="true"])': {
-      overflow: 'visible',
-    },
   },
   subCellContent: {
     display: 'block',

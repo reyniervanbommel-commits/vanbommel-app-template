@@ -11,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
+import { brandColor, interaction } from '../../styles/brandTokens';
 import {
   formatHistoryDate,
   formatHistoryStatus,
@@ -18,12 +19,15 @@ import {
   historyStatusColor,
 } from '../../utils/cellHistoryFormat';
 
+const FOLD_SIZE = '10px';
+
 const useStyles = makeStyles({
   wrapper: {
     position: 'relative',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'stretch',
     width: '100%',
+    height: '100%',
     maxWidth: '100%',
     overflow: 'visible',
   },
@@ -32,29 +36,63 @@ const useStyles = makeStyles({
     top: 'calc(-1 * var(--po-cell-padding-y, 0px))',
     right: 'calc(-1 * var(--po-cell-padding-x, 0px))',
     zIndex: 5,
-    width: '9px',
-    height: '9px',
+    width: FOLD_SIZE,
+    height: FOLD_SIZE,
     ...shorthands.padding('0'),
     ...shorthands.border('0'),
-    backgroundColor: tokens.colorNeutralStroke2,
-    clipPath: 'polygon(100% 0, 0 0, 100% 100%)',
+    backgroundColor: 'transparent',
     cursor: 'pointer',
-    transformOrigin: 'top right',
-    transitionProperty: 'background-color, transform',
-    transitionDuration: '120ms',
-    transitionTimingFunction: 'ease',
-    ':hover': {
-      backgroundColor: tokens.colorNeutralForeground3,
-      transform: 'scale(1.1)',
+    // Schaduw: onderste linkerhelft, donkerder dan de cel (multiply pakt de celkleur).
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      zIndex: 0,
+      width: FOLD_SIZE,
+      height: FOLD_SIZE,
+      backgroundColor: interaction.cellHistoryFoldShadow,
+      clipPath: 'polygon(0 0, 0 100%, 100% 100%)',
+      mixBlendMode: 'multiply',
+      pointerEvents: 'none',
+    },
+    // Papier: bovenste rechterhelft, altijd wit.
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      zIndex: 0,
+      width: FOLD_SIZE,
+      height: FOLD_SIZE,
+      backgroundColor: brandColor.cellHistoryFoldPaper,
+      clipPath: 'polygon(0 0, 100% 0, 100% 100%)',
+      pointerEvents: 'none',
+    },
+    ':hover::before': {
+      backgroundColor: interaction.cellHistoryFoldShadowHover,
     },
     ':focus-visible': {
-      backgroundColor: tokens.colorNeutralForeground3,
       outlineColor: tokens.colorBrandStroke1,
       outlineStyle: 'solid',
       outlineWidth: '2px',
     },
   },
-  content: { display: 'inline-flex', alignItems: 'center', width: '100%', maxWidth: '100%' },
+  foldDivider: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 1,
+    pointerEvents: 'none',
+    backgroundImage: `linear-gradient(45deg, transparent calc(50% - 0.5px), var(--po-fold-divider, transparent) 50%, transparent calc(50% + 0.5px))`,
+  },
+  content: {
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+  },
   surface: {
     width: 'min(720px, calc(100vw - 32px))',
     maxWidth: '720px',
@@ -169,8 +207,9 @@ function HistoryTable({ entries, dataType, styles }) {
 }
 
 /**
- * Toont een omgevouwen hoekje rechtsboven wanneer er historie bestaat.
- * Klik op het hoekje opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
+ * Toont een omgevouwen hoekje rechtsboven wanneer er historie bestaat:
+ * wit papier rechtsboven + schaduw linksonder in een donkerdere tint van de cel.
+ * Klik opent de cel-geschiedenis (audit trail) met wie/wat/wanneer.
  */
 export default function CellHistoryPopover({ cellKeys, dataType, children, hasHistory = false }) {
   const styles = useStyles();
@@ -215,7 +254,9 @@ export default function CellHistoryPopover({ cellKeys, dataType, children, hasHi
             aria-label="View cell history"
             title="View cell history"
             data-cell-history-trigger="true"
-          />
+          >
+            <span className={styles.foldDivider} aria-hidden="true" />
+          </button>
         </PopoverTrigger>
         <span className={styles.content}>{children}</span>
       </div>
