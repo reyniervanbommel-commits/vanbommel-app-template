@@ -1,5 +1,6 @@
 import React, { memo, useMemo, useState } from 'react';
 import {
+  Badge,
   Button,
   Dialog,
   DialogActions,
@@ -44,6 +45,17 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     ...shorthands.padding('8px', '12px'),
   },
+  hint: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    marginBottom: '8px',
+  },
+  fieldLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+    flexWrap: 'wrap',
+  },
 });
 
 export const OPERATOR_LABELS = {
@@ -78,7 +90,11 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
 
   const levelTitle = level === 'line' ? 'Subitems (Lines)' : 'Main items (Headers)';
   const sortedFields = useMemo(
-    () => [...fields].sort((a, b) => (b.nonEmptyCount || 0) - (a.nonEmptyCount || 0)),
+    () => [...fields].sort((a, b) => {
+      const recommendedDelta = Number(Boolean(b.recommended)) - Number(Boolean(a.recommended));
+      if (recommendedDelta) return recommendedDelta;
+      return (b.nonEmptyCount || 0) - (a.nonEmptyCount || 0);
+    }),
     [fields]
   );
 
@@ -96,6 +112,10 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
         <DialogBody>
           <DialogTitle>Select field from {levelTitle}</DialogTitle>
           <DialogContent>
+            <Text className={styles.hint} block>
+              Prefer a group field such as Vendor group or Purchase order status. That keeps the D365
+              filter short. Long lists of vendor accounts are slower.
+            </Text>
             <SearchBox
               className={styles.search}
               placeholder="Search field by name..."
@@ -119,7 +139,14 @@ function FilterFieldPickerDialog({ open, level, fields, onClose, onSelect }) {
                     return (
                       <TableRow key={`${field.level}-${field.field}`}>
                         <TableCell>
-                          <Text weight="semibold">{field.label}</Text>
+                          <div className={styles.fieldLabel}>
+                            <Text weight="semibold">{field.label}</Text>
+                            {field.resolveVia === 'vendor-group' || /group|pool|buyer/i.test(String(field.field || '')) ? (
+                              <Badge appearance="tint" color="brand" size="small">Group</Badge>
+                            ) : field.recommended ? (
+                              <Badge appearance="tint" color="informative" size="small">Compact</Badge>
+                            ) : null}
+                          </div>
                           <Text className={styles.samples} block>{field.field}</Text>
                         </TableCell>
                         <TableCell>

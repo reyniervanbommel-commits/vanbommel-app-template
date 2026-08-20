@@ -12,6 +12,7 @@ import {
 import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
 import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
 import FilterFieldPickerDialog from './FilterFieldPickerDialog';
+import FilterPreview from './FilterPreview';
 import SyncFilterRuleRow from './SyncFilterRuleRow';
 import AdminInfoHint from './AdminInfoHint';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
@@ -37,14 +38,6 @@ const useStyles = makeStyles({
   levelDropdown: { width: '170px', minWidth: '170px' },
   operatorDropdown: { width: '170px', minWidth: '170px' },
   valueInput: { width: '240px', minWidth: '180px', maxWidth: '320px', flex: '0 1 240px' },
-  preview: {
-    fontFamily: tokens.fontFamilyMonospace,
-    fontSize: tokens.fontSizeBase200,
-    backgroundColor: tokens.colorNeutralBackground3,
-    ...shorthands.padding('8px', '12px'),
-    ...shorthands.borderRadius('6px'),
-    wordBreak: 'break-all',
-  },
   actions: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
   error: { color: tokens.colorPaletteRedForeground1, fontSize: tokens.fontSizeBase200 },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase200 },
@@ -104,6 +97,18 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
     return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
   }, [cache?.retentionWarning, retainedMaxAuto, retainedRows, tableKey]);
 
+  const groupFilterHint = useMemo(() => {
+    if (tableKey !== 'purchase-orders') return '';
+    const usesGroup = rules.some((rule) => rule.field === 'VendorGroupId' && String(rule.value || '').trim());
+    if (usesGroup) return '';
+    const accountRule = rules.find((rule) => (
+      rule.field === 'OrderVendorAccountNumber' && rule.operator === 'oneof'
+    ));
+    if (!accountRule) return '';
+    const count = String(accountRule.value ?? '').split(',').map((part) => part.trim()).filter(Boolean).length;
+    if (count < 6) return '';
+    return 'A vendor group filter is shorter and faster in D365 than a long list of vendor accounts. Choose Vendor group from the field picker.';
+  }, [rules, tableKey]);
   const fieldsForLevel = useCallback(
     (level) => (level === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || [])),
     [filterCatalog]
@@ -146,7 +151,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         <Text className={styles.hint} block>
           {readOnlyMessage || 'This table inherits the active Purchase Orders sync filter and cannot be edited separately.'}
         </Text>
-        {inheritedCompiled ? <div className={styles.preview}>Inherited $filter = {inheritedCompiled}</div> : null}
+        <FilterPreview label="Inherited $filter" value={inheritedCompiled} />
         <div className={styles.actions}>
           <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
         </div>
@@ -166,13 +171,17 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       </div>
       <Text className={styles.hint} block>
         Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
-        network traffic and sync time. Use Discover D365 fields to register all entity columns first.
+        network traffic and sync time. Prefer a vendor group or status over a long list of vendor accounts.
+        Use Discover D365 fields to register all entity columns first.
       </Text>
+      {groupFilterHint ? (
+        <Text className={styles.hint} block>{groupFilterHint}</Text>
+      ) : null}
       {poScopeHint ? (
         <Text className={styles.hint} block>{poScopeHint}</Text>
       ) : null}
-      {poScopeHint && inheritedCompiled ? (
-        <div className={styles.preview}>Purchase Orders $filter (scope) = {inheritedCompiled}</div>
+      {poScopeHint ? (
+        <FilterPreview label="Purchase Orders $filter (scope)" value={inheritedCompiled} />
       ) : null}
       {tableKey === 'purchase-orders' ? (
         <div className={styles.titleRow}>
@@ -233,7 +242,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         />
       ))}
 
-      {preview ? <div className={styles.preview}>$filter = {preview}</div> : null}
+      <FilterPreview label="$filter" value={preview} />
 
       <div className={styles.actions}>
         <Button appearance="primary" icon={<SaveRegular />} onClick={save} disabled={saving}>

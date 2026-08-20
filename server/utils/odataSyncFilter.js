@@ -20,7 +20,11 @@ const ENUM_NAMESPACE = 'Microsoft.Dynamics.DataEntities';
 const LINES_NAV_PROPERTY = 'PurchaseOrderLines';
 const MAX_RULES = 15;
 const MAX_VALUE_LENGTH = 128;
-const MAX_ONEOF_VALUES = 20;
+// Opslaglimiet: de admin mag een lange vendor-lijst bewaren. D365-calls chunked de
+// one-of waarden (D365_FILTER_CHUNK_SIZE) omdat F&O geen `in`-operator heeft en GET-$filter
+// anders te lang wordt. Zie compileSyncRulesChunks.
+const MAX_ONEOF_VALUES = 500;
+const D365_FILTER_CHUNK_SIZE = 20;
 
 function badRequest(message) {
   return Object.assign(new Error(message), { status: 400 });
@@ -28,6 +32,13 @@ function badRequest(message) {
 
 function escapeODataLiteral(value) {
   return String(value).replace(/'/g, "''");
+}
+
+function listOneOfValues(rawValue) {
+  const list = Array.isArray(rawValue)
+    ? rawValue
+    : String(rawValue ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  return [...new Set(list.map((v) => String(v)))];
 }
 
 // Serialiseert één waarde naar een OData-literal volgens het waardetype.
@@ -72,9 +83,7 @@ function compileRuleExpression(rule, fieldRef, label) {
   }
 
   if (operator === 'oneof') {
-    const list = Array.isArray(rawValue)
-      ? rawValue
-      : String(rawValue ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+    const list = listOneOfValues(rawValue);
     if (!list.length) throw badRequest(`${label}: at least one value is required`);
     if (list.length > MAX_ONEOF_VALUES) throw badRequest(`${label}: maximum ${MAX_ONEOF_VALUES} values`);
     for (const v of list) {
@@ -123,7 +132,48 @@ function compileRule(rule, index) {
 function compileSyncRules(rules) {
   if (!Array.isArray(rules) || !rules.length) return '';
   if (rules.length > MAX_RULES) throw badRequest(`Maximum ${MAX_RULES} filter rules`);
+  const largeOneOfCount = rules.filter((rule) => (
+    String(rule?.operator || '').trim() === 'oneof'
+    && listOneOfValues(rule.value).length > D365_FILTER_CHUNK_SIZE
+  )).length;
+  if (largeOneOfCount > 1) {
+    throw badRequest('Only one "is one of" filter can contain more than 20 values');
+  }
   return rules.map(compileRule).join(' and ');
+}
+
+/**
+ * Zelfde validatie als compileSyncRules, maar splitst één grote one-of-regel in
+ * D365-veilige chunks (OR van max D365_FILTER_CHUNK_SIZE waarden).
+ * Lege regels → [''].
+ */
+function compileSyncRulesChunks(rules, chunkSize = D365_FILTER_CHUNK_SIZE) {
+  const compiled = compileSyncRules(rules);
+  if (!compiled) return [''];
+  const safeSize = Number.isFinite(chunkSize) && chunkSize > 0 ? Math.floor(chunkSize) : D365_FILTER_CHUNK_SIZE;
+  const largeIndexes = [];
+  (Array.isArray(rules) ? rules : []).forEach((rule, index) => {
+    if (String(rule?.operator || '').trim() !== 'oneof') return;
+    if (listOneOfValues(rule.value).length > safeSize) largeIndexes.push(index);
+  });
+  if (!largeIndexes.length) return [compiled];
+  if (largeIndexes.length > 1) {
+    throw badRequest('Only one "is one of" filter can contain more than 20 values');
+  }
+
+  const largeIndex = largeIndexes[0];
+  const largeRule = rules[largeIndex];
+  const values = listOneOfValues(largeRule.value);
+  const otherRules = rules.filter((_, index) => index !== largeIndex);
+  const chunks = [];
+  for (let offset = 0; offset < values.length; offset += safeSize) {
+    const slice = values.slice(offset, offset + safeSize);
+    chunks.push(compileSyncRules([
+      ...otherRules,
+      { ...largeRule, value: slice },
+    ]));
+  }
+  return chunks;
 }
 
 /**
@@ -199,9 +249,7 @@ function evaluateRuleExpression(rule, rawFieldValue) {
   const rawValue = rule.value;
 
   if (operator === 'oneof') {
-    const list = Array.isArray(rawValue)
-      ? rawValue
-      : String(rawValue ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+    const list = listOneOfValues(rawValue);
     return list.some((entry) => compareRuleValues(rawFieldValue, 'eq', entry, valueType));
   }
 
@@ -233,7 +281,10 @@ module.exports = {
   VALUE_TYPES,
   LEVELS,
   MAX_RULES,
+  MAX_ONEOF_VALUES,
+  D365_FILTER_CHUNK_SIZE,
   compileSyncRules,
+  compileSyncRulesChunks,
   parseSyncRules,
   recordMatchesSyncRules,
 };
