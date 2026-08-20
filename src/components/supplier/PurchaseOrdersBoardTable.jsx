@@ -2,15 +2,15 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { Button } from '@fluentui/react-components';
 import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
-import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
+import PurchaseOrdersBoardTableHeader from './PurchaseOrdersBoardTableHeader';
 import { usePurchaseOrdersBoardTableStyles } from './purchaseOrdersBoardTableStyles';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
-import { useColumnReorderDrag } from '../../hooks/useColumnReorderDrag';
 import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardLinks';
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
 import { applyCollapsedColumnWidths } from '../../utils/collapsedColumnUtils';
+
 function PurchaseOrdersBoardTable({
   data,
   layout,
@@ -29,7 +29,6 @@ function PurchaseOrdersBoardTable({
     collapsedLineColumnKeys = [],
   } = layout;
   const {
-    headerColumnTextStyles = {},
     headerColumnFormatRules = {},
     lineColumnTextStyles = {},
     lineColumnFormatRules = {},
@@ -41,25 +40,15 @@ function PurchaseOrdersBoardTable({
     isAdmin,
     isStaff = true,
     onToggleWriteback,
-    onReorderHeaderColumn,
     onReorderLineColumn,
-    onSaveHeaderColumnWidth,
     onSaveLineColumnWidth,
-    onSaveHeaderColumnTextStyle,
-    onSaveHeaderColumnFormatRules,
     onSaveLineColumnTextStyle,
     onSaveLineColumnFormatRules,
-    onAddColumnRightOf,
     datePeriodDisplayModes = {},
-    onSetDatePeriodDisplayMode,
     editingColumnKey,
-    onEditingDone,
     reorderingColumns = false,
-    trackChangesActiveByColumnId = null,
     onToggleHeaderColumnCollapsed,
     onToggleLineColumnCollapsed,
-    productImageColumnVisible = true,
-    onToggleProductImageColumn,
   } = columnActions;
   const {
     onSetLineColumnTotal,
@@ -103,28 +92,15 @@ function PurchaseOrdersBoardTable({
     columnFormatRules: headerColumnFormatRules,
   });
   const resolvedBoardView = boardView || fallbackBoardView;
-  const headerColumnDrag = useColumnReorderDrag({ onReorder: onReorderHeaderColumn, disabled: reorderingColumns });
   const {
     processedItems,
     rows,
-    sortState,
     filterByColumn,
-    setFilterOperator,
-    setFilterValue,
-    setFilterSecondaryValue,
-    applyColumnFilter,
     clearColumnFilter,
-    setColumnColorFilter,
     applyFilterFromCellValue,
-    setSortDirection,
     groupedRows,
     groupingColumnKey,
-    groupingColorsByColumn,
-    groupSummaryColumnKeys,
-    setGroupingColumn,
     clearGrouping,
-    setGroupingBarColor,
-    setGroupSummaryColumn,
     clearAllFilters,
     activeFilterCount = 0,
   } = resolvedBoardView;
@@ -239,59 +215,21 @@ function PurchaseOrdersBoardTable({
     <>
       <div className={styles.wrapper} ref={wrapperRef}>
         <table className={styles.table}>
-          <thead>
-            <PurchaseOrdersBoardHeaderRow
+          <PurchaseOrdersBoardTableHeader
             styles={styles}
             selection={selection}
             onSetExpansion={handleSetExpansion}
-            productImageColumnVisible={productImageColumnVisible}
-            onToggleProductImageColumn={onToggleProductImageColumn}
+            items={items}
             columns={decoratedColumns}
-            headerColumnDrag={headerColumnDrag}
             headerColumnWidths={effectiveHeaderColumnWidths}
-            onSaveHeaderColumnWidth={onSaveHeaderColumnWidth}
-            onRenameColumn={onRenameColumn}
-            onRemoveColumn={onRemoveColumn}
-            isAdmin={isAdmin}
-            isStaff={isStaff}
-            onToggleWriteback={onToggleWriteback}
-            trackChangesActiveByColumnId={trackChangesActiveByColumnId}
-            editingColumnKey={editingColumnKey}
-            onEditingDone={onEditingDone}
-            linkedLineTotalByHeaderKey={linkedLineTotalByHeaderKey}
-            linkedLineValueByHeaderKey={linkedLineValueByHeaderKey}
+            boardView={resolvedBoardView}
+            columnActions={columnActions}
+            formatting={formatting}
+            links={{ linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
             lineColumns={lineColumns}
-            filterByColumn={filterByColumn}
-            sortState={sortState}
-            groupingColumnKey={groupingColumnKey}
-            groupingColorsByColumn={groupingColorsByColumn}
-            groupSummaryColumnKeys={groupSummaryColumnKeys}
-            setSortDirection={setSortDirection}
-            setFilterOperator={setFilterOperator}
-            setFilterValue={setFilterValue}
-            setFilterSecondaryValue={setFilterSecondaryValue}
-            applyColumnFilter={applyColumnFilter}
-            clearColumnFilter={clearColumnFilter}
-            setColumnColorFilter={setColumnColorFilter}
-            setGroupingColumn={setGroupingColumn}
-            clearGrouping={clearGrouping}
-            setGroupingBarColor={setGroupingBarColor}
-            setGroupSummaryColumn={setGroupSummaryColumn}
-            onAddColumnRightOf={onAddColumnRightOf}
-            datePeriodDisplayModes={datePeriodDisplayModes}
-            onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}
-            headerColumnTextStyles={headerColumnTextStyles}
-            onSaveHeaderColumnTextStyle={onSaveHeaderColumnTextStyle}
-            headerColumnFormatRules={headerColumnFormatRules}
-            onSaveHeaderColumnFormatRules={onSaveHeaderColumnFormatRules}
-            referenceColumns={decoratedColumns}
-            stickyColumnKeys={stickyColumnKeys}
-            firstNonStickyColumnKey={firstNonStickyColumnKey}
-            onMakeColumnSticky={makeColumnSticky}
-            collapsedColumnKeys={collapsedHeaderColumnKeys}
-            onToggleColumnCollapsed={onToggleHeaderColumnCollapsed}
-            />
-          </thead>
+            stickyState={{ stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky }}
+            collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
+          />
           {hasFilteredEmptyState ? (
             <tbody>
               <tr>

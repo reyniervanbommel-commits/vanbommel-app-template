@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { FluentProvider, makeStyles, Spinner } from '@fluentui/react-components';
 import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
+import IdleSessionGuard from './components/auth/IdleSessionGuard';
 import LoginPage from './components/auth/LoginPage';
 import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
@@ -110,6 +111,7 @@ export default function App() {
 
   return (
     <FluentProvider theme={theme}>
+      <IdleSessionGuard />
       <AppInner isDarkMode={isDarkMode} onToggleTheme={handleToggleTheme} />
     </FluentProvider>
   );

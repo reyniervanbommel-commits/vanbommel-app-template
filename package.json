@@ -17,7 +17,8 @@
     "migrate:db": "node scripts/db/run-migrations.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@azure/communication-email": "^1.0.0",
@@ -45,12 +46,13 @@
   },
   "devDependencies": {
     "@playwright/mcp": "^0.0.78",
+    "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^24.0.12",
     "@vitejs/plugin-react": "^4.3.1",
-    "@vitest/coverage-v8": "^2.0.5",
+    "@vitest/coverage-v8": "^2.1.9",
     "concurrently": "^8.2.2",
     "eslint": "^9.9.0",
     "jsdom": "^29.1.1",

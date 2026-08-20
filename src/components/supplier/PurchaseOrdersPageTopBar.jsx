@@ -98,6 +98,7 @@ export default function PurchaseOrdersPageTopBar({
   bulkState,
   hiddenRowsState,
   refreshState,
+  onExportExcel,
   error,
 }) {
   const styles = useStyles();
@@ -179,6 +180,7 @@ export default function PurchaseOrdersPageTopBar({
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
               onToggleShowHistory={handleToggleShowHistory}
+              onExportExcel={onExportExcel}
             />
           </div>
         </div>

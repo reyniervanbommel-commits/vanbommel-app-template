@@ -556,3 +556,13 @@
     animation: none;
   }
 }
+
+.remarks-loading-indicator {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 12px;
+}
+
+.remarks-feed--loading .remarks-skeleton {
+  margin-bottom: 8px;
+}

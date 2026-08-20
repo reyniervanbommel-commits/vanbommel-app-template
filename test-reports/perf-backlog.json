@@ -10,6 +10,21 @@
   "frequencySource": "/admin/analytics/page-usage",
   "items": [
     {
+      "id": "BL-004",
+      "journey": "J4",
+      "action": "PO board vertical scroll (wheel)",
+      "profile": "L",
+      "maxLongFrameMs": 982,
+      "scrollJankMs": 3893,
+      "scrollStableMs": 400,
+      "slowInteractionCount": 0,
+      "dominantPost": "render",
+      "targetLongFrameMs": 687,
+      "routeFrequencyWeight": 3,
+      "priorityScore": 885,
+      "status": "open"
+    },
+    {
       "id": "BL-006",
       "journey": "J8",
       "action": "Column text style Bold toggle",
@@ -20,7 +35,9 @@
       "routeFrequencyWeight": 3,
       "priorityScore": 719,
       "status": "done-local",
-      "attemptedTiers": ["L1"],
+      "attemptedTiers": [
+        "L1"
+      ],
       "note": "Azure DEV truth-baseline = 799ms. L1 render-fix (arePropsEqual per-kolom + ref-stabiele stijl-map + network-only text-style persist). Lokale proxy-harnas (dev-build): ~2941 -> ~1880ms (~36%), J7 geen regressie, 35/35 tests. Azure DEV-bevestiging pending preview-deploy."
     },
     {
@@ -128,5 +145,6 @@
       "note": "elapsedWall null; duplicate PO-fetch = 0 (cache-fix v1.3 houdt stand)"
     }
   ],
-  "boardActionsMeasuredAt": "2026-07-22T10:30:21.473Z"
+  "boardActionsMeasuredAt": "2026-07-22T10:30:21.473Z",
+  "scrollMeasuredAt": "2026-08-13T17:39:39.392Z"
 }

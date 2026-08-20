@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { getLoginReasonMessage } from '../../utils/sessionExpiry';
 import {
   Button,
   Card,
@@ -91,11 +92,13 @@ const useStyles = makeStyles({
 export default function LoginPage() {
   const styles = useStyles();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [email, setEmail] = useState(() => getStoredLoginEmail());
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const reasonMessage = getLoginReasonMessage(searchParams.get('reason'));
 
   const handleEmailChange = useCallback((_, data) => setEmail(data.value), []);
   const handlePasswordChange = useCallback((_, data) => setPassword(data.value), []);
@@ -137,6 +140,12 @@ export default function LoginPage() {
           <Text className={styles.title} block>Sign in</Text>
           <Text className={styles.subtitle} block>{APP_DISPLAY_NAME}</Text>
         </div>
+
+        {reasonMessage && !error && (
+          <MessageBar intent="warning">
+            <MessageBarBody>{reasonMessage}</MessageBarBody>
+          </MessageBar>
+        )}
 
         {error && (
           <MessageBar intent="error">

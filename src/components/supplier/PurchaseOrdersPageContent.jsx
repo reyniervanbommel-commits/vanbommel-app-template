@@ -10,6 +10,13 @@ import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
 import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
+// Vendors mogen nooit terugschrijven naar D365. Forceer write-back uit op alle kolommen zodat
+// zowel de inline write-back editor als de D365-sync-indicator verdwijnen voor niet-staff.
+function disableWriteBack(columns) {
+  if (!Array.isArray(columns)) return columns;
+  return columns.map((c) => (c && c.writableToD365 ? { ...c, writableToD365: false } : c));
+}
+
 const useStyles = makeStyles({
   contentInset: {
     paddingLeft: '24px',
@@ -51,11 +58,12 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   );
   const data = useMemo(() => ({
     items: pageModel.orders,
-    columns: pageModel.visibleHeaderColumns,
-    lineColumns: pageModel.lineColumns,
+    columns: isStaff ? pageModel.visibleHeaderColumns : disableWriteBack(pageModel.visibleHeaderColumns),
+    lineColumns: isStaff ? pageModel.lineColumns : disableWriteBack(pageModel.lineColumns),
     boardView,
   }), [
     boardView,
+    isStaff,
     pageModel.lineColumns,
     pageModel.orders,
     pageModel.visibleHeaderColumns,
@@ -90,7 +98,8 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   ]);
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
-    onCorrect: bulkEdit.handleCorrectField,
+    // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
+    onCorrect: isStaff ? bulkEdit.handleCorrectField : undefined,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
     isStaff: tableContext.isStaff,
@@ -98,6 +107,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   }), [
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
+    isStaff,
     pageModel.updateStatusOptions,
     tableContext.isAdmin,
     tableContext.isStaff,

@@ -55,8 +55,8 @@ async function login(page) {
     return { ok: false, note: 'Login form missing' };
   }
 
-  await emailField.fill(process.env.TEST_LOGIN_EMAIL || 'admin@example.com');
-  await passwordField.fill(process.env.TEST_LOGIN_PASSWORD || 'Bootstrap123!');
+  await emailField.fill(process.env.TEST_LOGIN_EMAIL || process.env.LOGIN_EMAIL || 'admin@example.com');
+  await passwordField.fill(process.env.TEST_LOGIN_PASSWORD || process.env.LOGIN_PASSWORD || 'Bootstrap123!');
   await page.getByRole('button', { name: /^(Sign in|Log in)$/i }).click();
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 45000 });
 
@@ -74,6 +74,25 @@ async function waitForBoard(page) {
     page.getByText(/No purchase orders found/i).waitFor({ timeout: 45000 }),
     page.locator('[aria-label^="Select order"]').first().waitFor({ timeout: 45000 }),
   ]).catch(() => page.waitForTimeout(2000));
+}
+
+async function goToAllOrders(page) {
+  // Klik de "All orders" tab op het PO-bord zodat de scrollbare tabel zichtbaar wordt.
+  // Probeer meerdere label-varianten die in verschillende versies kunnen voorkomen.
+  const allOrdersTab = page.getByRole('tab', { name: /All orders|Alle orders|All/i })
+    .or(page.getByRole('button', { name: /All orders|Alle orders/i }))
+    .first();
+  const tabExists = await allOrdersTab.count().then((c) => c > 0).catch(() => false);
+  if (tabExists) {
+    await allOrdersTab.click({ timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+  // Wacht tot er rijen of een leeg-bericht is
+  await Promise.race([
+    page.locator('[aria-label^="Select order"]').first().waitFor({ timeout: 15000 }),
+    page.getByText(/No purchase orders found/i).waitFor({ timeout: 15000 }),
+    page.locator('tbody tr').nth(2).waitFor({ timeout: 15000 }),
+  ]).catch(() => page.waitForTimeout(1500));
 }
 
 async function dismissOverlays(page) {
@@ -341,6 +360,7 @@ async function main() {
     process.stdout.write(`Scroll run ${r + 1}/${RUNS}…\n`);
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await waitForBoard(page);
+    await goToAllOrders(page);
     const sample = await runScrollSample(page);
     if (sample.error) {
       console.warn(sample.error);

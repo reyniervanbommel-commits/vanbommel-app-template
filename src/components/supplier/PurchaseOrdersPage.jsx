@@ -16,6 +16,7 @@ import { usePurchaseOrderFormulaDialogState } from '../../hooks/usePurchaseOrder
 import { usePurchaseOrderDatePeriodDialogState } from '../../hooks/usePurchaseOrderDatePeriodDialogState';
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
+import { exportPurchaseOrdersToExcel, buildExportFileName } from '../../utils/purchaseOrderBoardExport';
 
 const useStyles = makeStyles({
   page: {
@@ -88,7 +89,8 @@ export default function PurchaseOrdersPage() {
     enabled: !loading,
     currentUser: user,
     columns: visibleHeaderColumns,
-    canCompose: isStaff,
+    // Suppliers mogen comments plaatsen op hun eigen orders (scope server-side afgedwongen).
+    canCompose: isStaff || isSupplier,
   });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });
@@ -177,6 +179,15 @@ export default function PurchaseOrdersPage() {
       finishRefresh();
     }
   }, [finishProgress, finishRefresh, hiddenRows, refresh, reloadAfterRefresh, setRefreshError, startProgress, waitForCompletion]);
+  const handleExportExcel = useCallback((scope) => {
+    const rows = scope === 'view' ? boardView.processedItems : boardView.allItems;
+    exportPurchaseOrdersToExcel({
+      orders: rows,
+      columns: visibleHeaderColumns,
+      fileName: buildExportFileName(scope),
+    });
+  }, [boardView.processedItems, boardView.allItems, visibleHeaderColumns]);
+
   const relativeSynced = formatSyncedAt(syncedAt);
   const contentStatus = useMemo(
     () => ({ loading, refreshing, orderCount: orders.length }),
@@ -268,6 +279,7 @@ export default function PurchaseOrdersPage() {
           refreshProgress,
           onRefresh: handleRefresh,
         }}
+        onExportExcel={handleExportExcel}
         error={error}
       />
 

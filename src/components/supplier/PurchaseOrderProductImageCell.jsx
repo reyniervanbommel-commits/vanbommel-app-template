@@ -113,6 +113,8 @@ function PurchaseOrderProductImageCell({
   // <img> (via imagePending) for as long as we don't know it's actually good.
   const [imageLoaded, setImageLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // B3: Tooltip pas mounten na 200ms hover — voorkomt 20 Tooltip-instanties bij scroll
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
     setDialogOpen(false);
@@ -144,6 +146,16 @@ function PurchaseOrderProductImageCell({
     setDialogOpen(open);
   }, []);
 
+  // B3: deferred tooltip mount handlers
+  const tooltipTimerRef = React.useRef(null);
+  const handleMouseEnter = useCallback(() => {
+    tooltipTimerRef.current = setTimeout(() => setShowTooltip(true), PRODUCT_IMAGE_LOAD_DELAY_MS);
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    clearTimeout(tooltipTimerRef.current);
+    setShowTooltip(false);
+  }, []);
+
   const imageButtonClassName = mergeClasses(
     styles.imageButton,
     isConditionalFormat ? styles.imageButtonFormatted : undefined,
@@ -167,11 +179,37 @@ function PurchaseOrderProductImageCell({
     <>
       <span className={styles.root}>
         {imageAvailable ? (
-          <Tooltip content={hoverPreview} relationship="description" positioning="above">
+          // B3: Tooltip pas mounten na hover — niet bij rij-mount
+          showTooltip ? (
+            <Tooltip content={hoverPreview} relationship="description" positioning="above">
+              <button
+                type="button"
+                className={imageButtonClassName}
+                onClick={handleOpenDialog}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                aria-label={`Show product image for ${normalizedItemNumber}`}
+              >
+                {shouldLoadImage ? (
+                  <img
+                    className={mergeClasses(styles.image, imageLoaded ? undefined : styles.imagePending)}
+                    src={imageUrl}
+                    alt={`Product image for ${normalizedItemNumber}`}
+                    loading="lazy"
+                    draggable={false}
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                  />
+                ) : null}
+              </button>
+            </Tooltip>
+          ) : (
             <button
               type="button"
               className={imageButtonClassName}
               onClick={handleOpenDialog}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
               aria-label={`Show product image for ${normalizedItemNumber}`}
             >
               {shouldLoadImage ? (
@@ -186,7 +224,7 @@ function PurchaseOrderProductImageCell({
                 />
               ) : null}
             </button>
-          </Tooltip>
+          )
         ) : null}
         {additionalItemCount > 0 ? (
           imageAvailable ? (

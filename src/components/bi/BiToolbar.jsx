@@ -27,7 +27,7 @@ const useStyles = makeStyles({
   vendorField: { maxWidth: '420px', minWidth: '320px' },
 });
 
-function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter }) {
+function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter, canManage = true }) {
   const styles = useStyles();
   return (
     <div className={styles.root}>
@@ -35,17 +35,21 @@ function BiToolbar({ onNewChart, onRefresh, vendorFilter, dateFilter }) {
       <div className={styles.controls}>
         <div className={styles.actions}>
           <Button appearance="secondary" icon={<ArrowClockwiseRegular />} onClick={onRefresh}>Refresh</Button>
-          <Button appearance="primary" icon={<AddRegular />} onClick={onNewChart}>New chart</Button>
+          {canManage ? (
+            <Button appearance="primary" icon={<AddRegular />} onClick={onNewChart}>New chart</Button>
+          ) : null}
         </div>
-        <RccpVendorFilter
-          className={styles.vendorField}
-          value={vendorFilter.vendorAccount}
-          onChange={vendorFilter.setVendorAccount}
-          vendors={vendorFilter.vendors}
-          vendorNames={vendorFilter.vendorNames}
-          loading={vendorFilter.loading}
-          error={vendorFilter.error}
-        />
+        {canManage ? (
+          <RccpVendorFilter
+            className={styles.vendorField}
+            value={vendorFilter.vendorAccount}
+            onChange={vendorFilter.setVendorAccount}
+            vendors={vendorFilter.vendors}
+            vendorNames={vendorFilter.vendorNames}
+            loading={vendorFilter.loading}
+            error={vendorFilter.error}
+          />
+        ) : null}
         <BiDateRangeFilter
           enabled={dateFilter.enabled}
           onEnabledChange={dateFilter.setEnabled}

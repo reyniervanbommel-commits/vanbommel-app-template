@@ -7,7 +7,7 @@ function RemarkMessageCard({ remark, currentUser, onDelete, onReaction }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const authorName = remark?.author?.displayName || 'Unknown user';
+  const authorName = remark?.author?.displayName || remark?.author?.email || 'Unknown user';
   const ownRemark = String(remark?.author?.id) === String(currentUser?.id);
 
   const showDeleteConfirmation = useCallback(() => {

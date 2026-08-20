@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Button } from '@fluentui/react-components';
+import { Button, Spinner } from '@fluentui/react-components';
 import RemarkMessageCard from './RemarkMessageCard';
 import RowHistoryEntry from './RowHistoryEntry';
 import { formatDayLabel, getActivityTimestamp, isRemarkActivity, toRemark } from './remarksFormatters';

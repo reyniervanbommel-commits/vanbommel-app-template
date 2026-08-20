@@ -54,6 +54,25 @@ describe('usePurchaseOrderTableView equals filter', () => {
     expect(result.current.filterByColumn.delivery.value).toBe('2026-03-15');
   });
 
+  it('filtert correct op een legacy oneOf-komma-string uit een opgeslagen view (backward compat)', () => {
+    const legacyColumns = [{ key: 'vendor', dataType: 'text', label: 'Vendor' }];
+    const legacyItems = [
+      { values: { vendor: 'Acme' } },
+      { values: { vendor: 'Beta' } },
+      { values: { vendor: 'Gamma' } },
+    ];
+    const { result } = renderHook(() => usePurchaseOrderTableView({ items: legacyItems, columns: legacyColumns }));
+
+    act(() => {
+      result.current.applyState({
+        filterByColumn: { vendor: { operator: 'oneOf', value: 'Acme,Gamma' } },
+      });
+    });
+
+    expect(result.current.processedItems.map((item) => item.values.vendor)).toEqual(['Acme', 'Gamma']);
+    expect(result.current.filterByColumn.vendor.value).toEqual(['Acme', 'Gamma']);
+  });
+
   it('sorts date period week columns numerically', () => {
     const weekColumn = {
       key: 'deliveryWeek',

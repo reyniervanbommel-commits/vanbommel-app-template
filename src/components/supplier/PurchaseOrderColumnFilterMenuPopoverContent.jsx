@@ -51,6 +51,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   operatorEntries,
   handleOperatorSelect,
   handleValueChange,
+  handleDraftValueChange,
+  handleApplyFilterWithValue,
+  uniqueColumnValues,
   handleSecondaryValueChange,
   handleApplyFilter,
   handleClearFilter,
@@ -136,6 +139,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         operatorEntries={operatorEntries}
         handleOperatorSelect={handleOperatorSelect}
         handleValueChange={handleValueChange}
+        handleDraftValueChange={handleDraftValueChange}
+        handleApplyFilterWithValue={handleApplyFilterWithValue}
+        uniqueColumnValues={uniqueColumnValues}
         handleSecondaryValueChange={handleSecondaryValueChange}
         handleApplyFilter={handleApplyFilter}
         handleClearFilter={handleClearFilter}
