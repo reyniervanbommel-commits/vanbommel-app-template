@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import {
   getCachedRccpConfig,
+  publishRccpSettingsSaved,
   publishRccpSettingsSync,
   subscribeRccpSettingsSync,
 } from './rccpSettingsSync';
@@ -63,7 +64,7 @@ export function useRccpSettings() {
     setSaved(false);
     try {
       const result = await apiRequest('/admin/rccp/settings', { method: 'PUT', body: config });
-      publishRccpSettingsSync(result.config);
+      publishRccpSettingsSaved(result.config);
       setConfig(result.config);
       setSaved(true);
       return true;

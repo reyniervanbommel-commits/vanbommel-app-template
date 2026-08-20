@@ -1,7 +1,7 @@
 // Korte Engelse toelichtingen voor de klikbare (i) op de Data model-pagina.
 export const DATA_MODEL_INFO = {
   page: 'This page controls what is synced from D365 and which columns appear in the app. Sync filters choose the starting set. After that, orders that leave the filter stay on the board (retained) and are refreshed individually. New D365 orders that still match the filter appear as new.',
-  syncFilters: 'These rules are sent to D365 as an OData $filter on every refresh. Only matching purchase orders enter the cache as the starting set. Changing and saving filters clears retention and can hide orders that no longer match.',
+  syncFilters: 'These rules are sent to D365 as an OData $filter on every refresh. Prefer a vendor group or order status over a long list of vendor accounts: D365 has no in-operator, so account lists are split into batches. Only matching purchase orders enter the cache as the starting set. Changing and saving filters clears retention and can hide orders that no longer match.',
   reimportBaseline: 'Re-import fetches all rows again with the current sync filter and treats that result as a new starting point. Changes are not written to history, so the board will not mark every row as new or changed. Use this after a data-model change. It does not switch to a wider filter for later refreshes.',
   countRows: 'Counts how many D365 rows match the filters currently shown, before you save. Use this to check the impact of a filter change.',
   saveFilters: 'Saves the filters and uses them on the next D365 refresh. Saving purchase-order filters also clears retention for orders that were kept after they left the previous filter.',

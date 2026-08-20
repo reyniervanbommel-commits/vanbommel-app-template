@@ -289,7 +289,11 @@ function PurchaseOrderSubitemLineRow({
           ? getProductImageCellStyle(baseCellStyle, PRODUCT_IMAGE_SUB_CELL_HEIGHT)
           : {
             ...baseCellStyle,
-            ...(isStatus ? { padding: 0 } : {}),
+            ...(isStatus ? {
+              padding: 0,
+              '--po-cell-padding-y': '0px',
+              '--po-cell-padding-x': '0px',
+            } : {}),
           };
         return (
           <PurchaseOrderDataCell
@@ -297,8 +301,10 @@ function PurchaseOrderSubitemLineRow({
             cell={{ column, rawValue: line.values?.[column.key], order, trackMarks: line.trackMarksByColumnId }}
             layout={{
               className: subCellClassName,
-              contentClassName: isImageColumn ? undefined : subCellContentClassName,
-              contentStyle: getFormattedCellContentStyle(isConditionalFormat),
+              contentClassName: (isImageColumn || isStatus) ? undefined : subCellContentClassName,
+              contentStyle: isStatus
+                ? { height: '100%', minHeight: 0, overflow: 'visible' }
+                : getFormattedCellContentStyle(isConditionalFormat),
               style: cellStyle,
             }}
           >

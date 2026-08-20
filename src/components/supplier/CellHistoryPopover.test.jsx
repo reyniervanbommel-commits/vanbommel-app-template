@@ -43,6 +43,18 @@ describe('CellHistoryPopover', () => {
     expect(trigger.getAttribute('data-cell-history-trigger')).toBe('true');
   });
 
+  it('plaatst de history-trigger strak in de rechterbovenhoek van de cel', () => {
+    renderPopover(true);
+
+    const trigger = screen.getByRole('button', { name: 'View cell history' });
+    const style = window.getComputedStyle(trigger);
+    expect(style.position).toBe('absolute');
+    expect(style.width).toBe('10px');
+    expect(style.height).toBe('10px');
+    expect(style.top.includes('calc') || style.top === '0px').toBe(true);
+    expect(style.right.includes('calc') || style.right === '0px').toBe(true);
+  });
+
   it('opent de geschiedenis en gebruikt de actieve tb-route na een klik', async () => {
     apiRequest.mockResolvedValue({ history: [] });
     renderPopover(true);

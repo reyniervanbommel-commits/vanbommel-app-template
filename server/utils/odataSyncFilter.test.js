@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileSyncRules, parseSyncRules, recordMatchesSyncRules } = require('./odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules } = require('./odataSyncFilter');
 
 describe('compileSyncRules (D365-syncfilters)', () => {
   it('compileert een tekst-regel met quoting en escaping', () => {
@@ -43,6 +43,40 @@ describe('compileSyncRules (D365-syncfilters)', () => {
     ]);
     expect(compiled).toContain("not contains(PurchaseOrderName,'test')");
     expect(compiled).toContain("(OrderVendorAccountNumber eq '1001' or OrderVendorAccountNumber eq '1002')");
+  });
+
+  it('staat meer dan 20 one-of waarden toe en chunked ze voor D365', () => {
+    const values = Array.from({ length: 25 }, (_, i) => `V${String(i).padStart(6, '0')}`);
+    const rules = [{
+      field: 'OrderVendorAccountNumber',
+      operator: 'oneof',
+      valueType: 'text',
+      value: values.join(', '),
+    }];
+    const compiled = compileSyncRules(rules);
+    expect(compiled.split(' or ')).toHaveLength(25);
+    const chunks = compileSyncRulesChunks(rules);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].split(' or ')).toHaveLength(20);
+    expect(chunks[1].split(' or ')).toHaveLength(5);
+  });
+
+  it('weigert twee grote one-of regels tegelijk', () => {
+    const values = Array.from({ length: 21 }, (_, i) => `V${i}`);
+    expect(() => compileSyncRules([
+      { field: 'OrderVendorAccountNumber', operator: 'oneof', valueType: 'text', value: values },
+      { field: 'PurchaseOrderName', operator: 'oneof', valueType: 'text', value: values },
+    ])).toThrow(/Only one "is one of" filter/);
+  });
+
+  it('weigert meer dan 500 one-of waarden', () => {
+    const values = Array.from({ length: 501 }, (_, i) => `V${i}`);
+    expect(() => compileSyncRules([{
+      field: 'OrderVendorAccountNumber',
+      operator: 'oneof',
+      valueType: 'text',
+      value: values,
+    }])).toThrow(/maximum 500 values/);
   });
 
   it('weigert ongeldige velden, operators en enum-waarden (injectiepreventie)', () => {

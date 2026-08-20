@@ -106,7 +106,6 @@ export default function RccpPageContent() {
 
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
-  const handleSettingsSaved = useCallback(() => reload(), [reload]);
   const handleCapacityChanged = useCallback(() => reload(), [reload]);
   const handleImportCompleted = useCallback(() => {
     setActiveTab('capacity-planning');
@@ -231,7 +230,6 @@ export default function RccpPageContent() {
         <RccpSettingsFlyout
           open={settingsOpen}
           onClose={handleCloseSettings}
-          onSaved={handleSettingsSaved}
           readOnly={readOnly}
         />
       )}

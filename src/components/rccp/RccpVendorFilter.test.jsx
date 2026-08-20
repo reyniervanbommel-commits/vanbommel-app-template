@@ -86,6 +86,14 @@ describe('RccpVendorFilter', () => {
     expect(document.activeElement).not.toBe(input);
   });
 
+  it('selects the current vendor text on focus so typing replaces it immediately', () => {
+    renderFilter({ value: 'V000583' });
+    const input = screen.getByRole('combobox');
+    fireEvent.focus(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  });
+
   it('calls onHighlightVendor on hover (background prefetch signal)', () => {
     const onHighlightVendor = vi.fn();
     renderFilter({ onHighlightVendor });

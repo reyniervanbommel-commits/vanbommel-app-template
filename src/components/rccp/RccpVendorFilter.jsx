@@ -1,11 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Combobox, Field, Option, Spinner, makeStyles, mergeClasses,
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   field: { maxWidth: '280px', minWidth: '220px' },
+  // Expanded list is wider than the trigger so vendor number + name stay on one line.
+  listbox: {
+    minWidth: '560px',
+    maxWidth: '720px',
+  },
+  option: {
+    whiteSpace: 'nowrap',
+  },
 });
+
+const LISTBOX_POSITIONING = { matchTargetSize: false };
 
 const ALL_VENDORS_LABEL = 'All vendors';
 
@@ -30,8 +40,11 @@ export default function RccpVendorFilter({
   className,
 }) {
   const styles = useStyles();
+  const inputRef = useRef(null);
   const selectedLabel = value ? vendorLabel(value, vendorNames) : ALL_VENDORS_LABEL;
   const [query, setQuery] = useState(selectedLabel);
+
+  const listboxSlot = useMemo(() => ({ className: styles.listbox }), [styles.listbox]);
 
   // Keep the input text in sync when the selection changes from outside (e.g. default vendor on load)
   useEffect(() => {
@@ -80,6 +93,24 @@ export default function RccpVendorFilter({
     setQuery(selectedLabel);
   }, [selectedLabel]);
 
+  // Select the current value on focus/open so the first keystroke replaces it (no double-click).
+  const handleInputFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
+
+  const handleOpenChange = useCallback((_, data) => {
+    if (!data.open) return;
+    requestAnimationFrame(() => {
+      inputRef.current?.select?.();
+    });
+  }, []);
+
+  const inputSlot = useMemo(() => ({
+    autoFocus,
+    ref: inputRef,
+    onFocus: handleInputFocus,
+  }), [autoFocus, handleInputFocus]);
+
   if (loading) {
     return <Spinner size="tiny" label="Loading vendors..." />;
   }
@@ -87,17 +118,21 @@ export default function RccpVendorFilter({
   return (
     <Field
       className={mergeClasses(styles.field, className)}
-      label="Vendor filter"
+      label="Vendor"
       validationState={error ? 'error' : 'none'}
       validationMessage={error || undefined}
     >
       <Combobox
+        freeform
         value={query}
         selectedOptions={[value || '']}
-        placeholder="Search by vendor no. or name..."
-        input={{ autoFocus }}
+        placeholder="Type vendor number or name..."
+        input={inputSlot}
+        listbox={listboxSlot}
+        positioning={LISTBOX_POSITIONING}
         onOptionSelect={handleOptionSelect}
         onActiveOptionChange={handleActiveOptionChange}
+        onOpenChange={handleOpenChange}
         onChange={handleInputChange}
         onBlur={handleBlur}
       >
@@ -109,6 +144,7 @@ export default function RccpVendorFilter({
           return (
             <Option
               key={vendor}
+              className={styles.option}
               value={vendor}
               text={label}
               onMouseEnter={() => onHighlightVendor?.(vendor)}

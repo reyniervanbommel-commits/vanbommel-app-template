@@ -1,9 +1,15 @@
 import React, { memo, useCallback, useMemo } from 'react';
+import { brandColor, interaction } from '../../styles/brandTokens';
 import { tokens } from '@fluentui/react-components';
 import { isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 import { isCellContextMenuDisabled } from '../../utils/tableViewFilterUtils';
 import TrackChangeMarks from './TrackChangeMarks';
 import { useTrackChangesMeta } from './trackChangesContext';
+
+function isWhiteCellBackground(backgroundColor) {
+  const value = String(backgroundColor || '').trim().toLowerCase();
+  return !value || value === '#fff' || value === '#ffffff' || value.startsWith('var(');
+}
 
 function PurchaseOrderDataCell({
   cell,
@@ -31,6 +37,10 @@ function PurchaseOrderDataCell({
     const hasBackground = Boolean(style?.backgroundColor);
     return {
       ...style,
+      '--po-cell-bg': style?.backgroundColor || brandColor.surfaceCard,
+      '--po-fold-divider': isWhiteCellBackground(style?.backgroundColor)
+        ? interaction.cellHistoryFoldDivider
+        : 'transparent',
       position: isSticky ? 'sticky' : 'relative',
       ...(isSticky ? {
         left: `${stickyLeft}px`,

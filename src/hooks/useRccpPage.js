@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
-import { getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
+import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/rccpUtils';
+import { clearRccpAnalysisPrefetchCache, getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
+import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 import { useRccpWindow } from './useRccpWindow';
 import { usePageActive } from './usePageActive';
 import { useBoardRevisionGate } from './useBoardRevisionGate';
@@ -18,7 +19,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   const [readOnly, setReadOnly] = useState(false);
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ bypassCache = false, skipLoading = false } = {}) => {
     if (!windowLoaded || !enabled) {
       // Geen vendor (nog) gekozen: leegmaken zodat een vorige selectie niet blijft hangen.
       setAnalysis(null);
@@ -27,12 +28,17 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     }
 
     const requestId = ++requestIdRef.current;
-    setLoading(true);
+    if (!skipLoading) setLoading(true);
     setError('');
     try {
       // Was deze vendor al op de achtergrond aan het laden (hover/highlight in de zoeklijst)?
-      // Hergebruik die call in plaats van een dubbele apiRequest te vuren.
-      const cached = vendorAccount ? getCachedRccpAnalysis(isoWindow, vendorAccount) : null;
+      // Hergebruik die call in plaats van een dubbele apiRequest te vuren — behalve na een
+      // expliciete reload (settings/refresh/PO-revisie), anders blijft de grafiek op de oude
+      // chartType hangen.
+      if (bypassCache) clearRccpAnalysisPrefetchCache();
+      const cached = (!bypassCache && vendorAccount)
+        ? getCachedRccpAnalysis(isoWindow, vendorAccount)
+        : null;
       const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined)));
       if (requestId !== requestIdRef.current) return;
       setAnalysis(data);
@@ -42,11 +48,18 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
       setError(err.message || 'Failed to load RCCP analysis');
       setAnalysis(null);
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if (requestId === requestIdRef.current && !skipLoading) setLoading(false);
     }
   }, [isoWindow, vendorAccount, windowLoaded, enabled]);
 
+  const reload = useCallback(() => load({ bypassCache: true }), [load]);
+
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => subscribeRccpSettingsSaved((config) => {
+    setAnalysis((prev) => applyRccpChartSettings(prev, config));
+    load({ bypassCache: true, skipLoading: true });
+  }), [load]);
 
   // Keep-alive: bij terugkeer naar de (verborgen gehouden) RCCP-pagina checkt de gate de
   // PO-revisie. Alleen PO muteert data die de RCCP-analyse raakt, dus bij een gewijzigde revisie
@@ -61,7 +74,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     }
     if (rev !== seenRevisionRef.current) {
       seenRevisionRef.current = rev;
-      load();
+      load({ bypassCache: true });
     }
   }, [load]);
   useBoardRevisionGate({ active: pageActive, onRevision: handleRevision, runOnMount: true });
@@ -92,6 +105,6 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     periods,
     cells,
     cellMap,
-    reload: load,
+    reload,
   };
 }

@@ -82,7 +82,7 @@ app.use(rateLimit({
   skip: shouldSkipGlobalRateLimit,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Publieke health-endpoints vóór session/rate-limit zodat probes en deploy-checks nooit
 // afhangen van DB/session-store of een volle rate-limit bucket.

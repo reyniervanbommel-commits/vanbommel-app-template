@@ -17,13 +17,22 @@ const {
   fetchPurchaseOrders,
   fetchPurchaseOrdersByKeys,
   fetchEntityRecords,
+  fetchVendorAccountsByGroups,
   escapeODataLiteral,
   writeBackField,
 } = require('./D365ODataService');
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
-const { compileSyncRules, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const {
+  listVendorGroupIds,
+  expandVendorGroupRules,
+  collectAccountsFromVendorRows,
+  vendorGroupCatalogEntry,
+  isRecommendedFilterField,
+  isVendorGroupRule,
+} = require('../utils/vendorGroupSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
@@ -517,25 +526,44 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
   const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
-  let extraFilter = '';
+  let filterChunks = [''];
   try {
-    extraFilter = await getTableSyncFilter(table);
+    const rules = await getTableSyncRules(table);
+    const resolved = await resolveSyncRules(rules, { forD365: true });
+    filterChunks = compileSyncRulesChunks(resolved);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
   const { selectFields, lineSelectFields } = await resolvePurchaseOrderSelectFields(table);
-  const result = await fetchPurchaseOrders({
-    supplierAccount: null,
-    fetchAll: true,
-    extraFilter,
-    maxItems,
-    onProgress,
-    selectFields,
-    lineSelectFields,
-  });
-  const items = Array.isArray(result.items) ? result.items : [];
+  const seen = new Map();
+  let total = 0;
+  let truncated = false;
+  for (const chunkFilter of filterChunks) {
+    const remaining = maxItems - seen.size;
+    if (remaining <= 0) {
+      truncated = true;
+      break;
+    }
+    const result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      fetchAll: true,
+      extraFilter: chunkFilter,
+      maxItems: remaining,
+      onProgress,
+      selectFields,
+      lineSelectFields,
+    });
+    total += Number(result.total) || 0;
+    truncated = truncated || Boolean(result.truncated);
+    for (const item of Array.isArray(result.items) ? result.items : []) {
+      const raw = item?.raw || {};
+      const key = `${String(raw.dataAreaId || company || '').trim()}|${String(item.orderNumber || raw.PurchaseOrderNumber || '').trim()}`;
+      if (key !== '|' && !seen.has(key)) seen.set(key, item);
+    }
+  }
+  const items = [...seen.values()];
   const records = mapPurchaseOrderRecordsToCacheRecords(items, company);
-  return { records, total: result.total, truncated: Boolean(result.truncated) };
+  return { records, total, truncated: Boolean(truncated) };
 }
 
 // Verplichte D365-velden die altijd mee moeten in $select, los van wat de admin selecteert: de velden die
@@ -837,10 +865,42 @@ async function getTableSyncRules(table) {
   return parseDefaultFilterRules(table.defaultFilter);
 }
 
+async function listVendorAccountsByGroupsFromCache(groupIds) {
+  const groups = [...new Set((Array.isArray(groupIds) ? groupIds : [])
+    .map((id) => String(id || '').trim())
+    .filter(Boolean))];
+  if (!groups.length) return [];
+  try {
+    const vendorsTable = await getTableByKey('vendors');
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('tableId', sql.BigInt, vendorsTable.id)
+      .query(`
+        SELECT data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 0
+      `);
+    return collectAccountsFromVendorRows(result.recordset, groups);
+  } catch {
+    return [];
+  }
+}
+
+async function resolveSyncRules(rules, { forD365 = false } = {}) {
+  const list = Array.isArray(rules) ? rules : [];
+  const groupIds = listVendorGroupIds(list);
+  if (!groupIds.length) return list;
+  let accounts = [];
+  if (!forD365) accounts = await listVendorAccountsByGroupsFromCache(groupIds);
+  if (!accounts.length) accounts = await fetchVendorAccountsByGroups(groupIds);
+  return expandVendorGroupRules(list, accounts);
+}
+
 async function getTableSyncFilter(table) {
   const rules = await getTableSyncRules(table);
   if (!rules.length) return '';
-  return compileSyncRules(rules);
+  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
+  return compileSyncRules(resolved);
 }
 
 // Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
@@ -2110,7 +2170,7 @@ async function refresh(tableKey, options = {}) {
 
     if (table.key === 'purchase-orders') {
       const retentionSettings = await getSyncRetentionSettings();
-      const syncRules = await getTableSyncRules(table);
+      const syncRules = await resolveSyncRules(await getTableSyncRules(table), { forD365: false });
       const retentionResult = await applySyncRetainedTransitions(
         pool,
         table,
@@ -3293,6 +3353,9 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     trackMarksPromise,
     syncRulesPromise,
   ]);
+  const resolvedSyncRules = table.key === 'purchase-orders'
+    ? await resolveSyncRules(syncRules, { forD365: false })
+    : (Array.isArray(syncRules) ? syncRules : []);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   // Eén keer per read berekend (niet per rij/formule) zodat TODAY() voor alle
   // rijen in deze response identiek is en er geen extra rekenkosten bijkomen.
@@ -3337,7 +3400,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   let newCount = 0;
   let changedCount = 0;
   let scopedRows;
-  const activeSyncRules = Array.isArray(syncRules) ? syncRules : [];
+  const activeSyncRules = Array.isArray(resolvedSyncRules) ? resolvedSyncRules : [];
   const masterJsonByRecKey = new Map(
     mastersResult.recordset.map((m) => [`${m.partition_key}|${m.record_key}`, parseJson(m.data_json)])
   );
@@ -3540,7 +3603,9 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const wanted = new Set(valueColumnKeys.filter(Boolean));
   const cols = masterCols.filter((c) => wanted.has(c.key));
 
-  const activeSyncRules = table.key === 'purchase-orders' ? await getTableSyncRules(table) : [];
+  const activeSyncRules = table.key === 'purchase-orders'
+    ? await resolveSyncRules(await getTableSyncRules(table), { forD365: false })
+    : [];
   const needsLineRecords = activeSyncRules.some((rule) => String(rule?.level || 'header').trim() === 'line');
 
   const mastersResult = await time('tb_vendor_master_only', () => pool.request()
@@ -4450,6 +4515,7 @@ async function getCellHistory({ tableKey, columnId, partitionKey, recordKey, det
 const PURCHASE_ORDER_SYNC_TEMPLATES = [
   { id: 'open_orders', label: 'Open orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Backorder' }] },
   { id: 'received_orders', label: 'Received orders', rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', valueType: 'enum', enumType: 'PurchStatus', value: 'Received' }] },
+  { id: 'vendor_group', label: 'Vendor group', rules: [{ level: 'header', field: 'VendorGroupId', operator: 'eq', valueType: 'text', value: '' }] },
 ];
 
 function syncTemplatesForTable(tableKey) {
@@ -4651,6 +4717,16 @@ async function getDataModel(tableKey) {
   // D365-filtercatalogus uit de admin-gemapte kolommen (generiek; geen po_-afhankelijkheid meer).
   const { buildFilterCatalogPayload } = require('../utils/tbSyncFilterCatalog');
   const filterMeta = buildFilterCatalogPayload([...headerCols, ...lineCols]);
+  if (table.key === 'purchase-orders') {
+    const header = Array.isArray(filterMeta.catalog?.header) ? filterMeta.catalog.header : [];
+    const withoutNativeGroup = header.filter((entry) => entry.field !== 'VendorGroupId');
+    filterMeta.catalog.header = [
+      vendorGroupCatalogEntry(),
+      ...withoutNativeGroup.map((entry) => (
+        isRecommendedFilterField(entry.field) ? { ...entry, recommended: true } : entry
+      )),
+    ];
+  }
   let previewTables = {
     header: buildPreviewTableFromCacheRows(headerCols, headerPreviewRowsRes.recordset),
     line: buildPreviewTableFromCacheRows(lineCols, linePreviewRowsRes.recordset),
@@ -4790,13 +4866,15 @@ async function saveSyncFilters(tableKey, rules) {
     throw Object.assign(new Error('This table automatically inherits the Purchase Orders filter and cannot be changed manually.'), { status: 400 });
   }
   const list = Array.isArray(rules) ? rules : [];
-  const compiled = compileSyncRules(list); // gooit 400 bij ongeldige regels
+  if (list.some(isVendorGroupRule)) expandVendorGroupRules(list, ['ok']);
+  const compiled = compileSyncRules(list.filter((rule) => !isVendorGroupRule(rule)));
   if (table.key === 'purchase-orders') {
     await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
     const pool = await getPool();
     await clearSyncRetainedForTable(pool, table.id);
     if (list.length) {
-      await markOutOfScopeCacheRows(pool, table.id, list);
+      const matchingRules = await resolveSyncRules(list, { forD365: false });
+      await markOutOfScopeCacheRows(pool, table.id, matchingRules);
     }
   }
   await saveTableDefaultFilter(table.id, list);
@@ -4809,7 +4887,10 @@ async function countSyncFilter(tableKey, rules) {
   if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
   }
-  const compiled = compileSyncRules(Array.isArray(rules) ? rules : []);
+  const list = Array.isArray(rules) ? rules : [];
+  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(list, { forD365: true }) : list;
+  const compiled = compileSyncRules(resolved);
+  const filterChunks = compileSyncRulesChunks(resolved);
 
   // PO lookup scoped tabellen (items): tel binnen de PO-scope. Combineer het eigen filter (AND) met
   // de one-of clausules op de lookup-sleutels. Chunks zijn disjuncte itemnummers → som is exact.
@@ -4821,43 +4902,49 @@ async function countSyncFilter(tableKey, rules) {
       for (const chunk of chunkList(scope.values, INHERITED_FILTER_CHUNK_SIZE)) {
         const oneOf = buildOneOfFilterClause(scope.targetField, chunk);
         if (!oneOf) continue;
-        const chunkResult = await fetchEntityRecords({
-          sourceEntity: table.sourceEntity,
-          top: 1,
-          skip: 0,
-          fetchAll: false,
-          extraFilter: combineODataFilters(compiled, oneOf),
-          maxItems: 1,
-          selectFields: null,
-        });
-        total += Number(chunkResult.total) || 0;
+        for (const ownFilter of filterChunks) {
+          const chunkResult = await fetchEntityRecords({
+            sourceEntity: table.sourceEntity,
+            top: 1,
+            skip: 0,
+            fetchAll: false,
+            extraFilter: combineODataFilters(ownFilter, oneOf),
+            maxItems: 1,
+            selectFields: null,
+          });
+          total += Number(chunkResult.total) || 0;
+        }
       }
     }
     return { total, compiled };
   }
 
-  let result;
-  if (table.key === 'purchase-orders') {
-    result = await fetchPurchaseOrders({
-      supplierAccount: null,
-      top: 1,
-      skip: 0,
-      fetchAll: false,
-      extraFilter: compiled,
-      maxItems: 1,
-    });
-  } else {
-    result = await fetchEntityRecords({
-      sourceEntity: table.sourceEntity,
-      top: 1,
-      skip: 0,
-      fetchAll: false,
-      extraFilter: compiled,
-      maxItems: 1,
-      selectFields: null,
-    });
+  let total = 0;
+  for (const extraFilter of filterChunks) {
+    let result;
+    if (table.key === 'purchase-orders') {
+      result = await fetchPurchaseOrders({
+        supplierAccount: null,
+        top: 1,
+        skip: 0,
+        fetchAll: false,
+        extraFilter,
+        maxItems: 1,
+      });
+    } else {
+      result = await fetchEntityRecords({
+        sourceEntity: table.sourceEntity,
+        top: 1,
+        skip: 0,
+        fetchAll: false,
+        extraFilter,
+        maxItems: 1,
+        selectFields: null,
+      });
+    }
+    total += Number(result.total) || 0;
   }
-  return { total: Number(result.total) || 0, compiled };
+  return { total, compiled };
 }
 
 module.exports = {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
+import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/rccpUtils';
+import { clearRccpAnalysisPrefetchCache } from '../utils/rccpAnalysisPrefetch';
+import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 
 export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refreshKey }) {
   const [analysis, setAnalysis] = useState(null);
@@ -8,9 +10,9 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
   const [error, setError] = useState('');
   const debounceRef = useRef(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ skipLoading = false } = {}) => {
     if (!enabled || !isoWindow) return;
-    setLoading(true);
+    if (!skipLoading) setLoading(true);
     setError('');
     try {
       const data = await apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined));
@@ -19,7 +21,7 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
       setError(err.message || 'Failed to load RCCP analysis');
       setAnalysis(null);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, [enabled, isoWindow, vendorAccount]);
 
@@ -29,6 +31,12 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
     debounceRef.current = setTimeout(load, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [enabled, load, refreshKey]);
+
+  useEffect(() => subscribeRccpSettingsSaved((config) => {
+    setAnalysis((prev) => applyRccpChartSettings(prev, config));
+    clearRccpAnalysisPrefetchCache();
+    load({ skipLoading: true });
+  }), [load]);
 
   const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
   const periods = useMemo(() => analysis?.periods || [], [analysis]);

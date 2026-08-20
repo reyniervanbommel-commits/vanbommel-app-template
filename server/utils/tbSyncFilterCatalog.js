@@ -23,6 +23,7 @@ function buildCatalogFromColumns(adminColumns, level) {
       field: c.d365Field,
       label: c.label || c.d365Field,
       valueType: toCatalogValueType(c),
+      recommended: /group|pool|buyer/i.test(String(c.d365Field || '')) || c.d365Field === 'PurchaseOrderStatus',
       nonEmptyCount: 0,
       fillRatio: 0,
       sampleValues: [],

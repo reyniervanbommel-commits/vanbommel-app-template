@@ -436,6 +436,26 @@ async function fetchVendorsByAccounts(vendorAccounts, timeout) {
   }, {});
 }
 
+async function fetchVendorAccountsByGroups(groupIds) {
+  const groups = [...new Set((Array.isArray(groupIds) ? groupIds : [])
+    .map((id) => String(id || '').trim())
+    .filter(Boolean))];
+  if (!groups.length) return [];
+  const extraFilter = groups.length === 1
+    ? `VendorGroupId eq '${escapeODataLiteral(groups[0])}'`
+    : `(${groups.map((id) => `VendorGroupId eq '${escapeODataLiteral(id)}'`).join(' or ')})`;
+  const result = await fetchEntityRecords({
+    sourceEntity: DEFAULT_VENDORS_PATH,
+    fetchAll: true,
+    extraFilter,
+    selectFields: ['VendorAccountNumber', 'VendorGroupId', 'dataAreaId'],
+    maxItems: 5000,
+  });
+  return [...new Set((Array.isArray(result.items) ? result.items : [])
+    .map((record) => String(record.VendorAccountNumber || '').trim())
+    .filter(Boolean))];
+}
+
 async function buildGenericEntityUrl({
   sourceEntity,
   company,
@@ -1004,6 +1024,7 @@ module.exports = {
   fetchPurchaseOrders,
   fetchPurchaseOrdersByKeys,
   fetchEntityRecords,
+  fetchVendorAccountsByGroups,
   mapPurchaseOrder,
   mapPurchaseOrderLine,
   mapVendor,
