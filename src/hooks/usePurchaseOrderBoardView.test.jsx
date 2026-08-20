@@ -83,6 +83,16 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.processedItems).toHaveLength(1);
   });
 
+  it('counts removed activity from unseen removals, not from persistent removedInD365', () => {
+    const items = [
+      { orderNumber: 'PO-1', dataAreaId: 'nl', removedInD365: true, values: { status: 'Open' } },
+      { orderNumber: 'PO-2', dataAreaId: 'nl', hasRemovalChange: true, removedInD365: true, values: { status: 'Open' } },
+      { orderNumber: 'PO-3', dataAreaId: 'nl', hasRemovedLine: true, values: { status: 'Open' } },
+    ];
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items, columns: COLUMNS }));
+    expect(result.current.activityCounts).toEqual({ newCount: 0, changedCount: 0, removedCount: 2 });
+  });
+
   it('round-trips the activity filter as part of a saved view', () => {
     const itemsWithNew = [
       { orderNumber: 'PO-1', dataAreaId: 'nl', isNew: true, values: { status: 'Open' } },

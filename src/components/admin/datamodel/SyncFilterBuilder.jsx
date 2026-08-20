@@ -13,6 +13,8 @@ import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbol
 import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
 import FilterFieldPickerDialog from './FilterFieldPickerDialog';
 import SyncFilterRuleRow from './SyncFilterRuleRow';
+import AdminInfoHint from './AdminInfoHint';
+import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 
 const useStyles = makeStyles({
   section: {
@@ -55,15 +57,17 @@ const useStyles = makeStyles({
 function ReimportBaselineButton({ onReimportBaseline, busy }) {
   if (!onReimportBaseline) return null;
   return (
-    <Button
-      size="small"
-      appearance="secondary"
-      onClick={onReimportBaseline}
-      disabled={busy}
-      title="Re-import all rows as a new starting point. Changes are not written to the change history, so the board will not mark every row as new."
-    >
-      {busy ? 'Re-importing...' : 'Re-import (baseline)'}
-    </Button>
+    <>
+      <Button
+        size="small"
+        appearance="secondary"
+        onClick={onReimportBaseline}
+        disabled={busy}
+      >
+        {busy ? 'Re-importing...' : 'Re-import (baseline)'}
+      </Button>
+      <AdminInfoHint text={DATA_MODEL_INFO.reimportBaseline} label="About re-import baseline" />
+    </>
   );
 }
 
@@ -87,17 +91,18 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
   const templates = syncFilter?.templates || [];
   const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
   const retainedRows = Number(cache?.retainedRows) || 0;
+  const retainedMaxAuto = Number(cache?.retainedMaxAuto) || 2000;
   const retentionHint = useMemo(() => {
     if (tableKey !== 'purchase-orders' || retainedRows <= 0) return '';
     const warning = String(cache?.retentionWarning || 'none');
     if (warning === 'cap' || warning === 'critical') {
-      return `${retainedRows} orders are retained outside the current sync filter (limit reached — review filter or hidden rows).`;
+      return `${retainedRows} orders are retained outside the current sync filter (limit ${retainedMaxAuto.toLocaleString('en-US')} reached — review filter or hidden rows).`;
     }
     if (warning === 'approaching') {
       return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
     }
     return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
-  }, [cache?.retentionWarning, retainedRows, tableKey]);
+  }, [cache?.retentionWarning, retainedMaxAuto, retainedRows, tableKey]);
 
   const fieldsForLevel = useCallback(
     (level) => (level === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || [])),
@@ -135,6 +140,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         <div className={styles.titleRow}>
           <FilterRegular />
           <Text weight="semibold" size={400}>D365 sync filters</Text>
+          <AdminInfoHint text={DATA_MODEL_INFO.syncFilters} label="About D365 sync filters" />
           <Badge appearance="tint" color="informative" size="small">Inherited</Badge>
         </div>
         <Text className={styles.hint} block>
@@ -153,6 +159,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       <div className={styles.titleRow}>
         <FilterRegular />
         <Text weight="semibold" size={400}>D365 sync filters</Text>
+        <AdminInfoHint text={DATA_MODEL_INFO.syncFilters} label="About D365 sync filters" />
         <Badge appearance="tint" color={activeRules.length ? 'brand' : 'warning'} size="small">
           {activeRules.length ? `${activeRules.length} active` : 'No active filter'}
         </Badge>
@@ -167,10 +174,13 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       {poScopeHint && inheritedCompiled ? (
         <div className={styles.preview}>Purchase Orders $filter (scope) = {inheritedCompiled}</div>
       ) : null}
-      {retentionHint ? (
-        <Text className={styles.hint} block>
-          {retentionHint}
-        </Text>
+      {tableKey === 'purchase-orders' ? (
+        <div className={styles.titleRow}>
+          <Text className={styles.hint}>
+            {retentionHint || `Orders that leave this filter stay on the board and are refreshed individually (up to ${retainedMaxAuto.toLocaleString('en-US')}). Change the cap on the OData tab.`}
+          </Text>
+          <AdminInfoHint text={DATA_MODEL_INFO.retention} label="About retained orders" />
+        </div>
       ) : null}
 
       <div className={styles.actions}>
@@ -199,6 +209,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         >
           {countLoading ? 'Counting...' : 'Count rows'}
         </Button>
+        <AdminInfoHint text={DATA_MODEL_INFO.countRows} label="About count rows" />
         {queryCount !== null ? (
           <Badge appearance="tint" color="brand">
             Query rows in D365: {queryCount.toLocaleString('nl-NL')}
@@ -228,6 +239,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         <Button appearance="primary" icon={<SaveRegular />} onClick={save} disabled={saving}>
           {saving ? 'Saving...' : 'Save filters'}
         </Button>
+        <AdminInfoHint text={DATA_MODEL_INFO.saveFilters} label="About save filters" />
         {error ? <Text className={styles.error}>{error}</Text> : null}
         {countError ? <Text className={styles.error}>{countError}</Text> : null}
         {savedAt ? <Text className={styles.saved}>Saved. Next sync uses these filters.</Text> : null}

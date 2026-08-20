@@ -16,6 +16,7 @@ const { getSqlPool } = require('../utils/sqlPool');
 const { requireRole } = require('../middleware/auth');
 const { getAppBaseUrl } = require('../utils/appEnvironment');
 const { getSecretExpiryStatus } = require('../utils/secretExpiry');
+const { expandRetentionSettings } = require('../utils/syncRetentionSettings');
 
 function getPool() {
   return getSqlPool();
@@ -331,9 +332,10 @@ router.post('/settings/odata', async (req, res, next) => {
     const filtered = Object.fromEntries(
       Object.entries(incoming).filter(([k]) => allowed.includes(k))
     );
+    const toSave = expandRetentionSettings(filtered);
 
-    await settingsService.saveODataConfig(filtered, req.user?.id ?? null);
-    await auditLog(req.user.id, req.user.email, 'UPDATE_ODATA_SETTINGS', 'app_settings', null, { keys: Object.keys(filtered) });
+    await settingsService.saveODataConfig(toSave, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_ODATA_SETTINGS', 'app_settings', null, { keys: Object.keys(toSave) });
     res.json({ success: true });
   } catch (err) {
     next(err);

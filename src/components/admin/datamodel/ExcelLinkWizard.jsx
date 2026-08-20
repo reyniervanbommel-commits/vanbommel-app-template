@@ -15,6 +15,8 @@ import StepKeys from './excel-link/StepKeys';
 import StepColumns from './excel-link/StepColumns';
 import StepPublish from './excel-link/StepPublish';
 import ExistingLinksList from './excel-link/ExistingLinksList';
+import AdminInfoHint from './AdminInfoHint';
+import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 
 const STEPS = [
   { n: 1, label: 'Upload file' },
@@ -26,6 +28,7 @@ const STEPS = [
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px'), width: '100%' },
   intro: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
+  titleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   error: { color: tokens.colorPaletteRedForeground1 },
   stepper: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
   stepButton: {
@@ -70,7 +73,10 @@ export default function ExcelLinkWizard() {
   return (
     <div className={styles.root}>
       <div>
-        <Text size={500} weight="semibold" block>External links</Text>
+        <div className={styles.titleRow}>
+          <Text size={500} weight="semibold">External links</Text>
+          <AdminInfoHint text={DATA_MODEL_INFO.externalLinks} label="About external links" />
+        </div>
         <Text className={styles.intro} block>
           Upload an Excel or CSV file and link it to a main table via a key field.
           The selected columns appear as read-only enrichment columns.

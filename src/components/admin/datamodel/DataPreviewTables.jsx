@@ -3,6 +3,8 @@ import { Button, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { SearchRegular } from '@fluentui/react-icons';
 import { exportSingleRowToExcel } from '../../../utils/excelExport';
 import EntityConfigTable from './EntityConfigTable';
+import AdminInfoHint from './AdminInfoHint';
+import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 
 const useStyles = makeStyles({
   discoverRow: {
@@ -107,8 +109,9 @@ function DataPreviewTables({
           >
             Discover D365 fields
           </Button>
+          <AdminInfoHint text={DATA_MODEL_INFO.discoverFields} label="About discover D365 fields" />
           <Text className={styles.discoverHint}>
-            Fetches all available fields from the D365 entity and adds missing columns (hidden by default).
+            Adds missing D365 columns, hidden until you turn them on.
           </Text>
         </div>
       ) : null}

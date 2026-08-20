@@ -15,6 +15,8 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import DataPreviewColumnConfigRow from './DataPreviewColumnConfigRow';
+import AdminInfoHint from './AdminInfoHint';
+import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import {
   BULK_TOGGLE_CONFIG,
   DATA_TYPE_LABELS,
@@ -68,18 +70,26 @@ const useStyles = makeStyles({
     alignItems: 'flex-start',
     ...shorthands.gap('4px'),
   },
+  headerLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('2px'),
+  },
   headerBulkButtons: { display: 'flex', ...shorthands.gap('4px') },
   headerBulkButton: { minWidth: 'auto' },
 });
 
 // Kolomkop met een "alles aan / alles uit"-bulkschakelaar voor de bijbehorende toggle-kolom.
 // De knoppen werken op de op dat moment gefilterde kolommen (net als de rij-toggles).
-function BulkToggleHeaderCell({ label, action, className }) {
+function BulkToggleHeaderCell({ label, info, action, className }) {
   const styles = useStyles();
   return (
     <TableHeaderCell className={className}>
       <div className={styles.headerBulkCell}>
-        <span>{label}</span>
+        <span className={styles.headerLabel}>
+          {label}
+          {info ? <AdminInfoHint text={info} label={`About ${label}`} /> : null}
+        </span>
         {action ? (
           <div className={styles.headerBulkButtons} title={`${action.affectedCount} columns affected`}>
             <Button
@@ -220,21 +230,29 @@ export default function EntityConfigTable({
               <TableHeaderCell className={styles.headerCell}>Sample value</TableHeaderCell>
               <BulkToggleHeaderCell
                 label="Visible in table"
+                info={DATA_MODEL_INFO.visibleInTable}
                 action={bulkActionByKey.visibility}
                 className={styles.headerCell}
               />
               <BulkToggleHeaderCell
                 label="Visible at delete"
+                info={DATA_MODEL_INFO.visibleAtDelete}
                 action={bulkActionByKey.visibleAtDelete}
                 className={styles.headerCell}
               />
               <BulkToggleHeaderCell
                 label="Write-back to D365"
+                info={DATA_MODEL_INFO.writeBack}
                 action={bulkActionByKey.writeback}
                 className={styles.headerCell}
               />
               {/* Bewust geen bulkschakelaar: welke kolom een capaciteitswaarde is, kies je per kolom. */}
-              <TableHeaderCell className={styles.headerCell}>RCCP value column</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell}>
+                <span className={styles.headerLabel}>
+                  RCCP value column
+                  <AdminInfoHint text={DATA_MODEL_INFO.rccp} label="About RCCP value column" />
+                </span>
+              </TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Delete custom column</TableHeaderCell>
             </TableRow>
           </TableHeader>

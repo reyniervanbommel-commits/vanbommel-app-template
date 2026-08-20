@@ -13,11 +13,14 @@ import {
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
 import ExcelLinkWizard from './ExcelLinkWizard';
+import AdminInfoHint from './AdminInfoHint';
+import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
 
 const useStyles = makeStyles({
   root: { width: '100%', maxWidth: 'none', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
   intro: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
+  titleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   error: { color: tokens.colorPaletteRedForeground1 },
   info: { marginTop: '4px' },
 });
@@ -58,7 +61,10 @@ export default function AdminDataModel() {
   return (
     <div className={styles.root}>
       <div>
-        <Text size={600} weight="semibold" block>Data model</Text>
+        <div className={styles.titleRow}>
+          <Text size={600} weight="semibold">Data model</Text>
+          <AdminInfoHint text={DATA_MODEL_INFO.page} label="About the data model page" />
+        </div>
         <Text className={styles.intro} block>
           Configure columns and sync filters per D365 entity.
           Use "External links" to publish Excel lookups as read-only enrichment columns.
@@ -69,7 +75,7 @@ export default function AdminDataModel() {
         <Tab value="purchase-orders">Purchase orders</Tab>
         <Tab value="vendors">Vendors</Tab>
         <Tab value="items">Items</Tab>
-        <Tab value="product-receipt-lines">Ontvangstregels</Tab>
+        <Tab value="product-receipt-lines">Product receipt lines</Tab>
         <Tab value="excel-links">External links</Tab>
       </TabList>
 

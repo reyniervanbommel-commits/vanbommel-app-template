@@ -3,13 +3,46 @@
 const settingsService = require('../services/SettingsService');
 
 const DEFAULTS = {
-  PO_SYNC_RETAINED_MAX_AUTO: 500,
-  PO_SYNC_RETAINED_FETCH_BUDGET: 500,
-  PO_SYNC_RETAINED_WARN_AT: 200,
-  PO_SYNC_RETAINED_CRITICAL_AT: 500,
+  PO_SYNC_RETAINED_MAX_AUTO: 2000,
+  PO_SYNC_RETAINED_FETCH_BUDGET: 2000,
+  PO_SYNC_RETAINED_WARN_AT: 800,
+  PO_SYNC_RETAINED_CRITICAL_AT: 1800,
 };
 
 const RETAINED_PO_CHUNK_SIZE = 20;
+const RETAINED_MAX_LIMIT = 10000;
+
+function clampRetainedMax(raw) {
+  const parsed = Number.parseInt(String(raw ?? '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULTS.PO_SYNC_RETAINED_MAX_AUTO;
+  return Math.min(RETAINED_MAX_LIMIT, parsed);
+}
+
+function deriveRetentionCompanionSettings(maxAuto) {
+  const capped = clampRetainedMax(maxAuto);
+  const warnAt = Math.max(1, Math.round(capped * 0.4));
+  const criticalAt = Math.min(capped, Math.max(warnAt, Math.round(capped * 0.9)));
+  return {
+    maxAuto: capped,
+    fetchBudget: capped,
+    warnAt,
+    criticalAt,
+  };
+}
+
+function expandRetentionSettings(settings) {
+  if (!settings || !Object.prototype.hasOwnProperty.call(settings, 'PO_SYNC_RETAINED_MAX_AUTO')) {
+    return settings;
+  }
+  const derived = deriveRetentionCompanionSettings(settings.PO_SYNC_RETAINED_MAX_AUTO);
+  return {
+    ...settings,
+    PO_SYNC_RETAINED_MAX_AUTO: String(derived.maxAuto),
+    PO_SYNC_RETAINED_FETCH_BUDGET: String(derived.fetchBudget),
+    PO_SYNC_RETAINED_WARN_AT: String(derived.warnAt),
+    PO_SYNC_RETAINED_CRITICAL_AT: String(derived.criticalAt),
+  };
+}
 
 async function getPositiveIntSetting(key, fallback) {
   const raw = await settingsService.getAsync(key, String(fallback));
@@ -19,22 +52,13 @@ async function getPositiveIntSetting(key, fallback) {
 }
 
 async function getSyncRetentionSettings() {
-  const [
-    maxAuto,
-    fetchBudget,
-    warnAt,
-    criticalAt,
-  ] = await Promise.all([
-    getPositiveIntSetting('PO_SYNC_RETAINED_MAX_AUTO', DEFAULTS.PO_SYNC_RETAINED_MAX_AUTO),
-    getPositiveIntSetting('PO_SYNC_RETAINED_FETCH_BUDGET', DEFAULTS.PO_SYNC_RETAINED_FETCH_BUDGET),
-    getPositiveIntSetting('PO_SYNC_RETAINED_WARN_AT', DEFAULTS.PO_SYNC_RETAINED_WARN_AT),
-    getPositiveIntSetting('PO_SYNC_RETAINED_CRITICAL_AT', DEFAULTS.PO_SYNC_RETAINED_CRITICAL_AT),
-  ]);
+  const maxAuto = await getPositiveIntSetting(
+    'PO_SYNC_RETAINED_MAX_AUTO',
+    DEFAULTS.PO_SYNC_RETAINED_MAX_AUTO
+  );
+  const derived = deriveRetentionCompanionSettings(maxAuto);
   return {
-    maxAuto,
-    fetchBudget,
-    warnAt,
-    criticalAt,
+    ...derived,
     chunkSize: RETAINED_PO_CHUNK_SIZE,
   };
 }
@@ -50,6 +74,10 @@ function resolveRetentionWarning(retainedCount, settings, { capReached = false }
 module.exports = {
   DEFAULTS,
   RETAINED_PO_CHUNK_SIZE,
+  RETAINED_MAX_LIMIT,
+  clampRetainedMax,
+  deriveRetentionCompanionSettings,
+  expandRetentionSettings,
   getSyncRetentionSettings,
   resolveRetentionWarning,
 };

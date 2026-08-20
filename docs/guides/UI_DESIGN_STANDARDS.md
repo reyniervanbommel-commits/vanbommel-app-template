@@ -127,7 +127,7 @@ See also `.cursor/rules/fluentui-valkuilen.mdc`.
 | Form with flyout variant | `src/components/rccp/RccpSettingsForm.jsx` |
 | Drill-down drawer | `src/components/rccp/RccpDrillDownPanel.jsx` |
 | Column filter menu | `src/components/supplier/purchaseOrderColumnFilterMenuStyles.js` |
-| Compact dialog | `src/components/admin/ODataInfoDialog.jsx` |
+| Compact dialog | `src/components/shared/ConfirmDialog.jsx` |
 
 When reviewing new UI, compare against the closest golden reference above.
 

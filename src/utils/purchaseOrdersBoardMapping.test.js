@@ -106,6 +106,7 @@ describe('mapTbResponseToBoard', () => {
       isNew: true,
       isChanged: false,
       removedInD365: true,
+      hasRemovalChange: false,
       syncRetained: false,
       lineCount: 2,
     });
