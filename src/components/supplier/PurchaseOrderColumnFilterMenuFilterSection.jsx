@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { Button, Input, Text } from '@fluentui/react-components';
+import { Button, Input, Text, mergeClasses } from '@fluentui/react-components';
 import { ChevronDownRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
+import { usePurchaseOrderColumnMenuFlyoutPlacement } from './usePurchaseOrderColumnMenuFlyoutPlacement';
 
 export default function PurchaseOrderColumnFilterMenuFilterSection({
   styles,
@@ -24,6 +25,9 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   onMouseEnter,
 }) {
   const [operatorFlyoutOpen, setOperatorFlyoutOpen] = useState(false);
+  const operatorFlyout = usePurchaseOrderColumnMenuFlyoutPlacement({
+    active: operatorFlyoutOpen,
+  });
 
   const handleFilterRowMouseEnter = useCallback(() => {
     setOperatorFlyoutOpen(false);
@@ -66,7 +70,16 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
             </span>
           </Button>
           {operatorFlyoutOpen ? (
-            <div className={styles.filterOperatorFlyout} role="listbox" aria-label="Filter operators">
+            <div
+              ref={operatorFlyout.ref}
+              className={mergeClasses(
+                styles.filterOperatorFlyout,
+                operatorFlyout.alignLeft && styles.filterOperatorFlyoutAlignLeft
+              )}
+              role="listbox"
+              aria-label="Filter operators"
+              data-flyout-side={operatorFlyout.alignLeft ? 'left' : 'right'}
+            >
               {operatorEntries.map(([key, label]) => (
                 <Button
                   key={key}

@@ -88,6 +88,10 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     position: 'absolute',
     zIndex: 1,
   },
+  subPaneAlignLeft: {
+    left: 'auto',
+    right: 'calc(100% - 8px)',
+  },
   subPaneTitle: {
     fontWeight: tokens.fontWeightRegular,
     fontSize: tokens.fontSizeBase300,
@@ -260,6 +264,7 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
   filterOperatorWrap: {
     position: 'relative',
     flexShrink: 0,
+    overflow: 'visible',
   },
   filterOperatorLink: {
     minWidth: 'auto',
@@ -303,6 +308,10 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap('0'),
+  },
+  filterOperatorFlyoutAlignLeft: {
+    left: 'auto',
+    right: 'calc(100% + 4px)',
   },
   filterOperatorOption: {
     justifyContent: 'flex-start',

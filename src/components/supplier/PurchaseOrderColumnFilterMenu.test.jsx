@@ -103,6 +103,27 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     fireEvent.mouseEnter(textStyleButton);
 
     expect(await screen.findByText('Preview text')).toBeTruthy();
+    expect(document.querySelector('[data-flyout-side]')).toBeTruthy();
+  });
+
+  it('klapt het submenu naar links als rechts geen ruimte is', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function mockRect() {
+      if (this.getAttribute?.('data-flyout-side') != null) {
+        return { width: 240, height: 220, top: 80, left: 1100, right: 1340, bottom: 300, x: 1100, y: 80, toJSON() {} };
+      }
+      if (this.getAttribute?.('data-column-menu-surface') != null) {
+        return { width: 256, height: 480, top: 40, left: 844, right: 1100, bottom: 520, x: 844, y: 40, toJSON() {} };
+      }
+      return { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON() {} };
+    });
+
+    renderMenu();
+    openColumnMenu();
+    fireEvent.mouseEnter(await screen.findByRole('button', { name: /Text style/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-flyout-side="left"]')).toBeTruthy();
+    });
   });
 
   it('sluit het submenu wanneer de gebruiker over een item zonder submenu hovert', async () => {
