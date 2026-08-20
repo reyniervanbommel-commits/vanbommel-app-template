@@ -16,7 +16,14 @@ async function runMigrations() {
   const migrationsDir = path.join(__dirname, 'migrations');
   const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
 
+  const isProd = process.env.APP_ENV === 'production';
+
   for (const file of files) {
+    if (isProd && /seed_e2e/.test(file)) {
+      console.log('Overslaan (PROD, e2e-seed): ' + file);
+      continue;
+    }
+
     const filePath = path.join(migrationsDir, file);
     let sqlContent = fs.readFileSync(filePath, 'utf8');
 
