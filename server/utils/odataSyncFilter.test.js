@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules } = require('./odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules, MAX_ONEOF_VALUES } = require('./odataSyncFilter');
 
 describe('compileSyncRules (D365-syncfilters)', () => {
   it('compileert een tekst-regel met quoting en escaping', () => {
@@ -69,14 +69,24 @@ describe('compileSyncRules (D365-syncfilters)', () => {
     ])).toThrow(/Only one "is one of" filter/);
   });
 
-  it('weigert meer dan 500 one-of waarden', () => {
-    const values = Array.from({ length: 501 }, (_, i) => `V${i}`);
+  it(`staat ${MAX_ONEOF_VALUES} one-of waarden toe`, () => {
+    const values = Array.from({ length: MAX_ONEOF_VALUES }, (_, i) => `V${i}`);
+    expect(() => compileSyncRules([{
+      field: 'PurchaseOrderNumber',
+      operator: 'oneof',
+      valueType: 'text',
+      value: values,
+    }])).not.toThrow();
+  });
+
+  it(`weigert meer dan ${MAX_ONEOF_VALUES} one-of waarden`, () => {
+    const values = Array.from({ length: MAX_ONEOF_VALUES + 1 }, (_, i) => `V${i}`);
     expect(() => compileSyncRules([{
       field: 'OrderVendorAccountNumber',
       operator: 'oneof',
       valueType: 'text',
       value: values,
-    }])).toThrow(/maximum 500 values/);
+    }])).toThrow(new RegExp(`maximum ${MAX_ONEOF_VALUES} values`));
   });
 
   it('weigert ongeldige velden, operators en enum-waarden (injectiepreventie)', () => {
