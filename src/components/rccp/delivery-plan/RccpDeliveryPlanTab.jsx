@@ -37,7 +37,7 @@ export default function RccpDeliveryPlanTab({
   if (!hasVendor) return null;
   if (loading) return <Spinner label="Loading delivery plan..." />;
   if (error) return <Text className={styles.error}>{error}</Text>;
-  if (!model || !data?.orders?.length) {
+  if (!model || !Array.isArray(data?.orders) || !data.orders.length) {
     return <Text className={styles.hint}>No purchase order lines in this week range.</Text>;
   }
 

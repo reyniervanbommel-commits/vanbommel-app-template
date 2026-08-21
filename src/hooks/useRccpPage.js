@@ -21,9 +21,12 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
 
   const load = useCallback(async ({ bypassCache = false, skipLoading = false } = {}) => {
     if (!windowLoaded || !enabled) {
-      // Geen vendor (nog) gekozen: leegmaken zodat een vorige selectie niet blijft hangen.
+      // Geen vendor / andere tab: in-flight request ongeldig maken, anders blijft de spinner staan
+      // wanneer enabled tijdens het laden naar false gaat (tab-wissel of vendor wissen).
+      requestIdRef.current += 1;
       setAnalysis(null);
       setError('');
+      setLoading(false);
       return;
     }
 

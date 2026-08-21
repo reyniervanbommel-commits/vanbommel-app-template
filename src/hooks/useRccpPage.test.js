@@ -111,4 +111,23 @@ describe('useRccpPage', () => {
     expect(result.current.measureRows[0].chartType).toBe('bar');
     expect(result.current.loading).toBe(false);
   }, 20000);
+
+  it('clears the spinner when enabled flips to false during an in-flight request', async () => {
+    const { apiRequest } = await import('../utils/api');
+    apiRequest.mockImplementation((url) => {
+      if (String(url).includes('/rccp/analysis')) return new Promise(() => {});
+      return Promise.resolve({ settings: {} });
+    });
+    const { useRccpPage } = await import('./useRccpPage');
+
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useRccpPage({ vendorAccount: 'V000583', enabled }),
+      { initialProps: { enabled: true } },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(true), { timeout: 15000 });
+    rerender({ enabled: false });
+    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 15000 });
+    expect(result.current.analysis).toBeNull();
+  }, 20000);
 });

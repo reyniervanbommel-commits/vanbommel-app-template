@@ -76,14 +76,18 @@ export default function RccpPageContent() {
   // wat traag is) — de gebruiker zoekt dan zelf een vendor op via het zoekveld. Dit effect staat
   // bewust ná useRccpPage: het leunt op windowLoaded/lastVendor uit die hook (TDZ voorkomen).
   useEffect(() => {
-    if (isSupplier || vendorsLoading || vendorAccount !== null) return;
+    if (isSupplier || vendorAccount !== null) return;
     const filterByColumn = readPoFilterByColumnForRccp();
     const fromFilter = resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn });
     if (fromFilter) { setVendorAccount(fromFilter); return; }
-    // Geen PO-handoff: wacht tot de opgeslagen voorkeur geladen is en herstel de laatste vendor
-    // (indien die nog in de lijst voorkomt); anders leeg laten zodat de gebruiker zelf zoekt.
+    // PO-filter op naam kan pas matchen als de vendorlijst er is; account-nummer/lastVendor
+    // hoeven daar niet op te wachten — anders blijft de dashboard leeg tot de trage
+    // /rccp/vendors-snapshot klaar is.
+    const filterCandidate = resolveRccpVendorFromFilter(filterByColumn);
+    if (filterCandidate && vendorsLoading) return;
     if (!windowLoaded) return;
-    if (lastVendor && vendors.includes(lastVendor)) { setVendorAccount(lastVendor); return; }
+    if (lastVendor) { setVendorAccount(lastVendor); return; }
+    if (vendorsLoading) return;
     setVendorAccount('');
   }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount, windowLoaded, lastVendor]);
 

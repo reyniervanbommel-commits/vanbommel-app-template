@@ -116,14 +116,15 @@ function isOverdue(planned, today, openQty) {
  */
 export function buildChartModel(orders, weeks, weeklyCapacity, now = new Date()) {
   const today = currentIsoWeek(now);
-  const byId = new Map((orders || []).map((order) => [order.orderId, order]));
+  const list = Array.isArray(orders) ? orders : [];
+  const byId = new Map(list.map((order) => [order.orderId, order]));
   const points = (weeks || []).map((week) => {
     const key = week.key || formatWeekLabel(week.year, week.week);
     const color = weekColor(week.year, week.week);
     const planningSegments = [];
     const receiptSegments = [];
 
-    for (const order of orders || []) {
+    for (const order of list) {
       const planned = isoParts(order.plannedDate);
       if (planned && planned.year === week.year && planned.week === week.week) {
         if (order.deliveredQty > 0) {

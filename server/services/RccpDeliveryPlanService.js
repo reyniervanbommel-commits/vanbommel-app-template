@@ -166,7 +166,7 @@ async function loadDeliveryPlan({
     supplierAccount: supplierAccount || null,
   }));
 
-  const orders = time('rccp_dp_map', () => mapSnapshotRows(poRows, config, window, effectiveVendor));
+  const orders = await time('rccp_dp_map', () => mapSnapshotRows(poRows, config, window, effectiveVendor));
 
   const capacityRows = await time('rccp_dp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,

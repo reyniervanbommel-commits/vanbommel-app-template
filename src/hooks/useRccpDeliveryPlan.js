@@ -29,17 +29,27 @@ export function useRccpDeliveryPlan({
   const [error, setError] = useState('');
   const requestIdRef = useRef(0);
 
+  const fromYear = window?.fromYear;
+  const fromWeek = window?.fromWeek;
+  const toYear = window?.toYear;
+  const toWeek = window?.toWeek;
+
   const load = useCallback(async () => {
     if (!windowLoaded || !enabled) {
+      requestIdRef.current += 1;
       setData(null);
       setError('');
+      setLoading(false);
       return;
     }
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError('');
     try {
-      const payload = await apiRequest(buildDeliveryPlanQuery(window, vendorAccount || undefined));
+      const payload = await apiRequest(buildDeliveryPlanQuery(
+        { fromYear, fromWeek, toYear, toWeek },
+        vendorAccount || undefined,
+      ));
       if (requestId !== requestIdRef.current) return;
       setData(payload);
     } catch (err) {
@@ -49,7 +59,7 @@ export function useRccpDeliveryPlan({
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [enabled, vendorAccount, window, windowLoaded]);
+  }, [enabled, vendorAccount, fromYear, fromWeek, toYear, toWeek, windowLoaded]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribeRccpSettingsSaved(() => { load(); }), [load]);

@@ -85,4 +85,11 @@ describe('rccpDeliveryPlanModel', () => {
     expect(line).not.toContain('0w');
     expect(line).not.toContain('week(s)');
   });
+
+  it('treats a non-array orders payload as empty instead of throwing', () => {
+    expect(() => buildChartModel({}, weeks, {})).not.toThrow();
+    const model = buildChartModel({}, weeks, {});
+    expect(model.ordersById.size).toBe(0);
+    expect(model.points).toHaveLength(3);
+  });
 });

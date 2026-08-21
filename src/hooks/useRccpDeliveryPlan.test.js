@@ -43,4 +43,23 @@ describe('useRccpDeliveryPlan', () => {
     expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining('/rccp/delivery-plan'));
     expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining('vendorAccount=V1'));
   });
+
+  it('clears the spinner when the tab is deactivated during an in-flight request', async () => {
+    const { apiRequest } = await import('../utils/api');
+    apiRequest.mockImplementation(() => new Promise(() => {}));
+    const { useRccpDeliveryPlan } = await import('./useRccpDeliveryPlan');
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useRccpDeliveryPlan({
+        vendorAccount: 'V1',
+        window,
+        windowLoaded: true,
+        enabled,
+      }),
+      { initialProps: { enabled: true } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    rerender({ enabled: false });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toBeNull();
+  });
 });
