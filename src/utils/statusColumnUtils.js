@@ -1,4 +1,6 @@
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+import { HEX_COLOR_PATTERN, getContrastTextColor } from './hexColor';
+
+export { getContrastTextColor };
 
 export const STATUS_COLOR_PALETTE = [
   '#c4c4c4',
@@ -105,16 +107,6 @@ export function resolveStatusCellColor(value, options) {
   const option = getStatusOptionByValue(value, options);
   if (option) return option.color;
   return '#c4c4c4';
-}
-
-export function getContrastTextColor(backgroundColor) {
-  const hex = String(backgroundColor || '').replace('#', '');
-  if (hex.length !== 6) return '#ffffff';
-  const red = Number.parseInt(hex.slice(0, 2), 16);
-  const green = Number.parseInt(hex.slice(2, 4), 16);
-  const blue = Number.parseInt(hex.slice(4, 6), 16);
-  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
-  return luminance > 0.55 ? '#323130' : '#ffffff';
 }
 
 export function isStatusColumn(column) {

@@ -1,16 +1,27 @@
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+import { HEX_COLOR_PATTERN, getContrastTextColor, getOpacityPercent, normalizeHexColor } from '../../utils/hexColor';
 
 export const FORMATTED_CELL_TEXT_COLOR = '#ffffff';
 
-export const FORMATTED_CELL_CSS_VARS = Object.freeze({
-  color: FORMATTED_CELL_TEXT_COLOR,
-  '--colorNeutralForeground1': FORMATTED_CELL_TEXT_COLOR,
-  '--colorNeutralForeground2': FORMATTED_CELL_TEXT_COLOR,
-  '--colorNeutralForeground3': FORMATTED_CELL_TEXT_COLOR,
-  '--colorBrandForeground1': FORMATTED_CELL_TEXT_COLOR,
-  '--colorBrandForeground2': FORMATTED_CELL_TEXT_COLOR,
-  '--colorCompoundBrandForeground1': FORMATTED_CELL_TEXT_COLOR,
-});
+export function getFormattedTextColor(backgroundColor) {
+  const color = normalizeHexColor(backgroundColor);
+  if (!color || getOpacityPercent(color) >= 100) return FORMATTED_CELL_TEXT_COLOR;
+  return getContrastTextColor(color);
+}
+
+export function getFormattedCellTextCssVars(backgroundColor) {
+  const textColor = getFormattedTextColor(backgroundColor);
+  return {
+    color: textColor,
+    '--colorNeutralForeground1': textColor,
+    '--colorNeutralForeground2': textColor,
+    '--colorNeutralForeground3': textColor,
+    '--colorBrandForeground1': textColor,
+    '--colorBrandForeground2': textColor,
+    '--colorCompoundBrandForeground1': textColor,
+  };
+}
+
+export const FORMATTED_CELL_CSS_VARS = Object.freeze(getFormattedCellTextCssVars(''));
 
 function buildTextStyle(textStyle, { omitColor = false } = {}) {
   const textColor = String(textStyle?.textColor || '').trim();
@@ -27,8 +38,8 @@ function buildTextStyle(textStyle, { omitColor = false } = {}) {
   };
 }
 
-export function getFormattedCellContentStyle(isConditionalFormat) {
-  return isConditionalFormat ? { ...FORMATTED_CELL_CSS_VARS } : undefined;
+export function getFormattedCellContentStyle(isConditionalFormat, backgroundColor = '') {
+  return isConditionalFormat ? getFormattedCellTextCssVars(backgroundColor) : undefined;
 }
 
 export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey, backgroundColor = '', options = {}) {
@@ -52,7 +63,7 @@ export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey, ba
       : {}),
     ...(resolvedBackgroundColor ? { backgroundColor: resolvedBackgroundColor } : {}),
     ...(resolvedTextStyle || {}),
-    ...(useFormattedTextColor ? FORMATTED_CELL_CSS_VARS : {}),
+    ...(useFormattedTextColor ? getFormattedCellTextCssVars(resolvedBackgroundColor) : {}),
   };
 }
 
@@ -63,7 +74,7 @@ export function getRowFormatControlCellStyle(rowFormatColor) {
   if (!color) return undefined;
   return {
     backgroundColor: color,
-    ...FORMATTED_CELL_CSS_VARS,
+    ...getFormattedCellTextCssVars(color),
   };
 }
 
@@ -76,7 +87,7 @@ export function getFormattedCellControlStyle(cellBackgroundColor, options = {}) 
   if (!color) return undefined;
   return {
     backgroundColor: color,
-    ...(useWhiteText ? FORMATTED_CELL_CSS_VARS : {}),
+    ...(useWhiteText ? getFormattedCellTextCssVars(color) : {}),
     '--colorNeutralBackground1': color,
     '--colorNeutralBackground2': color,
   };

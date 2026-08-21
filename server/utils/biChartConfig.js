@@ -1,6 +1,7 @@
 'use strict';
 
 const { AGGREGATIONS, CHART_TYPES, DATE_GROUPINGS } = require('./biAggregate');
+const { getRgbHex, isHexColor } = require('./hexColor');
 const { STATUS_COLOR_PALETTE } = require('./statusColumnOptions');
 
 const SELECTABLE_CHART_COLORS = new Set(STATUS_COLOR_PALETTE.slice(1).map((c) => c.toLowerCase()));
@@ -11,8 +12,10 @@ const VALUE_DISPLAYS = new Set(['value', 'percent']);
 const MEASURE_STYLES = new Set(['bar', 'line']);
 
 function normalizeColor(value) {
-  const color = String(value || '').toLowerCase();
-  return SELECTABLE_CHART_COLORS.has(color) ? color : null;
+  if (!isHexColor(value)) return null;
+  const color = String(value).toLowerCase();
+  const rgb = getRgbHex(color);
+  return SELECTABLE_CHART_COLORS.has(rgb) ? color : null;
 }
 
 function normalizeOptions(rawOptions, chartType) {

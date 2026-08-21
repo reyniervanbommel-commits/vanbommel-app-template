@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCellValue } from '../utils/purchaseOrderFormat';
+import { isHexColor } from '../utils/hexColor';
 
 const DEFAULT_GROUPING_COLOR = '#f4e6ed';
 
@@ -66,10 +67,6 @@ function normalizeGroupLabel(value, column) {
   }
   const text = String(value).trim();
   return text ? text : 'No value';
-}
-
-function isHexColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
 }
 
 /**

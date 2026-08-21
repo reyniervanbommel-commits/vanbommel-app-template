@@ -16,9 +16,11 @@ import StatusLabelsEditor from './StatusLabelsEditor';
 import StatusLabelsConflictResolver from './StatusLabelsConflictResolver';
 import { useStatusLabelsEditor } from '../../hooks/useStatusLabelsEditor';
 import {
+  getContrastTextColor,
   getStatusOptionByValue,
   resolveStatusCellColor,
 } from '../../utils/statusColumnUtils';
+import { getOpacityPercent } from '../../utils/hexColor';
 
 const STATUS_TEXT_COLOR = '#ffffff';
 
@@ -111,7 +113,9 @@ export default function StatusCell({
   });
   const selectedOption = useMemo(() => getStatusOptionByValue(value, normalizedOptions), [value, normalizedOptions]);
   const backgroundColor = resolveStatusCellColor(value, normalizedOptions);
-  const textColor = selectedOption ? STATUS_TEXT_COLOR : tokens.colorNeutralForeground3;
+  const textColor = selectedOption
+    ? (getOpacityPercent(backgroundColor) < 100 ? getContrastTextColor(backgroundColor) : STATUS_TEXT_COLOR)
+    : tokens.colorNeutralForeground3;
 
   const triggerButton = (
     <button
