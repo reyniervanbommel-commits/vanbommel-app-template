@@ -116,7 +116,7 @@ export default function AdminODataSettings() {
         D365_ODATA_CLIENT_ID: s.D365_ODATA_CLIENT_ID || '',
         D365_ODATA_CLIENT_SECRET: '',
         D365_ODATA_CLIENT_SECRET_EXPIRES_AT: toDateInputValue(s.D365_ODATA_CLIENT_SECRET_EXPIRES_AT),
-        PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2000',
+        PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2500',
         PO_SYNC_RETAINED_MAX_AUTO: s.PO_SYNC_RETAINED_MAX_AUTO || '2000',
         PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
       });
@@ -250,7 +250,7 @@ export default function AdminODataSettings() {
       <div className={styles.section}>
         <SectionTitle title="Cache sync" info={ODATA_SETTINGS_INFO.cache} infoLabel="About cache sync" />
         <Field label="Max orders per sync (cap)" hint="Safety cap on the filtered D365 fetch.">
-          <Input type="number" placeholder="2000" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
+          <Input type="number" placeholder="2500" value={form.PO_SYNC_MAX_ORDERS} onChange={handleChange('PO_SYNC_MAX_ORDERS')} />
         </Field>
         <Field
           label="Max retained orders"

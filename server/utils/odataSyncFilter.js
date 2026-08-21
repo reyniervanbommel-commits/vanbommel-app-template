@@ -20,10 +20,10 @@ const ENUM_NAMESPACE = 'Microsoft.Dynamics.DataEntities';
 const LINES_NAV_PROPERTY = 'PurchaseOrderLines';
 const MAX_RULES = 15;
 const MAX_VALUE_LENGTH = 128;
-// Opslaglimiet: de admin mag een lange vendor-lijst bewaren. D365-calls chunked de
+// Opslaglimiet: de admin mag een lange PO-/vendor-lijst bewaren (tot 2500). D365-calls chunked de
 // one-of waarden (D365_FILTER_CHUNK_SIZE) omdat F&O geen `in`-operator heeft en GET-$filter
 // anders te lang wordt. Zie compileSyncRulesChunks.
-const MAX_ONEOF_VALUES = 500;
+const MAX_ONEOF_VALUES = 2500;
 const D365_FILTER_CHUNK_SIZE = 20;
 
 function badRequest(message) {

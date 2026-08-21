@@ -524,8 +524,8 @@ async function resolvePurchaseOrderSelectFields(table) {
 
 async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY', '')).trim();
-  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2000));
-  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2000);
+  const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2500));
+  const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2500);
   let filterChunks = [''];
   try {
     const rules = await getTableSyncRules(table);
