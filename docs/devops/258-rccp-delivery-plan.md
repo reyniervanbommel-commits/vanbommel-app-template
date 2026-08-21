@@ -54,6 +54,7 @@
 5. Geen plannedDate → overslaan; lege delivered-date/qty = niet geleverd; geen purchaseOrderNumber → `recordKey`.
 6. Capaciteit = som `availableQty` per vendor+ISO-week; geen rij = geen lijn die week.
 7. `differenceInIsoWeeks` in `isoWeek.js` (geen date-fns); unit-tests groen.
+8. Validatie is nieuwe logica, geen bestaand precedent: `RccpSettingsService` valideert vandaag geen enkele kolomkey tegen de enriched-kolomlijst (`openMeasureKey` checkt alleen membership binnen de ingediende `quantityMeasures`; `dateColumnKey`/`vendorColumnKey` checken alleen non-empty, geen registry-lookup). De vier delivery-plan keys moeten echt tegen de live enriched-kolomlijst valideren (`rccpMeasure`-vlag voor de qty-keys, kolom-existentie voor de datumkeys), inclusief toegang tot `TableRegistryService` vanuit de normalize-functie.
 
 ### Story B (#AB:260): Delivery plan tab en grafiek
 **Beschrijving:** Derde tab op `/rccp` met Recharts dual-axis grafiek volgens het grafiekcontract in het plan.  
@@ -63,6 +64,7 @@
 3. Custom shapes (geen Bar-serie per order); planning boven, ontvangst onder met planweekkleur.
 4. Capaciteit, Today, overdue-stroke en opacities volgens plan; Y-as gedeelde schaal.
 5. UI Engels; geen Fluent Tooltip op segmenten; weekkleur stabiel per `year-Wxx` (Fluent tokens).
+6. `useRccpPage` (dashboard-analyse) alleen enabled bij `activeTab === 'dashboard'`, naast de nieuwe gating van `useRccpDeliveryPlan`. Vandaag draait de dashboard-fetch in `useRccpPage.js` door zodra er een vendor gekozen is, ongeacht de actieve tab (`enabled = hasVendor`, niet tab-afhankelijk) — met een derde tab wordt die achtergrond-waste vaker geraakt.
 
 ### Story C (#AB:261): Delivery plan interactie, tests en documentatie
 **Beschrijving:** Hover/selectie, verbindingslijn, detailregel, tooltip, docs, versie.  

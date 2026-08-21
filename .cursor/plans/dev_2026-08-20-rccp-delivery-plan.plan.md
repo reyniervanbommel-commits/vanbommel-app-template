@@ -159,6 +159,7 @@ Hook [src/hooks/useRccpDeliveryPlan.js](src/hooks/useRccpDeliveryPlan.js): `apiR
 5. Lege delivered-date/qty = niet geleverd; regel zonder plannedDate wordt overgeslagen.
 6. Capaciteit is som `availableQty` per vendor+ISO-week; geen rij = geen lijn die week.
 7. `differenceInIsoWeeks` + unit-tests voor mapping, jaarwissel, overdue en totalen; `npm test` groen.
+8. Validatie is nieuwe logica, geen bestaand precedent: [RccpSettingsService.js](server/services/RccpSettingsService.js) valideert vandaag geen enkele kolomkey tegen de enriched-kolomlijst (`openMeasureKey` checkt alleen membership binnen de ingediende `quantityMeasures`; `dateColumnKey`/`vendorColumnKey` checken alleen non-empty, geen registry-lookup). De vier delivery-plan keys moeten echt tegen de live enriched-kolomlijst valideren (`rccpMeasure`-vlag voor de qty-keys, kolom-existentie voor de datumkeys), inclusief toegang tot `TableRegistryService` vanuit de normalize-functie.
 
 ### Story B (#260) — Delivery plan tab en grafiek
 
@@ -167,6 +168,7 @@ Hook [src/hooks/useRccpDeliveryPlan.js](src/hooks/useRccpDeliveryPlan.js): `apiR
 3. Planning boven, ontvangst onder met planweekkleur; status, capaciteit, Today volgens grafiekcontract.
 4. UI Engels; geen Fluent Tooltip op segmenten; weekkleur stabiel per `year-Wxx`.
 5. Custom shapes (geen Bar-serie per order); Y-as gedeelde schaal.
+6. [useRccpPage.js](src/hooks/useRccpPage.js) (dashboard-analyse) alleen enabled bij `activeTab === 'dashboard'`, naast de nieuwe gating van `useRccpDeliveryPlan`. Vandaag draait de dashboard-fetch door zodra er een vendor gekozen is, ongeacht de actieve tab (`enabled = hasVendor`, niet tab-afhankelijk) — met een derde tab wordt die achtergrond-waste vaker geraakt.
 
 ### Story C (#261) — Delivery plan interactie, tests en documentatie
 
