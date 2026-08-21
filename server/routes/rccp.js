@@ -10,6 +10,7 @@ const capacityService = require('../services/RccpCapacityService');
 const importService = require('../services/RccpImportService');
 const analysisService = require('../services/RccpAnalysisService');
 const settingsService = require('../services/RccpSettingsService');
+const deliveryPlanService = require('../services/RccpDeliveryPlanService');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -164,6 +165,26 @@ router.post('/import/commit', requireRole(ROLES.ADMIN), upload.single('file'), a
       userId: req.user?.id ?? null,
     });
     res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/delivery-plan', async (req, res, next) => {
+  try {
+    const window = parseWindowQuery(req);
+    const vendorAccount = resolveVendorQuery(req);
+    const supplierAccount = resolveSupplierAccount(req);
+    if (!vendorAccount && !supplierAccount) {
+      return res.status(400).json({ error: 'vendorAccount is required' });
+    }
+    const data = await deliveryPlanService.loadDeliveryPlan({
+      vendorAccount,
+      supplierAccount,
+      ...window,
+    });
+    res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);

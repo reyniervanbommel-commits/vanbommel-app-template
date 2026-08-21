@@ -97,6 +97,21 @@ function buildWeekRange(fromYear, fromWeek, toYear, toWeek) {
   return out;
 }
 
+/**
+ * Signed ISO-week distance from `earlier` to `later` (week starts, year-safe).
+ * Positive = later is after earlier. Returns null when either date is invalid.
+ */
+function differenceInIsoWeeks(later, earlier) {
+  const laterYear = getIsoWeekYear(later);
+  const laterWeek = getIsoWeek(later);
+  const earlierYear = getIsoWeekYear(earlier);
+  const earlierWeek = getIsoWeek(earlier);
+  if (!laterYear || !laterWeek || !earlierYear || !earlierWeek) return null;
+  const laterStart = isoWeekStartUtc(laterYear, laterWeek);
+  const earlierStart = isoWeekStartUtc(earlierYear, earlierWeek);
+  return Math.round((laterStart.getTime() - earlierStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+}
+
 module.exports = {
   getIsoWeek,
   getIsoWeekYear,
@@ -106,4 +121,5 @@ module.exports = {
   isoWeekEndUtc,
   weeksInIsoYear,
   buildWeekRange,
+  differenceInIsoWeeks,
 };

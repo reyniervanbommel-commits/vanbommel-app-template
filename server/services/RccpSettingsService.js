@@ -6,6 +6,7 @@
 
 const settingsService = require('./SettingsService');
 const dataService = require('./TableDataService');
+const { normalizeDeliveryPlanKeys } = require('../utils/rccpDeliveryPlanKeys');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
 const PO_TABLE_KEY = 'purchase-orders';
@@ -72,6 +73,7 @@ function defaultConfig() {
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
     periodMode: 'week',
+    ...normalizeDeliveryPlanKeys({}),
   };
 }
 
@@ -115,7 +117,7 @@ function normalizeStringArray(value) {
   return [...new Set(value.map((v) => String(v || '').trim()).filter(Boolean))];
 }
 
-function validateConfig(raw) {
+function validateConfig(raw, columns) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { valid: false, error: 'Config must be an object' };
   }
@@ -184,6 +186,7 @@ function validateConfig(raw) {
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
       periodMode,
+      ...normalizeDeliveryPlanKeys(raw, columns),
     },
   };
 }
@@ -228,8 +231,14 @@ async function assertMeasuresAreReleased(measures) {
   }
 }
 
+async function loadPoColumns() {
+  const defs = await dataService.getBoardColumnDefinitions(PO_TABLE_KEY);
+  return [...(defs.master || []), ...(defs.detail || [])];
+}
+
 async function saveConfig(raw, userId = null) {
-  const result = validateConfig(raw);
+  const columns = await loadPoColumns();
+  const result = validateConfig(raw, columns);
   if (!result.valid) {
     const err = new Error(result.error);
     err.status = 400;

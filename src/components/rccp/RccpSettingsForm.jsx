@@ -5,6 +5,7 @@ import {
 import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
+import RccpDeliveryPlanFields from './RccpDeliveryPlanFields';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -106,6 +107,13 @@ function RccpSettingsForm({
           />
         </div>
       </div>
+
+      <RccpDeliveryPlanFields
+        config={config}
+        columns={columns}
+        compact={isFlyout}
+        onUpdateField={onUpdateField}
+      />
 
       <div className={mergeClasses(styles.section, isFlyout && styles.sectionFlyout)}>
         <RccpQuantityMeasuresEditor

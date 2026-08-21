@@ -9,6 +9,7 @@ const {
   isoWeekEndUtc,
   weeksInIsoYear,
   buildWeekRange,
+  differenceInIsoWeeks,
 } = require('../utils/isoWeek');
 
 describe('isoWeek', () => {
@@ -50,5 +51,12 @@ describe('isoWeek', () => {
     const end = isoWeekEndUtc(2024, 10);
     expect(start.getUTCDay()).toBe(1);
     expect(end.getTime()).toBeGreaterThan(start.getTime());
+  });
+
+  it('counts ISO-week delay across a year boundary', () => {
+    expect(differenceInIsoWeeks('2026-01-12', '2025-12-22')).toBe(3);
+    expect(differenceInIsoWeeks('2025-12-22', '2026-01-12')).toBe(-3);
+    expect(differenceInIsoWeeks('2026-03-10', '2026-03-12')).toBe(0);
+    expect(differenceInIsoWeeks(null, '2026-03-10')).toBeNull();
   });
 });

@@ -28,3 +28,34 @@ describe('RccpSettingsService.validateConfig openMeasureKey', () => {
     expect(config.openMeasureKey).toBe('');
   });
 });
+
+describe('RccpSettingsService.validateConfig delivery-plan keys', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+    quantityMeasures: [
+      { columnKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+    ],
+  };
+
+  it('stores delivery-plan defaults on a valid config', () => {
+    const { valid, config } = validateConfig(base);
+    expect(valid).toBe(true);
+    expect(config.deliveryPlanPlannedDateKey).toBe('requestedDeliveryDate');
+    expect(config.deliveryPlanOrderedQtyKey).toBe('quantity');
+  });
+
+  it('validates delivery-plan keys against the enriched column list', () => {
+    const columns = [
+      { key: 'requestedDeliveryDate', rccpMeasure: false },
+      { key: 'quantity', rccpMeasure: true },
+    ];
+    const { config } = validateConfig({
+      ...base,
+      deliveryPlanDeliveredDateKey: 'unknownDate',
+      deliveryPlanDeliveredQtyKey: 'requestedDeliveryDate',
+    }, columns);
+    expect(config.deliveryPlanDeliveredDateKey).toBe('');
+    expect(config.deliveryPlanDeliveredQtyKey).toBe('');
+  });
+});

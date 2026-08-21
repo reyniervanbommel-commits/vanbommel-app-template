@@ -5,7 +5,8 @@ Rough Cut Capacity Planning (RCCP) compares planned vendor capacity against live
 ## Where to find it
 
 - Dashboard: `/rccp` (admin, employee, supplier)
-- Settings: Admin → RCCP
+- Delivery plan: `/rccp` → **Delivery plan** tab
+- Settings: Admin → RCCP or the Settings button on `/rccp`
 
 ## Capacity template
 
@@ -31,6 +32,7 @@ Import flow:
 Configure on **Admin → RCCP**:
 
 - **Vendor / date / quantity / category columns** — taken from purchase order master and line columns
+- **Delivery plan columns** — planned date, delivered date, ordered quantity and delivered quantity for the Delivery plan chart (quantity fields only list `rccpMeasure` columns)
 - **Excluded PO statuses** — excluded from live load calculation
 - **Thresholds** — green and orange utilization percentages
 - **Duplicate import policy** — update or skip existing capacity keys
@@ -45,6 +47,17 @@ PO load is calculated live via `TableDataService.read('purchase-orders')`:
 - Lines without a date appear in the warning card and are excluded
 - Excluded statuses are skipped
 - Missing categories are grouped under **Unclassified**
+
+## Delivery plan
+
+The **Delivery plan** tab shows live purchase-order lines for the selected vendor in the current ISO-week window:
+
+- Planning bars above the axis (open quantity solid, delivered quantity nearly transparent, overdue open with a red stroke)
+- Receipt bars below the axis, coloured by the planned week
+- A red dashed capacity line (sum of `availableQty` per vendor+week). Weeks without a capacity row have no line
+- Hover or click a segment to highlight the order above and below, draw a connector (only when a delivered date exists) and show an English detail line
+
+`openQty` is always `max(0, orderedQty − deliveredQty)`. Lines without a planned date are omitted.
 
 ## Supplier access
 

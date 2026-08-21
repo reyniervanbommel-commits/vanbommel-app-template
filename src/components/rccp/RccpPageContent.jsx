@@ -6,7 +6,9 @@ import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icon
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
+import { useRccpDeliveryPlan } from '../../hooks/useRccpDeliveryPlan';
 import { useRccpVendorPrefetch } from '../../hooks/useRccpVendorPrefetch';
+import { RccpDeliveryPlanTab } from './delivery-plan';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
@@ -59,8 +61,15 @@ export default function RccpPageContent() {
     measureRows, periods, cellMap, reload,
   } = useRccpPage({
     vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
-    enabled: hasVendor,
+    enabled: hasVendor && activeTab === 'dashboard',
   });
+  const deliveryPlan = useRccpDeliveryPlan({
+    vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
+    window,
+    windowLoaded,
+    enabled: hasVendor && activeTab === 'delivery-plan',
+  });
+  const reloadDeliveryPlan = deliveryPlan.reload;
 
   // Neem de vendor over waarop de PO-pagina net gefilterd was (nr of naam); is er geen
   // PO-filter, laat de vendor dan leeg (in plaats van automatisch de eerste vendor te laden,
@@ -121,8 +130,12 @@ export default function RccpPageContent() {
       capacityReloadRef.current?.();
       return;
     }
+    if (activeTab === 'delivery-plan') {
+      reloadDeliveryPlan();
+      return;
+    }
     reload();
-  }, [activeTab, reload]);
+  }, [activeTab, reloadDeliveryPlan, reload]);
 
   const handleRegisterCapacityReload = useCallback((fn) => {
     capacityReloadRef.current = fn;
@@ -134,6 +147,7 @@ export default function RccpPageContent() {
 
       <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
         <Tab value="dashboard">Dashboard</Tab>
+        <Tab value="delivery-plan">Delivery plan</Tab>
         <Tab value="capacity-planning">Capacity planning</Tab>
       </TabList>
 
@@ -150,7 +164,7 @@ export default function RccpPageContent() {
             onHighlightVendor={handleHighlightVendor}
           />
         )}
-        {activeTab === 'dashboard' && (
+        {(activeTab === 'dashboard' || activeTab === 'delivery-plan') && (
           <>
             <Field label="From year">
               <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
@@ -174,7 +188,7 @@ export default function RccpPageContent() {
 
       {!hasVendor && (
         <Text className={styles.hint}>
-          Search for a vendor above to load the dashboard and capacity planning data.
+          Search for a vendor above to load the dashboard, delivery plan and capacity planning data.
         </Text>
       )}
 
@@ -206,6 +220,15 @@ export default function RccpPageContent() {
             </>
           )}
         </>
+      )}
+
+      {activeTab === 'delivery-plan' && (
+        <RccpDeliveryPlanTab
+          hasVendor={hasVendor}
+          data={deliveryPlan.data}
+          loading={deliveryPlan.loading}
+          error={deliveryPlan.error}
+        />
       )}
 
       {activeTab === 'capacity-planning' && (
