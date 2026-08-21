@@ -24,7 +24,7 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
-const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const {
   listVendorGroupIds,
   expandVendorGroupRules,
@@ -4735,12 +4735,13 @@ async function getDataModel(tableKey) {
   const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
   if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
     try {
+      const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
       const fallbackSample = await fetchPurchaseOrders({
         supplierAccount: null,
         top: DATA_MODEL_PREVIEW_ROW_LIMIT,
         skip: 0,
         fetchAll: false,
-        extraFilter: compiledFilter,
+        extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
         maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
       });
       const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
