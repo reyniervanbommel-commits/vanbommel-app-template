@@ -176,6 +176,12 @@ function compileSyncRulesChunks(rules, chunkSize = D365_FILTER_CHUNK_SIZE) {
   return chunks;
 }
 
+/** Eerste D365-veilige chunk — voor preview/sample-calls die geen volle one-of-URL aankunnen. */
+function firstSyncFilterChunk(rules, chunkSize = D365_FILTER_CHUNK_SIZE) {
+  const chunks = compileSyncRulesChunks(rules, chunkSize);
+  return chunks[0] || '';
+}
+
 /**
  * Parseert de opgeslagen JSON (PO_SYNC_RULES) defensief naar een regel-array.
  * Corrupte of lege JSON → lege lijst (sync draait dan ongefilterd door).
@@ -285,6 +291,7 @@ module.exports = {
   D365_FILTER_CHUNK_SIZE,
   compileSyncRules,
   compileSyncRulesChunks,
+  firstSyncFilterChunk,
   parseSyncRules,
   recordMatchesSyncRules,
 };

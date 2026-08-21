@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileSyncRules, compileSyncRulesChunks, parseSyncRules, recordMatchesSyncRules, MAX_ONEOF_VALUES } = require('./odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, MAX_ONEOF_VALUES } = require('./odataSyncFilter');
 
 describe('compileSyncRules (D365-syncfilters)', () => {
   it('compileert een tekst-regel met quoting en escaping', () => {
@@ -59,6 +59,8 @@ describe('compileSyncRules (D365-syncfilters)', () => {
     expect(chunks).toHaveLength(2);
     expect(chunks[0].split(' or ')).toHaveLength(20);
     expect(chunks[1].split(' or ')).toHaveLength(5);
+    expect(firstSyncFilterChunk(rules)).toBe(chunks[0]);
+    expect(firstSyncFilterChunk(rules).split(' or ')).toHaveLength(20);
   });
 
   it('weigert twee grote one-of regels tegelijk', () => {
