@@ -20,10 +20,12 @@
 1. Derde tab **Delivery plan** op `/rccp`; Dashboard en Capacity planning ongewijzigd.
 2. Admin kiest de vier bronkolommen in RCCP-instellingen; na Save herlaadt de tab.
 3. Grafiek toont live regels van de gekozen leverancier in het weekvenster.
-4. Weekkleur, segmenten, transparantie, achterstallig, ontvangstkleur, capaciteit, Today, hover/selectie en totalen kloppen met de specificatie.
-5. UI-teksten Engels; `openQty` altijd berekend; `plannedDate` ongewijzigd.
+4. Weekkleur, segmenten, transparantie, achterstallig, ontvangstkleur, capaciteit, Today, hover/selectie en totalen kloppen met het grafiekcontract in het plan.
+5. UI-teksten Engels; `openQty` altijd `max(0, orderedQty - deliveredQty)`; `plannedDate` ongewijzigd.
 6. Supplier ziet alleen eigen vendor, read-only settings.
 7. Unit-tests voor mapping/ISO-delay/overdue/totals; `npm test` groen; versie in `src/config/version.js` verhoogd.
+8. Browser-check op `/rccp`: tab, vendor, grafiek, hover-detail, settings-reload.
+9. `devTestItem` toegevoegd; `docs/guides/RCCP.md` bijgewerkt.
 
 ---
 
@@ -43,32 +45,36 @@
 ## Backlog — child User Stories
 
 ### Story A (#AB:259): Delivery plan settings en API
-**Beschrijving:** Vier kolomkeuzes in RCCP-config, `GET /rccp/delivery-plan`, mapping van PO-regels naar het ordercontract, capaciteitssom per ISO-week, unit-tests.  
+**Beschrijving:** Vier kolomkeuzes in RCCP-config, `GET /rccp/delivery-plan`, mapping van PO-regels, capaciteitssom per ISO-week, unit-tests.  
 **Acceptatiecriteria:**
-1. RCCP-instellingen hebben een sectie Delivery plan met vier dropdowns (qty alleen `rccpMeasure`).
-2. Config-keys staan in `RccpSettingsService` (JSON in bestaande app_settings, geen SQL-migratie).
-3. `GET /rccp/delivery-plan` geeft `{ orders, weeks, weeklyCapacity, config }` terug.
-4. `openQty` is altijd `max(0, orderedQty - deliveredQty)`; `plannedDate` wordt nooit overschreven.
-5. Lege delivered-date/qty = niet geleverd; regel zonder plannedDate wordt overgeslagen.
-6. Capaciteit is som `availableQty` per vendor+ISO-week; unit-tests groen.
+1. Sectie Delivery plan met vier dropdowns (qty alleen `rccpMeasure`; kolommen via `enriched=1`).
+2. Config-keys in `RccpSettingsService` (JSON in bestaande app_settings, geen SQL-migratie).
+3. `GET /rccp/delivery-plan` geeft `{ orders, weeks, weeklyCapacity, config }`; 400 zonder vendor (behalve supplier).
+4. `openQty = max(0, orderedQty - deliveredQty)`; `plannedDate` nooit overschreven.
+5. Geen plannedDate → overslaan; lege delivered-date/qty = niet geleverd; geen purchaseOrderNumber → `recordKey`.
+6. Capaciteit = som `availableQty` per vendor+ISO-week; geen rij = geen lijn die week.
+7. `differenceInIsoWeeks` in `isoWeek.js` (geen date-fns); unit-tests groen.
 
 ### Story B (#AB:260): Delivery plan tab en grafiek
-**Beschrijving:** Derde tab op `/rccp` met Recharts dual-axis grafiek.  
+**Beschrijving:** Derde tab op `/rccp` met Recharts dual-axis grafiek volgens het grafiekcontract in het plan.  
 **Acceptatiecriteria:**
 1. Tab **Delivery plan** naast de bestaande tabs; die blijven ongewijzigd.
 2. Weekvenster zichtbaar op Dashboard én Delivery plan; data alleen bij actieve tab + vendor.
-3. Planning boven, ontvangst onder met planweekkleur; status, capaciteit, Today.
-4. UI Engels; geen Fluent Tooltip op segmenten; weekkleur stabiel per `year-Wxx`.
+3. Custom shapes (geen Bar-serie per order); planning boven, ontvangst onder met planweekkleur.
+4. Capaciteit, Today, overdue-stroke en opacities volgens plan; Y-as gedeelde schaal.
+5. UI Engels; geen Fluent Tooltip op segmenten; weekkleur stabiel per `year-Wxx` (Fluent tokens).
 
 ### Story C (#AB:261): Delivery plan interactie, tests en documentatie
 **Beschrijving:** Hover/selectie, verbindingslijn, detailregel, tooltip, docs, versie.  
 **Acceptatiecriteria:**
 1. Hover/klik markeert boven + onder en tekent één verbindingslijn (geen lijn zonder `deliveredDate`).
-2. Detailregel en tooltip in het Engels; nooit `0w`.
-3. `docs/guides/RCCP.md`, `devTestItem`, versiebump; commit `feat` + `#AB:258`.
+2. Detailregel en tooltip in het Engels volgens de copy in het plan; nooit `0w`.
+3. `docs/guides/RCCP.md`, `devTestItem`, `measure()` rond client-groepering, versiebump.
+4. Browser-checkbaar op `/rccp` (tab, vendor, grafiek, hover, settings-reload).
+5. Commit-prefix `feat` + `#AB:258`.
 
 ---
 
 ## Versie document
 
-Aangemaakt op basis van [.cursor/plans/dev_2026-08-20-rccp-delivery-plan.plan.md](../../.cursor/plans/dev_2026-08-20-rccp-delivery-plan.plan.md); wijzig dit bestand bij nieuwe afspraken.
+Aangemaakt op basis van [.cursor/plans/dev_2026-08-20-rccp-delivery-plan.plan.md](../../.cursor/plans/dev_2026-08-20-rccp-delivery-plan.plan.md); plan aangevuld na review-plan-for-devops (gesloten aannames + grafiekcontract).
