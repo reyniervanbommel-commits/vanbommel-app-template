@@ -141,7 +141,7 @@ export default function PurchaseOrdersActiveFilterEditor({
     });
   }, [applyColumnFilter, columnKey, draft]);
 
-  const usesValuePicker = draft.operator === 'equals' || draft.operator === 'oneOf';
+  const usesValuePicker = draft.operator === 'oneOf' || (!isDate && draft.operator === 'equals');
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek');
   const inputType = getValueInputType(isDate, isNumber, draft.operator);

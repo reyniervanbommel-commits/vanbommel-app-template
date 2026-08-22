@@ -49,4 +49,24 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
       secondaryValue: '',
     });
   });
+
+  it('renders date equals filters with a date input', () => {
+    const column = { key: 'requestedDate', label: 'Requested date', dataType: 'date' };
+    renderEditor({
+      item: {
+        columnKey: 'requestedDate',
+        column,
+        filter: { operator: 'equals', value: '2026-08-22', secondaryValue: '' },
+      },
+      headerColumns: [column],
+      filterByColumn: {
+        requestedDate: { operator: 'equals', value: '2026-08-22', secondaryValue: '' },
+      },
+    });
+
+    const valueInput = screen.getByLabelText('Filter value for Requested date');
+
+    expect(valueInput.tagName).toBe('INPUT');
+    expect(valueInput.getAttribute('type')).toBe('date');
+  });
 });
