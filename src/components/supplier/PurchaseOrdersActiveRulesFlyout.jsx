@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import {
   Button,
   Drawer,
@@ -10,6 +10,8 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
+import PurchaseOrdersActiveFilterEditor from './PurchaseOrdersActiveFilterEditor';
+import PurchaseOrdersActiveFormatEditor from './PurchaseOrdersActiveFormatEditor';
 import PurchaseOrdersActiveFiltersList from './PurchaseOrdersActiveFiltersList';
 import PurchaseOrdersActiveFormatRulesList from './PurchaseOrdersActiveFormatRulesList';
 
@@ -26,20 +28,37 @@ function PurchaseOrdersActiveRulesFlyout({
   onClose,
   filters,
   formatRules,
-  expandedKey,
-  onToggleExpanded,
   onClearFilter,
   onClearFormatRules,
-  filterEditor = null,
-  formatEditor = null,
+  filterEditorProps = {},
+  formatEditorProps = {},
 }) {
   const styles = useStyles();
+  const [expandedKey, setExpandedKey] = useState(null);
   const handleClose = useCallback(() => {
+    setExpandedKey(null);
     onClose?.();
   }, [onClose]);
   const handleOpenChange = useCallback((_, data) => {
     if (!data.open) handleClose();
   }, [handleClose]);
+  const handleToggleExpanded = useCallback((itemKey) => {
+    setExpandedKey((currentKey) => (currentKey === itemKey ? null : itemKey));
+  }, []);
+  const renderFilterEditor = useCallback((item) => (
+    <PurchaseOrdersActiveFilterEditor item={item} {...filterEditorProps} />
+  ), [filterEditorProps]);
+  const renderFormatEditor = useCallback((item) => (
+    <PurchaseOrdersActiveFormatEditor
+      item={item}
+      referenceColumns={item.scope === 'line' ? formatEditorProps.lineColumns : formatEditorProps.headerColumns}
+      onSetColumnFormatRules={
+        item.scope === 'line'
+          ? formatEditorProps.onSaveLineColumnFormatRules
+          : formatEditorProps.onSaveHeaderColumnFormatRules
+      }
+    />
+  ), [formatEditorProps]);
 
   return (
     <Drawer open={open} position="end" size="medium" onOpenChange={handleOpenChange}>
@@ -63,16 +82,16 @@ function PurchaseOrdersActiveRulesFlyout({
             <PurchaseOrdersActiveFiltersList
               filters={filters}
               expandedKey={expandedKey}
-              onToggleExpanded={onToggleExpanded}
+              onToggleExpanded={handleToggleExpanded}
               onClearFilter={onClearFilter}
-              filterEditor={filterEditor}
+              filterEditor={renderFilterEditor}
             />
             <PurchaseOrdersActiveFormatRulesList
               formatRules={formatRules}
               expandedKey={expandedKey}
-              onToggleExpanded={onToggleExpanded}
+              onToggleExpanded={handleToggleExpanded}
               onClearFormatRules={onClearFormatRules}
-              formatEditor={formatEditor}
+              formatEditor={renderFormatEditor}
             />
           </div>
         </DrawerBody>

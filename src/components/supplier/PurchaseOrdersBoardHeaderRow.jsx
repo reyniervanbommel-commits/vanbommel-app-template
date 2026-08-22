@@ -62,6 +62,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   collapsedColumnKeys = [],
   onToggleColumnCollapsed,
   items = [],
+  activeRulesControls,
 }) {
   return (
     <tr>
@@ -73,6 +74,8 @@ export default function PurchaseOrdersBoardHeaderRow({
         allSelected={Boolean(selection?.allSelected)}
         someSelected={Boolean(selection?.someSelected)}
         onToggleAll={selection?.onToggleAll}
+        hasActive={activeRulesControls?.hasActive}
+        onOpenFlyout={activeRulesControls?.onOpenFlyout}
       />
       {columns.map((column) => {
         const isSystemColumn = isProductImageColumn(column);

@@ -20,6 +20,7 @@ function PurchaseOrdersBoardTable({
   linkActions,
   selection,
   remarks,
+  activeRulesControls,
 }) {
   const { items, columns, lineColumns, boardView } = data;
   const {
@@ -229,6 +230,7 @@ function PurchaseOrdersBoardTable({
             lineColumns={lineColumns}
             stickyState={{ stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky }}
             collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
+            activeRulesControls={activeRulesControls}
           />
           {hasFilteredEmptyState ? (
             <tbody>

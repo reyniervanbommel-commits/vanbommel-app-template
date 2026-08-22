@@ -94,31 +94,33 @@ function PurchaseOrdersActiveFiltersList({
   const hasFilters = headerFilters.length > 0 || lineFilters.length > 0;
   const renderHeaderFilter = useCallback((item) => {
     const itemKey = `filter:${item.id}`;
+    const expanded = expandedKey === itemKey;
     return (
       <ActiveRuleRow
         key={item.id}
         item={item}
         itemKey={itemKey}
-        expanded={expandedKey === itemKey}
+        expanded={expanded}
         onToggleExpanded={onToggleExpanded}
         onClear={onClearFilter}
       >
-        {filterEditor}
+        {expanded && typeof filterEditor === 'function' ? filterEditor(item) : filterEditor}
       </ActiveRuleRow>
     );
   }, [expandedKey, filterEditor, onClearFilter, onToggleExpanded]);
   const renderLineFilter = useCallback((item) => {
     const itemKey = `filter:${item.id}`;
+    const expanded = expandedKey === itemKey;
     return (
       <ActiveRuleRow
         key={item.id}
         item={item}
         itemKey={itemKey}
-        expanded={expandedKey === itemKey}
+        expanded={expanded}
         onToggleExpanded={onToggleExpanded}
         onClear={onClearFilter}
       >
-        {filterEditor}
+        {expanded && typeof filterEditor === 'function' ? filterEditor(item) : filterEditor}
       </ActiveRuleRow>
     );
   }, [expandedKey, filterEditor, onClearFilter, onToggleExpanded]);

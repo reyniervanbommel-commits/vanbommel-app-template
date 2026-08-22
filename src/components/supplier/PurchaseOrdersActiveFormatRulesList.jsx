@@ -28,31 +28,33 @@ function PurchaseOrdersActiveFormatRulesList({
   const hasRules = headerRules.length > 0 || lineRules.length > 0;
   const renderHeaderRule = useCallback((item) => {
     const itemKey = `format:${item.id}`;
+    const expanded = expandedKey === itemKey;
     return (
       <ActiveRuleRow
         key={item.id}
         item={item}
         itemKey={itemKey}
-        expanded={expandedKey === itemKey}
+        expanded={expanded}
         onToggleExpanded={onToggleExpanded}
         onClear={onClearFormatRules}
       >
-        {formatEditor}
+        {expanded && typeof formatEditor === 'function' ? formatEditor(item) : formatEditor}
       </ActiveRuleRow>
     );
   }, [expandedKey, formatEditor, onClearFormatRules, onToggleExpanded]);
   const renderLineRule = useCallback((item) => {
     const itemKey = `format:${item.id}`;
+    const expanded = expandedKey === itemKey;
     return (
       <ActiveRuleRow
         key={item.id}
         item={item}
         itemKey={itemKey}
-        expanded={expandedKey === itemKey}
+        expanded={expanded}
         onToggleExpanded={onToggleExpanded}
         onClear={onClearFormatRules}
       >
-        {formatEditor}
+        {expanded && typeof formatEditor === 'function' ? formatEditor(item) : formatEditor}
       </ActiveRuleRow>
     );
   }, [expandedKey, formatEditor, onClearFormatRules, onToggleExpanded]);

@@ -1,7 +1,9 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
+import PurchaseOrdersActiveRulesFlyout from './PurchaseOrdersActiveRulesFlyout';
+import { usePurchaseOrdersActiveRules } from './usePurchaseOrdersActiveRules';
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
 import { useAuth } from '../../context/AuthContext';
@@ -44,6 +46,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
+  const [activeRulesOpen, setActiveRulesOpen] = useState(false);
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
   // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
@@ -95,6 +98,60 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     pageModel.lineColumnFormatRules,
     pageModel.lineColumnTextStyles,
     pageModel.lineColumnWidths,
+  ]);
+  const activeRules = usePurchaseOrdersActiveRules({
+    headerColumns: data.columns,
+    lineColumns: data.lineColumns,
+    filterByColumn: boardView.filterByColumn,
+    headerColumnFormatRules: formatting.headerColumnFormatRules,
+    lineColumnFormatRules: formatting.lineColumnFormatRules,
+    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
+  });
+  const onOpenFlyout = useCallback(() => setActiveRulesOpen(true), []);
+  const onCloseActiveRulesFlyout = useCallback(() => setActiveRulesOpen(false), []);
+  const onClearFilter = useCallback((item) => {
+    boardView.clearColumnFilter(item.columnKey);
+  }, [boardView]);
+  const onClearFormatRules = useCallback((item) => {
+    if (item.scope === 'line') {
+      pageModel.saveLineColumnFormatRules(item.columnKey, null);
+      return;
+    }
+    pageModel.saveHeaderColumnFormatRules(item.columnKey, null);
+  }, [pageModel]);
+  const activeRulesControls = useMemo(() => ({
+    hasActive: activeRules.hasActive,
+    onOpenFlyout,
+  }), [activeRules.hasActive, onOpenFlyout]);
+  const activeRulesFilterEditorProps = useMemo(() => ({
+    applyColumnFilter: boardView.applyColumnFilter,
+    setColumnColorFilter: boardView.setColumnColorFilter,
+    items: pageModel.orders,
+    headerColumns: data.columns,
+    filterByColumn: boardView.filterByColumn,
+    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
+    headerColumnFormatRules: formatting.headerColumnFormatRules,
+    lineColumnFormatRules: formatting.lineColumnFormatRules,
+  }), [
+    boardView.applyColumnFilter,
+    boardView.filterByColumn,
+    boardView.setColumnColorFilter,
+    data.columns,
+    formatting.headerColumnFormatRules,
+    formatting.lineColumnFormatRules,
+    pageModel.orders,
+    tableContext.datePeriodDisplayModes,
+  ]);
+  const activeRulesFormatEditorProps = useMemo(() => ({
+    headerColumns: data.columns,
+    lineColumns: data.lineColumns,
+    onSaveHeaderColumnFormatRules: pageModel.saveHeaderColumnFormatRules,
+    onSaveLineColumnFormatRules: pageModel.saveLineColumnFormatRules,
+  }), [
+    data.columns,
+    data.lineColumns,
+    pageModel.saveHeaderColumnFormatRules,
+    pageModel.saveLineColumnFormatRules,
   ]);
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
@@ -170,7 +227,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     linkActions,
     selection: tableContext.tableSelection,
     remarks: tableContext.remarks.tableState,
+    activeRulesControls,
   }), [
+    activeRulesControls,
     cellActions,
     columnActions,
     data,
@@ -221,6 +280,16 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
           </TrackChangesContext.Provider>
         </div>
       </BoardSplitView>
+      <PurchaseOrdersActiveRulesFlyout
+        open={activeRulesOpen}
+        onClose={onCloseActiveRulesFlyout}
+        filters={activeRules.filters}
+        formatRules={activeRules.formatRules}
+        onClearFilter={onClearFilter}
+        onClearFormatRules={onClearFormatRules}
+        filterEditorProps={activeRulesFilterEditorProps}
+        formatEditorProps={activeRulesFormatEditorProps}
+      />
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>
   );
