@@ -37,6 +37,9 @@ const {
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
+const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
+const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
+const refreshRunService = require('./RefreshRunService');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 const MAX_KEY_LENGTH = 64;
@@ -114,13 +117,40 @@ function isRefreshRunning(tableKey) {
   return refreshJobsByTable.has(key);
 }
 
-async function startRefresh(tableKey) {
+async function resolveCascadeEntityKeys() {
+  try {
+    const table = await getTableByKey('purchase-orders');
+    const lookups = await getLookups(table.id);
+    const targets = [...new Set(
+      lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean)
+    )];
+    return ['purchase-orders', ...targets];
+  } catch {
+    return ['purchase-orders'];
+  }
+}
+
+async function startRefresh(tableKey, options = {}) {
   const key = String(tableKey || '').trim();
   if (!key) throw Object.assign(new Error('Invalid table key'), { status: 400 });
+  const source = options.source === 'night' ? 'night' : 'manual';
+  const triggeredByUserId = options.triggeredByUserId || null;
   if (refreshJobsByTable.has(key)) {
+    if (source === 'night' && key === 'purchase-orders') {
+      const attached = refreshRunService.attachNight();
+      return {
+        started: false,
+        running: true,
+        attached: true,
+        runId: attached.runId,
+        progress: getRefreshProgress(key),
+      };
+    }
     return {
       started: false,
       running: true,
+      attached: false,
+      runId: refreshRunService.getActiveRunId(),
       progress: getRefreshProgress(key),
     };
   }
@@ -134,11 +164,24 @@ async function startRefresh(tableKey) {
     finishedAt: null,
     error: null,
   });
+  if (key === 'purchase-orders') {
+    await refreshRunService.beginPurchaseOrderRun({
+      source,
+      triggeredByUserId,
+      entityKeys: await resolveCascadeEntityKeys(),
+    });
+  }
   const job = (async () => {
     try {
       await refresh(key);
+      if (key === 'purchase-orders') {
+        await refreshRunService.finishSuccess();
+      }
     } catch (err) {
       logger.error('Achtergrond-refresh mislukt', { tableKey: key, error: err.message });
+      if (key === 'purchase-orders') {
+        await refreshRunService.failPurchaseOrders(err.message);
+      }
     } finally {
       refreshJobsByTable.delete(key);
     }
@@ -147,6 +190,8 @@ async function startRefresh(tableKey) {
   return {
     started: true,
     running: true,
+    attached: false,
+    runId: refreshRunService.getActiveRunId(),
     progress: getRefreshProgress(key),
   };
 }
@@ -1768,8 +1813,10 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     });
   }
 
-  if (!masterRows.length) return { saved: 0, watermark };
+  if (!masterRows.length) return { saved: 0, watermark, inserted: 0, updated: 0 };
 
+  let inserted = 0;
+  let updated = 0;
   const tx = new sql.Transaction(pool);
   await tx.begin();
   try {
@@ -1914,7 +1961,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
 
     // Master: één set-based MERGE (nieuw/gewijzigd-detectie via content_hash blijft identiek).
-    await new sql.Request(tx)
+    const mergeResult = await new sql.Request(tx)
       .input('tableId', sql.BigInt, table.id)
       .input('syncedAt', sql.DateTime2, refreshStart)
       .query(`
@@ -1932,8 +1979,12 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
           (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
            synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
           VALUES (@tableId, 'master', src.partition_key, src.record_key, ${MASTER_DETAIL_KEY}, src.data_json, src.modified_at,
-           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
+           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt)
+        OUTPUT $action AS merge_action, inserted.content_hash AS next_hash, deleted.content_hash AS prev_hash;
       `);
+    const mergeCounts = countMergeActions(mergeResult.recordset);
+    inserted = mergeCounts.inserted;
+    updated = mergeCounts.updated;
 
     if (uniqueDetailRows.length) {
       await new sql.Request(tx)
@@ -1984,7 +2035,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     throw err;
   }
 
-  return { saved: masterRows.length, watermark };
+  return { saved: masterRows.length, watermark, inserted, updated };
 }
 
 // ---------------------------------------------------------------------------
@@ -2012,6 +2063,7 @@ async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
         error: err.message,
       });
       refreshFailures.push(`${targetKey}: ${err.message}`);
+      refreshRunService.markEntityError(targetKey, `${targetKey}: ${err.message}`);
     }
   }
   if (refreshFailures.length) {
@@ -2045,6 +2097,7 @@ async function refresh(tableKey, options = {}) {
   const adapter = getFetchAdapter(table);
   const refreshStart = new Date();
   const refreshJobId = `tb-refresh-${table.id}-${refreshStart.getTime()}`;
+  refreshRunService.markEntityRunning(table.key);
   resetRefreshProgress(tableKey, {
     status: 'fetching',
     startedAt: refreshStart.toISOString(),
@@ -2160,10 +2213,14 @@ async function refresh(tableKey, options = {}) {
     const validRecords = records.filter((rec) => rec.partitionKey && rec.recordKey);
     for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
       const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
-      const { saved: chunkSaved, watermark: chunkWatermark } =
+      const { saved: chunkSaved, watermark: chunkWatermark, inserted: chunkInserted, updated: chunkUpdated } =
         await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId, skipLedger);
       if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
       saved += chunkSaved;
+      refreshRunService.updateEntity(table.key, {
+        inserted: chunkInserted,
+        updated: chunkUpdated,
+      });
       updateRefreshProgress(tableKey, {
         status: 'saving',
         fetched: records.length,
@@ -2172,8 +2229,9 @@ async function refresh(tableKey, options = {}) {
         totalToSave: records.length,
         sourceTotal,
         pagesFetched,
-        truncated: Boolean(truncated),
-      });
+      truncated: Boolean(truncated),
+    });
+      refreshRunService.setEntityProgress(table.key, { fetched: records.length, saved });
     }
 
     const removedMasters = await pool.request()
@@ -2219,6 +2277,10 @@ async function refresh(tableKey, options = {}) {
       retainedKeys = retentionResult.retainedKeys || new Set();
       retainedTotal = await countSyncRetainedMasters(pool, table.id);
     }
+
+    refreshRunService.updateEntity(table.key, {
+      deleted: countSoftDeleted(removedMasters.recordset, retainedKeys),
+    });
 
     for (const row of removedMasters.recordset || []) {
       if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
@@ -2309,6 +2371,7 @@ async function refresh(tableKey, options = {}) {
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
 
+    refreshRunService.markEntityDone(table.key);
     const lookupWarnings = await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
@@ -3315,7 +3378,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // De ledger-read hangt af van sync-state + viewed en is daarom als geketende promise in
   // hetzelfde parallelle blok opgenomen.
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
-  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
+  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id, userId));
   // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
   // zodat de frontend na deze read exact de bijbehorende revision opslaat.
   const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
@@ -3341,9 +3404,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     : Promise.resolve([]);
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
-    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
-    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
-    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
     if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
     try {
       const ledgerResult = await time('tb_ledger', () => pool.request()
@@ -3403,8 +3464,8 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
-  const useViewedBaseline = lastViewedMs !== null && (lastSyncedMs === null || lastViewedMs >= lastSyncedMs);
-  const baselineMs = useViewedBaseline ? lastViewedMs : lastSyncedMs;
+  const useViewedBaseline = usesViewedBaseline(lastViewedAt);
+  const baselineMs = resolveLedgerSinceMs({ lastViewedAt, lastFullSyncAt });
   const compareAgainstBaseline = (valueMs) => {
     if (valueMs === null || baselineMs === null) return false;
     return useViewedBaseline ? valueMs > baselineMs : valueMs >= baselineMs;
@@ -3737,7 +3798,7 @@ function invalidateLookupEnrichmentCache(tableId = null) {
 
 // Supplier-scoping gebeurt in de route met assertSupplierPurchaseOrderRow (zelfde guard als de
 // andere rij-gerichte endpoints); deze functie gaat ervan uit dat de toegang al is gecontroleerd.
-async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
+async function readRowDetails({ tableKey, partitionKey, recordKey, userId = null } = {}) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
   const recordFilter = { partitionKey: String(partitionKey), recordKey: String(recordKey) };
@@ -3782,13 +3843,11 @@ async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
 
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([
-      getSyncState(table.id), getLastViewedAt(table.id),
+      getSyncState(table.id), getLastViewedAt(table.id, userId),
     ]);
-    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
-    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
-    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
     if (sinceMs === null) return { rows: [], hasLedgerWindow: false, sinceMs: null, useViewedBaseline: false };
-    const useViewedBaseline = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs);
+    const useViewedBaseline = usesViewedBaseline(viewedAtRaw);
     try {
       const result = await pool.request()
         .input('tableId', sql.BigInt, table.id)
@@ -3856,16 +3915,17 @@ async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
 // ---------------------------------------------------------------------------
 // Nieuw-detectie op basis van admin-view-state (globale baseline voor alle gebruikers)
 // ---------------------------------------------------------------------------
-async function getLastViewedAt(tableId) {
+async function getLastViewedAt(tableId, userId) {
+  if (!userId) return null;
   const pool = await getPool();
   const result = await pool.request()
     .input('tableId', sql.BigInt, tableId)
+    .input('userId', sql.Int, userId)
     .query(`
-      SELECT MAX(vs.last_viewed_at) AS last_viewed_at
+      SELECT vs.last_viewed_at
       FROM dbo.tb_user_view_state vs WITH (NOLOCK)
-      INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
       WHERE vs.table_id = @tableId
-        AND u.role = 'admin'
+        AND vs.user_id = @userId
     `);
   return result.recordset[0]?.last_viewed_at || null;
 }
@@ -3910,10 +3970,9 @@ async function getRevisionByTable(table, { userId = null, supplierAccount = null
         (SELECT MAX(updated_at) FROM dbo.tb_columns WITH (NOLOCK) WHERE table_id = @tableId) AS maxColumnsAt,
         (SELECT COUNT(*) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS exclusionCount,
         (SELECT MAX(excluded_at) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS maxExclusionAt,
-        (SELECT MAX(vs.last_viewed_at)
+        (SELECT vs.last_viewed_at
            FROM dbo.tb_user_view_state vs WITH (NOLOCK)
-           INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
-          WHERE vs.table_id = @tableId AND u.role = 'admin') AS adminViewedAt,
+          WHERE vs.table_id = @tableId AND vs.user_id = @userId) AS userViewedAt,
         (SELECT MAX(updated_at) FROM dbo.user_board_settings WITH (NOLOCK)
           WHERE user_id = @userId AND board_key = @boardKey) AS userBoardSettingsAt,
         (SELECT MAX(updated_at) FROM dbo.app_settings WITH (NOLOCK)) AS settingsAt
@@ -3928,7 +3987,7 @@ async function getRevisionByTable(table, { userId = null, supplierAccount = null
     maxColumnsAt: revisionPartValue(row.maxColumnsAt),
     exclusionCount: Number(row.exclusionCount) || 0,
     maxExclusionAt: revisionPartValue(row.maxExclusionAt),
-    adminViewedAt: revisionPartValue(row.adminViewedAt),
+    userViewedAt: revisionPartValue(row.userViewedAt),
     userBoardSettingsAt: revisionPartValue(row.userBoardSettingsAt),
     settingsAt: revisionPartValue(row.settingsAt),
     supplierAccount: supplierAccount || null,

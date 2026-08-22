@@ -32,7 +32,6 @@ const useStyles = makeStyles({
 export default function PurchaseOrdersPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const { progress: refreshProgress, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress();
   const pageModel = usePurchaseOrdersPage();
   const {
     orders,
@@ -74,6 +73,7 @@ export default function PurchaseOrdersPage() {
     setDatePeriodDisplayMode,
   } = pageModel;
   const isAdmin = user?.role === 'admin';
+  const { progress: refreshProgress, run: refreshRun, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress({ enabled: isAdmin });
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
   const isSupplier = user?.role === 'supplier';
   const boardView = usePurchaseOrderBoardView({
@@ -277,6 +277,7 @@ export default function PurchaseOrdersPage() {
         refreshState={{
           refreshing,
           refreshProgress,
+          refreshRun,
           onRefresh: handleRefresh,
         }}
         onExportExcel={handleExportExcel}

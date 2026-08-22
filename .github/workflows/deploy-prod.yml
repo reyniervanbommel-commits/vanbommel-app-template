@@ -60,6 +60,9 @@ jobs:
             --secrets \
               sql-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/sql-connection-string-prod,identityref:system" \
               session-secret="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/session-secret-prod,identityref:system" \
+              night-refresh-token="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/night-refresh-token-prod,identityref:system" \
+              acs-connection-string="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/acs-connection-string-prod,identityref:system" \
+              acs-from-email="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/acs-from-email-prod,identityref:system" \
               d365-base-url="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-BASE-URL,identityref:system" \
               d365-tenant-id="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-TENANT-ID,identityref:system" \
               d365-client-id="keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/D365-ODATA-PROD-CLIENT-ID,identityref:system" \
@@ -72,6 +75,9 @@ jobs:
             --set-env-vars \
               SQL_CONNECTION_STRING=secretref:sql-connection-string \
               SESSION_SECRET=secretref:session-secret \
+              NIGHT_REFRESH_TOKEN=secretref:night-refresh-token \
+              ACS_CONNECTION_STRING=secretref:acs-connection-string \
+              ACS_FROM_EMAIL=secretref:acs-from-email \
               APP_ENV=production \
               D365_ODATA_BASE_URL=secretref:d365-base-url \
               D365_ODATA_TENANT_ID=secretref:d365-tenant-id \

@@ -17,6 +17,8 @@ const { requireRole } = require('../middleware/auth');
 const { getAppBaseUrl } = require('../utils/appEnvironment');
 const { getSecretExpiryStatus } = require('../utils/secretExpiry');
 const { expandRetentionSettings } = require('../utils/syncRetentionSettings');
+const refreshRunService = require('../services/RefreshRunService');
+const { parseAlertEmails, serializeAlertEmails } = require('../utils/alertEmails');
 
 function getPool() {
   return getSqlPool();
@@ -445,6 +447,38 @@ router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) =>
     res.json({ success: true, config });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const raw = await settingsService.getAsync(refreshRunService.ALERT_EMAILS_KEY, '');
+    res.json({ emails: parseAlertEmails(raw) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const serialized = serializeAlertEmails(req.body?.emails ?? req.body?.value ?? '');
+    await settingsService.set(refreshRunService.ALERT_EMAILS_KEY, serialized, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_D365_REFRESH_ALERT_EMAILS', 'app_settings', null, {
+      count: parseAlertEmails(serialized).length,
+    });
+    res.json({ success: true, emails: parseAlertEmails(serialized) });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const runs = await refreshRunService.listRuns({ limit: req.query.limit });
+    res.json({ runs });
+  } catch (err) {
     next(err);
   }
 });

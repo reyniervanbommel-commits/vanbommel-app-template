@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { Button, Spinner, makeStyles } from '@fluentui/react-components';
+import { Button, ProgressBar, Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -9,51 +9,53 @@ const useStyles = makeStyles({
     gap: '12px',
     minHeight: '32px',
   },
+  barWrap: {
+    minWidth: '120px',
+  },
+  label: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: 'nowrap',
+  },
 });
 
-function formatCounter(value, total) {
-  const safeValue = Number(value) || 0;
-  const hasTotal = Number.isFinite(total) && total > 0;
-  return `${safeValue.toLocaleString()}/${hasTotal ? total.toLocaleString() : '?'}`;
-}
-
-function buildRefreshCounters(progress) {
-  if (!progress) {
-    return {
-      fetchCounter: '0/?',
-      saveCounter: '0/?',
-    };
-  }
-  const fetched = Number(progress.fetched) || 0;
-  const totalToFetch = Number(progress.totalToFetch);
-  const saved = Number(progress.saved) || 0;
-  const totalToSave = Number(progress.totalToSave);
-  const effectiveSaveTotal = Number.isFinite(totalToSave) && totalToSave > 0
-    ? totalToSave
-    : totalToFetch;
-  return {
-    fetchCounter: formatCounter(fetched, totalToFetch),
-    saveCounter: formatCounter(saved, effectiveSaveTotal),
-  };
-}
-
-function PurchaseOrderRefreshProgress({ progress, refreshing, onRefresh, canRefresh = true }) {
+function PurchaseOrderRefreshProgress({
+  progress,
+  run,
+  refreshing,
+  onRefresh,
+  canRefresh = true,
+  showProgress = true,
+}) {
   const styles = useStyles();
-  const counters = useMemo(() => buildRefreshCounters(progress), [progress]);
+  const overall = Number(run?.overall) || 0;
+  const label = run?.currentLabel || '';
+  const showLive = Boolean(showProgress && refreshing);
+
+  const icon = useMemo(() => {
+    if (showLive) return <Spinner size="tiny" />;
+    return <ArrowClockwiseRegular />;
+  }, [showLive]);
 
   return (
     <div className={styles.root}>
       <Button
         appearance="primary"
-        icon={refreshing ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
+        icon={icon}
         onClick={onRefresh}
         disabled={refreshing || !canRefresh}
         title={canRefresh ? 'Refresh data from D365' : 'Only admin can refresh'}
       >
-        {refreshing
-          ? `D365F&O ${counters.fetchCounter} | Save ${counters.saveCounter}`
-          : 'D365F&O'}
+        D365F&O
       </Button>
+      {showLive ? (
+        <>
+          <div className={styles.barWrap}>
+            <ProgressBar value={overall} />
+          </div>
+          <Text className={styles.label}>{label || progress?.status || 'Running'}</Text>
+        </>
+      ) : null}
     </div>
   );
 }

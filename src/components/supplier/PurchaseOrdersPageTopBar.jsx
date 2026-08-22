@@ -142,6 +142,7 @@ export default function PurchaseOrdersPageTopBar({
   const {
     refreshing,
     refreshProgress,
+    refreshRun,
     onRefresh,
   } = refreshState;
   const hasError = Boolean(error);
@@ -199,9 +200,11 @@ export default function PurchaseOrdersPageTopBar({
           {isStaff ? (
             <PurchaseOrderRefreshProgress
               progress={refreshProgress}
+              run={refreshRun}
               refreshing={refreshing}
               onRefresh={onRefresh}
               canRefresh={isAdmin}
+              showProgress={isAdmin}
             />
           ) : null}
           {error ? (
@@ -250,7 +253,7 @@ export default function PurchaseOrdersPageTopBar({
           removedCount={removedCount}
           markViewed={markViewed}
           markingViewed={markingViewed}
-          canMarkViewed={isAdmin}
+          canMarkViewed
           activityFilter={activityFilter}
           toggleActivityFilter={toggleActivityFilter}
         />

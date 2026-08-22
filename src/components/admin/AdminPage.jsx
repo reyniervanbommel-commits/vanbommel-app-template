@@ -7,6 +7,7 @@ import {
   Mail24Regular,
   Flowchart24Regular,
   History24Regular,
+  ArrowClockwise24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
@@ -15,6 +16,8 @@ import AdminODataSettings from './AdminODataSettings';
 import { AdminDataModel } from './datamodel';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 import AdminTrackChangesSettings from './AdminTrackChangesSettings';
+import AdminD365Refresh from './AdminD365Refresh';
+import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
   page: { display: 'flex', minHeight: '100%' },
@@ -38,6 +41,8 @@ const useStyles = makeStyles({
 
 export default function AdminPage() {
   const styles = useStyles();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [adminTab, setAdminTab] = useState('users');
 
   const handleTabUsers = useCallback(() => setAdminTab('users'), []);
@@ -46,6 +51,7 @@ export default function AdminPage() {
   const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
   const handleTabTrackChanges = useCallback(() => setAdminTab('track-changes'), []);
+  const handleTabD365Refresh = useCallback(() => setAdminTab('d365-refresh'), []);
 
   return (
     <div className={styles.page}>
@@ -86,6 +92,14 @@ export default function AdminPage() {
           active={adminTab === 'track-changes'}
           onClick={handleTabTrackChanges}
         />
+        {isAdmin ? (
+          <SidebarNavItem
+            icon={ArrowClockwise24Regular}
+            label="D365 refresh"
+            active={adminTab === 'd365-refresh'}
+            onClick={handleTabD365Refresh}
+          />
+        ) : null}
       </aside>
 
       <div className={styles.content}>
@@ -95,6 +109,7 @@ export default function AdminPage() {
         {adminTab === 'datamodel' && <AdminDataModel />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
         {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
+        {isAdmin && adminTab === 'd365-refresh' && <AdminD365Refresh />}
       </div>
     </div>
   );

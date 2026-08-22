@@ -24,6 +24,9 @@ const { rccpAccess } = require('./middleware/rccpAccess');
 const { createMediaRouter } = require('./routes/media');
 const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
 const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
+const { requireNightRefreshToken } = require('./utils/nightRefreshToken');
+const refreshRunService = require('./services/RefreshRunService');
+const dataService = require('./services/TableDataService');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
@@ -148,6 +151,30 @@ app.use((req, res, next) => {
   });
 });
 
+const nightRefreshPostLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Too many attempts. Try again in one minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/internal/night-refresh', nightRefreshPostLimiter, requireNightRefreshToken, async (req, res, next) => {
+  try {
+    const result = await dataService.startRefresh('purchase-orders', { source: 'night' });
+    if (result.attached) {
+      return res.status(202).json({ attached: true, runId: result.runId });
+    }
+    return res.status(202).json({ attached: false, runId: result.runId, running: true });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.get('/api/internal/night-refresh/status', requireNightRefreshToken, (_req, res) => {
+  res.json(refreshRunService.getNightStatus());
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
 app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
@@ -216,6 +243,13 @@ const PORT = process.env.PORT || 3008;
 // Non-fataal: bij een DB-hapering tijdens boot loggen we en starten we alsnog; de modules
 // verbinden dan lazy bij de eerste query (met standaard pool-config als fallback).
 initSqlPool()
+  .then(async () => {
+    try {
+      await refreshRunService.interruptRunningRowsOnProcessStart();
+    } catch (err) {
+      logger.warn('Refresh-run interrupt bij process-start mislukt', { error: err && err.message ? err.message : String(err) });
+    }
+  })
   .catch((err) => logger.error('MSSQL-pool init faalde; val terug op lazy connect', { error: err && err.message ? err.message : String(err) }))
   .finally(() => {
     app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
