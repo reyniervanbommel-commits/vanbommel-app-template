@@ -3,6 +3,20 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import PurchaseOrdersActiveRulesFlyout from './PurchaseOrdersActiveRulesFlyout';
 
+vi.mock('./PurchaseOrdersActiveFormatEditor', () => ({
+  default: ({ item, referenceColumns = [], onSetColumnFormatRules }) => (
+    <div data-testid={`format-editor-${item.scope}`}>
+      <span>{referenceColumns.map((column) => column.key).join(',')}</span>
+      <button
+        type="button"
+        onClick={() => onSetColumnFormatRules?.(item.columnKey, { target: 'cell', rules: [] })}
+      >
+        Save {item.scope}
+      </button>
+    </div>
+  ),
+}));
+
 const emptyRules = { header: [], line: [] };
 
 function renderFlyout(overrides = {}) {
@@ -11,12 +25,8 @@ function renderFlyout(overrides = {}) {
     onClose: vi.fn(),
     filters: emptyRules,
     formatRules: emptyRules,
-    expandedKey: null,
-    onToggleExpanded: vi.fn(),
     onClearFilter: vi.fn(),
     onClearFormatRules: vi.fn(),
-    filterEditor: null,
-    formatEditor: null,
     ...overrides,
   };
 
@@ -60,5 +70,68 @@ describe('PurchaseOrdersActiveRulesFlyout', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
     expect(onClearFilter).toHaveBeenCalledWith(filterItem);
+  });
+
+  it('mounts the header format editor after expanding a header rule', () => {
+    const headerRule = {
+      id: 'header:status',
+      columnKey: 'status',
+      columnLabel: 'Status',
+      scope: 'header',
+      column: { key: 'status', label: 'Status' },
+      summary: '1 rule',
+      ruleSet: { target: 'row', rules: [{ op: '=', value: 'Open' }] },
+    };
+    const onSaveHeaderColumnFormatRules = vi.fn();
+
+    renderFlyout({
+      formatRules: { header: [headerRule], line: [] },
+      formatEditorProps: {
+        headerColumns: [{ key: 'status' }, { key: 'vendor' }],
+        lineColumns: [{ key: 'qty' }],
+        onSaveHeaderColumnFormatRules,
+        onSaveLineColumnFormatRules: vi.fn(),
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Status' }));
+
+    expect(screen.getByTestId('format-editor-header').textContent).toContain('status,vendor');
+    fireEvent.click(screen.getByRole('button', { name: 'Save header' }));
+    expect(onSaveHeaderColumnFormatRules).toHaveBeenCalledWith('status', { target: 'cell', rules: [] });
+  });
+
+  it('routes line format editor saves and clear actions to line callbacks', () => {
+    const lineRule = {
+      id: 'line:qty',
+      columnKey: 'qty',
+      columnLabel: 'Qty',
+      scope: 'line',
+      column: { key: 'qty', label: 'Qty' },
+      summary: '1 rule',
+      ruleSet: { target: 'cell', rules: [{ op: '>', value: '10' }] },
+    };
+    const onClearFormatRules = vi.fn();
+    const onSaveLineColumnFormatRules = vi.fn();
+
+    renderFlyout({
+      formatRules: { header: [], line: [lineRule] },
+      onClearFormatRules,
+      formatEditorProps: {
+        headerColumns: [{ key: 'status' }],
+        lineColumns: [{ key: 'qty' }, { key: 'itemId' }],
+        onSaveHeaderColumnFormatRules: vi.fn(),
+        onSaveLineColumnFormatRules,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Qty' }));
+
+    expect(screen.getByTestId('format-editor-line').textContent).toContain('qty,itemId');
+    fireEvent.click(screen.getByRole('button', { name: 'Save line' }));
+    expect(onSaveLineColumnFormatRules).toHaveBeenCalledWith('qty', { target: 'cell', rules: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(onClearFormatRules).toHaveBeenCalledWith(lineRule);
   });
 });

@@ -100,16 +100,8 @@ export function usePurchaseOrdersActiveRules({
       payloadKey: 'filter',
       datePeriodDisplayModes,
     }),
-    line: buildActiveItems({
-      columns: lineColumns,
-      scope: 'line',
-      sourceByColumn: filterByColumn,
-      isActive: isColumnFilterActive,
-      summarize: summarizeColumnFilter,
-      payloadKey: 'filter',
-      datePeriodDisplayModes,
-    }),
-  }), [datePeriodDisplayModes, filterByColumn, headerColumns, lineColumns]);
+    line: [],
+  }), [datePeriodDisplayModes, filterByColumn, headerColumns]);
 
   const formatRules = useMemo(() => ({
     header: buildActiveItems({

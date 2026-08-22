@@ -53,7 +53,7 @@ describe('usePurchaseOrdersActiveRules', () => {
     expect(result.current.formatRules).toEqual({ header: [], line: [] });
   });
 
-  it('splits header vs line filters and format rules', () => {
+  it('keeps filters header-only while keeping header and line format rules', () => {
     const { result } = renderHook(() => usePurchaseOrdersActiveRules({
       headerColumns,
       lineColumns,
@@ -64,13 +64,15 @@ describe('usePurchaseOrdersActiveRules', () => {
       headerColumnFormatRules: {
         status: { target: 'row', rules: [{ op: '=', value: 'Open', color: '#c02f64' }] },
       },
-      lineColumnFormatRules: {},
+      lineColumnFormatRules: {
+        qty: { target: 'cell', rules: [{ op: '>', value: '10', color: '#fde7e9' }] },
+      },
     }));
     expect(result.current.hasActive).toBe(true);
     expect(result.current.filters.header.map((item) => item.columnKey)).toEqual(['vendor']);
-    expect(result.current.filters.line.map((item) => item.columnKey)).toEqual(['qty']);
+    expect(result.current.filters.line).toEqual([]);
     expect(result.current.formatRules.header.map((item) => item.columnKey)).toEqual(['status']);
-    expect(result.current.formatRules.line).toEqual([]);
+    expect(result.current.formatRules.line.map((item) => item.columnKey)).toEqual(['qty']);
   });
 
   it('ignores empty oneOf filters', () => {

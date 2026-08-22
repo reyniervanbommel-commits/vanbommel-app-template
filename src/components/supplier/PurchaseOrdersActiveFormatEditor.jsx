@@ -1,6 +1,5 @@
 import React, { memo, useCallback } from 'react';
 import { useAppToast } from '../../hooks/useAppToast';
-import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
 import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesMenuDraft';
 import PurchaseOrderColumnFormatRulesSection from './PurchaseOrderColumnFormatRulesSection';
 
@@ -23,14 +22,6 @@ function PurchaseOrdersActiveFormatEditor({
     columnFormatRuleSet: item?.ruleSet,
     onPersist,
   });
-  const { handleClearFormatRules } = useColumnFormatRulesMenuActions({
-    canSetColumnFormatRules: typeof onSetColumnFormatRules === 'function',
-    columnKey,
-    formatRulesDraft,
-    onSetColumnFormatRules,
-    onError: notifyError,
-  });
-  void handleClearFormatRules;
 
   return (
     <PurchaseOrderColumnFormatRulesSection

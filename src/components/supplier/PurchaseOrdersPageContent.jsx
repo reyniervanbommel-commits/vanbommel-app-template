@@ -119,10 +119,10 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     }
     pageModel.saveHeaderColumnFormatRules(item.columnKey, null);
   }, [pageModel]);
-  const activeRulesControls = useMemo(() => ({
+  const activeRulesControls = useMemo(() => (isStaff ? {
     hasActive: activeRules.hasActive,
     onOpenFlyout,
-  }), [activeRules.hasActive, onOpenFlyout]);
+  } : undefined), [activeRules.hasActive, isStaff, onOpenFlyout]);
   const activeRulesFilterEditorProps = useMemo(() => ({
     applyColumnFilter: boardView.applyColumnFilter,
     setColumnColorFilter: boardView.setColumnColorFilter,
@@ -142,14 +142,14 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     pageModel.orders,
     tableContext.datePeriodDisplayModes,
   ]);
-  const activeRulesFormatEditorProps = useMemo(() => ({
+  const activeRulesFormatEditorProps = useMemo(() => (isStaff ? {
     headerColumns: data.columns,
     lineColumns: data.lineColumns,
     onSaveHeaderColumnFormatRules: pageModel.saveHeaderColumnFormatRules,
     onSaveLineColumnFormatRules: pageModel.saveLineColumnFormatRules,
-  }), [
+  } : undefined), [
     data.columns,
-    data.lineColumns,
+    data.lineColumns, isStaff,
     pageModel.saveHeaderColumnFormatRules,
     pageModel.saveLineColumnFormatRules,
   ]);
