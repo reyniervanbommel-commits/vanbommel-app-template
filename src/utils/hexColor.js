@@ -46,6 +46,22 @@ function parseRgb(hex) {
   ];
 }
 
+function toHexByte(value) {
+  return Math.min(255, Math.max(0, value)).toString(16).padStart(2, '0');
+}
+
+export function blendHexToOpaque(foreground, background = '#ffffff') {
+  const color = normalizeHexColor(foreground);
+  if (!color) return '';
+  if (color.length === 7) return color;
+  const backdrop = getRgbHex(background) || '#ffffff';
+  const [red, green, blue] = parseRgb(color);
+  const [backRed, backGreen, backBlue] = parseRgb(backdrop);
+  const alpha = Number.parseInt(color.slice(7, 9), 16) / 255;
+  const blend = (channel, back) => Math.round(channel * alpha + back * (1 - alpha));
+  return `#${toHexByte(blend(red, backRed))}${toHexByte(blend(green, backGreen))}${toHexByte(blend(blue, backBlue))}`;
+}
+
 export function getContrastTextColor(backgroundColor) {
   const color = normalizeHexColor(backgroundColor);
   if (!color) return LIGHT_TEXT;

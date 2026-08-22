@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HEX_COLOR_PATTERN,
   applyOpacity,
+  blendHexToOpaque,
   getContrastTextColor,
   getOpacityPercent,
   getRgbHex,
@@ -47,5 +48,11 @@ describe('hexColor', () => {
     expect(getContrastTextColor('#e2445c')).toBe('#ffffff');
     expect(getContrastTextColor('#ffcb00')).toBe('#323130');
     expect(getContrastTextColor('#e2445c1a')).toBe('#323130');
+  });
+
+  it('mengt een doorzichtige kleur tot een ondoorzichtige tint op wit', () => {
+    expect(blendHexToOpaque('#e2445c')).toBe('#e2445c');
+    expect(blendHexToOpaque('#e2445cb3')).toBe('#eb7c8d');
+    expect(blendHexToOpaque('niet-hex')).toBe('');
   });
 });
