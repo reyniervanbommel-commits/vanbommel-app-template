@@ -1,20 +1,23 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 
 const POLL_INTERVAL_MS = 1250;
 const MAX_WAIT_MS = 15 * 60 * 1000;
 
 /**
- * Pollt de server-side D365 refreshvoortgang.
+ * Pollt D365-refreshvoortgang. Admin-only: één check bij mount, daarna alleen
+ * terwijl een run loopt. Hangt mee aan een Start vanuit Settings of night job.
  *
- * Input: geen.
- * Output: progress, startProgress, finishProgress.
+ * @param {{ enabled?: boolean, onAttachedRunFinishedRef?: { current: null | (() => void) } }} options
+ * @returns {{ progress: object|null, run: object|null, running: boolean, startProgress: Function, finishProgress: Function, waitForCompletion: Function }}
  */
-export function usePurchaseOrderRefreshProgress({ enabled = true } = {}) {
+export function usePurchaseOrderRefreshProgress({ enabled = true, onAttachedRunFinishedRef } = {}) {
   const [progress, setProgress] = useState(null);
   const [run, setRun] = useState(null);
   const [running, setRunning] = useState(false);
   const lastKnownStateRef = useRef({ progress: null, run: null, running: false });
+  const waitLoopRef = useRef(null);
+  const mountedRef = useRef(true);
 
   const setKnownState = useCallback((nextProgress, nextRunning, nextRun = null) => {
     setProgress(nextProgress);
@@ -81,7 +84,7 @@ export function usePurchaseOrderRefreshProgress({ enabled = true } = {}) {
     try {
       await loadProgress();
     } catch {
-      // Laat de laatst bekende voortgang staan als de eindpoll faalt.
+      // Keep last known progress if the final poll fails.
     } finally {
       const last = lastKnownStateRef.current;
       setKnownState(last.progress, false, last.run);
@@ -89,22 +92,57 @@ export function usePurchaseOrderRefreshProgress({ enabled = true } = {}) {
   }, [loadProgress, setKnownState]);
 
   const waitForCompletion = useCallback(async () => {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < MAX_WAIT_MS) {
-      const state = await loadProgress();
-      const status = String(state?.progress?.status || '').toLowerCase();
-      if ((status === 'done' || status === 'error') && !state?.running) {
-        setKnownState(state?.progress || null, false, state?.run || null);
-        return state?.progress || null;
+    if (waitLoopRef.current) return waitLoopRef.current;
+    const loop = (async () => {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        if (!mountedRef.current) return lastKnownStateRef.current.progress;
+        const state = await loadProgress();
+        const status = String(state?.progress?.status || '').toLowerCase();
+        if ((status === 'done' || status === 'error') && !state?.running) {
+          setKnownState(state?.progress || null, false, state?.run || null);
+          return state?.progress || null;
+        }
+        if (!state?.running && status !== 'fetching' && status !== 'saving') {
+          setKnownState(state?.progress || null, false, state?.run || null);
+          return state?.progress || null;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
       }
-      if (!state?.running && status !== 'fetching' && status !== 'saving') {
-        setKnownState(state?.progress || null, false, state?.run || null);
-        return state?.progress || null;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
+      throw new Error('D365 refresh took too long and was stopped');
+    })();
+    waitLoopRef.current = loop;
+    try {
+      return await loop;
+    } finally {
+      waitLoopRef.current = null;
     }
-    throw new Error('D365 refresh took too long and was stopped');
   }, [loadProgress, setKnownState]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await loadProgress();
+        if (cancelled || !state.running) return;
+        await waitForCompletion();
+        if (!cancelled) onAttachedRunFinishedRef?.current?.();
+      } catch {
+        // Board stays usable if attach/poll fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, loadProgress, onAttachedRunFinishedRef, waitForCompletion]);
 
   return useMemo(() => ({
     progress,

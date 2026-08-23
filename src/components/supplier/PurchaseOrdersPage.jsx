@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { makeStyles } from '@fluentui/react-components';
 import PurchaseOrdersPageContent from './PurchaseOrdersPageContent';
 import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
@@ -72,7 +72,8 @@ export default function PurchaseOrdersPage() {
     setDatePeriodDisplayMode,
   } = pageModel;
   const isAdmin = user?.role === 'admin';
-  const { progress: refreshProgress, run: refreshRun, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress({ enabled: isAdmin });
+  const onAttachedRunFinishedRef = useRef(null);
+  const { running: progressRunning, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress({ enabled: isAdmin, onAttachedRunFinishedRef });
   const isStaff = user?.role === 'admin' || user?.role === 'employee';
   const isSupplier = user?.role === 'supplier';
   const boardView = usePurchaseOrderBoardView({
@@ -93,6 +94,10 @@ export default function PurchaseOrdersPage() {
   });
   const { selection, tableSelection, handleDeleteSelected } = usePurchaseOrdersSelection({ orders, visibleOrders: boardView.processedItems, deleteRows });
   const hiddenRows = usePurchaseOrderHiddenRows({ onRestored: reload, enabled: isStaff });
+  onAttachedRunFinishedRef.current = () => {
+    reloadAfterRefresh();
+    hiddenRows.reload();
+  };
   const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
     orders,
     loading,
@@ -187,10 +192,11 @@ export default function PurchaseOrdersPage() {
     });
   }, [boardView.processedItems, boardView.allItems, visibleHeaderColumns]);
 
-  const relativeSynced = formatSyncedAt(syncedAt);
+  const lastRefreshedLabel = formatSyncedAt(syncedAt);
+  const isRefreshing = refreshing || progressRunning;
   const contentStatus = useMemo(
-    () => ({ loading, refreshing, orderCount: orders.length }),
-    [loading, orders.length, refreshing]
+    () => ({ loading, refreshing: isRefreshing, orderCount: orders.length }),
+    [loading, orders.length, isRefreshing]
   );
   const tableContext = useMemo(() => ({
     pageModel,
@@ -247,7 +253,8 @@ export default function PurchaseOrdersPage() {
         headerState={{
           isStaff,
           hasCache,
-          relativeSynced,
+          lastRefreshedLabel,
+          visibleCount: boardView.processedItems.length,
           total,
         }}
         activityState={{
@@ -273,9 +280,7 @@ export default function PurchaseOrdersPage() {
           restoreRows: hiddenRows.restoreRows,
         }}
         refreshState={{
-          refreshing,
-          refreshProgress,
-          refreshRun,
+          refreshing: isRefreshing,
           onRefresh: handleRefresh,
         }}
         onExportExcel={handleExportExcel}

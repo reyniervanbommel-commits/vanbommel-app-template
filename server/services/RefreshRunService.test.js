@@ -96,6 +96,7 @@ describe('RefreshRunService', () => {
     const run = await refreshRunService.failPurchaseOrders('PO fetch failed');
     expect(run.status).toBe('error');
     expect(run.entities.find((entity) => entity.tableKey === 'purchase-orders').status).toBe('error');
+    expect(run.entities.find((entity) => entity.tableKey === 'vendors').status).toBe('interrupted');
     expect(refreshRunService.shouldSendNightMail(run)).toBe(false);
   });
 
@@ -112,6 +113,7 @@ describe('RefreshRunService', () => {
 
   it('stript stacks uit error_text', () => {
     expect(refreshRunService.stripErrorText('boom\n    at foo (a.js:1:1)')).toBe('boom');
+    expect(refreshRunService.stripErrorText('x'.repeat(600)).length).toBe(500);
   });
 
   it('serialiseert board vs full progress zonder entities in board', () => {

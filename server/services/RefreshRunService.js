@@ -9,7 +9,7 @@ const emailService = require('./EmailService');
 const { parseAlertEmails } = require('../utils/alertEmails');
 
 const ALERT_EMAILS_KEY = 'NIGHT_REFRESH_ALERT_EMAILS';
-const MAX_ERROR_TEXT = 800;
+const MAX_ERROR_TEXT = 500;
 const HISTORY_LIMIT_MAX = 20;
 
 const ENTITY_LABELS = {
@@ -382,6 +382,21 @@ async function beginPurchaseOrderRun({ source = 'manual', triggeredByUserId = nu
   return run;
 }
 
+function closeLeftoverEntities(run, status) {
+  const finishedAt = run.finished_at;
+  (run.entities || []).forEach((entity) => {
+    if (entity.status !== 'queued' && entity.status !== 'running') return;
+    if (status === 'interrupted') {
+      entity.status = 'interrupted';
+    } else if (entity.status === 'running') {
+      entity.status = status === 'error' ? 'error' : 'done';
+    } else {
+      entity.status = 'interrupted';
+    }
+    entity.finished_at = entity.finished_at || finishedAt;
+  });
+}
+
 async function finishRun({ status, errorText = null } = {}) {
   const run = activeRun;
   if (!run) return lastRun;
@@ -392,12 +407,7 @@ async function finishRun({ status, errorText = null } = {}) {
   } else {
     run.error_text = stripErrorText(errorText) || entityErrorSummary(run);
   }
-  (run.entities || []).forEach((entity) => {
-    if (entity.status === 'queued' || entity.status === 'running') {
-      entity.status = status === 'interrupted' ? 'interrupted' : (entity.status === 'running' ? 'error' : entity.status);
-      entity.finished_at = entity.finished_at || run.finished_at;
-    }
-  });
+  closeLeftoverEntities(run, status);
   try {
     await time('refresh_run_sql', () => persistFinish(run));
   } catch (err) {

@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Badge, Spinner, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { Clock16Regular } from '@fluentui/react-icons';
+import { formatVisibleTotal } from '../../utils/formatCount';
 
 const useStyles = makeStyles({
   card: {
@@ -41,14 +42,23 @@ const useStyles = makeStyles({
   },
 });
 
-function freshnessText(hasCache, relativeSynced, refreshing) {
+function freshnessText(hasCache, lastRefreshedLabel, refreshing) {
   if (refreshing) return 'Refreshing...';
-  if (hasCache) return relativeSynced || 'Unknown';
+  if (hasCache) return lastRefreshedLabel || 'Unknown';
   return 'Unknown';
 }
 
-function PurchaseOrderSyncStatus({ hasCache, relativeSynced, total, refreshing = false }) {
+function PurchaseOrderSyncStatus({
+  hasCache,
+  lastRefreshedLabel,
+  visibleCount,
+  total,
+  refreshing = false,
+}) {
   const styles = useStyles();
+  const scopedTotal = Number(total) || 0;
+  const inView = visibleCount == null ? scopedTotal : Number(visibleCount) || 0;
+  const rowsText = formatVisibleTotal(inView, scopedTotal);
   return (
     <div className={styles.card}>
       <span className={styles.icon} aria-hidden>
@@ -57,13 +67,15 @@ function PurchaseOrderSyncStatus({ hasCache, relativeSynced, total, refreshing =
       <div className={styles.block}>
         <Text className={styles.label}>Last refreshed</Text>
         <Text className={styles.value} weight="medium">
-          {freshnessText(hasCache, relativeSynced, refreshing)}
+          {freshnessText(hasCache, lastRefreshedLabel, refreshing)}
         </Text>
       </div>
       <div className={styles.divider} />
       <div className={styles.block}>
-        <Text className={styles.label}>Rows</Text>
-        <Badge appearance="outline" color="informative">{total}</Badge>
+        <Text className={styles.label}>In view / total</Text>
+        <Badge appearance="outline" color="informative" aria-label={`${inView} in view of ${scopedTotal} total`}>
+          {rowsText}
+        </Badge>
       </div>
     </div>
   );

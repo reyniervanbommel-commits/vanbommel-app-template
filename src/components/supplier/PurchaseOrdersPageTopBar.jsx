@@ -90,7 +90,8 @@ export default function PurchaseOrdersPageTopBar({
   const {
     isStaff,
     hasCache,
-    relativeSynced,
+    lastRefreshedLabel,
+    visibleCount,
     total,
   } = headerState;
   const {
@@ -173,7 +174,8 @@ export default function PurchaseOrdersPageTopBar({
           ) : null}
           <PurchaseOrderSyncStatus
             hasCache={hasCache}
-            relativeSynced={relativeSynced}
+            lastRefreshedLabel={lastRefreshedLabel}
+            visibleCount={visibleCount}
             total={total}
             refreshing={refreshing}
           />
