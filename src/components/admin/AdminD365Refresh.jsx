@@ -13,6 +13,7 @@ import { D365_REFRESH_INFO, D365_REFRESH_SERVER_HINT } from './d365RefreshInfoCo
 import D365RefreshLivePanel from './D365RefreshLivePanel';
 import D365RefreshHistory from './D365RefreshHistory';
 import D365RefreshAlertEmails from './D365RefreshAlertEmails';
+import D365RefreshFold from './D365RefreshFold';
 import { useD365Refresh } from '../../hooks/useD365Refresh';
 
 const useStyles = makeStyles({
@@ -63,19 +64,18 @@ export default function AdminD365Refresh() {
         <D365RefreshLivePanel run={model.run} />
       </div>
 
-      <div className={styles.section}>
+      <D365RefreshFold title="Night alert emails" defaultOpen={false}>
         <D365RefreshAlertEmails
           emails={model.emails}
           onChange={model.setEmails}
           onSave={model.saveEmails}
           saving={model.savingEmails}
         />
-      </div>
+      </D365RefreshFold>
 
-      <div className={styles.section}>
-        <Text weight="semibold">History</Text>
+      <D365RefreshFold title="History" defaultOpen>
         <D365RefreshHistory runs={model.history} />
-      </div>
+      </D365RefreshFold>
 
       {model.error ? <Text className={styles.error}>{model.error}</Text> : null}
       {model.feedback ? <Text className={styles.feedback}>{model.feedback}</Text> : null}

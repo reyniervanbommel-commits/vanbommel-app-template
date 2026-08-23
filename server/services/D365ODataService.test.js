@@ -10,6 +10,7 @@ const {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  summarizeODataFailure,
   __resetOAuthTokenCache,
 } = require('./D365ODataService');
 
@@ -37,6 +38,17 @@ describe('D365ODataService', () => {
 
   it('escapet OData string literals veilig', () => {
     expect(escapeODataLiteral("a'b")).toBe("a''b");
+  });
+
+  it('vat een OData-fout samen voor de UI', () => {
+    const message = summarizeODataFailure(
+      400,
+      'https://example.operations.dynamics.com/data/ReleasedProductsV2?$select=BadField',
+      JSON.stringify({ error: { message: { value: "Could not find a property named 'BadField'" } } }),
+    );
+    expect(message).toContain('400');
+    expect(message).toContain('/data/ReleasedProductsV2');
+    expect(message).toContain("Could not find a property named 'BadField'");
   });
 
   it('bouwt een OR-filter voor retained purchase order keys', () => {

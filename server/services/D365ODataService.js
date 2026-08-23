@@ -367,6 +367,32 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
   return { ok: true };
 }
 
+function summarizeODataFailure(status, url, body) {
+  let detail = '';
+  const raw = String(body || '').trim();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const message = parsed?.error?.message;
+      if (typeof message === 'string') detail = message;
+      else if (message && typeof message === 'object') detail = String(message.value || '');
+      if (!detail && parsed?.error?.innererror?.message) {
+        detail = String(parsed.error.innererror.message);
+      }
+    } catch {
+      detail = raw;
+    }
+  }
+  detail = detail.replace(/\s+/g, ' ').trim().slice(0, 400);
+  let path = '';
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    path = '';
+  }
+  return [`D365 OData request failed (${status})`, path, detail].filter(Boolean).join(': ');
+}
+
 async function fetchODataJson(url, timeout) {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeout);
@@ -394,8 +420,8 @@ async function fetchODataJson(url, timeout) {
       bodyPreview: responseBody.slice(0, 300),
     });
 
-    const err = new Error('D365 OData request failed');
-    err.status = 502;
+    const err = new Error(summarizeODataFailure(response.status, url, responseBody));
+    err.status = response.status || 502;
     throw err;
   }
 
@@ -1036,6 +1062,7 @@ module.exports = {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  summarizeODataFailure,
   __resetOAuthTokenCache,
   RETAINED_PO_CHUNK_SIZE,
 };

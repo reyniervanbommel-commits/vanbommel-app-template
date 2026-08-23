@@ -20,6 +20,10 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  error: {
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 function entityBarValue(entity) {
@@ -62,6 +66,7 @@ function D365RefreshLivePanel({ run }) {
             {` · Cache rows +${entity.inserted || 0} ~${entity.updated || 0}`}
             {` · Removed from cache ${entity.deleted || 0}`}
           </Text>
+          {entity.error_text ? <Text className={styles.error}>{entity.error_text}</Text> : null}
         </div>
       ))}
     </div>

@@ -39,6 +39,7 @@ const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../
 const { time } = require('../utils/timing');
 const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
 const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
+const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
 const refreshRunService = require('./RefreshRunService');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
@@ -124,7 +125,8 @@ async function resolveCascadeEntityKeys() {
     const targets = [...new Set(
       lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean)
     )];
-    return ['purchase-orders', ...targets];
+    const ordered = await orderLookupTargetKeys(targets, getTableByKey);
+    return ['purchase-orders', ...ordered];
   } catch {
     return ['purchase-orders'];
   }
@@ -2044,26 +2046,25 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
 async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
   if (!table || table.key !== 'purchase-orders') return;
   const lookups = await getLookups(table.id);
-  const targetKeys = [...new Set(
-    lookups
-      .map((lookup) => String(lookup?.targetTableKey || '').trim())
-      .filter(Boolean)
-  )];
+  const targetKeys = await orderLookupTargetKeys(
+    lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean),
+    getTableByKey,
+  );
   const refreshFailures = [];
   for (const targetKey of targetKeys) {
     if (visitedTables.has(targetKey)) continue;
     try {
-      const targetTable = await getTableByKey(targetKey);
-      if (targetTable.cacheMode === 'never') continue;
       await refresh(targetKey, { visitedTables });
     } catch (err) {
       logger.error('Lookup-doeltabel verversen mislukt', {
         tableKey: table.key,
         targetTableKey: targetKey,
         error: err.message,
+        status: err.status || null,
       });
-      refreshFailures.push(`${targetKey}: ${err.message}`);
-      refreshRunService.markEntityError(targetKey, `${targetKey}: ${err.message}`);
+      const detail = formatEntityRefreshError(targetKey, err);
+      refreshFailures.push(detail);
+      refreshRunService.markEntityError(targetKey, detail);
     }
   }
   if (refreshFailures.length) {
@@ -2088,6 +2089,8 @@ async function refresh(tableKey, options = {}) {
   // laden van sublijnen mag daar niet achterlopen.
   invalidateLookupEnrichmentCache();
   if (table.cacheMode === 'never') {
+    refreshRunService.markEntityRunning(table.key);
+    refreshRunService.markEntityDone(table.key);
     resetRefreshProgress(tableKey, {
       status: 'done',
       finishedAt: new Date().toISOString(),

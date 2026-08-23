@@ -9,7 +9,7 @@ const emailService = require('./EmailService');
 const { parseAlertEmails } = require('../utils/alertEmails');
 
 const ALERT_EMAILS_KEY = 'NIGHT_REFRESH_ALERT_EMAILS';
-const MAX_ERROR_TEXT = 500;
+const MAX_ERROR_TEXT = 800;
 const HISTORY_LIMIT_MAX = 20;
 
 const ENTITY_LABELS = {

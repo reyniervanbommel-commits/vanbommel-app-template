@@ -32,6 +32,7 @@ const useStyles = makeStyles({
   emailField: { maxWidth: '400px', flex: '1 1 240px' },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1, fontSize: tokens.fontSizeBase200 },
+  save: { alignSelf: 'flex-start' },
 });
 
 function D365RefreshAlertEmails({ emails, onChange, onSave, saving }) {
@@ -91,7 +92,6 @@ function D365RefreshAlertEmails({ emails, onChange, onSave, saving }) {
 
   return (
     <div className={styles.root}>
-      <Text weight="semibold">Night alert emails</Text>
       <Text className={styles.hint}>
         These addresses receive the night error mail when a run fails, is interrupted, or an entity fails.
       </Text>
@@ -117,7 +117,14 @@ function D365RefreshAlertEmails({ emails, onChange, onSave, saving }) {
         <Button appearance="secondary" onClick={addFromDraft}>Add</Button>
       </div>
       {localError ? <Text className={styles.error}>{localError}</Text> : null}
-      <Button appearance="secondary" icon={<Save24Regular />} onClick={handleSave} disabled={saving}>
+      <Button
+        appearance="primary"
+        size="small"
+        className={styles.save}
+        icon={<Save24Regular />}
+        onClick={handleSave}
+        disabled={saving}
+      >
         Save
       </Button>
     </div>
