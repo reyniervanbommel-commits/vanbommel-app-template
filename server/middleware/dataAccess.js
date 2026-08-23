@@ -31,7 +31,8 @@ function isSupplierAllowedDataRequest(req) {
 
   // Suppliers mogen een eigen comment plaatsen op een order binnen hun scope. De
   // rij-scope wordt server-side afgedwongen in RowRemarksService.context().
-  if (method === 'POST' && rel === '/purchase-orders/remarks') return true;
+  if (method === 'POST' && rel === '/purchase-orders/remarks') return true;
+  if (method === 'POST' && rel === '/purchase-orders/viewed') return true;
 
   return false;
 }

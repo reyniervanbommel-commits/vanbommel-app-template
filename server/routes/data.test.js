@@ -114,3 +114,46 @@ describe('PUT /:tableKey/remarks/:id/reaction — open voor supplier (read-only 
     expect(remarksService.setReaction).not.toHaveBeenCalled();
   });
 });
+
+describe('refresh progress en viewed-rechten', () => {
+  it('geeft employee 403 op GET refresh/progress', async () => {
+    await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/refresh/progress`);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it('laat admin progress zien met run maar zonder entities in de default view', async () => {
+    await withServer({ id: 1, role: 'admin' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/refresh/progress`);
+      const data = await res.json();
+      expect(res.status).toBe(200);
+      expect(data.progress).toEqual(expect.objectContaining({
+        status: expect.any(String),
+        fetched: expect.any(Number),
+        saved: expect.any(Number),
+      }));
+      expect(data.run).toEqual(expect.objectContaining({
+        currentLabel: expect.any(String),
+        overall: expect.any(Number),
+        entityIndex: expect.any(Number),
+        entityCount: expect.any(Number),
+      }));
+      expect(data.run.entities).toBeUndefined();
+      expect(data.run.error_text).toBeUndefined();
+    });
+  });
+
+  it('laat employee POST /purchase-orders/viewed door', async () => {
+    const original = dataService.markViewed;
+    dataService.markViewed = vi.fn().mockResolvedValue({ success: true });
+    try {
+      await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/api/data/purchase-orders/viewed`, { method: 'POST' });
+        expect(res.status).toBe(200);
+      });
+    } finally {
+      dataService.markViewed = original;
+    }
+  });
+});

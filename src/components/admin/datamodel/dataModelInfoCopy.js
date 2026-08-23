@@ -5,7 +5,7 @@ export const DATA_MODEL_INFO = {
   reimportBaseline: 'Re-import fetches all rows again with the current sync filter and treats that result as a new starting point. Changes are not written to history, so the board will not mark every row as new or changed. Use this after a data-model change. It does not switch to a wider filter for later refreshes.',
   countRows: 'Counts how many D365 rows match the filters currently shown, before you save. Use this to check the impact of a filter change.',
   saveFilters: 'Saves the filters and uses them on the next D365 refresh. Saving purchase-order filters also clears retention for orders that were kept after they left the previous filter.',
-  discoverFields: 'Reads all fields from the D365 entity. Missing columns are added, hidden by default. Source columns that D365 does not return are removed from this table. Turn on “Visible in table” to show a new column on the board.',
+  discoverFields: 'Reads all fields from the D365 entity, including a sample value per column. Missing columns are added, hidden by default. Source columns that D365 does not return are removed from this table. Turn on “Visible in table” to show a new column on the board.',
   visibleInTable: 'Shows this column on the purchase-order board. Hidden columns stay in the data model and can be turned on later.',
   visibleAtDelete: 'Keeps this column visible in the hidden-rows panel after a user removes a row from the board. The row is only hidden in the app, not deleted in D365.',
   writeBack: 'Allows edits in the app to be written back to this D365 field. Only source columns that D365 accepts for update can be enabled.',

@@ -81,7 +81,7 @@ describe('TableDataService.computeRevision', () => {
     maxColumnsAt: '2026-07-01T00:00:00.000Z',
     exclusionCount: 3,
     maxExclusionAt: '2026-07-14T12:00:00.000Z',
-    adminViewedAt: '2026-07-15T09:00:00.000Z',
+    userViewedAt: '2026-07-15T09:00:00.000Z',
     userBoardSettingsAt: null,
     settingsAt: '2026-07-05T00:00:00.000Z',
     supplierAccount: null,

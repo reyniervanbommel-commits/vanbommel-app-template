@@ -2,13 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Badge,
   Button,
-  Divider,
-  Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
-import PurchaseOrderRefreshProgress from './PurchaseOrderRefreshProgress';
+import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
@@ -54,35 +52,6 @@ const useStyles = makeStyles({
     marginBottom: '4px',
     flexWrap: 'wrap',
   },
-  freshness: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    flexWrap: 'wrap',
-  },
-  statusPanel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    minHeight: '32px',
-    padding: '4px 10px',
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  freshnessLabel: {
-    color: tokens.colorNeutralForeground3,
-    lineHeight: tokens.lineHeightBase200,
-  },
-  freshnessValue: {
-    color: tokens.colorNeutralForeground2,
-    lineHeight: tokens.lineHeightBase200,
-  },
-  totalWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
   errorIndicator: {
     display: 'flex',
     alignItems: 'center',
@@ -121,8 +90,8 @@ export default function PurchaseOrdersPageTopBar({
   const {
     isStaff,
     hasCache,
-    relativeSynced,
-    stale,
+    lastRefreshedLabel,
+    visibleCount,
     total,
   } = headerState;
   const {
@@ -141,7 +110,6 @@ export default function PurchaseOrdersPageTopBar({
   } = bulkState;
   const {
     refreshing,
-    refreshProgress,
     onRefresh,
   } = refreshState;
   const hasError = Boolean(error);
@@ -196,14 +164,6 @@ export default function PurchaseOrdersPageTopBar({
               onRestore={hiddenRowsState.restoreRows}
             />
           ) : null}
-          {isStaff ? (
-            <PurchaseOrderRefreshProgress
-              progress={refreshProgress}
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              canRefresh={isAdmin}
-            />
-          ) : null}
           {error ? (
             <div className={styles.errorIndicator}>
               <Badge color="danger" appearance="filled">Request failed</Badge>
@@ -212,34 +172,13 @@ export default function PurchaseOrdersPageTopBar({
               </Button>
             </div>
           ) : null}
-          <div className={styles.statusPanel}>
-            <div className={styles.freshness}>
-              {hasCache ? (
-                <>
-                  <Text size={200} className={styles.freshnessLabel}>Last refreshed:</Text>
-                  <Text size={200} weight="medium" className={styles.freshnessValue}>
-                    {relativeSynced || 'unknown'}
-                  </Text>
-                </>
-              ) : (
-                <Text size={200} className={styles.freshnessLabel}>Last refreshed: unknown</Text>
-              )}
-              {hasCache ? (
-                stale ? (
-                  <Badge color="warning" appearance="tint">Stale</Badge>
-                ) : (
-                  <Badge color="success" appearance="tint">Current</Badge>
-                )
-              ) : (
-                <Badge color="warning" appearance="tint">Not synced yet</Badge>
-              )}
-            </div>
-            <Divider vertical />
-            <div className={styles.totalWrap}>
-              <Text size={200} className={styles.freshnessLabel}>Total</Text>
-              <Badge appearance="outline" color="brand">{total}</Badge>
-            </div>
-          </div>
+          <PurchaseOrderSyncStatus
+            hasCache={hasCache}
+            lastRefreshedLabel={lastRefreshedLabel}
+            visibleCount={visibleCount}
+            total={total}
+            refreshing={refreshing}
+          />
         </div>
       </div>
 
@@ -250,7 +189,7 @@ export default function PurchaseOrdersPageTopBar({
           removedCount={removedCount}
           markViewed={markViewed}
           markingViewed={markingViewed}
-          canMarkViewed={isAdmin}
+          canMarkViewed
           activityFilter={activityFilter}
           toggleActivityFilter={toggleActivityFilter}
         />

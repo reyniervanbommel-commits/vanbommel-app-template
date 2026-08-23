@@ -61,6 +61,56 @@ export function getExampleRowValues(previewRows, d365Fields, sampleByField = {})
   return fallback;
 }
 
+export function lookupSampleValue(sampleByField, ...keys) {
+  if (!sampleByField || typeof sampleByField !== 'object') return '—';
+  for (const key of keys) {
+    if (!key) continue;
+    const direct = sampleByField[key];
+    if (direct !== null && direct !== undefined && direct !== '') return display(direct);
+  }
+  const wanted = new Set(keys.filter(Boolean).map((key) => String(key).toLowerCase()));
+  if (!wanted.size) return '—';
+  const entries = Object.entries(sampleByField);
+  for (let i = 0; i < entries.length; i += 1) {
+    const [field, value] = entries[i];
+    if (!wanted.has(String(field).toLowerCase())) continue;
+    if (value !== null && value !== undefined && value !== '') return display(value);
+  }
+  return '—';
+}
+
+export function mergeSampleByField(base, extra) {
+  const next = { ...(base || {}) };
+  const extras = Object.entries(extra || {});
+  for (let i = 0; i < extras.length; i += 1) {
+    const [key, value] = extras[i];
+    if (value === null || value === undefined || value === '' || value === '—') continue;
+    const existingKey = Object.keys(next).find((entry) => entry.toLowerCase() === String(key).toLowerCase());
+    const target = existingKey || key;
+    if (!next[target] || next[target] === '—') next[target] = value;
+  }
+  return next;
+}
+
+export function mergeDiscoverySamples(previewTables, sampleByField) {
+  if (!previewTables || !sampleByField) return previewTables;
+  return {
+    ...previewTables,
+    header: previewTables.header
+      ? {
+        ...previewTables.header,
+        sampleByField: mergeSampleByField(previewTables.header.sampleByField, sampleByField.header),
+      }
+      : previewTables.header,
+    line: previewTables.line
+      ? {
+        ...previewTables.line,
+        sampleByField: mergeSampleByField(previewTables.line.sampleByField, sampleByField.line),
+      }
+      : previewTables.line,
+  };
+}
+
 export function createSampleByField(preview) {
   if (preview?.sampleByField && typeof preview.sampleByField === 'object') {
     return preview.sampleByField;

@@ -66,7 +66,19 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    ...shorthands.gap('8px'),
+  },
+  logo: {
+    width: '200px',
+    height: '200px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+  },
+  brandLogo: {
+    height: '14px',
+    width: 'auto',
+    maxWidth: '180px',
+    objectFit: 'contain',
+    alignSelf: 'center',
   },
   title: {
     fontSize: tokens.fontSizeBase500,
@@ -87,6 +99,12 @@ const useStyles = makeStyles({
     ...shorthands.gap('12px'),
   },
   version: { fontSize: '11px', color: tokens.colorNeutralForeground4, textAlign: 'center' },
+  footer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    ...shorthands.gap('8px'),
+  },
 });
 
 export default function LoginPage() {
@@ -132,7 +150,7 @@ export default function LoginPage() {
           <img
             src="/logo-circle.png"
             alt={APP_DISPLAY_NAME + ' logo'}
-            style={{ width: '112px', height: '112px', borderRadius: '50%', objectFit: 'cover' }}
+            className={styles.logo}
           />
         </div>
 
@@ -190,7 +208,14 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <Text className={styles.version}>{APP_VERSION}</Text>
+        <div className={styles.footer}>
+          <img
+            src="/floris-van-bommel-logo.png"
+            alt="Floris van Bommel"
+            className={styles.brandLogo}
+          />
+          <Text className={styles.version}>{APP_VERSION}</Text>
+        </div>
       </Card>
     </div>
   );

@@ -60,7 +60,6 @@ const EMPTY_FORM = {
   D365_ODATA_CLIENT_SECRET_EXPIRES_AT: '',
   PO_SYNC_MAX_ORDERS: '',
   PO_SYNC_RETAINED_MAX_AUTO: '',
-  PO_CACHE_STALE_MINUTES: '',
 };
 
 const EXPIRY_BADGE = {
@@ -118,7 +117,6 @@ export default function AdminODataSettings() {
         D365_ODATA_CLIENT_SECRET_EXPIRES_AT: toDateInputValue(s.D365_ODATA_CLIENT_SECRET_EXPIRES_AT),
         PO_SYNC_MAX_ORDERS: s.PO_SYNC_MAX_ORDERS || '2500',
         PO_SYNC_RETAINED_MAX_AUTO: s.PO_SYNC_RETAINED_MAX_AUTO || '2000',
-        PO_CACHE_STALE_MINUTES: s.PO_CACHE_STALE_MINUTES || '15',
       });
     } catch (err) {
       setError(err.message);
@@ -257,9 +255,6 @@ export default function AdminODataSettings() {
           hint="Orders that leave the Data model filter stay on the board and are re-fetched by key. Warning levels follow this limit. Maximum 10,000."
         >
           <Input type="number" min="1" max="10000" placeholder="2000" value={form.PO_SYNC_RETAINED_MAX_AUTO} onChange={handleChange('PO_SYNC_RETAINED_MAX_AUTO')} />
-        </Field>
-        <Field label="Cache stale after (minutes)" hint="How long the cache may sit before the board treats it as out of date.">
-          <Input type="number" placeholder="15" value={form.PO_CACHE_STALE_MINUTES} onChange={handleChange('PO_CACHE_STALE_MINUTES')} />
         </Field>
       </div>
 

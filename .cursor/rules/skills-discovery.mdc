@@ -9,10 +9,12 @@ alwaysApply: true
 
 Voordat je een taak start die mogelijk een skill raakt (feature bouwen, refactoren, plannen, analyseren, opruimen), scan eerst de volledige skills-mappen:
 
-1. `C:\Users\reynier\.cursor\skills\` (persoonlijke skills)
-2. `.cursor\skills\` (project skills)
+1. `C:\Users\reynier\.cursor\skills\` (persoonlijk Cursor — alle projecten)
+2. `C:\Users\reynier\.claude\skills\` (persoonlijk Claude Code — alle projecten)
+3. `C:\Users\reynier\.agents\skills\` (Codex / cross-runtime)
+4. `.cursor\skills\` én `.claude\skills\` (deze repo)
 
-Draai een Glob op `**/SKILL.md` in beide mappen en lees de frontmatter (name + description) van skills die je niet kent. Dit voorkomt dat je:
+Draai een Glob op `**/SKILL.md` in die mappen en lees de frontmatter (name + description) van skills die je niet kent. Dit voorkomt dat je:
 - Een skill dupliceert die al bestaat
 - Een workflow mist die al is ingericht
 - Output opslaat op een plek die een bestaande skill al afhandelt
@@ -21,15 +23,19 @@ Draai een Glob op `**/SKILL.md` in beide mappen en lees de frontmatter (name + d
 
 Voordat je een nieuwe skill schrijft:
 
-1. Scan beide skills-mappen
+1. Scan de mappen hierboven
 2. Controleer of er al een skill is die hetzelfde doel dient
 3. Als er overlap is: breid de bestaande skill uit in plaats van een nieuwe te maken
-4. Sla de skill altijd op in BEIDE locaties (persoonlijk + repo)
+4. Sla een **persoonlijke** skill op in Cursor + Claude + `.agents`; een **repo**-skill
+   ook in `.cursor/skills/` en `.claude/skills/` van dit project
 
 ## Skills-mappen
 
 | Locatie | Pad | Scope |
 |---------|-----|-------|
-| Persoonlijk | `C:\Users\reynier\.cursor\skills\` | Alle projecten |
-| Repo | `.cursor\skills\` | Dit project |
+| Persoonlijk Cursor | `C:\Users\reynier\.cursor\skills\` | Alle Cursor-projecten |
+| Persoonlijk Claude | `C:\Users\reynier\.claude\skills\` | Alle Claude Code-projecten |
+| Cross-runtime | `C:\Users\reynier\.agents\skills\` | Codex e.d. |
+| Repo Cursor | `.cursor\skills\` | Dit project |
+| Repo Claude | `.claude\skills\` | Dit project (Claude Code in de repo) |
 | Cursor intern | `C:\Users\reynier\.cursor\skills-cursor\` | Niet aanpassen |

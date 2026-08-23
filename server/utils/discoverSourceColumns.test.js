@@ -30,3 +30,53 @@ describe('listStaleSourceColumns', () => {
     expect(stale).toEqual([productName]);
   });
 });
+
+describe('D365 sample values', () => {
+  const {
+    lookupRawFieldValue,
+    firstNonEmptySample,
+    fillMissingSamplesFromRawRows,
+    sampleMapFromDiscoveredFields,
+  } = require('./discoverSourceColumns');
+
+  it('vindt een veld case-insensitive in een OData-rij', () => {
+    expect(lookupRawFieldValue({ ItemNumber: 'ART-1' }, 'itemNumber')).toBe('ART-1');
+  });
+
+  it('pakt de eerste niet-lege sample over meerdere rijen', () => {
+    expect(firstNonEmptySample(
+      [{ SearchName: '' }, { SearchName: 'Boot' }],
+      'SearchName',
+    )).toBe('Boot');
+  });
+
+  it('vult ontbrekende preview-samples vanuit ruwe D365-rijen', () => {
+    const filled = fillMissingSamplesFromRawRows(
+      { sampleByField: { ItemNumber: '—', SearchName: '—' } },
+      ['ItemNumber', 'SearchName'],
+      [{ itemNumber: 'ART-9', SearchName: 'Sneaker' }],
+    );
+    expect(filled.sampleByField.ItemNumber).toBe('ART-9');
+    expect(filled.sampleByField.SearchName).toBe('Sneaker');
+  });
+
+  it('merkt $select-velden die D365 niet in een volle record teruggeeft', () => {
+    const { listSelectFieldsMissingFromRecord, formatSelectDropNotice } = require('./discoverSourceColumns');
+    expect(listSelectFieldsMissingFromRecord(
+      ['dataAreaId', 'ItemNumber', 'ProductName', 'ItemGroupId'],
+      { dataAreaId: 'WHSL', ItemNumber: 'ART-1', '@odata.etag': 'W/"1"' },
+    )).toEqual(['ProductName', 'ItemGroupId']);
+    expect(formatSelectDropNotice(['ProductName', 'ItemGroupId']))
+      .toBe('Removed from $select (not returned by D365): ProductName, ItemGroupId');
+  });
+
+  it('zet discovered samples om naar een lookup per veld', () => {
+    expect(sampleMapFromDiscoveredFields([
+      { field: 'ItemNumber', sample: 'ART-1' },
+      { field: 'ProductName', sample: null },
+    ])).toEqual({
+      ItemNumber: 'ART-1',
+      ProductName: '—',
+    });
+  });
+});

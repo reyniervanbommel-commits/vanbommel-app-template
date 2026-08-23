@@ -1,18 +1,32 @@
 ---
 name: push-feature-to-dev
 description: >-
-  Merge een goedgekeurde feature branch naar develop. Maakt een PR aan,
-  GitHub Actions deployed automatisch naar DEV en ruimt de preview Container App
-  op. Post een comment op het DevOps work item.
-  Gebruik wanneer de gebruiker zegt "push feature preview to DEV",
-  "feature is akkoord", "merge naar dev" of "feature naar dev".
+  Use when merging a tested feature branch into the integration branch (often
+  `develop`) — any repo with that flow. Triggers: "push feature to DEV",
+  "feature is akkoord", "merge naar dev", "push-feature-to-dev". Azure preview
+  cleanup and DevOps comments only if this repo has that street.
 ---
 
 # Push Feature Preview to DEV
 
-Merget de goedgekeurde feature branch naar `develop`. GitHub Actions doet daarna automatisch:
-- Preview Container App verwijderen
-- Nieuwe deploy naar `<dev-container-app-naam>`
+Merget een goedgekeurde `feature/*` naar de **integratiebranch** (meestal
+`develop`).
+
+**Niet** `grill-me` / `brainstorming`. Dit is afronden, geen ontwerp.
+
+## Project-detectie
+
+| Iets in de repo | Dan |
+|-----------------|-----|
+| Branch `develop` | PR-base = `develop` |
+| Alleen `main` | Vraag of ze naar `main` willen; geen stille prod-deploy |
+| `deploy-dev.yml` | Na merge: `gh run watch` op die workflow |
+| `preview.yml` | Check of preview-app is opgeruimd |
+| `src/config/devTestItems.js` | Stap 2 uitvoeren; anders overslaan |
+| Azure DevOps MCP / work item-id in branch | Comment + Closed |
+| Geen ADO | Alleen PR + (optioneel) `gh issue comment` |
+
+Concrete Azure-namen: uit workflows/docs van *deze* repo, niet hardcoden.
 
 ---
 
@@ -68,16 +82,20 @@ Bepaal een korte test-omschrijving op basis van:
 
 ### 2b — Voeg item toe aan `src/config/devTestItems.js`
 
-Open `src/config/devTestItems.js` en voeg onderaan een nieuw item toe:
+Open `src/config/devTestItems.js` en voeg onderaan een nieuw item toe. Op DEV verschijnen alle `checks` automatisch als afvinkbare vakjes rechtsonder via `DevFeatureChecklist`.
 
 ```js
 {
-  id: '<feature-id-slug>',         // bijv. 'login-flow-142'
-  version: '<huidige-versie>',     // bijv. '1.8.6'
-  category: '<categorie>',         // bijv. 'Feature', 'Fix', 'UI', 'Backend'
-  label: '<wat moet de tester controleren>',
+  id: 'feature-<id>-<slug>-v<app-versie>',   // bijv. 'feature-207-row-remarks-v1-14-142'
+  title: 'Feature <id> - <korte titel> (v<app-versie>)',
+  checks: [
+    'Eerste controlepunt voor testers',
+    'Tweede controlepunt voor testers',
+  ],
 },
 ```
+
+Gebruik de app-versie uit `src/config/version.js` (footer), niet alleen `package.json`.
 
 Meerdere items zijn toegestaan als de feature uit meerdere onderdelen bestaat.
 

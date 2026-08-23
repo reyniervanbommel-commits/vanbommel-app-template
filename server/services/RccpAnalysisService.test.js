@@ -67,6 +67,41 @@ describe('RccpAnalysisService', () => {
     expect(diagnostics.countedLines).toBe(2);
   });
 
+  it('counts a header-only total in full on in-window lines', () => {
+    const inWindowDate = '2026-03-10T00:00:00.000Z';
+    const outOfWindowDate = '2021-11-11T00:00:00.000Z';
+    const year = getIsoWeekYear(inWindowDate);
+    const week = getIsoWeek(inWindowDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const headerConfig = {
+      ...config,
+      quantityMeasures: [{
+        columnKey: 'ordered_qty_ontvangstregels_total',
+        label: 'Ordered total',
+        chartType: 'line',
+        color: '#D13438',
+        showInChart: true,
+      }],
+    };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: {
+        vendorAccount: 'V001',
+        status: 'Open',
+        ordered_qty_ontvangstregels_total: 100,
+      },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: inWindowDate } },
+        { detailKey: '2', values: { requestedDeliveryDate: inWindowDate } },
+        { detailKey: '3', values: { requestedDeliveryDate: outOfWindowDate } },
+      ],
+    }];
+
+    const { confirmedByCell, diagnostics } = aggregatePoLoad(rows, headerConfig, testWindow);
+    expect(confirmedByCell.get(cellKey('V001', year, week, 'ordered_qty_ontvangstregels_total'))).toBe(100);
+    expect(diagnostics.totalConfirmedQty).toBe(100);
+  });
+
   it('spreads an order-level total across its lines', () => {
     const deliveryDate = '2026-03-10T00:00:00.000Z';
     const year = getIsoWeekYear(deliveryDate);
@@ -253,6 +288,46 @@ describe('RccpAnalysisService', () => {
     const result = buildDrillDownRows(rows, config, cell, testWindow);
     expect(result).toHaveLength(2);
     expect(result.map((r) => r.quantity).sort((a, b) => a - b)).toEqual([5, 7]);
+  });
+
+  it('buildDrillDownRows puts the full header total on in-window lines', () => {
+    const inWindowDate = '2026-03-10T00:00:00.000Z';
+    const outOfWindowDate = '2021-11-11T00:00:00.000Z';
+    const year = getIsoWeekYear(inWindowDate);
+    const week = getIsoWeek(inWindowDate);
+    const testWindow = { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+    const headerConfig = {
+      ...config,
+      quantityMeasures: [{
+        columnKey: 'remaining_qty_ontvangstregels_total_2',
+        label: 'Remaining',
+        chartType: 'line',
+        color: '#D13438',
+        showInChart: true,
+      }],
+    };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: {
+        vendorAccount: 'V001',
+        status: 'Open',
+        remaining_qty_ontvangstregels_total_2: 40,
+      },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: inWindowDate } },
+        { detailKey: '2', values: { requestedDeliveryDate: outOfWindowDate } },
+      ],
+    }];
+    const cell = {
+      vendorAccount: 'V001',
+      periodYear: year,
+      isoWeek: week,
+      measureKey: 'remaining_qty_ontvangstregels_total_2',
+    };
+
+    const result = buildDrillDownRows(rows, headerConfig, cell, testWindow);
+    expect(result).toHaveLength(1);
+    expect(result[0].quantity).toBe(40);
   });
 
   it('buildDrillDownRows spreads order-level quantity across lines without line qty', () => {
