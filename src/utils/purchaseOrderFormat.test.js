@@ -50,21 +50,9 @@ describe('formatSyncedAt', () => {
     expect(formatSyncedAt('not-a-date')).toBeNull();
   });
 
-  it('geeft "just now" voor een tijdstip net geleden', () => {
-    expect(formatSyncedAt(new Date(Date.now() - 10 * 1000).toISOString())).toBe('just now');
-  });
-
-  it('geeft "X min ago" binnen het uur', () => {
-    expect(formatSyncedAt(new Date(Date.now() - 5 * 60 * 1000).toISOString())).toBe('5 min ago');
-  });
-
-  it('geeft "X hours ago" binnen de 24 uur', () => {
-    expect(formatSyncedAt(new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString())).toBe('3 hours ago');
-  });
-
-  it('valt terug op een volledige NL-datum/tijd-notatie na 24 uur', () => {
-    const result = formatSyncedAt(new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString());
-    expect(result).not.toMatch(/ago|just now/);
-    expect(result).toMatch(/\d{2}.\d{2}.\d{4}.*\d{2}:\d{2}/);
+  it('toont datum en uur, zonder minuten', () => {
+    const value = new Date(2026, 7, 23, 15, 37, 12);
+    expect(formatSyncedAt(value)).toBe('23/08/2026 15:00');
+    expect(formatSyncedAt(value.toISOString())).toBe('23/08/2026 15:00');
   });
 });
