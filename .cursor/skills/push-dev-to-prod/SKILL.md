@@ -1,16 +1,29 @@
 ---
 name: push-dev-to-prod
 description: >-
-  Merge develop naar main en deployt naar productie via GitHub Actions.
-  Maakt een PR aan van develop naar main, wacht op de deploy en verifieert
-  de PROD Container App. Post een comment op het DevOps work item.
-  Gebruik wanneer de gebruiker zegt "push DEV to PROD", "deploy naar prod",
-  "zet op productie" of "develop naar main".
+  Use when promoting the integration branch (often `develop`) to production
+  (`main`) — any repo with that flow. Triggers: "push DEV to PROD", "deploy naar
+  prod", "develop naar main", "push-dev-to-prod". Container Apps and DevOps
+  comments only if this repo has them.
 ---
 
 # Push DEV to PROD
 
-Merget `develop` naar `main`. GitHub Actions deployt daarna automatisch naar `<prod-container-app-naam>`.
+Merget de integratiebranch naar productie (meestal `develop` → `main`).
+
+**Niet** `grill-me` / `brainstorming`.
+
+## Project-detectie
+
+| Iets in de repo | Dan |
+|-----------------|-----|
+| `develop` + `main` | PR `develop` → `main` |
+| `deploy-prod.yml` | `gh run watch`; let op environment-approval |
+| `src/config/devTestItems.js` | Lijst legen vóór de PR (stap 2) |
+| Azure DevOps / work item | Comment op het item |
+| Geen ADO | Alleen PR + deploy-verificatie |
+
+App-namen en resource group: uit `deploy-prod.yml` / docs van *deze* repo.
 
 ---
 

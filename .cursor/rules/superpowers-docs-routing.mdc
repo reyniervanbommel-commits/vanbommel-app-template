@@ -18,26 +18,41 @@ Bestandsnaam-formaat blijft hetzelfde: `YYYY-MM-DD-<naam>.plan.md` voor plannen,
 
 ## Uitgebreide pipeline
 
-Na de standaard superpowers flow zijn er extra stappen:
+Nieuwe features starten met `brd-td-feature-design` (**REQUIRED:** `grill-me` +
+`brainstorming`). Daarna, op verzoek: `review-plan-for-devops` →
+`post-plan-to-devops` → `develop-from-devops` → `push-feature-to-dev` →
+`push-dev-to-prod`.
+
+Die skills **detecteren** de repo: Azure DevOps + `preview.yml` = OTAP-pad;
+anders lokaal / GitHub / alleen document. `grill-me` en `brainstorming` alleen
+in het ontwerp, niet bij review/post/build/push.
 
 ```
-brainstorming       → docs/specs/        (design doc)
-writing-plans       → .cursor/plans/     (implementatieplan)
+brd-td-feature-design
+    → docs/specs/…-design.md     (één file: ## BRD, ## FRD, ## TD)
+    → team-review (.claude/team/, zelfde set als develop-from-devops stap 8)
+    ↓ op verzoek ná groene review
+writing-plans       → .cursor/plans/     (bouwplan voor de autonome agent)
+review-plan-for-devops  (gate — niet posten bij 🟡/🔴)
     ↓
 post-plan-to-devops → docs/devops/       (DevOps Feature + evt. child User Stories)
     ↓
-executing-plans     → bouwen
+develop-from-devops / executing-plans → bouwen
     ↓
 create-adr          → docs/adr/          (architectuurbeslissingen vastleggen)
 finishing-branch    → merge
 ```
 
-### Na writing-plans
+`brainstorming` wordt vanuit `brd-td-feature-design` aangeroepen voor FRD
+(approaches + gedrag), niet als parallel ontwerpbestand.
+
+### Na writing-plans / na een 🟢 gate
 
 Stel voor:
 > "Plan opgeslagen. Wil je dat ik hier een DevOps Feature van maak?"
 
-Gebruik de skill `post-plan-to-devops` als de gebruiker ja zegt.
+Gebruik de skill `post-plan-to-devops` als de gebruiker ja zegt — en alleen
+nadat `review-plan-for-devops` 🟢 is.
 
 ### Na executing-plans / finishing-branch
 
@@ -50,8 +65,8 @@ Gebruik de skill `create-adr` als de gebruiker ja zegt.
 
 | Map | Inhoud | Wanneer |
 |-----|--------|---------|
-| `.cursor/plans/` | Implementatieplannen | Na brainstorm/planning |
-| `docs/specs/` | Technische ontwerpen | Na brainstorm (design doc) |
+| `.cursor/plans/` | Bouwplannen (taken) | Ná goedgekeurde TD, als je gaat bouwen |
+| `docs/specs/` | Feature-ontwerp: BRD + FRD + TD in één file | Via `brd-td-feature-design` |
 | `docs/devops/` | DevOps work item documenten | Na plan → Feature aanmaken |
 | `docs/adr/` | Architecture Decision Records | Na afronding bouw |
 | `docs/guides/` | Handleidingen en referenties | Permanent |

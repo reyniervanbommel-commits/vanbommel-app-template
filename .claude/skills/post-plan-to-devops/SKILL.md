@@ -1,6 +1,9 @@
 ---
 name: post-plan-to-devops
-description: Use when a feature plan has been saved in .cursor/plans/ and needs to be registered in Azure DevOps — after brainstorming, when the user asks to post a plan, create a task, or register a feature in DevOps. Creates a structured DevOps document and work item.
+description: >-
+  Use when a feature plan or design should be registered on a tracker (Azure
+  DevOps, GitHub Issues, or a local backlog doc) — any repo. Triggers: "post
+  plan", "maak een work item", "post-plan-to-devops", "zet op het bord".
 ---
 
 # Post Plan to DevOps
@@ -15,8 +18,28 @@ Het plan blijft ongewijzigd in `.cursor/plans/`. Het DevOps-document is een vert
 
 ## Vereisten
 
-- Azure DevOps MCP actief (`@azure-devops/mcp`) — zie `.cursor/mcp.json`
-- Plan opgeslagen als `.cursor/plans/YYYY-MM-DD-naam.plan.md`
+- Plan of ontwerp op schijf (`docs/specs/` of `.cursor/plans/`, of pad van de gebruiker)
+
+## Project-detectie (Stap 0)
+
+1. **Bronbestand:** pad van de gebruiker, anders nieuwste `.cursor/plans/*.plan.md`
+   of `docs/specs/*-design.md`.
+2. **Tracker (kies één):**
+   - Azure DevOps MCP bereikbaar → **Pad ADO** (stappen 3–9 hieronder)
+   - `gh` + GitHub remote, geen ADO → **Pad GitHub:** `gh issue create` (of Epic
+     als de org dat gebruikt); lokaal document in `docs/devops/` of `docs/backlog/`
+   - Geen tracker → **Pad document:** alleen `docs/devops/` (of `docs/backlog/`)
+     schrijven; geen work item. Meld dat.
+3. `dev_`-prefix op het plan → al gepost; niet opnieuw aanmaken.
+
+Geen `grill-me` / `brainstorming`. Ontwerp incompleet → eerst
+`brd-td-feature-design` of `review-plan-for-devops`.
+
+## Overview
+
+Vertaal plan/ontwerp naar een backlog-document + (als er een tracker is) een
+work item. Het planbestand zelf blijft de bron; hernoem met `dev_` alleen bij
+succesvolle post.
 
 ## Hiërarchie: Feature → User Stories → Tasks
 
@@ -122,7 +145,13 @@ _(Bij een enkel User Story work item: gebruik "Backlog — tasks" met checkboxes
 Aangemaakt op basis van [.cursor/plans/<planbestand>](../.cursor/plans/<planbestand>); wijzig dit bestand bij nieuwe afspraken.
 ```
 
-### 4. Maak het work item aan via MCP
+### 4. Maak het work item aan (alleen Pad ADO)
+
+Als Pad GitHub of Pad document: sla MCP-stappen over; schrijf het document
+(stap 5) en maak desnoods `gh issue create`. Ga daarna naar stap 7–9 alleen
+als er een planbestand te hernoemen is.
+
+**Pad ADO:** via MCP.
 
 **Bepaal het type** op basis van de hiërarchie-regels hierboven.
 
