@@ -9,6 +9,7 @@ import {
   MenuPopover,
   MenuTrigger,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
@@ -17,6 +18,7 @@ import {
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
 import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 
 const useStyles = makeStyles({
   controlHeaderCell: {
@@ -51,19 +53,12 @@ const useStyles = makeStyles({
     ...shorthands.padding('0'),
   },
   filterIcon: {
-    position: 'relative',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeDot: {
-    position: 'absolute',
-    right: '-2px',
-    top: '-2px',
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: tokens.colorBrandForeground1,
+  filterIconActive: {
+    color: SUBITEM_CONNECTOR_COLOR,
   },
 });
 
@@ -98,9 +93,8 @@ function PurchaseOrdersTableControls({
     ? 'Show active filters and formatting (active)'
     : 'Show active filters and formatting';
   const filterIcon = (
-    <span className={styles.filterIcon}>
+    <span className={mergeClasses(styles.filterIcon, hasActive && styles.filterIconActive)}>
       <Filter20Regular />
-      {hasActive ? <span className={styles.activeDot} aria-hidden="true" /> : null}
     </span>
   );
 
@@ -170,7 +164,7 @@ function PurchaseOrdersTableControls({
           <Button
             size="small"
             appearance="subtle"
-            className={styles.button}
+            className={mergeClasses(styles.button, hasActive && styles.filterIconActive)}
             icon={filterIcon}
             title={filterButtonLabel}
             aria-label={filterButtonLabel}

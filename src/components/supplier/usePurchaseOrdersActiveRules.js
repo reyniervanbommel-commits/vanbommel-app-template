@@ -20,6 +20,11 @@ import {
  * }} ActiveRuleItem
  */
 
+export const EMPTY_ACTIVE_RULE_GROUPS = Object.freeze({
+  header: Object.freeze([]),
+  line: Object.freeze([]),
+});
+
 function stringifyFilterValue(value) {
   if (Array.isArray(value)) return value.join(', ');
   return String(value ?? '');
@@ -69,6 +74,40 @@ function buildActiveItems({
   }, []);
 }
 
+function headerHasActiveFilter(column, filterByColumn, datePeriodDisplayModes) {
+  const columnKey = column?.key;
+  if (!columnKey) return false;
+  return isColumnFilterActive(column, filterByColumn?.[columnKey], datePeriodDisplayModes);
+}
+
+function columnHasActiveFormat(column, formatRules) {
+  const columnKey = column?.key;
+  if (!columnKey) return false;
+  return isColumnFormatRuleSetActive(formatRules?.[columnKey]);
+}
+
+/**
+ * Cheap presence check for the overview icon. Same rules as the flyout lists
+ * (header filters + header/line format rules; no line filters, no cell scans).
+ */
+export function hasActivePurchaseOrderRules({
+  headerColumns = [],
+  lineColumns = [],
+  filterByColumn = {},
+  headerColumnFormatRules = {},
+  lineColumnFormatRules = {},
+  datePeriodDisplayModes = {},
+} = {}) {
+  for (const column of headerColumns) {
+    if (headerHasActiveFilter(column, filterByColumn, datePeriodDisplayModes)) return true;
+    if (columnHasActiveFormat(column, headerColumnFormatRules)) return true;
+  }
+  for (const column of lineColumns) {
+    if (columnHasActiveFormat(column, lineColumnFormatRules)) return true;
+  }
+  return false;
+}
+
 /**
  * Derives active PO board filters and format rules for the overview flyout.
  *
@@ -79,6 +118,7 @@ function buildActiveItems({
  *   headerColumnFormatRules: object,
  *   lineColumnFormatRules: object,
  *   datePeriodDisplayModes?: object,
+ *   open?: boolean,
  * }} options
  * @returns {{ hasActive: boolean, filters: { header: ActiveRuleItem[], line: ActiveRuleItem[] }, formatRules: { header: ActiveRuleItem[], line: ActiveRuleItem[] } }}
  */
@@ -89,45 +129,61 @@ export function usePurchaseOrdersActiveRules({
   headerColumnFormatRules = {},
   lineColumnFormatRules = {},
   datePeriodDisplayModes = {},
+  open = true,
 }) {
-  const filters = useMemo(() => ({
-    header: buildActiveItems({
-      columns: headerColumns,
-      scope: 'header',
-      sourceByColumn: filterByColumn,
-      isActive: isColumnFilterActive,
-      summarize: summarizeColumnFilter,
-      payloadKey: 'filter',
-      datePeriodDisplayModes,
-    }),
-    line: [],
-  }), [datePeriodDisplayModes, filterByColumn, headerColumns]);
+  const hasActive = useMemo(() => hasActivePurchaseOrderRules({
+    headerColumns,
+    lineColumns,
+    filterByColumn,
+    headerColumnFormatRules,
+    lineColumnFormatRules,
+    datePeriodDisplayModes,
+  }), [
+    datePeriodDisplayModes,
+    filterByColumn,
+    headerColumnFormatRules,
+    headerColumns,
+    lineColumnFormatRules,
+    lineColumns,
+  ]);
 
-  const formatRules = useMemo(() => ({
-    header: buildActiveItems({
-      columns: headerColumns,
-      scope: 'header',
-      sourceByColumn: headerColumnFormatRules,
-      isActive: isColumnFormatRuleSetActive,
-      summarize: (_column, ruleSet) => summarizeFormatRuleSet(ruleSet),
-      payloadKey: 'ruleSet',
-    }),
-    line: buildActiveItems({
-      columns: lineColumns,
-      scope: 'line',
-      sourceByColumn: lineColumnFormatRules,
-      isActive: isColumnFormatRuleSetActive,
-      summarize: (_column, ruleSet) => summarizeFormatRuleSet(ruleSet),
-      payloadKey: 'ruleSet',
-    }),
-  }), [headerColumnFormatRules, headerColumns, lineColumnFormatRules, lineColumns]);
+  const filters = useMemo(() => {
+    if (!open) return EMPTY_ACTIVE_RULE_GROUPS;
+    return {
+      header: buildActiveItems({
+        columns: headerColumns,
+        scope: 'header',
+        sourceByColumn: filterByColumn,
+        isActive: isColumnFilterActive,
+        summarize: summarizeColumnFilter,
+        payloadKey: 'filter',
+        datePeriodDisplayModes,
+      }),
+      line: [],
+    };
+  }, [datePeriodDisplayModes, filterByColumn, headerColumns, open]);
 
-  const hasActive = useMemo(() => (
-    filters.header.length > 0
-    || filters.line.length > 0
-    || formatRules.header.length > 0
-    || formatRules.line.length > 0
-  ), [filters, formatRules]);
+  const formatRules = useMemo(() => {
+    if (!open) return EMPTY_ACTIVE_RULE_GROUPS;
+    return {
+      header: buildActiveItems({
+        columns: headerColumns,
+        scope: 'header',
+        sourceByColumn: headerColumnFormatRules,
+        isActive: isColumnFormatRuleSetActive,
+        summarize: (_column, ruleSet) => summarizeFormatRuleSet(ruleSet),
+        payloadKey: 'ruleSet',
+      }),
+      line: buildActiveItems({
+        columns: lineColumns,
+        scope: 'line',
+        sourceByColumn: lineColumnFormatRules,
+        isActive: isColumnFormatRuleSetActive,
+        summarize: (_column, ruleSet) => summarizeFormatRuleSet(ruleSet),
+        payloadKey: 'ruleSet',
+      }),
+    };
+  }, [headerColumnFormatRules, headerColumns, lineColumnFormatRules, lineColumns, open]);
 
   return { hasActive, filters, formatRules };
 }

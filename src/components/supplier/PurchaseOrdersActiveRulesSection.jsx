@@ -11,6 +11,8 @@ import {
   ChevronRight20Regular,
 } from '@fluentui/react-icons';
 
+const EMPTY_ITEMS = [];
+
 const useStyles = makeStyles({
   section: {
     display: 'flex',
@@ -46,7 +48,7 @@ const useStyles = makeStyles({
   },
 });
 
-export const ActiveRuleRow = memo(function ActiveRuleRow({
+const ActiveRuleRow = memo(function ActiveRuleRow({
   item,
   itemKey,
   expanded,
@@ -81,19 +83,21 @@ export const ActiveRuleRow = memo(function ActiveRuleRow({
   );
 });
 
-function PurchaseOrdersActiveFiltersList({
-  filters,
+function PurchaseOrdersActiveRulesSection({
+  title,
+  emptyText,
+  headerItems = EMPTY_ITEMS,
+  lineItems = EMPTY_ITEMS,
+  keyPrefix,
   expandedKey,
   onToggleExpanded,
-  onClearFilter,
-  filterEditor,
+  onClear,
+  renderEditor,
 }) {
   const styles = useStyles();
-  const headerFilters = filters?.header || [];
-  const lineFilters = filters?.line || [];
-  const hasFilters = headerFilters.length > 0 || lineFilters.length > 0;
-  const renderHeaderFilter = useCallback((item) => {
-    const itemKey = `filter:${item.id}`;
+  const hasItems = headerItems.length > 0 || lineItems.length > 0;
+  const renderItem = useCallback((item) => {
+    const itemKey = `${keyPrefix}${item.id}`;
     const expanded = expandedKey === itemKey;
     return (
       <ActiveRuleRow
@@ -102,47 +106,31 @@ function PurchaseOrdersActiveFiltersList({
         itemKey={itemKey}
         expanded={expanded}
         onToggleExpanded={onToggleExpanded}
-        onClear={onClearFilter}
+        onClear={onClear}
       >
-        {expanded && typeof filterEditor === 'function' ? filterEditor(item) : filterEditor}
+        {expanded && typeof renderEditor === 'function' ? renderEditor(item) : renderEditor}
       </ActiveRuleRow>
     );
-  }, [expandedKey, filterEditor, onClearFilter, onToggleExpanded]);
-  const renderLineFilter = useCallback((item) => {
-    const itemKey = `filter:${item.id}`;
-    const expanded = expandedKey === itemKey;
-    return (
-      <ActiveRuleRow
-        key={item.id}
-        item={item}
-        itemKey={itemKey}
-        expanded={expanded}
-        onToggleExpanded={onToggleExpanded}
-        onClear={onClearFilter}
-      >
-        {expanded && typeof filterEditor === 'function' ? filterEditor(item) : filterEditor}
-      </ActiveRuleRow>
-    );
-  }, [expandedKey, filterEditor, onClearFilter, onToggleExpanded]);
+  }, [expandedKey, keyPrefix, onClear, onToggleExpanded, renderEditor]);
 
   return (
     <section className={styles.section}>
-      <Text weight="semibold">Filters</Text>
-      {hasFilters ? null : <Text>No active filters</Text>}
-      {headerFilters.length > 0 ? (
+      <Text weight="semibold">{title}</Text>
+      {hasItems ? null : <Text>{emptyText}</Text>}
+      {headerItems.length > 0 ? (
         <div className={styles.group}>
           <Text size={200} weight="semibold">Header columns</Text>
-          {headerFilters.map(renderHeaderFilter)}
+          {headerItems.map(renderItem)}
         </div>
       ) : null}
-      {lineFilters.length > 0 ? (
+      {lineItems.length > 0 ? (
         <div className={styles.group}>
           <Text size={200} weight="semibold">Line columns</Text>
-          {lineFilters.map(renderLineFilter)}
+          {lineItems.map(renderItem)}
         </div>
       ) : null}
     </section>
   );
 }
 
-export default memo(PurchaseOrdersActiveFiltersList);
+export default memo(PurchaseOrdersActiveRulesSection);

@@ -15,6 +15,7 @@ import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFil
 import { getDraftFromFilter, isDateColumn, isNumberColumn } from './purchaseOrderColumnFilterMenuConstants';
 import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
+import { measureSync } from '../../utils/perf';
 import {
   DATE_FILTER_OPERATORS,
   NUMBER_FILTER_OPERATORS,
@@ -27,6 +28,7 @@ const EMPTY_COLUMNS = [];
 const EMPTY_FILTERS = {};
 const EMPTY_DATE_PERIOD_MODES = {};
 const EMPTY_FORMAT_RULES = {};
+const EMPTY_UNIQUE_VALUES = [];
 
 const useStyles = makeStyles({
   root: {
@@ -93,11 +95,14 @@ export default function PurchaseOrdersActiveFilterEditor({
   const operatorLabels = getOperatorLabels(isDate, isNumber);
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const selectedOperatorLabel = operatorLabels[draft.operator] || draft.operator;
+  const usesValuePicker = draft.operator === 'oneOf' || (!isDate && draft.operator === 'equals');
 
   const uniqueColumnValues = useMemo(() => {
-    if (isDate) return [];
-    return getUniqueColumnValues(column, items, headerColumns, filterByColumn, datePeriodDisplayModes);
-  }, [isDate, column, items, headerColumns, filterByColumn, datePeriodDisplayModes]);
+    if (!usesValuePicker) return EMPTY_UNIQUE_VALUES;
+    return measureSync('po_flyout_unique_values', () => (
+      getUniqueColumnValues(column, items, headerColumns, filterByColumn, datePeriodDisplayModes)
+    ));
+  }, [usesValuePicker, column, items, headerColumns, filterByColumn, datePeriodDisplayModes]);
 
   const mergedColumnFormatRules = useMemo(
     () => ({ ...headerColumnFormatRules, ...lineColumnFormatRules }),
@@ -141,7 +146,6 @@ export default function PurchaseOrdersActiveFilterEditor({
     });
   }, [applyColumnFilter, columnKey, draft]);
 
-  const usesValuePicker = draft.operator === 'oneOf' || (!isDate && draft.operator === 'equals');
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek');
   const inputType = getValueInputType(isDate, isNumber, draft.operator);

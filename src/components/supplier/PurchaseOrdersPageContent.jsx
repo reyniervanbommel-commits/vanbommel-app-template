@@ -1,9 +1,9 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
 import PurchaseOrdersActiveRulesFlyout from './PurchaseOrdersActiveRulesFlyout';
-import { usePurchaseOrdersActiveRules } from './usePurchaseOrdersActiveRules';
+import { usePurchaseOrdersActiveRulesFlyout } from './usePurchaseOrdersActiveRulesFlyout';
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
 import { useAuth } from '../../context/AuthContext';
@@ -46,7 +46,6 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
-  const [activeRulesOpen, setActiveRulesOpen] = useState(false);
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
   // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
@@ -99,60 +98,17 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     pageModel.lineColumnTextStyles,
     pageModel.lineColumnWidths,
   ]);
-  const activeRules = usePurchaseOrdersActiveRules({
+  const { activeRulesControls, flyoutProps } = usePurchaseOrdersActiveRulesFlyout({
+    isStaff,
     headerColumns: data.columns,
     lineColumns: data.lineColumns,
-    filterByColumn: boardView.filterByColumn,
+    orders: pageModel.orders,
+    boardView,
+    pageModel,
+    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
     headerColumnFormatRules: formatting.headerColumnFormatRules,
     lineColumnFormatRules: formatting.lineColumnFormatRules,
-    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
   });
-  const onOpenFlyout = useCallback(() => setActiveRulesOpen(true), []);
-  const onCloseActiveRulesFlyout = useCallback(() => setActiveRulesOpen(false), []);
-  const onClearFilter = useCallback((item) => {
-    boardView.clearColumnFilter(item.columnKey);
-  }, [boardView]);
-  const onClearFormatRules = useCallback((item) => {
-    if (item.scope === 'line') {
-      pageModel.saveLineColumnFormatRules(item.columnKey, null);
-      return;
-    }
-    pageModel.saveHeaderColumnFormatRules(item.columnKey, null);
-  }, [pageModel]);
-  const activeRulesControls = useMemo(() => (isStaff ? {
-    hasActive: activeRules.hasActive,
-    onOpenFlyout,
-  } : undefined), [activeRules.hasActive, isStaff, onOpenFlyout]);
-  const activeRulesFilterEditorProps = useMemo(() => ({
-    applyColumnFilter: boardView.applyColumnFilter,
-    setColumnColorFilter: boardView.setColumnColorFilter,
-    items: pageModel.orders,
-    headerColumns: data.columns,
-    filterByColumn: boardView.filterByColumn,
-    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
-    headerColumnFormatRules: formatting.headerColumnFormatRules,
-    lineColumnFormatRules: formatting.lineColumnFormatRules,
-  }), [
-    boardView.applyColumnFilter,
-    boardView.filterByColumn,
-    boardView.setColumnColorFilter,
-    data.columns,
-    formatting.headerColumnFormatRules,
-    formatting.lineColumnFormatRules,
-    pageModel.orders,
-    tableContext.datePeriodDisplayModes,
-  ]);
-  const activeRulesFormatEditorProps = useMemo(() => (isStaff ? {
-    headerColumns: data.columns,
-    lineColumns: data.lineColumns,
-    onSaveHeaderColumnFormatRules: pageModel.saveHeaderColumnFormatRules,
-    onSaveLineColumnFormatRules: pageModel.saveLineColumnFormatRules,
-  } : undefined), [
-    data.columns,
-    data.lineColumns, isStaff,
-    pageModel.saveHeaderColumnFormatRules,
-    pageModel.saveLineColumnFormatRules,
-  ]);
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
     // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
@@ -280,16 +236,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
           </TrackChangesContext.Provider>
         </div>
       </BoardSplitView>
-      <PurchaseOrdersActiveRulesFlyout
-        open={activeRulesOpen}
-        onClose={onCloseActiveRulesFlyout}
-        filters={activeRules.filters}
-        formatRules={activeRules.formatRules}
-        onClearFilter={onClearFilter}
-        onClearFormatRules={onClearFormatRules}
-        filterEditorProps={activeRulesFilterEditorProps}
-        formatEditorProps={activeRulesFormatEditorProps}
-      />
+      {flyoutProps ? <PurchaseOrdersActiveRulesFlyout {...flyoutProps} /> : null}
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>
   );

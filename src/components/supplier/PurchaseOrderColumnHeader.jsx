@@ -6,6 +6,7 @@ import {
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import D365LogoIcon from './D365LogoIcon';
 import { FilterRegular, MoreVerticalRegular, PaintBrushRegular } from '@fluentui/react-icons';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
@@ -21,7 +22,7 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
   filterIndicator: {
-    color: tokens.colorBrandForeground1,
+    color: SUBITEM_CONNECTOR_COLOR,
     fontSize: tokens.fontSizeBase300,
     width: '16px',
     minWidth: '16px',

@@ -11,25 +11,42 @@ const listeners = new Set();
 // Performance én in de perf-HUD. Gebruik voor zware client-berekeningen (bijv. het opbouwen
 // van een grote tabel-view), zodat ook toekomstige hotspots meetbaar zijn.
 //   await measure('board:process', () => buildBoardRows(...))
+//   measureSync('board:uniqueValues', () => getUniqueColumnValues(...))
+function nowMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function finishMeasure(label, start) {
+  const ms = Math.round(nowMs() - start);
+  try {
+    if (typeof performance !== 'undefined' && typeof performance.measure === 'function') {
+      performance.measure(label, { start, duration: ms });
+    }
+  } catch {
+    /* niet-kritiek */
+  }
+  recordApiTiming({ method: 'ui', path: label, status: 0, ms, at: Date.now() });
+  if (PERF_BRIDGE_ENABLED) {
+    // eslint-disable-next-line no-console
+    console.debug(`[perf] measure ${label} → ${ms}ms`);
+  }
+}
+
 export async function measure(label, fn) {
-  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  const start = now();
+  const start = nowMs();
   try {
     return await fn();
   } finally {
-    const ms = Math.round(now() - start);
-    try {
-      if (typeof performance !== 'undefined' && typeof performance.measure === 'function') {
-        performance.measure(label, { start, duration: ms });
-      }
-    } catch {
-      /* niet-kritiek */
-    }
-    recordApiTiming({ method: 'ui', path: label, status: 0, ms, at: Date.now() });
-    if (PERF_BRIDGE_ENABLED) {
-      // eslint-disable-next-line no-console
-      console.debug(`[perf] measure ${label} → ${ms}ms`);
-    }
+    finishMeasure(label, start);
+  }
+}
+
+export function measureSync(label, fn) {
+  const start = nowMs();
+  try {
+    return fn();
+  } finally {
+    finishMeasure(label, start);
   }
 }
 

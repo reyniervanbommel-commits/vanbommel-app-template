@@ -10,10 +10,10 @@
 
 **Succes (toetsbaar):**
 - Links boven in de PO-tabelheader, naast het hamburger-menu, staat een filter-icoon.
-- Een stip op het icoon is zichtbaar als minstens één filter of één formatting-regelset actief is; bij niets actiefs geen stip.
+- Het icoon is geel (zelfde kleur als de balk onder een gefilterde/formatted header) als minstens één filter of één formatting-regelset actief is; bij niets actiefs blijft het icoon neutraal. Geen aparte presence-stip.
 - Klik opent een flyout aan de rechterkant met eerst Filters, daaronder Conditional formatting.
 - Alle actieve regels staan erin, zijn daar te wissen en (na uitklappen) te wijzigen; dezelfde opslag als de kolommenu’s.
-- Zolang de flyout dicht is: geen extra API-calls en geen unique-value-scans. Unique values en editors laden pas bij uitklappen van één regel.
+- Zolang de flyout dicht is: geen extra API-calls, geen unique-value-scans, geen itemlijsten. Unique values alleen bij uitklappen van een filter met value-picker.
 
 **Non-goals:**
 - Andere pagina’s (RCCP, BI) of een eigen scherm voor de subitem-tabel.
@@ -43,7 +43,7 @@
 5. Per sectie eerst Header columns (tabelvolgorde), daarna Line columns. Een groeps-kopje ontbreekt als die groep leeg is.
 6. Elke collapsed rij toont kolomnaam, korte samenvatting en Clear. Clear wist meteen via dezelfde handlers als het kolommenu.
 7. Uitklappen opent de compacte editor (filter of formatting). Maximaal één editor tegelijk.
-8. Wijzigingen gaan via `applyColumnFilter` / `clearColumnFilter` / `setColumnColorFilter` / `saveHeaderColumnFormatRules` / `saveLineColumnFormatRules`. De tabel en de stip-badge volgen dezelfde React-state.
+8. Wijzigingen gaan via `applyColumnFilter` / `clearColumnFilter` / `setColumnColorFilter` / `saveHeaderColumnFormatRules` / `saveLineColumnFormatRules`. De tabel en de gele icoon-kleur volgen dezelfde React-state.
 
 **Rollen:** alleen staff op de PO TABEL-pagina, zelfde `isStaff` als het board. Geen nieuwe API, geen `requireRole` extra.
 
@@ -53,7 +53,7 @@
 
 **Overlap:** één editor tegelijk. Flyout openen sluit het kolommenu (Fluent outside-click op het icoon; geen tweede overlay-bus tenzij een test het tegendeel toont). Geen tweede bron van waarheid.
 
-**UI:** Fluent Drawer (header + scrollbare body, geen extra Save-footer). Engels. Geen `<Tooltip>` in de lijst; `title` / `aria-label` op het icoon. Stip-badge nooit kleur alleen: `aria-label` is `Show active filters and formatting` of `Show active filters and formatting (active)`.
+**UI:** Fluent Drawer (header + scrollbare body, geen extra Save-footer). Engels. Geen `<Tooltip>` in de lijst; `title` / `aria-label` op het icoon. Actieve staat nooit kleur alleen: `aria-label` is `Show active filters and formatting` of `Show active filters and formatting (active)`.
 
 **Zichtbaarheid:** zelfde data als het board (geen extra velden, geen vendor-specifieke geheimen in de flyout).
 
@@ -66,7 +66,7 @@
 - Formatting: `saveHeaderColumnFormatRules`, `saveLineColumnFormatRules` in `src/hooks/usePurchaseOrdersPage.js`.
 - Detectie: `isColumnFilterActive`, `isColumnFormatRuleSetActive` in `src/components/supplier/purchaseOrderColumnFilterMenuConstants.js`.
 - Editors: `src/components/supplier/PurchaseOrderColumnFilterValuePicker.jsx`, `src/components/supplier/PurchaseOrderColumnFormatRulesSection.jsx`, `src/hooks/usePurchaseOrderColorFilter.js`, `src/hooks/useColumnFormatRulesMenuDraft.js`.
-- Unique values: `src/utils/columnUniqueValues.js` — alleen in de uitgeklapte filter-editor.
+- Unique values: `src/utils/columnUniqueValues.js` — alleen in de uitgeklapte filter-editor, en alleen bij operators met een value-picker (`oneOf` / tekst-`equals`).
 - Overlay-patroon: `src/components/rccp/RccpSettingsFlyout.jsx`.
 
 **Schema:** geen nieuwe tabel of kolom. Geen extra JSON-properties in canvas-layout; bestaande board-settings blijven de bron.
@@ -75,12 +75,12 @@
 
 **Nieuw** in `src/components/supplier/`, elk onder 300 regels:
 - `PurchaseOrdersActiveRulesFlyout.jsx` — Drawer `position="end"`, `DrawerHeader` / `DrawerHeaderTitle` / `DrawerBody`, geen footer-Save.
-- `PurchaseOrdersActiveFiltersList.jsx`
-- `PurchaseOrdersActiveFormatRulesList.jsx`
+- `PurchaseOrdersActiveRulesSection.jsx` — gedeelde Filters- en Conditional-formatting-lijst
 - compacte filter-editor en compacte format-editor (alleen gemount bij `expandedKey`; inputs in `Field`, geen Tooltip, Clear op collapsed rij = `Button`).
 - `usePurchaseOrdersActiveRules.js` + `usePurchaseOrdersActiveRules.test.js`
+- `usePurchaseOrdersActiveRulesFlyout.js` — open-state en PageContent-wiring
 
-**Hook-API:** de hook levert alleen afgeleide lijsten + `hasActive` (`useMemo`, stabiele referenties). Geen JSX. Open-state en `expandedKey` blijven in de flyout-view.
+**Hook-API:** `usePurchaseOrdersActiveRules` levert `hasActive` altijd (goedkoop, geen cell-scan). Itemlijsten alleen als `open` true is. Geen JSX. `expandedKey` blijft in de flyout-view; open-state in `usePurchaseOrdersActiveRulesFlyout`.
 
 **Mount:** sibling van `src/components/supplier/PurchaseOrdersBoardTable.jsx` in `src/components/supplier/PurchaseOrdersPageContent.jsx`. Niet in de `<th>`. `PurchaseOrdersTableControls.jsx` krijgt twee extra props: `hasActive`, `onOpenFlyout` (blijft onder 10 props). Control-kolom nu 92px: synchroon verbreden in `PurchaseOrdersTableControls.jsx` en `src/components/supplier/purchaseOrdersBoardRowsStyles.js`.
 
@@ -89,10 +89,11 @@
 **Perf:**
 - Geen extra `apiRequest`.
 - Drawer-body alleen renderen als `open`.
-- `getUniqueColumnValues` alleen als die ene filter-editor expanded is (zelfde guard als het kolommenu: `if (!open) return []`).
+- Itemlijsten alleen afleiden als de flyout open is; dichte flyout: alleen `hasActive`.
+- `getUniqueColumnValues` alleen als die ene filter-editor expanded is én de operator een value-picker gebruikt, gewrapt in `measureSync('po_flyout_unique_values')`.
 - Badge = Boolean over bestaande `filterByColumn` + format-regelmaps; geen scan van cell-waarden.
 - Lijst-rijen `React.memo`; handlers `useCallback`.
 
 **Versie:** patch in `src/config/version.js`.
 
-**Aantoonbaar:** icoon klikken op `http://localhost:5178` (PO TABEL) → flyout toont actieve regels → Clear verwijdert het filter/de regelset → uitklappen wijzigt en de tabel volgt → bij niets actiefs empty states en geen stip.
+**Aantoonbaar:** icoon klikken op `http://localhost:5178` (PO TABEL) → flyout toont actieve regels → Clear verwijdert het filter/de regelset → uitklappen wijzigt en de tabel volgt → bij niets actiefs empty states en een neutraal (niet-geel) icoon.

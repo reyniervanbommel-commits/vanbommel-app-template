@@ -12,8 +12,9 @@ import {
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import PurchaseOrdersActiveFilterEditor from './PurchaseOrdersActiveFilterEditor';
 import PurchaseOrdersActiveFormatEditor from './PurchaseOrdersActiveFormatEditor';
-import PurchaseOrdersActiveFiltersList from './PurchaseOrdersActiveFiltersList';
-import PurchaseOrdersActiveFormatRulesList from './PurchaseOrdersActiveFormatRulesList';
+import PurchaseOrdersActiveRulesSection from './PurchaseOrdersActiveRulesSection';
+
+const EMPTY_GROUPS = { header: [], line: [] };
 
 const useStyles = makeStyles({
   body: {
@@ -26,8 +27,8 @@ const useStyles = makeStyles({
 function PurchaseOrdersActiveRulesFlyout({
   open,
   onClose,
-  filters,
-  formatRules,
+  filters = EMPTY_GROUPS,
+  formatRules = EMPTY_GROUPS,
   onClearFilter,
   onClearFormatRules,
   filterEditorProps = {},
@@ -79,19 +80,27 @@ function PurchaseOrdersActiveRulesFlyout({
       {open ? (
         <DrawerBody>
           <div className={styles.body}>
-            <PurchaseOrdersActiveFiltersList
-              filters={filters}
+            <PurchaseOrdersActiveRulesSection
+              title="Filters"
+              emptyText="No active filters"
+              headerItems={filters.header}
+              lineItems={filters.line}
+              keyPrefix="filter:"
               expandedKey={expandedKey}
               onToggleExpanded={handleToggleExpanded}
-              onClearFilter={onClearFilter}
-              filterEditor={renderFilterEditor}
+              onClear={onClearFilter}
+              renderEditor={renderFilterEditor}
             />
-            <PurchaseOrdersActiveFormatRulesList
-              formatRules={formatRules}
+            <PurchaseOrdersActiveRulesSection
+              title="Conditional formatting"
+              emptyText="No conditional formatting"
+              headerItems={formatRules.header}
+              lineItems={formatRules.line}
+              keyPrefix="format:"
               expandedKey={expandedKey}
               onToggleExpanded={handleToggleExpanded}
-              onClearFormatRules={onClearFormatRules}
-              formatEditor={renderFormatEditor}
+              onClear={onClearFormatRules}
+              renderEditor={renderFormatEditor}
             />
           </div>
         </DrawerBody>

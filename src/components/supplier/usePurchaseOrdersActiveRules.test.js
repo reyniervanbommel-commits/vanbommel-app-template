@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import {
+  EMPTY_ACTIVE_RULE_GROUPS,
+  hasActivePurchaseOrderRules,
   summarizeColumnFilter,
   summarizeFormatRuleSet,
   usePurchaseOrdersActiveRules,
@@ -85,5 +87,50 @@ describe('usePurchaseOrdersActiveRules', () => {
     }));
     expect(result.current.hasActive).toBe(false);
     expect(result.current.filters.header).toEqual([]);
+  });
+
+  it('keeps hasActive without building flyout items while closed', () => {
+    const props = {
+      headerColumns,
+      lineColumns,
+      filterByColumn: {
+        vendor: { operator: 'contains', value: 'Acme' },
+      },
+      headerColumnFormatRules: {},
+      lineColumnFormatRules: {},
+    };
+    const { result, rerender } = renderHook(
+      ({ open }) => usePurchaseOrdersActiveRules({ ...props, open }),
+      { initialProps: { open: false } },
+    );
+
+    expect(result.current.hasActive).toBe(true);
+    expect(result.current.filters).toBe(EMPTY_ACTIVE_RULE_GROUPS);
+    expect(result.current.formatRules).toBe(EMPTY_ACTIVE_RULE_GROUPS);
+
+    rerender({ open: true });
+
+    expect(result.current.hasActive).toBe(true);
+    expect(result.current.filters.header.map((item) => item.columnKey)).toEqual(['vendor']);
+  });
+});
+
+describe('hasActivePurchaseOrderRules', () => {
+  it('matches the flyout rules: header filters and format rules, no line filters', () => {
+    expect(hasActivePurchaseOrderRules({
+      headerColumns,
+      lineColumns,
+      filterByColumn: { qty: { operator: 'gt', value: '10' } },
+      headerColumnFormatRules: {},
+      lineColumnFormatRules: {},
+    })).toBe(false);
+
+    expect(hasActivePurchaseOrderRules({
+      headerColumns,
+      lineColumns,
+      filterByColumn: { vendor: { operator: 'contains', value: 'Acme' } },
+      headerColumnFormatRules: {},
+      lineColumnFormatRules: {},
+    })).toBe(true);
   });
 });
