@@ -48,6 +48,7 @@ const { time } = require('../utils/timing');
 const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
 const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
 const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
+const { accumulateChunkFetchProgress } = require('../utils/refreshProgress');
 const refreshRunService = require('./RefreshRunService');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
@@ -594,18 +595,24 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const seen = new Map();
   let total = 0;
   let truncated = false;
+  if (typeof onProgress === 'function') {
+    onProgress({ fetched: 0, totalToFetch: maxItems, sourceTotal: null, pagesFetched: 0, truncated: false });
+  }
   for (const chunkFilter of filterChunks) {
     const remaining = maxItems - seen.size;
     if (remaining <= 0) {
       truncated = true;
       break;
     }
+    const completedCount = seen.size;
     const result = await fetchPurchaseOrders({
       supplierAccount: null,
       fetchAll: true,
       extraFilter: chunkFilter,
       maxItems: remaining,
-      onProgress,
+      onProgress: typeof onProgress === 'function'
+        ? (progress) => onProgress(accumulateChunkFetchProgress(completedCount, progress, maxItems))
+        : undefined,
       selectFields,
       lineSelectFields,
     });

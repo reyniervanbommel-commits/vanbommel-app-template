@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Badge, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { refreshDurationLabel } from '../../utils/d365RefreshDuration';
+import { formatCount } from '../../utils/formatCount';
 
 const useStyles = makeStyles({
   list: {
@@ -73,7 +74,7 @@ function D365RefreshHistory({ runs }) {
               <Text className={styles.meta}>{duration}</Text>
             </div>
             <Text className={styles.meta}>
-              {`Fetched from D365 ${run.fetched_total || 0} · Cache rows +${run.inserted_total || 0} ~${run.updated_total || 0} · Removed from cache ${run.deleted_total || 0}`}
+              {`Fetched from D365 ${formatCount(run.fetched_total || 0)} · Cache rows +${formatCount(run.inserted_total || 0)} ~${formatCount(run.updated_total || 0)} · Removed from cache ${formatCount(run.deleted_total || 0)}`}
             </Text>
             {run.error_text ? <Text className={styles.error}>{run.error_text}</Text> : null}
             {(run.entities || []).filter((entity) => entity.error_text).map((entity) => (

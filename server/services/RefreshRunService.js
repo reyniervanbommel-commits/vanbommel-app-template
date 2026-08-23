@@ -122,16 +122,35 @@ function updateEntity(tableKey, patch = {}) {
 function setEntityProgress(tableKey, patch = {}) {
   const entity = findEntity(tableKey);
   if (!entity) return null;
-  if (patch.fetched != null) entity.fetched = Number(patch.fetched) || 0;
+  if (patch.fetched != null) {
+    const next = Number(patch.fetched) || 0;
+    entity.fetched = Math.max(Number(entity.fetched) || 0, next);
+  }
   if (patch.saved != null) entity.saved = Number(patch.saved) || 0;
   if (patch.totalToFetch != null && Number.isFinite(Number(patch.totalToFetch))) {
-    entity.totalToFetch = Number(patch.totalToFetch);
+    const nextTotal = Number(patch.totalToFetch);
+    entity.totalToFetch = entity.totalToFetch == null
+      ? nextTotal
+      : Math.max(Number(entity.totalToFetch) || 0, nextTotal);
   }
   return entity;
 }
 
 function markEntityRunning(tableKey) {
-  return updateEntity(tableKey, { status: 'running', started_at: new Date().toISOString() });
+  const entity = findEntity(tableKey);
+  if (!entity) return null;
+  entity.status = 'running';
+  entity.started_at = new Date().toISOString();
+  entity.finished_at = null;
+  entity.fetched = 0;
+  entity.saved = 0;
+  entity.inserted = 0;
+  entity.updated = 0;
+  entity.deleted = 0;
+  entity.totalToFetch = null;
+  entity.error_text = null;
+  entity.notice_text = null;
+  return entity;
 }
 
 function markEntityDone(tableKey) {

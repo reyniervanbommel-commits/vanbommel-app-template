@@ -146,4 +146,16 @@ describe('RefreshRunService', () => {
     expect(full.overall).toBeGreaterThan(0.1);
     expect(full.overall).toBeLessThan(0.3);
   });
+
+  it('laat fetched en totalToFetch niet terugspringen tijdens een run', () => {
+    refreshRunService.create({ source: 'manual', entityKeys: ['purchase-orders'] });
+    refreshRunService.markEntityRunning('purchase-orders');
+    refreshRunService.setEntityProgress('purchase-orders', { fetched: 1600, totalToFetch: 2500 });
+    refreshRunService.setEntityProgress('purchase-orders', { fetched: 120, totalToFetch: 500 });
+    const full = refreshRunService.snapshotRun('full');
+    expect(full.entities[0]).toEqual(expect.objectContaining({
+      fetched: 1600,
+      totalToFetch: 2500,
+    }));
+  });
 });

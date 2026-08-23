@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { ProgressBar, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import { formatCount } from '../../utils/formatCount';
 
 const useStyles = makeStyles({
   root: {
@@ -36,14 +37,16 @@ function entityBarValue(entity) {
   const total = Number(entity.totalToFetch);
   const fetched = Number(entity.fetched) || 0;
   if (Number.isFinite(total) && total > 0) return Math.min(0.99, fetched / total);
-  return fetched > 0 ? 0.45 : 0.12;
+  return fetched > 0 ? 0.15 : 0.08;
 }
 
 function fetchedLabel(entity) {
   const fetched = Number(entity.fetched) || 0;
   const total = Number(entity.totalToFetch);
-  if (Number.isFinite(total) && total > 0) return `Fetched from D365 ${fetched} / ${total}`;
-  return `Fetched from D365 ${fetched}`;
+  if (Number.isFinite(total) && total > 0) {
+    return `Fetched from D365 ${formatCount(fetched)} / ${formatCount(total)}`;
+  }
+  return `Fetched from D365 ${formatCount(fetched)}`;
 }
 
 function D365RefreshLivePanel({ run }) {
@@ -67,8 +70,8 @@ function D365RefreshLivePanel({ run }) {
           <Text className={styles.meta}>
             {entity.status}
             {` · ${fetchedLabel(entity)}`}
-            {` · Cache rows +${entity.inserted || 0} ~${entity.updated || 0}`}
-            {` · Removed from cache ${entity.deleted || 0}`}
+            {` · Cache rows +${formatCount(entity.inserted || 0)} ~${formatCount(entity.updated || 0)}`}
+            {` · Removed from cache ${formatCount(entity.deleted || 0)}`}
           </Text>
           {entity.error_text ? <Text className={styles.error}>{entity.error_text}</Text> : null}
           {entity.notice_text ? <Text className={styles.notice}>{entity.notice_text}</Text> : null}

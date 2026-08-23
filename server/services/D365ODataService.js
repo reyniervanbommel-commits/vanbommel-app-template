@@ -598,8 +598,6 @@ async function fetchPurchaseOrderRecords({
 
     for (const record of recordsToAdd) {
       records.push(record);
-      // Update the shared progress counter per fetched row.
-      emitProgress(false);
     }
 
     const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
@@ -705,7 +703,6 @@ async function fetchEntityRecords({
       pagesFetched += 1;
       for (const record of recordsToAdd) {
         records.push(record);
-        emitProgress(false);
       }
 
       const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
