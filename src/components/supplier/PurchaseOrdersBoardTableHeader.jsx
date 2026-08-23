@@ -20,6 +20,7 @@ export default function PurchaseOrdersBoardTableHeader({
   stickyState,
   collapsedHeaderColumnKeys,
   items = [],
+  activeRulesControls,
 }) {
   const {
     filterByColumn, sortState, setSortDirection, setFilterOperator, setFilterValue,
@@ -94,6 +95,7 @@ export default function PurchaseOrdersBoardTableHeader({
         onMakeColumnSticky={makeColumnSticky}
         collapsedColumnKeys={collapsedHeaderColumnKeys}
         onToggleColumnCollapsed={onToggleHeaderColumnCollapsed}
+        activeRulesControls={activeRulesControls}
       />
     </thead>
   );

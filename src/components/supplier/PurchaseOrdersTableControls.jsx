@@ -9,12 +9,26 @@ import {
   MenuPopover,
   MenuTrigger,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
 import {
+  Filter20Regular,
   TextBulletList20Regular,
 } from '@fluentui/react-icons';
+import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
+import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
+
+function FilterIconThick20() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="13" height="2" rx="1" />
+      <rect x="5.5" y="8.75" width="9" height="2" rx="1" />
+      <rect x="7.5" y="13" width="5" height="2" rx="1" />
+    </svg>
+  );
+}
 
 const useStyles = makeStyles({
   controlHeaderCell: {
@@ -23,9 +37,9 @@ const useStyles = makeStyles({
     top: 0,
     left: 0,
     zIndex: 4,
-    width: '92px',
-    minWidth: '92px',
-    maxWidth: '92px',
+    width: purchaseOrderBoardControlColumnWidth,
+    minWidth: purchaseOrderBoardControlColumnWidth,
+    maxWidth: purchaseOrderBoardControlColumnWidth,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('2px'),
@@ -48,6 +62,14 @@ const useStyles = makeStyles({
     height: '22px',
     ...shorthands.padding('0'),
   },
+  filterIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterIconActive: {
+    color: SUBITEM_CONNECTOR_COLOR,
+  },
 });
 
 function PurchaseOrdersTableControls({
@@ -58,6 +80,8 @@ function PurchaseOrdersTableControls({
   allSelected = false,
   someSelected = false,
   onToggleAll,
+  hasActive = false,
+  onOpenFlyout,
 }) {
   const styles = useStyles();
   const expandAll = useCallback(() => onSetExpansion('all', true), [onSetExpansion]);
@@ -72,6 +96,17 @@ function PurchaseOrdersTableControls({
   const showProductImageColumn = useCallback(() => {
     onToggleProductImageColumn?.(true);
   }, [onToggleProductImageColumn]);
+  const openFlyout = useCallback(() => {
+    onOpenFlyout?.();
+  }, [onOpenFlyout]);
+  const filterButtonLabel = hasActive
+    ? 'Show active filters and formatting (active)'
+    : 'Show active filters and formatting';
+  const filterIcon = (
+    <span className={mergeClasses(styles.filterIcon, hasActive && styles.filterIconActive)}>
+      {hasActive ? <FilterIconThick20 /> : <Filter20Regular />}
+    </span>
+  );
 
   return (
     <th className={styles.controlHeaderCell} aria-label="Table display controls">
@@ -135,6 +170,17 @@ function PurchaseOrdersTableControls({
             </MenuList>
           </MenuPopover>
         </Menu>
+        {typeof onOpenFlyout === 'function' ? (
+          <Button
+            size="small"
+            appearance="subtle"
+            className={mergeClasses(styles.button, hasActive && styles.filterIconActive)}
+            icon={filterIcon}
+            title={filterButtonLabel}
+            aria-label={filterButtonLabel}
+            onClick={openFlyout}
+          />
+        ) : null}
       </div>
     </th>
   );

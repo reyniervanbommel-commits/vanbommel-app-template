@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX } from '../components/supplier/purchaseOrderBoardLayout';
 
-const CONTROL_COLUMN_WIDTH = 58;
+const CONTROL_COLUMN_WIDTH = PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX;
 const FALLBACK_COLUMN_WIDTH = 80;
 
 function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
