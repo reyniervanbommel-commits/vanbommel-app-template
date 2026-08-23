@@ -202,7 +202,7 @@ router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, nex
 router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    const result = await dataService.startRefresh(tableKey);
+    const result = await dataService.startRefresh(tableKey, { triggeredByUserId: req.user?.id });
     return res.status(result.started ? 202 : 200).json(result);
   } catch (err) {
     return next(err);
@@ -210,20 +210,26 @@ router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, re
 });
 
 // GET /api/data/:tableKey/refresh/progress â€” voortgang van de lopende/laatste bron-refresh.
-router.get('/:tableKey/refresh/progress', async (req, res, next) => {
+router.get('/:tableKey/refresh/progress', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
-    return res.json({
-      running: dataService.isRefreshRunning(tableKey),
-      progress: dataService.getRefreshProgress(tableKey),
-    });
+    const refreshRunService = require('../services/RefreshRunService');
+    return res.json(refreshRunService.serializeLivePayload(
+      dataService.getRefreshProgress(tableKey),
+      { view: String(req.query.view || ''), running: dataService.isRefreshRunning(tableKey) }
+    ));
   } catch (err) {
     return next(err);
   }
 });
 
 // POST /api/data/:tableKey/viewed â€” markeer alles als gezien (admin baseline voor alle gebruikers).
-router.post('/:tableKey/viewed', requireRole(ROLES.ADMIN), async (req, res, next) => {
+function viewedRoleGuard(req, res, next) {
+  if (req.params.tableKey === 'purchase-orders') return next();
+  return requireRole(ROLES.ADMIN)(req, res, next);
+}
+
+router.post('/:tableKey/viewed', viewedRoleGuard, async (req, res, next) => {
   try {
     const result = await dataService.markViewed(req.user.id, req.params.tableKey);
     return res.json(result);
@@ -523,7 +529,7 @@ router.get('/:tableKey/rows/hidden-in-filter', async (req, res, next) => {
   }
 });
 
-// GET /api/data/purchase-orders/lookup-debug — diagnostisch: toont lookup-state voor items (admin only)
+// GET /api/data/purchase-orders/lookup-debug ï¿½ diagnostisch: toont lookup-state voor items (admin only)
 router.get('/purchase-orders/lookup-debug', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const table = await registry.getTableByKey('purchase-orders');
@@ -558,7 +564,7 @@ router.get('/purchase-orders/lookup-debug', requireRole(ROLES.ADMIN), async (req
   }
 });
 
-// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details — sublijnen van één rij.
+// GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details ï¿½ sublijnen van ï¿½ï¿½n rij.
 // GET /api/data/:tableKey/rows/:partitionKey/:recordKey/details â€” sublijnen van Ã©Ã©n rij.
 // Het board krijgt de regels niet meer mee in de board-read (die zou bij ~2000 orders
 // tientallen MB's worden) en haalt ze hiermee op zodra een order wordt opengeklapt.
@@ -566,7 +572,12 @@ router.get('/:tableKey/rows/:partitionKey/:recordKey/details', async (req, res, 
   try {
     const { tableKey, partitionKey, recordKey } = req.params;
     await assertSupplierPurchaseOrderRow(req.user, { tableKey, partitionKey, recordKey });
-    const result = await dataService.readRowDetails({ tableKey, partitionKey, recordKey });
+    const result = await dataService.readRowDetails({
+      tableKey,
+      partitionKey,
+      recordKey,
+      userId: req.user?.id,
+    });
     return res.json(result);
   } catch (err) {
     return next(err);

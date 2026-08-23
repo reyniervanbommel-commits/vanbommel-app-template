@@ -2,6 +2,7 @@
 
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
+const { listSelectFieldsMissingFromRecord } = require('../utils/discoverSourceColumns');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
 const DEFAULT_RELEASED_PRODUCT_DOCUMENT_ATTACHMENTS_PATH = '/data/ReleasedProductDocumentAttachments';
@@ -367,6 +368,32 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
   return { ok: true };
 }
 
+function summarizeODataFailure(status, url, body) {
+  let detail = '';
+  const raw = String(body || '').trim();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const message = parsed?.error?.message;
+      if (typeof message === 'string') detail = message;
+      else if (message && typeof message === 'object') detail = String(message.value || '');
+      if (!detail && parsed?.error?.innererror?.message) {
+        detail = String(parsed.error.innererror.message);
+      }
+    } catch {
+      detail = raw;
+    }
+  }
+  detail = detail.replace(/\s+/g, ' ').trim().slice(0, 400);
+  let path = '';
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    path = '';
+  }
+  return [`D365 OData request failed (${status})`, path, detail].filter(Boolean).join(': ');
+}
+
 async function fetchODataJson(url, timeout) {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeout);
@@ -394,8 +421,8 @@ async function fetchODataJson(url, timeout) {
       bodyPreview: responseBody.slice(0, 300),
     });
 
-    const err = new Error('D365 OData request failed');
-    err.status = 502;
+    const err = new Error(summarizeODataFailure(response.status, url, responseBody));
+    err.status = response.status || 502;
     throw err;
   }
 
@@ -571,8 +598,6 @@ async function fetchPurchaseOrderRecords({
 
     for (const record of recordsToAdd) {
       records.push(record);
-      // Update the shared progress counter per fetched row.
-      emitProgress(false);
     }
 
     const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
@@ -628,89 +653,118 @@ async function fetchEntityRecords({
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
-  const records = [];
-  let total = null;
-  let pagesFetched = 0;
-  let hasMore = false;
-  let truncated = false;
   const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
     ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
     : MAX_PURCHASE_ORDER_ITEMS;
   const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
+  const hasSelect = Array.isArray(selectFields) && selectFields.length > 0;
 
-  let currentUrl = await buildGenericEntityUrl({
-    sourceEntity,
-    company,
-    top: initialTop,
-    skip,
-    extraFilter,
-    selectFields,
-    applyCompanyFilter,
-  });
+  async function run(activeSelectFields, { topOverride, fetchAllOverride, skipOverride } = {}) {
+    const records = [];
+    let total = null;
+    let pagesFetched = 0;
+    let hasMore = false;
+    let truncated = false;
+    const shouldFetchAll = fetchAllOverride ?? fetchAll;
+    const pageTop = topOverride ?? initialTop;
+    const pageSkip = skipOverride ?? skip;
 
-  const emitProgress = (isTruncated = false) => {
-    if (typeof onProgress !== 'function') return;
-    onProgress({
-      fetched: records.length,
-      totalToFetch: total === null ? null : Math.min(total, effectiveMax),
-      sourceTotal: total,
-      pagesFetched,
-      truncated: isTruncated,
+    let currentUrl = await buildGenericEntityUrl({
+      sourceEntity,
+      company,
+      top: pageTop,
+      skip: pageSkip,
+      extraFilter,
+      selectFields: activeSelectFields,
+      applyCompanyFilter,
     });
-  };
 
-  while (currentUrl) {
-    const payload = await fetchODataJson(currentUrl, timeout);
-    const pageRecords = Array.isArray(payload.value) ? payload.value : [];
-    if (total === null) {
-      const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
-      if (Number.isFinite(parsedTotal)) total = parsedTotal;
+    const emitProgress = (isTruncated = false) => {
+      if (typeof onProgress !== 'function') return;
+      onProgress({
+        fetched: records.length,
+        totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+        sourceTotal: total,
+        pagesFetched,
+        truncated: isTruncated,
+      });
+    };
+
+    while (currentUrl) {
+      const payload = await fetchODataJson(currentUrl, timeout);
+      const pageRecords = Array.isArray(payload.value) ? payload.value : [];
+      if (total === null) {
+        const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
+        if (Number.isFinite(parsedTotal)) total = parsedTotal;
+      }
+
+      const remaining = shouldFetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+      const recordsToAdd = pageRecords.slice(0, remaining);
+      pagesFetched += 1;
+      for (const record of recordsToAdd) {
+        records.push(record);
+      }
+
+      const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+      const manualNextLink = shouldFetchAll && !serverNextLink
+        ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
+        : null;
+      const nextLink = serverNextLink || manualNextLink;
+      const hitItemCap = shouldFetchAll
+        && records.length >= effectiveMax
+        && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
+      emitProgress(hitItemCap);
+
+      if (!shouldFetchAll || !nextLink) {
+        currentUrl = null;
+        hasMore = Boolean(nextLink) || hitItemCap;
+        truncated = hitItemCap;
+        break;
+      }
+
+      if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
+        currentUrl = null;
+        hasMore = true;
+        truncated = true;
+        emitProgress(true);
+        break;
+      }
+
+      currentUrl = nextLink;
     }
 
-    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
-    const recordsToAdd = pageRecords.slice(0, remaining);
-    pagesFetched += 1;
-    for (const record of recordsToAdd) {
-      records.push(record);
-      emitProgress(false);
-    }
-
-    const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
-    const manualNextLink = fetchAll && !serverNextLink
-      ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
-      : null;
-    const nextLink = serverNextLink || manualNextLink;
-    const hitItemCap = fetchAll
-      && records.length >= effectiveMax
-      && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
-    emitProgress(hitItemCap);
-
-    if (!fetchAll || !nextLink) {
-      currentUrl = null;
-      hasMore = Boolean(nextLink) || hitItemCap;
-      truncated = hitItemCap;
-      break;
-    }
-
-    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
-      currentUrl = null;
-      hasMore = true;
-      truncated = true;
-      emitProgress(true);
-      break;
-    }
-
-    currentUrl = nextLink;
+    return {
+      total: total ?? records.length,
+      items: records,
+      hasMore,
+      truncated,
+      pagesFetched,
+      fetchedAll: shouldFetchAll ? !hasMore : false,
+    };
   }
 
-  return {
-    total: total ?? records.length,
-    items: records,
-    hasMore,
-    truncated,
-    pagesFetched,
-    fetchedAll: fetchAll ? !hasMore : false,
-  };
+  try {
+    return await run(selectFields);
+  } catch (err) {
+    if (!hasSelect || Number(err?.status) !== 400) throw err;
+    let probe;
+    try {
+      probe = await run(null, { topOverride: 1, fetchAllOverride: false, skipOverride: 0 });
+    } catch {
+      throw err;
+    }
+    const sampleRecord = Array.isArray(probe?.items) ? probe.items[0] : null;
+    const droppedSelectFields = listSelectFieldsMissingFromRecord(selectFields, sampleRecord);
+    if (!droppedSelectFields.length) throw err;
+    const droppedSet = new Set(droppedSelectFields.map((field) => field.toLowerCase()));
+    const nextSelect = selectFields.filter((field) => !droppedSet.has(String(field).toLowerCase()));
+    logger.warn('D365 $select rejected; dropping fields that D365 did not return', {
+      sourceEntity,
+      droppedSelectFields,
+    });
+    const result = await run(nextSelect.length ? nextSelect : null);
+    return { ...result, droppedSelectFields };
+  }
 }
 
 function buildPurchaseOrderKeysFilter(keys) {
@@ -1036,6 +1090,7 @@ module.exports = {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  summarizeODataFailure,
   __resetOAuthTokenCache,
   RETAINED_PO_CHUNK_SIZE,
 };

@@ -29,4 +29,94 @@ function listStaleSourceColumns(existingColumns, discoveredFields, protectedSour
   });
 }
 
-module.exports = { listStaleSourceColumns };
+function isEmptySampleValue(value) {
+  return value === null || value === undefined || value === '';
+}
+
+function formatSampleValue(value) {
+  if (isEmptySampleValue(value)) return '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function lookupRawFieldValue(raw, field) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const name = String(field || '').trim();
+  if (!name) return undefined;
+  if (Object.prototype.hasOwnProperty.call(raw, name)) return raw[name];
+  const lower = name.toLowerCase();
+  for (const [key, value] of Object.entries(raw)) {
+    if (String(key).toLowerCase() === lower) return value;
+  }
+  return undefined;
+}
+
+function firstNonEmptySample(rawRows, field) {
+  const rows = Array.isArray(rawRows) ? rawRows : [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const candidate = lookupRawFieldValue(rows[i], field);
+    if (isEmptySampleValue(candidate)) continue;
+    if (Array.isArray(candidate)) continue;
+    if (typeof candidate === 'object') continue;
+    return candidate;
+  }
+  return undefined;
+}
+
+function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
+  if (!previewTable || !Array.isArray(fields) || !fields.length || !Array.isArray(rawRows) || !rawRows.length) {
+    return previewTable;
+  }
+  const nextSampleByField = { ...(previewTable.sampleByField || {}) };
+  for (const field of fields) {
+    if (nextSampleByField[field] && nextSampleByField[field] !== '—') continue;
+    const candidate = firstNonEmptySample(rawRows, field);
+    nextSampleByField[field] = candidate === undefined ? '—' : formatSampleValue(candidate);
+  }
+  return {
+    ...previewTable,
+    sampleByField: nextSampleByField,
+  };
+}
+
+function listSelectFieldsMissingFromRecord(selectFields, record) {
+  const keys = new Set(
+    Object.keys(record && typeof record === 'object' ? record : {})
+      .filter((key) => key && !String(key).startsWith('@'))
+      .map((key) => String(key).toLowerCase())
+  );
+  if (!keys.size) return [];
+  return (Array.isArray(selectFields) ? selectFields : [])
+    .map((field) => String(field || '').trim())
+    .filter((field) => field && !keys.has(field.toLowerCase()));
+}
+
+function formatSelectDropNotice(fields) {
+  const list = [...new Set((Array.isArray(fields) ? fields : [])
+    .map((field) => String(field || '').trim())
+    .filter(Boolean))];
+  if (!list.length) return null;
+  return `Removed from $select (not returned by D365): ${list.join(', ')}`;
+}
+
+function sampleMapFromDiscoveredFields(discoveredFields) {
+  const sampleByField = {};
+  for (const entry of Array.isArray(discoveredFields) ? discoveredFields : []) {
+    const field = String(entry?.field || '').trim();
+    if (!field) continue;
+    sampleByField[field] = isEmptySampleValue(entry?.sample) ? '—' : formatSampleValue(entry.sample);
+  }
+  return sampleByField;
+}
+
+module.exports = {
+  listStaleSourceColumns,
+  isEmptySampleValue,
+  formatSampleValue,
+  lookupRawFieldValue,
+  firstNonEmptySample,
+  fillMissingSamplesFromRawRows,
+  listSelectFieldsMissingFromRecord,
+  formatSelectDropNotice,
+  sampleMapFromDiscoveredFields,
+};

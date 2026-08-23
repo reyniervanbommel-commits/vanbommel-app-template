@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { BOARD_TB_SOURCE } from '../config/featureFlags';
+import { mergeDiscoverySamples } from '../components/admin/datamodel/entityConfigTableUtils';
 
 // Board-cutover Fase 5/6 (#AB:174/#175): de admin-datamodel-pagina draait onder BOARD_TB_SOURCE op de
 // generieke tb_*-laag (/api/data/purchase-orders/...). De tb_-kolomrespons wordt naar de admin-vorm
@@ -72,13 +73,17 @@ function mapAdminColumn(col) {
 
 function mapDataModelPayload(payload) {
   if (!payload || !BOARD_TB_SOURCE) return payload;
-  return {
+  const mapped = {
     ...payload,
     columns: {
       header: Array.isArray(payload.columns?.header) ? payload.columns.header.map(mapAdminColumn) : [],
       line: Array.isArray(payload.columns?.line) ? payload.columns.line.map(mapAdminColumn) : [],
     },
   };
+  if (payload.discovery?.sampleByField && payload.previewTables) {
+    mapped.previewTables = mergeDiscoverySamples(payload.previewTables, payload.discovery.sampleByField);
+  }
+  return mapped;
 }
 
 /**

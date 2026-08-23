@@ -65,6 +65,35 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(0);
   });
 
+  it('laat supplier POST op /purchase-orders/viewed door', () => {
+    const { next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/viewed',
+      method: 'POST',
+    });
+    expect(next.calls).toHaveLength(1);
+  });
+
+  it('weigert supplier POST op /purchase-orders/refresh/start met 403', () => {
+    const { res, next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/refresh/start',
+      method: 'POST',
+    });
+    expect(res.statusCode).toBe(403);
+    expect(next.calls).toHaveLength(0);
+  });
+
+  it('weigert supplier POST viewed op een andere tabel met 403', () => {
+    const { res, next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/vendors/viewed',
+      method: 'POST',
+    });
+    expect(res.statusCode).toBe(403);
+    expect(next.calls).toHaveLength(0);
+  });
+
   it('weigert supplier POST op /purchase-orders met 403 (geen schrijftoegang)', () => {
     const { res, next } = callMiddleware({ user: { role: 'supplier' }, path: '/purchase-orders', method: 'POST' });
     expect(res.statusCode).toBe(403);

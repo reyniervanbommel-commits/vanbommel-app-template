@@ -22,6 +22,7 @@ import {
   DATA_TYPE_LABELS,
   createSampleByField,
   getExampleRowValues,
+  lookupSampleValue,
   matchesText,
   toExcelCellValue,
 } from './entityConfigTableUtils';
@@ -142,7 +143,7 @@ export default function EntityConfigTable({
   const [columnFilter, setColumnFilter] = useState('');
   const handleColumnFilter = useCallback((_, data) => setColumnFilter(data.value), []);
   const filteredColumns = useMemo(() => columns.filter((column) => {
-    const sampleValue = sampleByField[column.d365Field] || sampleByField[column.label] || '—';
+    const sampleValue = lookupSampleValue(sampleByField, column.d365Field, column.key, column.label);
     return matchesText(column.label, columnFilter)
       || matchesText(column.d365Field, columnFilter)
       || matchesText(DATA_TYPE_LABELS[column.dataType] || column.dataType, columnFilter)
@@ -208,7 +209,8 @@ export default function EntityConfigTable({
         </Button>
       </div>
       <Text className={styles.muted}>
-        Sample values are taken from the latest synced rows ({sampledRows.toLocaleString('nl-NL')} sampled).
+        Sample values come from synced rows, or from a live D365 sample when the cache has no value yet
+        ({sampledRows.toLocaleString('nl-NL')} cache rows sampled).
       </Text>
       <Input
         className={styles.filterInput}
@@ -260,7 +262,7 @@ export default function EntityConfigTable({
             {filteredColumns.map((column) => {
               const fieldKey = String(column.d365Field || '').toLowerCase();
               const isRelationField = relationFields?.has ? relationFields.has(fieldKey) : false;
-              const sampleValue = sampleByField[column.d365Field] || sampleByField[column.label] || '—';
+              const sampleValue = lookupSampleValue(sampleByField, column.d365Field, column.key, column.label);
               return (
                 <DataPreviewColumnConfigRow
                   key={column.id}

@@ -25,6 +25,47 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
   return poller.pollUntilDone();
 }
 
+function buildNightDigestContent(run) {
+  const status = String(run?.status || 'unknown');
+  const errorText = String(run?.error_text || 'No details').slice(0, 500);
+  const entityLines = (run?.entities || [])
+    .filter((entity) => entity.status === 'error')
+    .map((entity) => `- ${entity.tableKey || entity.label}: ${String(entity.error_text || 'Refresh failed').slice(0, 500)}`);
+  const subject = status === 'interrupted'
+    ? 'D365 night refresh interrupted'
+    : 'D365 night refresh failed';
+  const plainText = [
+    `Status: ${status}`,
+    `Started: ${run?.started_at || 'unknown'}`,
+    `Finished: ${run?.finished_at || 'unknown'}`,
+    `Summary: ${errorText}`,
+    entityLines.length ? `Entity errors:\n${entityLines.join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+  return {
+    subject,
+    html: `<p>${plainText.replace(/\n/g, '<br/>')}</p>`,
+    plainText,
+  };
+}
+
+async function sendNightRefreshDigest({ recipients, run }) {
+  const client = getClient();
+  const senderAddress = process.env.ACS_FROM_EMAIL;
+  const to = (Array.isArray(recipients) ? recipients : []).filter(Boolean);
+  if (!client || !senderAddress || !to.length) {
+    console.warn('[EmailService] ACS not configured or no recipients; night digest skipped');
+    return { skipped: true };
+  }
+  const content = buildNightDigestContent(run);
+  const poller = await client.beginSend({
+    senderAddress,
+    content,
+    recipients: { to: to.map((address) => ({ address })) },
+  });
+  await poller.pollUntilDone();
+  return { skipped: false };
+}
+
 async function sendInviteEmail(toEmail, setPasswordUrl) {
   const client = getClient();
   const senderAddress = process.env.ACS_FROM_EMAIL;
@@ -44,4 +85,4 @@ async function sendInviteEmail(toEmail, setPasswordUrl) {
   return poller.pollUntilDone();
 }
 
-module.exports = { sendPasswordResetEmail, sendInviteEmail };
+module.exports = { sendPasswordResetEmail, sendInviteEmail, sendNightRefreshDigest, buildNightDigestContent };

@@ -74,7 +74,7 @@ function PurchaseOrderChangeActivityBar({
         icon={<CheckmarkRegular />}
         onClick={markViewed}
         disabled={markingViewed || !canMarkViewed}
-        title={canMarkViewed ? 'Mark changes as seen' : 'Only admin can mark as seen'}
+        title="Mark changes as seen"
       >
         {markingViewed ? 'Working...' : 'Mark as seen'}
       </Button>

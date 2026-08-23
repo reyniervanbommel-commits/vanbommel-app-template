@@ -10,6 +10,7 @@ const {
   escapeODataLiteral,
   getAccessToken,
   writeBackField,
+  summarizeODataFailure,
   __resetOAuthTokenCache,
 } = require('./D365ODataService');
 
@@ -37,6 +38,17 @@ describe('D365ODataService', () => {
 
   it('escapet OData string literals veilig', () => {
     expect(escapeODataLiteral("a'b")).toBe("a''b");
+  });
+
+  it('vat een OData-fout samen voor de UI', () => {
+    const message = summarizeODataFailure(
+      400,
+      'https://example.operations.dynamics.com/data/ReleasedProductsV2?$select=BadField',
+      JSON.stringify({ error: { message: { value: "Could not find a property named 'BadField'" } } }),
+    );
+    expect(message).toContain('400');
+    expect(message).toContain('/data/ReleasedProductsV2');
+    expect(message).toContain("Could not find a property named 'BadField'");
   });
 
   it('bouwt een OR-filter voor retained purchase order keys', () => {
@@ -573,6 +585,49 @@ describe('D365ODataService', () => {
       expect(result.items).toHaveLength(3);
       expect(result.pagesFetched).toBe(2);
       expect(result.fetchedAll).toBe(true);
+    });
+
+    it('haalt illegale $select-velden weg na een $top=1 probe zonder $select', async () => {
+      const calls = [];
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        const parsed = new URL(String(url));
+        const select = parsed.searchParams.get('$select');
+        calls.push({ select, top: parsed.searchParams.get('$top') });
+        if (select && select.split(',').includes('ProductName')) {
+          return {
+            ok: false,
+            status: 400,
+            text: async () => JSON.stringify({
+              error: { message: { value: "Could not find a property named 'ProductName'" } },
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            '@odata.count': 1,
+            value: [{ dataAreaId: 'WHSL', ItemNumber: 'ART-1', SearchName: 'Boot' }],
+          }),
+        };
+      });
+
+      const result = await fetchEntityRecords({
+        sourceEntity: '/data/ReleasedProductsV2',
+        top: 5,
+        skip: 0,
+        fetchAll: false,
+        selectFields: ['dataAreaId', 'ItemNumber', 'ProductName'],
+      });
+
+      expect(calls.map((call) => call.select)).toEqual([
+        'dataAreaId,ItemNumber,ProductName',
+        null,
+        'dataAreaId,ItemNumber',
+      ]);
+      expect(calls[1].top).toBe('1');
+      expect(result.droppedSelectFields).toEqual(['ProductName']);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].ItemNumber).toBe('ART-1');
     });
   });
 });

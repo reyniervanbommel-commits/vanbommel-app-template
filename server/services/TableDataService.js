@@ -25,7 +25,15 @@ const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } 
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
-const { listStaleSourceColumns } = require('../utils/discoverSourceColumns');
+const {
+  listStaleSourceColumns,
+  lookupRawFieldValue,
+  isEmptySampleValue,
+  formatSampleValue,
+  fillMissingSamplesFromRawRows,
+  sampleMapFromDiscoveredFields,
+  formatSelectDropNotice,
+} = require('../utils/discoverSourceColumns');
 const {
   listVendorGroupIds,
   expandVendorGroupRules,
@@ -37,6 +45,11 @@ const {
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
+const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
+const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
+const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
+const { accumulateChunkFetchProgress } = require('../utils/refreshProgress');
+const refreshRunService = require('./RefreshRunService');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
 const MAX_KEY_LENGTH = 64;
@@ -114,13 +127,41 @@ function isRefreshRunning(tableKey) {
   return refreshJobsByTable.has(key);
 }
 
-async function startRefresh(tableKey) {
+async function resolveCascadeEntityKeys() {
+  try {
+    const table = await getTableByKey('purchase-orders');
+    const lookups = await getLookups(table.id);
+    const targets = [...new Set(
+      lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean)
+    )];
+    const ordered = await orderLookupTargetKeys(targets, getTableByKey);
+    return ['purchase-orders', ...ordered];
+  } catch {
+    return ['purchase-orders'];
+  }
+}
+
+async function startRefresh(tableKey, options = {}) {
   const key = String(tableKey || '').trim();
   if (!key) throw Object.assign(new Error('Invalid table key'), { status: 400 });
+  const source = options.source === 'night' ? 'night' : 'manual';
+  const triggeredByUserId = options.triggeredByUserId || null;
   if (refreshJobsByTable.has(key)) {
+    if (source === 'night' && key === 'purchase-orders') {
+      const attached = refreshRunService.attachNight();
+      return {
+        started: false,
+        running: true,
+        attached: true,
+        runId: attached.runId,
+        progress: getRefreshProgress(key),
+      };
+    }
     return {
       started: false,
       running: true,
+      attached: false,
+      runId: refreshRunService.getActiveRunId(),
       progress: getRefreshProgress(key),
     };
   }
@@ -134,11 +175,24 @@ async function startRefresh(tableKey) {
     finishedAt: null,
     error: null,
   });
+  if (key === 'purchase-orders') {
+    await refreshRunService.beginPurchaseOrderRun({
+      source,
+      triggeredByUserId,
+      entityKeys: await resolveCascadeEntityKeys(),
+    });
+  }
   const job = (async () => {
     try {
       await refresh(key);
+      if (key === 'purchase-orders') {
+        await refreshRunService.finishSuccess();
+      }
     } catch (err) {
       logger.error('Achtergrond-refresh mislukt', { tableKey: key, error: err.message });
+      if (key === 'purchase-orders') {
+        await refreshRunService.failPurchaseOrders(err.message);
+      }
     } finally {
       refreshJobsByTable.delete(key);
     }
@@ -147,6 +201,8 @@ async function startRefresh(tableKey) {
   return {
     started: true,
     running: true,
+    attached: false,
+    runId: refreshRunService.getActiveRunId(),
     progress: getRefreshProgress(key),
   };
 }
@@ -539,18 +595,24 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const seen = new Map();
   let total = 0;
   let truncated = false;
+  if (typeof onProgress === 'function') {
+    onProgress({ fetched: 0, totalToFetch: maxItems, sourceTotal: null, pagesFetched: 0, truncated: false });
+  }
   for (const chunkFilter of filterChunks) {
     const remaining = maxItems - seen.size;
     if (remaining <= 0) {
       truncated = true;
       break;
     }
+    const completedCount = seen.size;
     const result = await fetchPurchaseOrders({
       supplierAccount: null,
       fetchAll: true,
       extraFilter: chunkFilter,
       maxItems: remaining,
-      onProgress,
+      onProgress: typeof onProgress === 'function'
+        ? (progress) => onProgress(accumulateChunkFetchProgress(completedCount, progress, maxItems))
+        : undefined,
       selectFields,
       lineSelectFields,
     });
@@ -988,6 +1050,7 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
   let rawItems = [];
   let total = 0;
   let truncated = false;
+  let droppedSelectFields = [];
 
   if (usesInheritedPoFilter) {
     const inheritedScopes = await getInheritedPoLookupScopes(table);
@@ -1023,6 +1086,10 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
           maxItems,
           selectFields,
         });
+        if (chunkResult.droppedSelectFields?.length) {
+          droppedSelectFields = mergeDroppedSelectFields(droppedSelectFields, chunkResult.droppedSelectFields);
+          selectFields = narrowSelectFields(selectFields, droppedSelectFields);
+        }
         pagesFetched += Number(chunkResult.pagesFetched) || 0;
         truncated = truncated || Boolean(chunkResult.truncated);
         for (const raw of Array.isArray(chunkResult.items) ? chunkResult.items : []) {
@@ -1055,9 +1122,16 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
       onProgress,
       selectFields,
     });
+    if (result.droppedSelectFields?.length) {
+      droppedSelectFields = mergeDroppedSelectFields(droppedSelectFields, result.droppedSelectFields);
+    }
     rawItems = Array.isArray(result.items) ? result.items : [];
     total = Number(result.total) || rawItems.length;
     truncated = Boolean(result.truncated);
+  }
+
+  if (droppedSelectFields.length) {
+    await applyDroppedSelectFields(table, droppedSelectFields);
   }
 
   const records = rawItems.map((raw) => {
@@ -1582,9 +1656,13 @@ function collectDiscoveredFields(records, level) {
             field: normalizedField,
             label: toColumnLabelFromField(normalizedField) || normalizedField,
             dataType: 'text',
+            sample: null,
           });
         }
         const current = discovered.get(normalizedField);
+        if (isEmptySampleValue(current.sample) && !isEmptySampleValue(value)) {
+          current.sample = value;
+        }
         const inferredType = inferSourceDataType(value);
         if (current.dataType === 'text' && inferredType !== 'text') current.dataType = inferredType;
       });
@@ -1607,6 +1685,52 @@ async function deleteSourceColumnsByIds(pool, columnIds) {
       .query("DELETE FROM dbo.tb_columns WHERE id = @columnId AND source = 'source'");
   }
   return ids.length;
+}
+
+function mergeDroppedSelectFields(current, extra) {
+  const next = [...(Array.isArray(current) ? current : [])];
+  const seen = new Set(next.map((field) => String(field).toLowerCase()));
+  for (const field of Array.isArray(extra) ? extra : []) {
+    const name = String(field || '').trim();
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    next.push(name);
+  }
+  return next;
+}
+
+function narrowSelectFields(selectFields, droppedFields) {
+  if (!Array.isArray(selectFields) || !selectFields.length) return selectFields;
+  const dropped = new Set((droppedFields || []).map((field) => String(field).toLowerCase()));
+  if (!dropped.size) return selectFields;
+  return selectFields.filter((field) => !dropped.has(String(field).toLowerCase()));
+}
+
+async function dropIllegalSelectSourceColumns(table, droppedFields) {
+  const names = [...new Set((droppedFields || []).map((field) => String(field || '').trim()).filter(Boolean))];
+  if (!names.length) return [];
+  const protectedFields = new Set(uniqueFieldList([
+    ...(table.keyFields || []),
+    ...requiredMasterFieldsFromTable(table),
+  ]).map((field) => field.toLowerCase()));
+  const removable = names.filter((name) => !protectedFields.has(name.toLowerCase()));
+  if (!removable.length) return [];
+  const columns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: true });
+  const stale = columns.filter((column) => (
+    column.source === 'source'
+    && removable.some((name) => name.toLowerCase() === String(column.sourceField || '').toLowerCase())
+  ));
+  if (!stale.length) return [];
+  const pool = await getPool();
+  await deleteSourceColumnsByIds(pool, stale.map((column) => column.id));
+  return stale.map((column) => column.sourceField);
+}
+
+async function applyDroppedSelectFields(table, droppedFields) {
+  const removed = await dropIllegalSelectSourceColumns(table, droppedFields);
+  const notice = formatSelectDropNotice(removed.length ? removed : droppedFields);
+  if (notice) refreshRunService.updateEntity(table.key, { notice_text: notice });
+  return removed;
 }
 
 async function syncSourceColumnsFromRecords(table, records, { prune = false } = {}) {
@@ -1768,8 +1892,10 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     });
   }
 
-  if (!masterRows.length) return { saved: 0, watermark };
+  if (!masterRows.length) return { saved: 0, watermark, inserted: 0, updated: 0 };
 
+  let inserted = 0;
+  let updated = 0;
   const tx = new sql.Transaction(pool);
   await tx.begin();
   try {
@@ -1914,7 +2040,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     }
 
     // Master: één set-based MERGE (nieuw/gewijzigd-detectie via content_hash blijft identiek).
-    await new sql.Request(tx)
+    const mergeResult = await new sql.Request(tx)
       .input('tableId', sql.BigInt, table.id)
       .input('syncedAt', sql.DateTime2, refreshStart)
       .query(`
@@ -1932,8 +2058,12 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
           (table_id, scope, partition_key, record_key, detail_key, data_json, source_modified_at,
            synced_at, first_seen_at, removed_at_source, content_hash, content_changed_at)
           VALUES (@tableId, 'master', src.partition_key, src.record_key, ${MASTER_DETAIL_KEY}, src.data_json, src.modified_at,
-           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt);
+           @syncedAt, @syncedAt, 0, src.content_hash, @syncedAt)
+        OUTPUT $action AS merge_action, inserted.content_hash AS next_hash, deleted.content_hash AS prev_hash;
       `);
+    const mergeCounts = countMergeActions(mergeResult.recordset);
+    inserted = mergeCounts.inserted;
+    updated = mergeCounts.updated;
 
     if (uniqueDetailRows.length) {
       await new sql.Request(tx)
@@ -1984,7 +2114,7 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
     throw err;
   }
 
-  return { saved: masterRows.length, watermark };
+  return { saved: masterRows.length, watermark, inserted, updated };
 }
 
 // ---------------------------------------------------------------------------
@@ -1993,25 +2123,25 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
 async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
   if (!table || table.key !== 'purchase-orders') return;
   const lookups = await getLookups(table.id);
-  const targetKeys = [...new Set(
-    lookups
-      .map((lookup) => String(lookup?.targetTableKey || '').trim())
-      .filter(Boolean)
-  )];
+  const targetKeys = await orderLookupTargetKeys(
+    lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean),
+    getTableByKey,
+  );
   const refreshFailures = [];
   for (const targetKey of targetKeys) {
     if (visitedTables.has(targetKey)) continue;
     try {
-      const targetTable = await getTableByKey(targetKey);
-      if (targetTable.cacheMode === 'never') continue;
       await refresh(targetKey, { visitedTables });
     } catch (err) {
       logger.error('Lookup-doeltabel verversen mislukt', {
         tableKey: table.key,
         targetTableKey: targetKey,
         error: err.message,
+        status: err.status || null,
       });
-      refreshFailures.push(`${targetKey}: ${err.message}`);
+      const detail = formatEntityRefreshError(targetKey, err);
+      refreshFailures.push(detail);
+      refreshRunService.markEntityError(targetKey, detail);
     }
   }
   if (refreshFailures.length) {
@@ -2036,6 +2166,8 @@ async function refresh(tableKey, options = {}) {
   // laden van sublijnen mag daar niet achterlopen.
   invalidateLookupEnrichmentCache();
   if (table.cacheMode === 'never') {
+    refreshRunService.markEntityRunning(table.key);
+    refreshRunService.markEntityDone(table.key);
     resetRefreshProgress(tableKey, {
       status: 'done',
       finishedAt: new Date().toISOString(),
@@ -2045,6 +2177,7 @@ async function refresh(tableKey, options = {}) {
   const adapter = getFetchAdapter(table);
   const refreshStart = new Date();
   const refreshJobId = `tb-refresh-${table.id}-${refreshStart.getTime()}`;
+  refreshRunService.markEntityRunning(table.key);
   resetRefreshProgress(tableKey, {
     status: 'fetching',
     startedAt: refreshStart.toISOString(),
@@ -2055,14 +2188,21 @@ async function refresh(tableKey, options = {}) {
     const totalToFetchRaw = Number(progress?.totalToFetch);
     const sourceTotalRaw = Number(progress?.sourceTotal);
     const pagesFetched = Number(progress?.pagesFetched) || 0;
+    const totalToFetch = Number.isFinite(totalToFetchRaw)
+      ? totalToFetchRaw
+      : (Number.isFinite(sourceTotalRaw) ? sourceTotalRaw : null);
     updateRefreshProgress(tableKey, {
       status: 'fetching',
       fetched,
-      totalToFetch: Number.isFinite(totalToFetchRaw) ? totalToFetchRaw : null,
+      totalToFetch,
       sourceTotal: Number.isFinite(sourceTotalRaw) ? sourceTotalRaw : null,
       pagesFetched,
       truncated: Boolean(progress?.truncated),
       error: null,
+    });
+    refreshRunService.setEntityProgress(table.key, {
+      fetched,
+      ...(totalToFetch != null ? { totalToFetch } : {}),
     });
   };
 
@@ -2160,10 +2300,14 @@ async function refresh(tableKey, options = {}) {
     const validRecords = records.filter((rec) => rec.partitionKey && rec.recordKey);
     for (let offset = 0; offset < validRecords.length; offset += SAVE_CHUNK_SIZE) {
       const chunk = validRecords.slice(offset, offset + SAVE_CHUNK_SIZE);
-      const { saved: chunkSaved, watermark: chunkWatermark } =
+      const { saved: chunkSaved, watermark: chunkWatermark, inserted: chunkInserted, updated: chunkUpdated } =
         await persistRecordsChunk(pool, table, chunk, refreshStart, masterSource, detailSource, refreshJobId, skipLedger);
       if (chunkWatermark && (!watermark || chunkWatermark > watermark)) watermark = chunkWatermark;
       saved += chunkSaved;
+      refreshRunService.updateEntity(table.key, {
+        inserted: chunkInserted,
+        updated: chunkUpdated,
+      });
       updateRefreshProgress(tableKey, {
         status: 'saving',
         fetched: records.length,
@@ -2172,7 +2316,12 @@ async function refresh(tableKey, options = {}) {
         totalToSave: records.length,
         sourceTotal,
         pagesFetched,
-        truncated: Boolean(truncated),
+      truncated: Boolean(truncated),
+    });
+      refreshRunService.setEntityProgress(table.key, {
+        fetched: records.length,
+        saved,
+        totalToFetch,
       });
     }
 
@@ -2219,6 +2368,10 @@ async function refresh(tableKey, options = {}) {
       retainedKeys = retentionResult.retainedKeys || new Set();
       retainedTotal = await countSyncRetainedMasters(pool, table.id);
     }
+
+    refreshRunService.updateEntity(table.key, {
+      deleted: countSoftDeleted(removedMasters.recordset, retainedKeys),
+    });
 
     for (const row of removedMasters.recordset || []) {
       if (Number(row.previous_removed) === 1 || !Number(row.removed_at_source)) continue;
@@ -2309,6 +2462,7 @@ async function refresh(tableKey, options = {}) {
         WHEN NOT MATCHED THEN INSERT (table_id, watermark, last_full_sync_at) VALUES (@tableId, @watermark, @syncedAt);
       `);
 
+    refreshRunService.markEntityDone(table.key);
     const lookupWarnings = await refreshLookupTargetsAfterPurchaseOrders(table, visitedTables);
 
     logger.info('tb_cache ververst', { tableKey, records: records.length, truncated, retainedFetched });
@@ -2360,7 +2514,7 @@ async function refresh(tableKey, options = {}) {
 // inactieve kolommen en verwijdert bronkolommen die D365 niet teruggeeft. Schrijft NIETS naar
 // tb_cache (#AB:177). Een gewone refresh pruned nooit (die sample is $select-beperkt).
 // ---------------------------------------------------------------------------
-const FIELD_DISCOVERY_ROW_LIMIT = 5;
+const FIELD_DISCOVERY_ROW_LIMIT = 60;
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
@@ -2392,10 +2546,22 @@ async function discoverSourceFields(tableKey) {
     }));
   }
   const { headerInserted, lineInserted, headerRemoved, lineRemoved } = await syncSourceColumnsFromRecords(table, records, { prune: true });
+  const headerFields = collectDiscoveredFields(records, 'header');
+  const lineFields = collectDiscoveredFields(records, 'line');
   logger.info('Veld-discovery uitgevoerd (datamodel)', {
     tableKey, headerInserted, lineInserted, headerRemoved, lineRemoved,
   });
-  return { headerInserted, lineInserted, headerRemoved, lineRemoved, sampledRows: records.length };
+  return {
+    headerInserted,
+    lineInserted,
+    headerRemoved,
+    lineRemoved,
+    sampledRows: records.length,
+    sampleByField: {
+      header: sampleMapFromDiscoveredFields(headerFields),
+      line: sampleMapFromDiscoveredFields(lineFields),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -3315,7 +3481,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // De ledger-read hangt af van sync-state + viewed en is daarom als geketende promise in
   // hetzelfde parallelle blok opgenomen.
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
-  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id));
+  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id, userId));
   // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
   // zodat de frontend na deze read exact de bijbehorende revision opslaat.
   const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
@@ -3341,9 +3507,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     : Promise.resolve([]);
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
-    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
-    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
-    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
     if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
     try {
       const ledgerResult = await time('tb_ledger', () => pool.request()
@@ -3403,8 +3567,8 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   const lastSyncedMs = lastFullSyncAt ? new Date(lastFullSyncAt).getTime() : null;
 
   const lastViewedMs = lastViewedAt ? new Date(lastViewedAt).getTime() : null;
-  const useViewedBaseline = lastViewedMs !== null && (lastSyncedMs === null || lastViewedMs >= lastSyncedMs);
-  const baselineMs = useViewedBaseline ? lastViewedMs : lastSyncedMs;
+  const useViewedBaseline = usesViewedBaseline(lastViewedAt);
+  const baselineMs = resolveLedgerSinceMs({ lastViewedAt, lastFullSyncAt });
   const compareAgainstBaseline = (valueMs) => {
     if (valueMs === null || baselineMs === null) return false;
     return useViewedBaseline ? valueMs > baselineMs : valueMs >= baselineMs;
@@ -3737,7 +3901,7 @@ function invalidateLookupEnrichmentCache(tableId = null) {
 
 // Supplier-scoping gebeurt in de route met assertSupplierPurchaseOrderRow (zelfde guard als de
 // andere rij-gerichte endpoints); deze functie gaat ervan uit dat de toegang al is gecontroleerd.
-async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
+async function readRowDetails({ tableKey, partitionKey, recordKey, userId = null } = {}) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
   const recordFilter = { partitionKey: String(partitionKey), recordKey: String(recordKey) };
@@ -3782,13 +3946,11 @@ async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
 
   const ledgerPromise = (async () => {
     const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([
-      getSyncState(table.id), getLastViewedAt(table.id),
+      getSyncState(table.id), getLastViewedAt(table.id, userId),
     ]);
-    const syncedMs = syncedAtRaw ? new Date(syncedAtRaw).getTime() : null;
-    const viewedMs = viewedAtRaw ? new Date(viewedAtRaw).getTime() : null;
-    const sinceMs = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs) ? viewedMs : syncedMs;
+    const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
     if (sinceMs === null) return { rows: [], hasLedgerWindow: false, sinceMs: null, useViewedBaseline: false };
-    const useViewedBaseline = viewedMs !== null && (syncedMs === null || viewedMs >= syncedMs);
+    const useViewedBaseline = usesViewedBaseline(viewedAtRaw);
     try {
       const result = await pool.request()
         .input('tableId', sql.BigInt, table.id)
@@ -3856,16 +4018,17 @@ async function readRowDetails({ tableKey, partitionKey, recordKey } = {}) {
 // ---------------------------------------------------------------------------
 // Nieuw-detectie op basis van admin-view-state (globale baseline voor alle gebruikers)
 // ---------------------------------------------------------------------------
-async function getLastViewedAt(tableId) {
+async function getLastViewedAt(tableId, userId) {
+  if (!userId) return null;
   const pool = await getPool();
   const result = await pool.request()
     .input('tableId', sql.BigInt, tableId)
+    .input('userId', sql.Int, userId)
     .query(`
-      SELECT MAX(vs.last_viewed_at) AS last_viewed_at
+      SELECT vs.last_viewed_at
       FROM dbo.tb_user_view_state vs WITH (NOLOCK)
-      INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
       WHERE vs.table_id = @tableId
-        AND u.role = 'admin'
+        AND vs.user_id = @userId
     `);
   return result.recordset[0]?.last_viewed_at || null;
 }
@@ -3910,10 +4073,9 @@ async function getRevisionByTable(table, { userId = null, supplierAccount = null
         (SELECT MAX(updated_at) FROM dbo.tb_columns WITH (NOLOCK) WHERE table_id = @tableId) AS maxColumnsAt,
         (SELECT COUNT(*) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS exclusionCount,
         (SELECT MAX(excluded_at) FROM dbo.tb_row_exclusions WITH (NOLOCK) WHERE table_id = @tableId) AS maxExclusionAt,
-        (SELECT MAX(vs.last_viewed_at)
+        (SELECT vs.last_viewed_at
            FROM dbo.tb_user_view_state vs WITH (NOLOCK)
-           INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = vs.user_id
-          WHERE vs.table_id = @tableId AND u.role = 'admin') AS adminViewedAt,
+          WHERE vs.table_id = @tableId AND vs.user_id = @userId) AS userViewedAt,
         (SELECT MAX(updated_at) FROM dbo.user_board_settings WITH (NOLOCK)
           WHERE user_id = @userId AND board_key = @boardKey) AS userBoardSettingsAt,
         (SELECT MAX(updated_at) FROM dbo.app_settings WITH (NOLOCK)) AS settingsAt
@@ -3928,7 +4090,7 @@ async function getRevisionByTable(table, { userId = null, supplierAccount = null
     maxColumnsAt: revisionPartValue(row.maxColumnsAt),
     exclusionCount: Number(row.exclusionCount) || 0,
     maxExclusionAt: revisionPartValue(row.maxExclusionAt),
-    adminViewedAt: revisionPartValue(row.adminViewedAt),
+    userViewedAt: revisionPartValue(row.userViewedAt),
     userBoardSettingsAt: revisionPartValue(row.userBoardSettingsAt),
     settingsAt: revisionPartValue(row.settingsAt),
     supplierAccount: supplierAccount || null,
@@ -4589,12 +4751,6 @@ function toAdminColumn(col) {
   };
 }
 
-function normalizePreviewSampleValue(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
 function buildPreviewTableFromCacheRows(columns, cacheRows) {
   const d365Columns = (Array.isArray(columns) ? columns : []).filter(
     (column) => column.source === 'd365' && column.d365Field
@@ -4604,10 +4760,9 @@ function buildPreviewTableFromCacheRows(columns, cacheRows) {
     const source = parseJson(cacheRow?.data_json);
     const values = {};
     for (const column of d365Columns) {
-      const preferred = Object.prototype.hasOwnProperty.call(source, column.key)
-        ? source[column.key]
-        : source[column.d365Field];
-      values[column.d365Field] = preferred === undefined ? null : preferred;
+      const preferred = lookupRawFieldValue(source, column.key);
+      const fallback = preferred === undefined ? lookupRawFieldValue(source, column.d365Field) : preferred;
+      values[column.d365Field] = fallback === undefined ? null : fallback;
     }
     return { values };
   });
@@ -4617,8 +4772,8 @@ function buildPreviewTableFromCacheRows(columns, cacheRows) {
     sampleByField[field] = '—';
     for (let i = 0; i < rows.length; i += 1) {
       const candidate = rows[i]?.values?.[field];
-      if (candidate === null || candidate === undefined || candidate === '') continue;
-      sampleByField[field] = normalizePreviewSampleValue(candidate);
+      if (isEmptySampleValue(candidate)) continue;
+      sampleByField[field] = formatSampleValue(candidate);
       break;
     }
   }
@@ -4641,27 +4796,6 @@ function getMissingPreviewFields(columns, sampleByField) {
     const current = sampleByField?.[field];
     return !current || current === '—';
   });
-}
-
-function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
-  if (!previewTable || !Array.isArray(fields) || !fields.length || !Array.isArray(rawRows) || !rawRows.length) {
-    return previewTable;
-  }
-  const nextSampleByField = { ...(previewTable.sampleByField || {}) };
-  for (const field of fields) {
-    if (nextSampleByField[field] && nextSampleByField[field] !== '—') continue;
-    for (let i = 0; i < rawRows.length; i += 1) {
-      const candidate = rawRows[i]?.[field];
-      if (candidate === null || candidate === undefined || candidate === '') continue;
-      nextSampleByField[field] = normalizePreviewSampleValue(candidate);
-      break;
-    }
-    if (!nextSampleByField[field]) nextSampleByField[field] = '—';
-  }
-  return {
-    ...previewTable,
-    sampleByField: nextSampleByField,
-  };
 }
 
 // Board-kolomdefinities inclusief lookup-verrijking (zelfde set als de board-read).
