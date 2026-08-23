@@ -33,6 +33,42 @@ function resolveLineMeasureQty(lineValues, masterValues, measureKey, share = 1) 
   return lineRaw !== null ? toNumber(lineRaw) : masterQty * share;
 }
 
+/** Header-totaal: de key staat op de order, niet op de regels. */
+function isHeaderOnlyMeasure(details, masterValues, measureKey) {
+  if (pickValue(masterValues, measureKey) === null) return false;
+  if (!details.length) return true;
+  return details.every((detail) => pickValue(detail.values || {}, measureKey) === null);
+}
+
+function lineDateValue(lineValues, masterValues, dateColumnKey) {
+  return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
+}
+
+/** Regels (of de header zelf) waarvan de leverweek in het RCCP-venster valt. */
+function collectInWindowSlots(details, masterValues, dateColumnKey, window, excludedSet, masterStatus) {
+  const sources = details.length
+    ? details.map((detail) => ({ lineNumber: detail.detailKey, lineValues: detail.values || {} }))
+    : [{ lineNumber: null, lineValues: masterValues }];
+  const slots = [];
+  for (const source of sources) {
+    const status = pickValue(source.lineValues, 'status') ?? masterStatus;
+    if (status && excludedSet.has(String(status).toLowerCase())) continue;
+    const dateValue = lineDateValue(source.lineValues, masterValues, dateColumnKey);
+    if (!dateValue) continue;
+    const year = getIsoWeekYear(dateValue);
+    const week = getIsoWeek(dateValue);
+    if (!year || !week || !isInWindow(year, week, window)) continue;
+    slots.push({
+      ...source,
+      dateValue,
+      year,
+      week,
+      dateFromHeader: !pickValue(source.lineValues, dateColumnKey),
+    });
+  }
+  return slots;
+}
+
 function cellKey(vendor, year, week, measureKey) {
   return `${vendor}|${year}|${week}|${measureKey}`;
 }
@@ -82,12 +118,16 @@ function aggregatePoLoad(rows, config, window) {
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
+    const headerOnlyKeys = new Set(
+      measures
+        .filter((measure) => isHeaderOnlyMeasure(details, masterValues, measure.columnKey))
+        .map((measure) => measure.columnKey),
+    );
+    const lineMeasures = measures.filter((measure) => !headerOnlyKeys.has(measure.columnKey));
 
-    const processLine = (lineNumber, lineValues, dateFromHeaderDefault) => {
+    const processLine = (lineNumber, lineValues) => {
       diagnostics.lineCount += 1;
       const share = details.length ? 1 / details.length : 1;
-      // Een measure kan een regel-kolom zijn (eigen waarde per regel, bijv. quantity) of een
-      // master-rollup (één totaal op de order, dat over de regels verdeeld moet worden).
       const measureQty = (measure) => {
         const lineRaw = pickValue(lineValues, measure.columnKey);
         return lineRaw !== null
@@ -111,7 +151,7 @@ function aggregatePoLoad(rows, config, window) {
           orderNumber: row.recordKey,
           lineNumber,
           vendorAccount: vendor,
-          quantity: measures.length ? measureQty(measures[0]) : 0,
+          quantity: lineMeasures.length ? measureQty(lineMeasures[0]) : 0,
           dateFromHeader: false,
         });
         return;
@@ -126,22 +166,35 @@ function aggregatePoLoad(rows, config, window) {
       }
 
       let hasQty = false;
-      measures.forEach((measure) => {
+      lineMeasures.forEach((measure) => {
         const qty = measureQty(measure);
         if (qty <= 0) return;
         hasQty = true;
         addLoad(vendor, year, week, measure.columnKey, qty);
       });
-      if (!hasQty) diagnostics.zeroQuantityLines += 1;
+      if (!hasQty && lineMeasures.length) diagnostics.zeroQuantityLines += 1;
     };
 
     if (!details.length) {
-      processLine(null, masterValues, true);
-      continue;
+      processLine(null, masterValues);
+    } else {
+      for (const detail of details) {
+        processLine(detail.detailKey, detail.values || {});
+      }
     }
 
-    for (const detail of details) {
-      processLine(detail.detailKey, detail.values || {}, false);
+    if (!headerOnlyKeys.size) continue;
+    const slots = collectInWindowSlots(
+      details, masterValues, config.dateColumnKey, window, excludedSet, masterStatus,
+    );
+    for (const measure of measures) {
+      if (!headerOnlyKeys.has(measure.columnKey)) continue;
+      const total = toNumber(pickValue(masterValues, measure.columnKey));
+      if (total <= 0 || !slots.length) continue;
+      const shareQty = total / slots.length;
+      for (const slot of slots) {
+        addLoad(vendor, slot.year, slot.week, measure.columnKey, shareQty);
+      }
     }
   }
 
@@ -417,6 +470,28 @@ function buildDrillDownRows(rows, config, cell, window) {
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
     const share = details.length ? 1 / details.length : 1;
+
+    if (isHeaderOnlyMeasure(details, masterValues, measureKey)) {
+      const slots = collectInWindowSlots(
+        details, masterValues, config.dateColumnKey, window, excludedSet, masterStatus,
+      );
+      const total = toNumber(pickValue(masterValues, measureKey));
+      if (total <= 0 || !slots.length) continue;
+      const shareQty = total / slots.length;
+      for (const slot of slots) {
+        if (slot.year !== cell.periodYear || slot.week !== cell.isoWeek) continue;
+        result.push({
+          orderNumber: row.recordKey,
+          lineNumber: slot.lineNumber,
+          itemNumber: pickValue(slot.lineValues, 'itemNumber') ?? pickValue(masterValues, 'itemNumber'),
+          quantity: shareQty,
+          deliveryDate: slot.dateValue,
+          status: (pickValue(slot.lineValues, 'status') ?? masterStatus) || '',
+          dateFromHeader: slot.dateFromHeader,
+        });
+      }
+      continue;
+    }
 
     const pushLine = (lineNumber, lineValues, dateValue, dateFromHeader) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
