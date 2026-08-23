@@ -23,6 +23,13 @@ describe('statusColumnOptions', () => {
     expect(normalized[0]).toMatchObject({ label: 'New', color: '#e2445c' });
   });
 
+  it('keeps an 8-digit status color with opacity', () => {
+    const normalized = normalizeStatusOptions([
+      { label: 'New', color: '#e2445cb3' },
+    ]);
+    expect(normalized[0].color).toBe('#e2445cb3');
+  });
+
   it('deduplicates labels case-insensitively', () => {
     const normalized = normalizeStatusOptions([
       { label: 'New', color: '#e2445c' },

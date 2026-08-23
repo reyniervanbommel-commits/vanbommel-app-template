@@ -56,4 +56,13 @@ describe('biChartConfig.normalizeConfig', () => {
     expect(result.options.valueDisplay).toBe('percent');
     expect(result.options.unit).toBe('EUR');
   });
+
+  it('behoudt een palette-kleur met opacity', () => {
+    const result = normalizeConfig({
+      type: 'kpi',
+      measure: 'amount',
+      options: { colorMode: 'single', singleColor: '#579bfcb3' },
+    });
+    expect(result.options.singleColor).toBe('#579bfcb3');
+  });
 });

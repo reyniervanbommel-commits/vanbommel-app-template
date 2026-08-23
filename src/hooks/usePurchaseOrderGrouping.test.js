@@ -89,6 +89,12 @@ describe('usePurchaseOrderGrouping', () => {
     expect(result.current.groupingColorsByColumn.vendorAccount).toBe('#123456');
   });
 
+  it('accepteert een 8-cijferige hex-kleur met opacity', () => {
+    const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS }));
+    act(() => result.current.setGroupingBarColor('#123456b3'));
+    expect(result.current.groupingColorsByColumn.status).toBe('#123456b3');
+  });
+
   it('negeert een ongeldige (niet-hex) kleur', () => {
     const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS }));
     const before = result.current.groupingColorsByColumn.status;

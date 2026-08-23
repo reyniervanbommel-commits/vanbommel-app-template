@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Checkbox } from '@fluentui/react-components';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
+import { blendHexToOpaque } from '../../utils/hexColor';
 
 function PurchaseOrdersGroupHeaderRow({
   group,
@@ -32,14 +33,18 @@ function PurchaseOrdersGroupHeaderRow({
   const groupSomeSelected = selectionEnabled
     && !groupAllSelected
     && selectionKeys.some((key) => selection.isSelected(key));
-  const cellStyle = useMemo(() => ({ backgroundColor: groupColor }), [groupColor]);
+  const headerBackground = useMemo(
+    () => blendHexToOpaque(groupColor) || groupColor,
+    [groupColor],
+  );
+  const cellStyle = useMemo(() => ({ backgroundColor: headerBackground }), [headerBackground]);
   const innerStyle = useMemo(() => ({
     position: 'sticky',
     left: 0,
     zIndex: 1,
     width: 'fit-content',
-    backgroundColor: groupColor,
-  }), [groupColor]);
+    backgroundColor: headerBackground,
+  }), [headerBackground]);
   const labelStyle = useMemo(
     () => ({ paddingLeft: `${12 + (groupLevel * 14)}px` }),
     [groupLevel]

@@ -33,12 +33,22 @@ function formatDiscoveryMessage(discovery) {
   if (!discovery) return '';
   const headerAdded = Number(discovery.headerInserted) || 0;
   const lineAdded = Number(discovery.lineInserted) || 0;
+  const headerRemoved = Number(discovery.headerRemoved) || 0;
+  const lineRemoved = Number(discovery.lineRemoved) || 0;
   const totalAdded = headerAdded + lineAdded;
-  if (!totalAdded) return '';
+  const totalRemoved = headerRemoved + lineRemoved;
+  if (!totalAdded && !totalRemoved) return '';
   const parts = [];
   if (headerAdded) parts.push(`${headerAdded} header`);
   if (lineAdded) parts.push(`${lineAdded} line`);
-  return `Added ${parts.join(' and ')} column${totalAdded === 1 ? '' : 's'} from D365 (hidden by default). Turn on "Visible in table" to use them on the board.`;
+  const added = totalAdded
+    ? `Added ${parts.join(' and ')} column${totalAdded === 1 ? '' : 's'} from D365 (hidden by default).`
+    : '';
+  const removed = totalRemoved
+    ? `Removed ${totalRemoved} column${totalRemoved === 1 ? '' : 's'} that D365 no longer exposes.`
+    : '';
+  const hint = totalAdded ? ' Turn on "Visible in table" to use new columns on the board.' : '';
+  return `${added}${added && removed ? ' ' : ''}${removed}${hint}`.trim();
 }
 
 export default function AdminDataModel() {

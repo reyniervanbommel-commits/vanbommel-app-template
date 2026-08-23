@@ -47,6 +47,16 @@ describe('columnFormatRuleUtils.normalizeColumnFormatRuleSet', () => {
   it('geeft null terug bij lege regels', () => {
     expect(normalizeColumnFormatRuleSet({ target: 'cell', rules: [] })).toBeNull();
   });
+
+  it('behoudt een 8-cijferige hex-kleur met opacity', () => {
+    expect(normalizeColumnFormatRuleSet({
+      target: 'cell',
+      rules: [{ op: '>', value: 10, color: '#E2445CB3' }],
+    })).toEqual({
+      target: 'cell',
+      rules: [{ op: '>', value: 10, color: '#e2445cb3' }],
+    });
+  });
 });
 
 describe('columnFormatRuleUtils.normalizeColumnFormatRulesMap', () => {

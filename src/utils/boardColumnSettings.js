@@ -2,9 +2,11 @@
 // (zichtbaarheid, volgorde, breedtes, tekststijlen, totals-links).
 // Geen React/side effects zodat ze los unit-testbaar zijn.
 
+import { HEX_COLOR_PATTERN } from './hexColor';
+
 export const MIN_COLUMN_WIDTH = 80;
 export const MAX_COLUMN_WIDTH = 1000;
-export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+export { HEX_COLOR_PATTERN };
 
 export function normalizeVisibleColumns(rawKeys, defaultKeys) {
   if (!Array.isArray(rawKeys) || !rawKeys.length) {

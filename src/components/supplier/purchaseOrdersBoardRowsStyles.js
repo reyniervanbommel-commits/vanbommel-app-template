@@ -1,5 +1,6 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import {
+  purchaseOrderBoardControlColumnWidth,
   purchaseOrderBoardHeaderHeight,
   purchaseOrderBoardRowHeight,
 } from './purchaseOrderBoardLayout';
@@ -79,9 +80,9 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     position: 'sticky',
     left: 0,
     zIndex: 3,
-    width: '92px',
-    minWidth: '92px',
-    maxWidth: '92px',
+    width: purchaseOrderBoardControlColumnWidth,
+    minWidth: purchaseOrderBoardControlColumnWidth,
+    maxWidth: purchaseOrderBoardControlColumnWidth,
     height: purchaseOrderBoardRowHeight,
     maxHeight: purchaseOrderBoardRowHeight,
     backgroundColor: tokens.colorNeutralBackground1,

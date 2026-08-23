@@ -1,11 +1,13 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Field, Switch, Text } from '@fluentui/react-components';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
+import { getRgbHex, isHexColor, normalizeHexColor } from '../../utils/hexColor';
 
 function resolvePaletteColor(color) {
-  const normalized = String(color || '').trim().toLowerCase();
-  const match = SELECTABLE_STATUS_COLORS.find((entry) => entry.toLowerCase() === normalized);
-  return match || SELECTABLE_STATUS_COLORS[0];
+  const rgb = getRgbHex(color);
+  const match = SELECTABLE_STATUS_COLORS.find((entry) => entry.toLowerCase() === rgb);
+  if (!match) return SELECTABLE_STATUS_COLORS[0];
+  return isHexColor(color) ? normalizeHexColor(color) : match;
 }
 
 function PurchaseOrderColumnGroupingSection({

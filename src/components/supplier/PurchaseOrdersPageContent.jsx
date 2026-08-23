@@ -2,6 +2,8 @@ import React, { memo, useEffect, useMemo } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
+import PurchaseOrdersActiveRulesFlyout from './PurchaseOrdersActiveRulesFlyout';
+import { usePurchaseOrdersActiveRulesFlyout } from './usePurchaseOrdersActiveRulesFlyout';
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
 import { useAuth } from '../../context/AuthContext';
@@ -96,6 +98,17 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     pageModel.lineColumnTextStyles,
     pageModel.lineColumnWidths,
   ]);
+  const { activeRulesControls, flyoutProps } = usePurchaseOrdersActiveRulesFlyout({
+    isStaff,
+    headerColumns: data.columns,
+    lineColumns: data.lineColumns,
+    orders: pageModel.orders,
+    boardView,
+    pageModel,
+    datePeriodDisplayModes: tableContext.datePeriodDisplayModes,
+    headerColumnFormatRules: formatting.headerColumnFormatRules,
+    lineColumnFormatRules: formatting.lineColumnFormatRules,
+  });
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
     // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
@@ -170,7 +183,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     linkActions,
     selection: tableContext.tableSelection,
     remarks: tableContext.remarks.tableState,
+    activeRulesControls,
   }), [
+    activeRulesControls,
     cellActions,
     columnActions,
     data,
@@ -221,6 +236,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
           </TrackChangesContext.Provider>
         </div>
       </BoardSplitView>
+      {flyoutProps ? <PurchaseOrdersActiveRulesFlyout {...flyoutProps} /> : null}
       <RemarksPanel {...tableContext.remarks.panelProps} />
     </>
   );

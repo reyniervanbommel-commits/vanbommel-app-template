@@ -35,5 +35,11 @@ describe('statusColumnUtils', () => {
   it('picks readable text color for backgrounds', () => {
     expect(getContrastTextColor('#e2445c')).toBe('#ffffff');
     expect(getContrastTextColor('#ffcb00')).toBe('#323130');
+    expect(getContrastTextColor('#e2445c1a')).toBe('#323130');
+  });
+
+  it('behoudt een 8-cijferige statuskleur', () => {
+    const options = normalizeStatusOptions([{ id: 'new', label: 'New', color: '#e2445cb3' }]);
+    expect(options[0].color).toBe('#e2445cb3');
   });
 });

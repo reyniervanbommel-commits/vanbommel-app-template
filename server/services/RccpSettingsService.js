@@ -6,6 +6,7 @@
 
 const settingsService = require('./SettingsService');
 const dataService = require('./TableDataService');
+const { isHexColor } = require('../utils/hexColor');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
 const PO_TABLE_KEY = 'purchase-orders';
@@ -42,8 +43,8 @@ function normalizeChartWeekRanges(raw) {
       || !Number.isFinite(toYear) || !Number.isFinite(toWeek)) return null;
     if (fromWeek < 1 || fromWeek > 53 || toWeek < 1 || toWeek > 53) return null;
     if (fromYear * 100 + fromWeek > toYear * 100 + toWeek) return null;
-    const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
-      ? String(entry.color)
+    const color = isHexColor(entry?.color)
+      ? String(entry.color).toLowerCase()
       : MEASURE_COLORS[index % MEASURE_COLORS.length];
     const label = String(entry?.label || '').trim();
     return {
@@ -86,8 +87,8 @@ function normalizeQuantityMeasures(raw) {
       const columnKey = String(entry?.columnKey || '').trim();
       if (!columnKey) return null;
       const chartType = VALID_CHART_TYPES.includes(entry?.chartType) ? entry.chartType : 'line';
-      const color = /^#[0-9a-fA-F]{6}$/.test(String(entry?.color || ''))
-        ? String(entry.color)
+      const color = isHexColor(entry?.color)
+        ? String(entry.color).toLowerCase()
         : MEASURE_COLORS[index % MEASURE_COLORS.length];
       return {
         columnKey,

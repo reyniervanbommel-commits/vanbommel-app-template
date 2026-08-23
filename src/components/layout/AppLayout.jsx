@@ -1,13 +1,13 @@
 ﻿import React, { useCallback, useMemo, useState } from 'react';
 import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import {
-  CalendarDataBar24Regular,
   ChartMultiple24Regular,
   Settings24Regular,
   Table24Regular,
 } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import RccpNavIcon from '../rccp/RccpNavIcon';
 import { useVendorCompanyName } from '../../hooks/useVendorCompanyName';
 import { ROLES } from '../../constants/roles';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
@@ -141,7 +141,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
-      { id: 'rccp', label: 'RCCP', icon: CalendarDataBar24Regular, path: '/rccp' },
+      { id: 'rccp', label: 'RCCP', icon: RccpNavIcon, path: '/rccp' },
       // BI is voor alle rollen zichtbaar; suppliers zien uitsluitend hun eigen (server-gescopete) data.
       { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
       ...(isAdminLike ? [

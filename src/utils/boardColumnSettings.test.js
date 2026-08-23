@@ -64,6 +64,7 @@ describe('normalizeColumnWidths', () => {
 describe('normalizeColumnTextStyle', () => {
   it('validates hex colors and lowercases them', () => {
     expect(normalizeColumnTextStyle({ textColor: '#AABB11' })).toEqual({ textColor: '#aabb11' });
+    expect(normalizeColumnTextStyle({ textColor: '#AABB11B3' })).toEqual({ textColor: '#aabb11b3' });
     expect(normalizeColumnTextStyle({ textColor: 'red' })).toBe(null);
   });
 

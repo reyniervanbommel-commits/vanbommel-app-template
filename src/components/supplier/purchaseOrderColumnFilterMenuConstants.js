@@ -1,10 +1,13 @@
 import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
+import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
 import { COLOR_FILTER_OPERATOR, hasActiveFilter } from '../../utils/tableViewFilterUtils';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
   normalizeColumnFormatRuleSet,
 } from './columnFormatRuleUtils';
+
+export { HEX_COLOR_PATTERN };
 
 export const NEW_COLUMN_TYPES = [
   { key: 'status', label: 'Status', dataType: 'status' },
@@ -31,8 +34,6 @@ const COLUMN_TYPE_META = {
   formula: { key: 'formula', label: 'Formula' },
   date_period: { key: 'date_period', label: 'Date W/M' },
 };
-
-export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 const COLUMN_SOURCE_META = {
   d365: { key: 'd365', label: 'Dynamics 365' },

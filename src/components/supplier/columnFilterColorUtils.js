@@ -7,7 +7,7 @@ import { evalFormatRules } from './columnFormatRuleUtils';
 import { isStatusColumn, normalizeStatusOptions, resolveStatusCellColor } from '../../utils/statusColumnUtils';
 import { COLOR_FILTER_OPERATOR } from '../../utils/tableViewFilterUtils';
 
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
 
 // Sentinel voor "rijen zonder opmaakkleur/status".
 export const NO_COLOR_FILTER_VALUE = 'none';

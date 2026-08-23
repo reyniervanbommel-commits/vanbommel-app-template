@@ -17,7 +17,7 @@ const purchaseOrdersValidator = [
 const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const { HEX_COLOR_PATTERN } = require('../utils/hexColor');
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 

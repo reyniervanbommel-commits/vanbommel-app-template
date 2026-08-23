@@ -1,6 +1,6 @@
 'use strict';
 
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const { HEX_COLOR_PATTERN } = require('./hexColor');
 
 const STATUS_COLOR_PALETTE = [
   '#c4c4c4',

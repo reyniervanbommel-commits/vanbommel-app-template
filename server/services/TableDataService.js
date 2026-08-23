@@ -25,6 +25,7 @@ const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } 
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { listStaleSourceColumns } = require('../utils/discoverSourceColumns');
 const {
   listVendorGroupIds,
   expandVendorGroupRules,
@@ -1592,8 +1593,24 @@ function collectDiscoveredFields(records, level) {
   return [...discovered.values()].sort((a, b) => a.field.localeCompare(b.field));
 }
 
-async function syncSourceColumnsFromRecords(table, records) {
-  if (!Array.isArray(records) || !records.length) return { headerInserted: 0, lineInserted: 0 };
+async function deleteSourceColumnsByIds(pool, columnIds) {
+  const ids = (Array.isArray(columnIds) ? columnIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  if (!ids.length) return 0;
+  for (const columnId of ids) {
+    await pool.request().input('columnId', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.tb_cell_history WHERE column_id = @columnId');
+    await pool.request().input('columnId', sql.BigInt, columnId)
+      .query('DELETE FROM dbo.tb_field_corrections WHERE column_id = @columnId');
+    await pool.request().input('columnId', sql.BigInt, columnId)
+      .query("DELETE FROM dbo.tb_columns WHERE id = @columnId AND source = 'source'");
+  }
+  return ids.length;
+}
+
+async function syncSourceColumnsFromRecords(table, records, { prune = false } = {}) {
+  if (!Array.isArray(records) || !records.length) return { headerInserted: 0, lineInserted: 0, headerRemoved: 0, lineRemoved: 0 };
   const pool = await getPool();
 
   async function insertMissingForScope(scope, discoveredFields) {
@@ -1642,7 +1659,27 @@ async function syncSourceColumnsFromRecords(table, records) {
     insertMissingForScope('master', headerFields),
     insertMissingForScope('detail', lineFields),
   ]);
-  return { headerInserted, lineInserted };
+  if (!prune) return { headerInserted, lineInserted, headerRemoved: 0, lineRemoved: 0 };
+
+  const protectedMaster = uniqueFieldList([
+    ...(table.keyFields || []),
+    ...requiredMasterFieldsFromTable(table),
+    ...(table.key === 'purchase-orders' ? REQUIRED_HEADER_D365_FIELDS : []),
+  ]);
+  const protectedLine = uniqueFieldList([
+    ...(table.key === 'purchase-orders' ? REQUIRED_LINE_D365_FIELDS : []),
+  ]);
+  const [masterCols, detailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+  ]);
+  const staleMaster = listStaleSourceColumns(masterCols, headerFields, protectedMaster);
+  const staleDetail = listStaleSourceColumns(detailCols, lineFields, protectedLine);
+  const [headerRemoved, lineRemoved] = await Promise.all([
+    deleteSourceColumnsByIds(pool, staleMaster.map((column) => column.id)),
+    deleteSourceColumnsByIds(pool, staleDetail.map((column) => column.id)),
+  ]);
+  return { headerInserted, lineInserted, headerRemoved, lineRemoved };
 }
 
 // Content-hash over de geprojecteerde master- + detail-JSON (bron-neutraal; nieuw/gewijzigd-detectie).
@@ -2319,8 +2356,9 @@ async function refresh(tableKey, options = {}) {
 // ---------------------------------------------------------------------------
 // discoverSourceFields — los, licht discovery-pad voor de datamodel-pagina. Alleen via POST
 // /discover-fields (knop "Discover D365 fields"), nooit automatisch bij GET /datamodel. Haalt ALLE
-// bronvelden op met een kleine sample (bewust géén $select) en registreert nieuwe velden als
-// beschikbare (inactieve) kolommen. Schrijft NIETS naar tb_cache (#AB:177).
+// bronvelden op met een kleine sample (bewust géén $select), voegt ontbrekende velden toe als
+// inactieve kolommen en verwijdert bronkolommen die D365 niet teruggeeft. Schrijft NIETS naar
+// tb_cache (#AB:177). Een gewone refresh pruned nooit (die sample is $select-beperkt).
 // ---------------------------------------------------------------------------
 const FIELD_DISCOVERY_ROW_LIMIT = 5;
 
@@ -2353,9 +2391,11 @@ async function discoverSourceFields(tableKey) {
       details: [],
     }));
   }
-  const { headerInserted, lineInserted } = await syncSourceColumnsFromRecords(table, records);
-  logger.info('Veld-discovery uitgevoerd (datamodel)', { tableKey, headerInserted, lineInserted });
-  return { headerInserted, lineInserted, sampledRows: records.length };
+  const { headerInserted, lineInserted, headerRemoved, lineRemoved } = await syncSourceColumnsFromRecords(table, records, { prune: true });
+  logger.info('Veld-discovery uitgevoerd (datamodel)', {
+    tableKey, headerInserted, lineInserted, headerRemoved, lineRemoved,
+  });
+  return { headerInserted, lineInserted, headerRemoved, lineRemoved, sampledRows: records.length };
 }
 
 // ---------------------------------------------------------------------------

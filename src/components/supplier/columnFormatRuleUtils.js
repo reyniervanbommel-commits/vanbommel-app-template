@@ -1,6 +1,6 @@
+import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
 import { STATUS_COLOR_PALETTE, normalizeStatusCompareKey } from '../../utils/statusColumnUtils';
 
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_]{1,64}$/;
 
 export const FORMAT_RULE_OPERATORS = ['=', '<>', '>', '<', '>=', '<='];
