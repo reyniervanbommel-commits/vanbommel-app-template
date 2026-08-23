@@ -654,89 +654,109 @@ async function fetchEntityRecords({
   const timeoutMs = Number.parseInt(timeoutRaw, 10);
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REQUEST_TIMEOUT_MS;
   const company = (await settingsService.getAsync('D365_ODATA_COMPANY')).trim();
-  const records = [];
-  let total = null;
-  let pagesFetched = 0;
-  let hasMore = false;
-  let truncated = false;
   const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
     ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
     : MAX_PURCHASE_ORDER_ITEMS;
   const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
+  const hasSelect = Array.isArray(selectFields) && selectFields.length > 0;
 
-  let currentUrl = await buildGenericEntityUrl({
-    sourceEntity,
-    company,
-    top: initialTop,
-    skip,
-    extraFilter,
-    selectFields,
-    applyCompanyFilter,
-  });
+  async function run(activeSelectFields) {
+    const records = [];
+    let total = null;
+    let pagesFetched = 0;
+    let hasMore = false;
+    let truncated = false;
 
-  const emitProgress = (isTruncated = false) => {
-    if (typeof onProgress !== 'function') return;
-    onProgress({
-      fetched: records.length,
-      totalToFetch: total === null ? null : Math.min(total, effectiveMax),
-      sourceTotal: total,
-      pagesFetched,
-      truncated: isTruncated,
+    let currentUrl = await buildGenericEntityUrl({
+      sourceEntity,
+      company,
+      top: initialTop,
+      skip,
+      extraFilter,
+      selectFields: activeSelectFields,
+      applyCompanyFilter,
     });
-  };
 
-  while (currentUrl) {
-    const payload = await fetchODataJson(currentUrl, timeout);
-    const pageRecords = Array.isArray(payload.value) ? payload.value : [];
-    if (total === null) {
-      const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
-      if (Number.isFinite(parsedTotal)) total = parsedTotal;
+    const emitProgress = (isTruncated = false) => {
+      if (typeof onProgress !== 'function') return;
+      onProgress({
+        fetched: records.length,
+        totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+        sourceTotal: total,
+        pagesFetched,
+        truncated: isTruncated,
+      });
+    };
+
+    while (currentUrl) {
+      const payload = await fetchODataJson(currentUrl, timeout);
+      const pageRecords = Array.isArray(payload.value) ? payload.value : [];
+      if (total === null) {
+        const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
+        if (Number.isFinite(parsedTotal)) total = parsedTotal;
+      }
+
+      const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+      const recordsToAdd = pageRecords.slice(0, remaining);
+      pagesFetched += 1;
+      for (const record of recordsToAdd) {
+        records.push(record);
+        emitProgress(false);
+      }
+
+      const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+      const manualNextLink = fetchAll && !serverNextLink
+        ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
+        : null;
+      const nextLink = serverNextLink || manualNextLink;
+      const hitItemCap = fetchAll
+        && records.length >= effectiveMax
+        && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
+      emitProgress(hitItemCap);
+
+      if (!fetchAll || !nextLink) {
+        currentUrl = null;
+        hasMore = Boolean(nextLink) || hitItemCap;
+        truncated = hitItemCap;
+        break;
+      }
+
+      if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
+        currentUrl = null;
+        hasMore = true;
+        truncated = true;
+        emitProgress(true);
+        break;
+      }
+
+      currentUrl = nextLink;
     }
 
-    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
-    const recordsToAdd = pageRecords.slice(0, remaining);
-    pagesFetched += 1;
-    for (const record of recordsToAdd) {
-      records.push(record);
-      emitProgress(false);
-    }
-
-    const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
-    const manualNextLink = fetchAll && !serverNextLink
-      ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
-      : null;
-    const nextLink = serverNextLink || manualNextLink;
-    const hitItemCap = fetchAll
-      && records.length >= effectiveMax
-      && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
-    emitProgress(hitItemCap);
-
-    if (!fetchAll || !nextLink) {
-      currentUrl = null;
-      hasMore = Boolean(nextLink) || hitItemCap;
-      truncated = hitItemCap;
-      break;
-    }
-
-    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
-      currentUrl = null;
-      hasMore = true;
-      truncated = true;
-      emitProgress(true);
-      break;
-    }
-
-    currentUrl = nextLink;
+    return {
+      total: total ?? records.length,
+      items: records,
+      hasMore,
+      truncated,
+      pagesFetched,
+      fetchedAll: fetchAll ? !hasMore : false,
+    };
   }
 
-  return {
-    total: total ?? records.length,
-    items: records,
-    hasMore,
-    truncated,
-    pagesFetched,
-    fetchedAll: fetchAll ? !hasMore : false,
-  };
+  try {
+    return await run(selectFields);
+  } catch (err) {
+    // Sommige D365-velden staan in tb_columns maar zijn illegaal in $select (HTTP 400).
+    // Zonder $select slaagt dezelfde call; refresh mag daar niet op stuklopen.
+    if (hasSelect && Number(err?.status) === 400) {
+      logger.warn('D365 $select rejected; retrying without $select', {
+        sourceEntity,
+        status: err.status,
+        message: err.message,
+      });
+      return run(null);
+    }
+    throw err;
+  }
 }
 
 function buildPurchaseOrderKeysFilter(keys) {

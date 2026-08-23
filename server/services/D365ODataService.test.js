@@ -586,5 +586,41 @@ describe('D365ODataService', () => {
       expect(result.pagesFetched).toBe(2);
       expect(result.fetchedAll).toBe(true);
     });
+
+    it('probeert opnieuw zonder $select wanneer D365 $select met HTTP 400 afwijst', async () => {
+      const calls = [];
+      global.fetch = vi.fn().mockImplementation(async (url) => {
+        const parsed = new URL(String(url));
+        calls.push(parsed.searchParams.get('$select'));
+        if (parsed.searchParams.has('$select')) {
+          return {
+            ok: false,
+            status: 400,
+            text: async () => JSON.stringify({
+              error: { message: { value: "Could not find a property named 'ProductName'" } },
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            '@odata.count': 1,
+            value: [{ dataAreaId: 'WHSL', ItemNumber: 'ART-1', SearchName: 'Boot' }],
+          }),
+        };
+      });
+
+      const result = await fetchEntityRecords({
+        sourceEntity: '/data/ReleasedProductsV2',
+        top: 5,
+        skip: 0,
+        fetchAll: false,
+        selectFields: ['dataAreaId', 'ItemNumber', 'ProductName'],
+      });
+
+      expect(calls).toEqual(['dataAreaId,ItemNumber,ProductName', null]);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].ItemNumber).toBe('ART-1');
+    });
   });
 });

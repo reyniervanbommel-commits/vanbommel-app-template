@@ -25,7 +25,14 @@ const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } 
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
-const { listStaleSourceColumns } = require('../utils/discoverSourceColumns');
+const {
+  listStaleSourceColumns,
+  lookupRawFieldValue,
+  isEmptySampleValue,
+  formatSampleValue,
+  fillMissingSamplesFromRawRows,
+  sampleMapFromDiscoveredFields,
+} = require('../utils/discoverSourceColumns');
 const {
   listVendorGroupIds,
   expandVendorGroupRules,
@@ -1629,9 +1636,13 @@ function collectDiscoveredFields(records, level) {
             field: normalizedField,
             label: toColumnLabelFromField(normalizedField) || normalizedField,
             dataType: 'text',
+            sample: null,
           });
         }
         const current = discovered.get(normalizedField);
+        if (isEmptySampleValue(current.sample) && !isEmptySampleValue(value)) {
+          current.sample = value;
+        }
         const inferredType = inferSourceDataType(value);
         if (current.dataType === 'text' && inferredType !== 'text') current.dataType = inferredType;
       });
@@ -2437,7 +2448,7 @@ async function refresh(tableKey, options = {}) {
 // inactieve kolommen en verwijdert bronkolommen die D365 niet teruggeeft. Schrijft NIETS naar
 // tb_cache (#AB:177). Een gewone refresh pruned nooit (die sample is $select-beperkt).
 // ---------------------------------------------------------------------------
-const FIELD_DISCOVERY_ROW_LIMIT = 5;
+const FIELD_DISCOVERY_ROW_LIMIT = 60;
 
 async function discoverSourceFields(tableKey) {
   const table = await getTableByKey(tableKey);
@@ -2469,10 +2480,22 @@ async function discoverSourceFields(tableKey) {
     }));
   }
   const { headerInserted, lineInserted, headerRemoved, lineRemoved } = await syncSourceColumnsFromRecords(table, records, { prune: true });
+  const headerFields = collectDiscoveredFields(records, 'header');
+  const lineFields = collectDiscoveredFields(records, 'line');
   logger.info('Veld-discovery uitgevoerd (datamodel)', {
     tableKey, headerInserted, lineInserted, headerRemoved, lineRemoved,
   });
-  return { headerInserted, lineInserted, headerRemoved, lineRemoved, sampledRows: records.length };
+  return {
+    headerInserted,
+    lineInserted,
+    headerRemoved,
+    lineRemoved,
+    sampledRows: records.length,
+    sampleByField: {
+      header: sampleMapFromDiscoveredFields(headerFields),
+      line: sampleMapFromDiscoveredFields(lineFields),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -4662,12 +4685,6 @@ function toAdminColumn(col) {
   };
 }
 
-function normalizePreviewSampleValue(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
 function buildPreviewTableFromCacheRows(columns, cacheRows) {
   const d365Columns = (Array.isArray(columns) ? columns : []).filter(
     (column) => column.source === 'd365' && column.d365Field
@@ -4677,10 +4694,9 @@ function buildPreviewTableFromCacheRows(columns, cacheRows) {
     const source = parseJson(cacheRow?.data_json);
     const values = {};
     for (const column of d365Columns) {
-      const preferred = Object.prototype.hasOwnProperty.call(source, column.key)
-        ? source[column.key]
-        : source[column.d365Field];
-      values[column.d365Field] = preferred === undefined ? null : preferred;
+      const preferred = lookupRawFieldValue(source, column.key);
+      const fallback = preferred === undefined ? lookupRawFieldValue(source, column.d365Field) : preferred;
+      values[column.d365Field] = fallback === undefined ? null : fallback;
     }
     return { values };
   });
@@ -4690,8 +4706,8 @@ function buildPreviewTableFromCacheRows(columns, cacheRows) {
     sampleByField[field] = '—';
     for (let i = 0; i < rows.length; i += 1) {
       const candidate = rows[i]?.values?.[field];
-      if (candidate === null || candidate === undefined || candidate === '') continue;
-      sampleByField[field] = normalizePreviewSampleValue(candidate);
+      if (isEmptySampleValue(candidate)) continue;
+      sampleByField[field] = formatSampleValue(candidate);
       break;
     }
   }
@@ -4714,27 +4730,6 @@ function getMissingPreviewFields(columns, sampleByField) {
     const current = sampleByField?.[field];
     return !current || current === '—';
   });
-}
-
-function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
-  if (!previewTable || !Array.isArray(fields) || !fields.length || !Array.isArray(rawRows) || !rawRows.length) {
-    return previewTable;
-  }
-  const nextSampleByField = { ...(previewTable.sampleByField || {}) };
-  for (const field of fields) {
-    if (nextSampleByField[field] && nextSampleByField[field] !== '—') continue;
-    for (let i = 0; i < rawRows.length; i += 1) {
-      const candidate = rawRows[i]?.[field];
-      if (candidate === null || candidate === undefined || candidate === '') continue;
-      nextSampleByField[field] = normalizePreviewSampleValue(candidate);
-      break;
-    }
-    if (!nextSampleByField[field]) nextSampleByField[field] = '—';
-  }
-  return {
-    ...previewTable,
-    sampleByField: nextSampleByField,
-  };
 }
 
 // Board-kolomdefinities inclusief lookup-verrijking (zelfde set als de board-read).
@@ -4846,21 +4841,35 @@ async function getDataModel(tableKey) {
   };
   const missingHeaderFields = getMissingPreviewFields(headerCols, previewTables.header.sampleByField);
   const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
-  if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
+  if (missingHeaderFields.length || missingLineFields.length) {
     try {
-      const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
-      const fallbackSample = await fetchPurchaseOrders({
-        supplierAccount: null,
-        top: DATA_MODEL_PREVIEW_ROW_LIMIT,
-        skip: 0,
-        fetchAll: false,
-        extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
-        maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
-      });
-      const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
-      const lineRawRows = (fallbackSample.items || []).flatMap((item) => (
-        Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
-      ));
+      let headerRawRows = [];
+      let lineRawRows = [];
+      if (table.key === 'purchase-orders') {
+        const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
+        const fallbackSample = await fetchPurchaseOrders({
+          supplierAccount: null,
+          top: DATA_MODEL_PREVIEW_ROW_LIMIT,
+          skip: 0,
+          fetchAll: false,
+          extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
+          maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
+        });
+        headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
+        lineRawRows = (fallbackSample.items || []).flatMap((item) => (
+          Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
+        ));
+      } else if (table.sourceEntity) {
+        const fallbackSample = await fetchEntityRecords({
+          sourceEntity: table.sourceEntity,
+          top: DATA_MODEL_PREVIEW_ROW_LIMIT,
+          skip: 0,
+          fetchAll: false,
+          maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
+          selectFields: null,
+        });
+        headerRawRows = Array.isArray(fallbackSample.items) ? fallbackSample.items : [];
+      }
       previewTables = {
         header: fillMissingSamplesFromRawRows(previewTables.header, missingHeaderFields, headerRawRows),
         line: fillMissingSamplesFromRawRows(previewTables.line, missingLineFields, lineRawRows),
