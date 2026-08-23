@@ -50,6 +50,7 @@ Project skills staan in `.claude/skills/`. Belangrijkste:
 
 | Skill | Slash command | Wanneer |
 |-------|---------------|---------|
+| `brd-td-feature-design` | — | Korte wens → één spec (`## BRD` / `## FRD` / `## TD`); vóór bouwplan/DevOps |
 | `ui-design-review` | `/check-ui` of `/ui-design-review` | Fluent UI design-consistentie na feature (ook kleine wijzigingen) |
 | `browser-feature-test` | — | Functionele browser-test (gedrag, API, console) |
 | `perf-review` | `/perf-check` | Laadtijden meten én toerekenen (SQL / backend / netwerk / client / render) |

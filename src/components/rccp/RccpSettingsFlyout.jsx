@@ -8,7 +8,10 @@ import { useRccpSettings } from '../../hooks/useRccpSettings';
 import RccpSettingsForm from './RccpSettingsForm';
 
 const useStyles = makeStyles({
-  body: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalL) },
+  drawer: {
+    width: '360px',
+    maxWidth: '100vw',
+  },
   footer: {
     display: 'flex',
     alignItems: 'center',
@@ -19,17 +22,26 @@ const useStyles = makeStyles({
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
-export default function RccpSettingsFlyout({ open, onClose, onSaved, readOnly }) {
+export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
   const styles = useStyles();
   const settings = useRccpSettings();
   const handleClose = useCallback(() => onClose?.(), [onClose]);
+  const handleOpenChange = useCallback((_, data) => {
+    if (!data.open) handleClose();
+  }, [handleClose]);
   const handleSave = useCallback(async () => {
     const ok = await settings.save();
     if (ok) onSaved?.();
   }, [onSaved, settings]);
 
   return (
-    <Drawer open={open} position="end" size="medium" onOpenChange={(_, data) => { if (!data.open) handleClose(); }}>
+    <Drawer
+      className={styles.drawer}
+      open={open}
+      position="end"
+      size="small"
+      onOpenChange={handleOpenChange}
+    >
       <DrawerHeader>
         <DrawerHeaderTitle
           action={(
@@ -45,17 +57,15 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved, readOnly })
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody>
-        <div className={styles.body}>
-          {settings.loading ? <Spinner label="Loading RCCP settings..." /> : (
-            <RccpSettingsForm
-              variant="flyout"
-              config={settings.config}
-              columns={settings.columns}
-              statusOptions={settings.statusOptions}
-              onUpdateField={settings.updateField}
-            />
-          )}
-        </div>
+        {settings.loading ? <Spinner label="Loading RCCP settings..." /> : (
+          <RccpSettingsForm
+            variant="flyout"
+            config={settings.config}
+            columns={settings.columns}
+            statusOptions={settings.statusOptions}
+            onUpdateField={settings.updateField}
+          />
+        )}
       </DrawerBody>
       {!settings.loading && settings.config && (
         <DrawerFooter>

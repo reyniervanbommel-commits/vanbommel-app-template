@@ -4,8 +4,8 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-262-d365-night-refresh-v1-51-31',
-    title: 'Feature 262 - D365 night refresh (v1.51.31)',
+    id: 'feature-262-d365-night-refresh-v1-51-38',
+    title: 'Feature 262 - D365 night refresh (v1.51.38)',
     checks: [
       'Settings → D365 refresh: admin sees live progress, history (max 20), Start and alert emails; employee does not see the menu item',
       'Manual or night run: purchase orders first, then lookups; history shows inserted/updated/deleted; Clear history keeps a running run',

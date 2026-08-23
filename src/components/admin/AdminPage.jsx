@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import { makeStyles, tokens, shorthands, Text } from '@fluentui/react-components';
 import {
   Person24Regular,
   Table24Regular,
@@ -31,6 +31,15 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     flexShrink: 0,
   },
+  sectionHeading: {
+    ...shorthands.margin(0),
+    ...shorthands.padding('12px', '14px', '4px', '16px'),
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
   content: {
     flex: 1,
     ...shorthands.padding('28px', '32px'),
@@ -56,6 +65,7 @@ export default function AdminPage() {
   return (
     <div className={styles.page}>
       <aside className={styles.sidebar}>
+        <Text as="h2" className={styles.sectionHeading}>People</Text>
         <SidebarNavItem
           icon={Person24Regular}
           label="Users"
@@ -69,6 +79,13 @@ export default function AdminPage() {
           onClick={handleTabAnalytics}
         />
         <SidebarNavItem
+          icon={Mail24Regular}
+          label="Mail template"
+          active={adminTab === 'mail-template'}
+          onClick={handleTabMailTemplate}
+        />
+        <Text as="h2" className={styles.sectionHeading}>Data</Text>
+        <SidebarNavItem
           icon={CloudLink24Regular}
           label="OData"
           active={adminTab === 'odata'}
@@ -79,12 +96,6 @@ export default function AdminPage() {
           label="Data model"
           active={adminTab === 'datamodel'}
           onClick={handleTabDataModel}
-        />
-        <SidebarNavItem
-          icon={Mail24Regular}
-          label="Mail template"
-          active={adminTab === 'mail-template'}
-          onClick={handleTabMailTemplate}
         />
         <SidebarNavItem
           icon={History24Regular}
@@ -105,9 +116,9 @@ export default function AdminPage() {
       <div className={styles.content}>
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}
+        {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
         {adminTab === 'odata' && <AdminODataSettings />}
         {adminTab === 'datamodel' && <AdminDataModel />}
-        {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
         {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
         {isAdmin && adminTab === 'd365-refresh' && <AdminD365Refresh />}
       </div>
