@@ -2108,14 +2108,21 @@ async function refresh(tableKey, options = {}) {
     const totalToFetchRaw = Number(progress?.totalToFetch);
     const sourceTotalRaw = Number(progress?.sourceTotal);
     const pagesFetched = Number(progress?.pagesFetched) || 0;
+    const totalToFetch = Number.isFinite(totalToFetchRaw)
+      ? totalToFetchRaw
+      : (Number.isFinite(sourceTotalRaw) ? sourceTotalRaw : null);
     updateRefreshProgress(tableKey, {
       status: 'fetching',
       fetched,
-      totalToFetch: Number.isFinite(totalToFetchRaw) ? totalToFetchRaw : null,
+      totalToFetch,
       sourceTotal: Number.isFinite(sourceTotalRaw) ? sourceTotalRaw : null,
       pagesFetched,
       truncated: Boolean(progress?.truncated),
       error: null,
+    });
+    refreshRunService.setEntityProgress(table.key, {
+      fetched,
+      ...(totalToFetch != null ? { totalToFetch } : {}),
     });
   };
 
@@ -2231,7 +2238,11 @@ async function refresh(tableKey, options = {}) {
         pagesFetched,
       truncated: Boolean(truncated),
     });
-      refreshRunService.setEntityProgress(table.key, { fetched: records.length, saved });
+      refreshRunService.setEntityProgress(table.key, {
+        fetched: records.length,
+        saved,
+        totalToFetch,
+      });
     }
 
     const removedMasters = await pool.request()

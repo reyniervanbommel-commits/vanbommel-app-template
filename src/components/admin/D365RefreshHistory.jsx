@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Badge, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import { refreshDurationLabel } from '../../utils/d365RefreshDuration';
 
 const useStyles = makeStyles({
   list: {
@@ -51,6 +52,7 @@ function D365RefreshHistory({ runs }) {
         const title = [run.error_text, run.alert_status === 'failed' ? 'Alert not sent' : '', run.alert_status === 'skipped' ? 'Alert skipped' : '']
           .filter(Boolean)
           .join(' · ');
+        const duration = refreshDurationLabel(run.started_at, run.finished_at, run.status);
         return (
           <div key={run.id} className={styles.row} title={title || undefined}>
             <div className={styles.top}>
@@ -60,6 +62,7 @@ function D365RefreshHistory({ runs }) {
                 <Badge appearance="tint" color="warning">Alert not sent</Badge>
               ) : null}
               <Text className={styles.meta}>{formatWhen(run.started_at)}</Text>
+              <Text className={styles.meta}>{duration}</Text>
             </div>
             <Text className={styles.meta}>
               {`Fetched from D365 ${run.fetched_total || 0} · Cache rows +${run.inserted_total || 0} ~${run.updated_total || 0} · Removed from cache ${run.deleted_total || 0}`}

@@ -132,4 +132,18 @@ describe('RefreshRunService', () => {
     expect(rows).toEqual([]);
     expect(mockState.pool.calls[0].inputs.limit).toBe(20);
   });
+
+  it('zet live fetched en totalToFetch op de running entity', () => {
+    refreshRunService.create({ source: 'manual', entityKeys: ['purchase-orders'] });
+    refreshRunService.markEntityRunning('purchase-orders');
+    refreshRunService.setEntityProgress('purchase-orders', { fetched: 412, totalToFetch: 2500 });
+    const full = refreshRunService.snapshotRun('full');
+    expect(full.entities[0]).toEqual(expect.objectContaining({
+      status: 'running',
+      fetched: 412,
+      totalToFetch: 2500,
+    }));
+    expect(full.overall).toBeGreaterThan(0.1);
+    expect(full.overall).toBeLessThan(0.3);
+  });
 });

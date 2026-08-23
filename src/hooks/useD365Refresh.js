@@ -13,7 +13,7 @@ export function useD365Refresh() {
   const [progress, setProgress] = useState(null);
   const [run, setRun] = useState(null);
   const [history, setHistory] = useState([]);
-  const [emails, setEmails] = useState('');
+  const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingEmails, setSavingEmails] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -42,7 +42,7 @@ export function useD365Refresh() {
 
   const loadEmails = useCallback(async () => {
     const data = await apiRequest('/admin/d365-refresh/alert-emails');
-    setEmails((data?.emails || []).join(', '));
+    setEmails(Array.isArray(data?.emails) ? data.emails : []);
   }, []);
 
   useEffect(() => {
@@ -89,16 +89,17 @@ export function useD365Refresh() {
     }
   }, [loadLive]);
 
-  const saveEmails = useCallback(async () => {
+  const saveEmails = useCallback(async (nextEmails) => {
+    const payload = Array.isArray(nextEmails) ? nextEmails : emails;
     setSavingEmails(true);
     setError('');
     setFeedback('');
     try {
       const data = await apiRequest('/admin/d365-refresh/alert-emails', {
         method: 'PUT',
-        body: { emails },
+        body: { emails: payload },
       });
-      setEmails((data?.emails || []).join(', '));
+      setEmails(Array.isArray(data?.emails) ? data.emails : payload);
       setFeedback('Alert emails saved');
     } catch (err) {
       setError(err?.message || 'Failed to save alert emails');
@@ -108,7 +109,7 @@ export function useD365Refresh() {
   }, [emails]);
 
   const setEmailsValue = useCallback((value) => {
-    setEmails(value);
+    setEmails(Array.isArray(value) ? value : []);
   }, []);
 
   return useMemo(() => ({

@@ -1,1 +1,3 @@
 export const D365_REFRESH_INFO = 'Night refresh runs once a day in production via GitHub Actions, not an Azure Logic App or always-on container. That keeps Azure cost near zero. It starts the same D365 run as the Start button. Staff and vendors see new and changed frames until they click Mark as seen — each person for themselves. If someone doesn\'t click Mark as seen, frames older than 14 days fade away automatically; no data is deleted, only the "new/changed" highlight stops applying to older changes. The schedule is 00:00 UTC.';
+
+export const D365_REFRESH_SERVER_HINT = 'This run continues on the server if you leave this page or close the browser. Open this tab again to follow live progress and history.';

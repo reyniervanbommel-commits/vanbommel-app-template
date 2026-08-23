@@ -22,10 +22,20 @@ const useStyles = makeStyles({
   },
 });
 
-function barValue(status, overall) {
-  if (status === 'done' || status === 'error') return 1;
-  if (status === 'running') return Math.min(0.95, Math.max(0.08, Number(overall) || 0.15));
-  return 0;
+function entityBarValue(entity) {
+  if (entity.status === 'done' || entity.status === 'error') return 1;
+  if (entity.status !== 'running') return 0;
+  const total = Number(entity.totalToFetch);
+  const fetched = Number(entity.fetched) || 0;
+  if (Number.isFinite(total) && total > 0) return Math.min(0.99, fetched / total);
+  return fetched > 0 ? 0.45 : 0.12;
+}
+
+function fetchedLabel(entity) {
+  const fetched = Number(entity.fetched) || 0;
+  const total = Number(entity.totalToFetch);
+  if (Number.isFinite(total) && total > 0) return `Fetched from D365 ${fetched} / ${total}`;
+  return `Fetched from D365 ${fetched}`;
 }
 
 function D365RefreshLivePanel({ run }) {
@@ -45,10 +55,10 @@ function D365RefreshLivePanel({ run }) {
       {entities.map((entity) => (
         <div key={entity.tableKey} className={styles.row}>
           <Text className={styles.label}>{entity.label}</Text>
-          <ProgressBar value={barValue(entity.status, 0.5)} />
+          <ProgressBar value={entityBarValue(entity)} />
           <Text className={styles.meta}>
             {entity.status}
-            {` · Fetched from D365 ${entity.fetched || 0}`}
+            {` · ${fetchedLabel(entity)}`}
             {` · Cache rows +${entity.inserted || 0} ~${entity.updated || 0}`}
             {` · Removed from cache ${entity.deleted || 0}`}
           </Text>
@@ -59,3 +69,4 @@ function D365RefreshLivePanel({ run }) {
 }
 
 export default memo(D365RefreshLivePanel);
+export { entityBarValue, fetchedLabel };

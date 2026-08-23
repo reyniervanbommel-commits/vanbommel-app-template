@@ -32,6 +32,6 @@ describe('useD365Refresh', () => {
     });
     expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/refresh/progress?view=full');
     expect(apiRequest).toHaveBeenCalledWith('/admin/d365-refresh/runs?limit=20');
-    expect(result.current.emails).toBe('ops@example.com');
+    expect(result.current.emails).toEqual(['ops@example.com']);
   });
 });

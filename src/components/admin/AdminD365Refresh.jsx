@@ -1,19 +1,18 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   Button,
-  Field,
-  Input,
   Spinner,
   Text,
   makeStyles,
   tokens,
   shorthands,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, Save24Regular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import AdminInfoHint from './AdminInfoHint';
-import { D365_REFRESH_INFO } from './d365RefreshInfoCopy';
+import { D365_REFRESH_INFO, D365_REFRESH_SERVER_HINT } from './d365RefreshInfoCopy';
 import D365RefreshLivePanel from './D365RefreshLivePanel';
 import D365RefreshHistory from './D365RefreshHistory';
+import D365RefreshAlertEmails from './D365RefreshAlertEmails';
 import { useD365Refresh } from '../../hooks/useD365Refresh';
 
 const useStyles = makeStyles({
@@ -28,18 +27,14 @@ const useStyles = makeStyles({
     ...shorthands.gap('16px'),
   },
   actions: { display: 'flex', ...shorthands.gap('12px'), alignItems: 'center', flexWrap: 'wrap' },
-  emailField: { maxWidth: '400px' },
+  hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1 },
   feedback: { color: tokens.colorPaletteGreenForeground1 },
-  hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
 export default function AdminD365Refresh() {
   const styles = useStyles();
   const model = useD365Refresh();
-  const onEmailsChange = useCallback((event) => {
-    model.setEmails(event.target.value);
-  }, [model]);
 
   if (model.loading) {
     return <Spinner label="Loading D365 refresh" />;
@@ -54,6 +49,7 @@ export default function AdminD365Refresh() {
 
       <div className={styles.section}>
         <Text weight="semibold">Live run</Text>
+        <Text className={styles.hint}>{D365_REFRESH_SERVER_HINT}</Text>
         <div className={styles.actions}>
           <Button
             appearance="primary"
@@ -68,16 +64,12 @@ export default function AdminD365Refresh() {
       </div>
 
       <div className={styles.section}>
-        <Text weight="semibold">Night alert emails</Text>
-        <Text className={styles.hint}>Used only when a night run fails, is interrupted, or an entity fails.</Text>
-        <Field label="Alert emails" className={styles.emailField}>
-          <Input value={model.emails} onChange={onEmailsChange} style={{ maxWidth: '400px' }} />
-        </Field>
-        <div className={styles.actions}>
-          <Button appearance="secondary" icon={<Save24Regular />} onClick={model.saveEmails} disabled={model.savingEmails}>
-            Save
-          </Button>
-        </div>
+        <D365RefreshAlertEmails
+          emails={model.emails}
+          onChange={model.setEmails}
+          onSave={model.saveEmails}
+          saving={model.savingEmails}
+        />
       </div>
 
       <div className={styles.section}>

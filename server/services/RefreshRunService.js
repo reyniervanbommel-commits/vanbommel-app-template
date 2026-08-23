@@ -42,6 +42,7 @@ function createEntity(tableKey, sortOrder) {
     sortOrder,
     status: 'queued',
     fetched: 0,
+    totalToFetch: null,
     saved: 0,
     inserted: 0,
     updated: 0,
@@ -121,6 +122,9 @@ function setEntityProgress(tableKey, patch = {}) {
   if (!entity) return null;
   if (patch.fetched != null) entity.fetched = Number(patch.fetched) || 0;
   if (patch.saved != null) entity.saved = Number(patch.saved) || 0;
+  if (patch.totalToFetch != null && Number.isFinite(Number(patch.totalToFetch))) {
+    entity.totalToFetch = Number(patch.totalToFetch);
+  }
   return entity;
 }
 
@@ -177,7 +181,11 @@ function snapshotRun(mode = 'board') {
   const entityIndex = current ? run.entities.indexOf(current) + 1 : 0;
   let overall = entityCount ? doneCount / entityCount : 0;
   if (running) {
-    const fetchFrac = running.fetched > 0 ? 0.5 : 0.15;
+    const total = Number(running.totalToFetch);
+    const fetched = Number(running.fetched) || 0;
+    const fetchFrac = Number.isFinite(total) && total > 0
+      ? Math.min(0.9, (fetched / total) * 0.9)
+      : (fetched > 0 ? 0.5 : 0.15);
     overall = Math.min(0.99, (doneCount + fetchFrac) / entityCount);
   }
   if (run.status === 'done' || run.status === 'error' || run.status === 'interrupted') {
@@ -197,6 +205,7 @@ function snapshotRun(mode = 'board') {
       label: entity.label,
       status: entity.status,
       fetched: entity.fetched,
+      totalToFetch: entity.totalToFetch,
       saved: entity.saved,
       inserted: entity.inserted,
       updated: entity.updated,
