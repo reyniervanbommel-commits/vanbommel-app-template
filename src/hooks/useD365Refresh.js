@@ -17,6 +17,7 @@ export function useD365Refresh() {
   const [loading, setLoading] = useState(true);
   const [savingEmails, setSavingEmails] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const historyLoadedRef = useRef(false);
@@ -108,6 +109,21 @@ export function useD365Refresh() {
     }
   }, [emails]);
 
+  const clearHistory = useCallback(async () => {
+    setClearingHistory(true);
+    setError('');
+    setFeedback('');
+    try {
+      await apiRequest('/admin/d365-refresh/runs', { method: 'DELETE' });
+      await loadHistory();
+      setFeedback('Refresh history cleared');
+    } catch (err) {
+      setError(err?.message || 'Failed to clear refresh history');
+    } finally {
+      setClearingHistory(false);
+    }
+  }, [loadHistory]);
+
   const setEmailsValue = useCallback((value) => {
     setEmails(Array.isArray(value) ? value : []);
   }, []);
@@ -125,7 +141,9 @@ export function useD365Refresh() {
     feedback,
     startRefresh,
     saveEmails,
+    clearHistory,
     setEmails: setEmailsValue,
+    clearingHistory,
   }), [
     emails,
     error,
@@ -138,7 +156,9 @@ export function useD365Refresh() {
     saveEmails,
     savingEmails,
     setEmailsValue,
+    clearHistory,
     startRefresh,
     starting,
+    clearingHistory,
   ]);
 }

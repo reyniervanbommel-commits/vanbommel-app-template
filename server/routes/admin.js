@@ -483,4 +483,21 @@ router.get('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next
   }
 });
 
+router.delete('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const result = await refreshRunService.clearHistory();
+    await auditLog(
+      req.user.id,
+      req.user.email,
+      'CLEAR_D365_REFRESH_HISTORY',
+      'tb_refresh_runs',
+      null,
+      result,
+    );
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

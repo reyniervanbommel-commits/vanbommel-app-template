@@ -74,7 +74,11 @@ export default function AdminD365Refresh() {
       </D365RefreshFold>
 
       <D365RefreshFold title="History" defaultOpen>
-        <D365RefreshHistory runs={model.history} />
+        <D365RefreshHistory
+          runs={model.history}
+          onClear={model.clearHistory}
+          clearing={model.clearingHistory}
+        />
       </D365RefreshFold>
 
       {model.error ? <Text className={styles.error}>{model.error}</Text> : null}

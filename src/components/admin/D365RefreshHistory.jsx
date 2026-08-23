@@ -1,5 +1,18 @@
-import React, { memo } from 'react';
-import { Badge, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import React, { memo, useCallback, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Text,
+  makeStyles,
+  tokens,
+  shorthands,
+} from '@fluentui/react-components';
 import { refreshDurationLabel } from '../../utils/d365RefreshDuration';
 import { formatCount } from '../../utils/formatCount';
 
@@ -35,6 +48,10 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteDarkOrangeForeground1,
     fontSize: tokens.fontSizeBase200,
   },
+  actions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+  },
 });
 
 function formatWhen(value) {
@@ -49,14 +66,32 @@ function statusColor(status) {
   return 'informative';
 }
 
-function D365RefreshHistory({ runs }) {
+function D365RefreshHistory({ runs, onClear, clearing = false }) {
   const styles = useStyles();
   const items = Array.isArray(runs) ? runs : [];
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const openConfirm = useCallback(() => setConfirmOpen(true), []);
+  const closeConfirm = useCallback(() => setConfirmOpen(false), []);
+  const handleDialogChange = useCallback((_, data) => setConfirmOpen(Boolean(data.open)), []);
+  const handleConfirm = useCallback(async () => {
+    if (typeof onClear !== 'function') return;
+    await onClear();
+    setConfirmOpen(false);
+  }, [onClear]);
+
   if (!items.length) {
     return <Text className={styles.meta}>No refresh runs yet.</Text>;
   }
+
   return (
     <div className={styles.list}>
+      {typeof onClear === 'function' ? (
+        <div className={styles.actions}>
+          <Button appearance="secondary" onClick={openConfirm} disabled={clearing}>
+            Clear history
+          </Button>
+        </div>
+      ) : null}
       {items.map((run) => {
         const title = [run.error_text, run.alert_status === 'failed' ? 'Alert not sent' : '', run.alert_status === 'skipped' ? 'Alert skipped' : '']
           .filter(Boolean)
@@ -90,6 +125,22 @@ function D365RefreshHistory({ runs }) {
           </div>
         );
       })}
+      <Dialog open={confirmOpen} onOpenChange={handleDialogChange}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Clear refresh history</DialogTitle>
+            <DialogContent>
+              This permanently deletes finished D365 refresh runs. A run that is still in progress is kept.
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={closeConfirm} disabled={clearing}>Cancel</Button>
+              <Button appearance="primary" onClick={handleConfirm} disabled={clearing}>
+                {clearing ? 'Clearing...' : 'Clear history'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 }

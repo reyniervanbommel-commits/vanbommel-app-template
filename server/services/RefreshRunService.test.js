@@ -158,4 +158,23 @@ describe('RefreshRunService', () => {
       totalToFetch: 2500,
     }));
   });
+
+  it('wist afgeronde history en houdt een lopende run', async () => {
+    refreshRunService.create({ source: 'manual', entityKeys: ['purchase-orders'] });
+    mockState.pool = createMockPool({
+      queries: [{ recordset: [] }, { recordset: [{ deletedRuns: 4 }] }],
+    });
+    const result = await refreshRunService.clearHistory();
+    expect(result).toEqual({ deletedRuns: 4, keptRunning: true });
+    expect(mockState.pool.calls[0].sql).toMatch(/tb_refresh_run_entities/);
+    expect(mockState.pool.calls[1].sql).toMatch(/tb_refresh_runs/);
+  });
+
+  it('wist alle history als er geen actieve run is', async () => {
+    mockState.pool = createMockPool({
+      queries: [{ recordset: [] }, { recordset: [{ deletedRuns: 2 }] }],
+    });
+    const result = await refreshRunService.clearHistory();
+    expect(result).toEqual({ deletedRuns: 2, keptRunning: false });
+  });
 });

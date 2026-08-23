@@ -4,9 +4,11 @@ const express = require('express');
 const refreshRunService = require('../services/RefreshRunService');
 
 const originalListRuns = refreshRunService.listRuns;
+const originalClearHistory = refreshRunService.clearHistory;
 
 afterEach(() => {
   refreshRunService.listRuns = originalListRuns;
+  refreshRunService.clearHistory = originalClearHistory;
 });
 
 function buildApp(user) {
@@ -48,6 +50,24 @@ describe('GET /api/admin/d365-refresh/runs', () => {
       const res = await fetch(`${baseUrl}/api/admin/d365-refresh/runs`);
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ runs: [] });
+    });
+  });
+});
+
+describe('DELETE /api/admin/d365-refresh/runs', () => {
+  it('geeft employee 403', async () => {
+    await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/admin/d365-refresh/runs`, { method: 'DELETE' });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it('laat admin de historie wissen', async () => {
+    refreshRunService.clearHistory = vi.fn().mockResolvedValue({ deletedRuns: 3, keptRunning: false });
+    await withServer({ id: 1, role: 'admin' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/admin/d365-refresh/runs`, { method: 'DELETE' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, deletedRuns: 3, keptRunning: false });
     });
   });
 });

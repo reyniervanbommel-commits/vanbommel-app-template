@@ -72,4 +72,24 @@ describe('D365RefreshHistory', () => {
     );
     expect(screen.getByText('Items: Removed from $select (not returned by D365): ProductName')).toBeTruthy();
   });
+
+  it('toont Clear history als onClear is meegegeven', () => {
+    renderWithFluent(
+      <D365RefreshHistory
+        onClear={() => {}}
+        runs={[{
+          id: 4,
+          status: 'done',
+          source: 'manual',
+          started_at: '2026-08-23T00:00:00.000Z',
+          finished_at: '2026-08-23T00:01:00.000Z',
+          fetched_total: 10,
+          inserted_total: 0,
+          updated_total: 0,
+          deleted_total: 0,
+        }]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Clear history' })).toBeTruthy();
+  });
 });

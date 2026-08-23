@@ -38,7 +38,6 @@ export default function PurchaseOrdersPage() {
     visibleHeaderColumns,
     lineColumns,
     syncedAt,
-    stale,
     hasCache,
     total,
     loading,
@@ -249,7 +248,6 @@ export default function PurchaseOrdersPage() {
           isStaff,
           hasCache,
           relativeSynced,
-          stale,
           total,
         }}
         activityState={{

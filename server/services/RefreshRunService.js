@@ -450,6 +450,26 @@ function mapHistoryRow(row, entities) {
   };
 }
 
+async function clearHistory() {
+  const running = isActive();
+  const keepId = running ? (Number(getActiveRunId()) || 0) : 0;
+  const pool = await getSqlPool();
+  await pool.request()
+    .input('keepId', sql.BigInt, keepId)
+    .query('DELETE FROM dbo.tb_refresh_run_entities WHERE @keepId = 0 OR run_id <> @keepId');
+  const result = await pool.request()
+    .input('keepId', sql.BigInt, keepId)
+    .query(`
+      DELETE FROM dbo.tb_refresh_runs WHERE @keepId = 0 OR id <> @keepId;
+      SELECT @@ROWCOUNT AS deletedRuns;
+    `);
+  lastRun = null;
+  return {
+    deletedRuns: Number(result.recordset?.[0]?.deletedRuns) || 0,
+    keptRunning: running,
+  };
+}
+
 async function listRuns({ limit = HISTORY_LIMIT_MAX } = {}) {
   const safeLimit = Math.min(HISTORY_LIMIT_MAX, Math.max(1, Number(limit) || HISTORY_LIMIT_MAX));
   const pool = await getSqlPool();
@@ -544,6 +564,7 @@ module.exports = {
   failPurchaseOrders,
   finishRun,
   listRuns,
+  clearHistory,
   interruptRunningRowsOnProcessStart,
   sendNightMailSafe,
   resetMemoryForTests,
