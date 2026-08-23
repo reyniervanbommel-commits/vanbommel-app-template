@@ -240,6 +240,42 @@ async function initSqlPool() {
 }
 
 const PORT = process.env.PORT || 3008;
+let httpServer = null;
+let staleReclaimTimer = null;
+
+function startStaleReclaimLoop() {
+  if (staleReclaimTimer) return;
+  staleReclaimTimer = setInterval(() => {
+    refreshRunService.interruptStaleRunningRows().catch((err) => {
+      logger.warn('Stale refresh-run reclaim mislukt', { error: err && err.message ? err.message : String(err) });
+    });
+  }, 30_000);
+  if (typeof staleReclaimTimer.unref === 'function') staleReclaimTimer.unref();
+}
+
+function shutdown(signal) {
+  logger.info('Server shutdown', { signal });
+  if (staleReclaimTimer) {
+    clearInterval(staleReclaimTimer);
+    staleReclaimTimer = null;
+  }
+  Promise.resolve(refreshRunService.markInterruptedOnShutdown())
+    .catch((err) => {
+      logger.warn('Refresh-run shutdown-markering mislukt', { error: err && err.message ? err.message : String(err) });
+    })
+    .finally(() => {
+      if (!httpServer) {
+        process.exit(0);
+        return;
+      }
+      httpServer.close(() => process.exit(0));
+      setTimeout(() => process.exit(1), 8000).unref();
+    });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 // Non-fataal: bij een DB-hapering tijdens boot loggen we en starten we alsnog; de modules
 // verbinden dan lazy bij de eerste query (met standaard pool-config als fallback).
 initSqlPool()
@@ -249,10 +285,11 @@ initSqlPool()
     } catch (err) {
       logger.warn('Refresh-run interrupt bij process-start mislukt', { error: err && err.message ? err.message : String(err) });
     }
+    startStaleReclaimLoop();
   })
   .catch((err) => logger.error('MSSQL-pool init faalde; val terug op lazy connect', { error: err && err.message ? err.message : String(err) }))
   .finally(() => {
-    app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
+    httpServer = app.listen(PORT, () => console.log('Server gestart op poort ' + PORT));
   });
 
 module.exports = app;
