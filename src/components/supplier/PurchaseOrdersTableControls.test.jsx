@@ -44,8 +44,13 @@ describe('PurchaseOrdersTableControls', () => {
   it('marks the filter overview button active when filters or formatting are active', () => {
     renderControls({ hasActive: true });
 
-    expect(screen.getByRole('button', {
+    const button = screen.getByRole('button', {
       name: 'Show active filters and formatting (active)',
-    })).toBeTruthy();
+    });
+    const bars = button.querySelectorAll('rect');
+
+    expect(button).toBeTruthy();
+    expect(bars).toHaveLength(3);
+    expect(bars[0].getAttribute('height')).toBe('2');
   });
 });

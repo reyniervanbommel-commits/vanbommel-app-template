@@ -20,6 +20,16 @@ import {
 import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 
+function FilterIconThick20() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="13" height="2" rx="1" />
+      <rect x="5.5" y="8.75" width="9" height="2" rx="1" />
+      <rect x="7.5" y="13" width="5" height="2" rx="1" />
+    </svg>
+  );
+}
+
 const useStyles = makeStyles({
   controlHeaderCell: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -94,7 +104,7 @@ function PurchaseOrdersTableControls({
     : 'Show active filters and formatting';
   const filterIcon = (
     <span className={mergeClasses(styles.filterIcon, hasActive && styles.filterIconActive)}>
-      <Filter20Regular />
+      {hasActive ? <FilterIconThick20 /> : <Filter20Regular />}
     </span>
   );
 

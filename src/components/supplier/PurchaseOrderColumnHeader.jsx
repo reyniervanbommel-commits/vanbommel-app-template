@@ -5,8 +5,7 @@ import {
 } from '@fluentui/react-components';
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import D365LogoIcon from './D365LogoIcon';
-import { FilterRegular, MoreVerticalRegular, PaintBrushRegular } from '@fluentui/react-icons';
-import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
+import { MoreVerticalRegular, PaintBrushRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
@@ -15,14 +14,6 @@ const useStyles = makeStyles({
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   conditionalFormattingIndicator: {
     color: tokens.colorPaletteDarkOrangeForeground2,
-    fontSize: tokens.fontSizeBase300,
-    width: '16px',
-    minWidth: '16px',
-    lineHeight: 1,
-    flexShrink: 0,
-  },
-  filterIndicator: {
-    color: SUBITEM_CONNECTOR_COLOR,
     fontSize: tokens.fontSizeBase300,
     width: '16px',
     minWidth: '16px',
@@ -41,7 +32,6 @@ export default function PurchaseOrderColumnHeader({
   showActionsMenu = true,
   autoEdit = false,
   onEditingDone,
-  showFilterIndicator = false,
   showConditionalFormattingIndicator = false,
 }) {
   const styles = useStyles();
@@ -101,11 +91,6 @@ export default function PurchaseOrderColumnHeader({
       {showConditionalFormattingIndicator ? (
         <Tooltip content="Conditional formatting active" relationship="label">
           <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
-        </Tooltip>
-      ) : null}
-      {showFilterIndicator ? (
-        <Tooltip content="Filter active" relationship="label">
-          <FilterRegular className={styles.filterIndicator} />
         </Tooltip>
       ) : null}
       <span className={styles.labelText}>{column.label}</span>

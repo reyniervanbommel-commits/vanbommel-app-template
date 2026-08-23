@@ -142,7 +142,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                     showActionsMenu={false}
                     autoEdit={editingColumnKey === column.key}
                     onEditingDone={onEditingDone}
-                    showFilterIndicator={hasActiveFilter}
                     showConditionalFormattingIndicator={hasActiveConditionalFormatting}
                   />
                 )}
