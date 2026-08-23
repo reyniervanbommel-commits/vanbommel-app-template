@@ -30,6 +30,10 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontSize: tokens.fontSizeBase200,
   },
+  notice: {
+    color: tokens.colorPaletteDarkOrangeForeground1,
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 function formatWhen(value) {
@@ -73,8 +77,13 @@ function D365RefreshHistory({ runs }) {
             </Text>
             {run.error_text ? <Text className={styles.error}>{run.error_text}</Text> : null}
             {(run.entities || []).filter((entity) => entity.error_text).map((entity) => (
-              <Text key={entity.tableKey} className={styles.error}>
+              <Text key={`err-${entity.tableKey}`} className={styles.error}>
                 {`${entity.label || entity.tableKey}: ${entity.error_text}`}
+              </Text>
+            ))}
+            {(run.entities || []).filter((entity) => entity.notice_text).map((entity) => (
+              <Text key={`notice-${entity.tableKey}`} className={styles.notice}>
+                {`${entity.label || entity.tableKey}: ${entity.notice_text}`}
               </Text>
             ))}
           </div>

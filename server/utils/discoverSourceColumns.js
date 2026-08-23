@@ -79,6 +79,26 @@ function fillMissingSamplesFromRawRows(previewTable, fields, rawRows) {
   };
 }
 
+function listSelectFieldsMissingFromRecord(selectFields, record) {
+  const keys = new Set(
+    Object.keys(record && typeof record === 'object' ? record : {})
+      .filter((key) => key && !String(key).startsWith('@'))
+      .map((key) => String(key).toLowerCase())
+  );
+  if (!keys.size) return [];
+  return (Array.isArray(selectFields) ? selectFields : [])
+    .map((field) => String(field || '').trim())
+    .filter((field) => field && !keys.has(field.toLowerCase()));
+}
+
+function formatSelectDropNotice(fields) {
+  const list = [...new Set((Array.isArray(fields) ? fields : [])
+    .map((field) => String(field || '').trim())
+    .filter(Boolean))];
+  if (!list.length) return null;
+  return `Removed from $select (not returned by D365): ${list.join(', ')}`;
+}
+
 function sampleMapFromDiscoveredFields(discoveredFields) {
   const sampleByField = {};
   for (const entry of Array.isArray(discoveredFields) ? discoveredFields : []) {
@@ -96,5 +116,7 @@ module.exports = {
   lookupRawFieldValue,
   firstNonEmptySample,
   fillMissingSamplesFromRawRows,
+  listSelectFieldsMissingFromRecord,
+  formatSelectDropNotice,
   sampleMapFromDiscoveredFields,
 };

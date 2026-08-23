@@ -587,12 +587,13 @@ describe('D365ODataService', () => {
       expect(result.fetchedAll).toBe(true);
     });
 
-    it('probeert opnieuw zonder $select wanneer D365 $select met HTTP 400 afwijst', async () => {
+    it('haalt illegale $select-velden weg na een $top=1 probe zonder $select', async () => {
       const calls = [];
       global.fetch = vi.fn().mockImplementation(async (url) => {
         const parsed = new URL(String(url));
-        calls.push(parsed.searchParams.get('$select'));
-        if (parsed.searchParams.has('$select')) {
+        const select = parsed.searchParams.get('$select');
+        calls.push({ select, top: parsed.searchParams.get('$top') });
+        if (select && select.split(',').includes('ProductName')) {
           return {
             ok: false,
             status: 400,
@@ -618,7 +619,13 @@ describe('D365ODataService', () => {
         selectFields: ['dataAreaId', 'ItemNumber', 'ProductName'],
       });
 
-      expect(calls).toEqual(['dataAreaId,ItemNumber,ProductName', null]);
+      expect(calls.map((call) => call.select)).toEqual([
+        'dataAreaId,ItemNumber,ProductName',
+        null,
+        'dataAreaId,ItemNumber',
+      ]);
+      expect(calls[1].top).toBe('1');
+      expect(result.droppedSelectFields).toEqual(['ProductName']);
       expect(result.items).toHaveLength(1);
       expect(result.items[0].ItemNumber).toBe('ART-1');
     });

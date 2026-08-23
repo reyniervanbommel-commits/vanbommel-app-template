@@ -32,6 +32,7 @@ const {
   formatSampleValue,
   fillMissingSamplesFromRawRows,
   sampleMapFromDiscoveredFields,
+  formatSelectDropNotice,
 } = require('../utils/discoverSourceColumns');
 const {
   listVendorGroupIds,
@@ -1042,6 +1043,7 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
   let rawItems = [];
   let total = 0;
   let truncated = false;
+  let droppedSelectFields = [];
 
   if (usesInheritedPoFilter) {
     const inheritedScopes = await getInheritedPoLookupScopes(table);
@@ -1077,6 +1079,10 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
           maxItems,
           selectFields,
         });
+        if (chunkResult.droppedSelectFields?.length) {
+          droppedSelectFields = mergeDroppedSelectFields(droppedSelectFields, chunkResult.droppedSelectFields);
+          selectFields = narrowSelectFields(selectFields, droppedSelectFields);
+        }
         pagesFetched += Number(chunkResult.pagesFetched) || 0;
         truncated = truncated || Boolean(chunkResult.truncated);
         for (const raw of Array.isArray(chunkResult.items) ? chunkResult.items : []) {
@@ -1109,9 +1115,16 @@ async function genericMasterD365Fetch(table, { onProgress } = {}) {
       onProgress,
       selectFields,
     });
+    if (result.droppedSelectFields?.length) {
+      droppedSelectFields = mergeDroppedSelectFields(droppedSelectFields, result.droppedSelectFields);
+    }
     rawItems = Array.isArray(result.items) ? result.items : [];
     total = Number(result.total) || rawItems.length;
     truncated = Boolean(result.truncated);
+  }
+
+  if (droppedSelectFields.length) {
+    await applyDroppedSelectFields(table, droppedSelectFields);
   }
 
   const records = rawItems.map((raw) => {
@@ -1665,6 +1678,52 @@ async function deleteSourceColumnsByIds(pool, columnIds) {
       .query("DELETE FROM dbo.tb_columns WHERE id = @columnId AND source = 'source'");
   }
   return ids.length;
+}
+
+function mergeDroppedSelectFields(current, extra) {
+  const next = [...(Array.isArray(current) ? current : [])];
+  const seen = new Set(next.map((field) => String(field).toLowerCase()));
+  for (const field of Array.isArray(extra) ? extra : []) {
+    const name = String(field || '').trim();
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    next.push(name);
+  }
+  return next;
+}
+
+function narrowSelectFields(selectFields, droppedFields) {
+  if (!Array.isArray(selectFields) || !selectFields.length) return selectFields;
+  const dropped = new Set((droppedFields || []).map((field) => String(field).toLowerCase()));
+  if (!dropped.size) return selectFields;
+  return selectFields.filter((field) => !dropped.has(String(field).toLowerCase()));
+}
+
+async function dropIllegalSelectSourceColumns(table, droppedFields) {
+  const names = [...new Set((droppedFields || []).map((field) => String(field || '').trim()).filter(Boolean))];
+  if (!names.length) return [];
+  const protectedFields = new Set(uniqueFieldList([
+    ...(table.keyFields || []),
+    ...requiredMasterFieldsFromTable(table),
+  ]).map((field) => field.toLowerCase()));
+  const removable = names.filter((name) => !protectedFields.has(name.toLowerCase()));
+  if (!removable.length) return [];
+  const columns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: true });
+  const stale = columns.filter((column) => (
+    column.source === 'source'
+    && removable.some((name) => name.toLowerCase() === String(column.sourceField || '').toLowerCase())
+  ));
+  if (!stale.length) return [];
+  const pool = await getPool();
+  await deleteSourceColumnsByIds(pool, stale.map((column) => column.id));
+  return stale.map((column) => column.sourceField);
+}
+
+async function applyDroppedSelectFields(table, droppedFields) {
+  const removed = await dropIllegalSelectSourceColumns(table, droppedFields);
+  const notice = formatSelectDropNotice(removed.length ? removed : droppedFields);
+  if (notice) refreshRunService.updateEntity(table.key, { notice_text: notice });
+  return removed;
 }
 
 async function syncSourceColumnsFromRecords(table, records, { prune = false } = {}) {
@@ -4841,35 +4900,21 @@ async function getDataModel(tableKey) {
   };
   const missingHeaderFields = getMissingPreviewFields(headerCols, previewTables.header.sampleByField);
   const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
-  if (missingHeaderFields.length || missingLineFields.length) {
+  if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
     try {
-      let headerRawRows = [];
-      let lineRawRows = [];
-      if (table.key === 'purchase-orders') {
-        const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
-        const fallbackSample = await fetchPurchaseOrders({
-          supplierAccount: null,
-          top: DATA_MODEL_PREVIEW_ROW_LIMIT,
-          skip: 0,
-          fetchAll: false,
-          extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
-          maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
-        });
-        headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
-        lineRawRows = (fallbackSample.items || []).flatMap((item) => (
-          Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
-        ));
-      } else if (table.sourceEntity) {
-        const fallbackSample = await fetchEntityRecords({
-          sourceEntity: table.sourceEntity,
-          top: DATA_MODEL_PREVIEW_ROW_LIMIT,
-          skip: 0,
-          fetchAll: false,
-          maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
-          selectFields: null,
-        });
-        headerRawRows = Array.isArray(fallbackSample.items) ? fallbackSample.items : [];
-      }
+      const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
+      const fallbackSample = await fetchPurchaseOrders({
+        supplierAccount: null,
+        top: DATA_MODEL_PREVIEW_ROW_LIMIT,
+        skip: 0,
+        fetchAll: false,
+        extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
+        maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
+      });
+      const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
+      const lineRawRows = (fallbackSample.items || []).flatMap((item) => (
+        Array.isArray(item?.lines) ? item.lines.map((line) => line?.raw || {}) : []
+      ));
       previewTables = {
         header: fillMissingSamplesFromRawRows(previewTables.header, missingHeaderFields, headerRawRows),
         line: fillMissingSamplesFromRawRows(previewTables.line, missingLineFields, lineRawRows),

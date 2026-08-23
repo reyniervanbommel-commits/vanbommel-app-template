@@ -60,6 +60,16 @@ describe('D365 sample values', () => {
     expect(filled.sampleByField.SearchName).toBe('Sneaker');
   });
 
+  it('merkt $select-velden die D365 niet in een volle record teruggeeft', () => {
+    const { listSelectFieldsMissingFromRecord, formatSelectDropNotice } = require('./discoverSourceColumns');
+    expect(listSelectFieldsMissingFromRecord(
+      ['dataAreaId', 'ItemNumber', 'ProductName', 'ItemGroupId'],
+      { dataAreaId: 'WHSL', ItemNumber: 'ART-1', '@odata.etag': 'W/"1"' },
+    )).toEqual(['ProductName', 'ItemGroupId']);
+    expect(formatSelectDropNotice(['ProductName', 'ItemGroupId']))
+      .toBe('Removed from $select (not returned by D365): ProductName, ItemGroupId');
+  });
+
   it('zet discovered samples om naar een lookup per veld', () => {
     expect(sampleMapFromDiscoveredFields([
       { field: 'ItemNumber', sample: 'ART-1' },

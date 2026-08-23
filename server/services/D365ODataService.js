@@ -2,6 +2,7 @@
 
 const { logger } = require('../utils/logger');
 const settingsService = require('./SettingsService');
+const { listSelectFieldsMissingFromRecord } = require('../utils/discoverSourceColumns');
 
 const DEFAULT_PURCHASE_ORDERS_PATH = '/data/PurchaseOrderHeadersV2';
 const DEFAULT_RELEASED_PRODUCT_DOCUMENT_ATTACHMENTS_PATH = '/data/ReleasedProductDocumentAttachments';
@@ -660,18 +661,21 @@ async function fetchEntityRecords({
   const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
   const hasSelect = Array.isArray(selectFields) && selectFields.length > 0;
 
-  async function run(activeSelectFields) {
+  async function run(activeSelectFields, { topOverride, fetchAllOverride, skipOverride } = {}) {
     const records = [];
     let total = null;
     let pagesFetched = 0;
     let hasMore = false;
     let truncated = false;
+    const shouldFetchAll = fetchAllOverride ?? fetchAll;
+    const pageTop = topOverride ?? initialTop;
+    const pageSkip = skipOverride ?? skip;
 
     let currentUrl = await buildGenericEntityUrl({
       sourceEntity,
       company,
-      top: initialTop,
-      skip,
+      top: pageTop,
+      skip: pageSkip,
       extraFilter,
       selectFields: activeSelectFields,
       applyCompanyFilter,
@@ -696,7 +700,7 @@ async function fetchEntityRecords({
         if (Number.isFinite(parsedTotal)) total = parsedTotal;
       }
 
-      const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+      const remaining = shouldFetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
       const recordsToAdd = pageRecords.slice(0, remaining);
       pagesFetched += 1;
       for (const record of recordsToAdd) {
@@ -705,16 +709,16 @@ async function fetchEntityRecords({
       }
 
       const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
-      const manualNextLink = fetchAll && !serverNextLink
+      const manualNextLink = shouldFetchAll && !serverNextLink
         ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
         : null;
       const nextLink = serverNextLink || manualNextLink;
-      const hitItemCap = fetchAll
+      const hitItemCap = shouldFetchAll
         && records.length >= effectiveMax
         && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
       emitProgress(hitItemCap);
 
-      if (!fetchAll || !nextLink) {
+      if (!shouldFetchAll || !nextLink) {
         currentUrl = null;
         hasMore = Boolean(nextLink) || hitItemCap;
         truncated = hitItemCap;
@@ -738,24 +742,31 @@ async function fetchEntityRecords({
       hasMore,
       truncated,
       pagesFetched,
-      fetchedAll: fetchAll ? !hasMore : false,
+      fetchedAll: shouldFetchAll ? !hasMore : false,
     };
   }
 
   try {
     return await run(selectFields);
   } catch (err) {
-    // Sommige D365-velden staan in tb_columns maar zijn illegaal in $select (HTTP 400).
-    // Zonder $select slaagt dezelfde call; refresh mag daar niet op stuklopen.
-    if (hasSelect && Number(err?.status) === 400) {
-      logger.warn('D365 $select rejected; retrying without $select', {
-        sourceEntity,
-        status: err.status,
-        message: err.message,
-      });
-      return run(null);
+    if (!hasSelect || Number(err?.status) !== 400) throw err;
+    let probe;
+    try {
+      probe = await run(null, { topOverride: 1, fetchAllOverride: false, skipOverride: 0 });
+    } catch {
+      throw err;
     }
-    throw err;
+    const sampleRecord = Array.isArray(probe?.items) ? probe.items[0] : null;
+    const droppedSelectFields = listSelectFieldsMissingFromRecord(selectFields, sampleRecord);
+    if (!droppedSelectFields.length) throw err;
+    const droppedSet = new Set(droppedSelectFields.map((field) => field.toLowerCase()));
+    const nextSelect = selectFields.filter((field) => !droppedSet.has(String(field).toLowerCase()));
+    logger.warn('D365 $select rejected; dropping fields that D365 did not return', {
+      sourceEntity,
+      droppedSelectFields,
+    });
+    const result = await run(nextSelect.length ? nextSelect : null);
+    return { ...result, droppedSelectFields };
   }
 }
 

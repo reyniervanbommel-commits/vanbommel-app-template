@@ -50,6 +50,7 @@ function createEntity(tableKey, sortOrder) {
     started_at: null,
     finished_at: null,
     error_text: null,
+    notice_text: null,
   };
 }
 
@@ -112,6 +113,7 @@ function updateEntity(tableKey, patch = {}) {
   if (patch.deleted != null) entity.deleted += Number(patch.deleted) || 0;
   if (patch.status) entity.status = patch.status;
   if (patch.error_text !== undefined) entity.error_text = stripErrorText(patch.error_text);
+  if (patch.notice_text !== undefined) entity.notice_text = stripErrorText(patch.notice_text);
   if (patch.started_at) entity.started_at = patch.started_at;
   if (patch.finished_at) entity.finished_at = patch.finished_at;
   return entity;
@@ -133,7 +135,12 @@ function markEntityRunning(tableKey) {
 }
 
 function markEntityDone(tableKey) {
-  return updateEntity(tableKey, { status: 'done', finished_at: new Date().toISOString(), error_text: null });
+  const entity = findEntity(tableKey);
+  return updateEntity(tableKey, {
+    status: 'done',
+    finished_at: new Date().toISOString(),
+    error_text: entity?.notice_text || null,
+  });
 }
 
 function markEntityError(tableKey, errorText) {
@@ -210,7 +217,8 @@ function snapshotRun(mode = 'board') {
       inserted: entity.inserted,
       updated: entity.updated,
       deleted: entity.deleted,
-      error_text: entity.error_text,
+      error_text: entity.status === 'error' ? entity.error_text : null,
+      notice_text: entity.status === 'error' ? null : (entity.notice_text || entity.error_text),
     })),
     error_text: run.error_text,
   };
@@ -417,7 +425,8 @@ function mapHistoryRow(row, entities) {
         inserted: Number(entity.inserted) || 0,
         updated: Number(entity.updated) || 0,
         deleted: Number(entity.deleted) || 0,
-        error_text: stripErrorText(entity.error_text),
+        error_text: entity.status === 'error' ? stripErrorText(entity.error_text) : null,
+        notice_text: entity.status === 'error' ? null : stripErrorText(entity.error_text),
       })),
   };
 }
