@@ -214,6 +214,7 @@ function normalizeBoardSettings(rawSettings) {
     biSplitPane: normalizeBiSplitPane(input.biSplitPane),
     isoWindow: normalizeIsoWindow(input.isoWindow),
     lastVendorAccount: normalizeLastVendorAccount(input.lastVendorAccount),
+    allOrdersShowHistoryIndicators: input.allOrdersShowHistoryIndicators !== false,
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
