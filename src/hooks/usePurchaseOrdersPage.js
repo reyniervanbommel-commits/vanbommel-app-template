@@ -40,6 +40,7 @@ import {
   clearUnseenChangeFlagsOnOrders,
   withClearedUnseenBoardCounts,
 } from '../utils/clearUnseenChangeFlags';
+import { withHistoryFlag } from '../utils/withHistoryFlag';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -420,6 +421,7 @@ export function usePurchaseOrdersPage() {
         ...line,
         values: { ...line.values, [columnKey]: value },
         trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+        historyByColumnId: withHistoryFlag(line.historyByColumnId, columnId),
       }));
     } else {
       setOrders((prev) => {
@@ -431,6 +433,7 @@ export function usePurchaseOrdersPage() {
               ...order,
               values: { ...order.values, [columnKey]: value },
               trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+              historyByColumnId: withHistoryFlag(order.historyByColumnId, columnId),
             }
         ));
       });
@@ -480,6 +483,7 @@ export function usePurchaseOrdersPage() {
         ...line,
         values: { ...line.values, [columnKey]: value },
         trackMarksByColumnId: withRightmostMarkRed(line.trackMarksByColumnId, columnId, meta),
+        historyByColumnId: withHistoryFlag(line.historyByColumnId, columnId),
       }));
     } else {
       setOrders((prev) => {
@@ -491,6 +495,7 @@ export function usePurchaseOrdersPage() {
               ...order,
               values: { ...order.values, [columnKey]: value },
               trackMarksByColumnId: withRightmostMarkRed(order.trackMarksByColumnId, columnId, meta),
+              historyByColumnId: withHistoryFlag(order.historyByColumnId, columnId),
             }
         ));
       });
