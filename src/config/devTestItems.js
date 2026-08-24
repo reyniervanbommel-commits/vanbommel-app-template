@@ -4,8 +4,8 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 267,
-    title: 'Live history fold after cell edit',
+    id: 'feature-267-live-cell-history-fold-v1-51-47',
+    title: 'Feature 267 - Live history fold after cell edit (v1.51.47)',
     checks: [
       'Edit a cell that had no history fold: the fold appears without page refresh',
       'Click the fold: existing history popover opens',
