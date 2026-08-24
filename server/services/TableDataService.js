@@ -24,6 +24,7 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
+const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
@@ -2988,31 +2989,8 @@ function normalizeRuntimeLinkArray(value) {
   }, []);
 }
 
-async function loadUserRuntimeHeaderLinks(pool, userId, boardKey) {
-  if (!pool || !userId || !boardKey) {
-    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
-  }
-  const result = await pool.request()
-    .input('userId', sql.Int, userId)
-    .input('boardKey', sql.NVarChar(64), boardKey)
-    .query(`
-      SELECT settings_json
-      FROM dbo.user_board_settings WITH (NOLOCK)
-      WHERE user_id = @userId AND board_key = @boardKey
-    `);
-  if (!result.recordset.length) {
-    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
-  }
-  let parsed = {};
-  try {
-    parsed = JSON.parse(result.recordset[0].settings_json || '{}');
-  } catch {
-    parsed = {};
-  }
-  return {
-    lineTotalHeaderLinks: normalizeRuntimeLinkArray(parsed.lineTotalHeaderLinks),
-    lineValueHeaderLinks: normalizeRuntimeLinkArray(parsed.lineValueHeaderLinks),
-  };
+async function loadUserRuntimeHeaderLinks(pool, userId, boardKey, options) {
+  return loadRuntimeHeaderLinks(pool, userId, boardKey, options);
 }
 
 function toLineNumeric(value) {
@@ -3560,7 +3538,9 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
     ])),
-    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key)),
+    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key, {
+      includeStaffLinks: supplierAccount != null,
+    })),
     syncStatePromise,
     viewedPromise,
     readCacheRows(pool, table.id, includeRemoved, recordFilter),
