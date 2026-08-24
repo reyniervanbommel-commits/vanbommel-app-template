@@ -13,7 +13,19 @@ const useStyles = makeStyles({
   todaySvg: { position: 'absolute', inset: 0, pointerEvents: 'none' },
 });
 
-function RccpChartPlot({ plot, stack, renderTooltip, todayX }) {
+function EmptyTooltip() {
+  return null;
+}
+
+function renderStackAbove(props) {
+  return <RccpPoStackBarAbove {...props} />;
+}
+
+function renderStackBelow(props) {
+  return <RccpPoStackBarBelow {...props} />;
+}
+
+function RccpChartPlot({ plot, stack, todayX }) {
   const styles = useStyles();
   const {
     data, width, height, compact, weekBoundaryCoordinates, chartRangeBands, activeRows,
@@ -38,7 +50,7 @@ function RccpChartPlot({ plot, stack, renderTooltip, todayX }) {
         <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
         <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
         <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
-        <Tooltip shared cursor={<RccpWeekBandCursor />} content={renderTooltip} />
+        <Tooltip shared cursor={<RccpWeekBandCursor />} content={EmptyTooltip} />
         <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
         {chartRangeBands.map((band, index) => (
           <ReferenceArea
@@ -56,9 +68,10 @@ function RccpChartPlot({ plot, stack, renderTooltip, todayX }) {
             dataKey="__stackAbove"
             name={openRow?.label || deliveredRow?.label}
             fill={openRow?.color || receivedColor}
-            shape={RccpPoStackBarAbove}
+            shape={renderStackAbove}
             barSize={RCCP_PO_BAR_SIZE}
             legendType={openVisible ? 'rect' : 'none'}
+            cursor="pointer"
             isAnimationActive={false}
           />
         )}
@@ -67,8 +80,9 @@ function RccpChartPlot({ plot, stack, renderTooltip, todayX }) {
             dataKey="__stackBelow"
             name={deliveredRow.label}
             fill={receivedColor}
-            shape={RccpPoStackBarBelow}
+            shape={renderStackBelow}
             barSize={RCCP_PO_BAR_SIZE}
+            cursor="pointer"
             isAnimationActive={false}
           />
         )}

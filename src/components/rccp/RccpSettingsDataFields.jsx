@@ -3,6 +3,7 @@ import { Button, Field, Input, Select, Text, makeStyles, shorthands, tokens } fr
 import { ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import { rccpFieldLabel } from './rccpFieldLabel';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
+import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
 
 const useStyles = makeStyles({
   stack: {
@@ -27,6 +28,7 @@ function columnOption(col) {
     value: col.key,
     text: label === col.key ? label : `${label} (${col.key})`,
     shortText: label,
+    group: rccpColumnGroupLabel(col),
   };
 }
 

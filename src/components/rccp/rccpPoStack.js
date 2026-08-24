@@ -24,22 +24,6 @@ export function isoWeekPartsUtc(date) {
 }
 
 /**
- * Mix a hex colour with white. `ratio` 0 = original, 1 = white.
- * @param {string} hex
- * @param {number} [ratio]
- */
-export function lightenHex(hex, ratio = 0.45) {
-  const raw = String(hex || '').replace('#', '');
-  const rgb = raw.slice(0, 6);
-  if (!/^[0-9a-fA-F]{6}$/.test(rgb)) return '#B4D6F6';
-  const mix = (channel) => Math.round(parseInt(channel, 16) * (1 - ratio) + 255 * ratio);
-  const r = mix(rgb.slice(0, 2));
-  const g = mix(rgb.slice(2, 4));
-  const b = mix(rgb.slice(4, 6));
-  return `#${[r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
-}
-
-/**
  * X-coordinate of the Today line inside the chart plot.
  * `null` when the current ISO week is not in `periods`.
  */

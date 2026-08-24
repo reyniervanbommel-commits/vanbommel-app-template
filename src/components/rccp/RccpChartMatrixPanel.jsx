@@ -1,9 +1,11 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import RccpPoSegmentTooltip from './RccpPoSegmentTooltip';
+import { RccpPoSegmentHoverCard } from './RccpPoSegmentTooltip';
 import RccpChartPlot from './RccpChartPlot';
-import { lightenHex, todayLineX } from './rccpPoStack';
+import { RccpSegmentHoverContext } from './RccpPoStackBar';
+import { getRgbHex } from '../../utils/hexColor';
+import { todayLineX } from './rccpPoStack';
 import {
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
@@ -18,7 +20,7 @@ const useStyles = makeStyles({
   chartCard: {
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL, '0'),
     minHeight: '240px',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   chartCardCompact: {
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM, '0'),
@@ -82,22 +84,19 @@ function RccpChartMatrixPanel({
   const handleToggle = useCallback((measureKey, checked) => {
     setVisibleKeys((prev) => ({ ...prev, [measureKey]: checked }));
   }, []);
-  const handleSegmentHover = useCallback((segment) => {
-    setHoveredSegment(segment);
+  const handleSegmentHover = useCallback((next) => {
+    setHoveredSegment(next);
   }, []);
-  const renderTooltip = useCallback((props) => (
-    <RccpPoSegmentTooltip
-      active={props.active}
-      label={props.label}
-      segment={hoveredSegment}
-    />
-  ), [hoveredSegment]);
 
   const openRow = useMemo(() => measureRows.find((row) => row.isOpen), [measureRows]);
   const deliveredRow = useMemo(() => measureRows.find((row) => row.isDelivered), [measureRows]);
   const receivedColor = useMemo(
-    () => lightenHex(deliveredRow?.color || '#0078D4'),
+    () => getRgbHex(deliveredRow?.color) || '#0078D4',
     [deliveredRow],
+  );
+  const openColor = useMemo(
+    () => getRgbHex(openRow?.color) || receivedColor,
+    [openRow, receivedColor],
   );
   const openVisible = Boolean(openRow && visibleKeys[openRow.measureKey]);
   const deliveredVisible = Boolean(deliveredRow && visibleKeys[deliveredRow.measureKey]);
@@ -113,11 +112,10 @@ function RccpChartMatrixPanel({
       segmentsBelow,
       __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
       __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
-      __openColor: openRow?.color,
+      __openColor: openColor,
       __receivedColor: receivedColor,
-      __onSegmentHover: handleSegmentHover,
     };
-  }), [chart, openVisible, deliveredVisible, openRow, receivedColor, handleSegmentHover]);
+  }), [chart, openVisible, deliveredVisible, openColor, receivedColor]);
 
   const todayX = useMemo(() => todayLineX(periodHeaders), [periodHeaders]);
   const activeRows = useMemo(
@@ -150,12 +148,14 @@ function RccpChartMatrixPanel({
           key={seriesSignature}
           style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}
         >
-          <RccpChartPlot
-            plot={plot}
-            stack={stack}
-            renderTooltip={renderTooltip}
-            todayX={todayX}
-          />
+          <RccpSegmentHoverContext.Provider value={handleSegmentHover}>
+            <RccpChartPlot
+              plot={plot}
+              stack={stack}
+              todayX={todayX}
+            />
+          </RccpSegmentHoverContext.Provider>
+          <RccpPoSegmentHoverCard hover={hoveredSegment} />
         </div>
         <RccpMatrixTable
           measureRows={measureRows.filter((r) => !r.isWarning)}

@@ -30,9 +30,6 @@ function RccpQuantityMeasuresEditor({
     return [...byKey.values()];
   }, [columns]);
 
-  const lineCols = useMemo(() => numberCols.filter((c) => c.scope === 'detail'), [numberCols]);
-  const orderCols = useMemo(() => numberCols.filter((c) => c.scope !== 'detail'), [numberCols]);
-
   const updateMeasure = useCallback((index, patch) => {
     const prev = measures[index];
     onChange(measures.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
@@ -83,8 +80,8 @@ function RccpQuantityMeasuresEditor({
     <div className={styles.root}>
       {!hideIntro && (
         <Text className={styles.hint}>
-          Each card is one matrix row — pick the column once. Chart role is optional:
-          at most one Open (boxes above) and one Received (boxes below). Not a second column.
+          Admin → Data model “RCCP value column” is the allowlist. Each card picks one of
+          those columns for the matrix. Chart role is optional: Open or Received.
         </Text>
       )}
       {!numberCols.length && (
@@ -98,8 +95,6 @@ function RccpQuantityMeasuresEditor({
           key={`${measure.columnKey}-${index}`}
           measure={measure}
           index={index}
-          lineCols={lineCols}
-          orderCols={orderCols}
           numberCols={numberCols}
           canRemove={measures.length > 1}
           chartRole={chartRoleForColumn(measure.columnKey, openMeasureKey, deliveredMeasureKey)}

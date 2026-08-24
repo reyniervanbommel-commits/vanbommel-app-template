@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  lightenHex,
   todayLineX,
   stackRectLayout,
   isoWeekPartsUtc,
@@ -11,12 +10,6 @@ import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 describe('rccpPoStack', () => {
   it('uses 80% of the week column as bar width', () => {
     expect(RCCP_PO_BAR_SIZE).toBe(Math.round(RCCP_WEEK_COL_WIDTH * 0.8));
-  });
-
-  it('lightens a hex colour toward white', () => {
-    expect(lightenHex('#0078D4', 0)).toBe('#0078d4');
-    expect(lightenHex('#000000', 1)).toBe('#ffffff');
-    expect(lightenHex('#0078D4', 0.45).startsWith('#')).toBe(true);
   });
 
   it('returns null for todayLineX when the current week is outside the window', () => {
