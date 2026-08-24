@@ -4,7 +4,7 @@
 // we genereren een werkboek-buffer met xlsx en controleren kolomdetectie, typedetectie en rij-normalisatie.
 
 const XLSX = require('xlsx');
-const { parseWorkbook } = require('./ExcelLinkService');
+const { parseWorkbook, createTbCacheBulkTable } = require('./ExcelLinkService');
 
 function toBuffer(aoa) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -92,5 +92,14 @@ describe('ExcelLinkService.parseWorkbook', () => {
     const { columns, rows } = parseWorkbook(buf);
     expect(columns[0].dataType).toBe('text');
     expect(rows[0][columns[0].key]).toBe('00123');
+  });
+});
+
+describe('ExcelLinkService.createTbCacheBulkTable', () => {
+  it('verklaart data_json nullable, gelijk aan dbo.tb_cache (anders faalt BCP met 4816)', () => {
+    const table = createTbCacheBulkTable();
+    const dataJson = table.columns.find((col) => col.name === 'data_json');
+    expect(dataJson).toBeTruthy();
+    expect(dataJson.nullable).toBe(true);
   });
 });

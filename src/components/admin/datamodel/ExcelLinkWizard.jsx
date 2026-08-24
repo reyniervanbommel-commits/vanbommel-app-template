@@ -5,6 +5,7 @@ import {
   Spinner,
   Text,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
@@ -74,7 +75,7 @@ export default function ExcelLinkWizard() {
     <div className={styles.root}>
       <div>
         <div className={styles.titleRow}>
-          <Text size={500} weight="semibold">External links</Text>
+          <Text size={600} weight="semibold">External links</Text>
           <AdminInfoHint text={DATA_MODEL_INFO.externalLinks} label="About external links" />
         </div>
         <Text className={styles.intro} block>
@@ -91,7 +92,7 @@ export default function ExcelLinkWizard() {
             <button
               key={s.n}
               type="button"
-              className={`${styles.stepButton} ${active ? styles.stepActive : ''}`}
+              className={mergeClasses(styles.stepButton, active && styles.stepActive)}
               disabled={!reachable}
               onClick={() => w.goToStep(s.n)}
             >

@@ -38,6 +38,25 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(1);
   });
 
+  it('laat supplier GET op purchase-order row details door', () => {
+    const { next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/rows/whsl/WSPO-0061689/details',
+      method: 'GET',
+    });
+    expect(next.calls).toHaveLength(1);
+  });
+
+  it('weigert supplier GET details op een andere tabel met 403', () => {
+    const { res, next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/vendors/rows/whsl/V-1/details',
+      method: 'GET',
+    });
+    expect(res.statusCode).toBe(403);
+    expect(next.calls).toHaveLength(0);
+  });
+
   it.each(['/purchase-orders/history', '/purchase-orders/remarks/summary', '/purchase-orders/remarks', '/purchase-orders/activity'])(
     'laat supplier GET op %s door',
     (path) => {

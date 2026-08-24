@@ -1,5 +1,6 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Badge, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
 import {
   PRODUCT_IMAGE_CELL_HEIGHT,
@@ -48,6 +49,8 @@ const useStyles = makeStyles({
     visibility: 'hidden',
   },
   hoverPreviewFrame: {
+    position: 'fixed',
+    zIndex: 10000,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -58,6 +61,7 @@ const useStyles = makeStyles({
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusMedium,
     boxShadow: tokens.shadow16,
+    pointerEvents: 'none',
   },
   hoverPreviewImage: {
     display: 'block',
@@ -113,13 +117,15 @@ function PurchaseOrderProductImageCell({
   // <img> (via imagePending) for as long as we don't know it's actually good.
   const [imageLoaded, setImageLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  // B3: Tooltip pas mounten na 200ms hover — voorkomt 20 Tooltip-instanties bij scroll
-  const [showTooltip, setShowTooltip] = useState(false);
+  // Hover-preview via portal i.p.v. Fluent Tooltip: die Tooltip in een lijst
+  // pre-rendert witte portals, en mounten-na-hover remount de trigger (mouseleave).
+  const [hoverPreviewPosition, setHoverPreviewPosition] = useState(null);
 
   useEffect(() => {
     setDialogOpen(false);
     setImageLoaded(false);
     setShouldLoadImage(false);
+    setHoverPreviewPosition(null);
     if (hasFailedProductImage(imageUrl)) {
       setImageAvailable(false);
       return undefined;
@@ -146,15 +152,24 @@ function PurchaseOrderProductImageCell({
     setDialogOpen(open);
   }, []);
 
-  // B3: deferred tooltip mount handlers
-  const tooltipTimerRef = React.useRef(null);
+  // Hover-preview pas na settle-delay, zonder de thumbnail-knop te remounten.
+  const triggerRef = useRef(null);
+  const tooltipTimerRef = useRef(null);
   const handleMouseEnter = useCallback(() => {
-    tooltipTimerRef.current = setTimeout(() => setShowTooltip(true), PRODUCT_IMAGE_LOAD_DELAY_MS);
+    tooltipTimerRef.current = setTimeout(() => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setHoverPreviewPosition({
+        top: Math.max(8, rect.top - PRODUCT_IMAGE_HOVER_MAX_SIZE - 8),
+        left: Math.max(8, rect.left + (rect.width / 2) - (PRODUCT_IMAGE_HOVER_MAX_SIZE / 2)),
+      });
+    }, PRODUCT_IMAGE_LOAD_DELAY_MS);
   }, []);
   const handleMouseLeave = useCallback(() => {
     clearTimeout(tooltipTimerRef.current);
-    setShowTooltip(false);
+    setHoverPreviewPosition(null);
   }, []);
+  useEffect(() => () => clearTimeout(tooltipTimerRef.current), []);
 
   const imageButtonClassName = mergeClasses(
     styles.imageButton,
@@ -164,67 +179,32 @@ function PurchaseOrderProductImageCell({
   if (!imageUrl) return null;
 
   const badgeLabel = `${additionalItemCount} additional unique items`;
-  const hoverPreview = (
-    <div className={styles.hoverPreviewFrame}>
-      <img
-        className={styles.hoverPreviewImage}
-        src={imageUrl}
-        alt=""
-        draggable={false}
-      />
-    </div>
-  );
 
   return (
     <>
       <span className={styles.root}>
         {imageAvailable ? (
-          // B3: Tooltip pas mounten na hover — niet bij rij-mount
-          showTooltip ? (
-            <Tooltip content={hoverPreview} relationship="description" positioning="above">
-              <button
-                type="button"
-                className={imageButtonClassName}
-                onClick={handleOpenDialog}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                aria-label={`Show product image for ${normalizedItemNumber}`}
-              >
-                {shouldLoadImage ? (
-                  <img
-                    className={mergeClasses(styles.image, imageLoaded ? undefined : styles.imagePending)}
-                    src={imageUrl}
-                    alt={`Product image for ${normalizedItemNumber}`}
-                    loading="lazy"
-                    draggable={false}
-                    onLoad={handleImageLoad}
-                    onError={handleImageError}
-                  />
-                ) : null}
-              </button>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              className={imageButtonClassName}
-              onClick={handleOpenDialog}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              aria-label={`Show product image for ${normalizedItemNumber}`}
-            >
-              {shouldLoadImage ? (
-                <img
-                  className={mergeClasses(styles.image, imageLoaded ? undefined : styles.imagePending)}
-                  src={imageUrl}
-                  alt={`Product image for ${normalizedItemNumber}`}
-                  loading="lazy"
-                  draggable={false}
-                  onLoad={handleImageLoad}
-                  onError={handleImageError}
-                />
-              ) : null}
-            </button>
-          )
+          <button
+            ref={triggerRef}
+            type="button"
+            className={imageButtonClassName}
+            onClick={handleOpenDialog}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            aria-label={`Show product image for ${normalizedItemNumber}`}
+          >
+            {shouldLoadImage ? (
+              <img
+                className={mergeClasses(styles.image, imageLoaded ? undefined : styles.imagePending)}
+                src={imageUrl}
+                alt={`Product image for ${normalizedItemNumber}`}
+                loading="lazy"
+                draggable={false}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+            ) : null}
+          </button>
         ) : null}
         {additionalItemCount > 0 ? (
           imageAvailable ? (
@@ -249,6 +229,20 @@ function PurchaseOrderProductImageCell({
           )
         ) : null}
       </span>
+      {hoverPreviewPosition && imageAvailable ? createPortal(
+        <div
+          className={styles.hoverPreviewFrame}
+          style={{ top: hoverPreviewPosition.top, left: hoverPreviewPosition.left }}
+        >
+          <img
+            className={styles.hoverPreviewImage}
+            src={imageUrl}
+            alt=""
+            draggable={false}
+          />
+        </div>,
+        document.body,
+      ) : null}
       <PurchaseOrderProductImagePreviewDialog
         open={dialogOpen}
         onOpenChange={handleDialogOpenChange}

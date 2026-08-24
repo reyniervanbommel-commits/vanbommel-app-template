@@ -179,4 +179,12 @@ describe('RefreshRunService', () => {
     const result = await refreshRunService.clearHistory();
     expect(result).toEqual({ deletedRuns: 2, keptRunning: false });
   });
+
+  it('interrupted alleen stale running-rijen, niet verse heartbeats', async () => {
+    mockState.pool = createMockPool({ queries: [{ recordset: [] }] });
+    await refreshRunService.interruptRunningRowsOnProcessStart();
+    expect(mockState.pool.calls[0].sql).toMatch(/COALESCE\(heartbeat_at, started_at\)/);
+    expect(mockState.pool.calls[0].sql).toMatch(/DATEADD\(second,/);
+    expect(mockState.pool.calls[0].inputs.staleSeconds).toBe(90);
+  });
 });

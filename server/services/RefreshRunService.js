@@ -8,9 +8,17 @@ const settingsService = require('./SettingsService');
 const emailService = require('./EmailService');
 const { parseAlertEmails } = require('../utils/alertEmails');
 
+const { randomUUID } = require('crypto');
+
 const ALERT_EMAILS_KEY = 'NIGHT_REFRESH_ALERT_EMAILS';
 const MAX_ERROR_TEXT = 500;
 const HISTORY_LIMIT_MAX = 20;
+const INSTANCE_ID = randomUUID();
+const HEARTBEAT_INTERVAL_MS = 20_000;
+const STALE_HEARTBEAT_SECONDS = 90;
+const STALE_INTERRUPT_TEXT = 'Refresh owner stopped (replica restart or crash)';
+
+let heartbeatTimer = null;
 
 const ENTITY_LABELS = {
   'purchase-orders': 'Purchase orders',
@@ -264,17 +272,52 @@ function getNightStatus() {
   };
 }
 
+function stopHeartbeat() {
+  if (!heartbeatTimer) return;
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+async function persistHeartbeat(runId) {
+  if (!runId) return;
+  const pool = await getSqlPool();
+  await pool.request()
+    .input('id', sql.BigInt, runId)
+    .input('ownerInstanceId', sql.NVarChar(64), INSTANCE_ID)
+    .query(`
+      UPDATE dbo.tb_refresh_runs
+      SET heartbeat_at = SYSUTCDATETIME()
+      WHERE id = @id
+        AND status = 'running'
+        AND owner_instance_id = @ownerInstanceId
+    `);
+}
+
+function startHeartbeat(runId) {
+  stopHeartbeat();
+  if (!runId) return;
+  heartbeatTimer = setInterval(() => {
+    persistHeartbeat(runId).catch((err) => {
+      logger.warn('Refresh-run heartbeat mislukt', { error: err.message, runId });
+    });
+  }, HEARTBEAT_INTERVAL_MS);
+  if (typeof heartbeatTimer.unref === 'function') heartbeatTimer.unref();
+}
+
 async function persistStart(run) {
   const pool = await getSqlPool();
   const result = await pool.request()
     .input('source', sql.NVarChar(16), run.source)
     .input('triggeredBy', sql.Int, run.triggered_by_user_id)
+    .input('ownerInstanceId', sql.NVarChar(64), INSTANCE_ID)
     .query(`
-      INSERT INTO dbo.tb_refresh_runs (status, source, triggered_by_user_id)
+      INSERT INTO dbo.tb_refresh_runs
+        (status, source, triggered_by_user_id, owner_instance_id, heartbeat_at)
       OUTPUT inserted.id
-      VALUES ('running', @source, @triggeredBy)
+      VALUES ('running', @source, @triggeredBy, @ownerInstanceId, SYSUTCDATETIME())
     `);
   run.id = result.recordset[0]?.id || null;
+  startHeartbeat(run.id);
   return run.id;
 }
 
@@ -398,6 +441,7 @@ function closeLeftoverEntities(run, status) {
 }
 
 async function finishRun({ status, errorText = null } = {}) {
+  stopHeartbeat();
   const run = activeRun;
   if (!run) return lastRun;
   run.status = status;
@@ -509,25 +553,35 @@ async function listRuns({ limit = HISTORY_LIMIT_MAX } = {}) {
   return (runs.recordset || []).map((row) => mapHistoryRow(row, entities.recordset));
 }
 
-async function interruptRunningRowsOnProcessStart() {
+async function interruptStaleRunningRows() {
   const pool = await getSqlPool();
-  const result = await pool.request().query(`
-    UPDATE dbo.tb_refresh_runs
-    SET status = 'interrupted',
-        finished_at = SYSUTCDATETIME(),
-        error_text = 'Process restarted while a refresh was running'
-    OUTPUT inserted.id, inserted.source, inserted.status, inserted.started_at, inserted.finished_at, inserted.error_text
-    WHERE status = 'running'
-  `);
+  const result = await pool.request()
+    .input('staleSeconds', sql.Int, STALE_HEARTBEAT_SECONDS)
+    .input('errorText', sql.NVarChar(500), STALE_INTERRUPT_TEXT)
+    .query(`
+      UPDATE dbo.tb_refresh_runs
+      SET status = 'interrupted',
+          finished_at = SYSUTCDATETIME(),
+          error_text = @errorText
+      OUTPUT inserted.id, inserted.source, inserted.status, inserted.started_at, inserted.finished_at, inserted.error_text
+      WHERE status = 'running'
+        AND COALESCE(heartbeat_at, started_at) < DATEADD(second, -@staleSeconds, SYSUTCDATETIME())
+    `);
   const interrupted = result.recordset || [];
   if (interrupted.length) {
-    await pool.request().query(`
+    const idRequest = pool.request().input('errorText', sql.NVarChar(500), STALE_INTERRUPT_TEXT);
+    const idParams = interrupted.map((row, index) => {
+      const name = `id${index}`;
+      idRequest.input(name, sql.BigInt, row.id);
+      return `@${name}`;
+    });
+    await idRequest.query(`
       UPDATE dbo.tb_refresh_run_entities
       SET status = 'interrupted',
           finished_at = SYSUTCDATETIME(),
-          error_text = COALESCE(error_text, 'Process restarted while a refresh was running')
+          error_text = COALESCE(error_text, @errorText)
       WHERE status IN ('queued', 'running')
-        AND run_id IN (SELECT id FROM dbo.tb_refresh_runs WHERE status = 'interrupted')
+        AND run_id IN (${idParams.join(', ')})
     `);
   }
   for (const row of interrupted) {
@@ -546,7 +600,20 @@ async function interruptRunningRowsOnProcessStart() {
   return interrupted;
 }
 
+async function interruptRunningRowsOnProcessStart() {
+  return interruptStaleRunningRows();
+}
+
+async function markInterruptedOnShutdown() {
+  if (!activeRun || activeRun.status !== 'running') {
+    stopHeartbeat();
+    return null;
+  }
+  return finishRun({ status: 'interrupted', errorText: STALE_INTERRUPT_TEXT });
+}
+
 function resetMemoryForTests() {
+  stopHeartbeat();
   activeRun = null;
   lastRun = null;
 }
@@ -554,6 +621,8 @@ function resetMemoryForTests() {
 module.exports = {
   ALERT_EMAILS_KEY,
   HISTORY_LIMIT_MAX,
+  STALE_HEARTBEAT_SECONDS,
+  STALE_INTERRUPT_TEXT,
   entityLabel,
   stripErrorText,
   create,
@@ -576,6 +645,36 @@ module.exports = {
   listRuns,
   clearHistory,
   interruptRunningRowsOnProcessStart,
+  interruptStaleRunningRows,
+  markInterruptedOnShutdown,
   sendNightMailSafe,
   resetMemoryForTests,
+  attachNight,
+  getActiveRunId,
+  getNightStatus,
+  beginPurchaseOrderRun,
+  finishSuccess,
+  failPurchaseOrders,
+  snapshotRun,
+  shouldSendNightMail,
+  markEntityDone,
+  markEntityError,
+  markEntityRunning,
+  setEntityProgress,
+  serializeLivePayload,
+  stripErrorText,
+  listRuns,
+  clearHistory,
+  interruptRunningRowsOnProcessStart,
+  interruptRunningRowsOnProcessStart: interruptRunningRowsOnProcessStart,
+  resetMemoryForTests,
+  resetMemoryForTests: resetMemoryForTests,
+  beginPurchaseOrderRun: beginPurchaseOrderRun,
+  finishSuccess: finishSuccess,
+  failPurchaseOrders: failPurchaseOrders,
+  attachNight: attachNight,
+  getActiveRunId: getActiveRunId,
+  getNightStatus: getNightStatus,
+  listRuns: listRuns,
+  clearHistory: clearHistory,
 };

@@ -156,7 +156,8 @@ function createTbCacheBulkTable() {
   table.columns.add('partition_key', sql.NVarChar(32), { nullable: false });
   table.columns.add('record_key', sql.NVarChar(128), { nullable: false });
   table.columns.add('detail_key', sql.Int, { nullable: false });
-  table.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: false });
+  // dbo.tb_cache.data_json is NVARCHAR(MAX) NULL; nullable:false geeft BCP 4816 op colid 6.
+  table.columns.add('data_json', sql.NVarChar(sql.MAX), { nullable: true });
   table.columns.add('synced_at', sql.DateTime2, { nullable: false });
   table.columns.add('first_seen_at', sql.DateTime2, { nullable: false });
   table.columns.add('removed_at_source', sql.Bit, { nullable: false });
@@ -310,7 +311,7 @@ async function createOrReplaceDataset({ label, fileName, buffer }, userId) {
     logger.info('Excel-dataset opgeslagen', { tableKey, rows: rows.length, columns: columns.length });
     return { tableKey, label: cleanLabel, rowCount: rows.length, columns: columns.map((c) => ({ key: c.key, label: c.label, dataType: c.dataType, samples: c.samples })) };
   } catch (err) {
-    await tx.rollback();
+    try { await tx.rollback(); } catch { /* transactie is al afgebroken */ }
     throw err;
   }
 }
@@ -566,6 +567,7 @@ async function deleteLink(relationId) {
 
 module.exports = {
   parseWorkbook,
+  createTbCacheBulkTable,
   createOrReplaceDataset,
   listDatasets,
   deleteDataset,

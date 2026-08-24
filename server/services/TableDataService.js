@@ -24,6 +24,7 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
+const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
@@ -2988,31 +2989,8 @@ function normalizeRuntimeLinkArray(value) {
   }, []);
 }
 
-async function loadUserRuntimeHeaderLinks(pool, userId, boardKey) {
-  if (!pool || !userId || !boardKey) {
-    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
-  }
-  const result = await pool.request()
-    .input('userId', sql.Int, userId)
-    .input('boardKey', sql.NVarChar(64), boardKey)
-    .query(`
-      SELECT settings_json
-      FROM dbo.user_board_settings WITH (NOLOCK)
-      WHERE user_id = @userId AND board_key = @boardKey
-    `);
-  if (!result.recordset.length) {
-    return { lineTotalHeaderLinks: [], lineValueHeaderLinks: [] };
-  }
-  let parsed = {};
-  try {
-    parsed = JSON.parse(result.recordset[0].settings_json || '{}');
-  } catch {
-    parsed = {};
-  }
-  return {
-    lineTotalHeaderLinks: normalizeRuntimeLinkArray(parsed.lineTotalHeaderLinks),
-    lineValueHeaderLinks: normalizeRuntimeLinkArray(parsed.lineValueHeaderLinks),
-  };
+async function loadUserRuntimeHeaderLinks(pool, userId, boardKey, options) {
+  return loadRuntimeHeaderLinks(pool, userId, boardKey, options);
 }
 
 function toLineNumeric(value) {
@@ -3256,9 +3234,10 @@ function buildD365ChangeState(ledgerRows) {
 // De drie tb_cache-reads (masters, details, custom values) parallel op de pool;
 // onafhankelijke queries, dus geen reden om op elkaar te wachten.
 // Elk deel krijgt een eigen Server-Timing-label (tb_read_masters/details/custom).
-async function readCacheRows(pool, tableId, includeRemoved) {
-  const mastersPromise = time('tb_read_masters', () => pool.request()
-    .input('tableId', sql.BigInt, tableId)
+async function readCacheRows(pool, tableId, includeRemoved, recordFilter = null) {
+  const mastersRequest = pool.request().input('tableId', sql.BigInt, tableId);
+  const mastersScope = applyRecordFilter(mastersRequest, recordFilter, 'c');
+  const mastersPromise = time('tb_read_masters', () => mastersRequest
     .query(`
       SELECT c.partition_key, c.record_key, c.data_json, c.source_modified_at, c.removed_at_source,
              c.sync_retained, c.first_seen_at, c.content_changed_at
@@ -3268,26 +3247,31 @@ async function readCacheRows(pool, tableId, includeRemoved) {
           SELECT 1 FROM dbo.tb_row_exclusions ex WITH (NOLOCK)
           WHERE ex.table_id = @tableId AND ex.partition_key = c.partition_key AND ex.record_key = c.record_key
         )`}
+      ${mastersScope}
       ORDER BY c.record_key
     `));
 
-  const detailsPromise = time('tb_read_details', () => pool.request()
-    .input('tableId', sql.BigInt, tableId)
+  const detailsRequest = pool.request().input('tableId', sql.BigInt, tableId);
+  const detailsScope = applyRecordFilter(detailsRequest, recordFilter);
+  const detailsPromise = time('tb_read_details', () => detailsRequest
     .query(`
       SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
       FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId AND scope = 'detail'
+      ${detailsScope}
       ORDER BY record_key, detail_key
     `));
 
-  const customPromise = time('tb_read_custom', () => pool.request()
-    .input('tableId', sql.BigInt, tableId)
+  const customRequest = pool.request().input('tableId', sql.BigInt, tableId);
+  const customScope = applyRecordFilter(customRequest, recordFilter, 'cv');
+  const customPromise = time('tb_read_custom', () => customRequest
     .query(`
       SELECT cv.column_id, c.[key], c.scope, c.data_type, cv.partition_key, cv.record_key,
              cv.detail_key, cv.value_text, cv.value_number, cv.value_date, cv.value_bool
       FROM dbo.tb_custom_values cv WITH (NOLOCK)
       INNER JOIN dbo.tb_columns c WITH (NOLOCK) ON c.id = cv.column_id
       WHERE cv.table_id = @tableId AND c.is_active = 1
+      ${customScope}
     `));
 
   const [mastersResult, detailsResult, customResult] = await Promise.all([
@@ -3312,11 +3296,12 @@ function buildHistoryByCell(rows) {
 
 // recordFilter beperkt de read tot één order — gebruikt door readRowDetails, zodat het
 // lazy laden van sublijnen niet de hele historie-tabel hoeft te scannen.
-function applyRecordFilter(request, recordFilter) {
+function applyRecordFilter(request, recordFilter, alias = '') {
   if (!recordFilter) return '';
   request.input('partitionKey', sql.NVarChar(32), recordFilter.partitionKey);
   request.input('recordKey', sql.NVarChar(128), recordFilter.recordKey);
-  return 'AND partition_key = @partitionKey AND record_key = @recordKey';
+  const prefix = alias ? `${alias}.` : '';
+  return `AND ${prefix}partition_key = @partitionKey AND ${prefix}record_key = @recordKey`;
 }
 
 async function loadHistoryByCell(pool, tableId, recordFilter = null) {
@@ -3471,9 +3456,12 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries, r
 // expanden en haalt de regels dan per order op (readRowDetails). De afgeleiden die het board wél
 // collapsed nodig heeft (aantal, new/changed/removed-vlaggen, linked kolomwaarden, image-preview)
 // blijven meekomen als rollup. Scheelt bij ~2000 orders het leeuwendeel van de payload.
-async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true } = {}) {
+async function readExecute({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true, partitionKey = null, recordKey = null } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
+  const recordFilter = (partitionKey && recordKey)
+    ? { partitionKey: String(partitionKey), recordKey: String(recordKey) }
+    : null;
 
   // Alle reads hieronder zijn onafhankelijk van elkaar (alleen afhankelijk van table.id/userId).
   // Parallel uitvoeren i.p.v. sequentieel scheelt ~7 SQL-round-trips naar de remote database;
@@ -3485,7 +3473,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
   // zodat de frontend na deze read exact de bijbehorende revision opslaat.
   const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
-  const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
+  const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id, recordFilter));
 
   // Track changes: config uit app_settings (in-memory gecached). Alleen bij ≥1 actieve kolom
   // draait er een query; anders geen SQL en geen Server-Timing-metric tb_track_marks.
@@ -3499,7 +3487,7 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
         const boundaries = trackConfig.mode === 'session'
           ? await trackChangesService.getSessionBoundaries()
           : [];
-        return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries);
+        return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries, recordFilter);
       })
     : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
   const syncRulesPromise = table.key === 'purchase-orders'
@@ -3510,15 +3498,18 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
     if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
     try {
-      const ledgerResult = await time('tb_ledger', () => pool.request()
+      const ledgerRequest = pool.request()
         .input('tableId', sql.BigInt, table.id)
-        .input('sinceAt', sql.DateTime2, new Date(sinceMs))
+        .input('sinceAt', sql.DateTime2, new Date(sinceMs));
+      const ledgerScope = applyRecordFilter(ledgerRequest, recordFilter);
+      const ledgerResult = await time('tb_ledger', () => ledgerRequest
         .query(`
           SELECT partition_key, record_key, detail_key, field_key, action
           FROM dbo.tb_change_ledger WITH (NOLOCK)
           WHERE table_id = @tableId
             AND source = 'D365'
             AND created_at >= @sinceAt
+            ${ledgerScope}
           ORDER BY created_at ASC, id ASC
         `));
       return { d365LedgerRows: ledgerResult.recordset, hasLedgerWindow: true };
@@ -3547,10 +3538,12 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
     ])),
-    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key)),
+    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key, {
+      includeStaffLinks: supplierAccount != null,
+    })),
     syncStatePromise,
     viewedPromise,
-    readCacheRows(pool, table.id, includeRemoved),
+    readCacheRows(pool, table.id, includeRemoved, recordFilter),
     time('tb_lookups', () => loadLookupEnrichmentCached(table)),
     ledgerPromise,
     historyByCellPromise,
@@ -3633,8 +3626,24 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
   const itemsLineFilterActive = table.key === 'purchase-orders' && itemsFilterKeys !== null;
   const ordersHiddenByItemsFilter = new Set();
 
+  let masterRows = mastersResult.recordset;
+  if (supplierAccount !== null && !recordFilter) {
+    const { selectRecKeysMatchingNativeSupplierColumn } = require('../utils/supplierRowAccess');
+    const nativeKeys = selectRecKeysMatchingNativeSupplierColumn(
+      masterJsonByRecKey,
+      supplierAccount,
+      supplierFilterColumn || 'vendorAccount',
+    );
+    if (nativeKeys) {
+      masterRows = masterRows.filter((m) => nativeKeys.has(`${m.partition_key}|${m.record_key}`));
+      for (const recKey of [...detailsByRecord.keys()]) {
+        if (!nativeKeys.has(recKey)) detailsByRecord.delete(recKey);
+      }
+    }
+  }
+
   await time('tb_build_rows', async () => {
-  const rows = mastersResult.recordset.map((m) => {
+  const rows = masterRows.map((m) => {
     const recKey = `${m.partition_key}|${m.record_key}`;
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
@@ -3751,6 +3760,11 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
 
   const { revision } = await revisionPromise;
 
+  if (supplierAccount !== null && !recordFilter) {
+    const { rememberSupplierVisibleRowKeys } = require('../utils/supplierRowAccess');
+    rememberSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, scopedRows);
+  }
+
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },
     changeContractVersion: 1,
@@ -3779,6 +3793,23 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
     changedCount,
     retention: retentionMeta,
   };
+}
+
+const _readInflight = new Map();
+
+function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, partitionKey, recordKey }) {
+  return [tableKey, userId, supplierAccount, includeDetails, partitionKey || '', recordKey || ''].join('\0');
+}
+
+async function read(opts = {}) {
+  const key = readInflightKey(opts);
+  const existing = _readInflight.get(key);
+  if (existing) return existing;
+  const pending = readExecute(opts).finally(() => {
+    if (_readInflight.get(key) === pending) _readInflight.delete(key);
+  });
+  _readInflight.set(key, pending);
+  return pending;
 }
 
 // ---------------------------------------------------------------------------
@@ -4104,7 +4135,7 @@ async function getRevision({ tableKey, userId = null, supplierAccount = null } =
   return getRevisionByTable(table, { userId, supplierAccount });
 }
 
-async function markViewed(userId, tableKey) {
+async function markViewed(userId, tableKey, { supplierAccount = null } = {}) {
   if (!userId) throw Object.assign(new Error('No user'), { status: 401 });
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -4118,7 +4149,15 @@ async function markViewed(userId, tableKey) {
       WHEN MATCHED THEN UPDATE SET last_viewed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT (table_id, user_id, last_viewed_at) VALUES (@tableId, @userId, SYSUTCDATETIME());
     `);
-  return { success: true };
+  // Revision teruggeven zodat de client de sessie-cache kan bijwerken zonder een full board-read.
+  try {
+    const { revision } = await time('tb_viewed_revision', () => (
+      getRevisionByTable(table, { userId, supplierAccount })
+    ));
+    return { success: true, revision };
+  } catch {
+    return { success: true, revision: null };
+  }
 }
 
 // ---------------------------------------------------------------------------

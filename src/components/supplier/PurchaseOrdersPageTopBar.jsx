@@ -86,6 +86,7 @@ export default function PurchaseOrdersPageTopBar({
     handleSetDefault,
     handleDeleteView,
     handleToggleShowHistory,
+    allOrdersShowHistoryIndicators,
   } = savedViewsState;
   const {
     isStaff,
@@ -148,6 +149,7 @@ export default function PurchaseOrdersPageTopBar({
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
               onToggleShowHistory={handleToggleShowHistory}
+              allOrdersShowHistoryIndicators={allOrdersShowHistoryIndicators}
               onExportExcel={onExportExcel}
             />
           </div>
