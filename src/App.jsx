@@ -1,5 +1,5 @@
 import React, { useState, useMemo, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { FluentProvider, makeStyles, Spinner } from '@fluentui/react-components';
 import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
@@ -24,6 +24,14 @@ const AdminPage = lazy(() => import('./components/admin/AdminPage'));
 // De drie datapagina's (/, /rccp, /bi) worden via KeepAliveDataPages gemount-gehouden; hun
 // lazy-imports staan daar. Zo delen ze één AppLayout-instantie en blijft terugkeren instant.
 
+const AUTH_PATHS = new Set([
+  '/login',
+  '/set-password',
+  '/forgot-password',
+  '/reset-password',
+  '/mfa',
+]);
+
 const useStyles = makeStyles({
   appShell: {
     minHeight: '100vh',
@@ -43,6 +51,8 @@ const useStyles = makeStyles({
 
 function AppInner({ isDarkMode, onToggleTheme }) {
   const styles = useStyles();
+  const location = useLocation();
+  const showFooter = !AUTH_PATHS.has(location.pathname);
   const isDevEnvironment = import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'dev';
   // Perf-HUD ook op de preview tonen (niet in productie), zodat we daar de snelheid kunnen meten.
   const isPerfEnabled = isDevEnvironment || import.meta.env.VITE_APP_ENV === 'preview';
@@ -92,7 +102,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
         </Suspense>
       </div>
 
-      <AppFooter />
+      {showFooter ? <AppFooter /> : null}
       <AppToaster />
 
       {isDevEnvironment ? <DevFeatureChecklist /> : null}

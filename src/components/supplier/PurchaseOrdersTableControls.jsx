@@ -30,6 +30,8 @@ function FilterIconThick20() {
   );
 }
 
+const CONTROL_ICON_SIZE = '22px';
+
 const useStyles = makeStyles({
   controlHeaderCell: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -42,24 +44,40 @@ const useStyles = makeStyles({
     maxWidth: purchaseOrderBoardControlColumnWidth,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px'),
+    ...shorthands.padding('10px', '2px'),
     textAlign: 'left',
     whiteSpace: 'nowrap',
-    verticalAlign: 'top',
+    verticalAlign: 'middle',
   },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    height: CONTROL_ICON_SIZE,
     ...shorthands.gap('2px'),
   },
   selectAll: {
     ...shorthands.padding('0'),
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: CONTROL_ICON_SIZE,
+    height: CONTROL_ICON_SIZE,
+    minWidth: CONTROL_ICON_SIZE,
+    minHeight: CONTROL_ICON_SIZE,
+  },
+  selectAllIndicator: {
+    ...shorthands.margin('0'),
+    alignSelf: 'center',
+  },
+  selectAllInput: {
+    width: CONTROL_ICON_SIZE,
+    height: CONTROL_ICON_SIZE,
   },
   button: {
-    minWidth: '22px',
-    width: '22px',
-    height: '22px',
+    minWidth: CONTROL_ICON_SIZE,
+    width: CONTROL_ICON_SIZE,
+    height: CONTROL_ICON_SIZE,
     ...shorthands.padding('0'),
   },
   filterIcon: {
@@ -113,7 +131,10 @@ function PurchaseOrdersTableControls({
       <div className={styles.toolbar}>
         {selectionEnabled ? (
           <Checkbox
+            size="large"
             className={styles.selectAll}
+            indicator={{ className: styles.selectAllIndicator }}
+            input={{ className: styles.selectAllInput }}
             checked={allSelected ? true : (someSelected ? 'mixed' : false)}
             onChange={onToggleAll}
             aria-label="Select all rows"

@@ -15,18 +15,16 @@ import {
 } from '@fluentui/react-components';
 import {
   ArrowSyncRegular,
-  CheckmarkRegular,
   ChevronDownRegular,
   DeleteRegular,
   EditRegular,
   EyeRegular,
   SaveRegular,
   StarRegular,
-  TableRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
-import { SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
+import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
   trigger: {
@@ -109,6 +107,7 @@ export default function PurchaseOrderSavedViewsControl({
   onDeleteView,
   onToggleShowHistory = () => {},
   onExportExcel = null,
+  allOrdersShowHistoryIndicators = true,
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -137,6 +136,12 @@ export default function PurchaseOrderSavedViewsControl({
   }, [activeView, onRenameView]);
 
   const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
+  const allOrdersView = useMemo(() => ({
+    id: null,
+    name: NO_VIEW_LABEL,
+    scope: 'personal',
+    viewState: { showHistoryIndicators: allOrdersShowHistoryIndicators },
+  }), [allOrdersShowHistoryIndicators]);
 
   return (
     <>
@@ -197,12 +202,13 @@ export default function PurchaseOrderSavedViewsControl({
               <div className={styles.empty}>No saved views yet</div>
             ) : null}
             <MenuDivider />
-            <MenuItem
-              icon={!activeView ? <CheckmarkRegular /> : <TableRegular />}
-              onClick={onResetView}
-            >
-              {NO_VIEW_LABEL}
-            </MenuItem>
+            <SavedViewMenuItem
+              view={allOrdersView}
+              activeViewId={activeViewId}
+              onApplyView={onResetView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal
+            />
 
             {onExportExcel ? (
               <>

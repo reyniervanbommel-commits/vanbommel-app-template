@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiRequest } from '../utils/api';
+import {
+  ALL_ORDERS_SETTINGS_BOARD_KEY,
+  describeHistoryToggle,
+  readAllOrdersHistoryFromSettings,
+} from '../utils/allOrdersHistoryPreference';
 import { usePurchaseOrderSavedViews } from './usePurchaseOrderSavedViews';
 
 const BOARD_KEY = 'purchase-orders';
@@ -57,11 +63,11 @@ export function usePurchaseOrderSavedViewState({
   const [savedStateFingerprint, setSavedStateFingerprint] = useState(null);
   const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
   const [showHistoryIndicators, setShowHistoryIndicators] = useState(true);
+  const [allOrdersShowHistoryIndicators, setAllOrdersShowHistoryIndicators] = useState(true);
   const autoAppliedRef = useRef(false);
-  const activeView = useMemo(
-    () => savedViews.views.find((view) => view.id === activeViewId) || null,
-    [savedViews.views, activeViewId]
-  );
+  const activeViewIdRef = useRef(activeViewId);
+  const allOrdersDirtyRef = useRef(false);
+  activeViewIdRef.current = activeViewId;
 
   const buildCurrentViewState = useCallback(() => ({
     showHistoryIndicators,
@@ -92,15 +98,23 @@ export function usePurchaseOrderSavedViewState({
     setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
   }, [applyColumnLayout, boardView]);
 
+  const persistAllOrdersHistory = useCallback((enabled) => {
+    allOrdersDirtyRef.current = true;
+    void apiRequest(`/supplier/board-settings/${ALL_ORDERS_SETTINGS_BOARD_KEY}`, {
+      method: 'PATCH',
+      body: { settings: { allOrdersShowHistoryIndicators: Boolean(enabled) } },
+    }).catch(() => {});
+  }, []);
+
   const handleResetView = useCallback(() => {
     boardView.clearAllFilters();
     boardView.clearSort();
     boardView.clearGrouping();
     boardView.clearGroupSummaries();
-    setShowHistoryIndicators(true);
+    setShowHistoryIndicators(allOrdersShowHistoryIndicators);
     setActiveViewId(null);
     setSavedStateFingerprint(null);
-  }, [boardView]);
+  }, [boardView, allOrdersShowHistoryIndicators]);
 
   const handleSaveAsNew = useCallback(async ({ name, scope, isDefault }) => {
     const currentState = buildCurrentViewState();
@@ -134,25 +148,52 @@ export function usePurchaseOrderSavedViewState({
   const handleDeleteView = useCallback(async (view) => {
     await savedViews.deleteView(view.id);
     if (view.id === activeViewId) {
-      setShowHistoryIndicators(true);
+      setShowHistoryIndicators(allOrdersShowHistoryIndicators);
       setActiveViewId(null);
       setSavedStateFingerprint(null);
     }
-  }, [savedViews, activeViewId]);
+  }, [savedViews, activeViewId, allOrdersShowHistoryIndicators]);
 
   const handleToggleShowHistory = useCallback(async (view, enabled) => {
+    const nextEnabled = Boolean(enabled);
+    const decision = describeHistoryToggle({
+      view,
+      activeViewId,
+      enabled: nextEnabled,
+      allOrdersPreference: allOrdersShowHistoryIndicators,
+    });
+    if (decision.updateLive) {
+      setShowHistoryIndicators(nextEnabled);
+    }
+    if (!decision.persistView) {
+      setAllOrdersShowHistoryIndicators(decision.nextAllOrdersPreference);
+      persistAllOrdersHistory(decision.nextAllOrdersPreference);
+      return;
+    }
     const nextViewState = {
       ...(view?.viewState || {}),
-      showHistoryIndicators: Boolean(enabled),
+      showHistoryIndicators: nextEnabled,
     };
-    if (view.id === activeViewId) {
-      setShowHistoryIndicators(Boolean(enabled));
-    }
     await savedViews.updateView(view.id, { viewState: nextViewState });
-    if (view.id === activeViewId) {
+    if (decision.updateLive) {
       setSavedStateFingerprint(stableSerialize(nextViewState));
     }
-  }, [activeViewId, savedViews]);
+  }, [activeViewId, allOrdersShowHistoryIndicators, persistAllOrdersHistory, savedViews]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest(`/supplier/board-settings/${ALL_ORDERS_SETTINGS_BOARD_KEY}`)
+      .then((data) => {
+        if (cancelled || allOrdersDirtyRef.current) return;
+        const next = readAllOrdersHistoryFromSettings(data?.settings);
+        setAllOrdersShowHistoryIndicators(next);
+        if (activeViewIdRef.current == null) {
+          setShowHistoryIndicators(next);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (autoAppliedRef.current) return;
@@ -178,6 +219,7 @@ export function usePurchaseOrderSavedViewState({
     handleToggleShowHistory,
     hasUnsavedChanges,
     showHistoryIndicators,
+    allOrdersShowHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   }), [
@@ -193,6 +235,7 @@ export function usePurchaseOrderSavedViewState({
     handleToggleShowHistory,
     hasUnsavedChanges,
     showHistoryIndicators,
+    allOrdersShowHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
   ]);
