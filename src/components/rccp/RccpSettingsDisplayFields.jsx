@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from 'react';
-import { Field, Input, Switch, Text, makeStyles, shorthands, tokens, InfoButton } from '@fluentui/react-components';
+import { Field, Input, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
-import { rccpFieldLabel, RccpInfoLabel } from './rccpFieldLabel';
+import { rccpFieldLabel, RccpInfoLabel, RccpHoverHint } from './rccpFieldLabel';
 
 const useStyles = makeStyles({
   stack: {
@@ -80,7 +80,7 @@ function ChartOverlaySwitches({ config, onUpdateField }) {
           onChange={handleCapacity}
           label="Capacity line"
         />
-        <InfoButton size="small" info="Shows weekly available capacity on the chart." />
+        <RccpHoverHint info="Shows weekly available capacity on the chart." />
       </div>
       <div className={styles.switchRow}>
         <Switch
@@ -88,7 +88,7 @@ function ChartOverlaySwitches({ config, onUpdateField }) {
           onChange={handleWarning}
           label="Warning threshold line"
         />
-        <InfoButton size="small" info="Shows the load warning threshold on the chart." />
+        <RccpHoverHint info="Shows the load warning threshold on the chart." />
       </div>
     </>
   );

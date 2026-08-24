@@ -4,6 +4,7 @@ import { Add24Regular } from '@fluentui/react-icons';
 import { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import { isRccpQuantityColumn } from '../../utils/rccpQuantityColumns';
 import RccpQuantityMeasureCard from './RccpQuantityMeasureCard';
+import { assignChartRole, chartRoleForColumn } from './rccpChartRole';
 
 const useStyles = makeStyles({
   root: {
@@ -16,7 +17,9 @@ const useStyles = makeStyles({
   add: { alignSelf: 'flex-start' },
 });
 
-function RccpQuantityMeasuresEditor({ measures, columns, hideIntro, onChange }) {
+function RccpQuantityMeasuresEditor({
+  measures, columns, hideIntro, openMeasureKey, deliveredMeasureKey, onChange, onUpdateField,
+}) {
   const styles = useStyles();
   const numberCols = useMemo(() => {
     const byKey = new Map();
@@ -31,8 +34,13 @@ function RccpQuantityMeasuresEditor({ measures, columns, hideIntro, onChange }) 
   const orderCols = useMemo(() => numberCols.filter((c) => c.scope !== 'detail'), [numberCols]);
 
   const updateMeasure = useCallback((index, patch) => {
+    const prev = measures[index];
     onChange(measures.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
-  }, [measures, onChange]);
+    if (patch.columnKey && patch.columnKey !== prev?.columnKey) {
+      if (openMeasureKey === prev.columnKey) onUpdateField('openMeasureKey', patch.columnKey);
+      if (deliveredMeasureKey === prev.columnKey) onUpdateField('deliveredMeasureKey', patch.columnKey);
+    }
+  }, [measures, onChange, openMeasureKey, deliveredMeasureKey, onUpdateField]);
 
   const nextFreeColumn = useMemo(
     () => numberCols.find((col) => !measures.some((m) => m.columnKey === col.key)) || null,
@@ -51,14 +59,32 @@ function RccpQuantityMeasuresEditor({ measures, columns, hideIntro, onChange }) 
   }, [nextFreeColumn, measures, onChange]);
 
   const removeMeasure = useCallback((index) => {
+    const removed = measures[index];
     onChange(measures.filter((_, i) => i !== index));
-  }, [measures, onChange]);
+    if (!removed) return;
+    const next = assignChartRole(openMeasureKey, deliveredMeasureKey, removed.columnKey, '');
+    if (next.openMeasureKey !== openMeasureKey) onUpdateField('openMeasureKey', next.openMeasureKey);
+    if (next.deliveredMeasureKey !== deliveredMeasureKey) {
+      onUpdateField('deliveredMeasureKey', next.deliveredMeasureKey);
+    }
+  }, [measures, onChange, openMeasureKey, deliveredMeasureKey, onUpdateField]);
+
+  const handleRole = useCallback((index, role) => {
+    const columnKey = measures[index]?.columnKey;
+    if (!columnKey) return;
+    const next = assignChartRole(openMeasureKey, deliveredMeasureKey, columnKey, role);
+    if (next.openMeasureKey !== openMeasureKey) onUpdateField('openMeasureKey', next.openMeasureKey);
+    if (next.deliveredMeasureKey !== deliveredMeasureKey) {
+      onUpdateField('deliveredMeasureKey', next.deliveredMeasureKey);
+    }
+  }, [measures, openMeasureKey, deliveredMeasureKey, onUpdateField]);
 
   return (
     <div className={styles.root}>
       {!hideIntro && (
         <Text className={styles.hint}>
-          Each quantity is a matrix row and an optional chart series.
+          Each card is one matrix row — pick the column once. Chart role is optional:
+          at most one Open (boxes above) and one Received (boxes below). Not a second column.
         </Text>
       )}
       {!numberCols.length && (
@@ -76,8 +102,10 @@ function RccpQuantityMeasuresEditor({ measures, columns, hideIntro, onChange }) 
           orderCols={orderCols}
           numberCols={numberCols}
           canRemove={measures.length > 1}
+          chartRole={chartRoleForColumn(measure.columnKey, openMeasureKey, deliveredMeasureKey)}
           onUpdate={updateMeasure}
           onRemove={removeMeasure}
+          onRole={handleRole}
         />
       ))}
       <Button

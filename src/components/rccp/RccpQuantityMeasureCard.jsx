@@ -5,6 +5,7 @@ import {
 import { Delete24Regular } from '@fluentui/react-icons';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
+import { rccpFieldLabel } from './rccpFieldLabel';
 
 const CHART_TYPES = [
   { value: 'line', label: 'Line' },
@@ -50,7 +51,7 @@ const useStyles = makeStyles({
 });
 
 function RccpQuantityMeasureCard({
-  measure, index, lineCols, orderCols, numberCols, canRemove, onUpdate, onRemove,
+  measure, index, lineCols, orderCols, numberCols, canRemove, chartRole, onUpdate, onRemove, onRole,
 }) {
   const styles = useStyles();
   const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
@@ -84,6 +85,9 @@ function RccpQuantityMeasureCard({
   }, [index, onUpdate]);
 
   const handleRemove = useCallback(() => onRemove(index), [index, onRemove]);
+  const handleRole = useCallback((e) => {
+    onRole(index, e.target.value);
+  }, [index, onRole]);
 
   return (
     <div className={styles.card}>
@@ -111,14 +115,30 @@ function RccpQuantityMeasureCard({
           />
         </Field>
       </div>
+      <div className={styles.field}>
+        <Field
+          label={rccpFieldLabel(
+            'Chart role',
+            'Optional. Open = still-open PO boxes above the axis. Received = delivered boxes (light above, below the axis on the receipt date). Matrix row only = no special role.',
+          )}
+        >
+          <Select size="small" value={chartRole || ''} onChange={handleRole}>
+            <option value="">Matrix row only</option>
+            <option value="open">Open (boxes above)</option>
+            <option value="delivered">Received (boxes below)</option>
+          </Select>
+        </Field>
+      </div>
       <div className={styles.row}>
-        <div className={styles.chartSlot}>
-          <Field label="Chart type">
-            <Select size="small" value={measure.chartType || 'line'} onChange={handleChart}>
-              {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </Select>
-          </Field>
-        </div>
+        {!chartRole && (
+          <div className={styles.chartSlot}>
+            <Field label="Chart type">
+              <Select size="small" value={measure.chartType || 'line'} onChange={handleChart}>
+                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </Field>
+          </div>
+        )}
         <div className={styles.colorSlot}>
           <Field label="Color">
             <div className={styles.colorField}>
