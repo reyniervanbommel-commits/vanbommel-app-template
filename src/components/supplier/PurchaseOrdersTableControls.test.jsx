@@ -41,6 +41,18 @@ describe('PurchaseOrdersTableControls', () => {
     expect(onOpenFlyout).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the select-all checkbox on the same toolbar as the table icon buttons', () => {
+    renderControls({
+      selectionEnabled: true,
+      onToggleAll: vi.fn(),
+      onOpenFlyout: vi.fn(),
+    });
+
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Table options' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show active filters and formatting' })).toBeTruthy();
+  });
+
   it('marks the filter overview button active when filters or formatting are active', () => {
     renderControls({ hasActive: true });
 
