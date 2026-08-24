@@ -4104,7 +4104,7 @@ async function getRevision({ tableKey, userId = null, supplierAccount = null } =
   return getRevisionByTable(table, { userId, supplierAccount });
 }
 
-async function markViewed(userId, tableKey) {
+async function markViewed(userId, tableKey, { supplierAccount = null } = {}) {
   if (!userId) throw Object.assign(new Error('No user'), { status: 401 });
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
@@ -4118,7 +4118,15 @@ async function markViewed(userId, tableKey) {
       WHEN MATCHED THEN UPDATE SET last_viewed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT (table_id, user_id, last_viewed_at) VALUES (@tableId, @userId, SYSUTCDATETIME());
     `);
-  return { success: true };
+  // Revision teruggeven zodat de client de sessie-cache kan bijwerken zonder een full board-read.
+  try {
+    const { revision } = await time('tb_viewed_revision', () => (
+      getRevisionByTable(table, { userId, supplierAccount })
+    ));
+    return { success: true, revision };
+  } catch {
+    return { success: true, revision: null };
+  }
 }
 
 // ---------------------------------------------------------------------------

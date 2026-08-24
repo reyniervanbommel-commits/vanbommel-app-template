@@ -36,6 +36,10 @@ import {
   extendDefaultColumnKeys,
   mergeProductImageColumnWidths,
 } from '../utils/purchaseOrderProductImageColumn';
+import {
+  clearUnseenChangeFlagsOnOrders,
+  withClearedUnseenBoardCounts,
+} from '../utils/clearUnseenChangeFlags';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -95,7 +99,7 @@ export function usePurchaseOrdersPage() {
   // Sublijnen worden per order lazy geladen bij het openklappen; deze store staat los van
   // de orders-state zodat een expand de board-pipeline niet opnieuw laat draaien.
   const lineDetails = usePurchaseOrderLineDetails();
-  const { applyLineValues, restoreLines, resetLines } = lineDetails;
+  const { applyLineValues, restoreLines, resetLines, clearUnseenLineFlags, restoreEntries } = lineDetails;
   const [headerColumns, setHeaderColumns] = useState([]);
   const [lineColumns, setLineColumns] = useState([]);
   const [syncedAt, setSyncedAt] = useState(null);
@@ -117,6 +121,7 @@ export function usePurchaseOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingViewed, setMarkingViewed] = useState(false);
+  const markingViewedRef = useRef(false);
   const [error, setError] = useState('');
 
   // Board-settings t.b.v. zichtbaarheid/volgorde van header-kolommen (op key-basis).
@@ -314,20 +319,50 @@ export function usePurchaseOrdersPage() {
     }
   }, [loadPurchaseOrders]);
 
-  // Markeer alles als gezien: zet het laatst-bekeken-watermerk en herlaad zodat de highlights verdwijnen.
+  // Mark as seen: lokale highlights meteen wissen. De POST zet alleen het watermerk;
+  // een full board-read is overbodig (data verandert niet, alleen de kaders).
   const markViewed = useCallback(async () => {
+    if (markingViewedRef.current) return;
+    markingViewedRef.current = true;
     setMarkingViewed(true);
     setError('');
+    const previousOrders = orders;
+    const previousNewCount = newCount;
+    const previousChangedCount = changedCount;
+    const nextOrders = clearUnseenChangeFlagsOnOrders(previousOrders);
+    setOrders(nextOrders);
+    setNewCount(0);
+    setChangedCount(0);
+    const previousLines = clearUnseenLineFlags();
+    const cached = getCachedBoard();
+    setCachedBoard(
+      withClearedUnseenBoardCounts(cached?.payload, nextOrders),
+      cached?.revision ?? null,
+    );
     try {
-      await apiRequest(`${boardBase()}/viewed`, { method: 'POST' });
-      const raw = await apiRequest(boardBase());
-      applyData(BOARD_TB_SOURCE ? mapTbResponseToBoard(raw) : raw);
+      const result = await apiRequest(`${boardBase()}/viewed`, { method: 'POST' });
+      setCachedBoard(
+        withClearedUnseenBoardCounts(getCachedBoard()?.payload, nextOrders),
+        result?.revision ?? getCachedBoard()?.revision ?? null,
+      );
     } catch (err) {
+      setOrders(previousOrders);
+      setNewCount(previousNewCount);
+      setChangedCount(previousChangedCount);
+      restoreEntries(previousLines);
+      const cachedAfterError = getCachedBoard();
+      if (cachedAfterError?.payload) {
+        setCachedBoard(
+          { ...cachedAfterError.payload, orders: previousOrders, newCount: previousNewCount, changedCount: previousChangedCount },
+          cachedAfterError.revision ?? null,
+        );
+      }
       setError(err.message);
     } finally {
+      markingViewedRef.current = false;
       setMarkingViewed(false);
     }
-  }, [applyData]);
+  }, [changedCount, clearUnseenLineFlags, newCount, orders, restoreEntries]);
 
   // Bulk "verwijderen": verberg de geselecteerde rijen (SQL-only exclusion, geen D365-mutatie).
   // Optimistic: rijen verdwijnen direct; bij een API-fout wordt de vorige lijst teruggezet.

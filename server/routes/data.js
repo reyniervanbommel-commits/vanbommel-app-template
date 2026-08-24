@@ -223,7 +223,7 @@ router.get('/:tableKey/refresh/progress', requireRole(ROLES.ADMIN), async (req, 
   }
 });
 
-// POST /api/data/:tableKey/viewed — markeer alles als gezien (admin baseline voor alle gebruikers).
+// POST /api/data/:tableKey/viewed — per-gebruiker last_viewed_at (purchase-orders: elke rol).
 function viewedRoleGuard(req, res, next) {
   if (req.params.tableKey === 'purchase-orders') return next();
   return requireRole(ROLES.ADMIN)(req, res, next);
@@ -231,7 +231,9 @@ function viewedRoleGuard(req, res, next) {
 
 router.post('/:tableKey/viewed', viewedRoleGuard, async (req, res, next) => {
   try {
-    const result = await dataService.markViewed(req.user.id, req.params.tableKey);
+    const isSupplier = req.user?.role === ROLES.SUPPLIER;
+    const supplierAccount = isSupplier ? getSupplierAccount(req.user) : null;
+    const result = await dataService.markViewed(req.user.id, req.params.tableKey, { supplierAccount });
     return res.json(result);
   } catch (err) {
     return next(err);

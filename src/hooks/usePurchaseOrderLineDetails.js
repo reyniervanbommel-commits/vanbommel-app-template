@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { mapTbDetailToBoardLine } from '../utils/purchaseOrdersBoardMapping';
+import { clearUnseenChangeFlagsOnLine } from '../utils/clearUnseenChangeFlags';
 
 // Sublijnen zitten niet meer in de board-payload (die zou bij ~2000 orders tientallen MB's
 // worden). Deze store houdt de per-order opgehaalde regels vast, los van de orders-state,
@@ -84,11 +85,37 @@ export function usePurchaseOrderLineDetails() {
     if (entriesRef.current.size) commit(new Map());
   }, [commit]);
 
+  // Mark as seen: wis highlights op al geladen sublijnen zonder ze opnieuw op te halen.
+  // Geeft de vorige Map terug voor rollback bij een mislukte POST.
+  const clearUnseenLineFlags = useCallback(() => {
+    const previous = entriesRef.current;
+    if (!previous.size) return previous;
+    const next = new Map();
+    for (const [key, entry] of previous) {
+      if (!Array.isArray(entry.lines)) {
+        next.set(key, entry);
+        continue;
+      }
+      next.set(key, {
+        ...entry,
+        lines: entry.lines.map(clearUnseenChangeFlagsOnLine),
+      });
+    }
+    commit(next);
+    return previous;
+  }, [commit]);
+
+  const restoreEntries = useCallback((snapshot) => {
+    if (snapshot instanceof Map) commit(snapshot);
+  }, [commit]);
+
   return useMemo(() => ({
     entries,
     loadLines,
     applyLineValues,
     restoreLines,
     resetLines,
-  }), [applyLineValues, entries, loadLines, resetLines, restoreLines]);
+    clearUnseenLineFlags,
+    restoreEntries,
+  }), [applyLineValues, clearUnseenLineFlags, entries, loadLines, resetLines, restoreEntries, restoreLines]);
 }

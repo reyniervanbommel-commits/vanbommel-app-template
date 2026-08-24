@@ -97,4 +97,34 @@ describe('usePurchaseOrderLineDetails', () => {
 
     expect(result.current.entries.size).toBe(0);
   });
+
+  it('wist new/changed-flags op geladen regels en kan dat terugdraaien', async () => {
+    apiRequest.mockResolvedValue({
+      details: [{ detailKey: 10, values: { qty: 5 }, isNew: true, isChanged: false, isRemoved: true, changedFieldKeys: ['qty'] }],
+    });
+    const { result } = renderHook(() => usePurchaseOrderLineDetails());
+    await act(async () => {
+      await result.current.loadLines('nl01', 'PO-1');
+    });
+
+    let snapshot;
+    act(() => {
+      snapshot = result.current.clearUnseenLineFlags();
+    });
+    expect(result.current.entries.get(KEY).lines[0]).toMatchObject({
+      isNew: false,
+      isChanged: false,
+      isRemoved: true,
+      changedFieldKeys: [],
+    });
+
+    act(() => {
+      result.current.restoreEntries(snapshot);
+    });
+    expect(result.current.entries.get(KEY).lines[0]).toMatchObject({
+      isNew: true,
+      isRemoved: true,
+      changedFieldKeys: ['qty'],
+    });
+  });
 });
