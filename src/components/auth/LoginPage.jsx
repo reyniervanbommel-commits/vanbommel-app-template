@@ -16,7 +16,6 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { APP_DISPLAY_NAME } from '../../config/app';
-import { APP_VERSION } from '../../config/version';
 
 const LAST_LOGIN_EMAIL_KEY = 'auth:last-login-email';
 
@@ -98,7 +97,6 @@ const useStyles = makeStyles({
     alignItems: 'center',
     ...shorthands.gap('12px'),
   },
-  version: { fontSize: '11px', color: tokens.colorNeutralForeground4, textAlign: 'center' },
   footer: {
     display: 'flex',
     flexDirection: 'column',
@@ -214,7 +212,6 @@ export default function LoginPage() {
             alt="Floris van Bommel"
             className={styles.brandLogo}
           />
-          <Text className={styles.version}>{APP_VERSION}</Text>
         </div>
       </Card>
     </div>
