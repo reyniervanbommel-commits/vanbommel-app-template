@@ -8,12 +8,14 @@ import {
   Flowchart24Regular,
   History24Regular,
   ArrowClockwise24Regular,
+  Link24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
 import UserAnalytics from './UserAnalytics';
 import AdminODataSettings from './AdminODataSettings';
 import { AdminDataModel } from './datamodel';
+import ExcelLinkWizard from './datamodel/ExcelLinkWizard';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 import AdminTrackChangesSettings from './AdminTrackChangesSettings';
 import AdminD365Refresh from './AdminD365Refresh';
@@ -58,6 +60,7 @@ export default function AdminPage() {
   const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
   const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
   const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
+  const handleTabExternalLinks = useCallback(() => setAdminTab('external-links'), []);
   const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
   const handleTabTrackChanges = useCallback(() => setAdminTab('track-changes'), []);
   const handleTabD365Refresh = useCallback(() => setAdminTab('d365-refresh'), []);
@@ -98,6 +101,12 @@ export default function AdminPage() {
           onClick={handleTabDataModel}
         />
         <SidebarNavItem
+          icon={Link24Regular}
+          label="External links"
+          active={adminTab === 'external-links'}
+          onClick={handleTabExternalLinks}
+        />
+        <SidebarNavItem
           icon={History24Regular}
           label="Track changes"
           active={adminTab === 'track-changes'}
@@ -119,6 +128,7 @@ export default function AdminPage() {
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
         {adminTab === 'odata' && <AdminODataSettings />}
         {adminTab === 'datamodel' && <AdminDataModel />}
+        {adminTab === 'external-links' && <ExcelLinkWizard />}
         {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
         {isAdmin && adminTab === 'd365-refresh' && <AdminD365Refresh />}
       </div>
