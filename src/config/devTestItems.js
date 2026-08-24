@@ -2,7 +2,19 @@
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
-export const devTestItems = [];
+export const devTestItems = [
+  {
+    id: 'feature-267-live-cell-history-fold-v1-51-47',
+    title: 'Feature 267 - Live history fold after cell edit (v1.51.47)',
+    checks: [
+      'Edit a cell that had no history fold: the fold appears without page refresh',
+      'Click the fold: existing history popover opens',
+      'Force a failed save: value and fold roll back together',
+      'History indicators off: no fold after save',
+      'Cell that already had a fold: fold stays visible',
+    ],
+  },
+];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
 export function buildDevChecklistItems(items = devTestItems) {
