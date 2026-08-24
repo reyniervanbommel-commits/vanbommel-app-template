@@ -14,6 +14,17 @@ export const devTestItems = [
       'Cell that already had a fold: fold stays visible',
     ],
   },
+  {
+    id: '269-rccp-chart-po-segments',
+    title: 'RCCP chart: PO boxes, Today, late',
+    checks: [
+      'On /rccp the Capacity vs load chart shows wide PO boxes (not thin week totals).',
+      'Received boxes appear above on the planned week and below the axis on the receipt date.',
+      'Hovering a box shows PO, status, quantity and week in English; boxes are not clickable.',
+      'A Today line sits on the real weekday of the current ISO week (none if that week is off-screen).',
+      'Open boxes from weeks before the current ISO week have a red outline; current-week open boxes do not.',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

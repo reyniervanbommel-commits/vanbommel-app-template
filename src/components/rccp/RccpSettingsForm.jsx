@@ -53,6 +53,7 @@ function RccpSettingsForm({
           compact={isFlyout}
           onVendor={handlers.handleVendor}
           onDate={handlers.handleDate}
+          onReceiptDate={handlers.handleReceiptDate}
           onStatuses={handlers.handleStatuses}
           onPolicy={handlers.handlePolicy}
         />

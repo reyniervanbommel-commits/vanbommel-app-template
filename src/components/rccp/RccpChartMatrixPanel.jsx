@@ -1,17 +1,15 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ComposedChart, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
-} from 'recharts';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import RccpWeekBandCursor from './RccpWeekBandCursor';
+import RccpPoSegmentTooltip from './RccpPoSegmentTooltip';
+import RccpChartPlot from './RccpChartPlot';
+import { lightenHex, todayLineX } from './rccpPoStack';
 import {
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
   RCCP_CHART_Y_AXIS_WIDTH,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
-  RCCP_WARNING_MEASURE_KEY,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
 
@@ -34,6 +32,10 @@ const useStyles = makeStyles({
   alignedBlock: { minWidth: 0 },
   chartArea: { flex: 1, minHeight: 0 },
 });
+
+function isStackRow(row) {
+  return Boolean(row?.isOpen || row?.isDelivered);
+}
 
 function RccpChartMatrixPanel({
   chart,
@@ -68,6 +70,7 @@ function RccpChartMatrixPanel({
   );
 
   const [visibleKeys, setVisibleKeys] = useState({});
+  const [hoveredSegment, setHoveredSegment] = useState(null);
 
   useEffect(() => {
     setVisibleKeys(measureRows.reduce((acc, row) => {
@@ -79,17 +82,64 @@ function RccpChartMatrixPanel({
   const handleToggle = useCallback((measureKey, checked) => {
     setVisibleKeys((prev) => ({ ...prev, [measureKey]: checked }));
   }, []);
+  const handleSegmentHover = useCallback((segment) => {
+    setHoveredSegment(segment);
+  }, []);
+  const renderTooltip = useCallback((props) => (
+    <RccpPoSegmentTooltip
+      active={props.active}
+      label={props.label}
+      segment={hoveredSegment}
+    />
+  ), [hoveredSegment]);
 
+  const openRow = useMemo(() => measureRows.find((row) => row.isOpen), [measureRows]);
+  const deliveredRow = useMemo(() => measureRows.find((row) => row.isDelivered), [measureRows]);
+  const receivedColor = useMemo(
+    () => lightenHex(deliveredRow?.color || '#0078D4'),
+    [deliveredRow],
+  );
+  const openVisible = Boolean(openRow && visibleKeys[openRow.measureKey]);
+  const deliveredVisible = Boolean(deliveredRow && visibleKeys[deliveredRow.measureKey]);
+
+  const chartRows = useMemo(() => (chart || []).map((point) => {
+    const segmentsAbove = (point.segmentsAbove || []).filter((seg) => (
+      (seg.status === 'open' && openVisible) || (seg.status === 'received' && deliveredVisible)
+    ));
+    const segmentsBelow = deliveredVisible ? (point.segmentsBelow || []) : [];
+    return {
+      ...point,
+      segmentsAbove,
+      segmentsBelow,
+      __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
+      __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
+      __openColor: openRow?.color,
+      __receivedColor: receivedColor,
+      __onSegmentHover: handleSegmentHover,
+    };
+  }), [chart, openVisible, deliveredVisible, openRow, receivedColor, handleSegmentHover]);
+
+  const todayX = useMemo(() => todayLineX(periodHeaders), [periodHeaders]);
   const activeRows = useMemo(
-    () => measureRows.filter((row) => visibleKeys[row.measureKey]),
+    () => measureRows.filter((row) => visibleKeys[row.measureKey] && !isStackRow(row)),
     [measureRows, visibleKeys],
   );
-  // Force Recharts to remount series when bar/line (or colour) changes; same dataKey
-  // otherwise keeps the previous Line/Bar instance.
   const seriesSignature = useMemo(
-    () => activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|'),
-    [activeRows],
+    () => `${activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|')}|${openVisible}|${deliveredVisible}`,
+    [activeRows, openVisible, deliveredVisible],
   );
+  const plot = useMemo(() => ({
+    data: chartRows,
+    width: chartWidth,
+    height: chartHeight,
+    compact,
+    weekBoundaryCoordinates,
+    chartRangeBands,
+    activeRows,
+  }), [chartRows, chartWidth, chartHeight, compact, weekBoundaryCoordinates, chartRangeBands, activeRows]);
+  const stack = useMemo(() => ({
+    openVisible, deliveredVisible, openRow, deliveredRow, receivedColor,
+  }), [openVisible, deliveredVisible, openRow, deliveredRow, receivedColor]);
 
   if (!periodHeaders.length) return null;
 
@@ -97,73 +147,15 @@ function RccpChartMatrixPanel({
     <div className={styles.scroller}>
       <div className={styles.alignedBlock} style={{ width: gridWidth }}>
         <div
-          style={{
-            marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH,
-            width: chartWidth,
-            height: chartHeight,
-          }}
+          key={seriesSignature}
+          style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}
         >
-          <ComposedChart
-            key={seriesSignature}
-            width={chartWidth}
-            height={chartHeight}
-            data={chart}
-            margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
-          >
-              <CartesianGrid
-                stroke={tokens.colorNeutralStroke2}
-                strokeDasharray="4 4"
-                verticalCoordinatesGenerator={weekBoundaryCoordinates}
-              />
-              <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
-              <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
-              {/* Nullijn: bij een capaciteitstekort duikt de overcapaciteit-lijn hieronder. */}
-              <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
-              <Tooltip shared cursor={<RccpWeekBandCursor />} />
-              <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
-              {chartRangeBands.map((band, index) => (
-                <ReferenceArea
-                  key={`${band.x1}-${band.x2}-${index}`}
-                  x1={band.x1}
-                  x2={band.x2}
-                  fill={band.color}
-                  fillOpacity={0.22}
-                  strokeOpacity={0}
-                  ifOverflow="hidden"
-                />
-              ))}
-              {activeRows.map((row) => (
-                row.chartType === 'bar' ? (
-                  <Bar
-                    key={`${row.measureKey}-bar`}
-                    dataKey={row.measureKey}
-                    name={row.label}
-                    fill={row.color}
-                    stackId={row.isDelivered ? 'rccp_delivered' : 'rccp_load'}
-                    barSize={compact ? 10 : 14}
-                  >
-                    {(chart || []).map((point, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={point.__overloaded__ ? '#D13438' : row.color}
-                        fillOpacity={point.__overloaded__ ? 0.85 : 1}
-                      />
-                    ))}
-                  </Bar>
-                ) : (
-                  <Line
-                    key={`${row.measureKey}-line`}
-                    type="monotone"
-                    dataKey={row.measureKey}
-                    name={row.label}
-                    stroke={row.color}
-                    strokeWidth={row.measureKey === RCCP_WARNING_MEASURE_KEY ? 1.5 : 2}
-                    dot={false}
-                    strokeDasharray={row.isDashed ? '6 3' : undefined}
-                  />
-                )
-              ))}
-          </ComposedChart>
+          <RccpChartPlot
+            plot={plot}
+            stack={stack}
+            renderTooltip={renderTooltip}
+            todayX={todayX}
+          />
         </div>
         <RccpMatrixTable
           measureRows={measureRows.filter((r) => !r.isWarning)}

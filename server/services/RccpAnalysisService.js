@@ -10,63 +10,24 @@ const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = 
 // Vaste kleur voor de afgeleide overcapaciteit-lijn (Fluent purple). Niet configureerbaar: het is
 // geen door de gebruiker toegevoegde measure maar een berekende regel.
 const OVERCAPACITY_COLOR = '#8764B8';
-const { getIsoWeek, getIsoWeekYear, buildWeekRange, isoWeekStartUtc, isoWeekEndUtc } = require('../utils/isoWeek');
+const { getIsoWeek, getIsoWeekYear, buildWeekRange, isIsoWeekInWindow } = require('../utils/isoWeek');
 const { computeRccpStatus } = require('../utils/rccpStatus');
+const {
+  toNumber,
+  pickValue,
+  resolveLineMeasureQty,
+  isHeaderOnlyMeasure,
+  lineDateValue,
+  collectDateSlots,
+} = require('../utils/rccpPoRow');
+const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
-function toNumber(value) {
-  if (value === null || value === undefined || value === '') return 0;
-  const n = Number(String(value).replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function pickValue(values, key) {
-  if (!values || !key) return null;
-  const v = values[key];
-  return v === undefined || v === null || v === '' ? null : v;
-}
-
-function resolveLineMeasureQty(lineValues, masterValues, measureKey, share = 1) {
-  const lineRaw = pickValue(lineValues, measureKey);
-  const masterQty = toNumber(pickValue(masterValues, measureKey));
-  return lineRaw !== null ? toNumber(lineRaw) : masterQty * share;
-}
-
-/** Header-totaal: de key staat op de order, niet op de regels. */
-function isHeaderOnlyMeasure(details, masterValues, measureKey) {
-  if (pickValue(masterValues, measureKey) === null) return false;
-  if (!details.length) return true;
-  return details.every((detail) => pickValue(detail.values || {}, measureKey) === null);
-}
-
-function lineDateValue(lineValues, masterValues, dateColumnKey) {
-  return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
-}
-
-/** Regels (of de header zelf) waarvan de leverweek in het RCCP-venster valt. */
 function collectInWindowSlots(details, masterValues, dateColumnKey, window, excludedSet, masterStatus) {
-  const sources = details.length
-    ? details.map((detail) => ({ lineNumber: detail.detailKey, lineValues: detail.values || {} }))
-    : [{ lineNumber: null, lineValues: masterValues }];
-  const slots = [];
-  for (const source of sources) {
-    const status = pickValue(source.lineValues, 'status') ?? masterStatus;
-    if (status && excludedSet.has(String(status).toLowerCase())) continue;
-    const dateValue = lineDateValue(source.lineValues, masterValues, dateColumnKey);
-    if (!dateValue) continue;
-    const year = getIsoWeekYear(dateValue);
-    const week = getIsoWeek(dateValue);
-    if (!year || !week || !isInWindow(year, week, window)) continue;
-    slots.push({
-      ...source,
-      dateValue,
-      year,
-      week,
-      dateFromHeader: !pickValue(source.lineValues, dateColumnKey),
-    });
-  }
-  return slots;
+  return collectDateSlots(
+    details, masterValues, dateColumnKey, null, window, excludedSet, masterStatus,
+  );
 }
 
 function cellKey(vendor, year, week, measureKey) {
@@ -160,7 +121,7 @@ function aggregatePoLoad(rows, config, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (!year || !week) return;
-      if (!isInWindow(year, week, window)) {
+      if (!isIsoWeekInWindow(year, week, window)) {
         diagnostics.outOfWindowLines += 1;
         return;
       }
@@ -199,13 +160,6 @@ function aggregatePoLoad(rows, config, window) {
   }
 
   return { confirmedByCell, missingDates, diagnostics };
-}
-
-function isInWindow(year, week, window) {
-  const start = isoWeekStartUtc(window.fromYear, window.fromWeek).getTime();
-  const end = isoWeekEndUtc(window.toYear, window.toWeek).getTime();
-  const point = isoWeekStartUtc(year, week).getTime();
-  return point >= start && point <= end;
 }
 
 function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
@@ -320,6 +274,7 @@ function buildMatrixCells({
       color: m.color,
       showInChart: m.showInChart !== false,
       isCapacity: false,
+      isOpen: Boolean(openMeasureKey && m.columnKey === openMeasureKey),
       isDelivered: Boolean(deliveredMeasureKey && m.columnKey === deliveredMeasureKey),
     })),
     {
@@ -439,6 +394,12 @@ async function analyze({
     vendorFilter: effectiveVendor,
   });
 
+  const chart = buildChartSeries(cells, periods, measureRows);
+  const segmentsByWeek = await time('rccp_po_segments', () => buildPoSegments(poRows, config, window, {
+    now: new Date(),
+    vendorAccount: effectiveVendor,
+  }));
+
   return {
     config,
     window,
@@ -451,7 +412,7 @@ async function analyze({
       : missingDates,
     diagnostics,
     kpis: buildKpis(cells, config.quantityMeasures),
-    chart: buildChartSeries(cells, periods, measureRows),
+    chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
 }
 
@@ -501,7 +462,7 @@ function buildDrillDownRows(rows, config, cell, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (year !== cell.periodYear || week !== cell.isoWeek) return;
-      if (!isInWindow(year, week, window)) return;
+      if (!isIsoWeekInWindow(year, week, window)) return;
 
       const qty = resolveLineMeasureQty(lineValues, masterValues, measureKey, share);
       if (qty <= 0) return;
