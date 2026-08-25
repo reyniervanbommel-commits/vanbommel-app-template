@@ -1,6 +1,6 @@
 'use strict';
 
-const { readBoardSnapshot } = require('./BoardSnapshotCache');
+const { readBoardSnapshot, readRccpPoRows } = require('./BoardSnapshotCache');
 // BoardSnapshotCache.js gebruikt het gedeelde dataService-object (niet gedestructureerd),
 // dus getRevision/read direct op dat object vervangen is genoeg — geen module-reset nodig.
 const dataService = require('./TableDataService');
@@ -68,5 +68,23 @@ describe('readBoardSnapshot', () => {
 
     expect(dataService.read).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+});
+
+describe('readRccpPoRows', () => {
+  it('leest zonder change-decoraties en hergebruikt de kpi-cache', async () => {
+    mockDataService({ parts: { syncedAt: 'kpi-same' }, rows: [{ recordKey: 'PO-1' }] });
+
+    const first = await readRccpPoRows({ tableKey: 'kpi-test-1' });
+    const second = await readRccpPoRows({ tableKey: 'kpi-test-1' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+    expect(dataService.read).toHaveBeenCalledWith({
+      tableKey: 'kpi-test-1',
+      supplierAccount: null,
+      includeChangeDecorations: false,
+    });
+    expect(first.rows).toEqual([{ recordKey: 'PO-1' }]);
+    expect(second.rows).toBe(first.rows);
   });
 });

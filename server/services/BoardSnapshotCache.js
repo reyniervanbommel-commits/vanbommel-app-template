@@ -12,6 +12,7 @@ const dataService = require('./TableDataService');
 
 const SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 const snapshotCache = new Map();
+const kpiRowCache = new Map();
 
 // Gescopeerd per (tableKey, supplierAccount): een supplier ziet via read() alleen zijn eigen
 // rijen, dus zijn snapshot mag nooit hergebruikt worden voor een andere supplier of voor staff
@@ -57,4 +58,29 @@ async function readBoardSnapshot({ tableKey, userId = null, supplierAccount = nu
   return { rows, columns, revision };
 }
 
-module.exports = { readBoardSnapshot };
+/**
+ * Lichte PO-rijen voor KPI-tegels: alle kolommen, lookups en formules, geen
+ * history/ledger/track-marks. Eigen cache, zodat het board-snapshot met
+ * change-decoraties niet wordt overschreven.
+ */
+async function readRccpPoRows({ tableKey, supplierAccount = null } = {}) {
+  const { revision, parts } = await time('kpi_rows_revision', () => dataService.getRevision({
+    tableKey, supplierAccount,
+  }));
+  const key = `kpi::${snapshotCacheKey(tableKey, supplierAccount)}`;
+  const signature = contentSignature(parts);
+  const cached = kpiRowCache.get(key);
+  if (cached && cached.signature === signature && (Date.now() - cached.cachedAt) < SNAPSHOT_TTL_MS) {
+    return { rows: cached.rows, revision };
+  }
+  const data = await time('kpi_po_read', () => dataService.read({
+    tableKey,
+    supplierAccount,
+    includeChangeDecorations: false,
+  }));
+  const rows = data.rows || [];
+  kpiRowCache.set(key, { rows, signature, cachedAt: Date.now() });
+  return { rows, revision };
+}
+
+module.exports = { readBoardSnapshot, readRccpPoRows };

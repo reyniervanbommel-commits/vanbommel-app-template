@@ -8,25 +8,39 @@ function internSku(skuList, skuIndex, sku) {
   return index;
 }
 
+function internSet(skuList, skuIndex, values) {
+  return [...values].map((value) => internSku(skuList, skuIndex, value));
+}
+
 function compactByOrder(byOrder) {
   const sku = [];
   const skuIndex = new Map();
   const orders = {};
   for (const [poNumber, entry] of Object.entries(byOrder)) {
-    if (!entry.openQty && !entry.deliveredQty && !entry.lateCount && !entry.openLateCount) continue;
+    if (
+      !entry.openQty && !entry.deliveredQty && !entry.lateCount
+      && !entry.openLateCount && !entry.onTimeUnits && !entry.openSkus.size
+    ) continue;
     const row = {};
     if (entry.openQty) row.o = entry.openQty;
     if (entry.deliveredQty) row.d = entry.deliveredQty;
+    if (entry.openSkus.size) row.oi = internSet(sku, skuIndex, entry.openSkus);
     if (entry.lateCount) {
       row.ls = entry.lateSum;
       row.ln = entry.lateCount;
-      const indexes = [...entry.lateSkus].map((value) => internSku(sku, skuIndex, value));
+      if (entry.lateUnits) row.lu = entry.lateUnits;
+      const indexes = internSet(sku, skuIndex, entry.lateSkus);
       if (indexes.length) row.lk = indexes;
+    }
+    if (entry.onTimeUnits) {
+      row.tu = entry.onTimeUnits;
+      const indexes = internSet(sku, skuIndex, entry.onTimeSkus);
+      if (indexes.length) row.tk = indexes;
     }
     if (entry.openLateCount) {
       row.os = entry.openLateSum;
       row.on = entry.openLateCount;
-      const indexes = [...entry.openLateSkus].map((value) => internSku(sku, skuIndex, value));
+      const indexes = internSet(sku, skuIndex, entry.openLateSkus);
       if (indexes.length) row.ok = indexes;
     }
     orders[poNumber] = row;

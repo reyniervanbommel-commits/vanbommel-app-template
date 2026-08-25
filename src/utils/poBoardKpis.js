@@ -9,6 +9,7 @@ export const PO_BOARD_CLICKABLE_KPI_KEYS = [
   'open',
   'lateDelivery',
   'lateItems',
+  'onTime',
   'openLate',
 ];
 
@@ -24,6 +25,7 @@ function emptyMatchByKey() {
     open: new Set(),
     lateDelivery: new Set(),
     lateItems: new Set(),
+    onTime: new Set(),
     openLate: new Set(),
   };
 }
@@ -47,9 +49,13 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
   let totalDelivered = 0;
   let lateSum = 0;
   let lateCount = 0;
+  let lateDeliveryUnits = 0;
+  let onTimeUnits = 0;
   let openLateSum = 0;
   let openLateCount = 0;
   const lateDeliverySkus = new Set();
+  const onTimeSkus = new Set();
+  const openSkus = new Set();
   const openLateSkus = new Set();
 
   for (const orderNumber of visibleOrderNumbers || []) {
@@ -62,12 +68,19 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
     if (openQty + deliveredQty > 0) matchByKey.ordered.add(orderNumber);
     if (deliveredQty > 0) matchByKey.delivered.add(orderNumber);
     if (openQty > 0) matchByKey.open.add(orderNumber);
+    addIndexedSkus(openSkus, sku, entry.oi);
     if (entry.ln) {
       lateSum += Number(entry.ls) || 0;
       lateCount += Number(entry.ln) || 0;
+      lateDeliveryUnits += Number(entry.lu) || 0;
       addIndexedSkus(lateDeliverySkus, sku, entry.lk);
       matchByKey.lateDelivery.add(orderNumber);
       matchByKey.lateItems.add(orderNumber);
+    }
+    if (entry.tu || (entry.tk && entry.tk.length)) {
+      onTimeUnits += Number(entry.tu) || 0;
+      addIndexedSkus(onTimeSkus, sku, entry.tk);
+      matchByKey.onTime.add(orderNumber);
     }
     if (entry.on) {
       openLateSum += Number(entry.os) || 0;
@@ -87,6 +100,10 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       openPercent: percentOf(totalOpen, totalOrdered),
       lateDeliveryAvgDays: lateCount ? lateSum / lateCount : null,
       lateDeliveryItemCount: lateDeliverySkus.size,
+      lateDeliveryUnits,
+      onTimeItemCount: onTimeSkus.size,
+      onTimeUnits,
+      openItemCount: openSkus.size,
       openLateItemCount: openLateSkus.size,
       openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,
       capacityShortfall: null,

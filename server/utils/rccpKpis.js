@@ -55,11 +55,16 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
   const itemNumber = line.itemNumber;
+  if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
   if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
     const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
     if (days > 0) {
       acc.lateDeliveryDays.push(days);
+      acc.lateDeliveryUnits += line.deliveredQty;
       addSku(acc.lateDeliverySkus, itemNumber);
+    } else if (days !== null) {
+      acc.onTimeUnits += line.deliveredQty;
+      addSku(acc.onTimeSkus, itemNumber);
     }
   }
   if (
@@ -83,7 +88,11 @@ function emptyAcc(now) {
     totalOpen: 0,
     totalDelivered: 0,
     lateDeliveryDays: [],
+    lateDeliveryUnits: 0,
     lateDeliverySkus: new Set(),
+    onTimeUnits: 0,
+    onTimeSkus: new Set(),
+    openSkus: new Set(),
     openLateDays: [],
     openLateSkus: new Set(),
   };
@@ -95,7 +104,11 @@ function emptyOrderStats() {
     deliveredQty: 0,
     lateSum: 0,
     lateCount: 0,
+    lateUnits: 0,
     lateSkus: new Set(),
+    onTimeUnits: 0,
+    onTimeSkus: new Set(),
+    openSkus: new Set(),
     openLateSum: 0,
     openLateCount: 0,
     openLateSkus: new Set(),
@@ -106,12 +119,17 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   entry.openQty += line.openQty;
   entry.deliveredQty += line.deliveredQty;
   const sku = String(line.itemNumber || '').trim();
+  if (line.openQty > 0 && sku) entry.openSkus.add(sku);
   if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
     const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
     if (days > 0) {
       entry.lateSum += days;
       entry.lateCount += 1;
+      entry.lateUnits += line.deliveredQty;
       if (sku) entry.lateSkus.add(sku);
+    } else if (days !== null) {
+      entry.onTimeUnits += line.deliveredQty;
+      if (sku) entry.onTimeSkus.add(sku);
     }
   }
   if (
@@ -220,6 +238,10 @@ function summarizeAcc(acc) {
     openPercent: percentOf(totalOpen, totalOrdered),
     lateDeliveryAvgDays: mean(acc.lateDeliveryDays),
     lateDeliveryItemCount: acc.lateDeliverySkus.size,
+    lateDeliveryUnits: acc.lateDeliveryUnits,
+    onTimeItemCount: acc.onTimeSkus.size,
+    onTimeUnits: acc.onTimeUnits,
+    openItemCount: acc.openSkus.size,
     openLateItemCount: acc.openLateSkus.size,
     openLateAvgDays: mean(acc.openLateDays),
   };

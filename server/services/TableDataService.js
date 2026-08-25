@@ -3471,29 +3471,46 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries, r
 // expanden en haalt de regels dan per order op (readRowDetails). De afgeleiden die het board wél
 // collapsed nodig heeft (aantal, new/changed/removed-vlaggen, linked kolomwaarden, image-preview)
 // blijven meekomen als rollup. Scheelt bij ~2000 orders het leeuwendeel van de payload.
-async function read({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true } = {}) {
+async function read({
+  tableKey,
+  includeRemoved = false,
+  userId = null,
+  supplierAccount = null,
+  supplierFilterColumn = 'vendorAccount',
+  includeDetails = true,
+  includeChangeDecorations = true,
+} = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
+  const emptyTrackMarks = { trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} };
 
   // Alle reads hieronder zijn onafhankelijk van elkaar (alleen afhankelijk van table.id/userId).
   // Parallel uitvoeren i.p.v. sequentieel scheelt ~7 SQL-round-trips naar de remote database;
   // dat was het leeuwendeel van de responstijd van het board (zie Server-Timing-metrics).
   // De ledger-read hangt af van sync-state + viewed en is daarom als geketende promise in
   // hetzelfde parallelle blok opgenomen.
+  // includeChangeDecorations=false: KPI-pad. Alle master/detail-kolommen, lookups en formules
+  // blijven; history/ledger/track-marks niet — die maakten de PO-tab-tegels traag.
   const syncStatePromise = time('tb_sync_state', () => getSyncState(table.id));
-  const viewedPromise = time('tb_viewed', () => getLastViewedAt(table.id, userId));
+  const viewedPromise = includeChangeDecorations
+    ? time('tb_viewed', () => getLastViewedAt(table.id, userId))
+    : Promise.resolve(null);
   // Revision atomair uit hetzelfde read-snapshot berekenen (parallel; ~1 goedkope round-trip),
   // zodat de frontend na deze read exact de bijbehorende revision opslaat.
   const revisionPromise = time('tb_revision', () => getRevisionByTable(table, { userId, supplierAccount }));
-  const historyByCellPromise = time('tb_history_hints', () => loadHistoryByCell(pool, table.id));
+  const historyByCellPromise = includeChangeDecorations
+    ? time('tb_history_hints', () => loadHistoryByCell(pool, table.id))
+    : Promise.resolve(new Map());
 
   // Track changes: config uit app_settings (in-memory gecached). Alleen bij ≥1 actieve kolom
   // draait er een query; anders geen SQL en geen Server-Timing-metric tb_track_marks.
-  const trackConfig = await trackChangesService.getConfig();
+  const trackConfig = includeChangeDecorations
+    ? await trackChangesService.getConfig()
+    : { columns: {}, mode: 'session' };
   const trackEnabledColumns = Object.entries(trackConfig.columns || {})
     .map(([id, entry]) => ({ columnId: Number(id), activatedAt: new Date(entry.activatedAt) }))
     .filter((c) => Number.isFinite(c.columnId) && !Number.isNaN(c.activatedAt.getTime()));
-  const trackActive = trackEnabledColumns.length > 0;
+  const trackActive = includeChangeDecorations && trackEnabledColumns.length > 0;
   const trackMarksPromise = trackActive
     ? time('tb_track_marks', async () => {
         const boundaries = trackConfig.mode === 'session'
@@ -3501,19 +3518,20 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
           : [];
         return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries);
       })
-    : Promise.resolve({ trackMarksByCell: new Map(), activeOffsetByColumnId: {}, defaultPattern: {} });
+    : Promise.resolve(emptyTrackMarks);
   const syncRulesPromise = table.key === 'purchase-orders'
     ? time('tb_sync_rules', () => getTableSyncRules(table))
     : Promise.resolve([]);
-  const ledgerPromise = (async () => {
-    const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
-    const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
-    if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
-    try {
-      const ledgerResult = await time('tb_ledger', () => pool.request()
-        .input('tableId', sql.BigInt, table.id)
-        .input('sinceAt', sql.DateTime2, new Date(sinceMs))
-        .query(`
+  const ledgerPromise = includeChangeDecorations
+    ? (async () => {
+      const [{ lastFullSyncAt: syncedAtRaw }, viewedAtRaw] = await Promise.all([syncStatePromise, viewedPromise]);
+      const sinceMs = resolveLedgerSinceMs({ lastViewedAt: viewedAtRaw, lastFullSyncAt: syncedAtRaw });
+      if (sinceMs === null) return { d365LedgerRows: [], hasLedgerWindow: false };
+      try {
+        const ledgerResult = await time('tb_ledger', () => pool.request()
+          .input('tableId', sql.BigInt, table.id)
+          .input('sinceAt', sql.DateTime2, new Date(sinceMs))
+          .query(`
           SELECT partition_key, record_key, detail_key, field_key, action
           FROM dbo.tb_change_ledger WITH (NOLOCK)
           WHERE table_id = @tableId
@@ -3521,15 +3539,16 @@ async function read({ tableKey, includeRemoved = false, userId = null, supplierA
             AND created_at >= @sinceAt
           ORDER BY created_at ASC, id ASC
         `));
-      return { d365LedgerRows: ledgerResult.recordset, hasLedgerWindow: true };
-    } catch (ledgerErr) {
-      logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
-        tableKey: table.key,
-        error: ledgerErr.message,
-      });
-      return { d365LedgerRows: [], hasLedgerWindow: false };
-    }
-  })();
+        return { d365LedgerRows: ledgerResult.recordset, hasLedgerWindow: true };
+      } catch (ledgerErr) {
+        logger.warn('Change-ledger uitlezen mislukt; fallback naar cache-only diff', {
+          tableKey: table.key,
+          error: ledgerErr.message,
+        });
+        return { d365LedgerRows: [], hasLedgerWindow: false };
+      }
+    })()
+    : Promise.resolve({ d365LedgerRows: [], hasLedgerWindow: false });
 
   const [
     [masterCols, detailCols],

@@ -2,7 +2,7 @@
 
 const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
-const { readBoardSnapshot } = require('./BoardSnapshotCache');
+const { readBoardSnapshot, readRccpPoRows } = require('./BoardSnapshotCache');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
 const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = require('./RccpSettingsService');
@@ -456,7 +456,7 @@ async function boardKpis({ supplierAccount = null } = {}) {
   const cached = boardKpiCache.get(cacheKey);
   if (cached) return cached;
 
-  const { rows: poRows } = await time('rccp_board_kpis_read', () => readBoardSnapshot({
+  const { rows: poRows } = await time('rccp_board_kpis_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));

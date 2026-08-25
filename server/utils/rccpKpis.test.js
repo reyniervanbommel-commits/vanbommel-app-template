@@ -78,6 +78,10 @@ describe('rccpKpis', () => {
     const kpis = buildRccpPoKpis([row()], baseConfig, window, { now: nowCurrent, vendorAccount: 'V001' });
     expect(kpis.lateDeliveryAvgDays).toBe(calendarDaysBetween(received, planned));
     expect(kpis.lateDeliveryItemCount).toBe(1);
+    expect(kpis.lateDeliveryUnits).toBe(4);
+    expect(kpis.openItemCount).toBe(1);
+    expect(kpis.onTimeItemCount).toBe(0);
+    expect(kpis.onTimeUnits).toBe(0);
   });
 
   it('does not count same-day receipt as late', () => {
@@ -89,6 +93,8 @@ describe('rccpKpis', () => {
     );
     expect(kpis.lateDeliveryItemCount).toBe(0);
     expect(kpis.lateDeliveryAvgDays).toBeNull();
+    expect(kpis.onTimeItemCount).toBe(1);
+    expect(kpis.onTimeUnits).toBe(4);
   });
 
   it('counts unique SKUs once and averages late days per line', () => {
@@ -120,6 +126,7 @@ describe('rccpKpis', () => {
     const d1 = calendarDaysBetween(received, planned);
     const d2 = calendarDaysBetween('2026-03-23T00:00:00.000Z', planned);
     expect(kpis.lateDeliveryAvgDays).toBeCloseTo((d1 + d1 + d2) / 3);
+    expect(kpis.lateDeliveryUnits).toBe(8);
   });
 
   it('marks open-and-late after the planned week and skips empty item numbers', () => {
@@ -179,9 +186,12 @@ describe('rccpKpis', () => {
     expect(byOrder.orders['PO-A'].d).toBe(4);
     expect(byOrder.orders['PO-A'].ln).toBe(1);
     expect(byOrder.orders['PO-A'].ls).toBe(calendarDaysBetween(received, planned));
+    expect(byOrder.orders['PO-A'].lu).toBe(4);
+    expect(byOrder.orders['PO-A'].oi).toEqual(expect.any(Array));
     expect(byOrder.orders['PO-FAR'].o).toBe(5);
     expect(byOrder.orders['PO-FAR'].d).toBe(2);
     expect(byOrder.orders['PO-FAR'].on).toBe(1);
+    expect(byOrder.orders['PO-FAR'].lu).toBe(2);
     expect(byOrder.sku).toContain('SKU-9');
   });
 

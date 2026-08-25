@@ -39,6 +39,20 @@ function formatDays(value) {
   return `${rounded} days late`;
 }
 
+function formatUnits(value) {
+  if (value === null || value === undefined) return '';
+  return `${formatQty(value)} units`;
+}
+
+function formatItems(value) {
+  if (value === null || value === undefined) return '';
+  return `${formatQty(value)} items`;
+}
+
+function joinDetails(...parts) {
+  return parts.filter(Boolean).join(' · ');
+}
+
 function KpiCard({ kpiKey, label, value, detail, selected, clickable, onActivate }) {
   const styles = useStyles();
   const handleClick = useCallback(() => {
@@ -98,7 +112,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="open"
         label="Total open"
         value={formatQty(kpis.totalOpen)}
-        detail={formatPct(kpis.openPercent)}
+        detail={joinDetails(formatItems(kpis.openItemCount), formatPct(kpis.openPercent))}
         selected={selectedKey === 'open'}
         clickable={clickableSet.has('open')}
         onActivate={handleActivate}
@@ -107,6 +121,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="lateDelivery"
         label="Late delivery"
         value={formatDays(kpis.lateDeliveryAvgDays)}
+        detail={joinDetails(formatItems(kpis.lateDeliveryItemCount), formatUnits(kpis.lateDeliveryUnits))}
         selected={selectedKey === 'lateDelivery'}
         clickable={clickableSet.has('lateDelivery')}
         onActivate={handleActivate}
@@ -115,8 +130,18 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="lateItems"
         label="Late delivery items"
         value={formatQty(kpis.lateDeliveryItemCount)}
+        detail={formatUnits(kpis.lateDeliveryUnits)}
         selected={selectedKey === 'lateItems'}
         clickable={clickableSet.has('lateItems')}
+        onActivate={handleActivate}
+      />
+      <KpiCard
+        kpiKey="onTime"
+        label="On time delivery"
+        value={formatQty(kpis.onTimeItemCount)}
+        detail={formatUnits(kpis.onTimeUnits)}
+        selected={selectedKey === 'onTime'}
+        clickable={clickableSet.has('onTime')}
         onActivate={handleActivate}
       />
       <KpiCard
