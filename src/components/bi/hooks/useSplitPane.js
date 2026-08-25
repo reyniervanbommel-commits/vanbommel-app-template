@@ -6,6 +6,12 @@ import { apiRequest } from '../../../utils/api';
 const SPLIT_BOARD_KEY = 'bi-split';
 const DEFAULT_HEIGHT = 280;
 
+const SPLIT_TABS = new Set(['bi', 'rccp', 'kpis']);
+
+function normalizeSplitTab(tab) {
+  return SPLIT_TABS.has(tab) ? tab : 'bi';
+}
+
 /**
  * Beheert het inklapbare split-screen-paneel: open/dicht, hoogte en de geselecteerde chart-ids.
  * @returns {{ open, height, chartIds, activeTab, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }}
@@ -28,7 +34,7 @@ export function useSplitPane() {
             open: false,
             height: Number(pane.height) || DEFAULT_HEIGHT,
             chartIds: Array.isArray(pane.chartIds) ? pane.chartIds : [],
-            activeTab: pane.activeTab === 'rccp' ? 'rccp' : 'bi',
+            activeTab: normalizeSplitTab(pane.activeTab),
           });
         }
       })
@@ -62,7 +68,7 @@ export function useSplitPane() {
   }, [update, state.chartIds]);
 
   const setActiveTab = useCallback((activeTab) => {
-    update({ activeTab: activeTab === 'rccp' ? 'rccp' : 'bi' });
+    update({ activeTab: normalizeSplitTab(activeTab) });
   }, [update]);
 
   return useMemo(

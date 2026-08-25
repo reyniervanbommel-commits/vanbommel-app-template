@@ -172,15 +172,39 @@ export function usePurchaseOrderBoardView({
     columnFormatRules,
   });
 
+  const [kpiFilterKey, setKpiFilterKey] = useState(null);
+  const [kpiMatchKeys, setKpiMatchKeys] = useState(null);
+  const applyKpiFilter = useCallback((key, matchKeys, options = {}) => {
+    const shouldToggle = options.toggle !== false;
+    setKpiFilterKey((prev) => {
+      if (shouldToggle && prev === key) {
+        setKpiMatchKeys(null);
+        return null;
+      }
+      setKpiMatchKeys(matchKeys || null);
+      return key;
+    });
+  }, []);
+  const clearAllFilters = useCallback(() => {
+    setKpiFilterKey(null);
+    setKpiMatchKeys(null);
+    tableView.clearAllFilters();
+  }, [tableView]);
+
+  const displayedItems = useMemo(() => {
+    if (!kpiMatchKeys) return tableView.processedItems;
+    return tableView.processedItems.filter((order) => kpiMatchKeys.has(order.orderNumber));
+  }, [kpiMatchKeys, tableView.processedItems]);
+
   const rows = useMemo(
     () =>
-      tableView.processedItems.map((order, index) => ({
+      displayedItems.map((order, index) => ({
         order,
         rowId: order?.orderNumber
           ? `${order.dataAreaId || ''}-${order.orderNumber}-${index}`
           : 'row-' + String(index),
       })),
-    [tableView.processedItems]
+    [displayedItems]
   );
 
   const grouping = usePurchaseOrderGrouping({ rows, columns });
@@ -212,7 +236,10 @@ export function usePurchaseOrderBoardView({
   return useMemo(
     () => ({
       // filter/sort API + processedItems
-      processedItems: tableView.processedItems,
+      processedItems: displayedItems,
+      kpiSourceItems: tableView.processedItems,
+      kpiFilterKey,
+      applyKpiFilter,
       // volledige dataset (alle rijen, afgeleide waarden, zonder filter/sort) voor exports
       allItems: itemsWithDerivedDatePeriods,
       sortState: tableView.sortState,
@@ -226,7 +253,7 @@ export function usePurchaseOrderBoardView({
       clearColumnFilter: tableView.clearColumnFilter,
       setColumnColorFilter: tableView.setColumnColorFilter,
       applyFilterFromCellValue: tableView.applyFilterFromCellValue,
-      clearAllFilters: tableView.clearAllFilters,
+      clearAllFilters,
       toggleSort: tableView.toggleSort,
       clearSort: tableView.clearSort,
       setSortDirection: tableView.setSortDirection,
@@ -251,6 +278,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

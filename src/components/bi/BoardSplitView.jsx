@@ -16,6 +16,7 @@ import { ROLES } from '../../constants/roles';
 
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
+const PoBoardKpiStrip = lazy(() => import('../rccp/PoBoardKpiStrip'));
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 },
@@ -57,7 +58,9 @@ const useStyles = makeStyles({
   },
 });
 
-export default function BoardSplitView({ filterByColumn, tableRows, isStaff, children }) {
+export default function BoardSplitView({
+  filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, children,
+}) {
   const styles = useStyles();
   const { user } = useAuth();
   const isSupplier = user?.role === ROLES.SUPPLIER;
@@ -95,6 +98,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
   );
   const showBiPane = !split.open || split.activeTab === 'bi';
   const showRccpPane = !split.open || split.activeTab === 'rccp';
+  const showKpiPane = !split.open || split.activeTab === 'kpis';
 
   const { resultsById } = useChartData({
     charts: selectedCharts,
@@ -130,6 +134,7 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
         >
           <Tab value="bi">Charts</Tab>
           <Tab value="rccp">RCCP</Tab>
+          <Tab value="kpis">KPIs</Tab>
         </TabList>
       </div>
 
@@ -157,6 +162,15 @@ export default function BoardSplitView({ filterByColumn, tableRows, isStaff, chi
               height={split.height}
               enabled
               isoWindow={isoWindow}
+            />
+          </Suspense>
+        </div>
+        <div hidden={!showKpiPane}>
+          <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
+            <PoBoardKpiStrip
+              orders={visibleOrders}
+              selectedKey={kpiFilterKey || ''}
+              onKpiFilter={onKpiFilter}
             />
           </Suspense>
         </div>

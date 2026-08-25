@@ -24,4 +24,5 @@ Lege artikelnummers tellen niet mee in SKU-tellingen. Zonder late regels: dagen 
 - Pure helper `server/utils/rccpKpis.js` (`buildRccpPoKpis`, `buildRccpCapacityKpis`) + co-located tests.
 - `RccpAnalysisService.analyze` vult `kpis` vanuit PO-snapshot + chart-serie (open vs `__capacity__`).
 - `RccpKpiCards.jsx` rendert de acht kaarten; diagnostics-empty-state gebruikt `totalOrdered`.
+- PO-tabel: derde split-tab **KPIs**. Getallen uit de zichtbare header-rijen (`buildPoBoardKpis`); capacity = —. Klikbare tegels zetten een overlay-filter (`applyKpiFilter`) bovenop kolomfilters.
 - Geen schema-migratie. Vendor-scoping gelijk aan de bestaande analyse.
