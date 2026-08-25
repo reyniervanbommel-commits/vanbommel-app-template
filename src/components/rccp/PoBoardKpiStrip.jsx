@@ -7,6 +7,7 @@ import RccpKpiCards from './RccpKpiCards';
 
 const useStyles = makeStyles({
   hint: { color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS },
+  error: { color: tokens.colorPaletteRedForeground1, marginBottom: tokens.spacingVerticalS },
 });
 
 function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
@@ -14,6 +15,7 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   const [payload, setPayload] = useState(null);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [settingsTick, setSettingsTick] = useState(0);
 
   useEffect(() => subscribeRccpSettingsSaved(() => {
@@ -24,15 +26,17 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError('');
     getPoBoardKpis(refreshKey)
       .then((data) => {
         if (!active) return;
         setPayload(data || { sku: [], orders: {} });
         setConfigured(data?.configured !== false);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return;
         setPayload({ sku: [], orders: {} });
+        setError(err?.message || 'Failed to load KPIs');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -60,6 +64,7 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   }, [matchByKey, onKpiFilter, selectedKey]);
 
   if (loading) return <Spinner size="tiny" label="Loading KPIs…" />;
+  if (error) return <Text className={styles.error}>{error}</Text>;
   if (!configured) {
     return <Text className={styles.hint}>KPI columns are not configured yet.</Text>;
   }

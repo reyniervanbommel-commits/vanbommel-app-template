@@ -456,20 +456,9 @@ async function boardKpis({ supplierAccount = null } = {}) {
   const cached = boardKpiCache.get(cacheKey);
   if (cached) return cached;
 
-  const { rows: poRows } = await time('rccp_board_kpis_read', () => tableDataService.readForRccpKpis({
+  const { rows: poRows } = await time('rccp_board_kpis_read', () => readBoardSnapshot({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
-    vendorColumnKey: config.vendorColumnKey,
-    neededKeys: [
-      config.vendorColumnKey,
-      config.openMeasureKey,
-      config.deliveredMeasureKey,
-      config.dateColumnKey,
-      config.receiptDateColumnKey,
-      'status',
-      'purchaseOrderStatus',
-      'itemNumber',
-    ],
   }));
   const compact = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
     now,
