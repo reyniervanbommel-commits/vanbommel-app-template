@@ -1,64 +1,58 @@
 import { describe, it, expect } from 'vitest';
-import { buildPoBoardKpis, calendarDaysBetween } from './poBoardKpis';
+import { aggregatePoBoardKpisFromByOrder } from './poBoardKpis';
 
-describe('buildPoBoardKpis', () => {
-  const planned = '2026-03-16T00:00:00.000Z';
-  const received = '2026-03-30T00:00:00.000Z';
-  const config = {
-    openMeasureKey: 'openQty',
-    deliveredMeasureKey: 'deliveredQty',
-    dateColumnKey: 'requestedDeliveryDate',
-    receiptDateColumnKey: 'productReceiptDate',
-    excludedStatuses: ['Canceled'],
+describe('aggregatePoBoardKpisFromByOrder', () => {
+  const byOrder = {
+    'PO-A': {
+      openQty: 10,
+      deliveredQty: 4,
+      lateDays: [14],
+      lateSkus: ['SKU-1', 'SKU-2'],
+      openLateDays: [7],
+      openLateSkus: ['SKU-1'],
+    },
+    'PO-B': {
+      openQty: 3,
+      deliveredQty: 0,
+      lateDays: [],
+      lateSkus: [],
+      openLateDays: [2],
+      openLateSkus: ['SKU-3'],
+    },
+    'PO-C': {
+      openQty: 99,
+      deliveredQty: 99,
+      lateDays: [1],
+      lateSkus: ['HIDDEN'],
+      openLateDays: [],
+      openLateSkus: [],
+    },
   };
 
-  function order(overrides = {}) {
-    return {
-      orderNumber: overrides.orderNumber || 'PO-A',
-      values: {
-        openQty: 10,
-        deliveredQty: 4,
-        requestedDeliveryDate: planned,
-        productReceiptDate: received,
-        itemNumber: 'SKU-1',
-        status: 'Open',
-        ...(overrides.values || {}),
-      },
-      linkedLineValues: overrides.linkedLineValues,
-    };
-  }
-
-  it('sums open and delivered from visible header rows', () => {
-    const { kpis, matchByKey } = buildPoBoardKpis([order()], config, { now: new Date(planned) });
-    expect(kpis.totalOrdered).toBe(14);
+  it('sums only the visible purchase orders', () => {
+    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-A', 'PO-B']);
+    expect(kpis.totalOpen).toBe(13);
     expect(kpis.totalDelivered).toBe(4);
-    expect(kpis.totalOpen).toBe(10);
+    expect(kpis.totalOrdered).toBe(17);
     expect(kpis.capacityShortfall).toBeNull();
+    expect(kpis.overloadedWeeks).toBeNull();
     expect(matchByKey.ordered.has('PO-A')).toBe(true);
+    expect(matchByKey.ordered.has('PO-C')).toBe(false);
   });
 
-  it('counts late received days and unique SKUs including linked line items', () => {
-    const { kpis, matchByKey } = buildPoBoardKpis([
-      order({ linkedLineValues: { itemNumber: ['SKU-1', 'SKU-2'] } }),
-    ], config, { now: new Date(planned) });
-    expect(kpis.lateDeliveryAvgDays).toBe(calendarDaysBetween(received, planned));
+  it('uniques late SKUs and averages days across visible orders', () => {
+    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-A', 'PO-B']);
+    expect(kpis.lateDeliveryAvgDays).toBe(14);
     expect(kpis.lateDeliveryItemCount).toBe(2);
+    expect(kpis.openLateItemCount).toBe(2);
+    expect(kpis.openLateAvgDays).toBeCloseTo(4.5);
     expect(matchByKey.lateItems.has('PO-A')).toBe(true);
+    expect(matchByKey.openLate.has('PO-B')).toBe(true);
   });
 
-  it('marks open-and-late when the planned week is before now', () => {
-    const { kpis, matchByKey } = buildPoBoardKpis(
-      [order()],
-      config,
-      { now: new Date('2026-03-23T00:00:00.000Z') },
-    );
-    expect(kpis.openLateItemCount).toBe(1);
-    expect(matchByKey.openLate.has('PO-A')).toBe(true);
-  });
-
-  it('skips excluded statuses and does not apply a week window', () => {
-    const canceled = order({ orderNumber: 'PO-X', values: { status: 'Canceled' } });
-    const { kpis } = buildPoBoardKpis([order(), canceled], config, { now: new Date(planned) });
-    expect(kpis.totalOrdered).toBe(14);
+  it('ignores order numbers that are not in the snapshot map', () => {
+    const { kpis } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-MISSING']);
+    expect(kpis.totalOrdered).toBe(0);
+    expect(kpis.lateDeliveryAvgDays).toBeNull();
   });
 });

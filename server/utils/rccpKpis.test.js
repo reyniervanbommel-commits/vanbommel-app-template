@@ -1,7 +1,7 @@
 'use strict';
 
 const { getIsoWeek, getIsoWeekYear, isoWeekKey } = require('./isoWeek');
-const { buildRccpPoKpis, buildRccpCapacityKpis, calendarDaysBetween } = require('./rccpKpis');
+const { buildRccpPoKpis, buildRccpPoKpiByOrder, buildRccpCapacityKpis, calendarDaysBetween } = require('./rccpKpis');
 
 function weekOf(date) {
   return {
@@ -148,6 +148,39 @@ describe('rccpKpis', () => {
     });
     expect(kpis.totalOrdered).toBe(14);
     expect(kpis.lateDeliveryItemCount).toBe(1);
+  });
+
+  it('builds per-order stats without the week window', () => {
+    const outOfWindow = {
+      recordKey: 'PO-FAR',
+      values: { vendorAccount: 'V001', status: 'Open' },
+      details: [{
+        detailKey: '1',
+        values: {
+          requestedDeliveryDate: '2025-01-06T00:00:00.000Z',
+          productReceiptDate: '2025-01-20T00:00:00.000Z',
+          openQty: 5,
+          deliveredQty: 2,
+          itemNumber: 'SKU-9',
+        },
+      }],
+    };
+    const windowed = buildRccpPoKpis([row(), outOfWindow], baseConfig, window, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+    });
+    expect(windowed.totalOrdered).toBe(14);
+
+    const byOrder = buildRccpPoKpiByOrder([row(), outOfWindow], baseConfig, {
+      now: nowNext,
+      vendorAccount: 'V001',
+    });
+    expect(byOrder['PO-A'].openQty).toBe(10);
+    expect(byOrder['PO-A'].deliveredQty).toBe(4);
+    expect(byOrder['PO-A'].lateDays).toEqual([calendarDaysBetween(received, planned)]);
+    expect(byOrder['PO-FAR'].openQty).toBe(5);
+    expect(byOrder['PO-FAR'].deliveredQty).toBe(2);
+    expect(byOrder['PO-FAR'].openLateDays.length).toBe(1);
   });
 
   it('sums capacity shortfall and overloaded weeks from open load', () => {

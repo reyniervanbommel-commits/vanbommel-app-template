@@ -171,6 +171,7 @@ export default function BoardSplitView({
               orders={visibleOrders}
               selectedKey={kpiFilterKey || ''}
               onKpiFilter={onKpiFilter}
+              refreshKey={dataRevision}
             />
           </Suspense>
         </div>

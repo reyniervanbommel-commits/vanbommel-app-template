@@ -1,41 +1,52 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
-import { getCachedRccpConfig, publishRccpSettingsSync, subscribeRccpSettingsSync } from '../../hooks/rccpSettingsSync';
-import { buildPoBoardKpis } from '../../utils/poBoardKpis';
+import { subscribeRccpSettingsSaved } from '../../hooks/rccpSettingsSync';
+import { aggregatePoBoardKpisFromByOrder } from '../../utils/poBoardKpis';
 import RccpKpiCards from './RccpKpiCards';
 
 const useStyles = makeStyles({
   hint: { color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS },
 });
 
-function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter }) {
+function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   const styles = useStyles();
-  const [config, setConfig] = useState(() => getCachedRccpConfig());
-  const [loading, setLoading] = useState(!getCachedRccpConfig());
+  const [byOrder, setByOrder] = useState(null);
+  const [configured, setConfigured] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [settingsTick, setSettingsTick] = useState(0);
 
-  useEffect(() => subscribeRccpSettingsSync((next) => setConfig(next)), []);
+  useEffect(() => subscribeRccpSettingsSaved(() => {
+    setSettingsTick((tick) => tick + 1);
+  }), []);
 
   useEffect(() => {
-    if (config) {
-      setLoading(false);
-      return undefined;
-    }
     let active = true;
-    apiRequest('/rccp/settings')
+    setLoading(true);
+    apiRequest('/rccp/board-kpis')
       .then((data) => {
-        if (!active || !data?.config) return;
-        publishRccpSettingsSync(data.config);
-        setConfig(data.config);
+        if (!active) return;
+        setByOrder(data?.byOrder || {});
+        setConfigured(data?.configured !== false);
       })
-      .catch(() => { /* strip blijft leeg; tabel werkt gewoon */ })
-      .finally(() => { if (active) setLoading(false); });
+      .catch(() => {
+        if (!active) return;
+        setByOrder({});
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => { active = false; };
-  }, [config]);
+  }, [refreshKey, settingsTick]);
+
+  const visibleOrderNumbers = useMemo(
+    () => (orders || []).map((order) => order?.orderNumber).filter(Boolean),
+    [orders],
+  );
 
   const { kpis, matchByKey } = useMemo(
-    () => buildPoBoardKpis(orders, config, { now: new Date() }),
-    [orders, config],
+    () => aggregatePoBoardKpisFromByOrder(byOrder, visibleOrderNumbers),
+    [byOrder, visibleOrderNumbers],
   );
 
   const handleSelect = useCallback((key) => {
@@ -48,7 +59,7 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter }) {
   }, [matchByKey, onKpiFilter, selectedKey]);
 
   if (loading) return <Spinner size="tiny" label="Loading KPIs…" />;
-  if (!config) {
+  if (!configured) {
     return <Text className={styles.hint}>KPI columns are not configured yet.</Text>;
   }
 

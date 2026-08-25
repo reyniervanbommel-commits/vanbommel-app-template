@@ -21,7 +21,7 @@ const {
   collectDateSlots,
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
-const { buildRccpPoKpis, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const { buildRccpPoKpis, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -414,6 +414,27 @@ async function analyze({
   };
 }
 
+/**
+ * Per-PO KPI-stats uit de snapshot (met regels), zonder weekvenster.
+ * De PO-board-tab aggregeert dit client-side over de zichtbare ordernummers.
+ */
+async function boardKpis({ supplierAccount = null } = {}) {
+  const config = await settingsService.getConfig();
+  const { rows: poRows } = await time('rccp_board_kpis_read', () => readBoardSnapshot({
+    tableKey: PO_TABLE_KEY,
+    supplierAccount: supplierAccount || null,
+  }));
+  const now = new Date();
+  const byOrder = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
+    now,
+    vendorAccount: supplierAccount || null,
+  }));
+  const configured = Boolean(
+    String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
+  );
+  return { byOrder, configured };
+}
+
 function buildDrillDownRows(rows, config, cell, window) {
   const result = [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
@@ -592,6 +613,7 @@ module.exports = {
   buildDrillDownRows,
   buildMatrixCells,
   analyze,
+  boardKpis,
   getDrillDown,
   listMainTableVendors,
   extractVendorsFromRows,

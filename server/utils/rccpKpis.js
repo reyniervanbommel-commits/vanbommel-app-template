@@ -15,6 +15,8 @@ const {
   collectDateSlots,
 } = require('./rccpPoRow');
 
+const WIDE_WINDOW = { fromYear: 2000, fromWeek: 1, toYear: 2100, toWeek: 53 };
+
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   if (aYear !== bYear) return aYear - bYear;
   return aWeek - bWeek;
@@ -61,6 +63,7 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
   }
   if (
     line.openQty > 0
+    && line.plannedYear
     && nowYear
     && nowWeek
     && compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) < 0
@@ -85,28 +88,52 @@ function emptyAcc(now) {
   };
 }
 
-/**
- * @param {object[]} rows
- * @param {object} config
- * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} window
- * @param {{ now: Date, vendorAccount?: string|null }} options
- */
-function buildRccpPoKpis(rows, config, window, { now, vendorAccount } = {}) {
+function emptyOrderStats() {
+  return {
+    openQty: 0, deliveredQty: 0, lateDays: [], lateSkus: [], openLateDays: [], openLateSkus: [],
+  };
+}
+
+function addLineToOrderStats(entry, line, now) {
+  entry.openQty += line.openQty;
+  entry.deliveredQty += line.deliveredQty;
+  const sku = String(line.itemNumber || '').trim();
+  if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
+    const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
+    if (days > 0) {
+      entry.lateDays.push(days);
+      if (sku) entry.lateSkus.push(sku);
+    }
+  }
+  if (
+    line.openQty > 0
+    && line.plannedYear
+    && compareIsoWeek(line.plannedYear, line.plannedWeek, getIsoWeekYear(now), getIsoWeek(now)) < 0
+  ) {
+    const days = calendarDaysBetween(now, line.plannedDate);
+    if (days !== null && days > 0) {
+      entry.openLateDays.push(days);
+      if (sku) entry.openLateSkus.push(sku);
+    }
+  }
+}
+
+function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow = false }, onLine) {
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
-  const nowYear = getIsoWeekYear(now);
-  const nowWeek = getIsoWeek(now);
-  const acc = emptyAcc(now);
+  const slotWindow = skipWindow ? WIDE_WINDOW : window;
 
   for (const row of rows || []) {
     const masterValues = row.values || {};
     const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
     if (!vendor) continue;
     if (vendorAccount && vendor !== vendorAccount) continue;
+    const poNumber = row.recordKey;
+    if (!poNumber) continue;
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
@@ -115,16 +142,19 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount } = {}) {
     const lineOpen = Boolean(openKey && !headerOnlyOpen);
     const lineDelivered = Boolean(deliveredKey && !headerOnlyDelivered);
 
-    const pushIfInWindow = (lineValues, openQty, deliveredQty) => {
+    const emit = (lineValues, openQty, deliveredQty) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
       if (status && excludedSet.has(String(status).toLowerCase())) return;
       const plannedDate = lineDateValue(lineValues, masterValues, dateKey);
-      if (!plannedDate) return;
-      const plannedYear = getIsoWeekYear(plannedDate);
-      const plannedWeek = getIsoWeek(plannedDate);
-      if (!plannedYear || !plannedWeek || !isIsoWeekInWindow(plannedYear, plannedWeek, window)) return;
+      const plannedYear = plannedDate ? getIsoWeekYear(plannedDate) : null;
+      const plannedWeek = plannedDate ? getIsoWeek(plannedDate) : null;
+      if (!skipWindow) {
+        if (!plannedDate || !plannedYear || !plannedWeek) return;
+        if (!isIsoWeekInWindow(plannedYear, plannedWeek, window)) return;
+      }
       const receiptDate = (receiptKey && lineDateValue(lineValues, masterValues, receiptKey)) || plannedDate;
-      visitUniverseLine(acc, {
+      onLine({
+        poNumber,
         itemNumber: pickValue(lineValues, 'itemNumber') ?? pickValue(masterValues, 'itemNumber'),
         openQty: Math.max(0, openQty),
         deliveredQty: Math.max(0, deliveredQty),
@@ -132,7 +162,7 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount } = {}) {
         receiptDate,
         plannedYear,
         plannedWeek,
-      }, nowYear, nowWeek);
+      });
     };
 
     if (lineOpen || lineDelivered) {
@@ -140,36 +170,32 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount } = {}) {
       const share = details.length ? 1 / details.length : 1;
       for (const detail of sources) {
         const lineValues = detail.values || {};
-        const openQty = lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0;
-        const deliveredQty = lineDelivered
-          ? resolveLineMeasureQty(lineValues, masterValues, deliveredKey, share)
-          : 0;
-        pushIfInWindow(lineValues, openQty, deliveredQty);
+        emit(
+          lineValues,
+          lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0,
+          lineDelivered ? resolveLineMeasureQty(lineValues, masterValues, deliveredKey, share) : 0,
+        );
       }
     }
 
     if (headerOnlyOpen || headerOnlyDelivered) {
       const plannedSlots = collectDateSlots(
-        details, masterValues, dateKey, null, window, excludedSet, masterStatus,
+        details, masterValues, dateKey, null, slotWindow, excludedSet, masterStatus,
       );
       if (plannedSlots.length) {
-        const openShare = headerOnlyOpen
-          ? toNumber(pickValue(masterValues, openKey)) / plannedSlots.length
-          : 0;
+        const openShare = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) / plannedSlots.length : 0;
         const deliveredShare = headerOnlyDelivered
           ? toNumber(pickValue(masterValues, deliveredKey)) / plannedSlots.length
           : 0;
         for (const slot of plannedSlots) {
-          pushIfInWindow(
-            slot.lineValues,
-            headerOnlyOpen ? openShare : 0,
-            headerOnlyDelivered ? deliveredShare : 0,
-          );
+          emit(slot.lineValues, headerOnlyOpen ? openShare : 0, headerOnlyDelivered ? deliveredShare : 0);
         }
       }
     }
   }
+}
 
+function summarizeAcc(acc) {
   const totalOpen = acc.totalOpen;
   const totalDelivered = acc.totalDelivered;
   const totalOrdered = totalOpen + totalDelivered;
@@ -186,12 +212,26 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount } = {}) {
   };
 }
 
-/**
- * Capaciteitstekort uit de chart-serie (open load vs capacity-lijn).
- * @param {object[]} chart
- * @param {object[]} measureRows
- * @param {string} capacityMeasureKey
- */
+function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow = false } = {}) {
+  const nowYear = getIsoWeekYear(now);
+  const nowWeek = getIsoWeek(now);
+  const acc = emptyAcc(now);
+  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow }, (line) => {
+    visitUniverseLine(acc, line, nowYear, nowWeek);
+  });
+  return summarizeAcc(acc);
+}
+
+function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount } = {}) {
+  const byOrder = {};
+  walkRccpPoKpiLines(rows, config, WIDE_WINDOW, { now, vendorAccount, skipWindow: true }, (line) => {
+    const entry = byOrder[line.poNumber] || emptyOrderStats();
+    addLineToOrderStats(entry, line, now);
+    byOrder[line.poNumber] = entry;
+  });
+  return byOrder;
+}
+
 function buildRccpCapacityKpis(chart, measureRows, capacityMeasureKey) {
   const openKeys = (measureRows || [])
     .filter((row) => !row.isCapacity && !row.isOvercapacity && !row.isWarning && !row.isDelivered)
@@ -211,6 +251,7 @@ function buildRccpCapacityKpis(chart, measureRows, capacityMeasureKey) {
 
 module.exports = {
   buildRccpPoKpis,
+  buildRccpPoKpiByOrder,
   buildRccpCapacityKpis,
   calendarDaysBetween,
 };

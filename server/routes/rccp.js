@@ -170,6 +170,17 @@ router.post('/import/commit', requireRole(ROLES.ADMIN), upload.single('file'), a
   }
 });
 
+router.get('/board-kpis', async (req, res, next) => {
+  try {
+    const supplierAccount = resolveSupplierAccount(req);
+    const data = await analysisService.boardKpis({ supplierAccount });
+    res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
 router.get('/analysis', async (req, res, next) => {
   try {
     const window = parseWindowQuery(req);
