@@ -47,8 +47,11 @@ export function usePurchaseOrderBoardView({
       ? lineValueHeaderLinks.reduce((acc, link) => {
         if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
         const lineColumn = lineColumns.find((column) => column.key === link.lineColumnKey);
-        if (!lineColumn) return acc;
-        acc[link.headerColumnKey] = { lineColumnKey: link.lineColumnKey, lineDataType: lineColumn.dataType };
+        acc[link.headerColumnKey] = {
+          lineColumnKey: link.lineColumnKey,
+          lineDataType: lineColumn?.dataType || 'text',
+          lineColumnLabel: lineColumn?.label || '',
+        };
         return acc;
       }, {})
       : {}),
@@ -73,8 +76,17 @@ export function usePurchaseOrderBoardView({
           ?? (Array.isArray(order?.lines)
             ? order.lines.map((line) => line?.values?.[meta.lineColumnKey])
             : null);
-        if (!Array.isArray(rawValues)) return;
-        const nextValue = formatLinkedLineValues(rawValues, meta.lineDataType, meta.lineColumnKey);
+        const sourceValues = Array.isArray(rawValues)
+          ? rawValues
+          : (nextValues?.[headerKey] != null && nextValues[headerKey] !== ''
+            ? String(nextValues[headerKey]).split(',').map((part) => part.trim()).filter(Boolean)
+            : null);
+        if (!Array.isArray(sourceValues)) return;
+        const nextValue = formatLinkedLineValues(
+          sourceValues,
+          meta.lineDataType,
+          { columnKey: meta.lineColumnKey, columnLabel: meta.lineColumnLabel },
+        );
         if (nextValues?.[headerKey] === nextValue) return;
         if (!changed) nextValues = { ...nextValues };
         nextValues[headerKey] = nextValue;

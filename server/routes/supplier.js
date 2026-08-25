@@ -6,6 +6,7 @@ const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { getSupplierAccount, isStaffUser } = require('../utils/supplierScope');
+const { loadRuntimeHeaderLinks, clearRuntimeHeaderLinksCache } = require('../utils/runtimeHeaderLinks');
 
 const router = express.Router();
 
@@ -373,15 +374,31 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
         WHERE user_id = @userId AND board_key = @boardKey
       `);
 
-    if (!result.recordset.length) {
-      return res.json({ boardKey, settings: null });
+    let parsedSettings = null;
+    if (result.recordset.length) {
+      try {
+        parsedSettings = JSON.parse(result.recordset[0].settings_json || '{}');
+      } catch {
+        parsedSettings = {};
+      }
     }
 
-    let parsedSettings = null;
-    try {
-      parsedSettings = JSON.parse(result.recordset[0].settings_json || '{}');
-    } catch {
-      parsedSettings = {};
+    // Vendors hebben zelf geen line-total-links; die staan bij staff. Zonder deze merge
+    // blijven gekoppelde header-kolommen leeg op de vendor-pagina.
+    if (!isStaffUser(req.user)) {
+      const sharedLinks = await loadRuntimeHeaderLinks(pool, req.user.id, boardKey, {
+        includeStaffLinks: true,
+      });
+      parsedSettings = {
+        ...(parsedSettings && typeof parsedSettings === 'object' ? parsedSettings : {}),
+        lineTotalHeaderLinks: sharedLinks.lineTotalHeaderLinks,
+        lineValueHeaderLinks: sharedLinks.lineValueHeaderLinks,
+      };
+      return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings) });
+    }
+
+    if (!result.recordset.length) {
+      return res.json({ boardKey, settings: null });
     }
 
     return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings) });
@@ -399,6 +416,7 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
 
     const settings = normalizeBoardSettings(req.body?.settings);
     const pool = await getPool();
+    if (isStaffUser(req.user)) clearRuntimeHeaderLinksCache();
     await pool.request()
       .input('userId', sql.Int, req.user.id)
       .input('boardKey', sql.NVarChar(64), boardKey)

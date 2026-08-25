@@ -1,13 +1,14 @@
-import React from 'react';
-import { tokens } from '@fluentui/react-components';
+import React, { useRef } from 'react';
 import PurchaseOrderColumnHeader from './PurchaseOrderColumnHeader';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import PurchaseOrdersBoardHeaderHoverLayer from './PurchaseOrdersBoardHeaderHoverLayer';
 import PurchaseOrderProductImageColumnHeader from './PurchaseOrderProductImageColumnHeader';
 import PurchaseOrderProductImageColumnMenu from './PurchaseOrderProductImageColumnMenu';
 import PurchaseOrdersTableControls from './PurchaseOrdersTableControls';
 import ResizableTableHeaderCell from './ResizableTableHeaderCell';
 import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
 import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrderColumnFilterMenuConstants';
+import { getPoHeaderConnectionTargets } from './poHeaderHoverModel';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 
@@ -64,8 +65,11 @@ export default function PurchaseOrdersBoardHeaderRow({
   items = [],
   activeRulesControls,
 }) {
+  const headerRowRef = useRef(null);
+
   return (
-    <tr>
+    <>
+    <tr ref={headerRowRef}>
       <PurchaseOrdersTableControls
         onSetExpansion={onSetExpansion}
         productImageColumnVisible={productImageColumnVisible}
@@ -82,17 +86,12 @@ export default function PurchaseOrdersBoardHeaderRow({
         const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
         const hasGroupSummary = groupSummaryColumnKeys.includes(column.key);
-        const connectionTargets = [];
-        const linkedTotalColumnKey = linkedLineTotalByHeaderKey[column.key];
-        const linkedValueMeta = linkedLineValueByHeaderKey[column.key];
-        if (linkedTotalColumnKey) {
-          const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedTotalColumnKey)?.label || linkedTotalColumnKey;
-          connectionTargets.push(`Subitem column "${lineColumnLabel}" (total)`);
-        }
-        if (linkedValueMeta?.lineColumnKey) {
-          const lineColumnLabel = lineColumns.find((lineColumn) => lineColumn.key === linkedValueMeta.lineColumnKey)?.label || linkedValueMeta.lineColumnKey;
-          connectionTargets.push(`Subitem column "${lineColumnLabel}" (values)`);
-        }
+        const connectionTargets = getPoHeaderConnectionTargets({
+          columnKey: column.key,
+          linkedLineTotalByHeaderKey,
+          linkedLineValueByHeaderKey,
+          lineColumns,
+        });
         const stickyLeft = Number(column?.stickyLeft);
         const isStickyColumn = Number.isFinite(stickyLeft);
         const canPromoteToSticky = column.key === firstNonStickyColumnKey;
@@ -206,5 +205,22 @@ export default function PurchaseOrdersBoardHeaderRow({
         );
       })}
     </tr>
+    <PurchaseOrdersBoardHeaderHoverLayer
+      rowRef={headerRowRef}
+      disabled={Boolean(headerColumnDrag?.draggingKey)}
+      hoverInput={{
+        columns,
+        filterByColumn,
+        sortState,
+        groupingColumnKey,
+        groupSummaryColumnKeys,
+        headerColumnFormatRules,
+        linkedLineTotalByHeaderKey,
+        linkedLineValueByHeaderKey,
+        lineColumns,
+        datePeriodDisplayModes,
+      }}
+    />
+    </>
   );
 }

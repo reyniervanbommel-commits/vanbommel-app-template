@@ -10,6 +10,7 @@ export function usePurchaseOrdersHeaderLinkActions({
   addLineValueHeaderLink,
   setLineColumnTotal,
   setEditingColumnKey,
+  reload,
 }) {
   const handlePushLineTotalToHeader = useCallback(async (lineColumn) => {
     const lineColumnKey = String(lineColumn?.key || '').trim();
@@ -31,6 +32,7 @@ export function usePurchaseOrdersHeaderLinkActions({
     if (!lineTotalColumns.includes(lineColumnKey)) {
       await setLineColumnTotal(lineColumnKey, true);
     }
+    if (typeof reload === 'function') await reload();
     setEditingColumnKey(created.key);
   }, [
     lineTotalHeaderLinks,
@@ -40,6 +42,7 @@ export function usePurchaseOrdersHeaderLinkActions({
     lineTotalColumns,
     setLineColumnTotal,
     setEditingColumnKey,
+    reload,
   ]);
 
   const handlePushLineValuesToHeader = useCallback(async (lineColumn) => {
@@ -57,6 +60,7 @@ export function usePurchaseOrdersHeaderLinkActions({
     });
     if (!created?.key) return;
     await addLineValueHeaderLink({ lineColumnKey, headerColumnKey: created.key });
+    if (typeof reload === 'function') await reload();
     setEditingColumnKey(created.key);
   }, [
     lineValueHeaderLinks,
@@ -64,6 +68,7 @@ export function usePurchaseOrdersHeaderLinkActions({
     addHeaderColumnAfter,
     addLineValueHeaderLink,
     setEditingColumnKey,
+    reload,
   ]);
 
   return {

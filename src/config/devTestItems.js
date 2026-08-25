@@ -4,17 +4,6 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-267-live-cell-history-fold-v1-51-47',
-    title: 'Feature 267 - Live history fold after cell edit (v1.51.47)',
-    checks: [
-      'Edit a cell that had no history fold: the fold appears without page refresh',
-      'Click the fold: existing history popover opens',
-      'Force a failed save: value and fold roll back together',
-      'History indicators off: no fold after save',
-      'Cell that already had a fold: fold stays visible',
-    ],
-  },
-  {
     id: '269-rccp-chart-po-segments',
     title: 'RCCP chart: PO boxes, Today, late',
     checks: [

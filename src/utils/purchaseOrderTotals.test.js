@@ -20,6 +20,12 @@ describe('formatLinkedLineValues', () => {
     expect(formatLinkedLineValues([], 'text')).toBe('-');
     expect(formatLinkedLineValues(null, 'text')).toBe('-');
   });
+
+  it('formats ISO datetime line values as dd/mm/yyyy for date and text columns', () => {
+    const isoDates = ['2026-08-25T00:00:00.000Z', '2026-08-26T14:30:00'];
+    expect(formatLinkedLineValues(isoDates, 'date', 'receiptDate')).toBe('25/08/2026, 26/08/2026');
+    expect(formatLinkedLineValues(isoDates, 'text', 'prl_rd')).toBe('25/08/2026, 26/08/2026');
+  });
 });
 
 describe('getLinkedLineValuePreview', () => {

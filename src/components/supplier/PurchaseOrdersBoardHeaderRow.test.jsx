@@ -1,7 +1,8 @@
 import React from 'react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PO_HEADER_HOVER_DELAY_MS } from '../../hooks/usePoColumnHeaderHover';
 import PurchaseOrdersBoardHeaderRow from './PurchaseOrdersBoardHeaderRow';
 
 vi.mock('./PurchaseOrderColumnHeader', () => ({
@@ -21,7 +22,9 @@ vi.mock('./PurchaseOrderProductImageColumnMenu', () => ({
 }));
 
 vi.mock('./ResizableTableHeaderCell', () => ({
-  default: ({ children }) => <th>{children}</th>,
+  default: ({ children, className, cellStyle, 'data-col-key': dataColKey }) => (
+    <th className={className} style={cellStyle} data-col-key={dataColKey}>{children}</th>
+  ),
 }));
 
 vi.mock('./PurchaseOrderCollapsedColumnCell', () => ({
@@ -47,7 +50,7 @@ const headerColumnDrag = {
   getCellDragProps: () => ({}),
 };
 
-function renderHeaderRow(activeRulesControls) {
+function renderHeaderRow(activeRulesControls, extraProps = {}) {
   return render(
     <FluentProvider theme={webLightTheme}>
       <table>
@@ -87,6 +90,7 @@ function renderHeaderRow(activeRulesControls) {
             headerColumnFormatRules={{}}
             onSaveHeaderColumnFormatRules={vi.fn()}
             activeRulesControls={activeRulesControls}
+            {...extraProps}
           />
         </thead>
       </table>
@@ -108,5 +112,32 @@ describe('PurchaseOrdersBoardHeaderRow', () => {
     fireEvent.click(button);
 
     expect(onOpenFlyout).toHaveBeenCalledTimes(1);
+  });
+
+  describe('column header hover', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows the active filter after the hover delay', async () => {
+      renderHeaderRow(undefined, {
+        filterByColumn: { vendor: { operator: 'contains', value: 'Acme' } },
+      });
+
+      fireEvent.mouseOver(screen.getByText('Vendor'));
+      expect(screen.queryByRole('tooltip')).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PO_HEADER_HOVER_DELAY_MS);
+      });
+
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip.textContent).toContain('Vendor');
+      expect(tooltip.textContent).toContain('contains Acme');
+    });
   });
 });

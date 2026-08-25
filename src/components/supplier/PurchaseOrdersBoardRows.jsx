@@ -159,7 +159,7 @@ function PurchaseOrdersBoardRows({
     enabled: windowEnabled,
   });
   // B1: Horizontale kolom-virtualisatie — alleen zichtbare kolommen renderen per rij
-  const { colStart, colEnd, leftSpanCount, rightSpanCount } = useBoardColumnWindow({
+  const { colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount } = useBoardColumnWindow({
     scrollRef,
     columns: layout.columns ?? [],
     columnWidths: formatting.headerColumnWidths ?? {},
@@ -167,8 +167,8 @@ function PurchaseOrdersBoardRows({
     enabled: windowEnabled,
   });
   const colWindow = useMemo(
-    () => ({ colStart, colEnd, leftSpanCount, rightSpanCount }),
-    [colStart, colEnd, leftSpanCount, rightSpanCount]
+    () => ({ colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount }),
+    [colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount]
   );
   const visibleSlots = useMemo(() => slots.slice(start, end), [end, slots, start]);
   // De categorie-header staat sticky (CSS position: sticky), maar dat werkt alleen

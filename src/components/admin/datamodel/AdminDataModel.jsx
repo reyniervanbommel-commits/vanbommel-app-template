@@ -12,7 +12,6 @@ import {
 } from '@fluentui/react-components';
 import SyncFilterBuilder from './SyncFilterBuilder';
 import DataPreviewTables from './DataPreviewTables';
-import ExcelLinkWizard from './ExcelLinkWizard';
 import AdminInfoHint from './AdminInfoHint';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
@@ -26,8 +25,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * Admin tab "Data model": configureer kolommen en syncfilters per entiteit (PO, vendors, items),
- * plus een tab "External links" om een Excel als read-only verrijking te koppelen (#AB:162/#195).
+ * Admin tab "Data model": configureer kolommen en syncfilters per entiteit (PO, vendors, items).
  */
 function formatDiscoveryMessage(discovery) {
   if (!discovery) return '';
@@ -65,7 +63,6 @@ export default function AdminDataModel() {
     'product-receipt-lines': productReceiptLines,
   };
   const selectedModel = modelByTab[selectedTab];
-  const isDataEntityTab = Boolean(selectedModel);
   const discoveryMessage = formatDiscoveryMessage(selectedModel?.discovery);
 
   return (
@@ -77,7 +74,6 @@ export default function AdminDataModel() {
         </div>
         <Text className={styles.intro} block>
           Configure columns and sync filters per D365 entity.
-          Use "External links" to publish Excel lookups as read-only enrichment columns.
         </Text>
       </div>
 
@@ -86,47 +82,42 @@ export default function AdminDataModel() {
         <Tab value="vendors">Vendors</Tab>
         <Tab value="items">Items</Tab>
         <Tab value="product-receipt-lines">Product receipt lines</Tab>
-        <Tab value="excel-links">External links</Tab>
       </TabList>
 
-      {isDataEntityTab ? (
-        selectedModel.loading ? (
-          <Spinner label="Loading data model..." />
-        ) : (
-          <>
-            {selectedModel.error ? <Text className={styles.error} block>{selectedModel.error}</Text> : null}
-            {discoveryMessage ? (
-              <MessageBar intent="info" className={styles.info}>
-                <MessageBarBody>{discoveryMessage}</MessageBarBody>
-              </MessageBar>
-            ) : null}
-            <SyncFilterBuilder
-              tableKey={selectedTab}
-              filterCatalog={selectedModel.filterCatalog}
-              syncFilter={selectedModel.syncFilter}
-              cache={selectedModel.cache}
-              onReimportBaseline={selectedModel.reimportBaseline}
-              baselineBusy={selectedModel.togglingKey === 'baseline-import'}
-            />
-            <DataPreviewTables
-              tableKey={selectedTab}
-              entities={selectedModel.entities}
-              previewTables={selectedModel.previewTables}
-              columns={selectedModel.columns}
-              relation={selectedModel.relation}
-              togglingKey={selectedModel.togglingKey}
-              onToggleVisibility={selectedModel.toggleVisibility}
-              onToggleVisibleAtDelete={selectedModel.toggleVisibleAtDelete}
-              onToggleWriteback={selectedModel.toggleWriteback}
-              onToggleRccpMeasure={selectedModel.toggleRccpMeasure}
-              onSetColumnToggleState={selectedModel.setColumnToggleState}
-              onDeleteColumn={selectedModel.deleteColumn}
-              onDiscoverFields={selectedModel.discoverFields}
-            />
-          </>
-        )
+      {selectedModel.loading ? (
+        <Spinner label="Loading data model..." />
       ) : (
-        <ExcelLinkWizard />
+        <>
+          {selectedModel.error ? <Text className={styles.error} block>{selectedModel.error}</Text> : null}
+          {discoveryMessage ? (
+            <MessageBar intent="info" className={styles.info}>
+              <MessageBarBody>{discoveryMessage}</MessageBarBody>
+            </MessageBar>
+          ) : null}
+          <SyncFilterBuilder
+            tableKey={selectedTab}
+            filterCatalog={selectedModel.filterCatalog}
+            syncFilter={selectedModel.syncFilter}
+            cache={selectedModel.cache}
+            onReimportBaseline={selectedModel.reimportBaseline}
+            baselineBusy={selectedModel.togglingKey === 'baseline-import'}
+          />
+          <DataPreviewTables
+            tableKey={selectedTab}
+            entities={selectedModel.entities}
+            previewTables={selectedModel.previewTables}
+            columns={selectedModel.columns}
+            relation={selectedModel.relation}
+            togglingKey={selectedModel.togglingKey}
+            onToggleVisibility={selectedModel.toggleVisibility}
+            onToggleVisibleAtDelete={selectedModel.toggleVisibleAtDelete}
+            onToggleWriteback={selectedModel.toggleWriteback}
+            onToggleRccpMeasure={selectedModel.toggleRccpMeasure}
+            onSetColumnToggleState={selectedModel.setColumnToggleState}
+            onDeleteColumn={selectedModel.deleteColumn}
+            onDiscoverFields={selectedModel.discoverFields}
+          />
+        </>
       )}
     </div>
   );

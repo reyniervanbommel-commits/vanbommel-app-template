@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
+import { PRODUCT_IMAGE_LOAD_DELAY_MS } from '../../utils/purchaseOrderProductImageColumn';
 import { resetProductImageFailureCache } from '../../utils/productImageFailureCache';
 
 function renderCell(props) {
@@ -16,6 +17,7 @@ function renderCell(props) {
 describe('PurchaseOrderProductImageCell', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     resetProductImageFailureCache();
   });
 
@@ -83,5 +85,26 @@ describe('PurchaseOrderProductImageCell', () => {
 
     const imageButton = screen.getByRole('button', { name: 'Show product image for ITEM-1' });
     expect(window.getComputedStyle(imageButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  });
+
+  it('shows an enlarged hover preview after the hover delay without remounting the trigger', async () => {
+    renderCell({ dataAreaId: 'NL01', itemNumber: 'ITEM-1' });
+    const thumbnail = await screen.findByAltText('Product image for ITEM-1');
+    const imageButton = screen.getByRole('button', { name: 'Show product image for ITEM-1' });
+    const imageUrl = thumbnail.getAttribute('src');
+
+    vi.useFakeTimers();
+    fireEvent.mouseEnter(imageButton);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PRODUCT_IMAGE_LOAD_DELAY_MS);
+    });
+
+    const imagesWithSrc = () => [...document.querySelectorAll('img')]
+      .filter((img) => img.getAttribute('src') === imageUrl);
+    expect(imagesWithSrc()).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Show product image for ITEM-1' })).toBe(imageButton);
+
+    fireEvent.mouseLeave(imageButton);
+    expect(imagesWithSrc()).toHaveLength(1);
   });
 });

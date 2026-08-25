@@ -23,7 +23,8 @@ function tryFormatAsDdMmYyyy(value) {
     if (!trimmed) return null;
 
     // ISO datums (yyyy-mm-dd of yyyy-mm-ddThh:mm:ss) mappen direct, zonder locale variatie.
-    const isoDateMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    // Geen komma in het restant: "ISO, ISO" is een lijst, geen enkele datetime.
+    const isoDateMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s][^,]*)?$/);
     if (isoDateMatch) {
       const [, year, month, day] = isoDateMatch;
       return `${day}/${month}/${year}`;
@@ -49,7 +50,24 @@ function isLikelyDateColumn(columnKey, columnLabel) {
 function looksLikeIsoDateString(value) {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
-  return /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/.test(trimmed);
+  return /^(\d{4})-(\d{2})-(\d{2})(?:[T\s][^,]*)?$/.test(trimmed);
+}
+
+function formatJoinedIsoDateValues(value) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2 || !parts.every(looksLikeIsoDateString)) return null;
+  return parts.map((part) => tryFormatAsDdMmYyyy(part) || part).join(', ');
+}
+
+/** True for Date objects and ISO date/datetime strings, including comma-separated lists. */
+export function isDateLikeCellValue(value) {
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (looksLikeIsoDateString(trimmed)) return true;
+  return formatJoinedIsoDateValues(trimmed) !== null;
 }
 
 /**
@@ -63,8 +81,12 @@ export function formatCellValue(value, dataType, columnMeta = '') {
 
   const resolvedColumnKey = typeof columnMeta === 'string' ? columnMeta : columnMeta?.columnKey || '';
   const resolvedColumnLabel = typeof columnMeta === 'string' ? '' : columnMeta?.columnLabel || '';
-  const normalizedDate = tryFormatAsDdMmYyyy(value);
   const normalizedDataType = String(dataType || '').trim().toLowerCase();
+  if (normalizedDataType !== 'date_period') {
+    const joinedDates = formatJoinedIsoDateValues(value);
+    if (joinedDates) return joinedDates;
+  }
+  const normalizedDate = tryFormatAsDdMmYyyy(value);
   if (
     isDateType(dataType)
     || (normalizedDataType !== 'date_period'

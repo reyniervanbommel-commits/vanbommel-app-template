@@ -7,6 +7,7 @@ import { evalFormatRules } from './columnFormatRuleUtils';
 import { isStatusColumn } from '../../utils/statusColumnUtils';
 import { orderLocateKeyFromOrder, ROW_LOCATE_HIGHLIGHT_COLOR } from '../../utils/purchaseOrderRowLocate';
 import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+import { resolveBoardRowColumnSlices } from '../../hooks/useBoardColumnWindow';
 
 function getOrderRowClassName(order, styles) {
   const classes = [];
@@ -27,6 +28,37 @@ function resolveRowFormatColor(order, columns, formatRules) {
     if (color) return color;
   }
   return '';
+}
+
+function renderBoardCells(columns, cellProps) {
+  const {
+    order,
+    rowId,
+    layout,
+    formatting,
+    actions,
+    links,
+    contextMenu,
+    rowRemarks,
+    rowFormatColor,
+    isLocated,
+  } = cellProps;
+  return columns.map((column) => (
+    <PurchaseOrderBoardCell
+      key={`${rowId}-${column.key}`}
+      order={order}
+      column={column}
+      styles={layout.styles}
+      formatting={formatting}
+      actions={actions.cellActions}
+      links={links}
+      contextMenu={contextMenu}
+      remarks={rowRemarks}
+      rowFormatColor={rowFormatColor}
+      isLocated={isLocated}
+      isCollapsed={isColumnCollapsed(column.key, layout.collapsedHeaderColumnKeys)}
+    />
+  ));
 }
 
 function PurchaseOrderBoardRow({
@@ -93,6 +125,33 @@ function PurchaseOrderBoardRow({
     actions.onToggleLineColumnCollapsed,
     links,
   ]);
+  const columnSlices = useMemo(
+    () => resolveBoardRowColumnSlices(layout.columns, colWindow),
+    [colWindow, layout.columns]
+  );
+  const cellProps = useMemo(() => ({
+    order,
+    rowId,
+    layout,
+    formatting,
+    actions,
+    links,
+    contextMenu,
+    rowRemarks,
+    rowFormatColor,
+    isLocated,
+  }), [
+    actions,
+    contextMenu,
+    formatting,
+    isLocated,
+    layout,
+    links,
+    order,
+    rowFormatColor,
+    rowId,
+    rowRemarks,
+  ]);
 
   return (
     <React.Fragment>
@@ -113,32 +172,13 @@ function PurchaseOrderBoardRow({
           rowFormatColor={rowFormatColor}
           isLocated={isLocated}
         />
-        {/* B1: colSpan-spacer voor niet-gerenderde kolommen links */}
-        {colWindow?.leftSpanCount > 0 ? (
-          <td colSpan={colWindow.leftSpanCount} style={{ padding: 0, border: 0 }} />
+        {renderBoardCells(columnSlices.stickyColumns, cellProps)}
+        {columnSlices.leftSpanCount > 0 ? (
+          <td colSpan={columnSlices.leftSpanCount} style={{ padding: 0, border: 0 }} />
         ) : null}
-        {(colWindow
-          ? layout.columns.slice(colWindow.colStart, colWindow.colEnd)
-          : layout.columns
-        ).map((column) => (
-          <PurchaseOrderBoardCell
-            key={`${rowId}-${column.key}`}
-            order={order}
-            column={column}
-            styles={layout.styles}
-            formatting={formatting}
-            actions={actions.cellActions}
-            links={links}
-            contextMenu={contextMenu}
-            remarks={rowRemarks}
-            rowFormatColor={rowFormatColor}
-            isLocated={isLocated}
-            isCollapsed={isColumnCollapsed(column.key, layout.collapsedHeaderColumnKeys)}
-          />
-        ))}
-        {/* B1: colSpan-spacer voor niet-gerenderde kolommen rechts */}
-        {colWindow?.rightSpanCount > 0 ? (
-          <td colSpan={colWindow.rightSpanCount} style={{ padding: 0, border: 0 }} />
+        {renderBoardCells(columnSlices.windowColumns, cellProps)}
+        {columnSlices.rightSpanCount > 0 ? (
+          <td colSpan={columnSlices.rightSpanCount} style={{ padding: 0, border: 0 }} />
         ) : null}
       </tr>
       <PurchaseOrdersBoardExpandedRow

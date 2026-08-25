@@ -161,7 +161,7 @@ export default function PurchaseOrdersPage() {
     addLineTotalHeaderLink,
     addLineValueHeaderLink,
     setLineColumnTotal,
-    setEditingColumnKey,
+    setEditingColumnKey, reload,
   });
 
   const handleRefresh = useCallback(async () => {
