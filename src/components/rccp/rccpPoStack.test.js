@@ -4,6 +4,7 @@ import {
   stackRectLayout,
   isoWeekPartsUtc,
   RCCP_PO_BAR_SIZE,
+  isReceivedPairHighlight,
 } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 
@@ -48,5 +49,12 @@ describe('rccpPoStack', () => {
     const below = stackRectLayout(segments, 160, -50, 'below');
     expect(below[0].y).toBe(110);
     expect(below[0].height).toBe(50);
+  });
+
+  it('highlights matching received segments of the same PO', () => {
+    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-1' }, 'PO-1')).toBe(true);
+    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-2' }, 'PO-1')).toBe(false);
+    expect(isReceivedPairHighlight({ status: 'open', poNumber: 'PO-1' }, 'PO-1')).toBe(false);
+    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-1' }, '')).toBe(false);
   });
 });

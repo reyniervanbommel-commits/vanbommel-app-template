@@ -63,3 +63,16 @@ export function stackRectLayout(segments, barY, barHeight, side) {
     return { y, height: segHeight, segment };
   });
 }
+
+/**
+ * Received-vakjes van dezelfde PO (boven én onder de as) horen bij elkaar.
+ * @param {{ status?: string, poNumber?: string }} segment
+ * @param {string} highlightPo
+ */
+export function isReceivedPairHighlight(segment, highlightPo) {
+  return Boolean(
+    highlightPo
+    && segment?.status === 'received'
+    && segment.poNumber === highlightPo
+  );
+}

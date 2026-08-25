@@ -87,6 +87,12 @@ function RccpChartMatrixPanel({
   const handleSegmentHover = useCallback((next) => {
     setHoveredSegment(next);
   }, []);
+  const hoverValue = useMemo(() => ({
+    onHover: handleSegmentHover,
+    highlightPo: hoveredSegment?.segment?.status === 'received'
+      ? hoveredSegment.segment.poNumber
+      : '',
+  }), [handleSegmentHover, hoveredSegment]);
 
   const openRow = useMemo(() => measureRows.find((row) => row.isOpen), [measureRows]);
   const deliveredRow = useMemo(() => measureRows.find((row) => row.isDelivered), [measureRows]);
@@ -148,7 +154,7 @@ function RccpChartMatrixPanel({
           key={seriesSignature}
           style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}
         >
-          <RccpSegmentHoverContext.Provider value={handleSegmentHover}>
+          <RccpSegmentHoverContext.Provider value={hoverValue}>
             <RccpChartPlot
               plot={plot}
               stack={stack}
