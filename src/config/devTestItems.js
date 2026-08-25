@@ -25,6 +25,18 @@ export const devTestItems = [
       'Open boxes from weeks before the current ISO week have a red outline; current-week open boxes do not.',
     ],
   },
+  {
+    id: 'feature-269-rccp-kpi-split-v1-51-64',
+    title: 'Feature 269 - RCCP KPI tiles and PO split pane (v1.51.64)',
+    checks: [
+      'RCCP dashboard shows volume, late, on-time and capacity KPI tiles; percentages use one decimal.',
+      'Switch “KPIs in selected weeks” on: tiles follow the week window; off: tiles use all weeks. Chart stays on the window.',
+      'PO board KPIs tab: same tiles, clickable (except capacity on this tab); click filters the table.',
+      'PO KPI tiles stay empty/unfetched until the KPIs tab is opened; Charts and RCCP tabs only load when selected.',
+      'Split pane remembers height per tab after resize and reopen.',
+      'Late delivery and on-time tiles show units as percent of ordered.',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
