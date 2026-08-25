@@ -6,6 +6,7 @@ import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
 import { resolveRccpVendorFromFilter } from '../rccp/resolveRccpVendorFilter';
 import { useSplitPane } from './hooks/useSplitPane';
+import SplitPaneResizeHandle from './SplitPaneResizeHandle';
 import { useBiCharts } from './hooks/useBiCharts';
 import { useChartData } from './hooks/useChartData';
 import { useBiMeta } from './hooks/useBiMeta';
@@ -44,10 +45,18 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
   },
   pane: {
+    display: 'flex',
+    flexDirection: 'column',
     ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
     backgroundColor: tokens.colorNeutralBackground2,
     minHeight: 0,
+    overflow: 'hidden',
+  },
+  paneBody: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto',
   },
   paneCollapsed: {
     height: 0,
@@ -143,7 +152,11 @@ export default function BoardSplitView({
         style={split.open ? { height: `${split.height}px` } : undefined}
         aria-hidden={!split.open}
       >
-        <div hidden={!showBiPane}>
+        {split.open ? (
+          <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
+        ) : null}
+        <div className={styles.paneBody}>
+          <div hidden={!showBiPane}>
           <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
             <BiChartStrip
               availableCharts={chartsWithSeries}
@@ -154,7 +167,7 @@ export default function BoardSplitView({
             />
           </Suspense>
         </div>
-        <div hidden={!showRccpPane}>
+          <div hidden={!showRccpPane}>
           <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
             <RccpSplitStrip
               vendorAccount={vendorAccount}
@@ -165,7 +178,7 @@ export default function BoardSplitView({
             />
           </Suspense>
         </div>
-        <div hidden={!kpiEnabled}>
+          <div hidden={!kpiEnabled}>
           {kpiEnabled ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
               <PoBoardKpiStrip
@@ -176,6 +189,7 @@ export default function BoardSplitView({
               />
             </Suspense>
           ) : null}
+          </div>
         </div>
       </div>
     </div>
