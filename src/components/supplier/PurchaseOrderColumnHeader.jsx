@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button, Input,
-  Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip, makeStyles, shorthands, tokens,
+  Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import D365LogoIcon from './D365LogoIcon';
@@ -84,14 +84,14 @@ export default function PurchaseOrderColumnHeader({
   const columnLabel = (
     <span className={styles.labelWrap}>
       {!isCustom && writable ? (
-        <Tooltip content="Write-back to D365 enabled" relationship="label">
+        <span aria-label="Write-back to D365 enabled">
           <D365LogoIcon alt="" />
-        </Tooltip>
+        </span>
       ) : null}
       {showConditionalFormattingIndicator ? (
-        <Tooltip content="Conditional formatting active" relationship="label">
+        <span aria-label="Conditional formatting active">
           <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
-        </Tooltip>
+        </span>
       ) : null}
       <span className={styles.labelText}>{column.label}</span>
     </span>
