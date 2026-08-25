@@ -2,7 +2,7 @@
 
 const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
-const { readBoardSnapshot } = require('./BoardSnapshotCache');
+const { readRccpPoRows } = require('./BoardSnapshotCache');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
 const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = require('./RccpSettingsService');
@@ -10,63 +10,25 @@ const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = 
 // Vaste kleur voor de afgeleide overcapaciteit-lijn (Fluent purple). Niet configureerbaar: het is
 // geen door de gebruiker toegevoegde measure maar een berekende regel.
 const OVERCAPACITY_COLOR = '#8764B8';
-const { getIsoWeek, getIsoWeekYear, buildWeekRange, isoWeekStartUtc, isoWeekEndUtc } = require('../utils/isoWeek');
+const { getIsoWeek, getIsoWeekYear, buildWeekRange, isIsoWeekInWindow } = require('../utils/isoWeek');
 const { computeRccpStatus } = require('../utils/rccpStatus');
+const {
+  toNumber,
+  pickValue,
+  resolveLineMeasureQty,
+  isHeaderOnlyMeasure,
+  lineDateValue,
+  collectDateSlots,
+} = require('../utils/rccpPoRow');
+const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
+const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
-function toNumber(value) {
-  if (value === null || value === undefined || value === '') return 0;
-  const n = Number(String(value).replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function pickValue(values, key) {
-  if (!values || !key) return null;
-  const v = values[key];
-  return v === undefined || v === null || v === '' ? null : v;
-}
-
-function resolveLineMeasureQty(lineValues, masterValues, measureKey, share = 1) {
-  const lineRaw = pickValue(lineValues, measureKey);
-  const masterQty = toNumber(pickValue(masterValues, measureKey));
-  return lineRaw !== null ? toNumber(lineRaw) : masterQty * share;
-}
-
-/** Header-totaal: de key staat op de order, niet op de regels. */
-function isHeaderOnlyMeasure(details, masterValues, measureKey) {
-  if (pickValue(masterValues, measureKey) === null) return false;
-  if (!details.length) return true;
-  return details.every((detail) => pickValue(detail.values || {}, measureKey) === null);
-}
-
-function lineDateValue(lineValues, masterValues, dateColumnKey) {
-  return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
-}
-
-/** Regels (of de header zelf) waarvan de leverweek in het RCCP-venster valt. */
 function collectInWindowSlots(details, masterValues, dateColumnKey, window, excludedSet, masterStatus) {
-  const sources = details.length
-    ? details.map((detail) => ({ lineNumber: detail.detailKey, lineValues: detail.values || {} }))
-    : [{ lineNumber: null, lineValues: masterValues }];
-  const slots = [];
-  for (const source of sources) {
-    const status = pickValue(source.lineValues, 'status') ?? masterStatus;
-    if (status && excludedSet.has(String(status).toLowerCase())) continue;
-    const dateValue = lineDateValue(source.lineValues, masterValues, dateColumnKey);
-    if (!dateValue) continue;
-    const year = getIsoWeekYear(dateValue);
-    const week = getIsoWeek(dateValue);
-    if (!year || !week || !isInWindow(year, week, window)) continue;
-    slots.push({
-      ...source,
-      dateValue,
-      year,
-      week,
-      dateFromHeader: !pickValue(source.lineValues, dateColumnKey),
-    });
-  }
-  return slots;
+  return collectDateSlots(
+    details, masterValues, dateColumnKey, null, window, excludedSet, masterStatus,
+  );
 }
 
 function cellKey(vendor, year, week, measureKey) {
@@ -160,7 +122,7 @@ function aggregatePoLoad(rows, config, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (!year || !week) return;
-      if (!isInWindow(year, week, window)) {
+      if (!isIsoWeekInWindow(year, week, window)) {
         diagnostics.outOfWindowLines += 1;
         return;
       }
@@ -199,13 +161,6 @@ function aggregatePoLoad(rows, config, window) {
   }
 
   return { confirmedByCell, missingDates, diagnostics };
-}
-
-function isInWindow(year, week, window) {
-  const start = isoWeekStartUtc(window.fromYear, window.fromWeek).getTime();
-  const end = isoWeekEndUtc(window.toYear, window.toWeek).getTime();
-  const point = isoWeekStartUtc(year, week).getTime();
-  return point >= start && point <= end;
 }
 
 function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
@@ -320,6 +275,7 @@ function buildMatrixCells({
       color: m.color,
       showInChart: m.showInChart !== false,
       isCapacity: false,
+      isOpen: Boolean(openMeasureKey && m.columnKey === openMeasureKey),
       isDelivered: Boolean(deliveredMeasureKey && m.columnKey === deliveredMeasureKey),
     })),
     {
@@ -352,18 +308,6 @@ function buildMatrixCells({
   ];
 
   return { cells, measureRows, periods };
-}
-
-function buildKpis(cells, measures) {
-  const loadKeys = new Set((measures || []).map((m) => m.columnKey));
-  const loadCells = cells.filter((c) => loadKeys.has(c.measureKey));
-  const totalAvailable = cells
-    .filter((c) => c.measureKey === CAPACITY_MEASURE_KEY)
-    .reduce((s, c) => s + c.availableQty, 0);
-  const totalConfirmed = loadCells.reduce((s, c) => s + c.confirmedQty, 0);
-  const overloaded = loadCells.filter((c) => c.statusLabel === 'Overloaded' || c.statusLabel === 'Unplanned').length;
-  const warnings = loadCells.filter((c) => c.statusLabel === 'Warning').length;
-  return { totalAvailable, totalConfirmed, overloaded, warnings };
 }
 
 function buildChartSeries(cells, periods, measureRows) {
@@ -417,7 +361,7 @@ async function analyze({
     toWeek: Number(toWeek),
   };
 
-  const { rows: poRows } = await time('rccp_po_read', () => readBoardSnapshot({
+  const { rows: poRows } = await time('rccp_po_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
@@ -439,6 +383,20 @@ async function analyze({
     vendorFilter: effectiveVendor,
   });
 
+  const chart = buildChartSeries(cells, periods, measureRows);
+  const now = new Date();
+  const segmentsByWeek = await time('rccp_po_segments', () => buildPoSegments(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+  }));
+  const poKpiPair = await time('rccp_kpis', () => buildRccpPoKpisPair(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+  }));
+  const capacityKpis = buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY);
+  const kpis = { ...poKpiPair.windowed, ...capacityKpis };
+  const kpisAll = { ...poKpiPair.all, ...capacityKpis };
+
   return {
     config,
     window,
@@ -450,9 +408,72 @@ async function analyze({
       ? missingDates.filter((m) => m.vendorAccount === effectiveVendor)
       : missingDates,
     diagnostics,
-    kpis: buildKpis(cells, config.quantityMeasures),
-    chart: buildChartSeries(cells, periods, measureRows),
+    kpis,
+    kpisAll,
+    chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
+}
+
+/**
+ * Per-PO KPI-stats uit een lichte cache-read (geen ledger/historie), zonder weekvenster.
+ * De PO-board-tab aggregeert dit client-side over de zichtbare ordernummers.
+ */
+const BOARD_KPI_CACHE_LIMIT = 8;
+const boardKpiCache = new Map();
+
+function boardKpiCacheKey(supplierAccount, revision, config, now) {
+  return [
+    supplierAccount || '',
+    revision || '',
+    config.openMeasureKey || '',
+    config.deliveredMeasureKey || '',
+    config.dateColumnKey || '',
+    config.receiptDateColumnKey || '',
+    config.vendorColumnKey || '',
+    (config.excludedStatuses || []).join(','),
+    getIsoWeekYear(now),
+    getIsoWeek(now),
+  ].join('|');
+}
+
+function rememberBoardKpis(key, payload) {
+  if (boardKpiCache.has(key)) boardKpiCache.delete(key);
+  boardKpiCache.set(key, payload);
+  while (boardKpiCache.size > BOARD_KPI_CACHE_LIMIT) {
+    const oldest = boardKpiCache.keys().next().value;
+    boardKpiCache.delete(oldest);
+  }
+}
+
+async function boardKpis({ supplierAccount = null } = {}) {
+  const config = await settingsService.getConfig();
+  const { revision, parts } = await time('rccp_board_kpis_rev', () => tableDataService.getRevision({
+    tableKey: PO_TABLE_KEY,
+    supplierAccount: supplierAccount || null,
+  }));
+  const now = new Date();
+  const cacheKey = boardKpiCacheKey(supplierAccount, revision, config, now);
+  const cached = boardKpiCache.get(cacheKey);
+  if (cached) return cached;
+
+  const { rows: poRows } = await time('rccp_board_kpis_read', () => readRccpPoRows({
+    tableKey: PO_TABLE_KEY,
+    supplierAccount: supplierAccount || null,
+    revision,
+    parts,
+  }));
+  const compact = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
+    now,
+    vendorAccount: supplierAccount || null,
+  }));
+  const payload = {
+    ...compact,
+    configured: Boolean(
+      String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
+    ),
+  };
+  rememberBoardKpis(cacheKey, payload);
+  return payload;
 }
 
 function buildDrillDownRows(rows, config, cell, window) {
@@ -501,7 +522,7 @@ function buildDrillDownRows(rows, config, cell, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (year !== cell.periodYear || week !== cell.isoWeek) return;
-      if (!isInWindow(year, week, window)) return;
+      if (!isIsoWeekInWindow(year, week, window)) return;
 
       const qty = resolveLineMeasureQty(lineValues, masterValues, measureKey, share);
       if (qty <= 0) return;
@@ -545,7 +566,7 @@ async function getDrillDown(params) {
     toYear: Number(params.toYear),
     toWeek: Number(params.toWeek),
   };
-  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readBoardSnapshot({
+  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: params.supplierAccount || null,
   }));
@@ -633,6 +654,7 @@ module.exports = {
   buildDrillDownRows,
   buildMatrixCells,
   analyze,
+  boardKpis,
   getDrillDown,
   listMainTableVendors,
   extractVendorsFromRows,

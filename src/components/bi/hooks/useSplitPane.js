@@ -1,19 +1,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
+import {
+  clampPaneHeight,
+  DEFAULT_PANE_HEIGHTS,
+  heightForTab,
+  normalizeHeightByTab,
+} from './splitPaneHeights';
 
 // Split-screen-voorkeuren (#AB:222) leven in user_board_settings.settings_json onder een eigen
 // board-key, zodat we de kolominstellingen van het PO-board niet raken. Geen nieuwe SQL-kolom.
 const SPLIT_BOARD_KEY = 'bi-split';
-const DEFAULT_HEIGHT = 280;
+const SPLIT_TABS = new Set(['bi', 'rccp', 'kpis']);
+
+function normalizeSplitTab(tab) {
+  return SPLIT_TABS.has(tab) ? tab : 'bi';
+}
 
 /**
- * Beheert het inklapbare split-screen-paneel: open/dicht, hoogte en de geselecteerde chart-ids.
- * @returns {{ open, height, chartIds, activeTab, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }}
+ * Beheert het inklapbare split-screen-paneel: open/dicht, per-tab hoogte en chart-ids.
+ * @returns {{ open, height, heightByTab, chartIds, activeTab, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }}
  */
 export function useSplitPane() {
-  const [state, setState] = useState({ open: false, height: DEFAULT_HEIGHT, chartIds: [], activeTab: 'bi' });
+  const [state, setState] = useState({
+    open: false,
+    heightByTab: { ...DEFAULT_PANE_HEIGHTS },
+    chartIds: [],
+    activeTab: 'bi',
+  });
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);
+
+  const persist = useCallback((next) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      apiRequest(`/supplier/board-settings/${SPLIT_BOARD_KEY}`, {
+        method: 'PATCH',
+        body: {
+          settings: {
+            biSplitPane: {
+              ...next,
+              height: heightForTab(next.heightByTab, next.activeTab),
+            },
+          },
+        },
+      }).catch(() => { /* stil falen; lokale state blijft leidend */ });
+    }, 400);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -23,12 +55,10 @@ export function useSplitPane() {
         const pane = data?.settings?.biSplitPane;
         if (pane) {
           setState({
-            // Always start collapsed on page open so the board is usable immediately;
-            // chart/tab preferences are still restored from saved settings.
             open: false,
-            height: Number(pane.height) || DEFAULT_HEIGHT,
+            heightByTab: normalizeHeightByTab(pane),
             chartIds: Array.isArray(pane.chartIds) ? pane.chartIds : [],
-            activeTab: pane.activeTab === 'rccp' ? 'rccp' : 'bi',
+            activeTab: normalizeSplitTab(pane.activeTab),
           });
         }
       })
@@ -40,19 +70,24 @@ export function useSplitPane() {
   const update = useCallback((patch) => {
     setState((prev) => {
       const next = { ...prev, ...patch };
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        apiRequest(`/supplier/board-settings/${SPLIT_BOARD_KEY}`, {
-          method: 'PATCH',
-          body: { settings: { biSplitPane: next } },
-        }).catch(() => { /* stil falen; lokale state blijft leidend */ });
-      }, 400);
+      persist(next);
       return next;
     });
-  }, []);
+  }, [persist]);
 
   const toggleOpen = useCallback(() => update({ open: !state.open }), [update, state.open]);
-  const setHeight = useCallback((value) => update({ height: value }), [update]);
+  const setHeight = useCallback((value) => {
+    setState((prev) => {
+      const tab = normalizeSplitTab(prev.activeTab);
+      const nextHeight = clampPaneHeight(value, DEFAULT_PANE_HEIGHTS[tab]);
+      const next = {
+        ...prev,
+        heightByTab: { ...prev.heightByTab, [tab]: nextHeight },
+      };
+      persist(next);
+      return next;
+    });
+  }, [persist]);
   const setChartIds = useCallback((ids) => update({ chartIds: ids }), [update]);
   const toggleChart = useCallback((id) => {
     const chartIds = state.chartIds.includes(id)
@@ -62,11 +97,13 @@ export function useSplitPane() {
   }, [update, state.chartIds]);
 
   const setActiveTab = useCallback((activeTab) => {
-    update({ activeTab: activeTab === 'rccp' ? 'rccp' : 'bi' });
+    update({ activeTab: normalizeSplitTab(activeTab) });
   }, [update]);
 
+  const height = heightForTab(state.heightByTab, state.activeTab);
+
   return useMemo(
-    () => ({ ...state, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }),
-    [state, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab],
+    () => ({ ...state, height, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab }),
+    [state, height, loaded, toggleOpen, setHeight, toggleChart, setChartIds, setActiveTab],
   );
 }

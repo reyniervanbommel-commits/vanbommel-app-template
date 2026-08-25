@@ -10,6 +10,7 @@ import { useBoardRevisionGate } from './useBoardRevisionGate';
 export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   const {
     isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded: windowLoaded,
+    kpiWindowOnly, setKpiWindowOnly,
   } = useRccpWindow();
   const [analysis, setAnalysis] = useState(null);
   // false, niet true: zolang er geen vendor gekozen is (enabled=false) mag er geen spinner
@@ -97,6 +98,8 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     windowLoaded,
     lastVendor,
     setLastVendor,
+    kpiWindowOnly,
+    setKpiWindowOnly,
     analysis,
     loading,
     error,

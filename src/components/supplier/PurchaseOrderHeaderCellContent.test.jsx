@@ -65,4 +65,59 @@ describe('PurchaseOrderHeaderCellContent', () => {
     expect(screen.getByText('Red')).toBeTruthy();
     expect(screen.queryByLabelText(/additional unique values/)).toBeNull();
   });
+
+  it('formats pushed receipt dates as dd/mm/yyyy instead of ISO datetime', () => {
+    renderHeaderCell({
+      order: {
+        dataAreaId: 'nl01',
+        orderNumber: 'PO-1',
+        values: { receiptDateValues: '2026-08-25T00:00:00.000Z' },
+        linkedLineValues: { receiptDateValues: ['2026-08-25T00:00:00.000Z'] },
+      },
+      column: {
+        key: 'receiptDateValues',
+        label: 'Receipt date Values',
+        dataType: 'text',
+        source: 'custom',
+      },
+      linkedLineValueMap: {
+        receiptDateValues: { lineColumnKey: 'receiptDate', lineDataType: 'text' },
+      },
+    });
+
+    expect(screen.getByText('25/08/2026')).toBeTruthy();
+    expect(screen.queryByDisplayValue(/2026-08-25/)).toBeNull();
+  });
+
+  it('formats ISO dates on a pushed header column even without a linked-value map', () => {
+    renderHeaderCell({
+      order: {
+        dataAreaId: 'nl01',
+        orderNumber: 'PO-1',
+        values: { receiptDateValues: '2026-08-25T00:00:00.000Z' },
+      },
+      column: {
+        key: 'receiptDateValues',
+        label: 'Receipt date Values',
+        dataType: 'text',
+        source: 'custom',
+      },
+    });
+
+    expect(screen.getByText('25/08/2026')).toBeTruthy();
+    expect(screen.queryByDisplayValue(/2026-08-25T00:00:00/)).toBeNull();
+  });
+
+  it('keeps a custom date column editable instead of rendering it as read-only text', () => {
+    renderHeaderCell({
+      order: {
+        dataAreaId: 'nl01',
+        orderNumber: 'PO-1',
+        values: { myDate: '2026-08-25T00:00:00.000Z' },
+      },
+      column: { key: 'myDate', label: 'My date', dataType: 'date', source: 'custom' },
+    });
+
+    expect(screen.getByDisplayValue('2026-08-25')).toBeTruthy();
+  });
 });

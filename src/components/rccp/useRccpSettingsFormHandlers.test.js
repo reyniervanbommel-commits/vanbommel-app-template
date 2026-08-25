@@ -10,6 +10,13 @@ describe('useRccpSettingsFormHandlers', () => {
     expect(onUpdateField).toHaveBeenCalledWith('excludedStatuses', ['Canceled', 'Invoiced']);
   });
 
+  it('zet de receipt-date kolom via handleReceiptDate', () => {
+    const onUpdateField = vi.fn();
+    const { result } = renderHook(() => useRccpSettingsFormHandlers({ thresholds: {} }, onUpdateField));
+    result.current.handleReceiptDate({ target: { value: 'productReceiptDate' } });
+    expect(onUpdateField).toHaveBeenCalledWith('receiptDateColumnKey', 'productReceiptDate');
+  });
+
   it('houdt de andere drempel vast bij een groene drempelwijziging', () => {
     const onUpdateField = vi.fn();
     const { result } = renderHook(() => (

@@ -5,6 +5,8 @@ import {
 import { Delete24Regular } from '@fluentui/react-icons';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
+import { rccpFieldLabel } from './rccpFieldLabel';
+import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
 
 const CHART_TYPES = [
   { value: 'line', label: 'Line' },
@@ -50,7 +52,7 @@ const useStyles = makeStyles({
 });
 
 function RccpQuantityMeasureCard({
-  measure, index, lineCols, orderCols, numberCols, canRemove, onUpdate, onRemove,
+  measure, index, numberCols, canRemove, chartRole, onUpdate, onRemove, onRole,
 }) {
   const styles = useStyles();
   const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
@@ -61,10 +63,13 @@ function RccpQuantityMeasureCard({
     if (isUnavailable) {
       list.push({ value: measure.columnKey, text: `${title} — unavailable` });
     }
-    lineCols.forEach((col) => list.push({ value: col.key, text: optionText(col) }));
-    orderCols.forEach((col) => list.push({ value: col.key, text: optionText(col) }));
+    numberCols.forEach((col) => list.push({
+      value: col.key,
+      text: optionText(col),
+      group: rccpColumnGroupLabel(col),
+    }));
     return list;
-  }, [isUnavailable, measure.columnKey, title, lineCols, orderCols]);
+  }, [isUnavailable, measure.columnKey, title, numberCols]);
 
   const handleColumn = useCallback((key) => {
     const col = numberCols.find((c) => c.key === key);
@@ -84,6 +89,9 @@ function RccpQuantityMeasureCard({
   }, [index, onUpdate]);
 
   const handleRemove = useCallback(() => onRemove(index), [index, onRemove]);
+  const handleRole = useCallback((e) => {
+    onRole(index, e.target.value);
+  }, [index, onRole]);
 
   return (
     <div className={styles.card}>
@@ -111,14 +119,30 @@ function RccpQuantityMeasureCard({
           />
         </Field>
       </div>
+      <div className={styles.field}>
+        <Field
+          label={rccpFieldLabel(
+            'Chart role',
+            'Optional. Open = full-color boxes above the axis. Received = 50% opacity of this color above the axis, and 100% of the same color below the axis on the receipt date.',
+          )}
+        >
+          <Select size="small" value={chartRole || ''} onChange={handleRole}>
+            <option value="">Matrix row only</option>
+            <option value="open">Open (boxes above)</option>
+            <option value="delivered">Received (boxes below)</option>
+          </Select>
+        </Field>
+      </div>
       <div className={styles.row}>
-        <div className={styles.chartSlot}>
-          <Field label="Chart type">
-            <Select size="small" value={measure.chartType || 'line'} onChange={handleChart}>
-              {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </Select>
-          </Field>
-        </div>
+        {!chartRole && (
+          <div className={styles.chartSlot}>
+            <Field label="Chart type">
+              <Select size="small" value={measure.chartType || 'line'} onChange={handleChart}>
+                {CHART_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </Field>
+          </div>
+        )}
         <div className={styles.colorSlot}>
           <Field label="Color">
             <div className={styles.colorField}>

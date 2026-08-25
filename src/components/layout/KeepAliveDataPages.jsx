@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { PageActiveContext } from '../../hooks/usePageActive';
 import { recordApiTiming } from '../../utils/perf';
+import PurchaseOrdersTableSkeleton from '../supplier/PurchaseOrdersTableSkeleton';
 
 // Alleen dev/preview: meet hoe snel een pagina bij terugkeer weer geschilderd is (in de perf-HUD
 // zichtbaar als "keepalive:return <pad>"). Vouwt in productie naar false → geen overhead.
@@ -34,6 +35,7 @@ const useStyles = makeStyles({
   slot: { height: '100%', minHeight: 0, minWidth: 0 },
   slotHidden: { display: 'none' },
   loading: { display: 'flex', justifyContent: 'center', ...shorthands.padding('48px') },
+  fallbackFill: { height: '100%', minHeight: 0, minWidth: 0, display: 'flex' },
 });
 
 function roleAllowed(roles, role) {
@@ -102,10 +104,20 @@ export default function KeepAliveDataPages() {
     setVisited((prev) => (prev.includes(activePath) ? prev : [...prev, activePath]));
   }, [activePath]);
 
+  const fallback = activePath === '/'
+    ? (
+      <div className={styles.fallbackFill}>
+        <PurchaseOrdersTableSkeleton label="Loading purchase orders" />
+      </div>
+    )
+    : (
+      <div className={styles.loading}><Spinner label="Loading…" /></div>
+    );
+
   return (
     <div className={styles.host}>
       {activeConfig && !activeAllowed ? <Navigate to="/" replace /> : null}
-      <Suspense fallback={<div className={styles.loading}><Spinner label="Laden…" /></div>}>
+      <Suspense fallback={fallback}>
         {visited.map((path) => {
           const page = PAGES.find((entry) => entry.path === path);
           if (!page) return null;

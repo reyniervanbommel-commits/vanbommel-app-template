@@ -14,6 +14,10 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     onUpdateField('dateColumnKey', e.target.value);
   }, [onUpdateField]);
 
+  const handleReceiptDate = useCallback((e) => {
+    onUpdateField('receiptDateColumnKey', e.target.value);
+  }, [onUpdateField]);
+
   const handleMeasures = useCallback((quantityMeasures) => {
     onUpdateField('quantityMeasures', quantityMeasures);
   }, [onUpdateField]);
@@ -44,6 +48,7 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
   return useMemo(() => ({
     handleVendor,
     handleDate,
+    handleReceiptDate,
     handleMeasures,
     handleRanges,
     handleStatuses,
@@ -51,7 +56,7 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     handleOrange,
     handlePolicy,
   }), [
-    handleVendor, handleDate, handleMeasures, handleRanges,
+    handleVendor, handleDate, handleReceiptDate, handleMeasures, handleRanges,
     handleStatuses, handleGreen, handleOrange, handlePolicy,
   ]);
 }

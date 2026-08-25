@@ -5,7 +5,7 @@ import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import PurchaseOrderLinkedValueCell from './PurchaseOrderLinkedValueCell';
-import { formatCellValue } from '../../utils/purchaseOrderFormat';
+import { formatCellValue, isDateLikeCellValue } from '../../utils/purchaseOrderFormat';
 import { getLinkedLineValuePreview } from '../../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
@@ -127,11 +127,18 @@ function PurchaseOrderHeaderCellContent({
   if (linkedLineValueMeta) {
     // Ruwe, ontdubbelde regelwaarden komen mee met de board-rollup (order.linkedLineValues);
     // val terug op order.lines zodra die (bijv. na expand) wel beschikbaar zijn.
-    const rawLineValues = order?.linkedLineValues?.[key]
+    let rawLineValues = order?.linkedLineValues?.[key]
       ?? (Array.isArray(order?.lines)
         ? order.lines.map((line) => line?.values?.[linkedLineValueMeta.lineColumnKey])
         : null);
-    const preview = getLinkedLineValuePreview(rawLineValues, linkedLineValueMeta.lineDataType, linkedLineValueMeta.lineColumnKey);
+    if (!Array.isArray(rawLineValues) && rawValue != null && rawValue !== '') {
+      rawLineValues = String(rawValue).split(',').map((part) => part.trim()).filter(Boolean);
+    }
+    const preview = getLinkedLineValuePreview(
+      rawLineValues,
+      linkedLineValueMeta.lineDataType,
+      { columnKey: linkedLineValueMeta.lineColumnKey, columnLabel: linkedLineValueMeta.lineColumnLabel },
+    );
     const linkedValueNode = (
       <PurchaseOrderLinkedValueCell
         firstValue={preview.firstValue}
@@ -168,26 +175,36 @@ function PurchaseOrderHeaderCellContent({
         />
       );
     }
-    return (
-      <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
-        <EditableCell
-          dataType={column.dataType}
-          value={rawValue}
-          options={column.options}
-          cellBackgroundColor={cellBackgroundColor}
-          isConditionalFormat={isConditionalFormat}
-          ariaLabel={`${column.label} for order ${order.orderNumber}`}
-          hasHistory={showHistory}
-          cellKeys={{
-            columnId: column.id,
-            dataAreaId: order.dataAreaId,
-            orderNumber: order.orderNumber,
-            lineNumber: null,
-          }}
-          onSave={handleSave}
-        />
-      </span>
-    );
+    // Push-to-header bewaart ISO-datums in een custom text-kolom. Niet inline bewerken:
+    // de koppeling overschrijft de waarde bij elke board-read. Toon dd/mm/yyyy zoals op de regels.
+    // Echte custom date-kolommen blijven de kalender-editor houden.
+    const columnType = String(column.dataType || '').trim().toLowerCase();
+    const isPushedIsoDate = isDateLikeCellValue(rawValue)
+      && columnType !== 'date'
+      && columnType !== 'datetime'
+      && columnType !== 'date-time';
+    if (!isPushedIsoDate) {
+      return (
+        <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
+          <EditableCell
+            dataType={column.dataType}
+            value={rawValue}
+            options={column.options}
+            cellBackgroundColor={cellBackgroundColor}
+            isConditionalFormat={isConditionalFormat}
+            ariaLabel={`${column.label} for order ${order.orderNumber}`}
+            hasHistory={showHistory}
+            cellKeys={{
+              columnId: column.id,
+              dataAreaId: order.dataAreaId,
+              orderNumber: order.orderNumber,
+              lineNumber: null,
+            }}
+            onSave={handleSave}
+          />
+        </span>
+      );
+    }
   }
 
   if (column.source === 'd365' && column.writableToD365 && onCorrect) {

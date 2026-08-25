@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useMemo } from 'react';
-import { makeStyles, Spinner } from '@fluentui/react-components';
+import { makeStyles } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
+import PurchaseOrdersTableSkeleton from './PurchaseOrdersTableSkeleton';
 import PurchaseOrdersActiveRulesFlyout from './PurchaseOrdersActiveRulesFlyout';
 import { usePurchaseOrdersActiveRulesFlyout } from './usePurchaseOrdersActiveRulesFlyout';
 import { RemarksPanel } from './remarks';
@@ -197,18 +198,10 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   ]);
 
   if (status.loading) {
-    return (
-      <div className={styles.contentInset}>
-        <Spinner label="Loading purchase orders from SQL cache..." />
-      </div>
-    );
+    return <PurchaseOrdersTableSkeleton label="Loading purchase orders from SQL cache" />;
   }
   if (status.refreshing && status.orderCount === 0) {
-    return (
-      <div className={styles.contentInset}>
-        <Spinner label="Loading purchase orders from D365..." />
-      </div>
-    );
+    return <PurchaseOrdersTableSkeleton label="Loading purchase orders from D365" />;
   }
   if (status.orderCount === 0) {
     return (
@@ -226,6 +219,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
       <BoardSplitView
         filterByColumn={boardView.filterByColumn}
         tableRows={pageModel.orders}
+        visibleOrders={boardView.kpiSourceItems}
+        kpiFilterKey={boardView.kpiFilterKey}
+        onKpiFilter={boardView.applyKpiFilter}
         isStaff={isStaff}
       >
         <div className={styles.tableRegion}>

@@ -4,7 +4,6 @@ import {
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
-import RccpSettingsChartRoles from './RccpSettingsChartRoles';
 import RccpSettingsDataFields from './RccpSettingsDataFields';
 import RccpSettingsDisplayFields from './RccpSettingsDisplayFields';
 import { useRccpSettingsFormHandlers } from './useRccpSettingsFormHandlers';
@@ -53,24 +52,20 @@ function RccpSettingsForm({
           compact={isFlyout}
           onVendor={handlers.handleVendor}
           onDate={handlers.handleDate}
+          onReceiptDate={handlers.handleReceiptDate}
           onStatuses={handlers.handleStatuses}
           onPolicy={handlers.handlePolicy}
         />
       )}
       {tab === 'quantities' && (
-        <>
-          <RccpSettingsChartRoles
-            config={config}
-            compact={isFlyout}
-            onUpdateField={onUpdateField}
-          />
-          <RccpQuantityMeasuresEditor
-            measures={config.quantityMeasures || []}
-            columns={columns}
-            hideIntro
-            onChange={handlers.handleMeasures}
-          />
-        </>
+        <RccpQuantityMeasuresEditor
+          measures={config.quantityMeasures || []}
+          columns={columns}
+          openMeasureKey={config.openMeasureKey}
+          deliveredMeasureKey={config.deliveredMeasureKey}
+          onChange={handlers.handleMeasures}
+          onUpdateField={onUpdateField}
+        />
       )}
       {tab === 'display' && (
         <RccpSettingsDisplayFields

@@ -1,8 +1,9 @@
 import React, { memo, useCallback, useEffect, useRef } from 'react';
-import { Button, Switch, Text, makeStyles, shorthands, tokens, InfoButton } from '@fluentui/react-components';
+import { Button, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { Add24Regular } from '@fluentui/react-icons';
 import { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import RccpWeekRangeCard from './RccpWeekRangeCard';
+import { RccpHoverHint } from './rccpFieldLabel';
 
 const useStyles = makeStyles({
   root: {
@@ -68,7 +69,7 @@ function RccpChartWeekRangesEditor({ ranges = [], hideIntro, onChange }) {
           onChange={handleToggle}
           label="Show on chart"
         />
-        <InfoButton size="small" info="Colored week bands behind the capacity chart." />
+        <RccpHoverHint info="Colored week bands behind the capacity chart." />
       </div>
       {!hideIntro && (
         <Text className={styles.hint}>

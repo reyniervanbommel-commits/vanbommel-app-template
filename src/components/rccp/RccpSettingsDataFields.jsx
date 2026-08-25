@@ -3,6 +3,7 @@ import { Button, Field, Input, Select, Text, makeStyles, shorthands, tokens } fr
 import { ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import { rccpFieldLabel } from './rccpFieldLabel';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
+import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
 
 const useStyles = makeStyles({
   stack: {
@@ -27,17 +28,25 @@ function columnOption(col) {
     value: col.key,
     text: label === col.key ? label : `${label} (${col.key})`,
     shortText: label,
+    group: rccpColumnGroupLabel(col),
   };
 }
 
+const EMPTY_COLUMN = '__none__';
+
 function ColumnSelect({
-  label, value, onChange, columns, info, compact,
+  label, value, onChange, columns, info, compact, allowEmpty = false,
 }) {
   const styles = useStyles();
-  const options = useMemo(() => columns.map(columnOption), [columns]);
-  const selected = options.find((opt) => opt.value === value);
+  const options = useMemo(() => {
+    const mapped = columns.map(columnOption);
+    return allowEmpty
+      ? [{ value: EMPTY_COLUMN, text: 'None', shortText: 'None' }, ...mapped]
+      : mapped;
+  }, [allowEmpty, columns]);
+  const selected = options.find((opt) => opt.value === (value || (allowEmpty ? EMPTY_COLUMN : value)));
   const handleSelect = useCallback((key) => {
-    onChange({ target: { value: key } });
+    onChange({ target: { value: key === EMPTY_COLUMN ? '' : key } });
   }, [onChange]);
 
   return (
@@ -45,7 +54,7 @@ function ColumnSelect({
       <Field label={rccpFieldLabel(label, info)}>
         <RccpNarrowDropdown
           size={compact ? 'small' : 'medium'}
-          selectedValue={value}
+          selectedValue={value || (allowEmpty ? EMPTY_COLUMN : value)}
           selectedText={selected?.shortText || value}
           options={options}
           onSelect={handleSelect}
@@ -96,7 +105,7 @@ function CapacityImportFields({ compact, policy, onPolicy }) {
 }
 
 function RccpSettingsDataFields({
-  config, columns, statusOptions, compact, onVendor, onDate, onStatuses, onPolicy,
+  config, columns, statusOptions, compact, onVendor, onDate, onReceiptDate, onStatuses, onPolicy,
 }) {
   const styles = useStyles();
   const masterColumns = columns.filter((c) => c.scope === 'master');
@@ -123,6 +132,15 @@ function RccpSettingsDataFields({
           value={config.dateColumnKey}
           onChange={onDate}
           columns={columns}
+        />
+        <ColumnSelect
+          compact={compact}
+          label="Receipt date"
+          info="Date used to place received quantity below the axis. If empty, the delivery date is used."
+          value={config.receiptDateColumnKey || ''}
+          onChange={onReceiptDate}
+          columns={columns}
+          allowEmpty
         />
       </div>
       <div className={styles.group}>

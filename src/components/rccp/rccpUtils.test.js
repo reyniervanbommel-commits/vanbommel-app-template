@@ -7,6 +7,7 @@ import {
   formatMatrixWeekLabel,
   isMatrixCellEmpty,
   resolveChartWeekRangeBounds,
+  resolveRccpDashboardKpis,
 } from './rccpUtils';
 
 describe('matrix period headers', () => {
@@ -122,5 +123,22 @@ describe('applyRccpChartSettings', () => {
     const analysis = { measureRows: [] };
     expect(applyRccpChartSettings(analysis, null)).toBe(analysis);
     expect(applyRccpChartSettings(null, {})).toBeNull();
+  });
+});
+
+describe('resolveRccpDashboardKpis', () => {
+  const windowed = { totalOrdered: 10 };
+  const all = { totalOrdered: 99 };
+
+  it('uses windowed KPIs when the selected-weeks toggle is on', () => {
+    expect(resolveRccpDashboardKpis({ kpis: windowed, kpisAll: all }, true)).toBe(windowed);
+  });
+
+  it('uses all-data KPIs when the toggle is off', () => {
+    expect(resolveRccpDashboardKpis({ kpis: windowed, kpisAll: all }, false)).toBe(all);
+  });
+
+  it('falls back to windowed KPIs when all-data is missing', () => {
+    expect(resolveRccpDashboardKpis({ kpis: windowed }, false)).toBe(windowed);
   });
 });

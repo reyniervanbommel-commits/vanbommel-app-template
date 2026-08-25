@@ -61,6 +61,7 @@ function normalizeChartWeekRanges(raw) {
 function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
+    receiptDateColumnKey: '',
     vendorColumnKey: 'vendorAccount',
     quantityMeasures: defaultQuantityMeasures(),
     openMeasureKey: '',
@@ -123,6 +124,13 @@ function validateConfig(raw) {
 
   const base = defaultConfig();
   const dateColumnKey = String(raw.dateColumnKey ?? base.dateColumnKey).trim();
+  const receiptDateColumnKey = String(raw.receiptDateColumnKey ?? '').trim();
+  if (receiptDateColumnKey.length > 128) {
+    return { valid: false, error: 'receiptDateColumnKey must be at most 128 characters' };
+  }
+  if (receiptDateColumnKey && !/^[A-Za-z0-9_]+$/.test(receiptDateColumnKey)) {
+    return { valid: false, error: 'receiptDateColumnKey may only contain letters, numbers and underscores' };
+  }
   const vendorColumnKey = String(raw.vendorColumnKey ?? base.vendorColumnKey).trim();
   const quantityMeasures = normalizeQuantityMeasures(raw);
   if (!dateColumnKey || !vendorColumnKey || !quantityMeasures.length) {
@@ -173,6 +181,7 @@ function validateConfig(raw) {
     valid: true,
     config: {
       dateColumnKey,
+      receiptDateColumnKey,
       vendorColumnKey,
       quantityMeasures,
       openMeasureKey,
