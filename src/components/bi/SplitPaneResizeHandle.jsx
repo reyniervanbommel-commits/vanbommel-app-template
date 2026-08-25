@@ -3,15 +3,13 @@ import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   handle: {
-    height: '8px',
-    marginTop: `-${tokens.spacingVerticalXS}`,
-    marginBottom: tokens.spacingVerticalNone,
+    height: '6px',
     cursor: 'ns-resize',
     touchAction: 'none',
     flexShrink: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: tokens.colorNeutralStroke2,
     ':hover': {
-      backgroundColor: tokens.colorBrandBackground2,
+      backgroundColor: tokens.colorBrandStroke1,
     },
   },
   dragging: {
@@ -36,6 +34,9 @@ function SplitPaneResizeHandle({ height, onResize }) {
     };
     const handleUp = () => {
       setDragging(false);
+      if (target.hasPointerCapture(event.pointerId)) {
+        target.releasePointerCapture(event.pointerId);
+      }
       target.removeEventListener('pointermove', handleMove);
       target.removeEventListener('pointerup', handleUp);
       target.removeEventListener('pointercancel', handleUp);

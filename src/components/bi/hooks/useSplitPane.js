@@ -7,6 +7,8 @@ import {
   normalizeHeightByTab,
 } from './splitPaneHeights';
 
+// Split-screen-voorkeuren (#AB:222) leven in user_board_settings.settings_json onder een eigen
+// board-key, zodat we de kolominstellingen van het PO-board niet raken. Geen nieuwe SQL-kolom.
 const SPLIT_BOARD_KEY = 'bi-split';
 const SPLIT_TABS = new Set(['bi', 'rccp', 'kpis']);
 

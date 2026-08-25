@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useCallback, useMemo } from 'react';
 import {
-  Button, Tab, TabList, makeStyles, shorthands, Spinner, tokens,
+  Button, Tab, TabList, makeStyles, mergeClasses, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
@@ -40,21 +40,15 @@ const useStyles = makeStyles({
     alignItems: 'center',
     ...shorthands.gap(tokens.spacingHorizontalS),
     ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
     backgroundColor: tokens.colorNeutralBackground2,
     flexWrap: 'wrap',
   },
+  toggleBarCollapsed: {
+    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
+  },
   pane: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke1),
     ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
     backgroundColor: tokens.colorNeutralBackground2,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  paneBody: {
-    flex: 1,
     minHeight: 0,
     overflow: 'auto',
   },
@@ -125,8 +119,11 @@ export default function BoardSplitView({
   return (
     <div className={styles.root}>
       <div className={styles.tableRegion}>{children}</div>
+      {split.open ? (
+        <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
+      ) : null}
 
-      <div className={styles.toggleBar}>
+      <div className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}>
         <Button
           size="small"
           appearance="subtle"
@@ -152,11 +149,7 @@ export default function BoardSplitView({
         style={split.open ? { height: `${split.height}px` } : undefined}
         aria-hidden={!split.open}
       >
-        {split.open ? (
-          <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
-        ) : null}
-        <div className={styles.paneBody}>
-          <div hidden={!showBiPane}>
+        <div hidden={!showBiPane}>
           <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
             <BiChartStrip
               availableCharts={chartsWithSeries}
@@ -167,7 +160,7 @@ export default function BoardSplitView({
             />
           </Suspense>
         </div>
-          <div hidden={!showRccpPane}>
+        <div hidden={!showRccpPane}>
           <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
             <RccpSplitStrip
               vendorAccount={vendorAccount}
@@ -178,7 +171,7 @@ export default function BoardSplitView({
             />
           </Suspense>
         </div>
-          <div hidden={!kpiEnabled}>
+        <div hidden={!kpiEnabled}>
           {kpiEnabled ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
               <PoBoardKpiStrip
@@ -189,7 +182,6 @@ export default function BoardSplitView({
               />
             </Suspense>
           ) : null}
-          </div>
         </div>
       </div>
     </div>
