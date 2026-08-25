@@ -241,6 +241,7 @@ function summarizeAcc(acc) {
     lateDeliveryUnits: acc.lateDeliveryUnits,
     onTimeItemCount: acc.onTimeSkus.size,
     onTimeUnits: acc.onTimeUnits,
+    onTimePercent: percentOf(acc.onTimeUnits, totalOrdered),
     openItemCount: acc.openSkus.size,
     openLateItemCount: acc.openLateSkus.size,
     openLateAvgDays: mean(acc.openLateDays),

@@ -139,7 +139,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="onTime"
         label="On time delivery"
         value={formatQty(kpis.onTimeItemCount)}
-        detail={formatUnits(kpis.onTimeUnits)}
+        detail={joinDetails(formatUnits(kpis.onTimeUnits), formatPct(kpis.onTimePercent))}
         selected={selectedKey === 'onTime'}
         clickable={clickableSet.has('onTime')}
         onActivate={handleActivate}

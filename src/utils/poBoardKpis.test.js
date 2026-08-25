@@ -32,6 +32,7 @@ describe('aggregatePoBoardKpisFromByOrder', () => {
     expect(kpis.lateDeliveryUnits).toBe(4);
     expect(kpis.onTimeItemCount).toBe(1);
     expect(kpis.onTimeUnits).toBe(2);
+    expect(kpis.onTimePercent).toBeCloseTo(2 / 17 * 100);
     expect(kpis.openLateItemCount).toBe(2);
     expect(kpis.openLateAvgDays).toBeCloseTo(4.5);
     expect(matchByKey.lateItems.has('PO-A')).toBe(true);

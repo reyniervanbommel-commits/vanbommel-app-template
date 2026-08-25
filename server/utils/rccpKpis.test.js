@@ -95,6 +95,7 @@ describe('rccpKpis', () => {
     expect(kpis.lateDeliveryAvgDays).toBeNull();
     expect(kpis.onTimeItemCount).toBe(1);
     expect(kpis.onTimeUnits).toBe(4);
+    expect(kpis.onTimePercent).toBeCloseTo(4 / 14 * 100);
   });
 
   it('counts unique SKUs once and averages late days per line', () => {
@@ -177,6 +178,13 @@ describe('rccpKpis', () => {
       vendorAccount: 'V001',
     });
     expect(windowed.totalOrdered).toBe(14);
+
+    const all = buildRccpPoKpis([row(), outOfWindow], baseConfig, window, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+      skipWindow: true,
+    });
+    expect(all.totalOrdered).toBe(21);
 
     const byOrder = buildRccpPoKpiByOrder([row(), outOfWindow], baseConfig, {
       now: nowNext,

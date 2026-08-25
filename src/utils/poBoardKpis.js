@@ -103,6 +103,7 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       lateDeliveryUnits,
       onTimeItemCount: onTimeSkus.size,
       onTimeUnits,
+      onTimePercent: percentOf(onTimeUnits, totalOrdered),
       openItemCount: openSkus.size,
       openLateItemCount: openLateSkus.size,
       openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,

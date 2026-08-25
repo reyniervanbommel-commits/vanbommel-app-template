@@ -393,10 +393,14 @@ async function analyze({
     now,
     vendorAccount: effectiveVendor,
   }));
-  const kpis = {
-    ...poKpis,
-    ...buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY),
-  };
+  const poKpisAll = await time('rccp_kpis_all', () => buildRccpPoKpis(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+    skipWindow: true,
+  }));
+  const capacityKpis = buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY);
+  const kpis = { ...poKpis, ...capacityKpis };
+  const kpisAll = { ...poKpisAll, ...capacityKpis };
 
   return {
     config,
@@ -410,6 +414,7 @@ async function analyze({
       : missingDates,
     diagnostics,
     kpis,
+    kpisAll,
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
 }

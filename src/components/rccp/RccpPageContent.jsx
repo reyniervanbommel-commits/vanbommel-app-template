@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Button, Field, Input, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
-} from '@fluentui/react-components';
+import { Button, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
 import { useRccpVendorPrefetch } from '../../hooks/useRccpVendorPrefetch';
+import { resolveRccpDashboardKpis } from './rccpUtils';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
@@ -15,6 +14,7 @@ import RccpDrillDownPanel from './RccpDrillDownPanel';
 import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
+import RccpWeekWindowFields from './RccpWeekWindowFields';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import { resolveDefaultRccpVendor, resolveRccpVendorFromFilter } from './resolveRccpVendorFilter';
 import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
@@ -22,8 +22,6 @@ import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
   toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap(tokens.spacingHorizontalM) },
-  yearInput: { width: '104px' },
-  weekInput: { width: '84px' },
   error: { color: tokens.colorPaletteRedForeground1 },
   hint: { color: tokens.colorNeutralForeground3 },
 });
@@ -55,6 +53,7 @@ export default function RccpPageContent() {
   const hasVendor = isSupplier || Boolean(vendorAccount);
   const {
     window, setWindow, windowLoaded, lastVendor, setLastVendor,
+    kpiWindowOnly, setKpiWindowOnly,
     analysis, loading, error, readOnly,
     measureRows, periods, cellMap, reload,
   } = useRccpPage({
@@ -151,20 +150,12 @@ export default function RccpPageContent() {
           />
         )}
         {activeTab === 'dashboard' && (
-          <>
-            <Field label="From year">
-              <Input className={styles.yearInput} type="number" value={String(window.fromYear)} onChange={(e) => handleWindowChange('fromYear', e.target.value)} />
-            </Field>
-            <Field label="From week">
-              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.fromWeek)} onChange={(e) => handleWindowChange('fromWeek', e.target.value)} />
-            </Field>
-            <Field label="To year">
-              <Input className={styles.yearInput} type="number" value={String(window.toYear)} onChange={(e) => handleWindowChange('toYear', e.target.value)} />
-            </Field>
-            <Field label="To week">
-              <Input className={styles.weekInput} type="number" min={1} max={53} value={String(window.toWeek)} onChange={(e) => handleWindowChange('toWeek', e.target.value)} />
-            </Field>
-          </>
+          <RccpWeekWindowFields
+            window={window}
+            onWindowChange={handleWindowChange}
+            kpiWindowOnly={kpiWindowOnly}
+            onKpiWindowOnlyChange={setKpiWindowOnly}
+          />
         )}
         <Button icon={<ArrowClockwise24Regular />} onClick={handleRefresh}>Refresh</Button>
         {isAdmin && (
@@ -185,7 +176,7 @@ export default function RccpPageContent() {
 
           {!loading && !error && analysis && (
             <>
-              <RccpKpiCards kpis={analysis.kpis} />
+              <RccpKpiCards kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)} />
               <RccpChartMatrixPanel
                 chart={analysis.chart}
                 measureRows={measureRows}
@@ -195,7 +186,7 @@ export default function RccpPageContent() {
                 onCellClick={handleCellClick}
                 interactive
               />
-              {(analysis.kpis?.totalOrdered === 0) && (
+              {(resolveRccpDashboardKpis(analysis, kpiWindowOnly)?.totalOrdered === 0) && (
                 <RccpDiagnosticsCard
                   diagnostics={analysis.diagnostics}
                   config={analysis.config}

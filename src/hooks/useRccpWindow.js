@@ -9,19 +9,22 @@ const RCCP_BOARD_KEY = 'rccp';
  * vendor. Beide worden bewust samen beheerd omdat de server de settings-blob vervangt (niet
  * merget) bij een PATCH — los wegschrijven zou het andere veld wissen.
  *
- * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded }}
+ * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, loaded }}
  */
 export function useRccpWindow() {
   const [isoWindow, setIsoWindowState] = useState(() => currentIsoWindow(8));
   const [lastVendor, setLastVendorState] = useState('');
+  const [kpiWindowOnly, setKpiWindowOnlyState] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);
 
   // Actuele waarden in refs zodat een debounced PATCH altijd beide velden meestuurt.
   const isoWindowRef = useRef(isoWindow);
   const lastVendorRef = useRef(lastVendor);
+  const kpiWindowOnlyRef = useRef(kpiWindowOnly);
   useEffect(() => { isoWindowRef.current = isoWindow; }, [isoWindow]);
   useEffect(() => { lastVendorRef.current = lastVendor; }, [lastVendor]);
+  useEffect(() => { kpiWindowOnlyRef.current = kpiWindowOnly; }, [kpiWindowOnly]);
 
   useEffect(() => {
     let active = true;
@@ -39,6 +42,9 @@ export function useRccpWindow() {
         }
         const vendor = data?.settings?.lastVendorAccount;
         if (typeof vendor === 'string' && vendor) setLastVendorState(vendor);
+        if (typeof data?.settings?.kpiWindowOnly === 'boolean') {
+          setKpiWindowOnlyState(data.settings.kpiWindowOnly);
+        }
       })
       .catch(() => { /* fallback naar defaults */ })
       .finally(() => { if (active) setLoaded(true); });
@@ -56,6 +62,7 @@ export function useRccpWindow() {
           settings: {
             isoWindow: isoWindowRef.current,
             lastVendorAccount: lastVendorRef.current,
+            kpiWindowOnly: kpiWindowOnlyRef.current,
           },
         },
       }).catch(() => { /* stil falen; lokale state blijft leidend */ });
@@ -81,12 +88,22 @@ export function useRccpWindow() {
     });
   }, [schedulePersist]);
 
+  const setKpiWindowOnly = useCallback((value) => {
+    const next = Boolean(value);
+    setKpiWindowOnlyState((prev) => {
+      if (prev === next) return prev;
+      kpiWindowOnlyRef.current = next;
+      schedulePersist();
+      return next;
+    });
+  }, [schedulePersist]);
+
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
   }, []);
 
   return useMemo(
-    () => ({ isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded }),
-    [isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded],
+    () => ({ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, loaded }),
+    [isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, loaded],
   );
 }
