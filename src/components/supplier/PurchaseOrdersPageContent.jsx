@@ -219,6 +219,9 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
       <BoardSplitView
         filterByColumn={boardView.filterByColumn}
         tableRows={pageModel.orders}
+        visibleOrders={boardView.kpiSourceItems}
+        kpiFilterKey={boardView.kpiFilterKey}
+        onKpiFilter={boardView.applyKpiFilter}
         isStaff={isStaff}
       >
         <div className={styles.tableRegion}>

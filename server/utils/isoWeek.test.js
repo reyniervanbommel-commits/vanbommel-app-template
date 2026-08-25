@@ -7,6 +7,7 @@ const {
   parseIsoWeekKey,
   isoWeekStartUtc,
   isoWeekEndUtc,
+  isIsoWeekInWindow,
   weeksInIsoYear,
   buildWeekRange,
 } = require('../utils/isoWeek');
@@ -43,6 +44,14 @@ describe('isoWeek', () => {
 
   it('formats iso week keys with padding', () => {
     expect(isoWeekKey(2024, 3)).toBe('2024-W03');
+  });
+
+  it('checks whether an ISO week sits inside a window', () => {
+    const window = { fromYear: 2026, fromWeek: 10, toYear: 2026, toWeek: 12 };
+    expect(isIsoWeekInWindow(2026, 10, window)).toBe(true);
+    expect(isIsoWeekInWindow(2026, 12, window)).toBe(true);
+    expect(isIsoWeekInWindow(2026, 9, window)).toBe(false);
+    expect(isIsoWeekInWindow(2026, 13, window)).toBe(false);
   });
 
   it('returns UTC week boundaries', () => {

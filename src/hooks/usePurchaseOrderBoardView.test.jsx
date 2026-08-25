@@ -154,6 +154,24 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
 
     expect(result.current.processedItems.map((order) => order.orderNumber)).toEqual(['PO-1', 'PO-2']);
   });
+
+  it('applies a KPI overlay on top of column filters and restores on toggle', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+    expect(result.current.kpiSourceItems).toHaveLength(2);
+
+    act(() => {
+      result.current.applyKpiFilter('open', new Set(['PO-1']));
+    });
+    expect(result.current.kpiFilterKey).toBe('open');
+    expect(result.current.processedItems.map((order) => order.orderNumber)).toEqual(['PO-1']);
+    expect(result.current.kpiSourceItems).toHaveLength(2);
+
+    act(() => {
+      result.current.applyKpiFilter('open', new Set(['PO-1']));
+    });
+    expect(result.current.kpiFilterKey).toBeNull();
+    expect(result.current.processedItems).toHaveLength(2);
+  });
 });
 
 describe('usePurchaseOrderGrouping saved-view serialisatie', () => {

@@ -66,6 +66,14 @@ function isoWeekStartUtc(year, week) {
   return start;
 }
 
+function isIsoWeekInWindow(year, week, window) {
+  if (!window) return false;
+  const start = isoWeekStartUtc(window.fromYear, window.fromWeek).getTime();
+  const end = isoWeekEndUtc(window.toYear, window.toWeek).getTime();
+  const point = isoWeekStartUtc(year, week).getTime();
+  return point >= start && point <= end;
+}
+
 function isoWeekEndUtc(year, week) {
   const start = isoWeekStartUtc(year, week);
   const end = new Date(start);
@@ -104,6 +112,7 @@ module.exports = {
   parseIsoWeekKey,
   isoWeekStartUtc,
   isoWeekEndUtc,
+  isIsoWeekInWindow,
   weeksInIsoYear,
   buildWeekRange,
 };

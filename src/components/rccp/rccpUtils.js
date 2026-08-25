@@ -147,6 +147,12 @@ function getIsoWeekNumber(date) {
   return 1 + Math.round((target - yearStart) / (7 * 24 * 60 * 60 * 1000));
 }
 
+export function resolveRccpDashboardKpis(analysis, kpiWindowOnly) {
+  if (!analysis) return null;
+  if (kpiWindowOnly) return analysis.kpis || null;
+  return analysis.kpisAll || analysis.kpis || null;
+}
+
 export function buildAnalysisQuery(window, vendorAccount) {
   const params = new URLSearchParams({
     fromYear: String(window.fromYear),

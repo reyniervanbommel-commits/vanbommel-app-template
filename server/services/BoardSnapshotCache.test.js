@@ -1,6 +1,6 @@
 'use strict';
 
-const { readBoardSnapshot } = require('./BoardSnapshotCache');
+const { readBoardSnapshot, readRccpPoRows } = require('./BoardSnapshotCache');
 // BoardSnapshotCache.js gebruikt het gedeelde dataService-object (niet gedestructureerd),
 // dus getRevision/read direct op dat object vervangen is genoeg — geen module-reset nodig.
 const dataService = require('./TableDataService');
@@ -68,5 +68,48 @@ describe('readBoardSnapshot', () => {
 
     expect(dataService.read).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+});
+
+describe('readRccpPoRows', () => {
+  it('leest zonder change-decoraties en hergebruikt de kpi-cache', async () => {
+    mockDataService({ parts: { syncedAt: 'kpi-same' }, rows: [{ recordKey: 'PO-1' }] });
+
+    const first = await readRccpPoRows({ tableKey: 'kpi-test-1' });
+    const second = await readRccpPoRows({ tableKey: 'kpi-test-1' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+    expect(dataService.read).toHaveBeenCalledWith({
+      tableKey: 'kpi-test-1',
+      supplierAccount: null,
+      includeChangeDecorations: false,
+    });
+    expect(first.rows).toEqual([{ recordKey: 'PO-1' }]);
+    expect(second.rows).toBe(first.rows);
+  });
+
+  it('hergebruikt een warm board-snapshot zonder tweede read()', async () => {
+    mockDataService({ parts: { syncedAt: 'shared-snap' }, rows: [{ recordKey: 'PO-SNAP' }] });
+    await readBoardSnapshot({ tableKey: 'kpi-reuse-snap' });
+    dataService.read.mockClear();
+    dataService.getRevision.mockClear();
+
+    const kpi = await readRccpPoRows({ tableKey: 'kpi-reuse-snap' });
+
+    expect(dataService.read).not.toHaveBeenCalled();
+    expect(kpi.rows).toEqual([{ recordKey: 'PO-SNAP' }]);
+  });
+
+  it('slaat getRevision over wanneer revision en parts al bekend zijn', async () => {
+    mockDataService({ parts: { syncedAt: 'known' }, rows: [{ recordKey: 'PO-2' }] });
+
+    await readRccpPoRows({
+      tableKey: 'kpi-known-rev',
+      revision: 9,
+      parts: { syncedAt: 'known' },
+    });
+
+    expect(dataService.getRevision).not.toHaveBeenCalled();
+    expect(dataService.read).toHaveBeenCalledTimes(1);
   });
 });
