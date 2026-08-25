@@ -36,15 +36,25 @@ export function todayLineX(periods, now = new Date()) {
 }
 
 /**
+ * Recharts geeft bij negatieve waarden y = ver-einde en height < 0.
+ * Normaliseer naar SVG-rect: y = top (as-kant), height > 0.
+ */
+export function normalizeBarBox(barY, barHeight) {
+  const signed = Number(barHeight) || 0;
+  const top = signed < 0 ? Number(barY) + signed : Number(barY);
+  return { y: top, height: Math.abs(signed) };
+}
+
+/**
  * Stack layout from the axis outward. Segments are drawn in array order
  * (received first, then open).
  */
 export function stackRectLayout(segments, barY, barHeight, side) {
   const list = Array.isArray(segments) ? segments : [];
   const total = list.reduce((sum, seg) => sum + Number(seg.qty || 0), 0);
-  const height = Math.abs(barHeight) || 0;
+  const { y: top, height } = normalizeBarBox(barY, barHeight);
   if (!total || !height) return [];
-  let cursor = side === 'above' ? barY + height : barY;
+  let cursor = side === 'above' ? top + height : top;
   return list.map((segment) => {
     const segHeight = (Number(segment.qty || 0) / total) * height;
     if (side === 'above') cursor -= segHeight;

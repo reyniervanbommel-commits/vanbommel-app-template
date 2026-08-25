@@ -42,4 +42,11 @@ describe('rccpPoStack', () => {
     expect(below[0].y).toBe(110);
     expect(below[1].y).toBe(110 + 20);
   });
+
+  it('anchors below-axis bars to the zero line when Recharts sends negative height', () => {
+    const segments = [{ poNumber: 'PO-A', qty: 10, status: 'received' }];
+    const below = stackRectLayout(segments, 160, -50, 'below');
+    expect(below[0].y).toBe(110);
+    expect(below[0].height).toBe(50);
+  });
 });
