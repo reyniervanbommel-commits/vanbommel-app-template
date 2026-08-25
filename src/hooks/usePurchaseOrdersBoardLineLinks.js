@@ -24,12 +24,11 @@ export function usePurchaseOrdersBoardLineLinks({
       ? lineValueHeaderLinks.reduce((acc, link) => {
         if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
         const lineColumn = lineColumns.find((entry) => entry.key === link.lineColumnKey);
-        if (lineColumn) {
-          acc[link.headerColumnKey] = {
-            lineColumnKey: link.lineColumnKey,
-            lineDataType: lineColumn.dataType,
-          };
-        }
+        acc[link.headerColumnKey] = {
+          lineColumnKey: link.lineColumnKey,
+          lineDataType: lineColumn?.dataType || 'text',
+          lineColumnLabel: lineColumn?.label || '',
+        };
         return acc;
       }, {})
       : {}),

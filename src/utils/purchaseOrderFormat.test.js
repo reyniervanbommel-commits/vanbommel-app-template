@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCellValue, formatSyncedAt } from './purchaseOrderFormat';
+import { formatCellValue, formatSyncedAt, isDateLikeCellValue } from './purchaseOrderFormat';
 
 describe('formatCellValue', () => {
   it('geeft een streepje voor null, undefined en lege string', () => {
@@ -40,6 +40,28 @@ describe('formatCellValue', () => {
   it('valt terug op String(value) voor onbekende/ontbrekende dataTypes', () => {
     expect(formatCellValue('plain text', 'string')).toBe('plain text');
     expect(formatCellValue(42, undefined)).toBe('42');
+  });
+
+  it('formatteert ISO-datums met tijd als dd/mm/yyyy, ook voor dataType text', () => {
+    expect(formatCellValue('2026-08-25T00:00:00.000Z', 'text')).toBe('25/08/2026');
+    expect(formatCellValue('2026-08-25T14:30:00', 'string')).toBe('25/08/2026');
+  });
+
+  it('formatteert komma-gescheiden ISO-datums elk als dd/mm/yyyy', () => {
+    expect(formatCellValue(
+      '2026-08-25T00:00:00.000Z, 2026-08-26T00:00:00.000Z',
+      'text',
+    )).toBe('25/08/2026, 26/08/2026');
+  });
+});
+
+describe('isDateLikeCellValue', () => {
+  it('herkent ISO-datums, Date-objecten en kommagescheiden ISO-lijsten', () => {
+    expect(isDateLikeCellValue('2026-08-25T00:00:00.000Z')).toBe(true);
+    expect(isDateLikeCellValue('2026-08-25T00:00:00.000Z, 2026-08-26T00:00:00.000Z')).toBe(true);
+    expect(isDateLikeCellValue(new Date(2026, 7, 25))).toBe(true);
+    expect(isDateLikeCellValue('Red')).toBe(false);
+    expect(isDateLikeCellValue('')).toBe(false);
   });
 });
 
