@@ -4,7 +4,8 @@ import { apiRequest } from '../../../utils/api';
 // Split-screen-voorkeuren (#AB:222) leven in user_board_settings.settings_json onder een eigen
 // board-key, zodat we de kolominstellingen van het PO-board niet raken. Geen nieuwe SQL-kolom.
 const SPLIT_BOARD_KEY = 'bi-split';
-const DEFAULT_HEIGHT = 280;
+const DEFAULT_HEIGHT = 440;
+const LEGACY_DEFAULT_HEIGHT = 280;
 
 const SPLIT_TABS = new Set(['bi', 'rccp', 'kpis']);
 
@@ -28,11 +29,14 @@ export function useSplitPane() {
         if (!active) return;
         const pane = data?.settings?.biSplitPane;
         if (pane) {
+          const savedHeight = Number(pane.height);
           setState({
             // Always start collapsed on page open so the board is usable immediately;
             // chart/tab preferences are still restored from saved settings.
             open: false,
-            height: Number(pane.height) || DEFAULT_HEIGHT,
+            height: !savedHeight || savedHeight === LEGACY_DEFAULT_HEIGHT
+              ? DEFAULT_HEIGHT
+              : savedHeight,
             chartIds: Array.isArray(pane.chartIds) ? pane.chartIds : [],
             activeTab: normalizeSplitTab(pane.activeTab),
           });

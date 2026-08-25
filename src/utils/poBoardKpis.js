@@ -1,5 +1,5 @@
 /**
- * Aggregeert server-side per-PO KPI-stats over de zichtbare tabelrijen.
+ * Aggregeert compacte server-side per-PO KPI-stats over de zichtbare tabelrijen.
  * Capacity blijft leeg: die zit niet in de PO-tabel.
  */
 
@@ -12,21 +12,9 @@ export const PO_BOARD_CLICKABLE_KPI_KEYS = [
   'openLate',
 ];
 
-function mean(values) {
-  if (!values.length) return null;
-  return values.reduce((sum, n) => sum + n, 0) / values.length;
-}
-
 function percentOf(part, whole) {
   if (!(whole > 0)) return 0;
   return (part / whole) * 100;
-}
-
-function addSkus(target, values) {
-  (values || []).forEach((sku) => {
-    const next = String(sku || '').trim();
-    if (next) target.add(next);
-  });
 }
 
 function emptyMatchByKey() {
@@ -40,38 +28,51 @@ function emptyMatchByKey() {
   };
 }
 
+function addIndexedSkus(target, sku, indexes) {
+  (indexes || []).forEach((index) => {
+    const next = String(sku[index] || '').trim();
+    if (next) target.add(next);
+  });
+}
+
 /**
- * @param {Record<string, { openQty?: number, deliveredQty?: number, lateDays?: number[], lateSkus?: string[], openLateDays?: number[], openLateSkus?: string[] }>} byOrder
+ * @param {{ sku?: string[], orders?: Record<string, object> }} payload
  * @param {string[]} visibleOrderNumbers
  */
-export function aggregatePoBoardKpisFromByOrder(byOrder, visibleOrderNumbers) {
+export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
+  const sku = payload?.sku || [];
+  const orders = payload?.orders || {};
   const matchByKey = emptyMatchByKey();
   let totalOpen = 0;
   let totalDelivered = 0;
-  const lateDeliveryDays = [];
+  let lateSum = 0;
+  let lateCount = 0;
+  let openLateSum = 0;
+  let openLateCount = 0;
   const lateDeliverySkus = new Set();
-  const openLateDays = [];
   const openLateSkus = new Set();
 
   for (const orderNumber of visibleOrderNumbers || []) {
-    const entry = byOrder?.[orderNumber];
+    const entry = orders[orderNumber];
     if (!entry) continue;
-    const openQty = Number(entry.openQty) || 0;
-    const deliveredQty = Number(entry.deliveredQty) || 0;
+    const openQty = Number(entry.o) || 0;
+    const deliveredQty = Number(entry.d) || 0;
     totalOpen += openQty;
     totalDelivered += deliveredQty;
     if (openQty + deliveredQty > 0) matchByKey.ordered.add(orderNumber);
     if (deliveredQty > 0) matchByKey.delivered.add(orderNumber);
     if (openQty > 0) matchByKey.open.add(orderNumber);
-    if (Array.isArray(entry.lateDays) && entry.lateDays.length) {
-      lateDeliveryDays.push(...entry.lateDays);
-      addSkus(lateDeliverySkus, entry.lateSkus);
+    if (entry.ln) {
+      lateSum += Number(entry.ls) || 0;
+      lateCount += Number(entry.ln) || 0;
+      addIndexedSkus(lateDeliverySkus, sku, entry.lk);
       matchByKey.lateDelivery.add(orderNumber);
       matchByKey.lateItems.add(orderNumber);
     }
-    if (Array.isArray(entry.openLateDays) && entry.openLateDays.length) {
-      openLateDays.push(...entry.openLateDays);
-      addSkus(openLateSkus, entry.openLateSkus);
+    if (entry.on) {
+      openLateSum += Number(entry.os) || 0;
+      openLateCount += Number(entry.on) || 0;
+      addIndexedSkus(openLateSkus, sku, entry.ok);
       matchByKey.openLate.add(orderNumber);
     }
   }
@@ -84,10 +85,10 @@ export function aggregatePoBoardKpisFromByOrder(byOrder, visibleOrderNumbers) {
       totalOpen,
       deliveredPercent: percentOf(totalDelivered, totalOrdered),
       openPercent: percentOf(totalOpen, totalOrdered),
-      lateDeliveryAvgDays: mean(lateDeliveryDays),
+      lateDeliveryAvgDays: lateCount ? lateSum / lateCount : null,
       lateDeliveryItemCount: lateDeliverySkus.size,
       openLateItemCount: openLateSkus.size,
-      openLateAvgDays: mean(openLateDays),
+      openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,
       capacityShortfall: null,
       overloadedWeeks: null,
     },

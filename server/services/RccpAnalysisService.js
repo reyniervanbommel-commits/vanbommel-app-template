@@ -415,24 +415,74 @@ async function analyze({
 }
 
 /**
- * Per-PO KPI-stats uit de snapshot (met regels), zonder weekvenster.
+ * Per-PO KPI-stats uit een lichte cache-read (geen ledger/historie), zonder weekvenster.
  * De PO-board-tab aggregeert dit client-side over de zichtbare ordernummers.
  */
+const BOARD_KPI_CACHE_LIMIT = 8;
+const boardKpiCache = new Map();
+
+function boardKpiCacheKey(supplierAccount, revision, config, now) {
+  return [
+    supplierAccount || '',
+    revision || '',
+    config.openMeasureKey || '',
+    config.deliveredMeasureKey || '',
+    config.dateColumnKey || '',
+    config.receiptDateColumnKey || '',
+    config.vendorColumnKey || '',
+    (config.excludedStatuses || []).join(','),
+    getIsoWeekYear(now),
+    getIsoWeek(now),
+  ].join('|');
+}
+
+function rememberBoardKpis(key, payload) {
+  if (boardKpiCache.has(key)) boardKpiCache.delete(key);
+  boardKpiCache.set(key, payload);
+  while (boardKpiCache.size > BOARD_KPI_CACHE_LIMIT) {
+    const oldest = boardKpiCache.keys().next().value;
+    boardKpiCache.delete(oldest);
+  }
+}
+
 async function boardKpis({ supplierAccount = null } = {}) {
   const config = await settingsService.getConfig();
-  const { rows: poRows } = await time('rccp_board_kpis_read', () => readBoardSnapshot({
+  const { revision } = await time('rccp_board_kpis_rev', () => tableDataService.getRevision({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
   const now = new Date();
-  const byOrder = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
+  const cacheKey = boardKpiCacheKey(supplierAccount, revision, config, now);
+  const cached = boardKpiCache.get(cacheKey);
+  if (cached) return cached;
+
+  const { rows: poRows } = await time('rccp_board_kpis_read', () => tableDataService.readForRccpKpis({
+    tableKey: PO_TABLE_KEY,
+    supplierAccount: supplierAccount || null,
+    vendorColumnKey: config.vendorColumnKey,
+    neededKeys: [
+      config.vendorColumnKey,
+      config.openMeasureKey,
+      config.deliveredMeasureKey,
+      config.dateColumnKey,
+      config.receiptDateColumnKey,
+      'status',
+      'purchaseOrderStatus',
+      'itemNumber',
+    ],
+  }));
+  const compact = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
     now,
     vendorAccount: supplierAccount || null,
   }));
-  const configured = Boolean(
-    String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
-  );
-  return { byOrder, configured };
+  const payload = {
+    ...compact,
+    configured: Boolean(
+      String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
+    ),
+  };
+  rememberBoardKpis(cacheKey, payload);
+  return payload;
 }
 
 function buildDrillDownRows(rows, config, cell, window) {

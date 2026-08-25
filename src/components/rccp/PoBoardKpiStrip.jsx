@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
-import { apiRequest } from '../../utils/api';
 import { subscribeRccpSettingsSaved } from '../../hooks/rccpSettingsSync';
+import { clearPoBoardKpiCache, getPoBoardKpis } from '../../utils/poBoardKpiCache';
 import { aggregatePoBoardKpisFromByOrder } from '../../utils/poBoardKpis';
 import RccpKpiCards from './RccpKpiCards';
 
@@ -11,27 +11,28 @@ const useStyles = makeStyles({
 
 function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   const styles = useStyles();
-  const [byOrder, setByOrder] = useState(null);
+  const [payload, setPayload] = useState(null);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [settingsTick, setSettingsTick] = useState(0);
 
   useEffect(() => subscribeRccpSettingsSaved(() => {
+    clearPoBoardKpiCache();
     setSettingsTick((tick) => tick + 1);
   }), []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    apiRequest('/rccp/board-kpis')
+    getPoBoardKpis(refreshKey)
       .then((data) => {
         if (!active) return;
-        setByOrder(data?.byOrder || {});
+        setPayload(data || { sku: [], orders: {} });
         setConfigured(data?.configured !== false);
       })
       .catch(() => {
         if (!active) return;
-        setByOrder({});
+        setPayload({ sku: [], orders: {} });
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -45,8 +46,8 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   );
 
   const { kpis, matchByKey } = useMemo(
-    () => aggregatePoBoardKpisFromByOrder(byOrder, visibleOrderNumbers),
-    [byOrder, visibleOrderNumbers],
+    () => aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers),
+    [payload, visibleOrderNumbers],
   );
 
   const handleSelect = useCallback((key) => {

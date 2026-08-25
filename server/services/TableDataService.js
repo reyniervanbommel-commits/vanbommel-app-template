@@ -5130,12 +5130,91 @@ async function countSyncFilter(tableKey, rules) {
   return { total, compiled };
 }
 
+/**
+ * Lichte PO-rijen voor RCCP board-KPI's: alleen tb_cache JSON + custom values,
+ * zonder ledger, historie, lookups of formule-evaluatie.
+ */
+async function readForRccpKpis({
+  tableKey,
+  supplierAccount = null,
+  vendorColumnKey = 'vendorAccount',
+  neededKeys = [],
+} = {}) {
+  const table = await time('kpi_meta', () => getTableByKey(tableKey));
+  const pool = await getPool();
+  const keySet = new Set((neededKeys || []).filter(Boolean));
+  keySet.add('status');
+  keySet.add('purchaseOrderStatus');
+  keySet.add('itemNumber');
+  if (vendorColumnKey) keySet.add(vendorColumnKey);
+
+  const [[masterCols, detailCols], { mastersResult, detailsResult, customResult }] = await Promise.all([
+    time('kpi_cols', () => Promise.all([
+      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+    ])),
+    readCacheRows(pool, table.id, false),
+  ]);
+  const masterKeep = masterCols.filter((col) => keySet.has(col.key));
+  const detailKeep = detailCols.filter((col) => keySet.has(col.key));
+
+  const customByCell = new Map();
+  for (const row of customResult.recordset || []) {
+    const cellKey = `${row.partition_key}|${row.record_key}|${row.detail_key}`;
+    let value = null;
+    if (row.data_type === 'number') value = row.value_number !== null ? Number(row.value_number) : null;
+    else if (row.data_type === 'date') value = row.value_date ? new Date(row.value_date).toISOString() : null;
+    else if (row.data_type === 'boolean') value = row.value_bool === null ? null : Boolean(row.value_bool);
+    else value = row.value_text;
+    if (!customByCell.has(cellKey)) customByCell.set(cellKey, {});
+    customByCell.get(cellKey)[row.key] = value;
+  }
+
+  const detailsByRecord = new Map();
+  for (const detail of detailsResult.recordset || []) {
+    const recKey = `${detail.partition_key}|${detail.record_key}`;
+    if (!detailsByRecord.has(recKey)) detailsByRecord.set(recKey, []);
+    detailsByRecord.get(recKey).push(detail);
+  }
+
+  const wantedVendor = supplierAccount ? String(supplierAccount).trim().toLowerCase() : null;
+  const rows = [];
+  await time('kpi_build_rows', async () => {
+    for (const master of mastersResult.recordset || []) {
+      const recKey = `${master.partition_key}|${master.record_key}`;
+      const masterJson = parseJson(master.data_json);
+      const masterCustom = customByCell.get(`${master.partition_key}|${master.record_key}|${MASTER_DETAIL_KEY}`) || {};
+      const values = buildValuesFromColumns(masterKeep, masterJson, masterCustom);
+      if (wantedVendor) {
+        const vendor = String(values[vendorColumnKey] || '').trim().toLowerCase();
+        if (vendor !== wantedVendor) continue;
+      }
+      const details = (detailsByRecord.get(recKey) || [])
+        .filter((detail) => !Number(detail.removed_at_source))
+        .map((detail) => {
+          const detailJson = parseJson(detail.data_json);
+          const detailCustom = customByCell.get(
+            `${detail.partition_key}|${detail.record_key}|${detail.detail_key}`,
+          ) || {};
+          return {
+            detailKey: detail.detail_key,
+            values: buildValuesFromColumns(detailKeep, detailJson, detailCustom),
+            isRemoved: false,
+          };
+        });
+      rows.push({ recordKey: master.record_key, values, details });
+    }
+  });
+  return { rows };
+}
+
 module.exports = {
   startRefresh,
   isRefreshRunning,
   refresh,
   getRefreshProgress,
   read,
+  readForRccpKpis,
   listVendorValues,
   readRowDetails,
   loadLookupEnrichment,

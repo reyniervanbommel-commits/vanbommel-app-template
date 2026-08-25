@@ -30,7 +30,7 @@ function formatQty(value) {
 
 function formatPct(value) {
   if (value === null || value === undefined) return '';
-  return `${Math.round(Number(value) || 0)}% of ordered`;
+  return `${(Number(value) || 0).toFixed(1)}% of ordered`;
 }
 
 function formatDays(value) {

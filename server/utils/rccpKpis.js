@@ -14,6 +14,7 @@ const {
   lineDateValue,
   collectDateSlots,
 } = require('./rccpPoRow');
+const { compactByOrder } = require('./rccpKpiCompact');
 
 const WIDE_WINDOW = { fromYear: 2000, fromWeek: 1, toYear: 2100, toWeek: 53 };
 
@@ -90,30 +91,41 @@ function emptyAcc(now) {
 
 function emptyOrderStats() {
   return {
-    openQty: 0, deliveredQty: 0, lateDays: [], lateSkus: [], openLateDays: [], openLateSkus: [],
+    openQty: 0,
+    deliveredQty: 0,
+    lateSum: 0,
+    lateCount: 0,
+    lateSkus: new Set(),
+    openLateSum: 0,
+    openLateCount: 0,
+    openLateSkus: new Set(),
   };
 }
 
-function addLineToOrderStats(entry, line, now) {
+function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   entry.openQty += line.openQty;
   entry.deliveredQty += line.deliveredQty;
   const sku = String(line.itemNumber || '').trim();
   if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
     const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
     if (days > 0) {
-      entry.lateDays.push(days);
-      if (sku) entry.lateSkus.push(sku);
+      entry.lateSum += days;
+      entry.lateCount += 1;
+      if (sku) entry.lateSkus.add(sku);
     }
   }
   if (
     line.openQty > 0
     && line.plannedYear
-    && compareIsoWeek(line.plannedYear, line.plannedWeek, getIsoWeekYear(now), getIsoWeek(now)) < 0
+    && nowYear
+    && nowWeek
+    && compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) < 0
   ) {
     const days = calendarDaysBetween(now, line.plannedDate);
     if (days !== null && days > 0) {
-      entry.openLateDays.push(days);
-      if (sku) entry.openLateSkus.push(sku);
+      entry.openLateSum += days;
+      entry.openLateCount += 1;
+      if (sku) entry.openLateSkus.add(sku);
     }
   }
 }
@@ -152,6 +164,7 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
         if (!plannedDate || !plannedYear || !plannedWeek) return;
         if (!isIsoWeekInWindow(plannedYear, plannedWeek, window)) return;
       }
+      if (!(openQty > 0 || deliveredQty > 0)) return;
       const receiptDate = (receiptKey && lineDateValue(lineValues, masterValues, receiptKey)) || plannedDate;
       onLine({
         poNumber,
@@ -224,12 +237,14 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow 
 
 function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount } = {}) {
   const byOrder = {};
+  const nowYear = getIsoWeekYear(now);
+  const nowWeek = getIsoWeek(now);
   walkRccpPoKpiLines(rows, config, WIDE_WINDOW, { now, vendorAccount, skipWindow: true }, (line) => {
     const entry = byOrder[line.poNumber] || emptyOrderStats();
-    addLineToOrderStats(entry, line, now);
+    addLineToOrderStats(entry, line, now, nowYear, nowWeek);
     byOrder[line.poNumber] = entry;
   });
-  return byOrder;
+  return compactByOrder(byOrder);
 }
 
 function buildRccpCapacityKpis(chart, measureRows, capacityMeasureKey) {

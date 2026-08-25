@@ -2,35 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { aggregatePoBoardKpisFromByOrder } from './poBoardKpis';
 
 describe('aggregatePoBoardKpisFromByOrder', () => {
-  const byOrder = {
-    'PO-A': {
-      openQty: 10,
-      deliveredQty: 4,
-      lateDays: [14],
-      lateSkus: ['SKU-1', 'SKU-2'],
-      openLateDays: [7],
-      openLateSkus: ['SKU-1'],
-    },
-    'PO-B': {
-      openQty: 3,
-      deliveredQty: 0,
-      lateDays: [],
-      lateSkus: [],
-      openLateDays: [2],
-      openLateSkus: ['SKU-3'],
-    },
-    'PO-C': {
-      openQty: 99,
-      deliveredQty: 99,
-      lateDays: [1],
-      lateSkus: ['HIDDEN'],
-      openLateDays: [],
-      openLateSkus: [],
+  const payload = {
+    sku: ['SKU-1', 'SKU-2', 'SKU-3', 'HIDDEN'],
+    orders: {
+      'PO-A': { o: 10, d: 4, ls: 14, ln: 1, lk: [0, 1], os: 7, on: 1, ok: [0] },
+      'PO-B': { o: 3, os: 2, on: 1, ok: [2] },
+      'PO-C': { o: 99, d: 99, ls: 1, ln: 1, lk: [3] },
     },
   };
 
   it('sums only the visible purchase orders', () => {
-    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-A', 'PO-B']);
+    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(payload, ['PO-A', 'PO-B']);
     expect(kpis.totalOpen).toBe(13);
     expect(kpis.totalDelivered).toBe(4);
     expect(kpis.totalOrdered).toBe(17);
@@ -41,7 +23,7 @@ describe('aggregatePoBoardKpisFromByOrder', () => {
   });
 
   it('uniques late SKUs and averages days across visible orders', () => {
-    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-A', 'PO-B']);
+    const { kpis, matchByKey } = aggregatePoBoardKpisFromByOrder(payload, ['PO-A', 'PO-B']);
     expect(kpis.lateDeliveryAvgDays).toBe(14);
     expect(kpis.lateDeliveryItemCount).toBe(2);
     expect(kpis.openLateItemCount).toBe(2);
@@ -51,7 +33,7 @@ describe('aggregatePoBoardKpisFromByOrder', () => {
   });
 
   it('ignores order numbers that are not in the snapshot map', () => {
-    const { kpis } = aggregatePoBoardKpisFromByOrder(byOrder, ['PO-MISSING']);
+    const { kpis } = aggregatePoBoardKpisFromByOrder(payload, ['PO-MISSING']);
     expect(kpis.totalOrdered).toBe(0);
     expect(kpis.lateDeliveryAvgDays).toBeNull();
   });

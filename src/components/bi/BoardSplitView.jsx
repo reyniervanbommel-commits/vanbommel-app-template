@@ -98,7 +98,7 @@ export default function BoardSplitView({
   );
   const showBiPane = !split.open || split.activeTab === 'bi';
   const showRccpPane = !split.open || split.activeTab === 'rccp';
-  const showKpiPane = !split.open || split.activeTab === 'kpis';
+  const kpiEnabled = split.open && split.activeTab === 'kpis';
 
   const { resultsById } = useChartData({
     charts: selectedCharts,
@@ -165,15 +165,17 @@ export default function BoardSplitView({
             />
           </Suspense>
         </div>
-        <div hidden={!showKpiPane}>
-          <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
-            <PoBoardKpiStrip
-              orders={visibleOrders}
-              selectedKey={kpiFilterKey || ''}
-              onKpiFilter={onKpiFilter}
-              refreshKey={dataRevision}
-            />
-          </Suspense>
+        <div hidden={!kpiEnabled}>
+          {kpiEnabled ? (
+            <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
+              <PoBoardKpiStrip
+                orders={visibleOrders}
+                selectedKey={kpiFilterKey || ''}
+                onKpiFilter={onKpiFilter}
+                refreshKey={dataRevision}
+              />
+            </Suspense>
+          ) : null}
         </div>
       </div>
     </div>

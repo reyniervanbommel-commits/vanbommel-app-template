@@ -175,12 +175,14 @@ describe('rccpKpis', () => {
       now: nowNext,
       vendorAccount: 'V001',
     });
-    expect(byOrder['PO-A'].openQty).toBe(10);
-    expect(byOrder['PO-A'].deliveredQty).toBe(4);
-    expect(byOrder['PO-A'].lateDays).toEqual([calendarDaysBetween(received, planned)]);
-    expect(byOrder['PO-FAR'].openQty).toBe(5);
-    expect(byOrder['PO-FAR'].deliveredQty).toBe(2);
-    expect(byOrder['PO-FAR'].openLateDays.length).toBe(1);
+    expect(byOrder.orders['PO-A'].o).toBe(10);
+    expect(byOrder.orders['PO-A'].d).toBe(4);
+    expect(byOrder.orders['PO-A'].ln).toBe(1);
+    expect(byOrder.orders['PO-A'].ls).toBe(calendarDaysBetween(received, planned));
+    expect(byOrder.orders['PO-FAR'].o).toBe(5);
+    expect(byOrder.orders['PO-FAR'].d).toBe(2);
+    expect(byOrder.orders['PO-FAR'].on).toBe(1);
+    expect(byOrder.sku).toContain('SKU-9');
   });
 
   it('sums capacity shortfall and overloaded weeks from open load', () => {
