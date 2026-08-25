@@ -195,7 +195,7 @@ export default function RccpPageContent() {
                 onCellClick={handleCellClick}
                 interactive
               />
-              {(analysis.kpis?.totalConfirmed === 0) && (
+              {(analysis.kpis?.totalOrdered === 0) && (
                 <RccpDiagnosticsCard
                   diagnostics={analysis.diagnostics}
                   config={analysis.config}

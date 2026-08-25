@@ -21,6 +21,7 @@ const {
   collectDateSlots,
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
+const { buildRccpPoKpis, buildRccpCapacityKpis } = require('../utils/rccpKpis');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -309,18 +310,6 @@ function buildMatrixCells({
   return { cells, measureRows, periods };
 }
 
-function buildKpis(cells, measures) {
-  const loadKeys = new Set((measures || []).map((m) => m.columnKey));
-  const loadCells = cells.filter((c) => loadKeys.has(c.measureKey));
-  const totalAvailable = cells
-    .filter((c) => c.measureKey === CAPACITY_MEASURE_KEY)
-    .reduce((s, c) => s + c.availableQty, 0);
-  const totalConfirmed = loadCells.reduce((s, c) => s + c.confirmedQty, 0);
-  const overloaded = loadCells.filter((c) => c.statusLabel === 'Overloaded' || c.statusLabel === 'Unplanned').length;
-  const warnings = loadCells.filter((c) => c.statusLabel === 'Warning').length;
-  return { totalAvailable, totalConfirmed, overloaded, warnings };
-}
-
 function buildChartSeries(cells, periods, measureRows) {
   // Open/remaining measures (niet delivered, niet afgeleid) voor de overload-berekening.
   const userLoadKeys = measureRows
@@ -395,10 +384,19 @@ async function analyze({
   });
 
   const chart = buildChartSeries(cells, periods, measureRows);
+  const now = new Date();
   const segmentsByWeek = await time('rccp_po_segments', () => buildPoSegments(poRows, config, window, {
-    now: new Date(),
+    now,
     vendorAccount: effectiveVendor,
   }));
+  const poKpis = await time('rccp_kpis', () => buildRccpPoKpis(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+  }));
+  const kpis = {
+    ...poKpis,
+    ...buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY),
+  };
 
   return {
     config,
@@ -411,7 +409,7 @@ async function analyze({
       ? missingDates.filter((m) => m.vendorAccount === effectiveVendor)
       : missingDates,
     diagnostics,
-    kpis: buildKpis(cells, config.quantityMeasures),
+    kpis,
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
 }
