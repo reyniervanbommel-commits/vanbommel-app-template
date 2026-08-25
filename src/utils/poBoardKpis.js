@@ -101,6 +101,7 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       lateDeliveryAvgDays: lateCount ? lateSum / lateCount : null,
       lateDeliveryItemCount: lateDeliverySkus.size,
       lateDeliveryUnits,
+      lateDeliveryPercent: percentOf(lateDeliveryUnits, totalOrdered),
       onTimeItemCount: onTimeSkus.size,
       onTimeUnits,
       onTimePercent: percentOf(onTimeUnits, totalOrdered),

@@ -121,7 +121,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="lateDelivery"
         label="Late delivery"
         value={formatDays(kpis.lateDeliveryAvgDays)}
-        detail={joinDetails(formatItems(kpis.lateDeliveryItemCount), formatUnits(kpis.lateDeliveryUnits))}
+        detail={joinDetails(formatItems(kpis.lateDeliveryItemCount), formatUnits(kpis.lateDeliveryUnits), formatPct(kpis.lateDeliveryPercent))}
         selected={selectedKey === 'lateDelivery'}
         clickable={clickableSet.has('lateDelivery')}
         onActivate={handleActivate}
@@ -130,7 +130,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         kpiKey="lateItems"
         label="Late delivery items"
         value={formatQty(kpis.lateDeliveryItemCount)}
-        detail={formatUnits(kpis.lateDeliveryUnits)}
+        detail={joinDetails(formatUnits(kpis.lateDeliveryUnits), formatPct(kpis.lateDeliveryPercent))}
         selected={selectedKey === 'lateItems'}
         clickable={clickableSet.has('lateItems')}
         onActivate={handleActivate}

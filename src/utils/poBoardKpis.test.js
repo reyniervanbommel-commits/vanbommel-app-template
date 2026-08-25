@@ -30,6 +30,7 @@ describe('aggregatePoBoardKpisFromByOrder', () => {
     expect(kpis.lateDeliveryAvgDays).toBe(14);
     expect(kpis.lateDeliveryItemCount).toBe(2);
     expect(kpis.lateDeliveryUnits).toBe(4);
+    expect(kpis.lateDeliveryPercent).toBeCloseTo(4 / 17 * 100);
     expect(kpis.onTimeItemCount).toBe(1);
     expect(kpis.onTimeUnits).toBe(2);
     expect(kpis.onTimePercent).toBeCloseTo(2 / 17 * 100);

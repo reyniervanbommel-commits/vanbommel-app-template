@@ -80,6 +80,7 @@ describe('rccpKpis', () => {
     expect(kpis.lateDeliveryItemCount).toBe(1);
     expect(kpis.lateDeliveryUnits).toBe(4);
     expect(kpis.openItemCount).toBe(1);
+    expect(kpis.lateDeliveryPercent).toBeCloseTo(4 / 14 * 100);
     expect(kpis.onTimeItemCount).toBe(0);
     expect(kpis.onTimeUnits).toBe(0);
   });
