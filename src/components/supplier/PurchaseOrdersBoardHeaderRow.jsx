@@ -120,6 +120,7 @@ export default function PurchaseOrdersBoardHeaderRow({
             key={column.key}
             columnKey={column.key}
             data-col-key={column.key}
+            data-column-filtered={hasActiveFilter ? 'true' : undefined}
             width={headerColumnWidths[column.key]}
             minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
             className={[styles.headerCell, hasActiveFilter ? styles.headerCellFiltered : '', headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
@@ -211,13 +212,6 @@ export default function PurchaseOrdersBoardHeaderRow({
       hoverInput={{
         columns,
         filterByColumn,
-        sortState,
-        groupingColumnKey,
-        groupSummaryColumnKeys,
-        headerColumnFormatRules,
-        linkedLineTotalByHeaderKey,
-        linkedLineValueByHeaderKey,
-        lineColumns,
         datePeriodDisplayModes,
       }}
     />

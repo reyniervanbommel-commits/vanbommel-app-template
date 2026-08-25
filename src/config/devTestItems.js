@@ -4,6 +4,15 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'po-header-filter-hover-v1-51-62',
+    title: 'PO header filter hover (v1.51.62)',
+    checks: [
+      'Hover a filtered PO column header: a compact card with background shows operator: value',
+      'Hover a header without a filter: no hover card appears',
+      'Move from a filtered header to an unfiltered header: the hover disappears',
+    ],
+  },
+  {
     id: '269-rccp-chart-po-segments',
     title: 'RCCP chart: PO boxes, Today, late',
     checks: [

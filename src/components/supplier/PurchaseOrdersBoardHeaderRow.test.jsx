@@ -22,8 +22,8 @@ vi.mock('./PurchaseOrderProductImageColumnMenu', () => ({
 }));
 
 vi.mock('./ResizableTableHeaderCell', () => ({
-  default: ({ children, className, cellStyle, 'data-col-key': dataColKey }) => (
-    <th className={className} style={cellStyle} data-col-key={dataColKey}>{children}</th>
+  default: ({ children, className, cellStyle, 'data-col-key': dataColKey, 'data-column-filtered': dataColumnFiltered }) => (
+    <th className={className} style={cellStyle} data-col-key={dataColKey} data-column-filtered={dataColumnFiltered}>{children}</th>
   ),
 }));
 
@@ -136,8 +136,18 @@ describe('PurchaseOrdersBoardHeaderRow', () => {
       });
 
       const tooltip = screen.getByRole('tooltip');
-      expect(tooltip.textContent).toContain('Vendor');
-      expect(tooltip.textContent).toContain('contains Acme');
+      expect(tooltip.textContent).toBe('contains: Acme');
+    });
+
+    it('does not show a hover when the column has no filter', async () => {
+      renderHeaderRow();
+
+      fireEvent.mouseOver(screen.getByText('Vendor'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PO_HEADER_HOVER_DELAY_MS);
+      });
+
+      expect(screen.queryByRole('tooltip')).toBeNull();
     });
   });
 });
