@@ -18,6 +18,7 @@ const SUPPLIER_ACCOUNT_PATTERN = /^[a-zA-Z0-9._+-]{2,40}$/;
 const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
 const { HEX_COLOR_PATTERN } = require('../utils/hexColor');
+const { normalizeBiSplitPane } = require('../utils/biSplitPane');
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
@@ -165,22 +166,6 @@ function normalizeLineValueLinks(value) {
     acc.push({ lineColumnKey, headerColumnKey });
     return acc;
   }, []);
-}
-
-// Split-screen-paneel (#AB:222): open/dicht, hoogte en geselecteerde chart-ids. Leeft in
-// settings_json (geen extra SQL-kolom).
-function normalizeBiSplitPane(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const height = Number(value.height);
-  const chartIds = Array.isArray(value.chartIds)
-    ? Array.from(new Set(value.chartIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))).slice(0, 12)
-    : [];
-  return {
-    open: value.open === true,
-    height: Number.isFinite(height) ? Math.min(800, Math.max(120, Math.round(height))) : 280,
-    chartIds,
-    activeTab: value.activeTab === 'rccp' ? 'rccp' : 'bi',
-  };
 }
 
 // RCCP ISO-weekrange (#AB:224): gedeeld tussen /rccp en split-pane, board-key `rccp`.
