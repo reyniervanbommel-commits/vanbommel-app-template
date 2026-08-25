@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import { usePoColumnHeaderHover } from '../../hooks/usePoColumnHeaderHover';
-import { buildPoHeaderHoverModel, getPoHeaderConnectionTargets } from './poHeaderHoverModel';
+import { buildPoHeaderHoverModel } from './poHeaderHoverModel';
 
 /**
- * Header-row hover: delayed overlay state plus in-memory card model.
+ * Header-row hover: delayed overlay with the active column filter only.
  *
  * @returns {{
  *   hover: { columnKey: string, top: number, left: number } | null,
- *   model: { title: string, rows: { label: string, value: string }[] } | null,
+ *   model: { text: string } | null,
  *   onMouseOver: Function,
  *   onMouseOut: Function,
  *   onMouseDown: Function,
@@ -16,13 +16,6 @@ import { buildPoHeaderHoverModel, getPoHeaderConnectionTargets } from './poHeade
 export function usePoBoardHeaderHover({
   columns = [],
   filterByColumn = {},
-  sortState,
-  groupingColumnKey,
-  groupSummaryColumnKeys = [],
-  headerColumnFormatRules = {},
-  linkedLineTotalByHeaderKey = {},
-  linkedLineValueByHeaderKey = {},
-  lineColumns = [],
   datePeriodDisplayModes = {},
   disabled = false,
 }) {
@@ -38,32 +31,9 @@ export function usePoBoardHeaderHover({
     return buildPoHeaderHoverModel({
       column: hoveredColumn,
       filter: filterByColumn[hoveredColumn.key],
-      sortState,
-      groupingColumnKey,
-      isGroupSummaryColumn: groupSummaryColumnKeys.includes(hoveredColumn.key),
-      formatRuleSet: headerColumnFormatRules[hoveredColumn.key],
-      connectionTargets: getPoHeaderConnectionTargets({
-        columnKey: hoveredColumn.key,
-        linkedLineTotalByHeaderKey,
-        linkedLineValueByHeaderKey,
-        lineColumns,
-      }),
       datePeriodDisplayMode: datePeriodDisplayModes[hoveredColumn.key],
-      isSticky: Number.isFinite(Number(hoveredColumn?.stickyLeft)),
-      isConnected: Boolean(linkedLineValueByHeaderKey[hoveredColumn.key]),
     });
-  }, [
-    datePeriodDisplayModes,
-    filterByColumn,
-    groupingColumnKey,
-    groupSummaryColumnKeys,
-    headerColumnFormatRules,
-    hoveredColumn,
-    lineColumns,
-    linkedLineTotalByHeaderKey,
-    linkedLineValueByHeaderKey,
-    sortState,
-  ]);
+  }, [datePeriodDisplayModes, filterByColumn, hoveredColumn]);
 
   return {
     hover: headerHover.hover,

@@ -5,6 +5,7 @@ export const PO_HEADER_HOVER_DELAY_MS = 280;
 function readColumnCell(element) {
   if (!(element instanceof Element)) return null;
   if (element.getAttribute('data-collapsed-column') === 'true') return null;
+  if (element.getAttribute('data-column-filtered') !== 'true') return null;
   if (!element.getAttribute('data-col-key')) return null;
   return element;
 }
@@ -45,7 +46,10 @@ export function usePoColumnHeaderHover({ disabled = false } = {}) {
     if (disabledRef.current) return;
     const target = readColumnCell(cell);
     const columnKey = target?.getAttribute('data-col-key');
-    if (!columnKey) return;
+    if (!columnKey) {
+      hide();
+      return;
+    }
     if (pendingKeyRef.current === columnKey) return;
     clearTimer();
     pendingKeyRef.current = columnKey;
@@ -58,7 +62,7 @@ export function usePoColumnHeaderHover({ disabled = false } = {}) {
         left: Math.round(rect.left),
       });
     }, PO_HEADER_HOVER_DELAY_MS);
-  }, [clearTimer]);
+  }, [clearTimer, hide]);
 
   const onMouseOver = useCallback((event) => {
     const cell = event.target instanceof Element

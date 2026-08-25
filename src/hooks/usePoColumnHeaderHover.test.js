@@ -6,7 +6,9 @@ import { PO_HEADER_HOVER_DELAY_MS, usePoColumnHeaderHover } from './usePoColumnH
 function makeCell(columnKey, extra = {}) {
   const cell = document.createElement('th');
   cell.setAttribute('data-col-key', columnKey);
-  Object.entries(extra).forEach(([name, value]) => cell.setAttribute(name, value));
+  const { filtered = true, ...attrs } = extra;
+  if (filtered) cell.setAttribute('data-column-filtered', 'true');
+  Object.entries(attrs).forEach(([name, value]) => cell.setAttribute(name, value));
   cell.getBoundingClientRect = () => ({
     top: 10, bottom: 40, left: 80, right: 180, width: 100, height: 30,
   });
@@ -80,5 +82,34 @@ describe('usePoColumnHeaderHover', () => {
       vi.advanceTimersByTime(PO_HEADER_HOVER_DELAY_MS);
     });
     expect(enabled.current.hover).toBe(null);
+  });
+
+  it('ignores cells without an active filter', () => {
+    const { result } = renderHook(() => usePoColumnHeaderHover());
+    const cell = makeCell('vendor', { filtered: false });
+
+    act(() => {
+      result.current.enter(cell);
+      vi.advanceTimersByTime(PO_HEADER_HOVER_DELAY_MS);
+    });
+
+    expect(result.current.hover).toBe(null);
+  });
+
+  it('hides when the pointer moves to a header without a filter', () => {
+    const { result } = renderHook(() => usePoColumnHeaderHover());
+    const filtered = makeCell('vendor');
+    const unfiltered = makeCell('status', { filtered: false });
+
+    act(() => {
+      result.current.enter(filtered);
+      vi.advanceTimersByTime(PO_HEADER_HOVER_DELAY_MS);
+    });
+    expect(result.current.hover?.columnKey).toBe('vendor');
+
+    act(() => {
+      result.current.enter(unfiltered);
+    });
+    expect(result.current.hover).toBe(null);
   });
 });
