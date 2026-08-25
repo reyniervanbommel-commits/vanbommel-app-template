@@ -1,7 +1,7 @@
 'use strict';
 
 const { getIsoWeek, getIsoWeekYear, isoWeekKey } = require('./isoWeek');
-const { buildRccpPoKpis, buildRccpPoKpiByOrder, buildRccpCapacityKpis, calendarDaysBetween } = require('./rccpKpis');
+const { buildRccpPoKpis, buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis, calendarDaysBetween } = require('./rccpKpis');
 
 function weekOf(date) {
   return {
@@ -186,6 +186,13 @@ describe('rccpKpis', () => {
       skipWindow: true,
     });
     expect(all.totalOrdered).toBe(21);
+
+    const pair = buildRccpPoKpisPair([row(), outOfWindow], baseConfig, window, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+    });
+    expect(pair.windowed.totalOrdered).toBe(14);
+    expect(pair.all.totalOrdered).toBe(21);
 
     const byOrder = buildRccpPoKpiByOrder([row(), outOfWindow], baseConfig, {
       now: nowNext,

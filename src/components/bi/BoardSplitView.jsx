@@ -99,12 +99,12 @@ export default function BoardSplitView({
     () => `${dataRevision}|${vendorAccount || ''}`,
     [dataRevision, vendorAccount],
   );
-  const showBiPane = !split.open || split.activeTab === 'bi';
-  const showRccpPane = !split.open || split.activeTab === 'rccp';
+  const showBiPane = split.open && split.activeTab === 'bi';
+  const showRccpPane = split.open && split.activeTab === 'rccp';
   const kpiEnabled = split.open && split.activeTab === 'kpis';
 
   const { resultsById } = useChartData({
-    charts: selectedCharts,
+    charts: showBiPane ? selectedCharts : [],
     externalFilterByColumn: filterByColumn,
     dataRevision,
   });
@@ -150,26 +150,30 @@ export default function BoardSplitView({
         aria-hidden={!split.open}
       >
         <div hidden={!showBiPane}>
-          <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
-            <BiChartStrip
-              availableCharts={chartsWithSeries}
-              selectedIds={split.chartIds}
-              onToggleChart={split.toggleChart}
-              height={split.height}
-              columns={meta.columns}
-            />
-          </Suspense>
+          {showBiPane ? (
+            <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
+              <BiChartStrip
+                availableCharts={chartsWithSeries}
+                selectedIds={split.chartIds}
+                onToggleChart={split.toggleChart}
+                height={split.height}
+                columns={meta.columns}
+              />
+            </Suspense>
+          ) : null}
         </div>
         <div hidden={!showRccpPane}>
-          <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
-            <RccpSplitStrip
-              vendorAccount={vendorAccount}
-              refreshKey={rccpRefreshKey}
-              height={split.height}
-              enabled
-              isoWindow={isoWindow}
-            />
-          </Suspense>
+          {showRccpPane ? (
+            <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
+              <RccpSplitStrip
+                vendorAccount={vendorAccount}
+                refreshKey={rccpRefreshKey}
+                height={split.height}
+                enabled
+                isoWindow={isoWindow}
+              />
+            </Suspense>
+          ) : null}
         </div>
         <div hidden={!kpiEnabled}>
           {kpiEnabled ? (

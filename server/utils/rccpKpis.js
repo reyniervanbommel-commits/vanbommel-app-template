@@ -259,6 +259,20 @@ function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow 
   return summarizeAcc(acc);
 }
 
+function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount } = {}) {
+  const nowYear = getIsoWeekYear(now);
+  const nowWeek = getIsoWeek(now);
+  const accWindow = emptyAcc(now);
+  const accAll = emptyAcc(now);
+  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow: true }, (line) => {
+    visitUniverseLine(accAll, line, nowYear, nowWeek);
+    if (line.plannedYear && line.plannedWeek && isIsoWeekInWindow(line.plannedYear, line.plannedWeek, window)) {
+      visitUniverseLine(accWindow, line, nowYear, nowWeek);
+    }
+  });
+  return { windowed: summarizeAcc(accWindow), all: summarizeAcc(accAll) };
+}
+
 function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount } = {}) {
   const byOrder = {};
   const nowYear = getIsoWeekYear(now);
@@ -290,6 +304,7 @@ function buildRccpCapacityKpis(chart, measureRows, capacityMeasureKey) {
 
 module.exports = {
   buildRccpPoKpis,
+  buildRccpPoKpisPair,
   buildRccpPoKpiByOrder,
   buildRccpCapacityKpis,
   calendarDaysBetween,

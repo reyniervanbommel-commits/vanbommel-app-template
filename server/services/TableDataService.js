@@ -3768,7 +3768,17 @@ async function read({
     };
   }
 
-  const { revision } = await revisionPromise;
+  const { revision, parts } = await revisionPromise;
+
+  if (table.key === 'purchase-orders' && parts) {
+    const { rememberKpiPoRows, contentSignature } = require('./BoardSnapshotCache');
+    rememberKpiPoRows({
+      tableKey: table.key,
+      supplierAccount,
+      signature: contentSignature(parts),
+      rows: scopedRows,
+    });
+  }
 
   return {
     table: { key: table.key, label: table.label, hasDetail: Boolean(table.relation && table.relation.kind !== 'none') },

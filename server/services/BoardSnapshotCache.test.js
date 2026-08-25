@@ -87,4 +87,29 @@ describe('readRccpPoRows', () => {
     expect(first.rows).toEqual([{ recordKey: 'PO-1' }]);
     expect(second.rows).toBe(first.rows);
   });
+
+  it('hergebruikt een warm board-snapshot zonder tweede read()', async () => {
+    mockDataService({ parts: { syncedAt: 'shared-snap' }, rows: [{ recordKey: 'PO-SNAP' }] });
+    await readBoardSnapshot({ tableKey: 'kpi-reuse-snap' });
+    dataService.read.mockClear();
+    dataService.getRevision.mockClear();
+
+    const kpi = await readRccpPoRows({ tableKey: 'kpi-reuse-snap' });
+
+    expect(dataService.read).not.toHaveBeenCalled();
+    expect(kpi.rows).toEqual([{ recordKey: 'PO-SNAP' }]);
+  });
+
+  it('slaat getRevision over wanneer revision en parts al bekend zijn', async () => {
+    mockDataService({ parts: { syncedAt: 'known' }, rows: [{ recordKey: 'PO-2' }] });
+
+    await readRccpPoRows({
+      tableKey: 'kpi-known-rev',
+      revision: 9,
+      parts: { syncedAt: 'known' },
+    });
+
+    expect(dataService.getRevision).not.toHaveBeenCalled();
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+  });
 });

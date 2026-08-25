@@ -2,7 +2,7 @@
 
 const { time } = require('../utils/timing');
 const tableDataService = require('./TableDataService');
-const { readBoardSnapshot, readRccpPoRows } = require('./BoardSnapshotCache');
+const { readRccpPoRows } = require('./BoardSnapshotCache');
 const capacityService = require('./RccpCapacityService');
 const settingsService = require('./RccpSettingsService');
 const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = require('./RccpSettingsService');
@@ -21,7 +21,7 @@ const {
   collectDateSlots,
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
-const { buildRccpPoKpis, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -361,7 +361,7 @@ async function analyze({
     toWeek: Number(toWeek),
   };
 
-  const { rows: poRows } = await time('rccp_po_read', () => readBoardSnapshot({
+  const { rows: poRows } = await time('rccp_po_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
@@ -389,18 +389,13 @@ async function analyze({
     now,
     vendorAccount: effectiveVendor,
   }));
-  const poKpis = await time('rccp_kpis', () => buildRccpPoKpis(poRows, config, window, {
+  const poKpiPair = await time('rccp_kpis', () => buildRccpPoKpisPair(poRows, config, window, {
     now,
     vendorAccount: effectiveVendor,
-  }));
-  const poKpisAll = await time('rccp_kpis_all', () => buildRccpPoKpis(poRows, config, window, {
-    now,
-    vendorAccount: effectiveVendor,
-    skipWindow: true,
   }));
   const capacityKpis = buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY);
-  const kpis = { ...poKpis, ...capacityKpis };
-  const kpisAll = { ...poKpisAll, ...capacityKpis };
+  const kpis = { ...poKpiPair.windowed, ...capacityKpis };
+  const kpisAll = { ...poKpiPair.all, ...capacityKpis };
 
   return {
     config,
@@ -452,7 +447,7 @@ function rememberBoardKpis(key, payload) {
 
 async function boardKpis({ supplierAccount = null } = {}) {
   const config = await settingsService.getConfig();
-  const { revision } = await time('rccp_board_kpis_rev', () => tableDataService.getRevision({
+  const { revision, parts } = await time('rccp_board_kpis_rev', () => tableDataService.getRevision({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
@@ -464,6 +459,8 @@ async function boardKpis({ supplierAccount = null } = {}) {
   const { rows: poRows } = await time('rccp_board_kpis_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
+    revision,
+    parts,
   }));
   const compact = await time('rccp_board_kpis', () => buildRccpPoKpiByOrder(poRows, config, {
     now,
@@ -569,7 +566,7 @@ async function getDrillDown(params) {
     toYear: Number(params.toYear),
     toWeek: Number(params.toWeek),
   };
-  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readBoardSnapshot({
+  const { rows: poRows } = await time('rccp_drilldown_po_read', () => readRccpPoRows({
     tableKey: PO_TABLE_KEY,
     supplierAccount: params.supplierAccount || null,
   }));
