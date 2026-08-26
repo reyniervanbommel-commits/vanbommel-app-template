@@ -11,7 +11,6 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { AddRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../../shared/ColorPalettePicker';
 import PurchaseOrderCreateTabsDialog from './PurchaseOrderCreateTabsDialog';
 import PurchaseOrderNewTabDialog from './PurchaseOrderNewTabDialog';
@@ -89,7 +88,7 @@ export default function PurchaseOrderViewTabMenuSection({
       <MenuDivider />
       <MenuGroup>
         <MenuGroupHeader>Tabs</MenuGroupHeader>
-        <MenuItem icon={<AddRegular />} onClick={openNewTab}>+ Tab</MenuItem>
+        <MenuItem onClick={openNewTab}>+ Tab</MenuItem>
         <MenuItem onClick={openCreateTabs}>+ Tab from column…</MenuItem>
         {groups.map((group) => (
           <GroupColorMenuItem

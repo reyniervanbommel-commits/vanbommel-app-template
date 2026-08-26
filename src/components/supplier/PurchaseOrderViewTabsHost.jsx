@@ -1,14 +1,13 @@
 import React from 'react';
-import { makeStyles, tokens } from '@fluentui/react-components';
+import { makeStyles } from '@fluentui/react-components';
 import { PurchaseOrderViewTabBar } from './viewTabs';
 
 const useStyles = makeStyles({
   wrap: {
-    flex: 1,
     minWidth: 0,
+    width: '100%',
     display: 'flex',
     alignItems: 'flex-end',
-    paddingTop: tokens.spacingVerticalL,
   },
 });
 

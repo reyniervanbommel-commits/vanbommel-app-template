@@ -1,3 +1,4 @@
+import { applyOpacity } from './hexColor';
 import { STATUS_COLOR_PALETTE } from './statusColumnUtils';
 import {
   buildFilterFromCellValue,
@@ -222,6 +223,13 @@ export function groupColorForTab(tab, groups) {
   const columnKey = inferGroupColumnKey(tab);
   const group = (groups || []).find((entry) => entry.columnKey === columnKey);
   return group?.color || '';
+}
+
+export const TAB_UNDERLINE_ACTIVE_OPACITY = 100;
+export const TAB_UNDERLINE_INACTIVE_OPACITY = 50;
+
+export function tabUnderlineColor(groupColor, isActive) {
+  return applyOpacity(groupColor, isActive ? TAB_UNDERLINE_ACTIVE_OPACITY : TAB_UNDERLINE_INACTIVE_OPACITY);
 }
 
 export function upsertGroup(groups, columnKey, color, namePrefix) {

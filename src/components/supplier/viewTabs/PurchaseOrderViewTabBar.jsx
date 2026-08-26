@@ -15,7 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
-import { ALL_TAB_ID, groupColorForTab } from '../../../utils/viewTabs';
+import { ALL_TAB_ID, groupColorForTab, tabUnderlineColor } from '../../../utils/viewTabs';
 
 const useStyles = makeStyles({
   row: {
@@ -36,19 +36,24 @@ const useStyles = makeStyles({
     maxWidth: '180px',
     minHeight: '28px',
     ...shorthands.margin('0', '4px', '0', '0'),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
     '::after': {
       display: 'none',
     },
   },
   tabActive: {
-    backgroundColor: tokens.colorNeutralBackground3,
+    fontWeight: tokens.fontWeightSemibold,
   },
   colorBar: {
     height: '3px',
     width: '100%',
     ...shorthands.borderRadius(tokens.borderRadiusSmall),
     marginTop: '2px',
+  },
+  colorBarFallback: {
+    backgroundColor: tokens.colorBrandStroke1,
+  },
+  colorBarFallbackMuted: {
+    backgroundColor: `color-mix(in srgb, ${tokens.colorBrandStroke1} 50%, transparent)`,
   },
   tabInner: {
     display: 'flex',
@@ -66,6 +71,19 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
 });
+
+function TabColorBar({ color, isActive, styles }) {
+  const backgroundColor = tabUnderlineColor(color, isActive);
+  return (
+    <span
+      className={mergeClasses(
+        styles.colorBar,
+        !backgroundColor && (isActive ? styles.colorBarFallback : styles.colorBarFallbackMuted),
+      )}
+      style={backgroundColor ? { backgroundColor } : undefined}
+    />
+  );
+}
 
 export default function PurchaseOrderViewTabBar({
   activeTabId,
@@ -110,14 +128,18 @@ export default function PurchaseOrderViewTabBar({
             className={mergeClasses(styles.tab, activeTabId === ALL_TAB_ID && styles.tabActive)}
             value={ALL_TAB_ID}
           >
-            All
+            <span className={styles.tabInner}>
+              <span className={styles.tabLabel}>All</span>
+              <TabColorBar color="" isActive={activeTabId === ALL_TAB_ID} styles={styles} />
+            </span>
           </Tab>
           {extraTabs.map((tab) => {
             const color = groupColorForTab(tab, groups);
+            const isActive = activeTabId === tab.id;
             return (
               <Tab
                 key={tab.id}
-                className={mergeClasses(styles.tab, activeTabId === tab.id && styles.tabActive)}
+                className={mergeClasses(styles.tab, isActive && styles.tabActive)}
                 value={tab.id}
                 title={tab.name}
                 data-tab-id={tab.id}
@@ -125,7 +147,7 @@ export default function PurchaseOrderViewTabBar({
               >
                 <span className={styles.tabInner}>
                   <span className={styles.tabLabel}>{tab.name}</span>
-                  {color ? <span className={styles.colorBar} style={{ backgroundColor: color }} /> : null}
+                  <TabColorBar color={color} isActive={isActive} styles={styles} />
                 </span>
               </Tab>
             );

@@ -18,6 +18,7 @@ import {
   vendorCanSeeView,
   removeTabsByScope,
   formatTabName,
+  tabUnderlineColor,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -172,5 +173,11 @@ describe('viewTabs', () => {
     ];
     expect(removeTabsByScope(tabs, 'a', 'tab').map((tab) => tab.id)).toEqual(['b', 'c']);
     expect(removeTabsByScope(tabs, 'a', 'group').map((tab) => tab.id)).toEqual(['c']);
+  });
+
+  it('zet tab-onderstreep op 100% opacity voor actief en 50% voor inactief', () => {
+    expect(tabUnderlineColor('#00c875', true)).toBe('#00c875');
+    expect(tabUnderlineColor('#00c875', false)).toBe('#00c87580');
+    expect(tabUnderlineColor('', true)).toBe('');
   });
 });

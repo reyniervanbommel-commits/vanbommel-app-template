@@ -3,11 +3,13 @@ import {
   Badge,
   Button,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
 import PurchaseOrderViewTitleRow from './PurchaseOrderViewTitleRow';
+import PurchaseOrderViewTabsHost from './PurchaseOrderViewTabsHost';
 import PurchaseOrderSaveTabsDialog from './viewTabs/PurchaseOrderSaveTabsDialog';
 import { ALL_TAB_ID, inferGroupColumnKey } from '../../utils/viewTabs';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
@@ -45,8 +47,17 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    marginBottom: '4px',
+    marginBottom: tokens.spacingVerticalS,
     flexWrap: 'wrap',
+  },
+  toolbarWithTabs: {
+    marginBottom: 0,
+  },
+  tabsMount: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    minWidth: 0,
+    marginBottom: 0,
   },
   errorIndicator: {
     display: 'flex',
@@ -209,7 +220,7 @@ export default function PurchaseOrdersPageTopBar({
         </div>
       </div>
 
-      <div className={styles.toolbar}>
+      <div className={mergeClasses(styles.toolbar, viewTabs && activeViewId && styles.toolbarWithTabs)}>
         <PurchaseOrderChangeActivityBar
           newCount={newCount}
           changedCount={changedCount}
@@ -227,6 +238,17 @@ export default function PurchaseOrdersPageTopBar({
           onClear={onClearSelection}
         />
       </div>
+
+      {viewTabs && activeViewId ? (
+        <div className={styles.tabsMount}>
+          <PurchaseOrderViewTabsHost
+            activeViewId={activeViewId}
+            viewTabs={viewTabs}
+            columns={columns}
+            canManage={isStaff}
+          />
+        </div>
+      ) : null}
 
       {error ? (
         <PurchaseOrderErrorDialog
