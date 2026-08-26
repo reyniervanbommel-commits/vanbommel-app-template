@@ -22,6 +22,9 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     ...shorthands.gap('16px'),
   },
+  vendorField: {
+    maxWidth: '168px',
+  },
 });
 
 // Dialog voor "opslaan als nieuwe view" en "hernoemen". mode bepaalt de velden.
@@ -36,6 +39,7 @@ export default function PurchaseOrderSavedViewDialog({
   const styles = useStyles();
   const [name, setName] = useState('');
   const [scope, setScope] = useState('personal');
+  const [vendorAccount, setVendorAccount] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -44,6 +48,7 @@ export default function PurchaseOrderSavedViewDialog({
     if (open) {
       setName(initialName || '');
       setScope('personal');
+      setVendorAccount('');
       setIsDefault(false);
       setSaving(false);
       setError('');
@@ -59,14 +64,14 @@ export default function PurchaseOrderSavedViewDialog({
     setSaving(true);
     setError('');
     try {
-      await onSubmit({ name: trimmed, scope, isDefault });
+      await onSubmit({ name: trimmed, scope, isDefault, vendorAccount: scope === 'vendor' ? vendorAccount.trim() : '' });
       onOpenChange(false);
     } catch (err) {
       setError(err.message || 'Save failed.');
     } finally {
       setSaving(false);
     }
-  }, [name, scope, isDefault, onSubmit, onOpenChange]);
+  }, [name, scope, isDefault, vendorAccount, onSubmit, onOpenChange]);
 
   const title = mode === 'rename' ? 'Rename view' : 'Save as new view';
 
@@ -93,9 +98,23 @@ export default function PurchaseOrderSavedViewDialog({
                     onChange={(_, data) => setScope(data.value)}
                   >
                     <Radio value="personal" label="Personal" />
-                    <Radio value="vendor" label="Vendor view (all suppliers)" />
+                    <Radio value="vendor" label="Vendor view" />
                     <Radio value="global" label="Shared (staff only)" />
                   </RadioGroup>
+                </Field>
+              ) : null}
+
+              {mode === 'create' && canManageGlobal && scope === 'vendor' ? (
+                <Field
+                  className={styles.vendorField}
+                  label="Vendor account"
+                  hint="Leave empty for all vendors. Fill in a D365 vendor account to assign this view to one supplier."
+                >
+                  <Input
+                    value={vendorAccount}
+                    onChange={(_, data) => setVendorAccount(data.value)}
+                    placeholder="e.g. Q000104"
+                  />
                 </Field>
               ) : null}
 

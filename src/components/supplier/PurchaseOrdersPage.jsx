@@ -98,13 +98,15 @@ export default function PurchaseOrdersPage() {
     reloadAfterRefresh();
     hiddenRows.reload();
   };
-  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
     applyColumnLayout,
     boardView,
     isSupplier,
+    columns: visibleHeaderColumns,
+    datePeriodDisplayModes,
   });
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
@@ -250,6 +252,7 @@ export default function PurchaseOrdersPage() {
           handleDeleteView,
           handleToggleShowHistory,
           allOrdersShowHistoryIndicators,
+          viewTabs,
         }}
         headerState={{
           isStaff,
@@ -286,6 +289,7 @@ export default function PurchaseOrdersPage() {
         }}
         onExportExcel={handleExportExcel}
         error={error}
+        columns={visibleHeaderColumns}
       />
 
       <PurchaseOrdersPageContent status={contentStatus} tableContext={tableContext} />

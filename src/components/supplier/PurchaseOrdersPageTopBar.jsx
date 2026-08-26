@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Badge,
   Button,
@@ -8,6 +8,9 @@ import {
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
+import PurchaseOrderViewTabsHost from './PurchaseOrderViewTabsHost';
+import PurchaseOrderSaveTabsDialog from './viewTabs/PurchaseOrderSaveTabsDialog';
+import { ALL_TAB_ID, inferGroupColumnKey } from '../../utils/viewTabs';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
 import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
@@ -69,6 +72,7 @@ export default function PurchaseOrdersPageTopBar({
   refreshState,
   onExportExcel,
   error,
+  columns = [],
 }) {
   const styles = useStyles();
   const { user } = useAuth();
@@ -87,7 +91,10 @@ export default function PurchaseOrdersPageTopBar({
     handleDeleteView,
     handleToggleShowHistory,
     allOrdersShowHistoryIndicators,
+    viewTabs,
   } = savedViewsState;
+  const [promptCreateTabs, setPromptCreateTabs] = useState(false);
+  const [saveTabsOpen, setSaveTabsOpen] = useState(false);
   const {
     isStaff,
     hasCache,
@@ -127,6 +134,38 @@ export default function PurchaseOrdersPageTopBar({
     setErrorDialogOpen(Boolean(open));
   }, []);
 
+  const activeView = useMemo(
+    () => savedViews.views.find((view) => view.id === activeViewId) || null,
+    [savedViews.views, activeViewId]
+  );
+  const groupLabel = useMemo(() => {
+    const tab = viewTabs?.extraTabs?.find((entry) => entry.id === viewTabs.activeTabId);
+    const key = tab ? inferGroupColumnKey(tab) : '';
+    const column = columns.find((entry) => entry.key === key);
+    return column?.label || key;
+  }, [columns, viewTabs]);
+
+  const onSaveAsNew = useCallback(async (payload) => {
+    await handleSaveAsNew(payload);
+    setPromptCreateTabs(true);
+  }, [handleSaveAsNew]);
+
+  const onRequestUpdate = useCallback(() => {
+    if (!activeView) return;
+    if (viewTabs?.activeTabId && viewTabs.activeTabId !== ALL_TAB_ID) {
+      setSaveTabsOpen(true);
+      return;
+    }
+    handleUpdateActive(activeView, 'all');
+  }, [activeView, handleUpdateActive, viewTabs]);
+
+  const onSaveTabs = useCallback(async (scope) => {
+    if (!activeView) return;
+    await handleUpdateActive(activeView, scope);
+  }, [activeView, handleUpdateActive]);
+
+  const handlePromptCreateHandled = useCallback(() => setPromptCreateTabs(false), []);
+
   return (
     <div className={styles.contentInset}>
       <div className={styles.header}>
@@ -143,8 +182,8 @@ export default function PurchaseOrdersPageTopBar({
               hasUnsavedChanges={hasUnsavedChanges}
               onApplyView={applyViewState}
               onResetView={handleResetView}
-              onSaveAsNew={handleSaveAsNew}
-              onUpdateActive={handleUpdateActive}
+              onSaveAsNew={onSaveAsNew}
+              onUpdateActive={onRequestUpdate}
               onRenameView={handleRenameView}
               onSetDefault={handleSetDefault}
               onDeleteView={handleDeleteView}
@@ -184,6 +223,17 @@ export default function PurchaseOrdersPageTopBar({
         </div>
       </div>
 
+      {viewTabs ? (
+        <PurchaseOrderViewTabsHost
+          activeViewId={activeViewId}
+          viewTabs={viewTabs}
+          columns={columns}
+          canManage={isStaff}
+          promptCreateTabs={promptCreateTabs}
+          onPromptCreateTabsHandled={handlePromptCreateHandled}
+        />
+      ) : null}
+
       <div className={styles.toolbar}>
         <PurchaseOrderChangeActivityBar
           newCount={newCount}
@@ -213,6 +263,12 @@ export default function PurchaseOrdersPageTopBar({
           canRefresh={isAdmin}
         />
       ) : null}
+      <PurchaseOrderSaveTabsDialog
+        open={saveTabsOpen}
+        groupLabel={groupLabel}
+        onOpenChange={setSaveTabsOpen}
+        onSubmit={onSaveTabs}
+      />
     </div>
   );
 }

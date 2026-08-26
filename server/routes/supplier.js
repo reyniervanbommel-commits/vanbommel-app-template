@@ -20,6 +20,12 @@ const BOARD_KEY_PATTERN = /^[a-z0-9-]{2,64}$/;
 const MAX_COLUMNS = 80;
 const { HEX_COLOR_PATTERN } = require('../utils/hexColor');
 const { normalizeBiSplitPane } = require('../utils/biSplitPane');
+const {
+  normalizeTabsState,
+  normalizeVendorAccount,
+  normalizeViewTabSelection,
+  vendorCanSeeView,
+} = require('../utils/viewTabs');
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
@@ -216,6 +222,7 @@ function normalizeBoardSettings(rawSettings) {
     collapsedHeaderColumnKeys: normalizeStringArray(input.collapsedHeaderColumnKeys),
     collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
     productImageColumnVisible: input.productImageColumnVisible !== false,
+    viewTabSelection: normalizeViewTabSelection(input.viewTabSelection),
   };
 }
 
@@ -287,6 +294,8 @@ function normalizeViewState(rawState) {
         summaryColumnKeys: normalizeStringArray(grouping.summaryColumnKeys),
       },
     },
+    tabs: normalizeTabsState(input.tabs),
+    vendorAccount: normalizeVendorAccount(input.vendorAccount),
   };
 }
 
@@ -414,13 +423,38 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid board key' });
     }
 
-    const settings = normalizeBoardSettings(req.body?.settings);
     const pool = await getPool();
     if (isStaffUser(req.user)) clearRuntimeHeaderLinksCache();
+    const existingResult = await pool.request()
+      .input('userId', sql.Int, req.user.id)
+      .input('boardKey', sql.NVarChar(64), boardKey)
+      .query(`
+        SELECT settings_json
+        FROM dbo.user_board_settings
+        WHERE user_id = @userId AND board_key = @boardKey
+      `);
+    let existing = {};
+    if (existingResult.recordset.length) {
+      try {
+        existing = JSON.parse(existingResult.recordset[0].settings_json || '{}') || {};
+      } catch {
+        existing = {};
+      }
+    }
+    const merged = normalizeBoardSettings({
+      ...existing,
+      ...req.body?.settings,
+      viewTabSelection: {
+        ...(existing.viewTabSelection && typeof existing.viewTabSelection === 'object' ? existing.viewTabSelection : {}),
+        ...(req.body?.settings?.viewTabSelection && typeof req.body.settings.viewTabSelection === 'object'
+          ? req.body.settings.viewTabSelection
+          : {}),
+      },
+    });
     await pool.request()
       .input('userId', sql.Int, req.user.id)
       .input('boardKey', sql.NVarChar(64), boardKey)
-      .input('settingsJson', sql.NVarChar(sql.MAX), JSON.stringify(settings))
+      .input('settingsJson', sql.NVarChar(sql.MAX), JSON.stringify(merged))
       .query(`
         MERGE dbo.user_board_settings AS target
         USING (SELECT @userId AS user_id, @boardKey AS board_key) AS source
@@ -432,7 +466,7 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
           VALUES (@userId, @boardKey, @settingsJson, SYSUTCDATETIME());
       `);
 
-    return res.json({ success: true, boardKey, settings });
+    return res.json({ success: true, boardKey, settings: merged });
   } catch (err) {
     return next(err);
   }
@@ -466,7 +500,13 @@ router.get('/board-views/:boardKey', async (req, res, next) => {
         ORDER BY scope, name
       `);
 
-    return res.json({ boardKey, views: result.recordset.map(mapViewRow) });
+    let views = result.recordset.map(mapViewRow);
+    if (!staff) {
+      const supplierAccount = getSupplierAccount(req.user);
+      views = views.filter((view) => view.scope !== 'vendor' || vendorCanSeeView(view, supplierAccount));
+    }
+
+    return res.json({ boardKey, views });
   } catch (err) {
     return next(err);
   }
