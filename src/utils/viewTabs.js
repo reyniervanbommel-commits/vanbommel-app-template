@@ -98,7 +98,7 @@ export function normalizeTabsState(rawTabs) {
     const columnKey = String(group.columnKey || '').slice(0, 64);
     const color = String(group.color || '');
     if (!columnKey) return null;
-    return { columnKey, color };
+    return { columnKey, color, namePrefix: String(group.namePrefix || '').trim().slice(0, 40) };
   }).filter(Boolean);
 
   return { extraTabs: normalizedTabs, groups: normalizedGroups };
@@ -150,7 +150,15 @@ export function nextGroupColor(groups) {
   return unused || palette[groups.length % Math.max(palette.length, 1)] || '#579bfc';
 }
 
-export function buildBulkTabs({ column, columnKey, values, existingTabs }) {
+export function formatTabName(prefix, value) {
+  const label = normalizeText(value);
+  const prefixText = normalizeText(prefix);
+  if (!label) return '';
+  if (!prefixText) return label.slice(0, 120);
+  return `${prefixText} ${label}`.slice(0, 120);
+}
+
+export function buildBulkTabs({ column, columnKey, values, existingTabs, namePrefix = '' }) {
   const existing = existingEqualsValues(existingTabs, columnKey);
   const created = [];
   (values || []).forEach((rawValue) => {
@@ -160,7 +168,7 @@ export function buildBulkTabs({ column, columnKey, values, existingTabs }) {
     existing.add(label.toLowerCase());
     created.push({
       id: createTabId(),
-      name: label.slice(0, 120),
+      name: formatTabName(namePrefix, label),
       groupColumnKey: columnKey,
       extraFilters: {
         [columnKey]: column ? buildFilterFromCellValue(column, rawValue) : {
@@ -216,11 +224,18 @@ export function groupColorForTab(tab, groups) {
   return group?.color || '';
 }
 
-export function upsertGroup(groups, columnKey, color) {
+export function upsertGroup(groups, columnKey, color, namePrefix) {
   if (!columnKey) return groups || [];
   const next = [...(groups || [])];
   const index = next.findIndex((group) => group.columnKey === columnKey);
-  const entry = { columnKey, color };
+  const prev = index >= 0 ? next[index] : {};
+  const entry = {
+    columnKey,
+    color: color || prev.color || '',
+    namePrefix: namePrefix !== undefined
+      ? normalizeText(namePrefix).slice(0, 40)
+      : String(prev.namePrefix || ''),
+  };
   if (index >= 0) next[index] = entry;
   else next.push(entry);
   return next;

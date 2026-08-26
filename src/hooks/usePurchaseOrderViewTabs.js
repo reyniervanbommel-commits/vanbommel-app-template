@@ -159,7 +159,7 @@ export function usePurchaseOrderViewTabs({
     applyMergedFilters(viewBaseRef.current, {});
   }, [applyMergedFilters, snapshotCurrentTab]);
 
-  const addTabsFromColumn = useCallback(({ columnKey, color }) => {
+  const addTabsFromColumn = useCallback(({ columnKey, color, namePrefix }) => {
     skipFilterPrompt();
     snapshotCurrentTab();
     const column = columns.find((entry) => entry.key === columnKey);
@@ -170,9 +170,10 @@ export function usePurchaseOrderViewTabs({
       columnKey,
       values,
       existingTabs: extraTabsRef.current,
+      namePrefix,
     });
     const nextTabs = [...extraTabsRef.current, ...created];
-    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups));
+    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups), namePrefix);
     setExtraTabs(nextTabs);
     extraTabsRef.current = nextTabs;
     setGroups(nextGroups);

@@ -47,7 +47,7 @@ function normalizeTabsState(rawTabs) {
     const columnKey = String(group.columnKey || '').slice(0, 64);
     const color = HEX_COLOR_PATTERN.test(String(group.color || '')) ? String(group.color).toLowerCase() : '';
     if (!columnKey) return null;
-    return { columnKey, color };
+    return { columnKey, color, namePrefix: String(group.namePrefix || '').trim().slice(0, 40) };
   }).filter(Boolean);
 
   return { extraTabs: normalizedTabs, groups: normalizedGroups };

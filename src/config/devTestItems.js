@@ -9,7 +9,8 @@ export const devTestItems = [
     checks: [
       'Save a view, then create tabs from a column (unique values of the current filters).',
       'All tab shows the shared view filters; extra tabs only add extra filters.',
-      'Right-click the All tab or the chevron for + Tab, + Tab from column, and group color.',
+      'Open the view menu for + Tab, + Tab from column, and group color (bottom of the menu).',
+      'When creating tabs from a column, an optional name prefix is shown in front of each value.',
       'Right-click an extra tab to delete this tab or all tabs in the same group.',
       'Setting an extra filter on an extra tab immediately asks This tab only vs All tabs with the same filter.',
       'Vendor views show the vendor account number after the view name in the view menu.',

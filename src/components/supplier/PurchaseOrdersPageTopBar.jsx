@@ -7,8 +7,7 @@ import {
 } from '@fluentui/react-components';
 import PurchaseOrderBulkActionsBar from './PurchaseOrderBulkActionsBar';
 import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
-import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
-import PurchaseOrderViewTabsHost from './PurchaseOrderViewTabsHost';
+import PurchaseOrderViewTitleRow from './PurchaseOrderViewTitleRow';
 import PurchaseOrderSaveTabsDialog from './viewTabs/PurchaseOrderSaveTabsDialog';
 import { ALL_TAB_ID, inferGroupColumnKey } from '../../utils/viewTabs';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
@@ -25,22 +24,9 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: '8px',
   },
   titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 },
-  viewRow: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: '12px',
-    flexWrap: 'nowrap',
-    minWidth: 0,
-    width: '100%',
-  },
-  viewTitle: {
-    flexShrink: 0,
-    minWidth: 0,
-    maxWidth: '260px',
-  },
   tableName: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -88,16 +74,8 @@ export default function PurchaseOrdersPageTopBar({
   const {
     savedViews,
     activeViewId,
-    hasUnsavedChanges,
-    applyViewState,
-    handleResetView,
     handleSaveAsNew,
     handleUpdateActive,
-    handleRenameView,
-    handleSetDefault,
-    handleDeleteView,
-    handleToggleShowHistory,
-    allOrdersShowHistoryIndicators,
     viewTabs,
   } = savedViewsState;
   const [promptCreateTabs, setPromptCreateTabs] = useState(false);
@@ -190,39 +168,16 @@ export default function PurchaseOrdersPageTopBar({
       <div className={styles.header}>
         <div className={styles.titleWrap}>
           <div className={styles.tableName}>Master plan purchase orders</div>
-          <div className={styles.viewRow}>
-            <div className={styles.viewTitle}>
-              <PurchaseOrderSavedViewsControl
-                titleMode
-                views={savedViews.views}
-                activeViewId={activeViewId}
-                canManageGlobal={isStaff}
-                canManageViews={isStaff}
-                saving={savedViews.saving}
-                hasUnsavedChanges={hasUnsavedChanges}
-                onApplyView={applyViewState}
-                onResetView={handleResetView}
-                onSaveAsNew={onSaveAsNew}
-                onUpdateActive={onRequestUpdate}
-                onRenameView={handleRenameView}
-                onSetDefault={handleSetDefault}
-                onDeleteView={handleDeleteView}
-                onToggleShowHistory={handleToggleShowHistory}
-                allOrdersShowHistoryIndicators={allOrdersShowHistoryIndicators}
-                onExportExcel={onExportExcel}
-              />
-            </div>
-            {viewTabs ? (
-              <PurchaseOrderViewTabsHost
-                activeViewId={activeViewId}
-                viewTabs={viewTabs}
-                columns={columns}
-                canManage={isStaff}
-                promptCreateTabs={promptCreateTabs}
-                onPromptCreateTabsHandled={handlePromptCreateHandled}
-              />
-            ) : null}
-          </div>
+          <PurchaseOrderViewTitleRow
+            savedViewsState={savedViewsState}
+            isStaff={isStaff}
+            columns={columns}
+            onExportExcel={onExportExcel}
+            promptCreateTabs={promptCreateTabs}
+            onPromptCreateTabsHandled={handlePromptCreateHandled}
+            onSaveAsNew={onSaveAsNew}
+            onRequestUpdate={onRequestUpdate}
+          />
         </div>
 
         <div className={styles.headerRight}>

@@ -1,10 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
-import {
-  PurchaseOrderCreateTabsDialog,
-  PurchaseOrderNewTabDialog,
-  PurchaseOrderViewTabBar,
-} from './viewTabs';
+import { PurchaseOrderViewTabBar } from './viewTabs';
 
 const useStyles = makeStyles({
   wrap: {
@@ -12,7 +8,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     display: 'flex',
     alignItems: 'flex-end',
-    paddingTop: tokens.spacingVerticalS,
+    paddingTop: tokens.spacingVerticalL,
   },
 });
 
@@ -21,31 +17,8 @@ export default function PurchaseOrderViewTabsHost({
   viewTabs,
   columns = [],
   canManage,
-  promptCreateTabs = false,
-  onPromptCreateTabsHandled,
 }) {
   const styles = useStyles();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newOpen, setNewOpen] = useState(false);
-
-  useEffect(() => {
-    if (promptCreateTabs && activeViewId) {
-      setCreateOpen(true);
-      onPromptCreateTabsHandled?.();
-    }
-  }, [promptCreateTabs, activeViewId, onPromptCreateTabsHandled]);
-
-  const handleCreate = useCallback(async ({ columnKey, color }) => {
-    viewTabs.addTabsFromColumn({ columnKey, color });
-  }, [viewTabs]);
-
-  const handleNew = useCallback((name) => {
-    viewTabs.addBlankTab(name);
-  }, [viewTabs]);
-
-  const openNewTab = useCallback(() => setNewOpen(true), []);
-  const openCreateTabs = useCallback(() => setCreateOpen(true), []);
-
   if (!activeViewId) return null;
 
   return (
@@ -57,20 +30,8 @@ export default function PurchaseOrderViewTabsHost({
         canManage={canManage}
         onSelectTab={viewTabs.selectTab}
         onRemoveTab={viewTabs.removeTab}
-        onNewTab={openNewTab}
-        onCreateFromColumn={openCreateTabs}
-        onSetGroupColor={viewTabs.setGroupColor}
         columns={columns}
       />
-      <PurchaseOrderCreateTabsDialog
-        open={createOpen}
-        columns={columns}
-        groups={viewTabs.groups}
-        uniqueValueCount={viewTabs.uniqueValueCount}
-        onOpenChange={setCreateOpen}
-        onSubmit={handleCreate}
-      />
-      <PurchaseOrderNewTabDialog open={newOpen} onOpenChange={setNewOpen} onSubmit={handleNew} />
     </div>
   );
 }

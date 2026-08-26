@@ -88,8 +88,7 @@ const useStyles = makeStyles({
 const NO_VIEW_LABEL = 'All orders (no view)';
 
 /**
- * View picker: switch views first, then manage the active view, then create/delete.
- * Suppliers only see the view list (canManageViews=false).
+ * View picker: All orders, then saved views, then manage/create, then tabs, then export.
  */
 export default function PurchaseOrderSavedViewsControl({
   views,
@@ -109,6 +108,7 @@ export default function PurchaseOrderSavedViewsControl({
   onToggleShowHistory = () => {},
   onExportExcel = null,
   allOrdersShowHistoryIndicators = true,
+  tabMenu = null,
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -175,6 +175,14 @@ export default function PurchaseOrderSavedViewsControl({
         </MenuTrigger>
         <MenuPopover className={styles.menuPopover}>
           <MenuList>
+            <SavedViewMenuItem
+              view={allOrdersView}
+              activeViewId={activeViewId}
+              onApplyView={onResetView}
+              onToggleShowHistory={onToggleShowHistory}
+              canManageGlobal
+            />
+            <MenuDivider />
             <SavedViewScopeGroup
               title="Vendor"
               views={vendorViews}
@@ -201,21 +209,6 @@ export default function PurchaseOrderSavedViewsControl({
             />
             {!hasSavedViews ? (
               <div className={styles.empty}>No saved views yet</div>
-            ) : null}
-            <MenuDivider />
-            <SavedViewMenuItem
-              view={allOrdersView}
-              activeViewId={activeViewId}
-              onApplyView={onResetView}
-              onToggleShowHistory={onToggleShowHistory}
-              canManageGlobal
-            />
-
-            {onExportExcel ? (
-              <>
-                <MenuDivider />
-                <PurchaseOrderExportMenu onExportExcel={onExportExcel} />
-              </>
             ) : null}
 
             {activeCanManage ? (
@@ -245,6 +238,13 @@ export default function PurchaseOrderSavedViewsControl({
                       Set as default
                     </MenuItem>
                   ) : null}
+                  <MenuItem
+                    icon={<DeleteRegular className={styles.deleteAction} />}
+                    className={styles.deleteAction}
+                    onClick={() => onDeleteView(activeView)}
+                  >
+                    Delete view
+                  </MenuItem>
                 </MenuGroup>
               </>
             ) : null}
@@ -258,16 +258,12 @@ export default function PurchaseOrderSavedViewsControl({
               </>
             ) : null}
 
-            {activeCanManage ? (
+            {tabMenu}
+
+            {onExportExcel ? (
               <>
                 <MenuDivider />
-                <MenuItem
-                  icon={<DeleteRegular className={styles.deleteAction} />}
-                  className={styles.deleteAction}
-                  onClick={() => onDeleteView(activeView)}
-                >
-                  Delete view
-                </MenuItem>
+                <PurchaseOrderExportMenu onExportExcel={onExportExcel} />
               </>
             ) : null}
           </MenuList>

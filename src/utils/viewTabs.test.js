@@ -17,6 +17,7 @@ import {
   viewVendorAccount,
   vendorCanSeeView,
   removeTabsByScope,
+  formatTabName,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -61,6 +62,18 @@ describe('viewTabs', () => {
     expect(created[0].groupColumnKey).toBe('vendorAccount');
     expect(created[0].extraFilters.vendorAccount.value).toBe('Q000105');
     expect(existingEqualsValues([...existing, ...created], 'vendorAccount').has('q000104')).toBe(true);
+  });
+
+  it('zet een vaste prefix vóór de kolomwaarde op tab-namen', () => {
+    expect(formatTabName('Vendor', 'Q000104')).toBe('Vendor Q000104');
+    expect(formatTabName('  ', 'Q000104')).toBe('Q000104');
+    const created = buildBulkTabs({
+      columnKey: 'vendorAccount',
+      values: ['Q000105'],
+      existingTabs: [],
+      namePrefix: 'Vendor',
+    });
+    expect(created[0].name).toBe('Vendor Q000105');
   });
 
   it('splitst extra filters t.o.v. de view-base', () => {
@@ -112,9 +125,10 @@ describe('viewTabs', () => {
   });
 
   it('zet groepskleur per kolom en hergebruikt ongebruikte paletkleur', () => {
-    const groups = upsertGroup([], 'vendorAccount', nextGroupColor([]));
+    const groups = upsertGroup([], 'vendorAccount', nextGroupColor([]), 'Vendor');
     expect(groups[0].columnKey).toBe('vendorAccount');
     expect(groups[0].color).toMatch(/^#/);
+    expect(groups[0].namePrefix).toBe('Vendor');
     expect(inferGroupColumnKey({ extraFilters: { vendorAccount: { operator: 'equals', value: 'X' } } })).toBe('vendorAccount');
   });
 

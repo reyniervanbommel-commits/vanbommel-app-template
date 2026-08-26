@@ -9,10 +9,11 @@ import {
   Tab,
   TabList,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ChevronDownRegular, MoreHorizontalRegular } from '@fluentui/react-icons';
+import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
 import { ALL_TAB_ID, groupColorForTab } from '../../../utils/viewTabs';
 
@@ -35,22 +36,13 @@ const useStyles = makeStyles({
     maxWidth: '180px',
     minHeight: '28px',
     ...shorthands.margin('0', '4px', '0', '0'),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    '::after': {
+      display: 'none',
+    },
   },
-  allInner: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalXXS),
-  },
-  allChevron: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    ...shorthands.padding('0'),
-    ...shorthands.border('0'),
-    backgroundColor: 'transparent',
-    color: tokens.colorNeutralForeground3,
-    cursor: 'pointer',
-    lineHeight: '1',
-    fontSize: '12px',
+  tabActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
   },
   colorBar: {
     height: '3px',
@@ -83,12 +75,9 @@ export default function PurchaseOrderViewTabBar({
   canManage,
   onSelectTab,
   onRemoveTab,
-  onNewTab,
-  onCreateFromColumn,
-  onSetGroupColor,
 }) {
   const styles = useStyles();
-  const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: ALL_TAB_ID });
+  const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: '' });
 
   const handleSelect = useCallback((_, data) => {
     onSelectTab(data.value);
@@ -99,33 +88,13 @@ export default function PurchaseOrderViewTabBar({
     if (tabId) onSelectTab(tabId);
   }, [onSelectTab]);
 
-  const openMenuAt = useCallback((event, tabId) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect?.();
-    setContext({
-      open: true,
-      x: rect ? rect.left : event.clientX,
-      y: rect ? rect.bottom : event.clientY,
-      tabId: tabId || ALL_TAB_ID,
-    });
-  }, []);
-
   const handleContextMenu = useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
-    const tabId = event.currentTarget.getAttribute('data-tab-id') || ALL_TAB_ID;
+    const tabId = event.currentTarget.getAttribute('data-tab-id');
+    if (!tabId || tabId === ALL_TAB_ID) return;
     setContext({ open: true, x: event.clientX, y: event.clientY, tabId });
   }, []);
-
-  const handleAllMenuClick = useCallback((event) => {
-    openMenuAt(event, ALL_TAB_ID);
-  }, [openMenuAt]);
-
-  const handleAllMenuKeyDown = useCallback((event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    openMenuAt(event, ALL_TAB_ID);
-  }, [openMenuAt]);
 
   const handleContextOpenChange = useCallback((open) => {
     setContext((prev) => ({ ...prev, open }));
@@ -136,36 +105,19 @@ export default function PurchaseOrderViewTabBar({
   return (
     <div className={styles.row}>
       <div className={styles.scroller}>
-        <TabList appearance="subtle" selectedValue={activeTabId} onTabSelect={handleSelect} size="small">
+        <TabList appearance="subtle" selectedValue={activeTabId} onTabSelect={handleSelect} size="small" reserveSelectedTabSpace={false}>
           <Tab
-            className={styles.tab}
+            className={mergeClasses(styles.tab, activeTabId === ALL_TAB_ID && styles.tabActive)}
             value={ALL_TAB_ID}
-            data-tab-id={ALL_TAB_ID}
-            onContextMenu={handleContextMenu}
           >
-            <span className={styles.allInner}>
-              All
-              {canManage ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className={styles.allChevron}
-                  aria-label="Tab menu"
-                  onMouseDown={handleAllMenuClick}
-                  onClick={handleAllMenuClick}
-                  onKeyDown={handleAllMenuKeyDown}
-                >
-                  <ChevronDownRegular />
-                </span>
-              ) : null}
-            </span>
+            All
           </Tab>
           {extraTabs.map((tab) => {
             const color = groupColorForTab(tab, groups);
             return (
               <Tab
                 key={tab.id}
-                className={styles.tab}
+                className={mergeClasses(styles.tab, activeTabId === tab.id && styles.tabActive)}
                 value={tab.id}
                 title={tab.name}
                 data-tab-id={tab.id}
@@ -207,10 +159,7 @@ export default function PurchaseOrderViewTabBar({
         columns={columns}
         canManage={canManage}
         onOpenChange={handleContextOpenChange}
-        onNewTab={onNewTab}
-        onCreateFromColumn={onCreateFromColumn}
         onRemoveTab={onRemoveTab}
-        onSetGroupColor={onSetGroupColor}
       />
     </div>
   );
