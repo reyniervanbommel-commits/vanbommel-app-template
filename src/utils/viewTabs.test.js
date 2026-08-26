@@ -19,6 +19,7 @@ import {
   removeTabsByScope,
   formatTabName,
   tabUnderlineColor,
+  hasExtraViewTabs,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -175,9 +176,15 @@ describe('viewTabs', () => {
     expect(removeTabsByScope(tabs, 'a', 'group').map((tab) => tab.id)).toEqual(['c']);
   });
 
-  it('zet tab-onderstreep op 100% opacity voor actief en 50% voor inactief', () => {
+  it('zet tab-onderstreep op 100% opacity voor actief en 25% voor inactief', () => {
     expect(tabUnderlineColor('#00c875', true)).toBe('#00c875');
-    expect(tabUnderlineColor('#00c875', false)).toBe('#00c87580');
+    expect(tabUnderlineColor('#00c875', false)).toBe('#00c87540');
     expect(tabUnderlineColor('', true)).toBe('');
+  });
+
+  it('toont de tabbalk alleen wanneer er extra tabs zijn', () => {
+    expect(hasExtraViewTabs([])).toBe(false);
+    expect(hasExtraViewTabs(null)).toBe(false);
+    expect(hasExtraViewTabs([{ id: 'tab_1' }])).toBe(true);
   });
 });

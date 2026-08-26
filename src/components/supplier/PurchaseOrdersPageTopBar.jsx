@@ -11,7 +11,7 @@ import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
 import PurchaseOrderViewTitleRow from './PurchaseOrderViewTitleRow';
 import PurchaseOrderViewTabsHost from './PurchaseOrderViewTabsHost';
 import PurchaseOrderSaveTabsDialog from './viewTabs/PurchaseOrderSaveTabsDialog';
-import { ALL_TAB_ID, inferGroupColumnKey } from '../../utils/viewTabs';
+import { ALL_TAB_ID, hasExtraViewTabs, inferGroupColumnKey } from '../../utils/viewTabs';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
 import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
@@ -174,6 +174,8 @@ export default function PurchaseOrdersPageTopBar({
     setSaveTabsOpen(true);
   }, [viewTabs?.extraFilterPrompt]);
 
+  const showViewTabs = Boolean(activeViewId && hasExtraViewTabs(viewTabs?.extraTabs));
+
   return (
     <div className={styles.contentInset}>
       <div className={styles.header}>
@@ -220,7 +222,7 @@ export default function PurchaseOrdersPageTopBar({
         </div>
       </div>
 
-      <div className={mergeClasses(styles.toolbar, viewTabs && activeViewId && styles.toolbarWithTabs)}>
+      <div className={mergeClasses(styles.toolbar, showViewTabs && styles.toolbarWithTabs)}>
         <PurchaseOrderChangeActivityBar
           newCount={newCount}
           changedCount={changedCount}
@@ -239,7 +241,7 @@ export default function PurchaseOrdersPageTopBar({
         />
       </div>
 
-      {viewTabs && activeViewId ? (
+      {showViewTabs ? (
         <div className={styles.tabsMount}>
           <PurchaseOrderViewTabsHost
             activeViewId={activeViewId}

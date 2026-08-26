@@ -1,6 +1,7 @@
 import React from 'react';
 import { makeStyles } from '@fluentui/react-components';
 import { PurchaseOrderViewTabBar } from './viewTabs';
+import { hasExtraViewTabs } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   wrap: {
@@ -18,7 +19,7 @@ export default function PurchaseOrderViewTabsHost({
   canManage,
 }) {
   const styles = useStyles();
-  if (!activeViewId) return null;
+  if (!activeViewId || !hasExtraViewTabs(viewTabs?.extraTabs)) return null;
 
   return (
     <div className={styles.wrap}>

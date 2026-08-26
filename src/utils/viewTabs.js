@@ -226,10 +226,14 @@ export function groupColorForTab(tab, groups) {
 }
 
 export const TAB_UNDERLINE_ACTIVE_OPACITY = 100;
-export const TAB_UNDERLINE_INACTIVE_OPACITY = 50;
+export const TAB_UNDERLINE_INACTIVE_OPACITY = 25;
 
 export function tabUnderlineColor(groupColor, isActive) {
   return applyOpacity(groupColor, isActive ? TAB_UNDERLINE_ACTIVE_OPACITY : TAB_UNDERLINE_INACTIVE_OPACITY);
+}
+
+export function hasExtraViewTabs(extraTabs) {
+  return Array.isArray(extraTabs) && extraTabs.length > 0;
 }
 
 export function upsertGroup(groups, columnKey, color, namePrefix) {

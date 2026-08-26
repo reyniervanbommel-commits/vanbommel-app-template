@@ -11,6 +11,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
+import { ColorRegular, ColumnRegular, TabAddRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../../shared/ColorPalettePicker';
 import PurchaseOrderCreateTabsDialog from './PurchaseOrderCreateTabsDialog';
 import PurchaseOrderNewTabDialog from './PurchaseOrderNewTabDialog';
@@ -33,7 +34,7 @@ function GroupColorMenuItem({ columnKey, label, selectedColor, onSetGroupColor }
   return (
     <Menu>
       <MenuTrigger disableButtonEnhancement>
-        <MenuItem>Group color: {label}</MenuItem>
+        <MenuItem icon={<ColorRegular />}>Group color: {label}</MenuItem>
       </MenuTrigger>
       <MenuPopover>
         <div className={styles.colorWrap} onMouseDown={stopMenuClose} onClick={stopMenuClose}>
@@ -88,8 +89,8 @@ export default function PurchaseOrderViewTabMenuSection({
       <MenuDivider />
       <MenuGroup>
         <MenuGroupHeader>Tabs</MenuGroupHeader>
-        <MenuItem onClick={openNewTab}>+ Tab</MenuItem>
-        <MenuItem onClick={openCreateTabs}>+ Tab from column…</MenuItem>
+        <MenuItem icon={<TabAddRegular />} onClick={openNewTab}>Tab</MenuItem>
+        <MenuItem icon={<ColumnRegular />} onClick={openCreateTabs}>Tab from column…</MenuItem>
         {groups.map((group) => (
           <GroupColorMenuItem
             key={group.columnKey}

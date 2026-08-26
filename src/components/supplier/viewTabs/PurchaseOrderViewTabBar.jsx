@@ -15,7 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
-import { ALL_TAB_ID, groupColorForTab, tabUnderlineColor } from '../../../utils/viewTabs';
+import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs, tabUnderlineColor } from '../../../utils/viewTabs';
 
 const useStyles = makeStyles({
   row: {
@@ -41,7 +41,9 @@ const useStyles = makeStyles({
     },
   },
   tabActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
     fontWeight: tokens.fontWeightSemibold,
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
   },
   colorBar: {
     height: '3px',
@@ -53,7 +55,7 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandStroke1,
   },
   colorBarFallbackMuted: {
-    backgroundColor: `color-mix(in srgb, ${tokens.colorBrandStroke1} 50%, transparent)`,
+    backgroundColor: `color-mix(in srgb, ${tokens.colorBrandStroke1} 25%, transparent)`,
   },
   tabInner: {
     display: 'flex',
@@ -118,7 +120,7 @@ export default function PurchaseOrderViewTabBar({
     setContext((prev) => ({ ...prev, open }));
   }, []);
 
-  if (!canManage && extraTabs.length === 0) return null;
+  if (!hasExtraViewTabs(extraTabs)) return null;
 
   return (
     <div className={styles.row}>

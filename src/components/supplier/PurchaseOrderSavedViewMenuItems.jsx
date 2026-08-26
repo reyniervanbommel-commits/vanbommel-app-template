@@ -9,7 +9,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ClockRegular } from '@fluentui/react-icons';
+import { ClockRegular, BuildingRegular, PeopleRegular, PersonRegular, TableRegular } from '@fluentui/react-icons';
 import { viewVendorAccount } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
@@ -73,6 +73,13 @@ function canToggleViewHistory(view, canManageGlobal) {
   return canManageGlobal;
 }
 
+function viewItemIcon(view) {
+  if (view.id == null) return <TableRegular />;
+  if (view.scope === 'vendor') return <BuildingRegular />;
+  if (view.scope === 'global') return <PeopleRegular />;
+  return <PersonRegular />;
+}
+
 export function SavedViewMenuItem({
   view,
   activeViewId,
@@ -102,6 +109,7 @@ export function SavedViewMenuItem({
 
   return (
     <MenuItem
+      icon={viewItemIcon(view)}
       className={mergeClasses(styles.viewMenuItem, isActive && styles.viewMenuItemActive)}
       aria-current={isActive ? 'true' : undefined}
       onClick={handleApply}
