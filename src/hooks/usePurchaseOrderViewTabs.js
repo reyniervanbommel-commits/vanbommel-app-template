@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedBoardSettings } from '../utils/boardPresentationCache';
 import {
@@ -6,6 +6,7 @@ import {
   buildBulkTabs,
   copyGroupExtraFilters,
   createTabId,
+  extraFiltersEqual,
   filterRowsByFilters,
   inferGroupColumnKey,
   mergeFilters,
@@ -36,17 +37,25 @@ export function usePurchaseOrderViewTabs({
   const viewBaseRef = useRef(viewBaseFilters);
   const extraTabsRef = useRef(extraTabs);
   const activeTabIdRef = useRef(activeTabId);
+  const skipFilterPromptRef = useRef(false);
+  const lastExtraSigRef = useRef('');
+  const [extraFilterPrompt, setExtraFilterPrompt] = useState(0);
   viewBaseRef.current = viewBaseFilters;
   extraTabsRef.current = extraTabs;
   activeTabIdRef.current = activeTabId;
 
+  const skipFilterPrompt = useCallback(() => {
+    skipFilterPromptRef.current = true;
+  }, []);
+
   const applyMergedFilters = useCallback((baseFilters, extraFilters) => {
+    skipFilterPrompt();
     const exported = boardView.exportFilterSortGrouping();
     boardView.applyFilterSortGrouping({
       ...exported,
       filterByColumn: mergeFilters(baseFilters, extraFilters),
     });
-  }, [boardView]);
+  }, [boardView, skipFilterPrompt]);
 
   const snapshotCurrentTab = useCallback(() => {
     const live = boardView.exportFilterSortGrouping()?.filterByColumn || {};
@@ -65,6 +74,7 @@ export function usePurchaseOrderViewTabs({
   }, [boardView]);
 
   const loadFromViewState = useCallback((viewState) => {
+    skipFilterPrompt();
     const tabs = normalizeTabsState(viewState?.tabs);
     const baseFilters = viewState?.table?.filterByColumn && typeof viewState.table.filterByColumn === 'object'
       ? viewState.table.filterByColumn
@@ -85,7 +95,7 @@ export function usePurchaseOrderViewTabs({
       const tab = tabs.extraTabs.find((entry) => entry.id === restored);
       applyMergedFilters(baseFilters, tab?.extraFilters || {});
     }
-  }, [applyMergedFilters]);
+  }, [applyMergedFilters, skipFilterPrompt]);
 
   const resetTabs = useCallback(() => {
     setExtraTabs([]);
@@ -149,6 +159,7 @@ export function usePurchaseOrderViewTabs({
   }, [applyMergedFilters, snapshotCurrentTab]);
 
   const addTabsFromColumn = useCallback(({ columnKey, color }) => {
+    skipFilterPrompt();
     snapshotCurrentTab();
     const column = columns.find((entry) => entry.key === columnKey);
     const scopedRows = filterRowsByFilters(allItems, columns, viewBaseRef.current, datePeriodDisplayModes);
@@ -165,7 +176,7 @@ export function usePurchaseOrderViewTabs({
     extraTabsRef.current = nextTabs;
     setGroups(nextGroups);
     return created.length;
-  }, [allItems, columns, datePeriodDisplayModes, groups, snapshotCurrentTab]);
+  }, [allItems, columns, datePeriodDisplayModes, groups, skipFilterPrompt, snapshotCurrentTab]);
 
   const setGroupColor = useCallback((columnKey, color) => {
     setGroups((prev) => upsertGroup(prev, columnKey, color));
@@ -185,6 +196,7 @@ export function usePurchaseOrderViewTabs({
   }, [snapshotCurrentTab]);
 
   const applySaveScope = useCallback((scope) => {
+    skipFilterPrompt();
     const snap = snapshotCurrentTab();
     if (scope !== 'group' || activeTabIdRef.current === ALL_TAB_ID) {
       return snap.extraTabs;
@@ -196,7 +208,7 @@ export function usePurchaseOrderViewTabs({
     setExtraTabs(next);
     extraTabsRef.current = next;
     return next;
-  }, [snapshotCurrentTab]);
+  }, [skipFilterPrompt, snapshotCurrentTab]);
 
   const uniqueValueCount = useCallback((columnKey) => {
     const scopedRows = filterRowsByFilters(allItems, columns, viewBaseRef.current, datePeriodDisplayModes);
@@ -218,6 +230,29 @@ export function usePurchaseOrderViewTabs({
     };
   }, [activeTabId, boardView, extraTabs, groups, viewBaseFilters]);
 
+  useEffect(() => {
+    if (activeTabId === ALL_TAB_ID) {
+      lastExtraSigRef.current = '';
+      skipFilterPromptRef.current = false;
+      return;
+    }
+    const liveFilters = boardView.filterByColumn
+      || boardView.exportFilterSortGrouping()?.filterByColumn
+      || {};
+    const extra = splitExtraFilters(liveFilters, viewBaseRef.current);
+    const sig = JSON.stringify(extra);
+    if (skipFilterPromptRef.current) {
+      skipFilterPromptRef.current = false;
+      lastExtraSigRef.current = sig;
+      return;
+    }
+    if (sig === lastExtraSigRef.current) return;
+    lastExtraSigRef.current = sig;
+    const tab = extraTabsRef.current.find((entry) => entry.id === activeTabId);
+    if (tab && extraFiltersEqual(extra, tab.extraFilters)) return;
+    setExtraFilterPrompt((count) => count + 1);
+  }, [activeTabId, boardView.filterByColumn]);
+
   return useMemo(() => ({
     activeTabId,
     extraTabs,
@@ -236,6 +271,7 @@ export function usePurchaseOrderViewTabs({
     applySaveScope,
     uniqueValueCount,
     peekTabsState,
+    extraFilterPrompt,
     hasExtraTabs: extraTabs.length > 0,
   }), [
     activeTabId,
@@ -255,5 +291,6 @@ export function usePurchaseOrderViewTabs({
     applySaveScope,
     uniqueValueCount,
     peekTabsState,
+    extraFilterPrompt,
   ]);
 }

@@ -27,12 +27,19 @@ const useStyles = makeStyles({
     alignItems: 'center',
     marginBottom: '16px',
   },
-  titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+  titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 },
   viewRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    flexWrap: 'wrap',
+    gap: '12px',
+    flexWrap: 'nowrap',
+    minWidth: 0,
+    width: '100%',
+  },
+  viewTitle: {
+    flexShrink: 0,
+    minWidth: 0,
+    maxWidth: '260px',
   },
   tableName: {
     color: tokens.colorNeutralForeground3,
@@ -95,6 +102,7 @@ export default function PurchaseOrdersPageTopBar({
   } = savedViewsState;
   const [promptCreateTabs, setPromptCreateTabs] = useState(false);
   const [saveTabsOpen, setSaveTabsOpen] = useState(false);
+  const [saveTabsMode, setSaveTabsMode] = useState('persist');
   const {
     isStaff,
     hasCache,
@@ -153,6 +161,7 @@ export default function PurchaseOrdersPageTopBar({
   const onRequestUpdate = useCallback(() => {
     if (!activeView) return;
     if (viewTabs?.activeTabId && viewTabs.activeTabId !== ALL_TAB_ID) {
+      setSaveTabsMode('persist');
       setSaveTabsOpen(true);
       return;
     }
@@ -160,11 +169,21 @@ export default function PurchaseOrdersPageTopBar({
   }, [activeView, handleUpdateActive, viewTabs]);
 
   const onSaveTabs = useCallback(async (scope) => {
+    if (saveTabsMode === 'scope') {
+      viewTabs?.applySaveScope(scope);
+      return;
+    }
     if (!activeView) return;
     await handleUpdateActive(activeView, scope);
-  }, [activeView, handleUpdateActive]);
+  }, [activeView, handleUpdateActive, saveTabsMode, viewTabs]);
 
   const handlePromptCreateHandled = useCallback(() => setPromptCreateTabs(false), []);
+
+  useEffect(() => {
+    if (!viewTabs?.extraFilterPrompt) return;
+    setSaveTabsMode('scope');
+    setSaveTabsOpen(true);
+  }, [viewTabs?.extraFilterPrompt]);
 
   return (
     <div className={styles.contentInset}>
@@ -172,25 +191,37 @@ export default function PurchaseOrdersPageTopBar({
         <div className={styles.titleWrap}>
           <div className={styles.tableName}>Master plan purchase orders</div>
           <div className={styles.viewRow}>
-            <PurchaseOrderSavedViewsControl
-              titleMode
-              views={savedViews.views}
-              activeViewId={activeViewId}
-              canManageGlobal={isStaff}
-              canManageViews={isStaff}
-              saving={savedViews.saving}
-              hasUnsavedChanges={hasUnsavedChanges}
-              onApplyView={applyViewState}
-              onResetView={handleResetView}
-              onSaveAsNew={onSaveAsNew}
-              onUpdateActive={onRequestUpdate}
-              onRenameView={handleRenameView}
-              onSetDefault={handleSetDefault}
-              onDeleteView={handleDeleteView}
-              onToggleShowHistory={handleToggleShowHistory}
-              allOrdersShowHistoryIndicators={allOrdersShowHistoryIndicators}
-              onExportExcel={onExportExcel}
-            />
+            <div className={styles.viewTitle}>
+              <PurchaseOrderSavedViewsControl
+                titleMode
+                views={savedViews.views}
+                activeViewId={activeViewId}
+                canManageGlobal={isStaff}
+                canManageViews={isStaff}
+                saving={savedViews.saving}
+                hasUnsavedChanges={hasUnsavedChanges}
+                onApplyView={applyViewState}
+                onResetView={handleResetView}
+                onSaveAsNew={onSaveAsNew}
+                onUpdateActive={onRequestUpdate}
+                onRenameView={handleRenameView}
+                onSetDefault={handleSetDefault}
+                onDeleteView={handleDeleteView}
+                onToggleShowHistory={handleToggleShowHistory}
+                allOrdersShowHistoryIndicators={allOrdersShowHistoryIndicators}
+                onExportExcel={onExportExcel}
+              />
+            </div>
+            {viewTabs ? (
+              <PurchaseOrderViewTabsHost
+                activeViewId={activeViewId}
+                viewTabs={viewTabs}
+                columns={columns}
+                canManage={isStaff}
+                promptCreateTabs={promptCreateTabs}
+                onPromptCreateTabsHandled={handlePromptCreateHandled}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -222,17 +253,6 @@ export default function PurchaseOrdersPageTopBar({
           />
         </div>
       </div>
-
-      {viewTabs ? (
-        <PurchaseOrderViewTabsHost
-          activeViewId={activeViewId}
-          viewTabs={viewTabs}
-          columns={columns}
-          canManage={isStaff}
-          promptCreateTabs={promptCreateTabs}
-          onPromptCreateTabsHandled={handlePromptCreateHandled}
-        />
-      ) : null}
 
       <div className={styles.toolbar}>
         <PurchaseOrderChangeActivityBar
@@ -266,6 +286,11 @@ export default function PurchaseOrdersPageTopBar({
       <PurchaseOrderSaveTabsDialog
         open={saveTabsOpen}
         groupLabel={groupLabel}
+        confirmLabel={saveTabsMode === 'scope' ? 'Apply' : 'Save'}
+        title={saveTabsMode === 'scope' ? 'Apply extra filter' : 'Save tab changes'}
+        fieldLabel={saveTabsMode === 'scope'
+          ? 'Choose This tab only or All tabs with the same filter.'
+          : 'What should be saved?'}
         onOpenChange={setSaveTabsOpen}
         onSubmit={onSaveTabs}
       />

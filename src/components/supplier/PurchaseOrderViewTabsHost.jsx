@@ -1,9 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { makeStyles } from '@fluentui/react-components';
 import {
   PurchaseOrderCreateTabsDialog,
   PurchaseOrderNewTabDialog,
   PurchaseOrderViewTabBar,
 } from './viewTabs';
+
+const useStyles = makeStyles({
+  wrap: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
+  },
+});
 
 export default function PurchaseOrderViewTabsHost({
   activeViewId,
@@ -13,6 +23,7 @@ export default function PurchaseOrderViewTabsHost({
   promptCreateTabs = false,
   onPromptCreateTabsHandled,
 }) {
+  const styles = useStyles();
   const [createOpen, setCreateOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
 
@@ -37,7 +48,7 @@ export default function PurchaseOrderViewTabsHost({
   if (!activeViewId) return null;
 
   return (
-    <>
+    <div className={styles.wrap}>
       <PurchaseOrderViewTabBar
         activeTabId={viewTabs.activeTabId}
         extraTabs={viewTabs.extraTabs}
@@ -58,6 +69,6 @@ export default function PurchaseOrderViewTabsHost({
         onSubmit={handleCreate}
       />
       <PurchaseOrderNewTabDialog open={newOpen} onOpenChange={setNewOpen} onSubmit={handleNew} />
-    </>
+    </div>
   );
 }

@@ -9,8 +9,10 @@ export const devTestItems = [
     checks: [
       'Save a view, then create tabs from a column (unique values of the current filters).',
       'All tab shows the shared view filters; extra tabs only add extra filters.',
-      'Save on an extra tab offers this tab vs all tabs in the same group (e.g. vendor).',
-      'Vendor views can target all vendors or one vendor account.',
+      'Right-click the All tab for + Tab, From column, and group color.',
+      'Right-click an extra tab to delete it.',
+      'Setting an extra filter on an extra tab immediately asks This tab only vs All tabs with the same filter.',
+      'Vendor views show the vendor account number after the view name in the view menu.',
     ],
   },
 ];

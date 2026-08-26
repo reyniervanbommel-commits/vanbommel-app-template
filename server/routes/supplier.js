@@ -314,6 +314,7 @@ function mapViewRow(row) {
     userId: row.user_id === null || row.user_id === undefined ? null : Number(row.user_id),
     isDefault: Boolean(row.is_default),
     viewState: normalizeViewState(parsedState),
+    vendorAccount: normalizeVendorAccount(parsedState.vendorAccount),
     updatedAt: row.updated_at,
   };
 }

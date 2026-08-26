@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Button,
   Menu,
@@ -9,21 +9,20 @@ import {
   Tab,
   TabList,
   makeStyles,
-  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { AddRegular, DismissRegular, MoreHorizontalRegular } from '@fluentui/react-icons';
-import ColorPalettePicker from '../../shared/ColorPalettePicker';
-import { ALL_TAB_ID, groupColorForTab, inferGroupColumnKey } from '../../../utils/viewTabs';
+import { MoreHorizontalRegular } from '@fluentui/react-icons';
+import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
+import { ALL_TAB_ID, groupColorForTab } from '../../../utils/viewTabs';
 
 const useStyles = makeStyles({
   row: {
     display: 'flex',
     alignItems: 'center',
     ...shorthands.gap(tokens.spacingHorizontalS),
-    marginBottom: tokens.spacingVerticalS,
     minWidth: 0,
+    flex: 1,
   },
   scroller: {
     display: 'flex',
@@ -34,12 +33,16 @@ const useStyles = makeStyles({
   },
   tab: {
     maxWidth: '180px',
+    minHeight: '32px',
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.margin('0', '4px', '0', '0'),
   },
   colorBar: {
     height: '3px',
     width: '100%',
     ...shorthands.borderRadius(tokens.borderRadiusSmall),
-    marginBottom: '2px',
+    marginTop: '2px',
   },
   tabInner: {
     display: 'flex',
@@ -54,7 +57,6 @@ const useStyles = makeStyles({
   actions: {
     display: 'flex',
     alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalXS),
     flexShrink: 0,
   },
 });
@@ -71,57 +73,64 @@ export default function PurchaseOrderViewTabBar({
   onSetGroupColor,
 }) {
   const styles = useStyles();
-  const [colorOpen, setColorOpen] = useState(false);
-  const selected = useMemo(
-    () => extraTabs.find((tab) => tab.id === activeTabId) || null,
-    [extraTabs, activeTabId]
-  );
-  const selectedGroupKey = selected ? inferGroupColumnKey(selected) : '';
-  const selectedColor = selected ? groupColorForTab(selected, groups) : '';
+  const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: ALL_TAB_ID });
 
   const handleSelect = useCallback((_, data) => {
     onSelectTab(data.value);
   }, [onSelectTab]);
-
-  const handleRemoveSelected = useCallback(() => {
-    if (selected) onRemoveTab(selected.id);
-  }, [onRemoveTab, selected]);
 
   const handleOverflowClick = useCallback((event) => {
     const tabId = event.currentTarget.getAttribute('data-tab-id');
     if (tabId) onSelectTab(tabId);
   }, [onSelectTab]);
 
-  const handleColorMenuOpen = useCallback((_, data) => {
-    setColorOpen(Boolean(data.open));
+  const handleContextMenu = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const tabId = event.currentTarget.getAttribute('data-tab-id') || ALL_TAB_ID;
+    setContext({ open: true, x: event.clientX, y: event.clientY, tabId });
   }, []);
 
-  const handleColor = useCallback((color) => {
-    if (selectedGroupKey) onSetGroupColor(selectedGroupKey, color);
-  }, [onSetGroupColor, selectedGroupKey]);
+  const handleContextOpenChange = useCallback((open) => {
+    setContext((prev) => ({ ...prev, open }));
+  }, []);
 
   if (!canManage && extraTabs.length === 0) return null;
 
   return (
     <div className={styles.row}>
       <div className={styles.scroller}>
-        <TabList selectedValue={activeTabId} onTabSelect={handleSelect} size="small">
-          <Tab className={styles.tab} value={ALL_TAB_ID}>All</Tab>
+        <TabList appearance="subtle" selectedValue={activeTabId} onTabSelect={handleSelect} size="small">
+          <Tab
+            className={styles.tab}
+            value={ALL_TAB_ID}
+            data-tab-id={ALL_TAB_ID}
+            onContextMenu={handleContextMenu}
+          >
+            All
+          </Tab>
           {extraTabs.map((tab) => {
             const color = groupColorForTab(tab, groups);
             return (
-              <Tab key={tab.id} className={styles.tab} value={tab.id} title={tab.name}>
+              <Tab
+                key={tab.id}
+                className={styles.tab}
+                value={tab.id}
+                title={tab.name}
+                data-tab-id={tab.id}
+                onContextMenu={handleContextMenu}
+              >
                 <span className={styles.tabInner}>
-                  {color ? <span className={styles.colorBar} style={{ backgroundColor: color }} /> : null}
                   <span className={styles.tabLabel}>{tab.name}</span>
+                  {color ? <span className={styles.colorBar} style={{ backgroundColor: color }} /> : null}
                 </span>
               </Tab>
             );
           })}
         </TabList>
       </div>
-      <div className={styles.actions}>
-        {extraTabs.length > 4 ? (
+      {extraTabs.length > 4 ? (
+        <div className={styles.actions}>
           <Menu>
             <MenuTrigger disableButtonEnhancement>
               <Button appearance="subtle" size="small" icon={<MoreHorizontalRegular />} aria-label="More tabs" />
@@ -135,44 +144,22 @@ export default function PurchaseOrderViewTabBar({
               </MenuList>
             </MenuPopover>
           </Menu>
-        ) : null}
-        {canManage ? (
-          <>
-            <Button appearance="subtle" size="small" icon={<AddRegular />} onClick={onNewTab}>
-              New tab
-            </Button>
-            <Button appearance="subtle" size="small" onClick={onCreateFromColumn}>
-              From column…
-            </Button>
-            {selected ? (
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<DismissRegular />}
-                aria-label="Close tab"
-                onClick={handleRemoveSelected}
-              />
-            ) : null}
-            {selected && selectedGroupKey ? (
-              <Menu open={colorOpen} onOpenChange={handleColorMenuOpen}>
-                <MenuTrigger disableButtonEnhancement>
-                  <Button appearance="subtle" size="small">Group color</Button>
-                </MenuTrigger>
-                <MenuPopover>
-                  <div className={mergeClasses(styles.tabInner)}>
-                    <ColorPalettePicker
-                      selectedColor={selectedColor || '#579bfc'}
-                      onSelect={handleColor}
-                      layout="grid"
-                      ariaLabel="Group color"
-                    />
-                  </div>
-                </MenuPopover>
-              </Menu>
-            ) : null}
-          </>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
+      <PurchaseOrderViewTabContextMenu
+        open={context.open}
+        x={context.x}
+        y={context.y}
+        tabId={context.tabId}
+        extraTabs={extraTabs}
+        groups={groups}
+        canManage={canManage}
+        onOpenChange={handleContextOpenChange}
+        onNewTab={onNewTab}
+        onCreateFromColumn={onCreateFromColumn}
+        onRemoveTab={onRemoveTab}
+        onSetGroupColor={onSetGroupColor}
+      />
     </div>
   );
 }

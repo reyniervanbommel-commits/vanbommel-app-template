@@ -46,6 +46,16 @@ export function splitExtraFilters(liveFilters, baseFilters) {
   return extra;
 }
 
+export function extraFiltersEqual(left, right) {
+  const a = normalizeExtraFilters(left);
+  const b = normalizeExtraFilters(right);
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (!filtersEqual(a[key], b[key])) return false;
+  }
+  return true;
+}
+
 export function createTabId() {
   return `tab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -207,6 +217,11 @@ export function upsertGroup(groups, columnKey, color) {
 
 export function normalizeVendorAccount(value) {
   return normalizeText(value).slice(0, 64);
+}
+
+export function viewVendorAccount(view) {
+  if (!view || view.scope !== 'vendor') return '';
+  return normalizeVendorAccount(view.vendorAccount || view.viewState?.vendorAccount);
 }
 
 export function vendorCanSeeView(view, supplierAccount) {

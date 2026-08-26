@@ -9,6 +9,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { CheckmarkRegular, ClockRegular } from '@fluentui/react-icons';
+import { viewVendorAccount } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   viewMenuItem: {
@@ -28,6 +29,12 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  vendorSuffix: {
+    marginLeft: '6px',
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
   },
   historyControl: {
     display: 'flex',
@@ -76,6 +83,8 @@ export function SavedViewMenuItem({
     event.stopPropagation();
   }, []);
 
+  const vendorAccount = viewVendorAccount(view);
+
   return (
     <MenuItem
       icon={isActive ? <CheckmarkRegular /> : undefined}
@@ -84,7 +93,9 @@ export function SavedViewMenuItem({
     >
       <span className={styles.viewMenuItemRow}>
         <span className={styles.viewMenuItemLabel}>
-          {view.name}{view.isDefault ? ' (default)' : ''}
+          {view.name}
+          {vendorAccount ? <span className={styles.vendorSuffix}>{vendorAccount}</span> : null}
+          {view.isDefault ? ' (default)' : ''}
         </span>
         <span className={styles.historyControl} title="Show history indicators">
           <ClockRegular className={styles.historyIcon} aria-hidden />

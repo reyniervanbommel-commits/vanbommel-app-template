@@ -13,6 +13,8 @@ import {
   splitExtraFilters,
   uniqueColumnValues,
   upsertGroup,
+  extraFiltersEqual,
+  viewVendorAccount,
   vendorCanSeeView,
 } from './viewTabs';
 
@@ -127,5 +129,23 @@ describe('viewTabs', () => {
     });
     expect(normalized.extraTabs[0].name).toBe('Open');
     expect(normalized.groups).toEqual([]);
+  });
+
+  it('vergelijkt extra filters ongeacht lege secondaryValue', () => {
+    expect(extraFiltersEqual(
+      { status: { operator: 'equals', value: 'Open' } },
+      { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+    )).toBe(true);
+    expect(extraFiltersEqual(
+      { status: { operator: 'equals', value: 'Open' } },
+      { status: { operator: 'equals', value: 'Closed' } },
+    )).toBe(false);
+  });
+
+  it('toont vendor-nummer alleen bij een vendor-view met account', () => {
+    expect(viewVendorAccount({ scope: 'vendor', vendorAccount: 'Q000104' })).toBe('Q000104');
+    expect(viewVendorAccount({ scope: 'vendor', viewState: { vendorAccount: 'Q000105' } })).toBe('Q000105');
+    expect(viewVendorAccount({ scope: 'global', vendorAccount: 'Q000104' })).toBe('');
+    expect(viewVendorAccount({ scope: 'vendor', vendorAccount: '  ' })).toBe('');
   });
 });

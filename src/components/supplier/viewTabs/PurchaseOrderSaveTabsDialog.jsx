@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -26,11 +26,18 @@ const useStyles = makeStyles({
 export default function PurchaseOrderSaveTabsDialog({
   open,
   groupLabel,
+  confirmLabel = 'Save',
+  title = 'Save tab changes',
+  fieldLabel = 'What should be saved?',
   onOpenChange,
   onSubmit,
 }) {
   const styles = useStyles();
   const [scope, setScope] = useState('tab');
+
+  useEffect(() => {
+    if (open) setScope('tab');
+  }, [open]);
 
   const handleSubmit = useCallback(async () => {
     await onSubmit(scope);
@@ -41,10 +48,10 @@ export default function PurchaseOrderSaveTabsDialog({
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Save tab changes</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogContent>
             <div className={styles.form}>
-              <Field label="What should be saved?">
+              <Field label={fieldLabel}>
                 <RadioGroup value={scope} onChange={(_, data) => setScope(data.value)}>
                   <Radio value="tab" label="This tab only" />
                   <Radio
@@ -59,7 +66,7 @@ export default function PurchaseOrderSaveTabsDialog({
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button appearance="primary" onClick={handleSubmit}>Save</Button>
+            <Button appearance="primary" onClick={handleSubmit}>{confirmLabel}</Button>
           </DialogActions>
         </DialogBody>
       </DialogSurface>

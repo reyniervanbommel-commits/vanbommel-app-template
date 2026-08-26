@@ -36,8 +36,9 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
   },
   titleTrigger: {
-    maxWidth: '420px',
+    maxWidth: '260px',
     minWidth: 0,
+    flexShrink: 0,
     height: 'auto',
     ...shorthands.padding('0'),
     ...shorthands.border('none'),

@@ -11,6 +11,9 @@ function createBoardView(filters = {}) {
     applyFilterSortGrouping: vi.fn((state) => {
       current = { ...current, ...state };
     }),
+    get filterByColumn() {
+      return current.filterByColumn;
+    },
     allItems: [
       { values: { vendorAccount: 'Q000104', status: 'Invoiced' } },
       { values: { vendorAccount: 'Q000105', status: 'Invoiced' } },
@@ -45,5 +48,29 @@ describe('usePurchaseOrderViewTabs', () => {
     expect(result.current.extraTabs.filter((tab) => tab.groupColumnKey === 'vendorAccount').length).toBe(2);
     expect(result.current.groups[0].columnKey).toBe('vendorAccount');
     expect(result.current.activeTabId).not.toBe(ALL_TAB_ID);
+  });
+
+  it('vraagt extra-filter scope nadat een extra tab-filter verandert', () => {
+    const boardView = createBoardView();
+    const { result, rerender } = renderHook(() => usePurchaseOrderViewTabs({
+      activeViewId: 9,
+      boardView,
+      columns: [{ key: 'status', label: 'Status', dataType: 'text' }],
+      allItems: [{ values: { status: 'Open' } }],
+    }));
+
+    act(() => {
+      result.current.addBlankTab('Dates');
+    });
+    expect(result.current.extraFilterPrompt).toBe(0);
+
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+      });
+    });
+    rerender();
+
+    expect(result.current.extraFilterPrompt).toBeGreaterThan(0);
   });
 });
