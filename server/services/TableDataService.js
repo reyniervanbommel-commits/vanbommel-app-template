@@ -3771,7 +3771,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
 
   const { revision, parts } = await revisionPromise;
 
-  if (table.key === 'purchase-orders' && parts) {
+  if (table.key === 'purchase-orders' && parts && includeDetails) {
     const { rememberKpiPoRows, contentSignature } = require('./BoardSnapshotCache');
     rememberKpiPoRows({
       tableKey: table.key,

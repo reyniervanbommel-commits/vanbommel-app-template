@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/rccpUtils';
-import { clearRccpAnalysisPrefetchCache } from '../utils/rccpAnalysisPrefetch';
+import { clearRccpAnalysisPrefetchCache, getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
 import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 
 export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refreshKey }) {
@@ -15,7 +15,10 @@ export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refres
     if (!skipLoading) setLoading(true);
     setError('');
     try {
-      const data = await apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined));
+      // Zonder vendor (all-vendors op de split-tab) is er nooit een prefetch — geen cache-lookup,
+      // gewoon de bestaande fetch.
+      const cached = vendorAccount ? getCachedRccpAnalysis(isoWindow, vendorAccount) : null;
+      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined)));
       setAnalysis(data);
     } catch (err) {
       setError(err.message || 'Failed to load RCCP analysis');

@@ -33,6 +33,25 @@ export function isoWeekStartUtc(year, week) {
   return start;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Vertaalt een ISO-weekvenster naar een `{ start, end }` datumrange (ISO-strings), inclusief
+ * tot en met zondag 23:59:59.999 van de laatste week. Gedeeld door `useBiDateFilter` (React) en
+ * `biBoardPrefetch` (buiten React) zodat beide exact dezelfde range berekenen.
+ * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} isoWindow
+ * @returns {{ start: string, end: string } | null}
+ */
+export function isoWindowDateRange(isoWindow) {
+  if (!isoWindow) return null;
+  const { fromYear, fromWeek, toYear, toWeek } = isoWindow;
+  const start = isoWeekStartUtc(fromYear, fromWeek);
+  const endMonday = isoWeekStartUtc(toYear, toWeek);
+  const end = new Date(endMonday.getTime() + 7 * DAY_MS - 1);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 /** Short English label for the Monday that starts the ISO week (e.g. "31 Mar"). */
 export function formatIsoWeekMondayLabel(year, week) {
   return isoWeekStartUtc(year, week).toLocaleDateString('en-GB', {

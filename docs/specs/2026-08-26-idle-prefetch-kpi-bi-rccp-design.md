@@ -16,7 +16,12 @@ Keep-alive maakt alleen **terugkeer** naar een al bezochte pagina instant. Dit o
    1. Server-snapshot mét PO-regels warmen via `GET /api/rccp/board-kpis` (compacte client-payload).
    2. JS-chunks van `/rccp` en `/bi` prefetchen (`import()`).
    3. RCCP-analyse prefetchen voor **alleen** de laatst gekozen vendor + opgeslagen ISO-weekrange (bestaande `prefetchRccpAnalysis`). Geen “alle vendors”.
-   4. BI: chartlijst + `POST /api/bi/aggregate` in `biBoardCache`, zelfde keys als `useChartData`.
+   4. BI: chartlijst + `POST /api/bi/aggregate` in `biBoardCache`, met
+      dezelfde vendor-/datumfilter als de echte `/bi`-lezing zal gebruiken:
+      lees `readPoFilterByColumnForRccp()` (PO-kolomfilter-handoff) en
+      `GET /bi/date-filter` vóórdat de aggregate-payload gebouwd wordt.
+      Zonder die twee inputs is de cache-key vrijwel zeker anders dan
+      `useChartData` gebruikt en is de prefetch een no-op.
 4. Hover op rail-items RCCP/BI mag dezelfde prefetch starten als idle nog niet klaar was.
 5. Prefetch schrijft **niet** naar PO-tabel React-state (`orders` / filters / grouping).
 6. `/rccp` en `/bi` worden **niet** stiekem gemount (geen extra keep-alive-slots).

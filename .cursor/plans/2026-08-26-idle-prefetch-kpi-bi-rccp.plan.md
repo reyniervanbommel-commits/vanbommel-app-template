@@ -51,7 +51,8 @@ Lees dit blok vóór de taken. Dit is wat een perf/architectuur-review moet afke
 | `src/utils/idleWhenQuiet.test.js` | Fake timers / fake rIC |
 | `src/utils/dataPagesPrefetch.js` | Orchestratie 4 stappen, dedupe |
 | `src/utils/dataPagesPrefetch.test.js` | Volgorde, skip zonder vendor, fouten slikken |
-| `src/utils/biBoardPrefetch.js` | Charts + aggregate → `setBiSeries` / `setBiRevision` |
+| `src/utils/biBoardPrefetch.js` | Charts + aggregate → `setBiSeries` / `setBiRevision`; leest eerst PO-vendorfilter-handoff + `/bi/date-filter` voor key-parity |
+| `src/utils/biChartFetchKey.js` | Gedeelde `chartFetchKey` (uit `useChartData.js` getrokken) zodat prefetch en echte lezing dezelfde cache-key bouwen |
 | `src/hooks/useDataPagesPrefetch.js` | Koppelen aan PO-pagina actief + board geladen |
 | `src/hooks/useRccpSplitAnalysis.js` | `getCachedRccpAnalysis` hergebruiken |
 | `src/components/layout/AppLayout.jsx` | Optioneel: `onMouseEnter` rail RCCP/BI → `kickDataPagesPrefetch` |
@@ -102,6 +103,13 @@ it('negeert een board-snapshot zonder details en doet alsnog een kpi_po_read mé
 ```
 
 Tweede test: `read` met `includeDetails: false` pad — `rememberKpiPoRows` wordt niet aangeroepen vanuit TableDataService (spy of: na een mock board-remember zonder details blijft `readRccpPoRows` een verse read doen). Minimaal de cache-helper testen; TableDataService-wijziging is een `if (includeDetails)` rond het bestaande blok.
+
+Let op: dit vereist ook een aanpassing van de bestaande test
+`'hergebruikt een warm board-snapshot zonder tweede read()'` in
+`BoardSnapshotCache.test.js` (regel 91-101) — de mock-rows daar
+(`[{ recordKey: 'PO-SNAP' }]`) hebben geen `details`, en falen dus
+op de nieuwe `snapshotHasDetails`-check. Update naar
+`rows: [{ recordKey: 'PO-SNAP', details: [] }]`.
 
 - [ ] **Step 2:** Helper:
 
@@ -210,11 +218,13 @@ Let op: bij `requestIdleCallback` is `idleId` een rIC-handle, bij fallback een t
 - Create: `src/utils/dataPagesPrefetch.js`
 - Create: `src/utils/dataPagesPrefetch.test.js`
 - Create: `src/utils/biBoardPrefetch.js` (klein, of in hetzelfde bestand als BI-stuk < 80 regels)
+- Create: `src/utils/biChartFetchKey.js` — `chartFetchKey(chart, inheritedFilters, dataRevision, dateFilter)` geëxtraheerd uit `src/components/bi/hooks/useChartData.js`; beide bestanden importeren dezelfde functie (geen kopie)
+- Modify: `src/components/bi/hooks/useChartData.js` — lokale `chartFetchKey` vervangen door de import uit `biChartFetchKey.js`
 - Modify: `src/utils/rccpAnalysisPrefetch.js` — geen API-wijziging nodig als we `prefetchRccpAnalysis` hergebruiken
 - Modify: `src/hooks/useRccpSplitAnalysis.js` — cache hergebruiken zoals `useRccpPage`
 
 **Interfaces:**
-- Consumes: `getPoBoardKpis`, `prefetchRccpAnalysis`, `apiRequest`, `setBiSeries`, `setBiRevision`, `chartFetchKey`-logica uit `useChartData` **niet dupliceren** — extraheer `buildBiAggregatePayload(charts, filterByColumn)` alleen als nodig; anders `/bi/charts` + aggregate met `inheritedFilters: []` en zonder dateFilter als date-filter uit is.
+- Consumes: `getPoBoardKpis`, `prefetchRccpAnalysis`, `apiRequest`, `setBiSeries`, `setBiRevision`, de gedeelde `chartFetchKey` uit `biChartFetchKey.js` (**niet** losstaand in `useChartData.js` laten staan — dat is precies de duplicatie die een cache-key-mismatch veroorzaakt), `readPoFilterByColumnForRccp` (`src/utils/poVendorFilterHandoff.js`), `resolveDefaultRccpVendor`/`resolveRccpVendorFromFilter` (`src/components/rccp/resolveRccpVendorFilter.js`), `useRccpVendorOptions` (voor `vendorColumnKey`)
 - Produces: `startDataPagesPrefetch({ refreshKey, lastVendor, isoWindow }) → Promise<void>`; `preloadDataPageChunks()`; interne dedupe-key
 
 - [ ] **Step 1: Tests** met `vi.mock('../utils/api')` en mocks voor `getPoBoardKpis` / `prefetchRccpAnalysis`:
@@ -222,6 +232,8 @@ Let op: bij `requestIdleCallback` is `idleId` een rIC-handle, bij fallback een t
   - zonder `lastVendor`: analysis **niet** aangeroepen
   - `getPoBoardKpis` throw → rest slikt, geen throw naar caller
   - tweede `startDataPagesPrefetch` zelfde `refreshKey` doet geen tweede board-kpis (dedupe)
+  - `prefetchBiDashboard` met een gemockt actief PO-vendorfilter (`readPoFilterByColumnForRccp` → niet-lege waarde): de `POST /bi/aggregate`-payload bevat de bijbehorende `externalFilterByColumn`-filter, en de opgeslagen `setBiSeries`-key matcht een key gebouwd via dezelfde `chartFetchKey`-call als `useChartData` met die filters zou maken
+  - `prefetchBiDashboard` met `/bi/date-filter` → `enabled: true`: de aggregate-payload bevat het datumfilter; met `enabled: false` (of request-fout) geen datumfilter
 
 - [ ] **Step 2: Implementatie** — stappen `await` sequentieel (niet parallel), zodat SQL/JSON niet samen pieken:
 
@@ -251,7 +263,14 @@ function preloadDataPageChunks() {
 }
 ```
 
-`prefetchBiDashboard`: `apiRequest('/bi/charts')` → max 20 charts → `POST /bi/aggregate` met `boardKey: 'purchase-orders'` en `charts: charts.map(c => c.config)` (zelfde shape als `useChartData`). Resultaat in `setBiRevision(data.revision)` en per chart `setBiSeries(chartFetchKey(...), series)`. Als `useChartData` keys niet 1-op-1 matchen, **eerst** de key-builder extraheren naar `src/utils/biChartFetchKey.js` en beide laten importeren — anders is de prefetch nutteloos.
+`prefetchBiDashboard`: bepaalt eerst dezelfde filters als `BiPage` zou gebruiken — anders is de cache-key gegarandeerd anders dan die van `useChartData` en de hele stap een no-op:
+
+1. Vendor: `readPoFilterByColumnForRccp()` → `resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn })` (vendorlijst via `useRccpVendorOptions`-databron, geen hook nodig buiten React — hergebruik de onderliggende `apiRequest`/cache die die hook al gebruikt) → `externalFilterByColumn` net als in `useBiVendorFilter` (`{ [vendorColumnKey]: { operator: 'equals', value: vendorAccount } }`, of `undefined` bij "all vendors"/supplier).
+2. Datumfilter: `apiRequest('/bi/date-filter')` → alleen een `dateRange` meenemen als `dateFilter.enabled` waar is; anders `null` (zelfde als `useBiDateFilter` ongeactiveerd).
+3. `apiRequest('/bi/charts')` → max 20 charts → per chart dezelfde `filters`-opbouw als `useChartData` (`chart.config.filters + inheritedFilters + dateFilter-voor-die-chart`) → `POST /bi/aggregate` met `boardKey: 'purchase-orders'`.
+4. Resultaat in `setBiRevision(data.revision)` en per chart `setBiSeries(chartFetchKey(chart, inheritedFilters, dataRevision, dateFilterForChart), series)` — met de **gedeelde** `chartFetchKey` uit `biChartFetchKey.js`, dezelfde parameters (inclusief `dataRevision`, standaard `null` zoals `BiPage` die niet meegeeft) als `useChartData` intern gebruikt.
+
+Zonder stap 1-2 (filter-parity) is dit hele stuk verspilde server-load: bij elke gebruiker met een actief PO-vendorfilter of een ingeschakelde BI-datumfilter zou de naïeve variant (geen filters meenemen) een cache-key bouwen die nooit door de echte `/bi`-lezing wordt geraakt.
 
 - [ ] **Step 3:** `useRccpSplitAnalysis.load`: zelfde patroon als `useRccpPage` (`getCachedRccpAnalysis(isoWindow, vendorAccount)` vóór `apiRequest`). Zonder vendor (lege string / all-vendors op de split-tab): **geen** prefetch van all-vendors; bestaande fetch bij tab-open mag blijven.
 
@@ -312,6 +331,8 @@ Geen code. Checklist voor reviewer:
 - [ ] Capaciteit-tegels op PO-KPI-tab blijven `—`.
 - [ ] Navigatie naar `/rccp` en `/bi` mount keep-alive pas bij eerste bezoek (Network: JS-chunk mag al binnen zijn).
 - [ ] Scroll 2000-rijen + kolomfilter typen terwijl prefetch loopt: subjectief gelijk aan baseline; bij twijfel `perf-scroll` / HUD `keepalive` niet erger.
+- [ ] `perf-review` (modus `regression`) vóór/na op de PO-pagina: deze wijziging raakt het PO-board hot path (nieuwe hook ná `loading=false`) — verplicht per Kwaliteitspoort (CLAUDE.md), niet optioneel bij twijfel. Baseline + na-meting bijvoegen bij de PR.
+- [ ] BI-prefetch key-parity in de praktijk: zet een PO-vendor-kolomfilter, wacht op idle-prefetch, open `/bi` — Network toont **geen** nieuwe `POST /bi/aggregate` voor charts die al door de prefetch zijn opgehaald (cache-hit, niet alleen "geen crash").
 
 ---
 
