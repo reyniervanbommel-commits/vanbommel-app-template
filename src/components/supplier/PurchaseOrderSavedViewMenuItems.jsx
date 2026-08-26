@@ -33,8 +33,9 @@ const useStyles = makeStyles({
   vendorSuffix: {
     marginLeft: '6px',
     color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase100,
     fontWeight: tokens.fontWeightRegular,
+    textDecorationLine: 'underline',
   },
   historyControl: {
     display: 'flex',

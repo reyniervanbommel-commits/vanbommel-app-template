@@ -36,6 +36,7 @@ export default function PurchaseOrderViewTabContextMenu({
   tabId,
   extraTabs,
   groups,
+  columns = [],
   canManage,
   onOpenChange,
   onNewTab,
@@ -53,6 +54,7 @@ export default function PurchaseOrderViewTabContextMenu({
   const selectedColor = tab
     ? groupColorForTab(tab, groups)
     : (groups[0]?.color || '#579bfc');
+  const groupLabel = columns.find((column) => column.key === groupKey)?.label || groupKey;
 
   const handleOpenChange = useCallback((_, data) => {
     onOpenChange(Boolean(data.open));
@@ -68,8 +70,13 @@ export default function PurchaseOrderViewTabContextMenu({
     onOpenChange(false);
   }, [onCreateFromColumn, onOpenChange]);
 
-  const handleDelete = useCallback(() => {
-    if (tabId && tabId !== ALL_TAB_ID) onRemoveTab(tabId);
+  const handleDeleteThis = useCallback(() => {
+    if (tabId && tabId !== ALL_TAB_ID) onRemoveTab(tabId, 'tab');
+    onOpenChange(false);
+  }, [onRemoveTab, onOpenChange, tabId]);
+
+  const handleDeleteGroup = useCallback(() => {
+    if (tabId && tabId !== ALL_TAB_ID) onRemoveTab(tabId, 'group');
     onOpenChange(false);
   }, [onRemoveTab, onOpenChange, tabId]);
 
@@ -92,7 +99,7 @@ export default function PurchaseOrderViewTabContextMenu({
         {isAll ? (
           <MenuList>
             <MenuItem icon={<AddRegular />} onClick={handleNewTab}>+ Tab</MenuItem>
-            <MenuItem onClick={handleFromColumn}>From column…</MenuItem>
+            <MenuItem onClick={handleFromColumn}>+ Tab from column…</MenuItem>
             {groups.length ? (
               <div className={styles.colorWrap} onMouseDown={stopMenuClose} onClick={stopMenuClose}>
                 <Text size={200}>Group color</Text>
@@ -107,7 +114,14 @@ export default function PurchaseOrderViewTabContextMenu({
           </MenuList>
         ) : (
           <MenuList>
-            <MenuItem icon={<DeleteRegular />} onClick={handleDelete}>Delete tab</MenuItem>
+            <MenuItem icon={<DeleteRegular />} onClick={handleDeleteThis}>This tab only</MenuItem>
+            {groupKey ? (
+              <MenuItem icon={<DeleteRegular />} onClick={handleDeleteGroup}>
+                {groupLabel
+                  ? `All tabs with the same ${groupLabel} filter`
+                  : 'All tabs in this group'}
+              </MenuItem>
+            ) : null}
           </MenuList>
         )}
       </MenuPopover>

@@ -179,6 +179,17 @@ export function tabsInGroup(extraTabs, columnKey) {
   return (extraTabs || []).filter((tab) => inferGroupColumnKey(tab) === columnKey);
 }
 
+export function removeTabsByScope(extraTabs, tabId, scope = 'tab') {
+  const list = extraTabs || [];
+  const tab = list.find((entry) => entry.id === tabId);
+  if (!tab) return list;
+  if (scope === 'group') {
+    const groupKey = inferGroupColumnKey(tab);
+    if (groupKey) return list.filter((entry) => inferGroupColumnKey(entry) !== groupKey);
+  }
+  return list.filter((entry) => entry.id !== tabId);
+}
+
 export function copyGroupExtraFilters(sourceTab, extraTabs, groupColumnKey) {
   const sourceExtra = sourceTab?.extraFilters || {};
   return (extraTabs || []).map((tab) => {

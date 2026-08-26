@@ -15,6 +15,7 @@ import {
   splitExtraFilters,
   uniqueColumnValues,
   upsertGroup,
+  removeTabsByScope,
 } from '../utils/viewTabs';
 
 const BOARD_KEY = 'purchase-orders';
@@ -146,16 +147,16 @@ export function usePurchaseOrderViewTabs({
     return tab;
   }, [applyMergedFilters, snapshotCurrentTab]);
 
-  const removeTab = useCallback((tabId) => {
+  const removeTab = useCallback((tabId, scope = 'tab') => {
     snapshotCurrentTab();
-    const next = extraTabsRef.current.filter((tab) => tab.id !== tabId);
+    const next = removeTabsByScope(extraTabsRef.current, tabId, scope);
+    const keepActive = next.some((tab) => tab.id === activeTabIdRef.current);
     setExtraTabs(next);
     extraTabsRef.current = next;
-    if (activeTabIdRef.current === tabId) {
-      setActiveTabId(ALL_TAB_ID);
-      activeTabIdRef.current = ALL_TAB_ID;
-      applyMergedFilters(viewBaseRef.current, {});
-    }
+    if (keepActive) return;
+    setActiveTabId(ALL_TAB_ID);
+    activeTabIdRef.current = ALL_TAB_ID;
+    applyMergedFilters(viewBaseRef.current, {});
   }, [applyMergedFilters, snapshotCurrentTab]);
 
   const addTabsFromColumn = useCallback(({ columnKey, color }) => {

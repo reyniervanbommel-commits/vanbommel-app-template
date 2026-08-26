@@ -16,6 +16,7 @@ import {
   extraFiltersEqual,
   viewVendorAccount,
   vendorCanSeeView,
+  removeTabsByScope,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -147,5 +148,15 @@ describe('viewTabs', () => {
     expect(viewVendorAccount({ scope: 'vendor', viewState: { vendorAccount: 'Q000105' } })).toBe('Q000105');
     expect(viewVendorAccount({ scope: 'global', vendorAccount: 'Q000104' })).toBe('');
     expect(viewVendorAccount({ scope: 'vendor', vendorAccount: '  ' })).toBe('');
+  });
+
+  it('verwijdert één tab of alle tabs van dezelfde groep', () => {
+    const tabs = [
+      { id: 'a', extraFilters: { vendorAccount: { operator: 'equals', value: 'A' } }, groupColumnKey: 'vendorAccount' },
+      { id: 'b', extraFilters: { vendorAccount: { operator: 'equals', value: 'B' } }, groupColumnKey: 'vendorAccount' },
+      { id: 'c', extraFilters: { status: { operator: 'equals', value: 'Open' } } },
+    ];
+    expect(removeTabsByScope(tabs, 'a', 'tab').map((tab) => tab.id)).toEqual(['b', 'c']);
+    expect(removeTabsByScope(tabs, 'a', 'group').map((tab) => tab.id)).toEqual(['c']);
   });
 });

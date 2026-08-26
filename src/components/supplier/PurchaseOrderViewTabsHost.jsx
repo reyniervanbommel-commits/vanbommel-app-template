@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { makeStyles } from '@fluentui/react-components';
+import { makeStyles, tokens } from '@fluentui/react-components';
 import {
   PurchaseOrderCreateTabsDialog,
   PurchaseOrderNewTabDialog,
@@ -11,7 +11,8 @@ const useStyles = makeStyles({
     flex: 1,
     minWidth: 0,
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    paddingTop: tokens.spacingVerticalS,
   },
 });
 
@@ -59,6 +60,7 @@ export default function PurchaseOrderViewTabsHost({
         onNewTab={openNewTab}
         onCreateFromColumn={openCreateTabs}
         onSetGroupColor={viewTabs.setGroupColor}
+        columns={columns}
       />
       <PurchaseOrderCreateTabsDialog
         open={createOpen}

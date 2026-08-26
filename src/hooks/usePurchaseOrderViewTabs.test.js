@@ -73,4 +73,31 @@ describe('usePurchaseOrderViewTabs', () => {
 
     expect(result.current.extraFilterPrompt).toBeGreaterThan(0);
   });
+
+  it('verwijdert alle tabs van dezelfde groep', () => {
+    const boardView = createBoardView();
+    const { result } = renderHook(() => usePurchaseOrderViewTabs({
+      activeViewId: 9,
+      boardView,
+      columns: [
+        { key: 'vendorAccount', label: 'Vendor', dataType: 'text' },
+      ],
+      allItems: [
+        { values: { vendorAccount: 'Q000104' } },
+        { values: { vendorAccount: 'Q000105' } },
+      ],
+    }));
+
+    act(() => {
+      result.current.addTabsFromColumn({ columnKey: 'vendorAccount', color: '#579bfc' });
+    });
+    const firstId = result.current.extraTabs[0].id;
+    expect(result.current.extraTabs).toHaveLength(2);
+
+    act(() => {
+      result.current.removeTab(firstId, 'group');
+    });
+    expect(result.current.extraTabs).toHaveLength(0);
+    expect(result.current.activeTabId).toBe(ALL_TAB_ID);
+  });
 });

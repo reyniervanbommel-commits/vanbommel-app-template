@@ -30,7 +30,7 @@ const useStyles = makeStyles({
   titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 },
   viewRow: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: '12px',
     flexWrap: 'nowrap',
     minWidth: 0,
