@@ -9,6 +9,7 @@ export { default as RowHistoryEntry } from './RowHistoryEntry';
 export { default as RowRemarksBadge } from './RowRemarksBadge';
 export { default as usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
 export { default as usePurchaseOrderRemarksBoard } from './usePurchaseOrderRemarksBoard';
+export { default as useRemarksColumnFilter } from './useRemarksColumnFilter';
 export { default as useRemarksSummary } from './useRemarksSummary';
 export { default as useRowActivity } from './useRowActivity';
 export { default as useRowRemarks } from './useRowRemarks';

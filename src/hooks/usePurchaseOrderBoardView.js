@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { usePurchaseOrderColumnSums } from './usePurchaseOrderColumnSums';
+import { applyBoardMatchKeys } from './applyBoardMatchKeys';
+import { usePurchaseOrderRemarksFilterBridge } from './usePurchaseOrderRemarksFilterBridge';
 import { formatLinkedLineValues } from '../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
@@ -202,10 +204,11 @@ export function usePurchaseOrderBoardView({
     tableView.clearAllFilters();
   }, [tableView]);
 
-  const displayedItems = useMemo(() => {
-    if (!kpiMatchKeys) return tableView.processedItems;
-    return tableView.processedItems.filter((order) => kpiMatchKeys.has(order.orderNumber));
-  }, [kpiMatchKeys, tableView.processedItems]);
+  const remarksFilter = usePurchaseOrderRemarksFilterBridge(tableView.filterByColumn);
+  const { columnFiltered, displayedItems } = useMemo(() => applyBoardMatchKeys({
+    processedItems: tableView.processedItems, remarksFilterEnabled: remarksFilter.enabled,
+    remarksMatchKeys: remarksFilter.matchKeys, kpiMatchKeys, kpiFilterKey, kpiQtyOverlay: null,
+  }), [kpiFilterKey, kpiMatchKeys, remarksFilter, tableView.processedItems]);
 
   const rows = useMemo(
     () =>
@@ -250,7 +253,7 @@ export function usePurchaseOrderBoardView({
     () => ({
       // filter/sort API + processedItems
       processedItems: displayedItems,
-      kpiSourceItems: tableView.processedItems,
+      kpiSourceItems: columnFiltered,
       kpiFilterKey,
       applyKpiFilter,
       // volledige dataset (alle rijen, afgeleide waarden, zonder filter/sort) voor exports
@@ -292,6 +295,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, displayedItems, columnFiltered, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }
