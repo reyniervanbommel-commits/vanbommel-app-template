@@ -4,17 +4,19 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'po-view-tabs',
-    title: 'PO view tabs',
+    id: 'feature-po-view-tabs-v1-52-10',
+    title: 'Feature PO view tabs (v1.52.10)',
     checks: [
       'Save a view, then create tabs from a column (unique values of the current filters).',
       'All tab shows the shared view filters; extra tabs only add extra filters.',
-      'Open the view menu for Tab, Tabs from column, and Group colors (nested).',
+      'Open the view menu for Tab, Tabs from column…, and Group colors (nested).',
       'A warning appears when a column would create more than 10 tabs.',
       'Right-click an extra tab to change group color or delete this tab / the group.',
-      'Hover a tab to see the full name and extra filters, with a colon after each column name.',
+      'Tab labels are at most 10 characters; hover shows the full name plus column and filter value in two columns.',
+      'Prefix and suffix options are not in the view menu, tab context menu, or create-tabs dialog.',
       'Setting an extra filter on an extra tab immediately asks This tab only vs All tabs with the same filter.',
       'Vendor views show the vendor account number after the view name in the view menu.',
+      'The tab bar stays flush under the toolbar and scrolls horizontally when there are many tabs.',
     ],
   },
 ];
