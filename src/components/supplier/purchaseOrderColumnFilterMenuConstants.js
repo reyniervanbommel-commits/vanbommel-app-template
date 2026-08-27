@@ -149,3 +149,9 @@ export function serializeFormatRulesDraft(formatTarget, formatRules) {
     })),
   });
 }
+
+export function getStickyColumnMenuText({ canUnstickSticky, isStickyColumn, stickyColumnCount = 0 }) {
+  if (canUnstickSticky) return 'Unstick column';
+  if (isStickyColumn) return `Already sticky (${stickyColumnCount})`;
+  return 'Make sticky';
+}

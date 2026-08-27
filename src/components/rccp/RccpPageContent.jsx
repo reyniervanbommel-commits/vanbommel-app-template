@@ -16,7 +16,10 @@ import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import RccpWeekWindowFields from './RccpWeekWindowFields';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
-import { resolveDefaultRccpVendor, resolveRccpVendorFromFilter } from './resolveRccpVendorFilter';
+import {
+  resolveDefaultRccpVendorWithFallback,
+  resolveRccpVendorFromFilter,
+} from './resolveRccpVendorFilter';
 import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
@@ -68,13 +71,12 @@ export default function RccpPageContent() {
   useEffect(() => {
     if (isSupplier || vendorsLoading || vendorAccount !== null) return;
     const filterByColumn = readPoFilterByColumnForRccp();
-    const fromFilter = resolveDefaultRccpVendor({ vendors, vendorNames, filterByColumn });
-    if (fromFilter) { setVendorAccount(fromFilter); return; }
-    // Geen PO-handoff: wacht tot de opgeslagen voorkeur geladen is en herstel de laatste vendor
-    // (indien die nog in de lijst voorkomt); anders leeg laten zodat de gebruiker zelf zoekt.
-    if (!windowLoaded) return;
-    if (lastVendor && vendors.includes(lastVendor)) { setVendorAccount(lastVendor); return; }
-    setVendorAccount('');
+    const resolved = resolveDefaultRccpVendorWithFallback({
+      vendors, vendorNames, filterByColumn, lastVendor, lastVendorReady: windowLoaded,
+    });
+    // undefined = nog niet resolvable (geen PO-filter, lastVendor nog niet geladen) — geen state
+    // zetten, effect draait opnieuw zodra windowLoaded true wordt.
+    if (resolved !== undefined) setVendorAccount(resolved);
   }, [isSupplier, vendorsLoading, vendors, vendorNames, vendorAccount, windowLoaded, lastVendor]);
 
   // Onthoud de gekozen vendor als voorkeur (samen met de week in board-settings/rccp), zodat de

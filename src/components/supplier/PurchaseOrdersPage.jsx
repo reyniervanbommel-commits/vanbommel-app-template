@@ -1,8 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { makeStyles } from '@fluentui/react-components';
-import PurchaseOrdersPageContent from './PurchaseOrdersPageContent';
-import PurchaseOrdersPageTopBar from './PurchaseOrdersPageTopBar';
-import PurchaseOrdersPageDialogs from './PurchaseOrdersPageDialogs';
+import PurchaseOrdersPageLayout from './PurchaseOrdersPageLayout';
 import { usePurchaseOrderRemarksBoard } from './remarks';
 import { usePurchaseOrdersPage } from '../../hooks/usePurchaseOrdersPage';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
@@ -18,19 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 import { exportPurchaseOrdersToExcel, buildExportFileName } from '../../utils/purchaseOrderBoardExport';
 
-const useStyles = makeStyles({
-  page: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    minWidth: 0,
-    boxSizing: 'border-box',
-    paddingTop: '24px',
-    paddingBottom: '24px',
-  },
-});
 export default function PurchaseOrdersPage() {
-  const styles = useStyles();
   const { user } = useAuth();
   const pageModel = usePurchaseOrdersPage();
   const {
@@ -98,13 +83,15 @@ export default function PurchaseOrdersPage() {
     reloadAfterRefresh();
     hiddenRows.reload();
   };
-  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
     applyColumnLayout,
     boardView,
     isSupplier,
+    columns: visibleHeaderColumns,
+    datePeriodDisplayModes,
   });
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
@@ -235,65 +222,68 @@ export default function PurchaseOrdersPage() {
     tableSelection,
   ]);
   return (
-    <div className={styles.page}>
-      <PurchaseOrdersPageTopBar
-        savedViewsState={{
-          savedViews,
-          activeViewId,
-          hasUnsavedChanges,
-          applyViewState,
-          handleResetView,
-          handleSaveAsNew,
-          handleUpdateActive,
-          handleRenameView,
-          handleSetDefault,
-          handleDeleteView,
-          handleToggleShowHistory,
-          allOrdersShowHistoryIndicators,
-        }}
-        headerState={{
-          isStaff,
-          hasCache,
-          lastRefreshedLabel,
-          visibleCount: boardView.processedItems.length,
-          total,
-        }}
-        activityState={{
-          newCount: boardView.activityCounts?.newCount ?? newCount,
-          changedCount: boardView.activityCounts?.changedCount ?? changedCount,
-          removedCount: boardView.activityCounts?.removedCount ?? 0,
-          markViewed,
-          markingViewed,
-          activityFilter: boardView.activityFilter,
-          toggleActivityFilter: boardView.toggleActivityFilter,
-        }}
-        bulkState={{
-          selectedCount: selection.selectedCount,
-          onDeleteSelected: handleDeleteSelected,
-          onClearSelection: selection.clear,
-        }}
-        hiddenRowsState={{
-          hiddenRows: hiddenRows.hiddenRows,
-          columns: hiddenRows.columns,
-          count: hiddenRows.count,
-          loading: hiddenRows.loading,
-          restoring: hiddenRows.restoring,
-          restoreRows: hiddenRows.restoreRows,
-        }}
-        refreshState={{
-          refreshing: isRefreshing,
-          onRefresh: handleRefresh,
-        }}
-        onExportExcel={handleExportExcel}
-        error={error}
-      />
-
-      <PurchaseOrdersPageContent status={contentStatus} tableContext={tableContext} />
-      <PurchaseOrdersPageDialogs
-        formula={{ state: formulaDialogState, close: closeFormulaDialog, submit: submitFormulaColumn, availableColumns: formulaReferenceColumns, formatRules: headerColumnFormatRules }}
-        datePeriod={{ state: datePeriodDialogState, close: closeDatePeriodDialog, submit: submitDatePeriodColumn, dateSourceColumns }}
-        bulkEdit={bulkEdit}
-      />
-    </div>
+    <PurchaseOrdersPageLayout
+      viewTabs={viewTabs}
+      columns={visibleHeaderColumns}
+      isStaff={isStaff}
+      activeViewId={activeViewId}
+      savedViewsState={{
+        savedViews,
+        activeViewId,
+        hasUnsavedChanges,
+        applyViewState,
+        handleResetView,
+        handleSaveAsNew,
+        handleUpdateActive,
+        handleRenameView,
+        handleSetDefault,
+        handleDeleteView,
+        handleToggleShowHistory,
+        allOrdersShowHistoryIndicators,
+        viewTabs,
+      }}
+      headerState={{
+        isStaff,
+        hasCache,
+        lastRefreshedLabel,
+        visibleCount: boardView.processedItems.length,
+        total,
+      }}
+      activityState={{
+        newCount: boardView.activityCounts?.newCount ?? newCount,
+        changedCount: boardView.activityCounts?.changedCount ?? changedCount,
+        removedCount: boardView.activityCounts?.removedCount ?? 0,
+        markViewed,
+        markingViewed,
+        activityFilter: boardView.activityFilter,
+        toggleActivityFilter: boardView.toggleActivityFilter,
+      }}
+      bulkState={{
+        selectedCount: selection.selectedCount,
+        onDeleteSelected: handleDeleteSelected,
+        onClearSelection: selection.clear,
+      }}
+      hiddenRowsState={{
+        hiddenRows: hiddenRows.hiddenRows,
+        columns: hiddenRows.columns,
+        count: hiddenRows.count,
+        loading: hiddenRows.loading,
+        restoring: hiddenRows.restoring,
+        restoreRows: hiddenRows.restoreRows,
+      }}
+      refreshState={{
+        refreshing: isRefreshing,
+        onRefresh: handleRefresh,
+      }}
+      onExportExcel={handleExportExcel}
+      error={error}
+      contentStatus={contentStatus}
+      tableContext={tableContext}
+      dialogs={{
+        formula: { state: formulaDialogState, close: closeFormulaDialog, submit: submitFormulaColumn, availableColumns: formulaReferenceColumns, formatRules: headerColumnFormatRules },
+        datePeriod: { state: datePeriodDialogState, close: closeDatePeriodDialog, submit: submitDatePeriodColumn, dateSourceColumns },
+        bulkEdit,
+      }}
+    />
   );
 }

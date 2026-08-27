@@ -13,6 +13,10 @@ import { ROLES } from '../../constants/roles';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
 import AppNavItem from './AppNavItem';
 import AppShellHeader from './AppShellHeader';
+import { kickDataPagesPrefetch } from '../../utils/dataPagesPrefetch';
+
+// Rail-items die de idle-prefetch mogen versnellen bij hover (toont intentie om te navigeren).
+const PREFETCH_ON_HOVER_IDS = new Set(['rccp', 'bi']);
 
 const RAIL_WIDTH = appLayoutTokens.railWidth;
 const PANEL_WIDTH = appLayoutTokens.panelWidth;
@@ -157,6 +161,13 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
     [navigate]
   );
 
+  // Toont de gebruiker intentie om naar RCCP/BI te gaan: start de idle-prefetch meteen in plaats
+  // van te wachten tot de browser idle wordt. Geen effect als de PO-pagina deze sessie nog niet
+  // is geladen (kickDataPagesPrefetch is dan een no-op).
+  const handleItemMouseEnter = useCallback((item) => {
+    if (PREFETCH_ON_HOVER_IDS.has(item.id)) kickDataPagesPrefetch();
+  }, []);
+
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen((value) => !value);
   }, []);
@@ -211,6 +222,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
                 active={location.pathname === item.path}
                 styles={styles}
                 onNavigate={handleNavigate}
+                onItemMouseEnter={handleItemMouseEnter}
               />
             ))}
           </aside>
@@ -230,6 +242,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
                 active={location.pathname === item.path}
                 styles={styles}
                 onNavigate={handleNavigate}
+                onItemMouseEnter={handleItemMouseEnter}
               />
             ))}
           </aside>

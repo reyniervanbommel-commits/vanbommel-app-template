@@ -104,7 +104,16 @@ describe('PurchaseOrderProductImageCell', () => {
     expect(imagesWithSrc()).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Show product image for ITEM-1' })).toBe(imageButton);
 
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.textContent).toContain('ITEM-1');
+    expect(tooltip.closest('[data-portal-node="true"]')).toBeTruthy();
+    const tooltipBackground = window.getComputedStyle(tooltip).backgroundColor;
+    expect(tooltipBackground).not.toBe('');
+    expect(tooltipBackground).not.toBe('rgba(0, 0, 0, 0)');
+    expect(tooltipBackground).not.toBe('transparent');
+
     fireEvent.mouseLeave(imageButton);
     expect(imagesWithSrc()).toHaveLength(1);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

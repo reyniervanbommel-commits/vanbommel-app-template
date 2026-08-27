@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
-import { currentIsoWindow, isoWeekStartUtc } from '../../rccp/rccpUtils';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { currentIsoWindow, isoWindowDateRange } from '../../rccp/rccpUtils';
 
 /**
  * Generiek week/jaar-datumfilter voor de BI-pagina (zelfde velden als RCCP). Er wordt géén
@@ -63,16 +61,10 @@ export function useBiDateFilter() {
     persist({ enabled: value, isoWindow });
   }, [isoWindow, persist]);
 
-  const dateRange = useMemo(() => {
-    if (!enabled) return null;
-    const { fromYear, fromWeek, toYear, toWeek } = appliedWindow;
-    const start = isoWeekStartUtc(fromYear, fromWeek);
-    const endMonday = isoWeekStartUtc(toYear, toWeek);
-    // Inclusief tot en met zondag 23:59:59.999 van de laatste week.
-    const end = new Date(endMonday.getTime() + 7 * DAY_MS - 1);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-    return { start: start.toISOString(), end: end.toISOString() };
-  }, [enabled, appliedWindow]);
+  const dateRange = useMemo(
+    () => (enabled ? isoWindowDateRange(appliedWindow) : null),
+    [enabled, appliedWindow],
+  );
 
   return useMemo(
     () => ({ enabled, setEnabled, isoWindow, setWindowField, applyWindow, dateRange }),

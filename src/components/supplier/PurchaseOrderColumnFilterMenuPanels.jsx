@@ -6,6 +6,7 @@ import PurchaseOrderColumnFormatRulesPane from './PurchaseOrderColumnFormatRules
 import PurchaseOrderColumnTextStylePane from './PurchaseOrderColumnTextStylePane';
 import FilterMenuMainPane from './PurchaseOrderColumnFilterMenuMainPane';
 import { usePurchaseOrderColumnMenuFlyoutPlacement } from './usePurchaseOrderColumnMenuFlyoutPlacement';
+import { withSumToggleHandlers } from './PurchaseOrderColumnSumToggles';
 
 export { FilterMenuMainPane };
 
@@ -36,8 +37,8 @@ export function FilterMenuSubPane({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
-  canToggleGroupSummary,
-  isGroupSummaryColumn,
+  sumToggles,
+  sumFlags,
   handleToggleGroupSummary,
 }) {
   const flyout = usePurchaseOrderColumnMenuFlyoutPlacement({
@@ -98,9 +99,7 @@ export function FilterMenuSubPane({
         onSetGroupingColumn={onSetGroupingColumn}
         onClearGrouping={onClearGrouping}
         onSetGroupingColor={onSetGroupingColor}
-        canToggleGroupSummary={canToggleGroupSummary}
-        isGroupSummaryColumn={isGroupSummaryColumn}
-        onToggleGroupSummary={handleToggleGroupSummary}
+        sumToggles={withSumToggleHandlers(sumToggles, { canToggleGroupSummary: sumFlags?.canToggleGroupSummary }, handleToggleGroupSummary)}
       />
     );
   }

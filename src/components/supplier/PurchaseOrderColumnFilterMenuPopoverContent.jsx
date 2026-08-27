@@ -74,9 +74,10 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
-  canToggleGroupSummary,
-  isGroupSummaryColumn,
+  sumToggles,
+  sumFlags,
   handleToggleGroupSummary,
+  handleToggleColumnSum,
   showGrouping = true,
   showColumnMutations = true,
   showSortAndFilter = true,
@@ -117,6 +118,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canToggleLineTotal={canToggleLineTotal}
         isLineColumnSummed={isLineColumnSummed}
         handleToggleLineTotal={handleToggleLineTotal}
+        canToggleColumnSum={sumFlags?.canToggleColumnSum}
+        isColumnSumColumn={Boolean(sumToggles?.isColumnSumColumn)}
+        handleToggleColumnSum={handleToggleColumnSum}
         canPushLineTotalToHeader={canPushLineTotalToHeader}
         handlePushLineTotalToHeader={handlePushLineTotalToHeader}
         canPushLineValuesToHeader={canPushLineValuesToHeader}
@@ -174,8 +178,8 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         onSetGroupingColumn={onSetGroupingColumn}
         onClearGrouping={onClearGrouping}
         onSetGroupingColor={onSetGroupingColor}
-        canToggleGroupSummary={canToggleGroupSummary}
-        isGroupSummaryColumn={isGroupSummaryColumn}
+        sumToggles={sumToggles}
+        sumFlags={sumFlags}
         handleToggleGroupSummary={handleToggleGroupSummary}
       />
     </PopoverSurface>

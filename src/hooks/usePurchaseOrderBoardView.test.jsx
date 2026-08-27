@@ -114,6 +114,34 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.activityFilter).toBe('new');
   });
 
+  it('round-trips columnSumKeys independently of grouping summaries', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.columnSums.setColumnSumColumn('amount', true);
+    });
+    expect(result.current.columnSums.summedValuesByColumn).toEqual({ amount: 30 });
+
+    const savedState = result.current.exportFilterSortGrouping();
+    expect(savedState.columnSumKeys).toEqual(['amount']);
+
+    act(() => {
+      result.current.columnSums.clearColumnSums();
+      result.current.applyFilterSortGrouping({ ...savedState, grouping: savedState.grouping });
+    });
+    expect(result.current.columnSums.columnSumKeys).toEqual(['amount']);
+    expect(result.current.columnSums.summedValuesByColumn).toEqual({ amount: 30 });
+  });
+
+  it('drops unknown columnSumKeys from an old or stale view', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyFilterSortGrouping({ columnSumKeys: ['amount', 'ghost'] });
+    });
+    expect(result.current.columnSums.columnSumKeys).toEqual(['amount']);
+  });
+
   // De som zelf komt sinds de lazy-lines-payload uit de board-read (values.lineAmountTotal);
   // de hook sorteert daar alleen nog op.
   it('sorteert header-kolommen met gepushte line totals op de som uit de read', () => {

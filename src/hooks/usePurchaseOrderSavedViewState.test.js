@@ -33,6 +33,7 @@ function createBoardView() {
     clearSort: vi.fn(),
     clearGrouping: vi.fn(),
     clearGroupSummaries: vi.fn(),
+    columnSums: { clearColumnSums: vi.fn() },
   };
 }
 
@@ -87,6 +88,7 @@ describe('usePurchaseOrderSavedViewState All orders history toggle', () => {
     expect(result.current.activeViewId).toBe(null);
     expect(result.current.showHistoryIndicators).toBe(false);
     expect(boardView.clearAllFilters).toHaveBeenCalled();
+    expect(boardView.columnSums.clearColumnSums).toHaveBeenCalled();
   });
 
   it('wijzigt live history niet als All orders getoggeld wordt terwijl een andere view actief is', async () => {

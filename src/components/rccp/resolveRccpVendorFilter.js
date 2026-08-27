@@ -52,3 +52,34 @@ export function resolveDefaultRccpVendor({
 
   return '';
 }
+
+/**
+ * Zelfde volgorde als RccpPageContent's vendor-resolve-effect: PO-tabelfilter wint (via
+ * resolveDefaultRccpVendor), anders de laatst gekozen/opgeslagen vendor (indien nog in de
+ * lijst), anders leeg. Gedeeld zodat de idle-prefetch (dataPagesPrefetch.js) altijd exact
+ * dezelfde vendor warmt als de RCCP-pagina straks zal opvragen — een losstaande kopie van deze
+ * logica loopt uit de pas zodra een van de twee wijzigt.
+ *
+ * `lastVendorReady` laat de caller de fallback-tak uitstellen totdat `lastVendor` betrouwbaar is
+ * geladen (bv. `useRccpWindow().loaded`), zonder de PO-filter-tak te vertragen: bij een actief
+ * PO-filter wordt meteen `undefined` vermeden. Zonder filter én `lastVendorReady: false` geeft
+ * dit `undefined` terug — "nog niet resolvable", geen state zetten.
+ * @param {{ vendors: string[], vendorNames?: Record<string,string>, filterByColumn?: object, vendorColumnKey?: string, lastVendor?: string, lastVendorReady?: boolean }} params
+ * @returns {string|undefined}
+ */
+export function resolveDefaultRccpVendorWithFallback({
+  vendors,
+  vendorNames = {},
+  filterByColumn,
+  vendorColumnKey = 'vendorAccount',
+  lastVendor = '',
+  lastVendorReady = true,
+}) {
+  const fromFilter = resolveDefaultRccpVendor({
+    vendors, vendorNames, filterByColumn, vendorColumnKey,
+  });
+  if (fromFilter) return fromFilter;
+  if (!lastVendorReady) return undefined;
+  const list = Array.isArray(vendors) ? vendors : [];
+  return lastVendor && list.includes(lastVendor) ? lastVendor : '';
+}

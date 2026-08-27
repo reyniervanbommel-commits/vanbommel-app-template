@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import PurchaseOrderColumnFilterMenu from './PurchaseOrderColumnFilterMenu';
+import ViewTabsDialogsProvider from './viewTabs/ViewTabsDialogsProvider';
 
 const COLUMN = {
   id: 'amount-id',
@@ -171,13 +172,24 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
   it('toont group header sum toggle voor number header-kolommen', async () => {
     const onSetGroupSummaryColumn = vi.fn();
-    renderMenu({ onSetGroupSummaryColumn });
+    renderMenu({ sumToggles: { onSetGroupSummaryColumn } });
 
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
     fireEvent.click(await screen.findByRole('switch', { name: /Show sum in group header/i }));
 
     expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
+  });
+
+  it('toont Show sum toggle voor number header-kolommen', async () => {
+    const onSetColumnSumColumn = vi.fn();
+    renderMenu({ sumToggles: { onSetColumnSumColumn } });
+
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('switch', { name: /^Show sum$/i }));
+
+    expect(onSetColumnSumColumn).toHaveBeenCalledWith('amount', true);
+    expect(screen.getByRole('switch', { name: /^Show sum$/i })).toBeInTheDocument();
   });
 
   it('gebruikt palette picker voor category bar color', async () => {
@@ -291,5 +303,53 @@ describe('PurchaseOrderColumnFilterMenu — value picker wiring', () => {
     openColumnMenu();
     const input = await screen.findByLabelText(/Filter value for Amount/i);
     expect(input).toHaveValue('100');
+  });
+});
+
+describe('PurchaseOrderColumnFilterMenu — tabs en sticky', () => {
+  it('toont Make sticky in de Column-sectie', async () => {
+    renderMenu({
+      canMakeColumnSticky: true,
+      isStickyActionEnabled: true,
+      onMakeColumnSticky: vi.fn(),
+    });
+    openColumnMenu();
+    expect(await screen.findByRole('button', { name: /Make sticky/i })).toBeTruthy();
+  });
+
+  it('opent Tabs from column-dialog vanuit het kolommenu', async () => {
+    const addTabsFromColumn = vi.fn();
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ViewTabsDialogsProvider
+          viewTabs={{ addTabsFromColumn, groups: [], uniqueValueCount: () => 2 }}
+          columns={[COLUMN]}
+          isStaff
+          activeViewId={9}
+        >
+          <PurchaseOrderColumnFilterMenu
+            column={COLUMN}
+            filter={null}
+            sortState={{ columnKey: '', direction: 'none' }}
+            groupingColumnKey=""
+            groupingColor="#f4e6ed"
+            onSetSortDirection={vi.fn()}
+            onSetOperator={vi.fn()}
+            onSetValue={vi.fn()}
+            onSetSecondaryValue={vi.fn()}
+            onClearFilter={vi.fn()}
+            onSetGroupingColumn={vi.fn()}
+            onClearGrouping={vi.fn()}
+            onSetGroupingColor={vi.fn()}
+            onSetColumnFormatRules={vi.fn().mockResolvedValue(undefined)}
+            onSetColumnTextStyle={vi.fn().mockResolvedValue(undefined)}
+            referenceColumns={[{ key: 'amount', label: 'Amount' }]}
+          />
+        </ViewTabsDialogsProvider>
+      </FluentProvider>
+    );
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Tabs from column/i }));
+    expect(await screen.findByText('Create tabs from a column')).toBeTruthy();
   });
 });

@@ -1,10 +1,14 @@
 import React, { useCallback } from 'react';
 import { Button } from '@fluentui/react-components';
 
-export default function AppNavItem({ item, compact, active, styles, onNavigate }) {
+export default function AppNavItem({ item, compact, active, styles, onNavigate, onItemMouseEnter }) {
   const handleClick = useCallback(() => {
     onNavigate(item.path);
   }, [item.path, onNavigate]);
+
+  const handleMouseEnter = useCallback(() => {
+    onItemMouseEnter?.(item);
+  }, [item, onItemMouseEnter]);
 
   if (item.type === 'divider') {
     return (
@@ -20,7 +24,7 @@ export default function AppNavItem({ item, compact, active, styles, onNavigate }
 
   if (compact) {
     return (
-      <div className={styles.railItem}>
+      <div className={styles.railItem} onMouseEnter={handleMouseEnter}>
         <Button
           appearance={active ? 'primary' : 'subtle'}
           icon={<Icon />}
@@ -39,6 +43,7 @@ export default function AppNavItem({ item, compact, active, styles, onNavigate }
       icon={<Icon />}
       className={styles.navButton}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
       aria-current={active ? 'page' : undefined}
     >
       {item.label}

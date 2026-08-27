@@ -10,7 +10,7 @@ export function usePurchaseOrderColumnMenuFlags({
   onRenameColumn,
   onRemoveColumn,
   onToggleLineColumnSum,
-  onSetGroupSummaryColumn,
+  sumToggles,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
   onSetColumnTextStyle,
@@ -35,7 +35,9 @@ export function usePurchaseOrderColumnMenuFlags({
   const isLineNumberColumn = isLineColumn && column.dataType === 'number';
   const isHeaderNumberColumn = column.level !== 'line' && column.dataType === 'number';
   const canToggleLineTotal = Boolean(staffMenu && isLineNumberColumn && typeof onToggleLineColumnSum === 'function');
-  const canToggleGroupSummary = Boolean(staffMenu && isHeaderNumberColumn && typeof onSetGroupSummaryColumn === 'function');
+  const canToggleGroupSummary = Boolean(staffMenu && isHeaderNumberColumn && typeof sumToggles?.onSetGroupSummaryColumn === 'function');
+  const canToggleColumnSum = Boolean(staffMenu && isHeaderNumberColumn && typeof sumToggles?.onSetColumnSumColumn === 'function');
+  const sumFlags = { canToggleGroupSummary, canToggleColumnSum };
   const canPushLineTotalToHeader = Boolean(staffMenu && isLineNumberColumn && typeof onPushLineTotalToHeader === 'function');
   const canPushLineValuesToHeader = Boolean(staffMenu && isLineColumn && typeof onPushLineValuesToHeader === 'function');
   const canSetColumnTextStyle = staffMenu && !isRemarksColumn && !isImageColumn && typeof onSetColumnTextStyle === 'function';
@@ -82,6 +84,7 @@ export function usePurchaseOrderColumnMenuFlags({
     canRemoveColumn,
     canToggleLineTotal,
     canToggleGroupSummary,
+    sumFlags,
     canPushLineTotalToHeader,
     canPushLineValuesToHeader,
     canSetColumnTextStyle,

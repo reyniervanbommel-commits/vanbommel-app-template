@@ -4,6 +4,8 @@ import PurchaseOrderColumnFilterMenuFilterSection from './PurchaseOrderColumnFil
 import PurchaseOrderColumnFilterMenuSortSection from './PurchaseOrderColumnFilterMenuSortSection';
 import PurchaseOrderColumnFilterMenuColumnActionsSection from './PurchaseOrderColumnFilterMenuColumnActionsSection';
 import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
+import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
+import { PurchaseOrderShowSumSwitch } from './PurchaseOrderColumnSumToggles';
 
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
@@ -37,6 +39,9 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   canToggleLineTotal,
   isLineColumnSummed,
   handleToggleLineTotal,
+  canToggleColumnSum = false,
+  isColumnSumColumn = false,
+  handleToggleColumnSum,
   canPushLineTotalToHeader,
   handlePushLineTotalToHeader,
   canPushLineValuesToHeader,
@@ -71,6 +76,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
     closeSubmenu?.();
   }, [closeSubmenu]);
 
+  const { canCreateFromColumn } = useViewTabsActions();
   const showAppearanceSection = useMemo(
     () => Boolean(canSetColumnTextStyle || canSetColumnFormatRules || canConfigureDatePeriodDisplay),
     [canConfigureDatePeriodDisplay, canSetColumnFormatRules, canSetColumnTextStyle]
@@ -86,9 +92,11 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       || canPushLineTotalToHeader
       || canPushLineValuesToHeader
       || canMakeColumnSticky
+      || canCreateFromColumn
     ),
     [
       canAddColumn,
+      canCreateFromColumn,
       canEditFormulaColumn,
       canHideColumn,
       canMakeColumnSticky,
@@ -128,7 +136,16 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             setSortAsc={setSortAsc}
             setSortDesc={setSortDesc}
             clearSort={clearSort}
-          />
+          >
+            {canToggleColumnSum ? (
+              <PurchaseOrderShowSumSwitch
+                styles={styles}
+                checked={isColumnSumColumn}
+                onToggle={handleToggleColumnSum}
+                onMouseEnter={closeSubmenu}
+              />
+            ) : null}
+          </PurchaseOrderColumnFilterMenuSortSection>
           <div className={styles.divider} />
           <PurchaseOrderColumnFilterMenuFilterSection
             styles={styles}
@@ -203,6 +220,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         handleMakeColumnSticky={handleMakeColumnSticky}
         showAppearanceSection={showAppearanceSection}
         showColumnSection={showColumnSection}
+        columnKey={column.key}
       />
     </div>
   );

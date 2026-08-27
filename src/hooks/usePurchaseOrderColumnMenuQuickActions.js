@@ -4,16 +4,16 @@ export function usePurchaseOrderColumnMenuQuickActions({
   column,
   writable,
   isLineColumnSummed,
-  isGroupSummaryColumn,
+  sumToggles,
   canToggleWriteback,
   canToggleLineTotal,
   canToggleGroupSummary,
+  canToggleColumnSum,
   canPushLineTotalToHeader,
   canPushLineValuesToHeader,
   canToggleStickyAction,
   onToggleWriteback,
   onToggleLineColumnSum,
-  onSetGroupSummaryColumn,
   onPushLineTotalToHeader,
   onPushLineValuesToHeader,
   onMakeColumnSticky,
@@ -34,9 +34,14 @@ export function usePurchaseOrderColumnMenuQuickActions({
 
   const handleToggleGroupSummary = useCallback(() => {
     if (!canToggleGroupSummary) return;
-    onSetGroupSummaryColumn(column.key, !isGroupSummaryColumn);
+    sumToggles?.onSetGroupSummaryColumn?.(column.key, !sumToggles.isGroupSummaryColumn);
     setOpen(false);
-  }, [canToggleGroupSummary, column.key, isGroupSummaryColumn, onSetGroupSummaryColumn, setOpen]);
+  }, [canToggleGroupSummary, column.key, setOpen, sumToggles]);
+
+  const handleToggleColumnSum = useCallback(() => {
+    if (!canToggleColumnSum) return;
+    sumToggles?.onSetColumnSumColumn?.(column.key, !sumToggles.isColumnSumColumn);
+  }, [canToggleColumnSum, column.key, sumToggles]);
 
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;
@@ -66,6 +71,7 @@ export function usePurchaseOrderColumnMenuQuickActions({
     handleToggleWriteback,
     handleToggleLineTotal,
     handleToggleGroupSummary,
+    handleToggleColumnSum,
     handlePushLineTotalToHeader,
     handlePushLineValuesToHeader,
     handleMakeColumnSticky,

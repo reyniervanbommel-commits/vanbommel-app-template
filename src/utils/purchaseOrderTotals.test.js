@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateHeaderColumnSums,
   calculateLineColumnSum,
   calculateLineColumnValues,
   formatLinkedLineValues,
   getLinkedLineValuePreview,
+  isSummableHeaderColumn,
   isSummableLineColumn,
+  toNumeric,
 } from './purchaseOrderTotals';
 
 describe('formatLinkedLineValues', () => {
@@ -74,6 +77,31 @@ describe('calculateLineColumnValues', () => {
       { values: { itemNumber: 'ITEM-1' } },
     ];
     expect(calculateLineColumnValues(lines, 'itemNumber', 'text')).toBe('ITEM-1, ITEM-2');
+  });
+});
+
+describe('toNumeric / calculateHeaderColumnSums', () => {
+  it('parses numbers and comma decimals, skips invalid values', () => {
+    expect(toNumeric(10)).toBe(10);
+    expect(toNumeric('3,5')).toBe(3.5);
+    expect(toNumeric('')).toBe(null);
+    expect(toNumeric('x')).toBe(null);
+  });
+
+  it('sums header row values in one pass per requested key', () => {
+    const rows = [
+      { order: { values: { qty: 2, amount: '3,5' } } },
+      { order: { values: { qty: '4', amount: null } } },
+      { order: { values: { qty: 'x', amount: 1 } } },
+    ];
+    expect(calculateHeaderColumnSums(rows, ['qty', 'amount'])).toEqual({ qty: 6, amount: 4.5 });
+  });
+
+  it('returns zeros for empty rows and ignores non-header number columns', () => {
+    expect(calculateHeaderColumnSums([], ['qty'])).toEqual({ qty: 0 });
+    expect(isSummableHeaderColumn({ dataType: 'number' })).toBe(true);
+    expect(isSummableHeaderColumn({ dataType: 'number', level: 'line' })).toBe(false);
+    expect(isSummableHeaderColumn({ dataType: 'text' })).toBe(false);
   });
 });
 

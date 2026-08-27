@@ -1,5 +1,6 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
+import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 
 export const usePurchaseOrdersBoardTableStyles = makeStyles({
   wrapper: {
@@ -72,5 +73,29 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     ...shorthands.gap('8px'),
+  },
+  totalsCell: {
+    position: 'sticky',
+    bottom: 0,
+    zIndex: 1,
+    backgroundColor: tokens.colorNeutralBackground2,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase500,
+    lineHeight: tokens.lineHeightBase500,
+    ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.padding('4px', '8px'),
+  },
+  totalsControlCell: {
+    position: 'sticky',
+    left: 0,
+    bottom: 0,
+    zIndex: 2,
+    width: purchaseOrderBoardControlColumnWidth,
+    minWidth: purchaseOrderBoardControlColumnWidth,
+    maxWidth: purchaseOrderBoardControlColumnWidth,
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
   },
 });

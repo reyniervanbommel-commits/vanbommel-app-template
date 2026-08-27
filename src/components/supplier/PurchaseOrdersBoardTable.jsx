@@ -3,6 +3,7 @@ import { Button } from '@fluentui/react-components';
 import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardTableHeader from './PurchaseOrdersBoardTableHeader';
+import PurchaseOrdersBoardTotalsRow from './PurchaseOrdersBoardTotalsRow';
 import { usePurchaseOrdersBoardTableStyles } from './purchaseOrdersBoardTableStyles';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
@@ -260,6 +261,16 @@ function PurchaseOrdersBoardTable({
               scrollRef={wrapperRef}
             />
           )}
+          {!hasFilteredEmptyState && resolvedBoardView.columnSums?.columnSumKeys?.length ? (
+            <PurchaseOrdersBoardTotalsRow
+              columns={decoratedColumns}
+              columnSumKeys={resolvedBoardView.columnSums.columnSumKeys}
+              summedValuesByColumn={resolvedBoardView.columnSums.summedValuesByColumn}
+              collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
+              totalsCellClassName={styles.totalsCell}
+              controlCellClassName={styles.totalsControlCell}
+            />
+          ) : null}
         </table>
       </div>
       <PurchaseOrderCellContextMenu

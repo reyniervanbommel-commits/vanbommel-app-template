@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCellValue } from '../utils/purchaseOrderFormat';
 import { isHexColor } from '../utils/hexColor';
+import { toNumeric } from '../utils/purchaseOrderTotals';
 
 const DEFAULT_GROUPING_COLOR = '#f4e6ed';
 
@@ -43,17 +44,6 @@ function isDateLikeGroupingColumn(column) {
 
 function isNumberGroupingSummaryColumn(column) {
   return String(column?.dataType || '').trim().toLowerCase() === 'number';
-}
-
-function toNumeric(value) {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function normalizeGroupLabel(value, column) {

@@ -20,6 +20,7 @@ export default function PurchaseOrderColumnFilterMenuSortSection({
   setSortAsc,
   setSortDesc,
   clearSort,
+  children,
 }) {
   const sortLabels = useMemo(() => getSortActionLabels(isDate, isNumber), [isDate, isNumber]);
 
@@ -46,6 +47,7 @@ export default function PurchaseOrderColumnFilterMenuSortSection({
           onOpenSubmenu={openSubmenu}
         />
       ) : null}
+      {children}
     </div>
   );
 }

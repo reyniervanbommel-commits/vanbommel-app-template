@@ -1,6 +1,6 @@
 import { formatCellValue } from './purchaseOrderFormat';
 
-function toNumeric(value) {
+export function toNumeric(value) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
   }
@@ -24,6 +24,25 @@ export function calculateLineColumnSum(lines, columnKey) {
 
 export function isSummableLineColumn(column) {
   return Boolean(column && column.dataType === 'number');
+}
+
+export function isSummableHeaderColumn(column) {
+  if (!column || column.level === 'line') return false;
+  return String(column.dataType || '').trim().toLowerCase() === 'number';
+}
+
+export function calculateHeaderColumnSums(rows, columnKeys) {
+  const keys = (Array.isArray(columnKeys) ? columnKeys : []).filter(Boolean);
+  const totals = Object.fromEntries(keys.map((key) => [key, 0]));
+  if (!Array.isArray(rows) || !keys.length) return totals;
+  rows.forEach((entry) => {
+    const values = entry?.order?.values;
+    keys.forEach((key) => {
+      const numeric = toNumeric(values?.[key]);
+      if (numeric !== null) totals[key] += numeric;
+    });
+  });
+  return totals;
 }
 
 export function filterSummableLineColumnKeys(columnKeys, lineColumns) {
