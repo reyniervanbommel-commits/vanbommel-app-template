@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   Menu,
   MenuDivider,
@@ -11,10 +11,9 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ColorRegular, ColumnRegular, TabAddRegular } from '@fluentui/react-icons';
+import { ColorRegular, TabAddRegular } from '@fluentui/react-icons';
 import ColorPalettePicker from '../../shared/ColorPalettePicker';
-import PurchaseOrderCreateTabsDialog from './PurchaseOrderCreateTabsDialog';
-import PurchaseOrderNewTabDialog from './PurchaseOrderNewTabDialog';
+import { useViewTabsActions } from './ViewTabsDialogsProvider';
 
 const useStyles = makeStyles({
   colorWrap: {
@@ -54,33 +53,10 @@ export default function PurchaseOrderViewTabMenuSection({
   enabled,
   groups = [],
   columns = [],
-  uniqueValueCount,
-  promptCreateTabs = false,
-  onPromptCreateTabsHandled,
-  onAddBlankTab,
-  onAddFromColumn,
   onSetGroupColor,
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newOpen, setNewOpen] = useState(false);
-
-  useEffect(() => {
-    if (promptCreateTabs && enabled) {
-      setCreateOpen(true);
-      onPromptCreateTabsHandled?.();
-    }
-  }, [promptCreateTabs, enabled, onPromptCreateTabsHandled]);
-
-  const handleNew = useCallback((name) => {
-    onAddBlankTab?.(name);
-  }, [onAddBlankTab]);
-
-  const handleCreate = useCallback(async (payload) => {
-    onAddFromColumn?.(payload);
-  }, [onAddFromColumn]);
-
-  const openNewTab = useCallback(() => setNewOpen(true), []);
-  const openCreateTabs = useCallback(() => setCreateOpen(true), []);
+  const { openNewTab, openCreateTabs } = useViewTabsActions();
+  const handleOpenCreateTabs = useCallback(() => openCreateTabs(), [openCreateTabs]);
 
   if (!enabled) return null;
 
@@ -90,7 +66,7 @@ export default function PurchaseOrderViewTabMenuSection({
       <MenuGroup>
         <MenuGroupHeader>Tabs</MenuGroupHeader>
         <MenuItem icon={<TabAddRegular />} onClick={openNewTab}>Tab</MenuItem>
-        <MenuItem icon={<ColumnRegular />} onClick={openCreateTabs}>Tab from column…</MenuItem>
+        <MenuItem icon={<TabAddRegular />} onClick={handleOpenCreateTabs}>Tab from column…</MenuItem>
         {groups.map((group) => (
           <GroupColorMenuItem
             key={group.columnKey}
@@ -101,15 +77,6 @@ export default function PurchaseOrderViewTabMenuSection({
           />
         ))}
       </MenuGroup>
-      <PurchaseOrderCreateTabsDialog
-        open={createOpen}
-        columns={columns}
-        groups={groups}
-        uniqueValueCount={uniqueValueCount}
-        onOpenChange={setCreateOpen}
-        onSubmit={handleCreate}
-      />
-      <PurchaseOrderNewTabDialog open={newOpen} onOpenChange={setNewOpen} onSubmit={handleNew} />
     </>
   );
 }

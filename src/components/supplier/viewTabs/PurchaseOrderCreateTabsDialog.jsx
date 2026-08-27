@@ -33,11 +33,15 @@ export default function PurchaseOrderCreateTabsDialog({
   columns = [],
   groups = [],
   uniqueValueCount,
+  initialColumnKey = '',
   onOpenChange,
   onSubmit,
 }) {
   const styles = useStyles();
-  const defaultKey = useMemo(() => preferredSplitColumnKey(columns), [columns]);
+  const defaultKey = useMemo(
+    () => initialColumnKey || preferredSplitColumnKey(columns),
+    [columns, initialColumnKey]
+  );
   const [columnKey, setColumnKey] = useState(defaultKey);
   const [color, setColor] = useState(() => nextGroupColor(groups));
   const [namePrefix, setNamePrefix] = useState('');

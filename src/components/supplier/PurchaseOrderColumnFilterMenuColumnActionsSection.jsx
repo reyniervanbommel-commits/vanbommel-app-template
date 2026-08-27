@@ -1,20 +1,24 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { mergeClasses, Text } from '@fluentui/react-components';
 import {
   AddRegular,
   ArrowBidirectionalLeftRightRegular,
-  ArrowRightRegular,
   CalendarLtrRegular,
   CheckmarkRegular,
   DeleteRegular,
   EditRegular,
   LinkRegular,
   NumberSymbolRegular,
+  PinOffRegular,
+  PinRegular,
+  TabAddRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterSubmenuButton from './PurchaseOrderColumnFilterSubmenuButton';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 import D365LogoIcon from './D365LogoIcon';
 import { menuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
+import { getStickyColumnMenuText } from './purchaseOrderColumnFilterMenuConstants';
+import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
 
 export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
   styles,
@@ -52,17 +56,18 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
   handleMakeColumnSticky,
   showAppearanceSection = false,
   showColumnSection = false,
+  columnKey = '',
 }) {
-  const stickyMenuText = canUnstickSticky
-    ? 'Unstick column'
-    : isStickyColumn
-      ? `Already sticky (${stickyColumnCount})`
-      : 'Make this the next sticky column';
+  const { canCreateFromColumn, openCreateTabs } = useViewTabsActions();
+  const stickyMenuText = getStickyColumnMenuText({ canUnstickSticky, isStickyColumn, stickyColumnCount });
   const stickyActionDisabled = !canPromoteToSticky && !canUnstickSticky;
   const stickyLabelClassName = `${styles.menuItemContent} ${stickyActionDisabled ? styles.menuItemContentDisabled : ''}`.trim();
   const stickyIconClassName = `${styles.menuItemIcon} ${stickyActionDisabled ? styles.menuItemIconDisabled : ''}`.trim();
   const weekSelected = datePeriodDisplayMode !== 'month';
   const monthSelected = datePeriodDisplayMode === 'month';
+  const handleCreateTabsFromColumn = useCallback(() => {
+    openCreateTabs(columnKey);
+  }, [columnKey, openCreateTabs]);
 
   if (!showAppearanceSection && !showColumnSection) {
     return null;
@@ -145,6 +150,17 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
                 {menuLabel(styles, <ArrowBidirectionalLeftRightRegular />, 'Hide column')}
               </PurchaseOrderColumnFilterMenuButton>
             ) : null}
+            {canCreateFromColumn ? (
+              <PurchaseOrderColumnFilterMenuButton
+                className={styles.sortButton}
+                appearance="subtle"
+                size="small"
+                closeSubmenu={closeSubmenu}
+                onClick={handleCreateTabsFromColumn}
+              >
+                {menuLabel(styles, <TabAddRegular />, 'Tab from column…')}
+              </PurchaseOrderColumnFilterMenuButton>
+            ) : null}
             {canToggleWriteback ? (
               <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
                 <span className={styles.d365SyncLabel}>
@@ -199,7 +215,7 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
               >
                 <span className={stickyLabelClassName}>
                   <span className={stickyIconClassName} aria-hidden>
-                    <ArrowRightRegular />
+                    {canUnstickSticky ? <PinOffRegular /> : <PinRegular />}
                   </span>
                   <span>{stickyMenuText}</span>
                 </span>

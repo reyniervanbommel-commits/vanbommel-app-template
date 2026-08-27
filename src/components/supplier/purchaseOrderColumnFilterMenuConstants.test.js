@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDraftFromFilter, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
+import { getDraftFromFilter, getStickyColumnMenuText, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 
 describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   const textColumn = { key: 'vendor', dataType: 'text' };
@@ -22,5 +22,15 @@ describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   it('isColumnFilterActive is alleen actief met een niet-lege oneOf-array', () => {
     expect(isColumnFilterActive(textColumn, { operator: 'oneOf', value: [] })).toBe(false);
     expect(isColumnFilterActive(textColumn, { operator: 'oneOf', value: ['Acme'] })).toBe(true);
+  });
+});
+
+describe('getStickyColumnMenuText', () => {
+  it('gebruikt Make sticky voor een niet-sticky kolom', () => {
+    expect(getStickyColumnMenuText({ canUnstickSticky: false, isStickyColumn: false })).toBe('Make sticky');
+  });
+
+  it('gebruikt Unstick column wanneer losmaken mag', () => {
+    expect(getStickyColumnMenuText({ canUnstickSticky: true, isStickyColumn: true, stickyColumnCount: 2 })).toBe('Unstick column');
   });
 });

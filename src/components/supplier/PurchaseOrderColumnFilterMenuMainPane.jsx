@@ -4,6 +4,7 @@ import PurchaseOrderColumnFilterMenuFilterSection from './PurchaseOrderColumnFil
 import PurchaseOrderColumnFilterMenuSortSection from './PurchaseOrderColumnFilterMenuSortSection';
 import PurchaseOrderColumnFilterMenuColumnActionsSection from './PurchaseOrderColumnFilterMenuColumnActionsSection';
 import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
+import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
 
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
@@ -71,6 +72,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
     closeSubmenu?.();
   }, [closeSubmenu]);
 
+  const { canCreateFromColumn } = useViewTabsActions();
   const showAppearanceSection = useMemo(
     () => Boolean(canSetColumnTextStyle || canSetColumnFormatRules || canConfigureDatePeriodDisplay),
     [canConfigureDatePeriodDisplay, canSetColumnFormatRules, canSetColumnTextStyle]
@@ -86,9 +88,11 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       || canPushLineTotalToHeader
       || canPushLineValuesToHeader
       || canMakeColumnSticky
+      || canCreateFromColumn
     ),
     [
       canAddColumn,
+      canCreateFromColumn,
       canEditFormulaColumn,
       canHideColumn,
       canMakeColumnSticky,
@@ -203,6 +207,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         handleMakeColumnSticky={handleMakeColumnSticky}
         showAppearanceSection={showAppearanceSection}
         showColumnSection={showColumnSection}
+        columnKey={column.key}
       />
     </div>
   );

@@ -16,8 +16,6 @@ export default function PurchaseOrderViewTitleRow({
   isStaff,
   columns,
   onExportExcel,
-  promptCreateTabs,
-  onPromptCreateTabsHandled,
   onSaveAsNew,
   onRequestUpdate,
 }) {
@@ -61,11 +59,6 @@ export default function PurchaseOrderViewTitleRow({
             enabled={Boolean(activeViewId && isStaff && viewTabs)}
             groups={viewTabs?.groups || []}
             columns={columns}
-            uniqueValueCount={viewTabs?.uniqueValueCount}
-            promptCreateTabs={promptCreateTabs}
-            onPromptCreateTabsHandled={onPromptCreateTabsHandled}
-            onAddBlankTab={viewTabs?.addBlankTab}
-            onAddFromColumn={viewTabs?.addTabsFromColumn}
             onSetGroupColor={viewTabs?.setGroupColor}
           />
         )}

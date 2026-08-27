@@ -11,6 +11,7 @@ import PurchaseOrderSyncStatus from './PurchaseOrderSyncStatus';
 import PurchaseOrderViewTitleRow from './PurchaseOrderViewTitleRow';
 import PurchaseOrderViewTabsHost from './PurchaseOrderViewTabsHost';
 import PurchaseOrderSaveTabsDialog from './viewTabs/PurchaseOrderSaveTabsDialog';
+import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
 import { ALL_TAB_ID, hasExtraViewTabs, inferGroupColumnKey } from '../../utils/viewTabs';
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
@@ -89,7 +90,7 @@ export default function PurchaseOrdersPageTopBar({
     handleUpdateActive,
     viewTabs,
   } = savedViewsState;
-  const [promptCreateTabs, setPromptCreateTabs] = useState(false);
+  const { openCreateTabs } = useViewTabsActions();
   const [saveTabsOpen, setSaveTabsOpen] = useState(false);
   const [saveTabsMode, setSaveTabsMode] = useState('persist');
   const {
@@ -144,8 +145,8 @@ export default function PurchaseOrdersPageTopBar({
 
   const onSaveAsNew = useCallback(async (payload) => {
     await handleSaveAsNew(payload);
-    setPromptCreateTabs(true);
-  }, [handleSaveAsNew]);
+    openCreateTabs();
+  }, [handleSaveAsNew, openCreateTabs]);
 
   const onRequestUpdate = useCallback(() => {
     if (!activeView) return;
@@ -166,8 +167,6 @@ export default function PurchaseOrdersPageTopBar({
     await handleUpdateActive(activeView, scope);
   }, [activeView, handleUpdateActive, saveTabsMode, viewTabs]);
 
-  const handlePromptCreateHandled = useCallback(() => setPromptCreateTabs(false), []);
-
   useEffect(() => {
     if (!viewTabs?.extraFilterPrompt) return;
     setSaveTabsMode('scope');
@@ -186,8 +185,6 @@ export default function PurchaseOrdersPageTopBar({
             isStaff={isStaff}
             columns={columns}
             onExportExcel={onExportExcel}
-            promptCreateTabs={promptCreateTabs}
-            onPromptCreateTabsHandled={handlePromptCreateHandled}
             onSaveAsNew={onSaveAsNew}
             onRequestUpdate={onRequestUpdate}
           />

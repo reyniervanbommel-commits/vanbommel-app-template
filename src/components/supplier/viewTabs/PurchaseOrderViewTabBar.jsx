@@ -41,7 +41,7 @@ const useStyles = makeStyles({
     },
   },
   tabActive: {
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: tokens.colorNeutralBackground4,
     fontWeight: tokens.fontWeightSemibold,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
   },
