@@ -136,17 +136,16 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             setSortAsc={setSortAsc}
             setSortDesc={setSortDesc}
             clearSort={clearSort}
-          />
-          {canToggleColumnSum ? (
-            <div className={styles.sectionBlock}>
+          >
+            {canToggleColumnSum ? (
               <PurchaseOrderShowSumSwitch
                 styles={styles}
                 checked={isColumnSumColumn}
                 onToggle={handleToggleColumnSum}
                 onMouseEnter={closeSubmenu}
               />
-            </div>
-          ) : null}
+            ) : null}
+          </PurchaseOrderColumnFilterMenuSortSection>
           <div className={styles.divider} />
           <PurchaseOrderColumnFilterMenuFilterSection
             styles={styles}

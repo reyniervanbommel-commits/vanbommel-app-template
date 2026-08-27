@@ -41,8 +41,7 @@ export function usePurchaseOrderColumnMenuQuickActions({
   const handleToggleColumnSum = useCallback(() => {
     if (!canToggleColumnSum) return;
     sumToggles?.onSetColumnSumColumn?.(column.key, !sumToggles.isColumnSumColumn);
-    setOpen(false);
-  }, [canToggleColumnSum, column.key, setOpen, sumToggles]);
+  }, [canToggleColumnSum, column.key, sumToggles]);
 
   const handlePushLineTotalToHeader = useCallback(() => {
     if (!canPushLineTotalToHeader) return;

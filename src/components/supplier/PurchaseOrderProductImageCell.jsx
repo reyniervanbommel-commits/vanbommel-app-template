@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Badge, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
+import { Badge, Portal, Text, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import PurchaseOrderProductImagePreviewDialog from './PurchaseOrderProductImagePreviewDialog';
 import {
   PRODUCT_IMAGE_CELL_HEIGHT,
@@ -8,6 +7,8 @@ import {
   PRODUCT_IMAGE_LOAD_DELAY_MS,
 } from '../../utils/purchaseOrderProductImageColumn';
 import { hasFailedProductImage, markProductImageFailed } from '../../utils/productImageFailureCache';
+
+const HOVER_PREVIEW_CHROME_PX = 48;
 
 const useStyles = makeStyles({
   root: {
@@ -52,11 +53,10 @@ const useStyles = makeStyles({
     position: 'fixed',
     zIndex: 10000,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    maxWidth: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
-    maxHeight: `${PRODUCT_IMAGE_HOVER_MAX_SIZE}px`,
-    ...shorthands.padding('4px'),
+    ...shorthands.gap('8px'),
+    ...shorthands.padding('8px'),
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusMedium,
@@ -70,6 +70,12 @@ const useStyles = makeStyles({
     width: 'auto',
     height: 'auto',
     objectFit: 'contain',
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  hoverItemNumber: {
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase200,
   },
   badgeButton: {
     position: 'absolute',
@@ -160,7 +166,7 @@ function PurchaseOrderProductImageCell({
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       setHoverPreviewPosition({
-        top: Math.max(8, rect.top - PRODUCT_IMAGE_HOVER_MAX_SIZE - 8),
+        top: Math.max(8, rect.top - PRODUCT_IMAGE_HOVER_MAX_SIZE - HOVER_PREVIEW_CHROME_PX),
         left: Math.max(8, rect.left + (rect.width / 2) - (PRODUCT_IMAGE_HOVER_MAX_SIZE / 2)),
       });
     }, PRODUCT_IMAGE_LOAD_DELAY_MS);
@@ -229,19 +235,22 @@ function PurchaseOrderProductImageCell({
           )
         ) : null}
       </span>
-      {hoverPreviewPosition && imageAvailable ? createPortal(
-        <div
-          className={styles.hoverPreviewFrame}
-          style={{ top: hoverPreviewPosition.top, left: hoverPreviewPosition.left }}
-        >
-          <img
-            className={styles.hoverPreviewImage}
-            src={imageUrl}
-            alt=""
-            draggable={false}
-          />
-        </div>,
-        document.body,
+      {hoverPreviewPosition && imageAvailable ? (
+        <Portal>
+          <div
+            className={styles.hoverPreviewFrame}
+            role="tooltip"
+            style={{ top: hoverPreviewPosition.top, left: hoverPreviewPosition.left }}
+          >
+            <img
+              className={styles.hoverPreviewImage}
+              src={imageUrl}
+              alt=""
+              draggable={false}
+            />
+            <Text className={styles.hoverItemNumber}>{normalizedItemNumber}</Text>
+          </div>
+        </Portal>
       ) : null}
       <PurchaseOrderProductImagePreviewDialog
         open={dialogOpen}

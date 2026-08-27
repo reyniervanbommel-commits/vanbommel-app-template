@@ -1,5 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Switch, Text } from '@fluentui/react-components';
+import { AutosumRegular } from '@fluentui/react-icons';
+import { menuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 
 export const EMPTY_SUM_TOGGLES = {
   isGroupSummaryColumn: false,
@@ -31,15 +33,25 @@ export function PurchaseOrderShowSumSwitch({ styles, checked, onToggle, onMouseE
     if (data.checked === Boolean(checked)) return;
     onToggle?.();
   }, [checked, onToggle]);
+  const stopMenuDismiss = useCallback((event) => {
+    event.stopPropagation();
+  }, []);
 
   return (
-    <div className={styles.groupingToggleRow} onMouseEnter={onMouseEnter}>
-      <Text size={300}>Show sum</Text>
-      <Switch
-        checked={Boolean(checked)}
-        onChange={handleChange}
-        aria-label="Show sum"
-      />
+    <div
+      className={styles.showSumRow}
+      onMouseEnter={onMouseEnter}
+      onMouseDown={stopMenuDismiss}
+      onClick={stopMenuDismiss}
+    >
+      {menuLabel(styles, <AutosumRegular />, 'Show sum')}
+      <span className={styles.showSumSwitch}>
+        <Switch
+          checked={Boolean(checked)}
+          onChange={handleChange}
+          aria-label="Show sum"
+        />
+      </span>
     </div>
   );
 }

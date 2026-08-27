@@ -189,6 +189,7 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     fireEvent.click(await screen.findByRole('switch', { name: /^Show sum$/i }));
 
     expect(onSetColumnSumColumn).toHaveBeenCalledWith('amount', true);
+    expect(screen.getByRole('switch', { name: /^Show sum$/i })).toBeInTheDocument();
   });
 
   it('gebruikt palette picker voor category bar color', async () => {
