@@ -11,6 +11,7 @@ import {
   NUMBER_FILTER_OPERATORS,
   numberMatchesFilter,
   filterItemsByColumnFilters,
+  isRemarksSearchTermValid,
 } from './tableViewFilterUtils';
 
 describe('tableViewFilterUtils', () => {
@@ -162,5 +163,23 @@ describe('filterItemsByColumnFilters', () => {
       vendor: { operator: 'colorIs', colors: ['#ff0000'] },
     };
     expect(filterItemsByColumnFilters(items, columns, filterByColumn, {}, 'status')).toEqual(items);
+  });
+});
+
+describe('remarks column — value-pass skip and min-2 helper', () => {
+  const remarks = { key: 'remarks', dataType: 'remarks' };
+  it('treats remarks as matching in the value pass so unique values of other columns stay filled', () => {
+    expect(columnValueMatchesFilter(remarks, undefined, { operator: 'contains', value: 'delay' })).toBe(true);
+    expect(hasActiveFilter(remarks, { operator: 'contains', value: 'delay' })).toBe(true);
+  });
+  it('isRemarksSearchTermValid requires 2–200 trimmed chars', () => {
+    expect(isRemarksSearchTermValid(' a ')).toBe(false);
+    expect(isRemarksSearchTermValid('ab')).toBe(true);
+  });
+  it('filterItemsByColumnFilters ignores remarks cell values', () => {
+    const items = [{ values: { vendor: 'Acme' } }];
+    const columns = [{ key: 'vendor', dataType: 'text' }, remarks];
+    const filters = { remarks: { operator: 'contains', value: 'delay' }, vendor: { operator: 'contains', value: 'acme' } };
+    expect(filterItemsByColumnFilters(items, columns, filters)).toHaveLength(1);
   });
 });
