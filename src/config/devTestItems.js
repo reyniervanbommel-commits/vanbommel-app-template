@@ -4,6 +4,15 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'idle-prefetch-kpi-bi-rccp',
+    title: 'Idle prefetch: KPI-tab, BI & RCCP',
+    checks: [
+      'Open the PO table, wait ~2s without scrolling, open the KPI tab: tiles show non-zero numbers when Open/Delivered are configured in settings.',
+      'Scroll fast / type in a column filter while the idle-prefetch would normally run: no noticeable extra stutter compared to before this change.',
+      'First click on RCCP with a last-used vendor: chart/KPIs appear without a long empty state (at most a brief JS-chunk load if the prefetch had not finished yet).',
+    ],
+  },
+  {
     id: 'feature-po-view-tabs-v1-52-10',
     title: 'Feature PO view tabs (v1.52.10)',
     checks: [

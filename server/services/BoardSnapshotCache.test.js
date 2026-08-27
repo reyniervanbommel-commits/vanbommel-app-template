@@ -73,7 +73,7 @@ describe('readBoardSnapshot', () => {
 
 describe('readRccpPoRows', () => {
   it('leest zonder change-decoraties en hergebruikt de kpi-cache', async () => {
-    mockDataService({ parts: { syncedAt: 'kpi-same' }, rows: [{ recordKey: 'PO-1' }] });
+    mockDataService({ parts: { syncedAt: 'kpi-same' }, rows: [{ recordKey: 'PO-1', details: [] }] });
 
     const first = await readRccpPoRows({ tableKey: 'kpi-test-1' });
     const second = await readRccpPoRows({ tableKey: 'kpi-test-1' });
@@ -84,12 +84,12 @@ describe('readRccpPoRows', () => {
       supplierAccount: null,
       includeChangeDecorations: false,
     });
-    expect(first.rows).toEqual([{ recordKey: 'PO-1' }]);
+    expect(first.rows).toEqual([{ recordKey: 'PO-1', details: [] }]);
     expect(second.rows).toBe(first.rows);
   });
 
   it('hergebruikt een warm board-snapshot zonder tweede read()', async () => {
-    mockDataService({ parts: { syncedAt: 'shared-snap' }, rows: [{ recordKey: 'PO-SNAP' }] });
+    mockDataService({ parts: { syncedAt: 'shared-snap' }, rows: [{ recordKey: 'PO-SNAP', details: [] }] });
     await readBoardSnapshot({ tableKey: 'kpi-reuse-snap' });
     dataService.read.mockClear();
     dataService.getRevision.mockClear();
@@ -97,7 +97,7 @@ describe('readRccpPoRows', () => {
     const kpi = await readRccpPoRows({ tableKey: 'kpi-reuse-snap' });
 
     expect(dataService.read).not.toHaveBeenCalled();
-    expect(kpi.rows).toEqual([{ recordKey: 'PO-SNAP' }]);
+    expect(kpi.rows).toEqual([{ recordKey: 'PO-SNAP', details: [] }]);
   });
 
   it('slaat getRevision over wanneer revision en parts al bekend zijn', async () => {
@@ -111,5 +111,48 @@ describe('readRccpPoRows', () => {
 
     expect(dataService.getRevision).not.toHaveBeenCalled();
     expect(dataService.read).toHaveBeenCalledTimes(1);
+  });
+
+  it('negeert een board-snapshot zonder details en doet alsnog een kpi_po_read mét details', async () => {
+    mockDataService({
+      parts: { syncedAt: 'poison' },
+      rows: [{ recordKey: 'PO-1', values: { vendorAccount: 'V1' } }], // geen details
+    });
+    const { rememberKpiPoRows, contentSignature } = await import('./BoardSnapshotCache');
+    rememberKpiPoRows({
+      tableKey: 'purchase-orders',
+      supplierAccount: null,
+      signature: contentSignature({ syncedAt: 'poison' }),
+      rows: [{ recordKey: 'PO-1', values: {} }],
+    });
+    dataService.read.mockResolvedValue({
+      rows: [{ recordKey: 'PO-1', details: [{ detailKey: '1', values: {} }], values: {} }],
+    });
+    const kpi = await readRccpPoRows({
+      tableKey: 'purchase-orders',
+      revision: 1,
+      parts: { syncedAt: 'poison' },
+    });
+    expect(dataService.read).toHaveBeenCalledWith(expect.objectContaining({
+      includeChangeDecorations: false,
+    }));
+    expect(kpi.rows[0].details).toEqual([{ detailKey: '1', values: {} }]);
+  });
+
+  it('een board-read zonder details overschrijft een eerder warme, details-rijke kpi-cache niet', async () => {
+    mockDataService({ parts: { syncedAt: 'guard' }, rows: [{ recordKey: 'PO-9', details: [{ detailKey: 'd1' }] }] });
+    const { rememberKpiPoRows, contentSignature } = await import('./BoardSnapshotCache');
+    const signature = contentSignature({ syncedAt: 'guard' });
+
+    const first = await readRccpPoRows({ tableKey: 'kpi-guard-1', revision: 1, parts: { syncedAt: 'guard' } });
+    expect(first.rows[0].details).toEqual([{ detailKey: 'd1' }]);
+    dataService.read.mockClear();
+
+    // Simuleert een header-only board-read die de cache probeert te vergiftigen.
+    rememberKpiPoRows({ tableKey: 'kpi-guard-1', supplierAccount: null, signature, rows: [{ recordKey: 'PO-9' }] });
+
+    const second = await readRccpPoRows({ tableKey: 'kpi-guard-1', revision: 1, parts: { syncedAt: 'guard' } });
+    expect(dataService.read).not.toHaveBeenCalled();
+    expect(second.rows[0].details).toEqual([{ detailKey: 'd1' }]);
   });
 });

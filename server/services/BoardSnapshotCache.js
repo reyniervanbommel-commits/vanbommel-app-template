@@ -39,8 +39,18 @@ function contentSignature(parts = {}) {
   });
 }
 
+// Een header-only board-read (includeDetails: false) heeft geen `details`-array op de rijen.
+// Zulke rijen mogen de kpi-cache niet vullen: RCCP/BI-KPI's rekenen op PO-regels (open/delivered
+// zitten op `details`), en een header-only snapshot zou ze permanent op 0 laten staan tot de
+// volgende content-wijziging de signature verandert.
+function snapshotHasDetails(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return true;
+  return rows.some((row) => Array.isArray(row.details));
+}
+
 function rememberKpiPoRows({ tableKey, supplierAccount = null, signature, rows } = {}) {
   if (!tableKey || !signature || !rows) return;
+  if (!snapshotHasDetails(rows)) return;
   kpiRowCache.set(kpiCacheKey(tableKey, supplierAccount), {
     rows,
     signature,
@@ -94,12 +104,12 @@ async function readRccpPoRows({
   }
   const signature = contentSignature(parts);
   const snap = snapshotCache.get(snapshotCacheKey(tableKey, supplierAccount));
-  if (snap && snap.signature === signature && liveCache(snap)) {
+  if (snap && snap.signature === signature && liveCache(snap) && snapshotHasDetails(snap.rows)) {
     rememberKpiPoRows({ tableKey, supplierAccount, signature, rows: snap.rows });
     return { rows: snap.rows, revision };
   }
   const cached = kpiRowCache.get(kpiCacheKey(tableKey, supplierAccount));
-  if (cached && cached.signature === signature && liveCache(cached)) {
+  if (cached && cached.signature === signature && liveCache(cached) && snapshotHasDetails(cached.rows)) {
     return { rows: cached.rows, revision };
   }
   const data = await time('kpi_po_read', () => dataService.read({

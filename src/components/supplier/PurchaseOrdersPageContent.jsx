@@ -12,6 +12,8 @@ import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
 import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
+import { buildTableDataRevision } from '../bi/tableDataRevision';
+import { useDataPagesPrefetch } from '../../hooks/useDataPagesPrefetch';
 
 // Vendors mogen nooit terugschrijven naar D365. Forceer write-back uit op alle kolommen zodat
 // zowel de inline write-back editor als de D365-sync-indicator verdwijnen voor niet-staff.
@@ -45,6 +47,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
   const { user } = useAuth();
   const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+  const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
 
@@ -53,6 +56,11 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   useEffect(() => {
     savePoFilterByColumnForRccp(boardView.filterByColumn);
   }, [boardView.filterByColumn]);
+
+  // Zelfde fingerprint als BoardSplitView's `dataRevision` — zo hergebruikt de KPI-tab
+  // (PoBoardKpiStrip) de idle-geprefetchte `getPoBoardKpis`-cache in plaats van een tweede call.
+  const dataRevision = useMemo(() => buildTableDataRevision(pageModel.orders), [pageModel.orders]);
+  useDataPagesPrefetch({ enabled: !status.loading, refreshKey: dataRevision, isSupplier });
 
   // Track-changes worden centraal in Settings beheerd; hier alleen de header-indicator.
   const trackChangesActiveByColumnId = useMemo(
