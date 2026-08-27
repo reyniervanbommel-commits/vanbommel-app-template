@@ -100,28 +100,4 @@ describe('usePurchaseOrderViewTabs', () => {
     expect(result.current.extraTabs).toHaveLength(0);
     expect(result.current.activeTabId).toBe(ALL_TAB_ID);
   });
-
-  it('hernoemt groeps-tabs bij prefix en suffix', () => {
-    const boardView = createBoardView();
-    const { result } = renderHook(() => usePurchaseOrderViewTabs({
-      activeViewId: 9,
-      boardView,
-      columns: [{ key: 'vendorAccount', label: 'Vendor', dataType: 'text' }],
-      allItems: [
-        { values: { vendorAccount: 'Q000104' } },
-        { values: { vendorAccount: 'Q000105' } },
-      ],
-    }));
-
-    act(() => {
-      result.current.addTabsFromColumn({ columnKey: 'vendorAccount', color: '#579bfc' });
-    });
-    act(() => {
-      result.current.setGroupAffix('vendorAccount', { namePrefix: 'Acc', nameSuffix: 'NL' });
-    });
-
-    expect(result.current.extraTabs.map((tab) => tab.name).sort()).toEqual(['Acc Q000104 NL', 'Acc Q000105 NL']);
-    expect(result.current.groups[0].namePrefix).toBe('Acc');
-    expect(result.current.groups[0].nameSuffix).toBe('NL');
-  });
 });

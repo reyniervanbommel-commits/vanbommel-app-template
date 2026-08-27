@@ -16,8 +16,7 @@ import {
 import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
 import PurchaseOrderViewTabHoverCard from './PurchaseOrderViewTabHoverCard';
-import PurchaseOrderTabNameAffixDialog from './PurchaseOrderTabNameAffixDialog';
-import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs, tabUnderlineColor } from '../../../utils/viewTabs';
+import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs, tabUnderlineColor, truncateTabLabel } from '../../../utils/viewTabs';
 
 const ALL_HOVER_TAB = { id: ALL_TAB_ID, name: 'All', extraFilters: {} };
 
@@ -35,9 +34,26 @@ const useStyles = makeStyles({
     minWidth: 0,
     flex: 1,
     overflowX: 'auto',
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${tokens.colorNeutralStrokeAccessible} transparent`,
+    '::-webkit-scrollbar': {
+      height: '5px',
+    },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStrokeAccessible,
+      ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    },
+    '::-webkit-scrollbar-track': {
+      backgroundColor: 'transparent',
+    },
+    '::-webkit-scrollbar-button': {
+      display: 'none',
+      width: 0,
+      height: 0,
+    },
   },
   tab: {
-    maxWidth: '180px',
+    maxWidth: '11ch',
     minHeight: '28px',
     ...shorthands.margin('0', '4px', '0', '0'),
     '::after': {
@@ -104,14 +120,10 @@ export default function PurchaseOrderViewTabBar({
   onSelectTab,
   onRemoveTab,
   onSetGroupColor,
-  onSetGroupAffix,
 }) {
   const styles = useStyles();
   const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: '' });
   const [hover, setHover] = useState(null);
-  const [affixGroupKey, setAffixGroupKey] = useState('');
-  const affixGroup = groups.find((group) => group.columnKey === affixGroupKey);
-  const affixLabel = columns.find((column) => column.key === affixGroupKey)?.label || affixGroupKey;
 
   const handleSelect = useCallback((_, data) => {
     onSelectTab(data.value);
@@ -149,18 +161,6 @@ export default function PurchaseOrderViewTabBar({
     setContext((prev) => ({ ...prev, open }));
   }, []);
 
-  const handleOpenAffix = useCallback((groupKey) => {
-    setAffixGroupKey(groupKey);
-  }, []);
-
-  const handleAffixOpenChange = useCallback((open) => {
-    if (!open) setAffixGroupKey('');
-  }, []);
-
-  const handleAffixSubmit = useCallback((affix) => {
-    if (affixGroupKey) onSetGroupAffix(affixGroupKey, affix);
-  }, [affixGroupKey, onSetGroupAffix]);
-
   if (!hasExtraViewTabs(extraTabs)) return null;
 
   return (
@@ -193,7 +193,7 @@ export default function PurchaseOrderViewTabBar({
                 onMouseLeave={handleTabLeave}
               >
                 <span className={styles.tabInner}>
-                  <span className={styles.tabLabel}>{tab.name}</span>
+                  <span className={styles.tabLabel}>{truncateTabLabel(tab.name)}</span>
                   <TabColorBar color={color} isActive={isActive} styles={styles} />
                 </span>
               </Tab>
@@ -231,15 +231,6 @@ export default function PurchaseOrderViewTabBar({
         onOpenChange={handleContextOpenChange}
         onRemoveTab={onRemoveTab}
         onSetGroupColor={onSetGroupColor}
-        onOpenAffix={handleOpenAffix}
-      />
-      <PurchaseOrderTabNameAffixDialog
-        open={Boolean(affixGroupKey)}
-        groupLabel={affixLabel}
-        namePrefix={affixGroup?.namePrefix || ''}
-        nameSuffix={affixGroup?.nameSuffix || ''}
-        onOpenChange={handleAffixOpenChange}
-        onSubmit={handleAffixSubmit}
       />
     </div>
   );

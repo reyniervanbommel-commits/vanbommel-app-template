@@ -31,7 +31,6 @@ export default function PurchaseOrderViewTabsHost({
         onSelectTab={viewTabs.selectTab}
         onRemoveTab={viewTabs.removeTab}
         onSetGroupColor={viewTabs.setGroupColor}
-        onSetGroupAffix={viewTabs.setGroupAffix}
         columns={columns}
       />
     </div>

@@ -24,7 +24,8 @@ describe('PurchaseOrderViewTabHoverCard', () => {
     expect(getComputedStyle(card).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
     expect(getComputedStyle(card).backgroundColor).not.toBe('transparent');
     expect(screen.getByText('Open orders')).toBeTruthy();
-    expect(screen.getByText('Status is exactly Open')).toBeTruthy();
+    expect(screen.getByText('Status:')).toBeTruthy();
+    expect(screen.getByText('is exactly Open')).toBeTruthy();
   });
 
   it('toont view-filters-only voor de All-tab', () => {

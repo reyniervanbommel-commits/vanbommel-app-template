@@ -8,7 +8,6 @@ import {
   DialogSurface,
   DialogTitle,
   Field,
-  Input,
   MessageBar,
   MessageBarBody,
   Select,
@@ -24,9 +23,6 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     ...shorthands.gap('16px'),
     maxWidth: '520px',
-  },
-  prefixField: {
-    maxWidth: '168px',
   },
 });
 
@@ -48,42 +44,25 @@ export default function PurchaseOrderCreateTabsDialog({
   );
   const [columnKey, setColumnKey] = useState(defaultKey);
   const [color, setColor] = useState(() => nextGroupColor(groups));
-  const [namePrefix, setNamePrefix] = useState('');
-  const [nameSuffix, setNameSuffix] = useState('');
 
   useEffect(() => {
     if (open) {
       setColumnKey(defaultKey);
       setColor(nextGroupColor(groups));
-      const existing = groups.find((group) => group.columnKey === defaultKey);
-      setNamePrefix(existing?.namePrefix || '');
-      setNameSuffix(existing?.nameSuffix || '');
     }
   }, [open, defaultKey, groups]);
 
   const handleColumnChange = useCallback((event) => {
-    const nextKey = event.target.value;
-    setColumnKey(nextKey);
-    const existing = groups.find((group) => group.columnKey === nextKey);
-    setNamePrefix(existing?.namePrefix || '');
-    setNameSuffix(existing?.nameSuffix || '');
-  }, [groups]);
-
-  const handlePrefixChange = useCallback((_, data) => {
-    setNamePrefix(data.value);
-  }, []);
-
-  const handleSuffixChange = useCallback((_, data) => {
-    setNameSuffix(data.value);
+    setColumnKey(event.target.value);
   }, []);
 
   const count = columnKey && uniqueValueCount ? uniqueValueCount(columnKey) : 0;
 
   const handleSubmit = useCallback(async () => {
     if (!columnKey) return;
-    await onSubmit({ columnKey, color, namePrefix, nameSuffix });
+    await onSubmit({ columnKey, color });
     onOpenChange(false);
-  }, [columnKey, color, namePrefix, nameSuffix, onSubmit, onOpenChange]);
+  }, [columnKey, color, onSubmit, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
@@ -98,30 +77,6 @@ export default function PurchaseOrderCreateTabsDialog({
                     <option key={column.key} value={column.key}>{column.label || column.key}</option>
                   ))}
                 </Select>
-              </Field>
-              <Field
-                className={styles.prefixField}
-                label="Name prefix"
-                hint="Shown in front of the column value on each tab."
-              >
-                <Input
-                  value={namePrefix}
-                  onChange={handlePrefixChange}
-                  placeholder="e.g. Vendor"
-                  maxLength={40}
-                />
-              </Field>
-              <Field
-                className={styles.prefixField}
-                label="Name suffix"
-                hint="Shown after the column value on each tab."
-              >
-                <Input
-                  value={nameSuffix}
-                  onChange={handleSuffixChange}
-                  placeholder="e.g. NL"
-                  maxLength={40}
-                />
               </Field>
               {count > TAB_COUNT_WARNING ? (
                 <MessageBar intent="warning">

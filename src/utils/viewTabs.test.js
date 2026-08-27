@@ -20,8 +20,8 @@ import {
   formatTabName,
   tabUnderlineColor,
   hasExtraViewTabs,
-  applyGroupAffixToTabs,
-  tabHoverFilterLines,
+  tabHoverFilterRows,
+  truncateTabLabel,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -68,45 +68,26 @@ describe('viewTabs', () => {
     expect(existingEqualsValues([...existing, ...created], 'vendorAccount').has('q000104')).toBe(true);
   });
 
-  it('zet een vaste prefix vóór de kolomwaarde op tab-namen', () => {
-    expect(formatTabName('Vendor', 'Q000104')).toBe('Vendor Q000104');
-    expect(formatTabName('  ', 'Q000104')).toBe('Q000104');
+  it('kapt tab-labels af tot 10 tekens', () => {
+    expect(truncateTabLabel('Open')).toBe('Open');
+    expect(truncateTabLabel('Vendor:twtwtwtwt V000123')).toBe('Vendor:twt…');
+    expect(formatTabName('  Q000105  ')).toBe('Q000105');
     const created = buildBulkTabs({
       columnKey: 'vendorAccount',
       values: ['Q000105'],
       existingTabs: [],
-      namePrefix: 'Vendor',
     });
-    expect(created[0].name).toBe('Vendor Q000105');
+    expect(created[0].name).toBe('Q000105');
   });
 
-  it('zet prefix en suffix rond de kolomwaarde en hernoemt de groep', () => {
-    expect(formatTabName('PO', '123', 'open')).toBe('PO 123 open');
-    const created = buildBulkTabs({
-      columnKey: 'vendorAccount',
-      values: ['Q000105'],
-      existingTabs: [],
-      namePrefix: 'Vendor',
-      nameSuffix: 'NL',
-    });
-    expect(created[0].name).toBe('Vendor Q000105 NL');
-    const next = applyGroupAffixToTabs(created, [{ columnKey: 'vendorAccount', color: '#579bfc' }], 'vendorAccount', {
-      namePrefix: 'Acc',
-      nameSuffix: 'EU',
-    });
-    expect(next.extraTabs[0].name).toBe('Acc Q000105 EU');
-    expect(next.groups[0].namePrefix).toBe('Acc');
-    expect(next.groups[0].nameSuffix).toBe('EU');
-  });
-
-  it('beschrijft extra filters voor de tab-hover', () => {
+  it('beschrijft extra filters voor de tab-hover met kolomnaam en dubbele punt', () => {
     const columns = [{ key: 'status', label: 'Status', dataType: 'text' }];
-    expect(tabHoverFilterLines({ id: ALL_TAB_ID }, columns)).toEqual(['View filters only']);
-    expect(tabHoverFilterLines({ id: 'tab_1', extraFilters: {} }, columns)).toEqual(['No extra filters']);
-    expect(tabHoverFilterLines({
+    expect(tabHoverFilterRows({ id: ALL_TAB_ID }, columns)).toEqual([{ label: '', detail: 'View filters only' }]);
+    expect(tabHoverFilterRows({ id: 'tab_1', extraFilters: {} }, columns)).toEqual([{ label: '', detail: 'No extra filters' }]);
+    expect(tabHoverFilterRows({
       id: 'tab_2',
       extraFilters: { status: { operator: 'equals', value: 'Open' } },
-    }, columns)).toEqual(['Status is exactly Open']);
+    }, columns)).toEqual([{ label: 'Status:', detail: 'is exactly Open' }]);
   });
 
   it('splitst extra filters t.o.v. de view-base', () => {
@@ -158,10 +139,9 @@ describe('viewTabs', () => {
   });
 
   it('zet groepskleur per kolom en hergebruikt ongebruikte paletkleur', () => {
-    const groups = upsertGroup([], 'vendorAccount', nextGroupColor([]), 'Vendor');
+    const groups = upsertGroup([], 'vendorAccount', nextGroupColor([]));
     expect(groups[0].columnKey).toBe('vendorAccount');
     expect(groups[0].color).toMatch(/^#/);
-    expect(groups[0].namePrefix).toBe('Vendor');
     expect(inferGroupColumnKey({ extraFilters: { vendorAccount: { operator: 'equals', value: 'X' } } })).toBe('vendorAccount');
   });
 
@@ -177,11 +157,11 @@ describe('viewTabs', () => {
     });
     expect(normalized.extraTabs[0].name).toBe('Open');
     expect(normalized.groups).toEqual([]);
-    const withAffix = normalizeTabsState({
+    const withLegacyAffix = normalizeTabsState({
       extraTabs: [{ name: 'Open', extraFilters: { status: { operator: 'equals', value: 'Open' } } }],
       groups: [{ columnKey: 'status', color: '#00c875', namePrefix: 'St', nameSuffix: 'x' }],
     });
-    expect(withAffix.groups[0]).toMatchObject({ namePrefix: 'St', nameSuffix: 'x' });
+    expect(withLegacyAffix.groups[0]).toEqual({ columnKey: 'status', color: '#00c875' });
   });
 
   it('vergelijkt extra filters ongeacht lege secondaryValue', () => {

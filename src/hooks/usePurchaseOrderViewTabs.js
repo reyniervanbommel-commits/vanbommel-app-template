@@ -3,7 +3,6 @@ import { apiRequest } from '../utils/api';
 import { getCachedBoardSettings } from '../utils/boardPresentationCache';
 import {
   ALL_TAB_ID,
-  applyGroupAffixToTabs,
   buildBulkTabs,
   copyGroupExtraFilters,
   createTabId,
@@ -159,7 +158,7 @@ export function usePurchaseOrderViewTabs({
     applyMergedFilters(viewBaseRef.current, {});
   }, [applyMergedFilters, snapshotCurrentTab]);
 
-  const addTabsFromColumn = useCallback(({ columnKey, color, namePrefix, nameSuffix }) => {
+  const addTabsFromColumn = useCallback(({ columnKey, color }) => {
     skipFilterPrompt();
     snapshotCurrentTab();
     const column = columns.find((entry) => entry.key === columnKey);
@@ -170,11 +169,9 @@ export function usePurchaseOrderViewTabs({
       columnKey,
       values,
       existingTabs: extraTabsRef.current,
-      namePrefix,
-      nameSuffix,
     });
     const nextTabs = [...extraTabsRef.current, ...created];
-    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups), namePrefix, nameSuffix);
+    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups));
     setExtraTabs(nextTabs);
     extraTabsRef.current = nextTabs;
     setGroups(nextGroups);
@@ -184,15 +181,6 @@ export function usePurchaseOrderViewTabs({
   const setGroupColor = useCallback((columnKey, color) => {
     setGroups((prev) => upsertGroup(prev, columnKey, color));
   }, []);
-
-  const setGroupAffix = useCallback((columnKey, affix) => {
-    if (!columnKey) return;
-    snapshotCurrentTab();
-    const next = applyGroupAffixToTabs(extraTabsRef.current, groups, columnKey, affix);
-    setExtraTabs(next.extraTabs);
-    extraTabsRef.current = next.extraTabs;
-    setGroups(next.groups);
-  }, [groups, snapshotCurrentTab]);
 
   const exportTabsState = useCallback(() => {
     const snap = snapshotCurrentTab();
@@ -252,7 +240,6 @@ export function usePurchaseOrderViewTabs({
     removeTab,
     addTabsFromColumn,
     setGroupColor,
-    setGroupAffix,
     loadFromViewState,
     resetTabs,
     snapshotCurrentTab,
@@ -273,7 +260,6 @@ export function usePurchaseOrderViewTabs({
     removeTab,
     addTabsFromColumn,
     setGroupColor,
-    setGroupAffix,
     loadFromViewState,
     resetTabs,
     snapshotCurrentTab,

@@ -10,7 +10,7 @@ describe('server viewTabs', () => {
     });
     expect(normalized.extraTabs[0].name).toBe('Q1');
     expect(normalized.groups[0].color).toBe('#579bfc');
-    expect(normalized.groups[0].namePrefix).toBe('Vendor');
+    expect(normalized.groups[0]).toEqual({ columnKey: 'vendorAccount', color: '#579bfc' });
   });
 
   it('scoped een vendor-view op account', () => {

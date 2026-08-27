@@ -8,7 +8,7 @@ import {
   MenuTrigger,
   makeStyles,
 } from '@fluentui/react-components';
-import { DeleteRegular, EditRegular } from '@fluentui/react-icons';
+import { DeleteRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabGroupColorItem from './PurchaseOrderViewTabGroupColorItem';
 import { ALL_TAB_ID, inferGroupColumnKey } from '../../../utils/viewTabs';
 
@@ -33,7 +33,6 @@ export default function PurchaseOrderViewTabContextMenu({
   onOpenChange,
   onRemoveTab,
   onSetGroupColor,
-  onOpenAffix,
 }) {
   const styles = useStyles();
   const tab = useMemo(
@@ -58,11 +57,6 @@ export default function PurchaseOrderViewTabContextMenu({
     onOpenChange(false);
   }, [onRemoveTab, onOpenChange, tabId]);
 
-  const handleOpenAffix = useCallback(() => {
-    if (groupKey) onOpenAffix(groupKey);
-    onOpenChange(false);
-  }, [groupKey, onOpenAffix, onOpenChange]);
-
   if (!canManage || !tabId || tabId === ALL_TAB_ID) return null;
 
   return (
@@ -79,9 +73,6 @@ export default function PurchaseOrderViewTabContextMenu({
               selectedColor={group?.color}
               onSetGroupColor={onSetGroupColor}
             />
-          ) : null}
-          {groupKey ? (
-            <MenuItem icon={<EditRegular />} onClick={handleOpenAffix}>Prefix and suffix…</MenuItem>
           ) : null}
           {groupKey ? <MenuDivider /> : null}
           <MenuItem icon={<DeleteRegular />} onClick={handleDeleteThis}>This tab only</MenuItem>
