@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo } from 'react';
 import {
   Menu,
+  MenuDivider,
   MenuItem,
   MenuList,
   MenuPopover,
   MenuTrigger,
   makeStyles,
 } from '@fluentui/react-components';
-import { DeleteRegular } from '@fluentui/react-icons';
+import { DeleteRegular, EditRegular } from '@fluentui/react-icons';
+import PurchaseOrderViewTabGroupColorItem from './PurchaseOrderViewTabGroupColorItem';
 import { ALL_TAB_ID, inferGroupColumnKey } from '../../../utils/viewTabs';
 
 const useStyles = makeStyles({
@@ -25,10 +27,13 @@ export default function PurchaseOrderViewTabContextMenu({
   y,
   tabId,
   extraTabs,
+  groups = [],
   columns = [],
   canManage,
   onOpenChange,
   onRemoveTab,
+  onSetGroupColor,
+  onOpenAffix,
 }) {
   const styles = useStyles();
   const tab = useMemo(
@@ -36,6 +41,7 @@ export default function PurchaseOrderViewTabContextMenu({
     [extraTabs, tabId]
   );
   const groupKey = tab ? inferGroupColumnKey(tab) : '';
+  const group = groups.find((entry) => entry.columnKey === groupKey);
   const groupLabel = columns.find((column) => column.key === groupKey)?.label || groupKey;
 
   const handleOpenChange = useCallback((_, data) => {
@@ -52,6 +58,11 @@ export default function PurchaseOrderViewTabContextMenu({
     onOpenChange(false);
   }, [onRemoveTab, onOpenChange, tabId]);
 
+  const handleOpenAffix = useCallback(() => {
+    if (groupKey) onOpenAffix(groupKey);
+    onOpenChange(false);
+  }, [groupKey, onOpenAffix, onOpenChange]);
+
   if (!canManage || !tabId || tabId === ALL_TAB_ID) return null;
 
   return (
@@ -61,6 +72,18 @@ export default function PurchaseOrderViewTabContextMenu({
       </MenuTrigger>
       <MenuPopover>
         <MenuList>
+          {groupKey ? (
+            <PurchaseOrderViewTabGroupColorItem
+              columnKey={groupKey}
+              label="Group color"
+              selectedColor={group?.color}
+              onSetGroupColor={onSetGroupColor}
+            />
+          ) : null}
+          {groupKey ? (
+            <MenuItem icon={<EditRegular />} onClick={handleOpenAffix}>Prefix and suffix…</MenuItem>
+          ) : null}
+          {groupKey ? <MenuDivider /> : null}
           <MenuItem icon={<DeleteRegular />} onClick={handleDeleteThis}>This tab only</MenuItem>
           {groupKey ? (
             <MenuItem icon={<DeleteRegular />} onClick={handleDeleteGroup}>

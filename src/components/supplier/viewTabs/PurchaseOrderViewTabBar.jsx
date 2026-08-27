@@ -15,7 +15,11 @@ import {
 } from '@fluentui/react-components';
 import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
+import PurchaseOrderViewTabHoverCard from './PurchaseOrderViewTabHoverCard';
+import PurchaseOrderTabNameAffixDialog from './PurchaseOrderTabNameAffixDialog';
 import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs, tabUnderlineColor } from '../../../utils/viewTabs';
+
+const ALL_HOVER_TAB = { id: ALL_TAB_ID, name: 'All', extraFilters: {} };
 
 const useStyles = makeStyles({
   row: {
@@ -51,6 +55,9 @@ const useStyles = makeStyles({
     ...shorthands.borderRadius(tokens.borderRadiusSmall),
     marginTop: '2px',
   },
+  colorBarActive: {
+    height: '5px',
+  },
   colorBarFallback: {
     backgroundColor: tokens.colorBrandStroke1,
   },
@@ -80,6 +87,7 @@ function TabColorBar({ color, isActive, styles }) {
     <span
       className={mergeClasses(
         styles.colorBar,
+        isActive && styles.colorBarActive,
         !backgroundColor && (isActive ? styles.colorBarFallback : styles.colorBarFallbackMuted),
       )}
       style={backgroundColor ? { backgroundColor } : undefined}
@@ -95,9 +103,15 @@ export default function PurchaseOrderViewTabBar({
   canManage,
   onSelectTab,
   onRemoveTab,
+  onSetGroupColor,
+  onSetGroupAffix,
 }) {
   const styles = useStyles();
   const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: '' });
+  const [hover, setHover] = useState(null);
+  const [affixGroupKey, setAffixGroupKey] = useState('');
+  const affixGroup = groups.find((group) => group.columnKey === affixGroupKey);
+  const affixLabel = columns.find((column) => column.key === affixGroupKey)?.label || affixGroupKey;
 
   const handleSelect = useCallback((_, data) => {
     onSelectTab(data.value);
@@ -108,17 +122,44 @@ export default function PurchaseOrderViewTabBar({
     if (tabId) onSelectTab(tabId);
   }, [onSelectTab]);
 
+  const handleTabEnter = useCallback((event) => {
+    const tabId = event.currentTarget.getAttribute('data-tab-id') || ALL_TAB_ID;
+    const tab = tabId === ALL_TAB_ID
+      ? ALL_HOVER_TAB
+      : extraTabs.find((entry) => entry.id === tabId);
+    if (!tab) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHover({ tab, rect: { left: rect.left, top: rect.bottom } });
+  }, [extraTabs]);
+
+  const handleTabLeave = useCallback(() => {
+    setHover(null);
+  }, []);
+
   const handleContextMenu = useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
     const tabId = event.currentTarget.getAttribute('data-tab-id');
     if (!tabId || tabId === ALL_TAB_ID) return;
+    setHover(null);
     setContext({ open: true, x: event.clientX, y: event.clientY, tabId });
   }, []);
 
   const handleContextOpenChange = useCallback((open) => {
     setContext((prev) => ({ ...prev, open }));
   }, []);
+
+  const handleOpenAffix = useCallback((groupKey) => {
+    setAffixGroupKey(groupKey);
+  }, []);
+
+  const handleAffixOpenChange = useCallback((open) => {
+    if (!open) setAffixGroupKey('');
+  }, []);
+
+  const handleAffixSubmit = useCallback((affix) => {
+    if (affixGroupKey) onSetGroupAffix(affixGroupKey, affix);
+  }, [affixGroupKey, onSetGroupAffix]);
 
   if (!hasExtraViewTabs(extraTabs)) return null;
 
@@ -129,6 +170,9 @@ export default function PurchaseOrderViewTabBar({
           <Tab
             className={mergeClasses(styles.tab, activeTabId === ALL_TAB_ID && styles.tabActive)}
             value={ALL_TAB_ID}
+            data-tab-id={ALL_TAB_ID}
+            onMouseEnter={handleTabEnter}
+            onMouseLeave={handleTabLeave}
           >
             <span className={styles.tabInner}>
               <span className={styles.tabLabel}>All</span>
@@ -143,9 +187,10 @@ export default function PurchaseOrderViewTabBar({
                 key={tab.id}
                 className={mergeClasses(styles.tab, isActive && styles.tabActive)}
                 value={tab.id}
-                title={tab.name}
                 data-tab-id={tab.id}
                 onContextMenu={handleContextMenu}
+                onMouseEnter={handleTabEnter}
+                onMouseLeave={handleTabLeave}
               >
                 <span className={styles.tabInner}>
                   <span className={styles.tabLabel}>{tab.name}</span>
@@ -173,6 +218,7 @@ export default function PurchaseOrderViewTabBar({
           </Menu>
         </div>
       ) : null}
+      <PurchaseOrderViewTabHoverCard tab={hover?.tab} columns={columns} anchorRect={hover?.rect} />
       <PurchaseOrderViewTabContextMenu
         open={context.open}
         x={context.x}
@@ -184,6 +230,16 @@ export default function PurchaseOrderViewTabBar({
         canManage={canManage}
         onOpenChange={handleContextOpenChange}
         onRemoveTab={onRemoveTab}
+        onSetGroupColor={onSetGroupColor}
+        onOpenAffix={handleOpenAffix}
+      />
+      <PurchaseOrderTabNameAffixDialog
+        open={Boolean(affixGroupKey)}
+        groupLabel={affixLabel}
+        namePrefix={affixGroup?.namePrefix || ''}
+        nameSuffix={affixGroup?.nameSuffix || ''}
+        onOpenChange={handleAffixOpenChange}
+        onSubmit={handleAffixSubmit}
       />
     </div>
   );

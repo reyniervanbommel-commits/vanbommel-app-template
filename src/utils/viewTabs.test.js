@@ -20,6 +20,8 @@ import {
   formatTabName,
   tabUnderlineColor,
   hasExtraViewTabs,
+  applyGroupAffixToTabs,
+  tabHoverFilterLines,
 } from './viewTabs';
 
 describe('viewTabs', () => {
@@ -76,6 +78,35 @@ describe('viewTabs', () => {
       namePrefix: 'Vendor',
     });
     expect(created[0].name).toBe('Vendor Q000105');
+  });
+
+  it('zet prefix en suffix rond de kolomwaarde en hernoemt de groep', () => {
+    expect(formatTabName('PO', '123', 'open')).toBe('PO 123 open');
+    const created = buildBulkTabs({
+      columnKey: 'vendorAccount',
+      values: ['Q000105'],
+      existingTabs: [],
+      namePrefix: 'Vendor',
+      nameSuffix: 'NL',
+    });
+    expect(created[0].name).toBe('Vendor Q000105 NL');
+    const next = applyGroupAffixToTabs(created, [{ columnKey: 'vendorAccount', color: '#579bfc' }], 'vendorAccount', {
+      namePrefix: 'Acc',
+      nameSuffix: 'EU',
+    });
+    expect(next.extraTabs[0].name).toBe('Acc Q000105 EU');
+    expect(next.groups[0].namePrefix).toBe('Acc');
+    expect(next.groups[0].nameSuffix).toBe('EU');
+  });
+
+  it('beschrijft extra filters voor de tab-hover', () => {
+    const columns = [{ key: 'status', label: 'Status', dataType: 'text' }];
+    expect(tabHoverFilterLines({ id: ALL_TAB_ID }, columns)).toEqual(['View filters only']);
+    expect(tabHoverFilterLines({ id: 'tab_1', extraFilters: {} }, columns)).toEqual(['No extra filters']);
+    expect(tabHoverFilterLines({
+      id: 'tab_2',
+      extraFilters: { status: { operator: 'equals', value: 'Open' } },
+    }, columns)).toEqual(['Status is exactly Open']);
   });
 
   it('splitst extra filters t.o.v. de view-base', () => {
@@ -146,6 +177,11 @@ describe('viewTabs', () => {
     });
     expect(normalized.extraTabs[0].name).toBe('Open');
     expect(normalized.groups).toEqual([]);
+    const withAffix = normalizeTabsState({
+      extraTabs: [{ name: 'Open', extraFilters: { status: { operator: 'equals', value: 'Open' } } }],
+      groups: [{ columnKey: 'status', color: '#00c875', namePrefix: 'St', nameSuffix: 'x' }],
+    });
+    expect(withAffix.groups[0]).toMatchObject({ namePrefix: 'St', nameSuffix: 'x' });
   });
 
   it('vergelijkt extra filters ongeacht lege secondaryValue', () => {

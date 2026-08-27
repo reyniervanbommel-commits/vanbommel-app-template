@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { getCachedBoardSettings } from '../utils/boardPresentationCache';
 import {
   ALL_TAB_ID,
+  applyGroupAffixToTabs,
   buildBulkTabs,
   copyGroupExtraFilters,
   createTabId,
-  extraFiltersEqual,
   filterRowsByFilters,
   inferGroupColumnKey,
   mergeFilters,
@@ -17,6 +17,7 @@ import {
   upsertGroup,
   removeTabsByScope,
 } from '../utils/viewTabs';
+import { useViewTabExtraFilterPrompt } from './useViewTabExtraFilterPrompt';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -38,16 +39,15 @@ export function usePurchaseOrderViewTabs({
   const viewBaseRef = useRef(viewBaseFilters);
   const extraTabsRef = useRef(extraTabs);
   const activeTabIdRef = useRef(activeTabId);
-  const skipFilterPromptRef = useRef(false);
-  const lastExtraSigRef = useRef('');
-  const [extraFilterPrompt, setExtraFilterPrompt] = useState(0);
   viewBaseRef.current = viewBaseFilters;
   extraTabsRef.current = extraTabs;
   activeTabIdRef.current = activeTabId;
-
-  const skipFilterPrompt = useCallback(() => {
-    skipFilterPromptRef.current = true;
-  }, []);
+  const { extraFilterPrompt, skipFilterPrompt } = useViewTabExtraFilterPrompt({
+    activeTabId,
+    boardView,
+    extraTabsRef,
+    viewBaseRef,
+  });
 
   const applyMergedFilters = useCallback((baseFilters, extraFilters) => {
     skipFilterPrompt();
@@ -159,7 +159,7 @@ export function usePurchaseOrderViewTabs({
     applyMergedFilters(viewBaseRef.current, {});
   }, [applyMergedFilters, snapshotCurrentTab]);
 
-  const addTabsFromColumn = useCallback(({ columnKey, color, namePrefix }) => {
+  const addTabsFromColumn = useCallback(({ columnKey, color, namePrefix, nameSuffix }) => {
     skipFilterPrompt();
     snapshotCurrentTab();
     const column = columns.find((entry) => entry.key === columnKey);
@@ -171,9 +171,10 @@ export function usePurchaseOrderViewTabs({
       values,
       existingTabs: extraTabsRef.current,
       namePrefix,
+      nameSuffix,
     });
     const nextTabs = [...extraTabsRef.current, ...created];
-    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups), namePrefix);
+    const nextGroups = upsertGroup(groups, columnKey, color || nextGroupColor(groups), namePrefix, nameSuffix);
     setExtraTabs(nextTabs);
     extraTabsRef.current = nextTabs;
     setGroups(nextGroups);
@@ -183,6 +184,15 @@ export function usePurchaseOrderViewTabs({
   const setGroupColor = useCallback((columnKey, color) => {
     setGroups((prev) => upsertGroup(prev, columnKey, color));
   }, []);
+
+  const setGroupAffix = useCallback((columnKey, affix) => {
+    if (!columnKey) return;
+    snapshotCurrentTab();
+    const next = applyGroupAffixToTabs(extraTabsRef.current, groups, columnKey, affix);
+    setExtraTabs(next.extraTabs);
+    extraTabsRef.current = next.extraTabs;
+    setGroups(next.groups);
+  }, [groups, snapshotCurrentTab]);
 
   const exportTabsState = useCallback(() => {
     const snap = snapshotCurrentTab();
@@ -232,29 +242,6 @@ export function usePurchaseOrderViewTabs({
     };
   }, [activeTabId, boardView, extraTabs, groups, viewBaseFilters]);
 
-  useEffect(() => {
-    if (activeTabId === ALL_TAB_ID) {
-      lastExtraSigRef.current = '';
-      skipFilterPromptRef.current = false;
-      return;
-    }
-    const liveFilters = boardView.filterByColumn
-      || boardView.exportFilterSortGrouping()?.filterByColumn
-      || {};
-    const extra = splitExtraFilters(liveFilters, viewBaseRef.current);
-    const sig = JSON.stringify(extra);
-    if (skipFilterPromptRef.current) {
-      skipFilterPromptRef.current = false;
-      lastExtraSigRef.current = sig;
-      return;
-    }
-    if (sig === lastExtraSigRef.current) return;
-    lastExtraSigRef.current = sig;
-    const tab = extraTabsRef.current.find((entry) => entry.id === activeTabId);
-    if (tab && extraFiltersEqual(extra, tab.extraFilters)) return;
-    setExtraFilterPrompt((count) => count + 1);
-  }, [activeTabId, boardView.filterByColumn]);
-
   return useMemo(() => ({
     activeTabId,
     extraTabs,
@@ -265,6 +252,7 @@ export function usePurchaseOrderViewTabs({
     removeTab,
     addTabsFromColumn,
     setGroupColor,
+    setGroupAffix,
     loadFromViewState,
     resetTabs,
     snapshotCurrentTab,
@@ -285,6 +273,7 @@ export function usePurchaseOrderViewTabs({
     removeTab,
     addTabsFromColumn,
     setGroupColor,
+    setGroupAffix,
     loadFromViewState,
     resetTabs,
     snapshotCurrentTab,

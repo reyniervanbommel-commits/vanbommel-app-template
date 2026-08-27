@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
+import PurchaseOrderViewTabHoverCard from './PurchaseOrderViewTabHoverCard';
+
+describe('PurchaseOrderViewTabHoverCard', () => {
+  it('toont extra filters op een kaart met achtergrond', () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <PurchaseOrderViewTabHoverCard
+          tab={{
+            id: 'tab_1',
+            name: 'Open orders',
+            extraFilters: { status: { operator: 'equals', value: 'Open' } },
+          }}
+          columns={[{ key: 'status', label: 'Status', dataType: 'text' }]}
+          anchorRect={{ left: 20, top: 80 }}
+        />
+      </FluentProvider>
+    );
+
+    const card = screen.getByRole('tooltip');
+    expect(card).toBeTruthy();
+    expect(getComputedStyle(card).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(card).backgroundColor).not.toBe('transparent');
+    expect(screen.getByText('Open orders')).toBeTruthy();
+    expect(screen.getByText('Status is exactly Open')).toBeTruthy();
+  });
+
+  it('toont view-filters-only voor de All-tab', () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <PurchaseOrderViewTabHoverCard
+          tab={{ id: 'all', name: 'All', extraFilters: {} }}
+          columns={[]}
+          anchorRect={{ left: 20, top: 80 }}
+        />
+      </FluentProvider>
+    );
+    expect(screen.getByText('View filters only')).toBeTruthy();
+  });
+});

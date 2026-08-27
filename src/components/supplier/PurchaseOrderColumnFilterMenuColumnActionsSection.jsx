@@ -139,6 +139,14 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
         <>
           <Text className={styles.sectionTitle}>Column</Text>
           <div className={styles.sectionBlock}>
+            {canToggleWriteback ? (
+              <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
+                <span className={styles.d365SyncLabel}>
+                  <D365LogoIcon size="small" alt="" />
+                  {writable ? 'Disable sync' : 'Enable sync'}
+                </span>
+              </PurchaseOrderColumnFilterMenuButton>
+            ) : null}
             {canHideColumn ? (
               <PurchaseOrderColumnFilterMenuButton
                 className={styles.sortButton}
@@ -158,15 +166,7 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
                 closeSubmenu={closeSubmenu}
                 onClick={handleCreateTabsFromColumn}
               >
-                {menuLabel(styles, <TabAddRegular />, 'Tab from column…')}
-              </PurchaseOrderColumnFilterMenuButton>
-            ) : null}
-            {canToggleWriteback ? (
-              <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
-                <span className={styles.d365SyncLabel}>
-                  <D365LogoIcon size="small" alt="" />
-                  {writable ? 'Disable sync' : 'Enable sync'}
-                </span>
+                {menuLabel(styles, <TabAddRegular />, 'Tabs from column…')}
               </PurchaseOrderColumnFilterMenuButton>
             ) : null}
             {canAddColumn ? (

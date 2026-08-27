@@ -306,7 +306,7 @@ describe('PurchaseOrderColumnFilterMenu — tabs en sticky', () => {
     expect(await screen.findByRole('button', { name: /Make sticky/i })).toBeTruthy();
   });
 
-  it('opent Tab from column-dialog vanuit het kolommenu', async () => {
+  it('opent Tabs from column-dialog vanuit het kolommenu', async () => {
     const addTabsFromColumn = vi.fn();
     render(
       <FluentProvider theme={webLightTheme}>
@@ -338,7 +338,7 @@ describe('PurchaseOrderColumnFilterMenu — tabs en sticky', () => {
       </FluentProvider>
     );
     openColumnMenu();
-    fireEvent.click(await screen.findByRole('button', { name: /Tab from column/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tabs from column/i }));
     expect(await screen.findByText('Create tabs from a column')).toBeTruthy();
   });
 });

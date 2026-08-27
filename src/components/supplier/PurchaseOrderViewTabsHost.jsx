@@ -30,6 +30,8 @@ export default function PurchaseOrderViewTabsHost({
         canManage={canManage}
         onSelectTab={viewTabs.selectTab}
         onRemoveTab={viewTabs.removeTab}
+        onSetGroupColor={viewTabs.setGroupColor}
+        onSetGroupAffix={viewTabs.setGroupAffix}
         columns={columns}
       />
     </div>

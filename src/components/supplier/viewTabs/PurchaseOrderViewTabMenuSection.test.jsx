@@ -4,12 +4,12 @@ import { Button, FluentProvider, Menu, MenuList, MenuPopover, MenuTrigger, webLi
 import PurchaseOrderViewTabMenuSection from './PurchaseOrderViewTabMenuSection';
 import ViewTabsDialogsProvider from './ViewTabsDialogsProvider';
 
-function renderTabMenu() {
+function renderTabMenu({ groups = [] } = {}) {
   render(
     <FluentProvider theme={webLightTheme}>
       <ViewTabsDialogsProvider
-        viewTabs={{ addBlankTab: vi.fn(), addTabsFromColumn: vi.fn(), groups: [], uniqueValueCount: () => 1 }}
-        columns={[{ key: 'amount', label: 'Amount' }]}
+        viewTabs={{ addBlankTab: vi.fn(), addTabsFromColumn: vi.fn(), groups, uniqueValueCount: () => 1 }}
+        columns={[{ key: 'amount', label: 'Amount' }, { key: 'status', label: 'Status' }]}
         isStaff
         activeViewId={9}
       >
@@ -21,8 +21,8 @@ function renderTabMenu() {
             <MenuList>
               <PurchaseOrderViewTabMenuSection
                 enabled
-                groups={[]}
-                columns={[{ key: 'amount', label: 'Amount' }]}
+                groups={groups}
+                columns={[{ key: 'amount', label: 'Amount' }, { key: 'status', label: 'Status' }]}
                 onSetGroupColor={vi.fn()}
               />
             </MenuList>
@@ -44,7 +44,21 @@ describe('PurchaseOrderViewTabMenuSection dialogs', () => {
   it('houdt Create tabs-dialog open nadat het view-menu sluit', async () => {
     renderTabMenu();
     fireEvent.click(screen.getByRole('button', { name: 'Views' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Tab from column…' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Tabs from column…' }));
     expect(await screen.findByText('Create tabs from a column')).toBeTruthy();
+  });
+
+  it('zet groepskleuren in een nested Group colors-menu', async () => {
+    renderTabMenu({
+      groups: [
+        { columnKey: 'status', color: '#00c875' },
+        { columnKey: 'amount', color: '#579bfc' },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Views' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Group colors' }));
+    expect(await screen.findByRole('menuitem', { name: 'Status' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Amount' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Group color:/ })).toBeNull();
   });
 });

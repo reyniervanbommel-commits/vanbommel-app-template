@@ -9,6 +9,8 @@ import {
   DialogTitle,
   Field,
   Input,
+  MessageBar,
+  MessageBarBody,
   Select,
   makeStyles,
   shorthands,
@@ -28,6 +30,8 @@ const useStyles = makeStyles({
   },
 });
 
+const TAB_COUNT_WARNING = 10;
+
 export default function PurchaseOrderCreateTabsDialog({
   open,
   columns = [],
@@ -45,6 +49,7 @@ export default function PurchaseOrderCreateTabsDialog({
   const [columnKey, setColumnKey] = useState(defaultKey);
   const [color, setColor] = useState(() => nextGroupColor(groups));
   const [namePrefix, setNamePrefix] = useState('');
+  const [nameSuffix, setNameSuffix] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -52,6 +57,7 @@ export default function PurchaseOrderCreateTabsDialog({
       setColor(nextGroupColor(groups));
       const existing = groups.find((group) => group.columnKey === defaultKey);
       setNamePrefix(existing?.namePrefix || '');
+      setNameSuffix(existing?.nameSuffix || '');
     }
   }, [open, defaultKey, groups]);
 
@@ -59,20 +65,25 @@ export default function PurchaseOrderCreateTabsDialog({
     const nextKey = event.target.value;
     setColumnKey(nextKey);
     const existing = groups.find((group) => group.columnKey === nextKey);
-    if (existing?.namePrefix) setNamePrefix(existing.namePrefix);
+    setNamePrefix(existing?.namePrefix || '');
+    setNameSuffix(existing?.nameSuffix || '');
   }, [groups]);
 
   const handlePrefixChange = useCallback((_, data) => {
     setNamePrefix(data.value);
   }, []);
 
+  const handleSuffixChange = useCallback((_, data) => {
+    setNameSuffix(data.value);
+  }, []);
+
   const count = columnKey && uniqueValueCount ? uniqueValueCount(columnKey) : 0;
 
   const handleSubmit = useCallback(async () => {
     if (!columnKey) return;
-    await onSubmit({ columnKey, color, namePrefix });
+    await onSubmit({ columnKey, color, namePrefix, nameSuffix });
     onOpenChange(false);
-  }, [columnKey, color, namePrefix, onSubmit, onOpenChange]);
+  }, [columnKey, color, namePrefix, nameSuffix, onSubmit, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
@@ -100,6 +111,25 @@ export default function PurchaseOrderCreateTabsDialog({
                   maxLength={40}
                 />
               </Field>
+              <Field
+                className={styles.prefixField}
+                label="Name suffix"
+                hint="Shown after the column value on each tab."
+              >
+                <Input
+                  value={nameSuffix}
+                  onChange={handleSuffixChange}
+                  placeholder="e.g. NL"
+                  maxLength={40}
+                />
+              </Field>
+              {count > TAB_COUNT_WARNING ? (
+                <MessageBar intent="warning">
+                  <MessageBarBody>
+                    This column will create {count} tabs. More than {TAB_COUNT_WARNING} tabs can make the tab bar hard to use.
+                  </MessageBarBody>
+                </MessageBar>
+              ) : null}
               <Field label="Group color">
                 <ColorPalettePicker
                   selectedColor={color}

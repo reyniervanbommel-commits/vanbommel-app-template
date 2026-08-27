@@ -3,8 +3,14 @@ import { STATUS_COLOR_PALETTE } from './statusColumnUtils';
 import {
   buildFilterFromCellValue,
   columnValueMatchesFilter,
+  COLOR_FILTER_OPERATOR,
+  DATE_FILTER_OPERATORS,
   hasActiveFilter,
+  isDateColumn,
+  isNumberColumn,
+  NUMBER_FILTER_OPERATORS,
   resolveFilterModel,
+  TEXT_FILTER_OPERATORS,
 } from './tableViewFilterUtils';
 
 const SELECTABLE_STATUS_COLORS = STATUS_COLOR_PALETTE.slice(1);
@@ -99,7 +105,12 @@ export function normalizeTabsState(rawTabs) {
     const columnKey = String(group.columnKey || '').slice(0, 64);
     const color = String(group.color || '');
     if (!columnKey) return null;
-    return { columnKey, color, namePrefix: String(group.namePrefix || '').trim().slice(0, 40) };
+    return {
+      columnKey,
+      color,
+      namePrefix: String(group.namePrefix || '').trim().slice(0, 40),
+      nameSuffix: String(group.nameSuffix || '').trim().slice(0, 40),
+    };
   }).filter(Boolean);
 
   return { extraTabs: normalizedTabs, groups: normalizedGroups };
@@ -151,15 +162,21 @@ export function nextGroupColor(groups) {
   return unused || palette[groups.length % Math.max(palette.length, 1)] || '#579bfc';
 }
 
-export function formatTabName(prefix, value) {
+export function formatTabName(prefix, value, suffix = '') {
   const label = normalizeText(value);
-  const prefixText = normalizeText(prefix);
   if (!label) return '';
-  if (!prefixText) return label.slice(0, 120);
-  return `${prefixText} ${label}`.slice(0, 120);
+  const parts = [normalizeText(prefix), label, normalizeText(suffix)].filter(Boolean);
+  return parts.join(' ').slice(0, 120);
 }
 
-export function buildBulkTabs({ column, columnKey, values, existingTabs, namePrefix = '' }) {
+export function getTabGroupValue(tab, columnKey) {
+  if (!columnKey) return '';
+  const filter = tab?.extraFilters?.[columnKey];
+  if (!filter || filter.operator !== 'equals') return '';
+  return normalizeText(filter.value);
+}
+
+export function buildBulkTabs({ column, columnKey, values, existingTabs, namePrefix = '', nameSuffix = '' }) {
   const existing = existingEqualsValues(existingTabs, columnKey);
   const created = [];
   (values || []).forEach((rawValue) => {
@@ -169,7 +186,7 @@ export function buildBulkTabs({ column, columnKey, values, existingTabs, namePre
     existing.add(label.toLowerCase());
     created.push({
       id: createTabId(),
-      name: formatTabName(namePrefix, label),
+      name: formatTabName(namePrefix, label, nameSuffix),
       groupColumnKey: columnKey,
       extraFilters: {
         [columnKey]: column ? buildFilterFromCellValue(column, rawValue) : {
@@ -236,7 +253,7 @@ export function hasExtraViewTabs(extraTabs) {
   return Array.isArray(extraTabs) && extraTabs.length > 0;
 }
 
-export function upsertGroup(groups, columnKey, color, namePrefix) {
+export function upsertGroup(groups, columnKey, color, namePrefix, nameSuffix) {
   if (!columnKey) return groups || [];
   const next = [...(groups || [])];
   const index = next.findIndex((group) => group.columnKey === columnKey);
@@ -247,10 +264,60 @@ export function upsertGroup(groups, columnKey, color, namePrefix) {
     namePrefix: namePrefix !== undefined
       ? normalizeText(namePrefix).slice(0, 40)
       : String(prev.namePrefix || ''),
+    nameSuffix: nameSuffix !== undefined
+      ? normalizeText(nameSuffix).slice(0, 40)
+      : String(prev.nameSuffix || ''),
   };
   if (index >= 0) next[index] = entry;
   else next.push(entry);
   return next;
+}
+
+export function applyGroupAffixToTabs(extraTabs, groups, groupKey, { namePrefix, nameSuffix } = {}) {
+  if (!groupKey) return { extraTabs: extraTabs || [], groups: groups || [] };
+  const nextGroups = upsertGroup(groups, groupKey, undefined, namePrefix, nameSuffix);
+  const group = nextGroups.find((entry) => entry.columnKey === groupKey) || {};
+  const nextTabs = (extraTabs || []).map((tab) => {
+    if (inferGroupColumnKey(tab) !== groupKey) return tab;
+    const name = formatTabName(group.namePrefix, getTabGroupValue(tab, groupKey), group.nameSuffix);
+    return name ? { ...tab, name } : tab;
+  });
+  return { extraTabs: nextTabs, groups: nextGroups };
+}
+
+function operatorPhrase(column, operator) {
+  if (operator === COLOR_FILTER_OPERATOR) return 'color is';
+  if (isDateColumn(column)) return DATE_FILTER_OPERATORS[operator] || operator;
+  if (isNumberColumn(column)) return NUMBER_FILTER_OPERATORS[operator] || operator;
+  return TEXT_FILTER_OPERATORS[operator] || operator;
+}
+
+function formatFilterDisplayValue(filter) {
+  if (!filter) return '';
+  if (Array.isArray(filter.colors) && filter.colors.length) return filter.colors.join(', ');
+  if (Array.isArray(filter.value)) return filter.value.join(', ');
+  const value = normalizeText(filter.value);
+  const secondary = normalizeText(filter.secondaryValue);
+  if (filter.operator === 'between' && (value || secondary)) return `${value} – ${secondary}`;
+  return value;
+}
+
+export function describeTabExtraFilters(tab, columns = []) {
+  const extra = normalizeExtraFilters(tab?.extraFilters);
+  return Object.keys(extra).map((key) => {
+    const column = columns.find((entry) => entry.key === key);
+    const label = column?.label || key;
+    const filter = extra[key];
+    const phrase = operatorPhrase(column, filter.operator);
+    const value = formatFilterDisplayValue(filter);
+    return value ? `${label} ${phrase} ${value}` : `${label} ${phrase}`;
+  });
+}
+
+export function tabHoverFilterLines(tab, columns = []) {
+  if (!tab || tab.id === ALL_TAB_ID) return ['View filters only'];
+  const lines = describeTabExtraFilters(tab, columns);
+  return lines.length ? lines : ['No extra filters'];
 }
 
 export function normalizeVendorAccount(value) {
