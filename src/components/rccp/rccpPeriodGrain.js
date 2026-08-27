@@ -34,7 +34,7 @@ function buildCellMap(cells) {
 const SKIP_CHART_KEYS = new Set([
   'key', 'year', 'week', 'month', 'lastWeek', 'lastYear',
   'segmentsAbove', 'segmentsBelow', 'segmentsConfirmed', '__overloaded__',
-  '__stackAbove', '__stackBelow', '__openColor', '__receivedColor',
+  '__stackAbove', '__stackBelow', '__stackConfirmed', '__openColor', '__receivedColor',
   '__barWidthAbove', '__barWidthBelow', '__barWidthConfirmed',
 ]);
 

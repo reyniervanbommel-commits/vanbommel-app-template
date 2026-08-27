@@ -20,6 +20,7 @@ export function buildRccpChartRows({
       segmentsConfirmed,
       __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
       __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
+      __stackConfirmed: segmentsConfirmed.reduce((sum, seg) => sum + seg.qty, 0),
       __openColor: openColor,
       __receivedColor: receivedColor,
       __barWidthAbove: RCCP_PO_BAR_SIZE,

@@ -126,9 +126,7 @@ function RccpChartMatrixPanel({
     }
     setHoveredSegment((prev) => (isSameRccpHover(prev, next) ? prev : next));
   }, []);
-  const highlightItem = hoveredSegment?.segment?.status === 'received'
-    ? (hoveredSegment.segment.itemNumber || '')
-    : '';
+  const highlightItem = hoveredSegment?.segment?.itemNumber || '';
   const hoverValue = useMemo(() => ({
     onHover: handleSegmentHover,
     highlightItem,

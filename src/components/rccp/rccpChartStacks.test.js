@@ -23,6 +23,8 @@ describe('buildRccpChartRows', () => {
     expect(rows[0].__stackBelow).toBe(-4);
     expect(rows[0].segmentsConfirmed).toEqual(chart[0].segmentsConfirmed);
     expect(rows[0].__barWidthAbove).toBe(RCCP_PO_BAR_SIZE);
+    expect(rows[0].__barWidthConfirmed).toBe(RCCP_PO_BAR_SIZE);
+    expect(rows[0].__stackConfirmed).toBe(6);
     expect(rows[0].__openColor).toBe('#D13438');
   });
 

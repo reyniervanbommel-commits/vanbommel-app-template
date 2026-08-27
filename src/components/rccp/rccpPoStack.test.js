@@ -6,7 +6,7 @@ import {
   isoWeekPartsUtc,
   RCCP_PO_BAR_SIZE,
   weekBarBox,
-  isReceivedPairHighlight,
+  isRccpItemHighlight,
   isCurrentMatrixPeriod,
 } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
@@ -97,11 +97,13 @@ describe('rccpPoStack', () => {
     expect(below[0].height).toBe(50);
   });
 
-  it('highlights matching received segments of the same item', () => {
-    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
-    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
-    expect(isReceivedPairHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
-    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
+  it('highlights received and confirmed of the same item, not open or other items', () => {
+    expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
+    expect(isRccpItemHighlight({ status: 'confirmed', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
+    expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
+    expect(isRccpItemHighlight({ status: 'confirmed', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
+    expect(isRccpItemHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
+    expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
   });
 
   it('detects the current week and month period', () => {

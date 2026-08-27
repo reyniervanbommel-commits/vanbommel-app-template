@@ -1,10 +1,11 @@
 import React, { createContext, memo, useCallback, useContext } from 'react';
-import { isReceivedPairHighlight, stackRectLayout, weekBarBox } from './rccpPoStack';
+import { rccpItemColor } from './rccpItemColor';
+import { isRccpItemHighlight, stackRectLayout, weekBarBox } from './rccpPoStack';
 
 const LATE_STROKE = '#D13438';
 const PAIR_STROKE = '#323130';
-const RECEIVED_ABOVE_OPACITY = 0.5;
-const RECEIVED_ABOVE_HIGHLIGHT_OPACITY = 0.9;
+const RECEIVED_ABOVE_OPACITY = 0.25;
+const RECEIVED_ABOVE_HIGHLIGHT_OPACITY = 0.4;
 
 export const RccpSegmentHoverContext = createContext(null);
 
@@ -27,7 +28,7 @@ function RccpPoStackBar({
   const barWidth = side === 'above'
     ? Number(payload?.__barWidthAbove)
     : Number(payload?.__barWidthBelow);
-  const box = weekBarBox(index, barWidth);
+  const box = weekBarBox(index, barWidth, side === 'above' ? 'left' : 'center');
   if (!box.width || !layout.length) return null;
   return (
     <g>
@@ -40,9 +41,11 @@ function RccpPoStackBar({
           height={rectH}
           segment={segment}
           weekLabel={payload?.key}
-          fill={segment.status === 'open' ? payload.__openColor : payload.__receivedColor}
+          fill={segment.status === 'open'
+            ? payload.__openColor
+            : rccpItemColor(segment.itemNumber, { openColor: payload.__openColor })}
           side={side}
-          highlighted={isReceivedPairHighlight(segment, highlightItem)}
+          highlighted={isRccpItemHighlight(segment, highlightItem)}
         />
       ))}
     </g>

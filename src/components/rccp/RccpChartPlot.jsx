@@ -5,6 +5,8 @@ import {
 import { makeStyles, tokens } from '@fluentui/react-components';
 import RccpWeekBandCursor from './RccpWeekBandCursor';
 import { RccpPoStackBarAbove, RccpPoStackBarBelow } from './RccpPoStackBar';
+import RccpPoConfirmedBar from './RccpPoConfirmedBar';
+import RccpChartLegend, { RccpConfirmedHatchDefs } from './RccpChartLegend';
 import { brandColor } from '../../styles/brandTokens';
 import { RCCP_PO_BAR_SIZE } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WARNING_MEASURE_KEY } from './rccpUtils';
@@ -32,6 +34,10 @@ function renderStackBelow(props) {
   return <RccpPoStackBarBelow {...props} />;
 }
 
+function renderConfirmed(props) {
+  return <RccpPoConfirmedBar {...props} />;
+}
+
 function RccpChartPlot({ plot, stack, todayMarker }) {
   const styles = useStyles();
   const {
@@ -43,6 +49,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
   const legendPad = compact ? 28 : 36;
   const plotBottom = Math.max(24, height - legendPad);
   const labelOnRight = todayMarker?.todayX != null && (todayMarker.todayX + 48) < width;
+  const hasConfirmed = data.some((point) => (point.segmentsConfirmed || []).length > 0);
 
   return (
     <div className={styles.plot} style={{ width, height }}>
@@ -63,8 +70,20 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
         <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
         <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
         <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
+        <RccpConfirmedHatchDefs />
         <Tooltip shared cursor={<RccpWeekBandCursor />} content={EmptyTooltip} />
-        <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
+        <Legend
+          wrapperStyle={{ fontSize: compact ? '11px' : '12px' }}
+          content={(
+            <RccpChartLegend
+              compact={compact}
+              openRow={openVisible ? openRow : null}
+              deliveredRow={deliveredVisible ? deliveredRow : null}
+              receivedColor={receivedColor}
+              showConfirmed={hasConfirmed}
+            />
+          )}
+        />
         {chartRangeBands.map((band, index) => (
           <ReferenceArea
             key={`${band.x1}-${band.x2}-${index}`}
@@ -95,7 +114,19 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
             fill={receivedColor}
             shape={renderStackBelow}
             barSize={RCCP_PO_BAR_SIZE}
+            legendType="none"
             cursor="pointer"
+            isAnimationActive={false}
+          />
+        )}
+        {hasConfirmed && (
+          <Bar
+            dataKey="__stackConfirmed"
+            name="Confirmed"
+            fill="none"
+            shape={renderConfirmed}
+            barSize={RCCP_PO_BAR_SIZE}
+            legendType="none"
             isAnimationActive={false}
           />
         )}

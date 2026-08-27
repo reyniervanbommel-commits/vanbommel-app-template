@@ -117,14 +117,16 @@ export function stackRectLayout(segments, barY, barHeight, side) {
 }
 
 /**
- * Received-vakjes van hetzelfde item (boven én onder de as) horen bij elkaar.
+ * Received (above+below) and confirmed of the same item highlight together.
+ * Open segments stay measure-fill; they do not get fill-highlight.
  * @param {{ status?: string, itemNumber?: string }} segment
  * @param {string} highlightItem
  */
-export function isReceivedPairHighlight(segment, highlightItem) {
+export function isRccpItemHighlight(segment, highlightItem) {
+  const status = segment?.status;
   return Boolean(
     highlightItem
-    && segment?.status === 'received'
-    && segment.itemNumber === highlightItem
+    && segment?.itemNumber === highlightItem
+    && (status === 'received' || status === 'confirmed')
   );
 }
