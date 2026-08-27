@@ -193,11 +193,6 @@ export function buildBulkTabs({ column, columnKey, values, existingTabs }) {
   return created.slice(0, Math.max(0, MAX_EXTRA_TABS - (existingTabs || []).length));
 }
 
-export function tabsInGroup(extraTabs, columnKey) {
-  if (!columnKey) return [];
-  return (extraTabs || []).filter((tab) => inferGroupColumnKey(tab) === columnKey);
-}
-
 export function removeTabsByScope(extraTabs, tabId, scope = 'tab') {
   const list = extraTabs || [];
   const tab = list.find((entry) => entry.id === tabId);
