@@ -9,7 +9,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * Planning date radio: Requested vs Confirmed. Not mounted in PageContent yet.
+ * Planning date radio: Requested vs Confirmed. Hidden when confirmedDateColumnKey is empty.
  */
 function RccpPlanningDateSwitch({ value = 'requested', onChange, disabled }) {
   const styles = useStyles();

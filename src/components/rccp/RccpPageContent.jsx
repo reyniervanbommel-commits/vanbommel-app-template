@@ -22,6 +22,7 @@ import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import RccpWeekWindowFields from './RccpWeekWindowFields';
 import RccpItemFilter from './RccpItemFilter';
+import RccpPlanningDateSwitch from './RccpPlanningDateSwitch';
 import { useRccpItemFilter } from './useRccpItemFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import {
@@ -66,7 +67,7 @@ export default function RccpPageContent() {
     window, setWindow, windowLoaded, lastVendor, setLastVendor,
     kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
     analysis, loading, error, readOnly,
-    measureRows, periods, cells, reload,
+    measureRows, periods, cells, reload, planning,
   } = useRccpPage({
     vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
     enabled: hasVendor,
@@ -98,7 +99,7 @@ export default function RccpPageContent() {
   // Terwijl de gebruiker een vendor zoekt (hover/keyboard-highlight in de dropdown, of een
   // exacte match tijdens het typen), laad de analyse voor die vendor alvast op de achtergrond —
   // zodra hij/zij die vendor echt selecteert, komt de data al (grotendeels) uit cache.
-  const handleHighlightVendor = useRccpVendorPrefetch(window);
+  const handleHighlightVendor = useRccpVendorPrefetch(window, planning.date);
 
   const [drillCell, setDrillCell] = useState(null);
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
@@ -197,6 +198,9 @@ export default function RccpPageContent() {
             items={itemNumbers}
           />
         )}
+        {activeTab === 'dashboard' && analysis?.config?.confirmedDateColumnKey && (
+          <RccpPlanningDateSwitch value={planning.date} onChange={planning.setDate} />
+        )}
         {activeTab === 'dashboard' && (
           <RccpWeekWindowFields
             window={window}
@@ -232,7 +236,10 @@ export default function RccpPageContent() {
                   onShow={handleShowDataWindow}
                 />
               )}
-              <RccpKpiCards kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)} />
+              <RccpKpiCards
+                kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)}
+                planningDate={planning.date}
+              />
               <RccpChartMatrixPanel
                 chart={filteredChart}
                 measureRows={measureRows}

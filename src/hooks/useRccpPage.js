@@ -11,6 +11,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   const {
     isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded: windowLoaded,
     kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
+    planning,
   } = useRccpWindow();
   const [analysis, setAnalysis] = useState(null);
   // false, niet true: zolang er geen vendor gekozen is (enabled=false) mag er geen spinner
@@ -37,10 +38,11 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
       // expliciete reload (settings/refresh/PO-revisie), anders blijft de grafiek op de oude
       // chartType hangen.
       if (bypassCache) clearRccpAnalysisPrefetchCache();
+      const planningDate = planning.date;
       const cached = (!bypassCache && vendorAccount)
-        ? getCachedRccpAnalysis(isoWindow, vendorAccount)
+        ? getCachedRccpAnalysis(isoWindow, vendorAccount, planningDate)
         : null;
-      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined)));
+      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined, planningDate)));
       if (requestId !== requestIdRef.current) return;
       setAnalysis(data);
       setReadOnly(Boolean(data.readOnly));
@@ -51,7 +53,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     } finally {
       if (requestId === requestIdRef.current && !skipLoading) setLoading(false);
     }
-  }, [isoWindow, vendorAccount, windowLoaded, enabled]);
+  }, [isoWindow, vendorAccount, windowLoaded, enabled, planning.date]);
 
   const reload = useCallback(() => load({ bypassCache: true }), [load]);
 
@@ -102,6 +104,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     setKpiWindowOnly,
     chartVisibleKeys,
     setChartVisibleKeys,
+    planning,
     analysis,
     loading,
     error,

@@ -12,7 +12,7 @@ const useStyles = makeStyles({
   },
 });
 
-function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
+function RccpKpiCards({ kpis, selectedKey = '', onSelect, planningDate }) {
   const styles = useStyles();
   const handleActivate = useCallback((key) => {
     onSelect?.(key);
@@ -98,7 +98,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       />
       <KpiCard
         kpiKey="planned1900"
-        label="1-1-1900"
+        label={planningDate === 'confirmed' ? 'Missing confirmed date' : '1-1-1900'}
         qty={kpis.planned1900Units}
         hash
         aside={formatItems(kpis.planned1900ItemCount)}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyRccpChartSettings,
+  buildAnalysisQuery,
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
   clampIsoWeek,
@@ -262,5 +263,14 @@ describe('shouldOfferRccpDataWindow', () => {
       kpisAll: { totalOrdered: 0 },
       dataWindow,
     })).toBe(false);
+  });
+});
+
+describe('buildAnalysisQuery', () => {
+  const WINDOW = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 };
+
+  it('includes planningDate only when it is confirmed', () => {
+    expect(buildAnalysisQuery(WINDOW, 'V1', 'confirmed')).toContain('planningDate=confirmed');
+    expect(buildAnalysisQuery(WINDOW, 'V1')).not.toContain('planningDate');
   });
 });

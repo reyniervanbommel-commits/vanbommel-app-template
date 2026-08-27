@@ -50,4 +50,15 @@ describe('rccpAnalysisPrefetch', () => {
 
     expect(getCachedRccpAnalysis(WINDOW, 'V000696')).toBeNull();
   });
+
+  it('fires a second fetch when planningDate differs for the same vendor+window', async () => {
+    const { apiRequest } = await import('./api');
+    apiRequest.mockResolvedValue({ kpis: {} });
+    const { prefetchRccpAnalysis } = await import('./rccpAnalysisPrefetch');
+
+    prefetchRccpAnalysis(WINDOW, 'V000583', 'requested');
+    expect(apiRequest).toHaveBeenCalledTimes(1);
+    prefetchRccpAnalysis(WINDOW, 'V000583', 'confirmed');
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+  });
 });
