@@ -7,6 +7,7 @@ function matrixRowRank(row) {
   if (row?.isWarning) return 90;
   if (row?.isOvercapacity) return 50;
   if (row?.isCapacity) return 40;
+  if (row?.isConfirmedDelivery) return 35;
   if (row?.isOpen) return 30;
   if (row?.isDelivered) return 20;
   return 10;

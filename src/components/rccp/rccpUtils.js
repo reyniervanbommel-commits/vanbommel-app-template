@@ -221,6 +221,7 @@ export const RCCP_CHART_Y_AXIS_WIDTH = 42;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
 export const RCCP_OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
 export const RCCP_WARNING_MEASURE_KEY = '__warning__';
+export const RCCP_CONFIRMED_DELIVERY_MEASURE_KEY = '__confirmed_delivery__';
 
 /** Recharts CartesianGrid: vertical dashed lines at ISO week band edges (in chart coordinates). */
 export function buildRccpChartWeekBoundaryCoordinates(periodCount) {

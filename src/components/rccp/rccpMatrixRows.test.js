@@ -6,6 +6,7 @@ describe('sortRccpMatrixRows', () => {
     const rows = [
       { measureKey: '__overcapacity__', isOvercapacity: true },
       { measureKey: '__capacity__', isCapacity: true },
+      { measureKey: '__confirmed_delivery__', isConfirmedDelivery: true },
       { measureKey: 'open', isOpen: true },
       { measureKey: 'delivered', isDelivered: true },
       { measureKey: 'ordered' },
@@ -14,6 +15,7 @@ describe('sortRccpMatrixRows', () => {
       'ordered',
       'delivered',
       'open',
+      '__confirmed_delivery__',
       '__capacity__',
       '__overcapacity__',
     ]);

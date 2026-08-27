@@ -13,6 +13,7 @@ const {
   isHeaderOnlyMeasure,
   lineDateValue,
   collectDateSlots,
+  isSentinelDate,
 } = require('./rccpPoRow');
 
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
@@ -87,6 +88,18 @@ function emitBelow(itemMap) {
   return out;
 }
 
+function emitConfirmed(itemMap) {
+  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
+  const out = [];
+  for (const itemNumber of items) {
+    const entry = itemMap.get(itemNumber);
+    if (entry.open > 0) {
+      out.push(emitSegment(itemNumber, entry.open, 'confirmed', false, entry.dataAreaId));
+    }
+  }
+  return out;
+}
+
 function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlot, dataAreaId) {
   if (!(total > 0) || !slots.length) return;
   const shareQty = total / slots.length;
@@ -109,13 +122,14 @@ function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlo
  * @param {object} config RCCP-config
  * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} window
  * @param {{ now: Date, vendorAccount?: string|null }} options
- * @returns {Map<string, { segmentsAbove: object[], segmentsBelow: object[] }>}
+ * @returns {Map<string, { segmentsAbove: object[], segmentsBelow: object[], segmentsConfirmed: object[] }>}
  */
 function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
+  const confirmedKey = String(config.confirmedDateColumnKey || '').trim();
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
   const nowYear = getIsoWeekYear(now);
@@ -125,6 +139,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
 
   const above = new Map();
   const below = new Map();
+  const confirmed = new Map();
 
   const clipBump = (weekMap, week, itemNumber, status, qty, late, dataAreaId) => {
     if (!periodSet.has(week)) return;
@@ -178,6 +193,17 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
           clipBump(below, isoWeekKey(receiptYear, receiptWeek), itemNumber, 'received', deliveredQty, false, dataAreaId);
         }
       }
+
+      if (confirmedKey && openQty > 0) {
+        const confirmedDate = lineDateValue(lineValues, masterValues, confirmedKey);
+        if (confirmedDate && !isSentinelDate(confirmedDate)) {
+          const confirmedYear = getIsoWeekYear(confirmedDate);
+          const confirmedWeek = getIsoWeek(confirmedDate);
+          if (confirmedYear && confirmedWeek) {
+            clipBump(confirmed, isoWeekKey(confirmedYear, confirmedWeek), itemNumber, 'open', openQty, false, dataAreaId);
+          }
+        }
+      }
     };
 
     if (lineOpen || lineDelivered) {
@@ -215,6 +241,26 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
       );
       spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
     }
+    if (headerOnlyOpen && confirmedKey) {
+      const confirmedSlots = collectDateSlots(
+        details,
+        masterValues,
+        confirmedKey,
+        null,
+        window,
+        excludedSet,
+        masterStatus,
+      ).filter((slot) => !isSentinelDate(slot.dateValue));
+      spreadHeaderQty(
+        confirmed,
+        confirmedSlots,
+        masterValues,
+        'open',
+        toNumber(pickValue(masterValues, openKey)),
+        false,
+        dataAreaId,
+      );
+    }
   }
 
   const byWeek = new Map();
@@ -222,6 +268,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
     byWeek.set(period.key, {
       segmentsAbove: emitAbove(above.get(period.key) || emptyWeekBucket()),
       segmentsBelow: emitBelow(below.get(period.key) || emptyWeekBucket()),
+      segmentsConfirmed: emitConfirmed(confirmed.get(period.key) || emptyWeekBucket()),
     });
   }
   return byWeek;
@@ -229,11 +276,14 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
 
 function mergeSegmentsIntoChart(chart, segmentsByWeek) {
   return (chart || []).map((point) => {
-    const segs = segmentsByWeek.get(point.key) || { segmentsAbove: [], segmentsBelow: [] };
+    const segs = segmentsByWeek.get(point.key) || {
+      segmentsAbove: [], segmentsBelow: [], segmentsConfirmed: [],
+    };
     return {
       ...point,
       segmentsAbove: segs.segmentsAbove,
       segmentsBelow: segs.segmentsBelow,
+      segmentsConfirmed: segs.segmentsConfirmed || [],
     };
   });
 }

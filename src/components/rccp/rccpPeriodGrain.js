@@ -33,9 +33,9 @@ function buildCellMap(cells) {
 
 const SKIP_CHART_KEYS = new Set([
   'key', 'year', 'week', 'month', 'lastWeek', 'lastYear',
-  'segmentsAbove', 'segmentsBelow', '__overloaded__',
+  'segmentsAbove', 'segmentsBelow', 'segmentsConfirmed', '__overloaded__',
   '__stackAbove', '__stackBelow', '__openColor', '__receivedColor',
-  '__barWidthAbove', '__barWidthBelow',
+  '__barWidthAbove', '__barWidthBelow', '__barWidthConfirmed',
 ]);
 
 function mergeSegments(lists) {
@@ -70,6 +70,7 @@ function sumChartGroup(points, bucket, first, last) {
     lastYear: last.year,
     segmentsAbove: mergeSegments(points.map((point) => point.segmentsAbove || [])),
     segmentsBelow: mergeSegments(points.map((point) => point.segmentsBelow || [])),
+    segmentsConfirmed: mergeSegments(points.map((point) => point.segmentsConfirmed || [])),
   };
   for (const point of points) {
     Object.keys(point).forEach((key) => {

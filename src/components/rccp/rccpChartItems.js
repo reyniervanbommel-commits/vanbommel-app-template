@@ -6,7 +6,11 @@
 export function collectRccpChartItemNumbers(chart) {
   const items = new Set();
   for (const point of chart || []) {
-    const segs = [...(point.segmentsAbove || []), ...(point.segmentsBelow || [])];
+    const segs = [
+      ...(point.segmentsAbove || []),
+      ...(point.segmentsBelow || []),
+      ...(point.segmentsConfirmed || []),
+    ];
     for (const segment of segs) {
       const itemNumber = String(segment?.itemNumber || '').trim();
       if (itemNumber) items.add(itemNumber);
@@ -41,5 +45,6 @@ export function filterRccpChartByItem(chart, itemNumber) {
     ...point,
     segmentsAbove: (point.segmentsAbove || []).filter((seg) => matchRccpChartItem(seg, selected)),
     segmentsBelow: (point.segmentsBelow || []).filter((seg) => matchRccpChartItem(seg, selected)),
+    segmentsConfirmed: (point.segmentsConfirmed || []).filter((seg) => matchRccpChartItem(seg, selected)),
   }));
 }

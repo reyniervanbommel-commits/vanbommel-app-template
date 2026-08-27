@@ -1,0 +1,201 @@
+'use strict';
+
+const { getIsoWeek, getIsoWeekYear, isoWeekKey } = require('./isoWeek');
+const {
+  CONFIRMED_DELIVERY_MEASURE_KEY,
+  buildFactoryConfirmedByCell,
+  buildConfirmedDeliveryCells,
+  appendConfirmedDeliveryRow,
+  matchConfirmedDeliveryDrill,
+} = require('./rccpConfirmedLoad');
+const { buildRccpCapacityKpis } = require('./rccpKpis');
+
+function weekOf(date) {
+  return {
+    year: getIsoWeekYear(date),
+    week: getIsoWeek(date),
+    key: isoWeekKey(getIsoWeekYear(date), getIsoWeek(date)),
+  };
+}
+
+describe('rccpConfirmedLoad', () => {
+  const planned = '2026-03-16T00:00:00.000Z';
+  const confirmed = '2026-03-23T00:00:00.000Z';
+  const plannedWeek = weekOf(planned);
+  const confirmedWeek = weekOf(confirmed);
+
+  const baseConfig = {
+    dateColumnKey: 'requestedDeliveryDate',
+    receiptDateColumnKey: 'productReceiptDate',
+    confirmedDateColumnKey: 'confirmedDlvDate',
+    vendorColumnKey: 'vendorAccount',
+    openMeasureKey: 'openQty',
+    deliveredMeasureKey: 'deliveredQty',
+    excludedStatuses: ['Canceled'],
+  };
+
+  const window = {
+    fromYear: plannedWeek.year,
+    fromWeek: plannedWeek.week,
+    toYear: confirmedWeek.year,
+    toWeek: confirmedWeek.week,
+  };
+
+  function row(overrides = {}) {
+    return {
+      recordKey: 'PO-A',
+      partitionKey: 'whsl',
+      values: { vendorAccount: 'V001', status: 'Open', dataAreaId: 'whsl', ...(overrides.values || {}) },
+      details: overrides.details || [{
+        detailKey: '1',
+        values: {
+          requestedDeliveryDate: planned,
+          confirmedDlvDate: confirmed,
+          openQty: 10,
+          deliveredQty: 4,
+          itemNumber: 'SKU-1',
+          ...(overrides.line || {}),
+        },
+      }],
+    };
+  }
+
+  it('builds extra row cells with Confirmed delivery measure', () => {
+    const factoryConfirmedByCell = new Map([[`V001|${confirmedWeek.year}|${confirmedWeek.week}`, 10]]);
+    const periods = [{ year: confirmedWeek.year, week: confirmedWeek.week, key: confirmedWeek.key }];
+    const { cells, measureRow } = buildConfirmedDeliveryCells({
+      factoryConfirmedByCell,
+      periods,
+      vendorFilter: 'V001',
+      config: baseConfig,
+    });
+    expect(measureRow).toEqual({
+      measureKey: CONFIRMED_DELIVERY_MEASURE_KEY,
+      label: 'Confirmed delivery',
+      showInChart: false,
+      isConfirmedDelivery: true,
+    });
+    expect(cells).toEqual([
+      expect.objectContaining({
+        vendorAccount: 'V001',
+        periodYear: confirmedWeek.year,
+        isoWeek: confirmedWeek.week,
+        measureKey: CONFIRMED_DELIVERY_MEASURE_KEY,
+        confirmedQty: 10,
+      }),
+    ]);
+  });
+
+  it('appends the extra row onto existing matrix cells', () => {
+    const cells = [];
+    const measureRows = [];
+    appendConfirmedDeliveryRow({
+      cells,
+      measureRows,
+      factoryConfirmedByCell: new Map([[`V001|${confirmedWeek.year}|${confirmedWeek.week}`, 10]]),
+      periods: [{ year: confirmedWeek.year, week: confirmedWeek.week, key: confirmedWeek.key }],
+      vendorFilter: 'V001',
+    });
+    expect(measureRows).toEqual([
+      expect.objectContaining({
+        measureKey: '__confirmed_delivery__',
+        label: 'Confirmed delivery',
+        showInChart: false,
+        isConfirmedDelivery: true,
+      }),
+    ]);
+    expect(cells[0].confirmedQty).toBe(10);
+  });
+
+  it('skips sentinel and empty confirmed dates in the factory map', () => {
+    const sentinel = buildFactoryConfirmedByCell(
+      [row({ line: { confirmedDlvDate: '1900-01-01T00:00:00.000Z' } })],
+      baseConfig,
+      window,
+      {},
+    );
+    const empty = buildFactoryConfirmedByCell(
+      [row({ line: { confirmedDlvDate: '' } })],
+      baseConfig,
+      window,
+      {},
+    );
+    expect(sentinel.size).toBe(0);
+    expect(empty.size).toBe(0);
+  });
+
+  it('places open qty on the confirmed week in the factory map', () => {
+    const map = buildFactoryConfirmedByCell([row()], baseConfig, window, {});
+    expect(map.get(`V001|${confirmedWeek.year}|${confirmedWeek.week}`)).toBe(10);
+    expect(map.get(`V001|${plannedWeek.year}|${plannedWeek.week}`)).toBeUndefined();
+  });
+
+  it('clips factory confirmed load outside the window', () => {
+    const map = buildFactoryConfirmedByCell(
+      [row({ line: { confirmedDlvDate: '2020-01-06T00:00:00.000Z' } })],
+      baseConfig,
+      window,
+      {},
+    );
+    expect(map.size).toBe(0);
+  });
+
+  it('spreads header-only open qty onto confirmed-date slots', () => {
+    const header = {
+      recordKey: 'PO-H',
+      partitionKey: 'whsl',
+      values: {
+        vendorAccount: 'V001',
+        status: 'Open',
+        dataAreaId: 'whsl',
+        openQty: 30,
+        confirmedDlvDate: confirmed,
+      },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: planned, itemNumber: 'SKU-1' } },
+        { detailKey: '2', values: { requestedDeliveryDate: planned, itemNumber: 'SKU-2' } },
+      ],
+    };
+    const map = buildFactoryConfirmedByCell([header], baseConfig, window, {});
+    expect(map.get(`V001|${confirmedWeek.year}|${confirmedWeek.week}`)).toBe(30);
+  });
+
+  it('matches drill-down on the confirmed week, not the requested week', () => {
+    const onConfirmed = matchConfirmedDeliveryDrill(row(), {
+      vendorAccount: 'V001',
+      periodYear: confirmedWeek.year,
+      isoWeek: confirmedWeek.week,
+      measureKey: '__confirmed_delivery__',
+    }, baseConfig);
+    expect(onConfirmed).toEqual([
+      expect.objectContaining({
+        orderNumber: 'PO-A',
+        itemNumber: 'SKU-1',
+        quantity: 10,
+        deliveryDate: confirmed,
+      }),
+    ]);
+    const onRequested = matchConfirmedDeliveryDrill(row(), {
+      vendorAccount: 'V001',
+      periodYear: plannedWeek.year,
+      isoWeek: plannedWeek.week,
+      measureKey: '__confirmed_delivery__',
+    }, baseConfig);
+    expect(onRequested).toEqual([]);
+  });
+
+  it('excludes the synthetic confirmed-delivery row from capacity load', () => {
+    const chart = [
+      { key: '2026-W11', openQty: 80, __confirmed_delivery__: 80, __capacity__: 100 },
+      { key: '2026-W12', openQty: 120, __confirmed_delivery__: 50, __capacity__: 100 },
+    ];
+    const measureRows = [
+      { measureKey: 'openQty', isDelivered: false },
+      { measureKey: '__confirmed_delivery__', isConfirmedDelivery: true },
+      { measureKey: '__capacity__', isCapacity: true },
+    ];
+    const kpis = buildRccpCapacityKpis(chart, measureRows, '__capacity__');
+    expect(kpis.capacityShortfall).toBe(20);
+    expect(kpis.overloadedWeeks).toBe(1);
+  });
+});

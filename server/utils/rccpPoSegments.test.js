@@ -181,4 +181,37 @@ describe('buildPoSegments', () => {
     expect(chart[0].segmentsAbove).toHaveLength(2);
     expect(chart[0].segmentsBelow).toEqual([]);
   });
+
+  it('places open qty on the confirmed week as segmentsConfirmed', () => {
+    const confirmed = '2026-03-23T00:00:00.000Z';
+    const confirmedWeek = weekOf(confirmed);
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const byWeek = buildPoSegments([row({ line: { confirmedDlvDate: confirmed } })], config, {
+      ...window, toWeek: Math.max(window.toWeek, confirmedWeek.week),
+    }, { now: nowCurrent });
+    expect(byWeek.get(confirmedWeek.key).segmentsConfirmed).toEqual([
+      { itemNumber: 'SKU-1', qty: 10, status: 'confirmed', late: false, dataAreaId: 'whsl' },
+    ]);
+    expect(byWeek.get(plannedWeek.key).segmentsConfirmed || []).toEqual([]);
+  });
+
+  it('skips sentinel and empty confirmed dates', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const byWeek = buildPoSegments([
+      row({ line: { confirmedDlvDate: '1900-01-01T00:00:00.000Z' } }),
+    ], config, window, { now: nowCurrent });
+    for (const bucket of byWeek.values()) {
+      expect(bucket.segmentsConfirmed || []).toEqual([]);
+    }
+  });
+
+  it('clips confirmed segments outside the window', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const byWeek = buildPoSegments([
+      row({ line: { confirmedDlvDate: '2020-01-06T00:00:00.000Z' } }),
+    ], config, window, { now: nowCurrent });
+    for (const bucket of byWeek.values()) {
+      expect(bucket.segmentsConfirmed || []).toEqual([]);
+    }
+  });
 });

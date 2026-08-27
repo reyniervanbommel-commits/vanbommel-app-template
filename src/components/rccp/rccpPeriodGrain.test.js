@@ -39,16 +39,19 @@ describe('resolveRccpChartView', () => {
       key: '2026-W10', year: 2026, week: 10, open: 10, __capacity__: 40, __overloaded__: false,
       segmentsAbove: [{ itemNumber: 'A', qty: 10, status: 'open', late: false, dataAreaId: '' }],
       segmentsBelow: [],
+      segmentsConfirmed: [{ itemNumber: 'A', qty: 8, status: 'confirmed', late: false, dataAreaId: '' }],
     },
     {
       key: '2026-W11', year: 2026, week: 11, open: 30, __capacity__: 40, __overloaded__: false,
       segmentsAbove: [{ itemNumber: 'A', qty: 20, status: 'open', late: true, dataAreaId: '' }],
       segmentsBelow: [{ itemNumber: 'B', qty: 5, status: 'received', late: false, dataAreaId: '' }],
+      segmentsConfirmed: [{ itemNumber: 'A', qty: 12, status: 'confirmed', late: false, dataAreaId: '' }],
     },
     {
       key: '2026-W12', year: 2026, week: 12, open: 50, __capacity__: 40, __overloaded__: true,
       segmentsAbove: [],
       segmentsBelow: [],
+      segmentsConfirmed: [],
     },
   ];
   const cells = [
@@ -93,6 +96,9 @@ describe('resolveRccpChartView', () => {
     ]);
     expect(view.chart[0].segmentsBelow).toEqual([
       expect.objectContaining({ itemNumber: 'B', qty: 5, status: 'received' }),
+    ]);
+    expect(view.chart[0].segmentsConfirmed).toEqual([
+      expect.objectContaining({ itemNumber: 'A', qty: 20, status: 'confirmed' }),
     ]);
     expect(view.cellMap.get('open|2026|3').confirmedQty).toBe(90);
     expect(view.cellMap.get('open|2026|3').availableQty).toBe(120);

@@ -22,6 +22,12 @@ const {
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const {
+  CONFIRMED_DELIVERY_MEASURE_KEY,
+  buildFactoryConfirmedByCell,
+  appendConfirmedDeliveryRow,
+  matchConfirmedDeliveryDrill,
+} = require('../utils/rccpConfirmedLoad');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -352,7 +358,7 @@ function buildMatrixCells({
 function buildChartSeries(cells, periods, measureRows) {
   // Open/remaining measures (niet delivered, niet afgeleid) voor de overload-berekening.
   const userLoadKeys = measureRows
-    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered)
+    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered && !r.isConfirmedDelivery)
     .map((r) => r.measureKey);
 
   return periods.map(({ year, week, key }) => {
@@ -423,6 +429,18 @@ async function analyze({
     window,
     vendorFilter: effectiveVendor,
   });
+  if (String(config.confirmedDateColumnKey || '').trim()) {
+    const factoryConfirmedByCell = buildFactoryConfirmedByCell(poRows, config, window, {
+      vendorAccount: effectiveVendor,
+    });
+    appendConfirmedDeliveryRow({
+      cells,
+      measureRows,
+      factoryConfirmedByCell,
+      periods,
+      vendorFilter: effectiveVendor,
+    });
+  }
 
   const chart = buildChartSeries(cells, periods, measureRows);
   const now = new Date();
@@ -524,6 +542,12 @@ function buildDrillDownRows(rows, config, cell, window) {
   const measureKey = cell.measureKey;
   // Capaciteit en overcapaciteit zijn afgeleide regels zonder onderliggende PO-regels.
   if (!measureKey || measureKey === CAPACITY_MEASURE_KEY || measureKey === OVERCAPACITY_MEASURE_KEY) return result;
+  if (measureKey === CONFIRMED_DELIVERY_MEASURE_KEY) {
+    for (const row of rows) {
+      result.push(...matchConfirmedDeliveryDrill(row, cell, config));
+    }
+    return result;
+  }
 
   for (const row of rows) {
     const masterValues = row.values || {};

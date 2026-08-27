@@ -23,6 +23,14 @@ describe('collectRccpChartItemNumbers', () => {
     expect(collectRccpChartItemNumbers([])).toEqual([]);
     expect(collectRccpChartItemNumbers(null)).toEqual([]);
   });
+
+  it('includes item numbers from segmentsConfirmed', () => {
+    expect(collectRccpChartItemNumbers([{
+      segmentsAbove: [],
+      segmentsBelow: [],
+      segmentsConfirmed: [{ itemNumber: 'CFM-9', qty: 3, status: 'confirmed' }],
+    }])).toEqual(['CFM-9']);
+  });
 });
 
 describe('matchRccpChartItem', () => {
@@ -57,6 +65,22 @@ describe('filterRccpChartByItem', () => {
       load: 10,
       segmentsAbove: [{ itemNumber: 'A', qty: 2, status: 'open' }],
       segmentsBelow: [{ itemNumber: 'A', qty: 1, status: 'received' }],
+      segmentsConfirmed: [],
+    }]);
+  });
+
+  it('filters confirmed segments by the selected item', () => {
+    expect(filterRccpChartByItem([{
+      segmentsAbove: [],
+      segmentsBelow: [],
+      segmentsConfirmed: [
+        { itemNumber: 'A', qty: 2, status: 'confirmed' },
+        { itemNumber: 'B', qty: 3, status: 'confirmed' },
+      ],
+    }], 'A')).toEqual([{
+      segmentsAbove: [],
+      segmentsBelow: [],
+      segmentsConfirmed: [{ itemNumber: 'A', qty: 2, status: 'confirmed' }],
     }]);
   });
 });
