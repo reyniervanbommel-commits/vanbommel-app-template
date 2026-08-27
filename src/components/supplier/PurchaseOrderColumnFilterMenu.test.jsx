@@ -172,13 +172,24 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
 
   it('toont group header sum toggle voor number header-kolommen', async () => {
     const onSetGroupSummaryColumn = vi.fn();
-    renderMenu({ onSetGroupSummaryColumn });
+    renderMenu({ sumToggles: { onSetGroupSummaryColumn } });
 
     openColumnMenu();
     fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
     fireEvent.click(await screen.findByRole('switch', { name: /Show sum in group header/i }));
 
     expect(onSetGroupSummaryColumn).toHaveBeenCalledWith('amount', true);
+  });
+
+  it('toont Show sum toggle voor number header-kolommen', async () => {
+    const onSetColumnSumColumn = vi.fn();
+    renderMenu({ sumToggles: { onSetColumnSumColumn } });
+
+    openColumnMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
+    fireEvent.click(await screen.findByRole('switch', { name: /^Show sum$/i }));
+
+    expect(onSetColumnSumColumn).toHaveBeenCalledWith('amount', true);
   });
 
   it('gebruikt palette picker voor category bar color', async () => {

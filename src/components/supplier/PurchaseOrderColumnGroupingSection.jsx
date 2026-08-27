@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Field, Switch, Text } from '@fluentui/react-components';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import { getRgbHex, isHexColor, normalizeHexColor } from '../../utils/hexColor';
+import PurchaseOrderColumnSumToggles, { EMPTY_SUM_TOGGLES } from './PurchaseOrderColumnSumToggles';
 
 function resolvePaletteColor(color) {
   const rgb = getRgbHex(color);
@@ -18,9 +19,7 @@ function PurchaseOrderColumnGroupingSection({
   onSetGroupingColumn,
   onClearGrouping,
   onSetGroupingColor,
-  canToggleGroupSummary = false,
-  isGroupSummaryColumn = false,
-  onToggleGroupSummary,
+  sumToggles = EMPTY_SUM_TOGGLES,
 }) {
   const paletteColor = useMemo(() => resolvePaletteColor(groupingColor), [groupingColor]);
 
@@ -39,11 +38,6 @@ function PurchaseOrderColumnGroupingSection({
   const handleColorSelect = useCallback((color) => {
     onSetGroupingColor(column.key, color);
   }, [column.key, onSetGroupingColor]);
-
-  const handleSummaryToggle = useCallback((_, data) => {
-    if (data.checked === isGroupSummaryColumn) return;
-    onToggleGroupSummary();
-  }, [isGroupSummaryColumn, onToggleGroupSummary]);
 
   return (
     <>
@@ -70,16 +64,10 @@ function PurchaseOrderColumnGroupingSection({
             ariaLabel={`Category bar color for ${column.label}`}
           />
         </Field>
-        {canToggleGroupSummary ? (
-          <div className={styles.groupingToggleRow}>
-            <Text size={200}>Show sum in group header</Text>
-            <Switch
-              checked={isGroupSummaryColumn}
-              onChange={handleSummaryToggle}
-              aria-label="Show sum in group header"
-            />
-          </div>
-        ) : null}
+        <PurchaseOrderColumnSumToggles
+          styles={styles}
+          sumToggles={sumToggles}
+        />
       </div>
     </>
   );

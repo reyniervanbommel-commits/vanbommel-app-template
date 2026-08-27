@@ -82,6 +82,7 @@ export default function PurchaseOrdersBoardTableHeader({
         clearGrouping={clearGrouping}
         setGroupingBarColor={setGroupingBarColor}
         setGroupSummaryColumn={setGroupSummaryColumn}
+        columnSums={boardView.columnSums}
         onAddColumnRightOf={onAddColumnRightOf}
         datePeriodDisplayModes={datePeriodDisplayModes}
         onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}

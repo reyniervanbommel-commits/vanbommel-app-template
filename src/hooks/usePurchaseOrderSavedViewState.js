@@ -144,6 +144,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearSort();
     boardView.clearGrouping();
     boardView.clearGroupSummaries();
+    boardView.columnSums?.clearColumnSums?.();
     setShowHistoryIndicators(allOrdersShowHistoryIndicators);
     setActiveViewId(null);
     setSavedStateFingerprint(null);

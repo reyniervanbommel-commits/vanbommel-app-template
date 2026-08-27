@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
+import { usePurchaseOrderColumnSums } from './usePurchaseOrderColumnSums';
 import { formatLinkedLineValues } from '../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
@@ -8,18 +9,16 @@ import {
   resolveDatePeriodCellValue,
   resolveDatePeriodSourceKey,
 } from '../utils/datePeriodColumnUtils';
-
-const ACTIVITY_FILTER_ALL = 'all';
-const ACTIVITY_FILTER_NEW = 'new';
-const ACTIVITY_FILTER_CHANGED = 'changed';
-const ACTIVITY_FILTER_REMOVED = 'removed';
+import {
+  ACTIVITY_FILTER_ALL,
+  ACTIVITY_FILTER_CHANGED,
+  ACTIVITY_FILTER_NEW,
+  ACTIVITY_FILTER_REMOVED,
+  ACTIVITY_FILTERS,
+} from './purchaseOrderActivityFilter';
 
 /**
- * Compositiepunt voor de board-view state: combineert filter/sort
- * (usePurchaseOrderTableView) met grouping (usePurchaseOrderGrouping) en levert
- * één gecombineerde export/apply zodat een saved view filter + sort + grouping in
- * één keer kan serialiseren en terugzetten. Kolomlayout hoort NIET hier maar in
- * usePurchaseOrdersPage; PurchaseOrdersPage voegt beide samen tot een volledige view.
+ * Compositiepunt: filter/sort + grouping + column sums, met één export/apply voor saved views.
  */
 export function usePurchaseOrderBoardView({
   items,
@@ -220,6 +219,7 @@ export function usePurchaseOrderBoardView({
   );
 
   const grouping = usePurchaseOrderGrouping({ rows, columns });
+  const columnSums = usePurchaseOrderColumnSums({ rows, columns });
 
   const exportFilterSortGrouping = useCallback(() => {
     const tableState = tableView.exportState();
@@ -228,13 +228,13 @@ export function usePurchaseOrderBoardView({
       filterByColumn: tableState.filterByColumn,
       sortState: tableState.sortState,
       grouping: grouping.exportState(),
+      columnSumKeys: columnSums.columnSumKeys,
     };
-  }, [activityFilter, tableView, grouping]);
+  }, [activityFilter, columnSums.columnSumKeys, tableView, grouping]);
 
   const applyFilterSortGrouping = useCallback((state) => {
     setActivityFilter(
-      [ACTIVITY_FILTER_ALL, ACTIVITY_FILTER_NEW, ACTIVITY_FILTER_CHANGED, ACTIVITY_FILTER_REMOVED]
-        .includes(state?.activityFilter)
+      ACTIVITY_FILTERS.includes(state?.activityFilter)
         ? state.activityFilter
         : ACTIVITY_FILTER_ALL
     );
@@ -243,7 +243,8 @@ export function usePurchaseOrderBoardView({
       sortState: state?.sortState,
     });
     grouping.applyState(state?.grouping);
-  }, [tableView, grouping]);
+    columnSums.applyKeys(state?.columnSumKeys);
+  }, [columnSums.applyKeys, grouping, tableView]);
 
   return useMemo(
     () => ({
@@ -286,10 +287,11 @@ export function usePurchaseOrderBoardView({
       setGroupingBarColor: grouping.setGroupingBarColor,
       setGroupSummaryColumn: grouping.setGroupSummaryColumn,
       clearGroupSummaries: grouping.clearGroupSummaries,
+      columnSums,
       // gecombineerde serialisatie voor saved views
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

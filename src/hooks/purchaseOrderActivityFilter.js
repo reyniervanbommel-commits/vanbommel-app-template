@@ -1,0 +1,11 @@
+export const ACTIVITY_FILTER_ALL = 'all';
+export const ACTIVITY_FILTER_NEW = 'new';
+export const ACTIVITY_FILTER_CHANGED = 'changed';
+export const ACTIVITY_FILTER_REMOVED = 'removed';
+
+export const ACTIVITY_FILTERS = [
+  ACTIVITY_FILTER_ALL,
+  ACTIVITY_FILTER_NEW,
+  ACTIVITY_FILTER_CHANGED,
+  ACTIVITY_FILTER_REMOVED,
+];

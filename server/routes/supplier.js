@@ -286,13 +286,14 @@ function normalizeViewState(rawState) {
         columnKey: String(sortState.columnKey || '').slice(0, 64),
         direction: VIEW_SORT_DIRECTIONS.has(sortState.direction) ? sortState.direction : 'none',
       },
-      grouping: {
+        grouping: {
         columnKeys: normalizeStringArray(grouping.columnKeys),
         columnKey: String(grouping.columnKey || '').slice(0, 64),
         color: HEX_COLOR_PATTERN.test(String(grouping.color || '')) ? grouping.color : '',
         colorsByColumn: normalizeColorMap(grouping.colorsByColumn),
         summaryColumnKeys: normalizeStringArray(grouping.summaryColumnKeys),
       },
+      columnSumKeys: normalizeStringArray(table.columnSumKeys),
     },
     tabs: normalizeTabsState(input.tabs),
     vendorAccount: normalizeVendorAccount(input.vendorAccount),
@@ -727,3 +728,4 @@ router.get('/purchase-orders', purchaseOrdersValidator, async (req, res, next) =
 });
 
 module.exports = router;
+router.normalizeViewState = normalizeViewState;

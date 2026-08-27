@@ -11,6 +11,7 @@ import { isColumnFilterActive, isColumnFormatRuleSetActive } from './purchaseOrd
 import { getPoHeaderConnectionTargets } from './poHeaderHoverModel';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+import { buildColumnSumToggles } from './PurchaseOrderColumnSumToggles';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -49,6 +50,7 @@ export default function PurchaseOrdersBoardHeaderRow({
   clearGrouping,
   setGroupingBarColor,
   setGroupSummaryColumn,
+  columnSums,
   onAddColumnRightOf,
   datePeriodDisplayModes = {},
   onSetDatePeriodDisplayMode,
@@ -85,7 +87,6 @@ export default function PurchaseOrdersBoardHeaderRow({
         const isSystemColumn = isProductImageColumn(column);
         const hasActiveFilter = isColumnFilterActive(column, filterByColumn[column.key]);
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
-        const hasGroupSummary = groupSummaryColumnKeys.includes(column.key);
         const connectionTargets = getPoHeaderConnectionTargets({
           columnKey: column.key,
           linkedLineTotalByHeaderKey,
@@ -156,7 +157,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                 sortState={sortState}
                 groupingColumnKey={groupingColumnKey}
                 groupingColor={groupingColorsByColumn[column.key] || '#f4e6ed'}
-                isGroupSummaryColumn={hasGroupSummary}
+                sumToggles={buildColumnSumToggles(column.key, groupSummaryColumnKeys, columnSums, setGroupSummaryColumn)}
                 isAdmin={isAdmin}
                 isStaff={isStaff}
                 onToggleWriteback={onToggleWriteback}
@@ -170,7 +171,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                 onSetGroupingColumn={setGroupingColumn}
                 onClearGrouping={clearGrouping}
                 onSetGroupingColor={setGroupingBarColor}
-                onSetGroupSummaryColumn={setGroupSummaryColumn}
                 onAddColumnRightOf={onAddColumnRightOf}
                 datePeriodDisplayMode={datePeriodDisplayModes[column.key]}
                 onSetDatePeriodDisplayMode={onSetDatePeriodDisplayMode}
