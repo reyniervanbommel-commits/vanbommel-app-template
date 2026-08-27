@@ -190,6 +190,7 @@ router.get('/analysis', async (req, res, next) => {
       vendorAccount,
       supplierAccount,
       ...window,
+      planningDate: req.query.planningDate,
     });
     res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
   } catch (err) {

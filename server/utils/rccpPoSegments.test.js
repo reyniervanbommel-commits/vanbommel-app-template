@@ -1,7 +1,7 @@
 'use strict';
 
 const { getIsoWeek, getIsoWeekYear, isoWeekKey } = require('./isoWeek');
-const { buildPoSegments, mergeSegmentsIntoChart } = require('./rccpPoSegments');
+const { buildPoSegmentState, buildPoSegments, mergeSegmentsIntoChart } = require('./rccpPoSegments');
 
 function weekOf(date) {
   return { year: getIsoWeekYear(date), week: getIsoWeek(date), key: isoWeekKey(getIsoWeekYear(date), getIsoWeek(date)) };
@@ -193,6 +193,20 @@ describe('buildPoSegments', () => {
       { itemNumber: 'SKU-1', qty: 10, status: 'confirmed', late: false, dataAreaId: 'whsl' },
     ]);
     expect(byWeek.get(plannedWeek.key).segmentsConfirmed || []).toEqual([]);
+  });
+
+  it('fills factoryConfirmedByCell in the same pass as segments', () => {
+    const confirmed = '2026-03-23T00:00:00.000Z';
+    const confirmedWeek = weekOf(confirmed);
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const { byWeek, factoryConfirmedByCell } = buildPoSegmentState(
+      [row({ line: { confirmedDlvDate: confirmed } })],
+      config,
+      { ...window, toWeek: Math.max(window.toWeek, confirmedWeek.week) },
+      { now: nowCurrent },
+    );
+    expect(byWeek).toBeInstanceOf(Map);
+    expect(factoryConfirmedByCell.get(`V001|${confirmedWeek.year}|${confirmedWeek.week}`)).toBe(10);
   });
 
   it('skips sentinel and empty confirmed dates', () => {

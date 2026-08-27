@@ -20,13 +20,14 @@ const {
   lineDateValue,
   collectDateSlots,
 } = require('../utils/rccpPoRow');
-const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
+const { buildPoSegmentState, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const { parsePlanningDate } = require('../utils/rccpPlanningDate');
 const {
   CONFIRMED_DELIVERY_MEASURE_KEY,
-  buildFactoryConfirmedByCell,
   appendConfirmedDeliveryRow,
   matchConfirmedDeliveryDrill,
+  openLoadForOvercapacity,
 } = require('../utils/rccpConfirmedLoad');
 
 const PO_TABLE_KEY = 'purchase-orders';
@@ -220,6 +221,7 @@ function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
 
 function buildMatrixCells({
   capacityRows, confirmedByCell, config, window, vendorFilter = null,
+  planningDate = 'requested', factoryConfirmedByCell,
 }) {
   const measures = config.quantityMeasures || [];
   const openMeasureKey = config.openMeasureKey || '';
@@ -290,7 +292,15 @@ function buildMatrixCells({
       // Overcapaciteit = beschikbare capaciteit − de als "openstaand" gekozen measure. Negatief =
       // tekort; dat toont de matrix rood en de grafiek onder de nullijn.
       if (openMeasureKey) {
-        const openLoad = confirmedByCell.get(cellKey(vendor, period.year, period.week, openMeasureKey)) || 0;
+        const openLoad = openLoadForOvercapacity({
+          planningDate,
+          confirmedByCell,
+          factoryConfirmedByCell,
+          vendor,
+          year: period.year,
+          week: period.week,
+          openMeasureKey,
+        });
         const over = available - openLoad;
         cells.push({
           vendorAccount: vendor,
@@ -396,8 +406,10 @@ async function analyze({
   toYear,
   toWeek,
   supplierAccount = null,
+  planningDate: planningDateRaw,
 } = {}) {
   const config = await settingsService.getConfig();
+  const planningDate = parsePlanningDate(planningDateRaw, config);
   const effectiveVendor = supplierAccount || vendorAccount || null;
   const window = {
     fromYear: Number(fromYear),
@@ -422,17 +434,24 @@ async function analyze({
     (row) => isIsoWeekInWindow(row.periodYear, row.isoWeek, window),
   );
 
+  const now = new Date();
+  const { byWeek: segmentsByWeek, factoryConfirmedByCell } = await time('rccp_po_segments', () => (
+    buildPoSegmentState(poRows, config, window, {
+      now,
+      vendorAccount: effectiveVendor,
+    })
+  ));
+
   const { cells, measureRows, periods } = buildMatrixCells({
     capacityRows,
     confirmedByCell,
+    factoryConfirmedByCell,
+    planningDate,
     config,
     window,
     vendorFilter: effectiveVendor,
   });
   if (String(config.confirmedDateColumnKey || '').trim()) {
-    const factoryConfirmedByCell = buildFactoryConfirmedByCell(poRows, config, window, {
-      vendorAccount: effectiveVendor,
-    });
     appendConfirmedDeliveryRow({
       cells,
       measureRows,
@@ -443,14 +462,10 @@ async function analyze({
   }
 
   const chart = buildChartSeries(cells, periods, measureRows);
-  const now = new Date();
-  const segmentsByWeek = await time('rccp_po_segments', () => buildPoSegments(poRows, config, window, {
-    now,
-    vendorAccount: effectiveVendor,
-  }));
   const poKpiPair = await time('rccp_kpis', () => buildRccpPoKpisPair(poRows, config, window, {
     now,
     vendorAccount: effectiveVendor,
+    planningDate,
   }));
   const capacityKpis = buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY);
   const kpis = { ...poKpiPair.windowed, ...capacityKpis };

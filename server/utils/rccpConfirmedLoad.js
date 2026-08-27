@@ -5,7 +5,7 @@
  * Puur: geen Date.now, geen RccpAnalysisService-import, geen history-I/O.
  */
 
-const { getIsoWeek, getIsoWeekYear, isIsoWeekInWindow } = require('./isoWeek');
+const { getIsoWeek, getIsoWeekYear } = require('./isoWeek');
 const {
   toNumber,
   pickValue,
@@ -15,6 +15,7 @@ const {
   collectDateSlots,
   isSentinelDate,
 } = require('./rccpPoRow');
+const { buildPoSegmentState } = require('./rccpPoSegments');
 
 const CONFIRMED_DELIVERY_MEASURE_KEY = '__confirmed_delivery__';
 
@@ -29,13 +30,6 @@ function parseFactoryCellKey(key) {
     periodYear: Number(periodYear),
     isoWeek: Number(isoWeek),
   };
-}
-
-function addFactoryLoad(map, vendor, year, week, qty, window) {
-  if (!(qty > 0) || !vendor || !year || !week) return;
-  if (!isIsoWeekInWindow(year, week, window)) return;
-  const key = factoryCellKey(vendor, year, week);
-  map.set(key, (map.get(key) || 0) + qty);
 }
 
 function confirmedMeasureRow() {
@@ -65,58 +59,13 @@ function confirmedMatrixCell(vendor, period, qty) {
 /**
  * Open qty keyed by vendor|year|week of the confirmed date.
  * Skips empty / sentinel dates and clips outside the window.
+ * Same PO walk as chart segments.
  */
-function buildFactoryConfirmedByCell(rows, config, window, { vendorAccount } = {}) {
-  const map = new Map();
-  const confirmedKey = String(config.confirmedDateColumnKey || '').trim();
-  const openKey = String(config.openMeasureKey || '').trim();
-  if (!confirmedKey || !openKey) return map;
-
-  const vendorCol = config.vendorColumnKey;
-  const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
-
-  for (const row of rows || []) {
-    const masterValues = row.values || {};
-    const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
-    if (!vendor) continue;
-    if (vendorAccount && vendor !== vendorAccount) continue;
-
-    const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
-    const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
-    const headerOnlyOpen = Boolean(openKey && isHeaderOnlyMeasure(details, masterValues, openKey));
-    const lineOpen = Boolean(openKey && !headerOnlyOpen);
-
-    if (lineOpen) {
-      const sources = details.length ? details : [{ values: masterValues }];
-      const share = details.length ? 1 / details.length : 1;
-      for (const detail of sources) {
-        const lineValues = detail.values || {};
-        const status = pickValue(lineValues, 'status') ?? masterStatus;
-        if (status && excludedSet.has(String(status).toLowerCase())) continue;
-        const confirmedDate = lineDateValue(lineValues, masterValues, confirmedKey);
-        if (!confirmedDate || isSentinelDate(confirmedDate)) continue;
-        const year = getIsoWeekYear(confirmedDate);
-        const week = getIsoWeek(confirmedDate);
-        const qty = resolveLineMeasureQty(lineValues, masterValues, openKey, share);
-        addFactoryLoad(map, vendor, year, week, qty, window);
-      }
-    }
-
-    if (headerOnlyOpen) {
-      const slots = collectDateSlots(
-        details, masterValues, confirmedKey, null, window, excludedSet, masterStatus,
-      ).filter((slot) => !isSentinelDate(slot.dateValue));
-      const total = toNumber(pickValue(masterValues, openKey));
-      if (total > 0 && slots.length) {
-        const shareQty = total / slots.length;
-        for (const slot of slots) {
-          addFactoryLoad(map, vendor, slot.year, slot.week, shareQty, window);
-        }
-      }
-    }
-  }
-
-  return map;
+function buildFactoryConfirmedByCell(rows, config, window, { vendorAccount, now } = {}) {
+  return buildPoSegmentState(rows, config, window, {
+    now: now || new Date(0),
+    vendorAccount,
+  }).factoryConfirmedByCell;
 }
 
 function collectVendors(factoryConfirmedByCell, vendorFilter) {
@@ -235,10 +184,28 @@ function matchConfirmedDeliveryDrill(row, cell, config, window) {
   return result;
 }
 
+function openLoadForOvercapacity({
+  planningDate,
+  confirmedByCell,
+  factoryConfirmedByCell,
+  vendor,
+  year,
+  week,
+  openMeasureKey,
+} = {}) {
+  if (planningDate === 'confirmed') {
+    const map = factoryConfirmedByCell || new Map();
+    return map.get(factoryCellKey(vendor, year, week)) || 0;
+  }
+  const map = confirmedByCell || new Map();
+  return map.get(`${vendor}|${year}|${week}|${openMeasureKey}`) || 0;
+}
+
 module.exports = {
   CONFIRMED_DELIVERY_MEASURE_KEY,
   buildFactoryConfirmedByCell,
   buildConfirmedDeliveryCells,
   appendConfirmedDeliveryRow,
   matchConfirmedDeliveryDrill,
+  openLoadForOvercapacity,
 };

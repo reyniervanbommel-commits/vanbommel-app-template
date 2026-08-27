@@ -7,6 +7,7 @@ const {
   buildConfirmedDeliveryCells,
   appendConfirmedDeliveryRow,
   matchConfirmedDeliveryDrill,
+  openLoadForOvercapacity,
 } = require('./rccpConfirmedLoad');
 const { buildRccpCapacityKpis } = require('./rccpKpis');
 
@@ -215,6 +216,55 @@ describe('rccpConfirmedLoad', () => {
         deliveryDate: confirmed,
       }),
     ]);
+  });
+
+  it('uses factory map for overload when planningDate is confirmed', () => {
+    const confirmedByCell = new Map([
+      [`V001|${plannedWeek.year}|${plannedWeek.week}|openQty`, 80],
+    ]);
+    const factoryConfirmedByCell = new Map([
+      [`V001|${confirmedWeek.year}|${confirmedWeek.week}`, 120],
+    ]);
+    expect(openLoadForOvercapacity({
+      planningDate: 'confirmed',
+      confirmedByCell,
+      factoryConfirmedByCell,
+      vendor: 'V001',
+      year: confirmedWeek.year,
+      week: confirmedWeek.week,
+      openMeasureKey: 'openQty',
+    })).toBe(120);
+    expect(openLoadForOvercapacity({
+      planningDate: 'requested',
+      confirmedByCell,
+      factoryConfirmedByCell,
+      vendor: 'V001',
+      year: plannedWeek.year,
+      week: plannedWeek.week,
+      openMeasureKey: 'openQty',
+    })).toBe(80);
+  });
+
+  it('does not double-count extra row qty into confirmed overload', () => {
+    const factoryQty = 10;
+    const requestedQty = 10;
+    const extraRowQty = factoryQty;
+    const load = openLoadForOvercapacity({
+      planningDate: 'confirmed',
+      confirmedByCell: new Map([
+        [`V001|${plannedWeek.year}|${plannedWeek.week}|openQty`, requestedQty],
+      ]),
+      factoryConfirmedByCell: new Map([
+        [`V001|${confirmedWeek.year}|${confirmedWeek.week}`, factoryQty],
+      ]),
+      vendor: 'V001',
+      year: confirmedWeek.year,
+      week: confirmedWeek.week,
+      openMeasureKey: 'openQty',
+    });
+    expect(load).toBe(factoryQty);
+    expect(load).not.toBe(factoryQty + extraRowQty);
+    expect(load).not.toBe(factoryQty + requestedQty);
   });
 
   it('excludes the synthetic confirmed-delivery row from capacity load', () => {

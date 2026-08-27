@@ -288,6 +288,37 @@ describe('rccpKpis', () => {
     expect(kpis.overloadedWeeks).toBe(2);
   });
 
+  it('keeps window membership on requested date when planningDate is confirmed', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const confirmed = '2026-06-01T00:00:00.000Z'; // outside window
+    const rows = [row({ line: { confirmedDlvDate: confirmed, openQty: 10, deliveredQty: 0 } })];
+    const pair = buildRccpPoKpisPair(rows, config, window, { now: nowCurrent, planningDate: 'confirmed' });
+    expect(pair.windowed.totalOpen).toBe(10); // still in window via requested date
+  });
+
+  it('treats missing confirmed date as planned1900, not late', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const rows = [row({ line: { confirmedDlvDate: '', openQty: 10, deliveredQty: 0 } })];
+    const kpis = buildRccpPoKpis(rows, config, window, { now: nowNext, planningDate: 'confirmed' });
+    expect(kpis.planned1900Units).toBe(10);
+    expect(kpis.openLateUnits).toBe(0);
+  });
+
+  it('compares late and on-time against the confirmed date', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const confirmed = '2026-03-30T00:00:00.000Z';
+    const rows = [row({ line: { confirmedDlvDate: confirmed, openQty: 0, deliveredQty: 4 } })];
+    const requested = buildRccpPoKpis(rows, config, window, { now: nowCurrent });
+    expect(requested.lateDeliveryUnits).toBe(4);
+    expect(requested.onTimeUnits).toBe(0);
+    const confirmedKpis = buildRccpPoKpis(rows, config, window, {
+      now: nowCurrent,
+      planningDate: 'confirmed',
+    });
+    expect(confirmedKpis.lateDeliveryUnits).toBe(0);
+    expect(confirmedKpis.onTimeUnits).toBe(4);
+  });
+
   it('excludes the confirmed-delivery synthetic row from capacity load', () => {
     const chart = [
       { key: '2026-W11', openQty: 80, __confirmed_delivery__: 80, __capacity__: 100 },

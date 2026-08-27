@@ -5,7 +5,7 @@
  * Puur: geen Date.now, geen RccpAnalysisService-import.
  */
 
-const { getIsoWeek, getIsoWeekYear, isoWeekKey, buildWeekRange } = require('./isoWeek');
+const { getIsoWeek, getIsoWeekYear, isoWeekKey, buildWeekRange, isIsoWeekInWindow } = require('./isoWeek');
 const {
   toNumber,
   pickValue,
@@ -15,14 +15,18 @@ const {
   collectDateSlots,
   isSentinelDate,
 } = require('./rccpPoRow');
+const {
+  emptyWeekBucket,
+  bump,
+  emitAbove,
+  emitBelow,
+  emitConfirmed,
+  spreadHeaderQty,
+} = require('./rccpPoSegmentEmit');
 
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   if (aYear !== bYear) return aYear - bYear;
   return aWeek - bWeek;
-}
-
-function emptyWeekBucket() {
-  return new Map();
 }
 
 function lineItemNumber(lineValues, masterValues) {
@@ -35,96 +39,18 @@ function resolveDataAreaId(row, masterValues) {
   return String(pickValue(masterValues, 'dataAreaId') || '').trim();
 }
 
-function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId = '') {
-  if (!(qty > 0) || !week) return;
-  let itemMap = weekMap.get(week);
-  if (!itemMap) {
-    itemMap = emptyWeekBucket();
-    weekMap.set(week, itemMap);
-  }
-  const current = itemMap.get(itemNumber) || {
-    open: 0, received: 0, late: false, dataAreaId: '',
-  };
-  if (!current.dataAreaId && dataAreaId) current.dataAreaId = dataAreaId;
-  if (status === 'open') {
-    current.open += qty;
-    current.late = current.late || Boolean(late);
-  } else {
-    current.received += qty;
-  }
-  itemMap.set(itemNumber, current);
-}
-
-function emitSegment(itemNumber, qty, status, late, dataAreaId) {
-  return {
-    itemNumber, qty, status, late, dataAreaId: dataAreaId || '',
-  };
-}
-
-function emitAbove(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
-  const out = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
-    if (entry.received > 0) {
-      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId));
-    }
-    if (entry.open > 0) {
-      out.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId));
-    }
-  }
-  return out;
-}
-
-function emitBelow(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
-  const out = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
-    if (entry.received > 0) {
-      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId));
-    }
-  }
-  return out;
-}
-
-function emitConfirmed(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
-  const out = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
-    if (entry.open > 0) {
-      out.push(emitSegment(itemNumber, entry.open, 'confirmed', false, entry.dataAreaId));
-    }
-  }
-  return out;
-}
-
-function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlot, dataAreaId) {
-  if (!(total > 0) || !slots.length) return;
-  const shareQty = total / slots.length;
-  for (const slot of slots) {
-    const late = typeof lateForSlot === 'function' ? lateForSlot(slot) : false;
-    bump(
-      weekMap,
-      slot.key,
-      lineItemNumber(slot.lineValues, masterValues),
-      status,
-      shareQty,
-      late,
-      dataAreaId,
-    );
-  }
+function addFactoryLoad(map, vendor, year, week, qty, window) {
+  if (!(qty > 0) || !vendor || !year || !week) return;
+  if (!isIsoWeekInWindow(year, week, window)) return;
+  const key = `${vendor}|${year}|${week}`;
+  map.set(key, (map.get(key) || 0) + qty);
 }
 
 /**
- * @param {object[]} rows PO-snapshot
- * @param {object} config RCCP-config
- * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} window
- * @param {{ now: Date, vendorAccount?: string|null }} options
- * @returns {Map<string, { segmentsAbove: object[], segmentsBelow: object[], segmentsConfirmed: object[] }>}
+ * One PO walk: chart segments by week plus factory-confirmed open load.
+ * @returns {{ byWeek: Map, factoryConfirmedByCell: Map }}
  */
-function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
+function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) {
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
@@ -140,6 +66,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
   const above = new Map();
   const below = new Map();
   const confirmed = new Map();
+  const factoryConfirmedByCell = new Map();
 
   const clipBump = (weekMap, week, itemNumber, status, qty, late, dataAreaId) => {
     if (!periodSet.has(week)) return;
@@ -201,6 +128,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
           const confirmedWeek = getIsoWeek(confirmedDate);
           if (confirmedYear && confirmedWeek) {
             clipBump(confirmed, isoWeekKey(confirmedYear, confirmedWeek), itemNumber, 'open', openQty, false, dataAreaId);
+            addFactoryLoad(factoryConfirmedByCell, vendor, confirmedYear, confirmedWeek, openQty, window);
           }
         }
       }
@@ -251,15 +179,22 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
         excludedSet,
         masterStatus,
       ).filter((slot) => !isSentinelDate(slot.dateValue));
+      const confirmedTotal = toNumber(pickValue(masterValues, openKey));
       spreadHeaderQty(
         confirmed,
         confirmedSlots,
         masterValues,
         'open',
-        toNumber(pickValue(masterValues, openKey)),
+        confirmedTotal,
         false,
         dataAreaId,
       );
+      if (confirmedTotal > 0 && confirmedSlots.length) {
+        const shareQty = confirmedTotal / confirmedSlots.length;
+        for (const slot of confirmedSlots) {
+          addFactoryLoad(factoryConfirmedByCell, vendor, slot.year, slot.week, shareQty, window);
+        }
+      }
     }
   }
 
@@ -271,7 +206,11 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
       segmentsConfirmed: emitConfirmed(confirmed.get(period.key) || emptyWeekBucket()),
     });
   }
-  return byWeek;
+  return { byWeek, factoryConfirmedByCell };
+}
+
+function buildPoSegments(rows, config, window, options) {
+  return buildPoSegmentState(rows, config, window, options).byWeek;
 }
 
 function mergeSegmentsIntoChart(chart, segmentsByWeek) {
@@ -289,6 +228,7 @@ function mergeSegmentsIntoChart(chart, segmentsByWeek) {
 }
 
 module.exports = {
+  buildPoSegmentState,
   buildPoSegments,
   mergeSegmentsIntoChart,
 };

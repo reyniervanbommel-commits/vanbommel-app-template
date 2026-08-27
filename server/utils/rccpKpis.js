@@ -53,32 +53,37 @@ function addSku(set, itemNumber) {
   if (sku) set.add(sku);
 }
 
-function openLateDays(line, now, nowYear, nowWeek) {
+function openLateDays(line, now, nowYear, nowWeek, compareDate) {
+  const compareYear = compareDate ? getIsoWeekYear(compareDate) : null;
+  const compareWeek = compareDate ? getIsoWeek(compareDate) : null;
   if (
     !(line.openQty > 0)
-    || !line.plannedYear
+    || !compareYear
     || !nowYear
     || !nowWeek
-    || compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) >= 0
+    || compareIsoWeek(compareYear, compareWeek, nowYear, nowWeek) >= 0
   ) return null;
-  const days = calendarDaysBetween(now, line.plannedDate);
+  const days = calendarDaysBetween(now, compareDate);
   return days !== null && days > 0 ? days : null;
 }
 
-function visitUniverseLine(acc, line, nowYear, nowWeek) {
+function visitUniverseLine(acc, line, nowYear, nowWeek, planningDate = 'requested') {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
-  if (isSentinelDate(line.plannedDate)) {
+  const compareDate = planningDate === 'confirmed' ? line.confirmedDate : line.plannedDate;
+  const confirmedMissing = planningDate === 'confirmed' && (!compareDate || isSentinelDate(compareDate));
+  if (confirmedMissing || isSentinelDate(compareDate)) {
     const qty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
     if (qty > 0) {
       acc.planned1900Units += qty;
       addSku(acc.planned1900Skus, itemNumber);
     }
   }
-  if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
-    const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
+  if (confirmedMissing) return;
+  if (line.deliveredQty > 0 && line.receiptDate && compareDate) {
+    const days = calendarDaysBetween(line.receiptDate, compareDate);
     if (days > 0) {
       acc.lateDeliveryDays.push(days);
       acc.lateDeliveryUnits += line.deliveredQty;
@@ -88,7 +93,7 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
       addSku(acc.onTimeSkus, itemNumber);
     }
   }
-  const openDays = openLateDays(line, acc.now, nowYear, nowWeek);
+  const openDays = openLateDays(line, acc.now, nowYear, nowWeek, compareDate);
   if (openDays !== null) {
     acc.openLateDays.push(openDays);
     acc.openLateUnits += line.openQty;
@@ -159,7 +164,7 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
       if (sku) entry.onTimeSkus.add(sku);
     }
   }
-  const days = openLateDays(line, now, nowYear, nowWeek);
+  const days = openLateDays(line, now, nowYear, nowWeek, line.plannedDate);
   if (days !== null) {
     entry.openLateSum += days;
     entry.openLateCount += 1;
@@ -173,6 +178,7 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
+  const confirmedKey = String(config.confirmedDateColumnKey || '').trim();
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
   const slotWindow = skipWindow ? WIDE_WINDOW : window;
@@ -205,12 +211,14 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
       if (!(openQty > 0 || deliveredQty > 0)) return;
       const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
       const receiptDate = utcDayValue(rawReceipt) === null ? null : rawReceipt;
+      const confirmedDate = confirmedKey ? lineDateValue(lineValues, masterValues, confirmedKey) : null;
       onLine({
         poNumber,
         itemNumber: pickValue(lineValues, 'itemNumber') ?? pickValue(masterValues, 'itemNumber'),
         openQty: Math.max(0, openQty),
         deliveredQty: Math.max(0, deliveredQty),
         plannedDate,
+        confirmedDate,
         receiptDate,
         plannedYear,
         plannedWeek,
@@ -273,25 +281,25 @@ function summarizeAcc(acc) {
   };
 }
 
-function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow = false } = {}) {
+function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow = false, planningDate = 'requested' } = {}) {
   const nowYear = getIsoWeekYear(now);
   const nowWeek = getIsoWeek(now);
   const acc = emptyAcc(now);
   walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow }, (line) => {
-    visitUniverseLine(acc, line, nowYear, nowWeek);
+    visitUniverseLine(acc, line, nowYear, nowWeek, planningDate);
   });
   return summarizeAcc(acc);
 }
 
-function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount } = {}) {
+function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount, planningDate = 'requested' } = {}) {
   const nowYear = getIsoWeekYear(now);
   const nowWeek = getIsoWeek(now);
   const accWindow = emptyAcc(now);
   const accAll = emptyAcc(now);
   walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow: true }, (line) => {
-    visitUniverseLine(accAll, line, nowYear, nowWeek);
+    visitUniverseLine(accAll, line, nowYear, nowWeek, planningDate);
     if (line.plannedYear && line.plannedWeek && isIsoWeekInWindow(line.plannedYear, line.plannedWeek, window)) {
-      visitUniverseLine(accWindow, line, nowYear, nowWeek);
+      visitUniverseLine(accWindow, line, nowYear, nowWeek, planningDate);
     }
   });
   return { windowed: summarizeAcc(accWindow), all: summarizeAcc(accAll) };
