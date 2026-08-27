@@ -235,7 +235,7 @@ export function usePurchaseOrderBoardView({
       filterByColumn: tableState.filterByColumn,
       sortState: tableState.sortState,
       grouping: grouping.exportState(),
-      columnSumKeys: columnSums.columnSumKeys,
+      columnSumKeys: columnSums.exportKeys(),
     };
   }, [activityFilter, columnSums.columnSumKeys, tableView, grouping]);
 

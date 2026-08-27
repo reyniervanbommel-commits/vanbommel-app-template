@@ -133,6 +133,22 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.columnSums.summedValuesByColumn).toEqual({ amount: 30 });
   });
 
+  it('keeps columnSumKeys when a filter overlay is applied in the same tick', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyFilterSortGrouping({ columnSumKeys: ['amount'] });
+      const exported = result.current.exportFilterSortGrouping();
+      result.current.applyFilterSortGrouping({
+        ...exported,
+        filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+      });
+    });
+
+    expect(result.current.columnSums.columnSumKeys).toEqual(['amount']);
+    expect(result.current.filterByColumn.status.value).toBe('Open');
+  });
+
   it('drops unknown columnSumKeys from an old or stale view', () => {
     const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
 
