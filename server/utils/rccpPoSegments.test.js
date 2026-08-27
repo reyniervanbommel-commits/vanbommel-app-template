@@ -34,7 +34,8 @@ describe('buildPoSegments', () => {
   function row(overrides = {}) {
     return {
       recordKey: 'PO-A',
-      values: { vendorAccount: 'V001', status: 'Open', ...(overrides.values || {}) },
+      partitionKey: 'whsl',
+      values: { vendorAccount: 'V001', status: 'Open', dataAreaId: 'whsl', ...(overrides.values || {}) },
       details: overrides.details || [{
         detailKey: '1',
         values: {
@@ -42,9 +43,16 @@ describe('buildPoSegments', () => {
           productReceiptDate: received,
           openQty: 10,
           deliveredQty: 4,
+          itemNumber: 'SKU-1',
           ...(overrides.line || {}),
         },
       }],
+    };
+  }
+
+  function seg(itemNumber, qty, status, late) {
+    return {
+      itemNumber, qty, status, late, dataAreaId: 'whsl',
     };
   }
 
@@ -53,11 +61,11 @@ describe('buildPoSegments', () => {
     const above = byWeek.get(plannedWeek.key).segmentsAbove;
     const below = byWeek.get(receivedWeek.key).segmentsBelow;
     expect(above).toEqual([
-      { poNumber: 'PO-A', qty: 4, status: 'received', late: false },
-      { poNumber: 'PO-A', qty: 10, status: 'open', late: false },
+      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 10, 'open', false),
     ]);
     expect(below).toEqual([
-      { poNumber: 'PO-A', qty: 4, status: 'received', late: false },
+      seg('SKU-1', 4, 'received', false),
     ]);
     expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
   });
@@ -68,7 +76,7 @@ describe('buildPoSegments', () => {
       now: nowCurrent,
     });
     expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([
-      { poNumber: 'PO-A', qty: 4, status: 'received', late: false },
+      seg('SKU-1', 4, 'received', false),
     ]);
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([]);
   });
@@ -96,35 +104,45 @@ describe('buildPoSegments', () => {
     };
     const byWeek = buildPoSegments([row()], baseConfig, clipWindow, { now: nowCurrent });
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([
-      { poNumber: 'PO-A', qty: 4, status: 'received', late: false },
+      seg('SKU-1', 4, 'received', false),
     ]);
     expect(byWeek.get(receivedWeek.key).segmentsAbove).toEqual([]);
     expect(byWeek.has(plannedWeek.key)).toBe(false);
   });
 
   it('filters other vendors when vendorAccount is set', () => {
-    const other = row({ values: { vendorAccount: 'V999' } });
+    const other = row({ values: { vendorAccount: 'V999' }, line: { itemNumber: 'SKU-X' } });
     other.recordKey = 'PO-X';
     const byWeek = buildPoSegments([row(), other], baseConfig, window, {
       now: nowCurrent,
       vendorAccount: 'V001',
     });
-    const pos = byWeek.get(plannedWeek.key).segmentsAbove.map((s) => s.poNumber);
-    expect(pos).not.toContain('PO-X');
-    expect(pos).toContain('PO-A');
+    const items = byWeek.get(plannedWeek.key).segmentsAbove.map((s) => s.itemNumber);
+    expect(items).not.toContain('SKU-X');
+    expect(items).toContain('SKU-1');
   });
 
-  it('sorts PO numbers and stacks received against the axis then open', () => {
-    const b = row();
+  it('sorts unique items and stacks received against the axis then open', () => {
+    const b = row({ line: { itemNumber: 'SKU-B' } });
     b.recordKey = 'PO-B';
-    const a = row();
+    const a = row({ line: { itemNumber: 'SKU-A' } });
     a.recordKey = 'PO-A';
     const byWeek = buildPoSegments([b, a], baseConfig, window, { now: nowCurrent });
-    expect(byWeek.get(plannedWeek.key).segmentsAbove.map((s) => `${s.poNumber}:${s.status}`)).toEqual([
-      'PO-A:received',
-      'PO-A:open',
-      'PO-B:received',
-      'PO-B:open',
+    expect(byWeek.get(plannedWeek.key).segmentsAbove.map((s) => `${s.itemNumber}:${s.status}`)).toEqual([
+      'SKU-A:received',
+      'SKU-A:open',
+      'SKU-B:received',
+      'SKU-B:open',
+    ]);
+  });
+
+  it('merges the same item from different POs into one segment', () => {
+    const second = row();
+    second.recordKey = 'PO-B';
+    const byWeek = buildPoSegments([row(), second], baseConfig, window, { now: nowCurrent });
+    expect(byWeek.get(plannedWeek.key).segmentsAbove).toEqual([
+      seg('SKU-1', 8, 'received', false),
+      seg('SKU-1', 20, 'open', false),
     ]);
   });
 
@@ -134,6 +152,24 @@ describe('buildPoSegments', () => {
     });
     expect(byWeek.get(plannedWeek.key).segmentsAbove).toEqual([]);
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([]);
+  });
+
+  it('uses the order partitionKey even when the line has another dataAreaId', () => {
+    const byWeek = buildPoSegments(
+      [row({ line: { dataAreaId: 'not-a-company-code' } })],
+      baseConfig,
+      window,
+      { now: nowCurrent },
+    );
+    expect(byWeek.get(plannedWeek.key).segmentsAbove[0].dataAreaId).toBe('whsl');
+  });
+
+  it('falls back to values.dataAreaId when partitionKey is empty', () => {
+    const orphan = row();
+    orphan.partitionKey = '';
+    orphan.values.dataAreaId = 'nl01';
+    const byWeek = buildPoSegments([orphan], baseConfig, window, { now: nowCurrent });
+    expect(byWeek.get(plannedWeek.key).segmentsAbove[0].dataAreaId).toBe('nl01');
   });
 
   it('merges segments onto existing chart points', () => {

@@ -5,6 +5,13 @@ import {
 
 export const RCCP_PO_BAR_SIZE = Math.round(RCCP_WEEK_COL_WIDTH * 0.8);
 
+/** Center a bar of `barWidth` inside the ISO-week band at `index`. */
+export function weekBarBox(index, barWidth) {
+  const bandX = RCCP_CHART_Y_AXIS_WIDTH + Number(index) * RCCP_WEEK_COL_WIDTH;
+  const width = Math.min(Math.max(0, Number(barWidth) || 0), RCCP_WEEK_COL_WIDTH);
+  return { x: bandX + (RCCP_WEEK_COL_WIDTH - width) / 2, width };
+}
+
 function utcDayDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -28,11 +35,48 @@ export function isoWeekPartsUtc(date) {
  * `null` when the current ISO week is not in `periods`.
  */
 export function todayLineX(periods, now = new Date()) {
+  const band = todayBand(periods, now);
+  return band ? band.todayX : null;
+}
+
+/**
+ * Current-period highlight: full column band plus the today line inside it.
+ * `null` when the current period is outside the window.
+ */
+export function todayBand(periods, now = new Date()) {
   if (!Array.isArray(periods) || !periods.length) return null;
-  const parts = isoWeekPartsUtc(now);
-  const index = periods.findIndex((period) => period.key === parts.key);
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  let index = -1;
+  let fraction = 0.5;
+  if (periods[0].month) {
+    const year = utc.getUTCFullYear();
+    const month = utc.getUTCMonth() + 1;
+    index = periods.findIndex((period) => period.year === year && period.month === month);
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    fraction = (utc.getUTCDate() - 0.5) / daysInMonth;
+  } else {
+    const parts = isoWeekPartsUtc(now);
+    index = periods.findIndex((period) => period.key === parts.key);
+    fraction = (parts.weekday - 0.5) / 7;
+  }
   if (index < 0) return null;
-  return RCCP_CHART_Y_AXIS_WIDTH + (index + (parts.weekday - 0.5) / 7) * RCCP_WEEK_COL_WIDTH;
+  const bandX = RCCP_CHART_Y_AXIS_WIDTH + index * RCCP_WEEK_COL_WIDTH;
+  return {
+    index,
+    bandX,
+    bandWidth: RCCP_WEEK_COL_WIDTH,
+    todayX: bandX + fraction * RCCP_WEEK_COL_WIDTH,
+  };
+}
+
+/** True when a matrix/chart period column is the current ISO week or calendar month. */
+export function isCurrentMatrixPeriod(period, now = new Date()) {
+  if (!period) return false;
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  if (period.month) {
+    return period.year === utc.getUTCFullYear() && Number(period.month) === utc.getUTCMonth() + 1;
+  }
+  return period.key === isoWeekPartsUtc(now).key;
 }
 
 /**
@@ -65,14 +109,14 @@ export function stackRectLayout(segments, barY, barHeight, side) {
 }
 
 /**
- * Received-vakjes van dezelfde PO (boven én onder de as) horen bij elkaar.
- * @param {{ status?: string, poNumber?: string }} segment
- * @param {string} highlightPo
+ * Received-vakjes van hetzelfde item (boven én onder de as) horen bij elkaar.
+ * @param {{ status?: string, itemNumber?: string }} segment
+ * @param {string} highlightItem
  */
-export function isReceivedPairHighlight(segment, highlightPo) {
+export function isReceivedPairHighlight(segment, highlightItem) {
   return Boolean(
-    highlightPo
+    highlightItem
     && segment?.status === 'received'
-    && segment.poNumber === highlightPo
+    && segment.itemNumber === highlightItem
   );
 }

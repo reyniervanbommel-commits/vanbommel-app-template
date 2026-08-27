@@ -1,11 +1,15 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import { RccpPoSegmentHoverCard } from './RccpPoSegmentTooltip';
+import {
+  RccpPoSegmentHoverCard,
+  firstChartDataAreaId,
+  isSameRccpHover,
+} from './RccpPoSegmentTooltip';
 import RccpChartPlot from './RccpChartPlot';
 import { RccpSegmentHoverContext } from './RccpPoStackBar';
 import { getRgbHex } from '../../utils/hexColor';
-import { todayLineX } from './rccpPoStack';
+import { todayBand, RCCP_PO_BAR_SIZE } from './rccpPoStack';
 import {
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
@@ -14,6 +18,7 @@ import {
   RCCP_WEEK_COL_WIDTH,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
+import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
@@ -49,14 +54,20 @@ function RccpChartMatrixPanel({
   chartHeight = 240,
   onCellClick,
   interactive = false,
+  visibility = null,
 }) {
   const styles = useStyles();
+  const orderedRows = useMemo(() => sortRccpMatrixRows(measureRows), [measureRows]);
+  const matrixRows = useMemo(
+    () => orderedRows.filter((row) => !row.isWarning),
+    [orderedRows],
+  );
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
   const gridWidth = useMemo(
-    () => measureRows.length && periodHeaders.length
+    () => matrixRows.length && periodHeaders.length
       ? RCCP_ROW_LABEL_WIDTH + periodHeaders.length * RCCP_WEEK_COL_WIDTH
       : 0,
-    [measureRows.length, periodHeaders.length],
+    [matrixRows.length, periodHeaders.length],
   );
   const chartRangeBands = useMemo(
     () => (chartWeekRanges || [])
@@ -73,29 +84,55 @@ function RccpChartMatrixPanel({
 
   const [visibleKeys, setVisibleKeys] = useState({});
   const [hoveredSegment, setHoveredSegment] = useState(null);
+  const hoverBoxRef = useRef(null);
+  const hydratedRef = useRef(false);
+  const fallbackDataAreaId = useMemo(() => firstChartDataAreaId(chart), [chart]);
 
   useEffect(() => {
-    setVisibleKeys(measureRows.reduce((acc, row) => {
-      acc[row.measureKey] = row.showInChart !== false;
-      return acc;
-    }, {}));
-  }, [measureRows]);
+    const ready = !visibility || visibility.ready !== false;
+    if (!ready) {
+      hydratedRef.current = false;
+      setVisibleKeys(mergeChartVisibleKeys(orderedRows, {}, {}));
+      return;
+    }
+    const preferStored = Boolean(visibility) && !hydratedRef.current;
+    hydratedRef.current = true;
+    setVisibleKeys((prev) => mergeChartVisibleKeys(
+      orderedRows,
+      prev,
+      visibility?.savedKeys || {},
+      { preferStored },
+    ));
+  }, [orderedRows, visibility, visibility?.savedKeys, visibility?.ready]);
 
   const handleToggle = useCallback((measureKey, checked) => {
-    setVisibleKeys((prev) => ({ ...prev, [measureKey]: checked }));
-  }, []);
+    setVisibleKeys((prev) => {
+      const next = { ...prev, [measureKey]: checked };
+      visibility?.onChange?.(next);
+      return next;
+    });
+  }, [visibility]);
   const handleSegmentHover = useCallback((next) => {
-    setHoveredSegment(next);
+    if (!next) {
+      setHoveredSegment(null);
+      return;
+    }
+    if (hoverBoxRef.current) {
+      hoverBoxRef.current.style.left = `${next.x + 12}px`;
+      hoverBoxRef.current.style.top = `${next.y + 12}px`;
+    }
+    setHoveredSegment((prev) => (isSameRccpHover(prev, next) ? prev : next));
   }, []);
+  const highlightItem = hoveredSegment?.segment?.status === 'received'
+    ? (hoveredSegment.segment.itemNumber || '')
+    : '';
   const hoverValue = useMemo(() => ({
     onHover: handleSegmentHover,
-    highlightPo: hoveredSegment?.segment?.status === 'received'
-      ? hoveredSegment.segment.poNumber
-      : '',
-  }), [handleSegmentHover, hoveredSegment]);
+    highlightItem,
+  }), [handleSegmentHover, highlightItem]);
 
-  const openRow = useMemo(() => measureRows.find((row) => row.isOpen), [measureRows]);
-  const deliveredRow = useMemo(() => measureRows.find((row) => row.isDelivered), [measureRows]);
+  const openRow = useMemo(() => orderedRows.find((row) => row.isOpen), [orderedRows]);
+  const deliveredRow = useMemo(() => orderedRows.find((row) => row.isDelivered), [orderedRows]);
   const receivedColor = useMemo(
     () => getRgbHex(deliveredRow?.color) || '#0078D4',
     [deliveredRow],
@@ -106,6 +143,11 @@ function RccpChartMatrixPanel({
   );
   const openVisible = Boolean(openRow && visibleKeys[openRow.measureKey]);
   const deliveredVisible = Boolean(deliveredRow && visibleKeys[deliveredRow.measureKey]);
+
+  const activeRows = useMemo(
+    () => orderedRows.filter((row) => visibleKeys[row.measureKey] && !isStackRow(row)),
+    [orderedRows, visibleKeys],
+  );
 
   const chartRows = useMemo(() => (chart || []).map((point) => {
     const segmentsAbove = (point.segmentsAbove || []).filter((seg) => (
@@ -120,14 +162,11 @@ function RccpChartMatrixPanel({
       __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
       __openColor: openColor,
       __receivedColor: receivedColor,
+      __barWidthAbove: RCCP_PO_BAR_SIZE,
+      __barWidthBelow: RCCP_PO_BAR_SIZE,
     };
   }), [chart, openVisible, deliveredVisible, openColor, receivedColor]);
-
-  const todayX = useMemo(() => todayLineX(periodHeaders), [periodHeaders]);
-  const activeRows = useMemo(
-    () => measureRows.filter((row) => visibleKeys[row.measureKey] && !isStackRow(row)),
-    [measureRows, visibleKeys],
-  );
+  const todayMarker = useMemo(() => todayBand(periodHeaders), [periodHeaders]);
   const seriesSignature = useMemo(
     () => `${activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|')}|${openVisible}|${deliveredVisible}`,
     [activeRows, openVisible, deliveredVisible],
@@ -158,13 +197,17 @@ function RccpChartMatrixPanel({
             <RccpChartPlot
               plot={plot}
               stack={stack}
-              todayX={todayX}
+              todayMarker={todayMarker}
             />
           </RccpSegmentHoverContext.Provider>
-          <RccpPoSegmentHoverCard hover={hoveredSegment} />
+          <RccpPoSegmentHoverCard
+            hover={hoveredSegment}
+            boxRef={hoverBoxRef}
+            fallbackDataAreaId={fallbackDataAreaId}
+          />
         </div>
         <RccpMatrixTable
-          measureRows={measureRows.filter((r) => !r.isWarning)}
+          measureRows={matrixRows}
           periods={periods}
           cellMap={cellMap}
           visibleKeys={visibleKeys}

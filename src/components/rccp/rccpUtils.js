@@ -22,6 +22,24 @@ export function formatMatrixWeekLabel(week) {
   return String(week).padStart(2, '0');
 }
 
+/** Matrix column: short English month (Jan, Feb, …). */
+export function formatMatrixMonthLabel(month) {
+  return new Date(Date.UTC(2026, (Number(month) || 1) - 1, 1)).toLocaleDateString('en-GB', {
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+export function formatMatrixPeriodAria(period) {
+  if (period?.month) return `${formatMatrixMonthLabel(period.month)} ${period.year}`;
+  return formatWeekLabel(period?.year, period?.week);
+}
+
+/** Cell-map token: calendar month in month view, ISO week otherwise. */
+export function matrixPeriodToken(period) {
+  return period?.month || period?.week;
+}
+
 /** Monday 00:00 UTC of the given ISO week. */
 export function isoWeekStartUtc(year, week) {
   const jan4 = new Date(Date.UTC(year, 0, 4));
@@ -66,21 +84,45 @@ export function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   return aWeek - bWeek;
 }
 
-/**
- * @param {{ year: number, week: number, key: string }[]} periods
- * @returns {{ year: number, week: number, key: string, weekLabel: string, mondayLabel: string, yearLabel: string }[]}
- */
+function formatRolledWeekSpan(fromWeek, toWeek) {
+  if (!fromWeek || !toWeek) return '';
+  const from = formatMatrixWeekLabel(fromWeek);
+  const to = formatMatrixWeekLabel(toWeek);
+  return from === to ? `W${from}` : `W${from}–W${to}`;
+}
+
+/** Matrix column headers for ISO weeks or rolled-up calendar months. */
 export function buildMatrixPeriodHeaders(periods) {
   if (!Array.isArray(periods) || !periods.length) return [];
   const spansYears = periods[0].year !== periods[periods.length - 1].year;
-  return periods.map((period, index) => ({
-    ...period,
-    weekLabel: formatMatrixWeekLabel(period.week),
-    mondayLabel: formatIsoWeekMondayLabel(period.year, period.week),
-    yearLabel: spansYears && (index === 0 || period.year !== periods[index - 1].year)
-      ? String(period.year)
-      : '',
-  }));
+  return periods.map((period, index) => {
+    const isMonth = Boolean(period.month);
+    return {
+      ...period,
+      weekLabel: isMonth
+        ? formatMatrixMonthLabel(period.month)
+        : formatMatrixWeekLabel(period.week),
+      mondayLabel: isMonth
+        ? formatRolledWeekSpan(period.week, period.lastWeek)
+        : formatIsoWeekMondayLabel(period.year, period.week),
+      yearLabel: spansYears && (index === 0 || period.year !== periods[index - 1].year)
+        ? String(period.year)
+        : '',
+    };
+  });
+}
+
+function periodEndYear(period) {
+  return period.lastYear || period.year;
+}
+
+function periodEndWeek(period) {
+  return period.lastWeek || period.week;
+}
+
+function periodOverlapsWeekRange(period, range) {
+  return compareIsoWeek(periodEndYear(period), periodEndWeek(period), range.fromYear, range.fromWeek) >= 0
+    && compareIsoWeek(period.year, period.week, range.toYear, range.toWeek) <= 0;
 }
 
 /**
@@ -90,15 +132,12 @@ export function buildMatrixPeriodHeaders(periods) {
 export function resolveChartWeekRangeBounds(range, periods) {
   if (!range || !Array.isArray(periods) || !periods.length) return null;
 
-  const startIdx = periods.findIndex(
-    (period) => compareIsoWeek(period.year, period.week, range.fromYear, range.fromWeek) >= 0,
-  );
+  const startIdx = periods.findIndex((period) => periodOverlapsWeekRange(period, range));
   if (startIdx < 0) return null;
 
   let endIdx = -1;
   for (let index = periods.length - 1; index >= 0; index -= 1) {
-    const period = periods[index];
-    if (compareIsoWeek(period.year, period.week, range.toYear, range.toWeek) <= 0) {
+    if (periodOverlapsWeekRange(periods[index], range)) {
       endIdx = index;
       break;
     }

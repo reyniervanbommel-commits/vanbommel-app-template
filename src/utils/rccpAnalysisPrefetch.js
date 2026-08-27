@@ -11,6 +11,7 @@ const cache = new Map();
 
 function cacheKey(window, vendorAccount) {
   return [
+    'rccp-analysis-v2',
     vendorAccount,
     window.fromYear, window.fromWeek, window.toYear, window.toWeek,
   ].join('|');

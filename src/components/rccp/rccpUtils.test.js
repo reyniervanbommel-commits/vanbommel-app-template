@@ -31,6 +31,15 @@ describe('matrix period headers', () => {
     expect(headers[0].yearLabel).toBe('2026');
     expect(headers[1].yearLabel).toBe('2027');
   });
+
+  it('shows short month names and the rolled-up week span', () => {
+    const headers = buildMatrixPeriodHeaders([
+      { year: 2026, week: 10, lastWeek: 13, month: 3, key: '2026-M03' },
+    ]);
+    expect(headers[0].weekLabel).toBe('Mar');
+    expect(headers[0].mondayLabel).toBe('W10–W13');
+    expect(headers[0].yearLabel).toBe('');
+  });
 });
 
 describe('resolveChartWeekRangeBounds', () => {
@@ -65,6 +74,26 @@ describe('resolveChartWeekRangeBounds', () => {
       toWeek: 2,
       color: '#579bfc',
     }, periods)).toBeNull();
+  });
+
+  it('maps a week range onto overlapping month columns', () => {
+    const months = [
+      { year: 2026, week: 10, lastWeek: 13, month: 3, key: '2026-M03' },
+      { year: 2026, week: 14, lastWeek: 17, month: 4, key: '2026-M04' },
+    ];
+    const bounds = resolveChartWeekRangeBounds({
+      fromYear: 2026,
+      fromWeek: 13,
+      toYear: 2026,
+      toWeek: 14,
+      color: '#00c875',
+    }, months);
+    expect(bounds).toEqual({
+      x1: '2026-M03',
+      x2: '2026-M04',
+      color: '#00c875',
+      label: undefined,
+    });
   });
 });
 

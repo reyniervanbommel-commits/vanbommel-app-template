@@ -5,6 +5,7 @@ import {
 import { makeStyles, tokens } from '@fluentui/react-components';
 import RccpWeekBandCursor from './RccpWeekBandCursor';
 import { RccpPoStackBarAbove, RccpPoStackBarBelow } from './RccpPoStackBar';
+import { brandColor } from '../../styles/brandTokens';
 import { RCCP_PO_BAR_SIZE } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WARNING_MEASURE_KEY } from './rccpUtils';
 
@@ -25,7 +26,7 @@ function renderStackBelow(props) {
   return <RccpPoStackBarBelow {...props} />;
 }
 
-function RccpChartPlot({ plot, stack, todayX }) {
+function RccpChartPlot({ plot, stack, todayMarker }) {
   const styles = useStyles();
   const {
     data, width, height, compact, weekBoundaryCoordinates, chartRangeBands, activeRows,
@@ -33,6 +34,9 @@ function RccpChartPlot({ plot, stack, todayX }) {
   const {
     openVisible, deliveredVisible, openRow, deliveredRow, receivedColor,
   } = stack;
+  const legendPad = compact ? 28 : 36;
+  const plotBottom = Math.max(24, height - legendPad);
+  const labelOnRight = todayMarker?.todayX != null && (todayMarker.todayX + 48) < width;
 
   return (
     <div className={styles.plot} style={{ width, height }}>
@@ -41,6 +45,8 @@ function RccpChartPlot({ plot, stack, todayX }) {
         height={height}
         data={data}
         margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+        barCategoryGap={0}
+        barGap={0}
       >
         <CartesianGrid
           stroke={tokens.colorNeutralStroke2}
@@ -118,16 +124,38 @@ function RccpChartPlot({ plot, stack, todayX }) {
           )
         ))}
       </ComposedChart>
-      {todayX != null && (
-        <svg className={styles.todaySvg} width={width} height={height} aria-hidden>
-          <line
-            x1={todayX}
-            x2={todayX}
-            y1={8}
-            y2={height - 8}
-            stroke={tokens.colorNeutralForeground2}
-            strokeWidth={1.5}
+      {todayMarker?.todayX != null && (
+        <svg className={styles.todaySvg} width={width} height={plotBottom} aria-hidden>
+          <rect
+            x={todayMarker.bandX}
+            y={8}
+            width={todayMarker.bandWidth}
+            height={Math.max(0, plotBottom - 16)}
+            fill={brandColor.navyMid}
+            fillOpacity={0.14}
           />
+          <line
+            x1={todayMarker.todayX}
+            x2={todayMarker.todayX}
+            y1={8}
+            y2={plotBottom - 8}
+            stroke={brandColor.navyMid}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+          />
+          <text
+            x={todayMarker.todayX + (labelOnRight ? 6 : -6)}
+            y={18}
+            textAnchor={labelOnRight ? 'start' : 'end'}
+            fill={brandColor.navyMid}
+            fontSize="11"
+            fontWeight="600"
+            stroke={tokens.colorNeutralBackground1}
+            strokeWidth="3"
+            paintOrder="stroke"
+          >
+            Today
+          </text>
         </svg>
       )}
     </div>

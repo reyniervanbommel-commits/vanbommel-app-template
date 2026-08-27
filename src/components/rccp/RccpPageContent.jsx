@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Settings24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -6,6 +6,11 @@ import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
 import { useRccpVendorPrefetch } from '../../hooks/useRccpVendorPrefetch';
 import { resolveRccpDashboardKpis } from './rccpUtils';
+import {
+  RCCP_PERIOD_GRAIN_MONTH,
+  RCCP_PERIOD_GRAIN_WEEK,
+  resolveRccpChartView,
+} from './rccpPeriodGrain';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpMissingDateCard from './RccpMissingDateCard';
@@ -56,9 +61,9 @@ export default function RccpPageContent() {
   const hasVendor = isSupplier || Boolean(vendorAccount);
   const {
     window, setWindow, windowLoaded, lastVendor, setLastVendor,
-    kpiWindowOnly, setKpiWindowOnly,
+    kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
     analysis, loading, error, readOnly,
-    measureRows, periods, cellMap, reload,
+    measureRows, periods, cells, reload,
   } = useRccpPage({
     vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
     enabled: hasVendor,
@@ -93,11 +98,29 @@ export default function RccpPageContent() {
   const handleHighlightVendor = useRccpVendorPrefetch(window);
 
   const [drillCell, setDrillCell] = useState(null);
+  const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
   const capacityReloadRef = useRef(null);
 
   const handleWindowChange = useCallback((field, value) => {
     setWindow((prev) => ({ ...prev, [field]: Number(value) }));
   }, [setWindow]);
+
+  const handlePeriodGrainChange = useCallback((value) => {
+    setPeriodGrain(value === RCCP_PERIOD_GRAIN_MONTH ? RCCP_PERIOD_GRAIN_MONTH : RCCP_PERIOD_GRAIN_WEEK);
+  }, []);
+
+  const chartVisibility = useMemo(() => ({
+    savedKeys: chartVisibleKeys,
+    onChange: setChartVisibleKeys,
+    ready: windowLoaded,
+  }), [chartVisibleKeys, setChartVisibleKeys, windowLoaded]);
+
+  const chartView = useMemo(() => resolveRccpChartView({
+    grain: periodGrain,
+    periods,
+    chart: analysis?.chart,
+    cells,
+  }), [periodGrain, periods, analysis?.chart, cells]);
 
   const handleCellClick = useCallback((cell) => {
     if (cell) setDrillCell(cell);
@@ -157,6 +180,8 @@ export default function RccpPageContent() {
             onWindowChange={handleWindowChange}
             kpiWindowOnly={kpiWindowOnly}
             onKpiWindowOnlyChange={setKpiWindowOnly}
+            periodGrain={periodGrain}
+            onPeriodGrainChange={handlePeriodGrainChange}
           />
         )}
         <Button icon={<ArrowClockwise24Regular />} onClick={handleRefresh}>Refresh</Button>
@@ -180,13 +205,14 @@ export default function RccpPageContent() {
             <>
               <RccpKpiCards kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)} />
               <RccpChartMatrixPanel
-                chart={analysis.chart}
+                chart={chartView.chart}
                 measureRows={measureRows}
-                periods={periods}
-                cellMap={cellMap}
+                periods={chartView.periods}
+                cellMap={chartView.cellMap}
                 chartWeekRanges={analysis.config?.chartWeekRanges}
                 onCellClick={handleCellClick}
-                interactive
+                interactive={periodGrain === RCCP_PERIOD_GRAIN_WEEK}
+                visibility={chartVisibility}
               />
               {(resolveRccpDashboardKpis(analysis, kpiWindowOnly)?.totalOrdered === 0) && (
                 <RccpDiagnosticsCard

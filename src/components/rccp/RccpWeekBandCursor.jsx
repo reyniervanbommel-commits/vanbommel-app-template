@@ -1,22 +1,25 @@
 import React from 'react';
 import { tokens } from '@fluentui/react-components';
-import { RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 
 /**
- * Tooltip cursor: vertical line at ISO week start (aligned with chart grid).
+ * Tooltip cursor: vertical line at the centre of the hovered period.
  * Recharts spreads chart offset as top-level left/top/height props — not as `offset`.
  */
-export function RccpWeekBandCursor(props) {
-  const { points, left, top, height } = props;
-  if (!points?.length || top == null || height == null) return null;
+export function hoverCursorX(points) {
+  if (!points?.length) return null;
+  return points[0].x;
+}
 
-  const weekStartX = points[0].x - RCCP_WEEK_COL_WIDTH / 2;
+export function RccpWeekBandCursor(props) {
+  const { points, top, height } = props;
+  const x = hoverCursorX(points);
+  if (x == null || top == null || height == null) return null;
 
   return (
     <line
-      x1={weekStartX}
+      x1={x}
       y1={top}
-      x2={weekStartX}
+      x2={x}
       y2={top + height}
       stroke={tokens.colorNeutralStroke1}
       strokeWidth={1.5}
