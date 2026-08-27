@@ -97,9 +97,6 @@ describe('rccpKpis', () => {
     expect(kpis.onTimeItemCount).toBe(1);
     expect(kpis.onTimeUnits).toBe(4);
     expect(kpis.onTimePercent).toBeCloseTo(4 / 14 * 100);
-    expect(kpis.deliveryReliabilityPercent).toBeCloseTo(100);
-    expect(kpis.validPlannedUnits).toBe(14);
-    expect(kpis.validPlannedPercent).toBeCloseTo(100);
   });
 
   it('does not count delivered quantity as on time without a real receipt date', () => {
@@ -151,9 +148,6 @@ describe('rccpKpis', () => {
     expect(all.planned1900Units).toBe(8);
     expect(all.planned1900ItemCount).toBe(1);
     expect(all.totalOrdered).toBe(8);
-    expect(all.validPlannedUnits).toBe(0);
-    expect(all.validPlannedPercent).toBe(0);
-    expect(all.deliveryReliabilityPercent).toBe(0);
 
     const byOrder = buildRccpPoKpiByOrder([sentinel], baseConfig, {
       now: nowCurrent,

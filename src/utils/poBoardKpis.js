@@ -12,8 +12,6 @@ export const PO_BOARD_CLICKABLE_KPI_KEYS = [
   'onTime',
   'openLate',
   'planned1900',
-  'validDates',
-  'deliveryReliability',
 ];
 
 function percentOf(part, whole) {
@@ -31,8 +29,6 @@ function emptyMatchByKey() {
     onTime: new Set(),
     openLate: new Set(),
     planned1900: new Set(),
-    validDates: new Set(),
-    deliveryReliability: new Set(),
   };
 }
 
@@ -44,17 +40,11 @@ function addIndexedSkus(target, sku, indexes) {
 }
 
 function kpiQtyFamily(kpiKey) {
-  if (
-    kpiKey === 'onTime'
-    || kpiKey === 'deliveryReliability'
-    || kpiKey === 'lateDelivery'
-    || kpiKey === 'lateItems'
-    || kpiKey === 'delivered'
-  ) {
+  if (kpiKey === 'onTime' || kpiKey === 'lateDelivery' || kpiKey === 'lateItems' || kpiKey === 'delivered') {
     return 'delivered';
   }
   if (kpiKey === 'open' || kpiKey === 'openLate') return 'open';
-  if (kpiKey === 'ordered' || kpiKey === 'planned1900' || kpiKey === 'validDates') return 'ordered';
+  if (kpiKey === 'ordered' || kpiKey === 'planned1900') return 'ordered';
   return null;
 }
 
@@ -74,13 +64,13 @@ export function isKpiQtyOverlayColumn(columnKey, kpiKey) {
 
 export function kpiQtyForKey(entry, kpiKey) {
   if (!entry) return null;
-  if (kpiKey === 'onTime' || kpiKey === 'deliveryReliability') return Number(entry.tu) || 0;
+  if (kpiKey === 'onTime') return Number(entry.tu) || 0;
   if (kpiKey === 'lateDelivery' || kpiKey === 'lateItems') return Number(entry.lu) || 0;
   if (kpiKey === 'open') return Number(entry.o) || 0;
   if (kpiKey === 'openLate') return Number(entry.ou) || 0;
   if (kpiKey === 'delivered') return Number(entry.d) || 0;
   if (kpiKey === 'ordered') return (Number(entry.o) || 0) + (Number(entry.d) || 0);
-  if (kpiKey === 'planned1900' || kpiKey === 'validDates') return Number(entry.yu) || 0;
+  if (kpiKey === 'planned1900') return Number(entry.yu) || 0;
   return null;
 }
 
@@ -160,7 +150,6 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       onTimeUnits += Number(entry.tu) || 0;
       addIndexedSkus(onTimeSkus, sku, entry.tk);
       matchByKey.onTime.add(orderNumber);
-      matchByKey.deliveryReliability.add(orderNumber);
     }
     if (entry.on) {
       openLateSum += Number(entry.os) || 0;
@@ -173,12 +162,10 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       planned1900Units += Number(entry.yu) || 0;
       addIndexedSkus(planned1900Skus, sku, entry.yk);
       matchByKey.planned1900.add(orderNumber);
-      matchByKey.validDates.add(orderNumber);
     }
   }
 
   const totalOrdered = totalOpen + totalDelivered;
-  const validPlannedUnits = Math.max(0, totalOrdered - planned1900Units);
   return {
     kpis: {
       totalOrdered,
@@ -199,9 +186,6 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,
       planned1900Units,
       planned1900ItemCount: planned1900Skus.size,
-      validPlannedUnits,
-      validPlannedPercent: percentOf(validPlannedUnits, totalOrdered),
-      deliveryReliabilityPercent: percentOf(onTimeUnits, totalDelivered),
       capacityShortfall: null,
       overloadedWeeks: null,
     },
