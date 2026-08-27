@@ -19,6 +19,7 @@ import {
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
 import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
+import RccpLinkedHScroll from './RccpLinkedHScroll';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
@@ -35,9 +36,10 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     boxSizing: 'border-box',
   },
-  scroller: { overflowX: 'auto', width: '100%' },
-  alignedBlock: { minWidth: 0 },
   chartArea: { flex: 1, minHeight: 0 },
+  chartHeader: {
+    ...shorthands.padding(0, 0, tokens.spacingVerticalS),
+  },
 });
 
 function isStackRow(row) {
@@ -187,8 +189,9 @@ function RccpChartMatrixPanel({
   if (!periodHeaders.length) return null;
 
   const alignedContent = (
-    <div className={styles.scroller}>
-      <div className={styles.alignedBlock} style={{ width: gridWidth }}>
+    <RccpLinkedHScroll
+      contentWidth={gridWidth}
+      top={(
         <div
           key={seriesSignature}
           style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}
@@ -206,6 +209,8 @@ function RccpChartMatrixPanel({
             fallbackDataAreaId={fallbackDataAreaId}
           />
         </div>
+      )}
+      bottom={(
         <RccpMatrixTable
           measureRows={matrixRows}
           periods={periods}
@@ -214,17 +219,20 @@ function RccpChartMatrixPanel({
           onToggleVisible={handleToggle}
           onCellClick={onCellClick}
           interactive={interactive}
-          compact={compact}
           gridWidth={gridWidth}
         />
-      </div>
-    </div>
+      )}
+    />
   );
 
   return (
     <div className={styles.root}>
       <Card className={compact ? styles.chartCardCompact : styles.chartCard}>
-        {!compact && <Text weight="semibold">Capacity vs load</Text>}
+        {!compact && (
+          <div className={styles.chartHeader}>
+            <Text weight="semibold">Capacity vs load</Text>
+          </div>
+        )}
         {compact ? <div className={styles.chartArea}>{alignedContent}</div> : alignedContent}
       </Card>
     </div>

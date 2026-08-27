@@ -167,6 +167,54 @@ export function formatIsoWindowLabel(window) {
   return `${formatWeekLabel(window.fromYear, window.fromWeek)} → ${formatWeekLabel(window.toYear, window.toWeek)}`;
 }
 
+/** ISO week-numbering years have 53 weeks when 1 Jan is a Thursday, or a Wednesday in a leap year. */
+export function isoWeeksInYear(year) {
+  const y = Number(year);
+  if (!Number.isFinite(y) || y < 1) return 52;
+  const weekday = new Date(Date.UTC(y, 0, 1)).getUTCDay() || 7;
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  return weekday === 4 || (leap && weekday === 3) ? 53 : 52;
+}
+
+export function clampIsoWeek(year, week) {
+  const max = isoWeeksInYear(year);
+  const n = Number(week);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(max, Math.max(1, Math.round(n)));
+}
+
+export function compareIsoWeekParts(a, b) {
+  return (Number(a?.year) || 0) * 100 + (Number(a?.week) || 0)
+    - ((Number(b?.year) || 0) * 100 + (Number(b?.week) || 0));
+}
+
+/** Local calendar date → ISO week-year (avoids timezone shift). */
+export function isoWeekPartsFromLocalDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return currentIsoWeekParts();
+  return currentIsoWeekParts(new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())));
+}
+
+/** First click starts a range; second click completes it (order-independent). */
+export function isoWindowFromWeekClicks(anchor, next) {
+  if (!next) return { window: null, nextAnchor: anchor || null };
+  if (!anchor) {
+    return {
+      window: {
+        fromYear: next.year, fromWeek: next.week, toYear: next.year, toWeek: next.week,
+      },
+      nextAnchor: next,
+    };
+  }
+  const start = compareIsoWeekParts(anchor, next) <= 0 ? anchor : next;
+  const end = compareIsoWeekParts(anchor, next) <= 0 ? next : anchor;
+  return {
+    window: {
+      fromYear: start.year, fromWeek: start.week, toYear: end.year, toWeek: end.week,
+    },
+    nextAnchor: null,
+  };
+}
+
 export const RCCP_WEEK_COL_WIDTH = 68;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
@@ -196,19 +244,34 @@ export function currentIsoWindow(size = 8) {
 }
 
 function getIsoWeekNumber(date) {
-  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-  const yearStartDay = yearStart.getUTCDay() || 7;
-  yearStart.setUTCDate(yearStart.getUTCDate() + 4 - yearStartDay);
-  return 1 + Math.round((target - yearStart) / (7 * 24 * 60 * 60 * 1000));
+  const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return Math.ceil((((utc - yearStart) / 86400000) + 1) / 7);
+}
+
+/** Current ISO week-year and week number (Monday–Sunday). */
+export function currentIsoWeekParts(now = new Date()) {
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const weekday = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - weekday);
+  const year = utc.getUTCFullYear();
+  return { year, week: clampIsoWeek(year, getIsoWeekNumber(now)) };
 }
 
 export function resolveRccpDashboardKpis(analysis, kpiWindowOnly) {
   if (!analysis) return null;
   if (kpiWindowOnly) return analysis.kpis || null;
   return analysis.kpisAll || analysis.kpis || null;
+}
+
+/** True when the selected weeks are empty but the vendor has load in another period. */
+export function shouldOfferRccpDataWindow(analysis) {
+  if (!analysis?.dataWindow) return false;
+  const windowed = Number(analysis.kpis?.totalOrdered) || 0;
+  const all = Number(analysis.kpisAll?.totalOrdered) || 0;
+  return windowed === 0 && all > 0;
 }
 
 export function buildAnalysisQuery(window, vendorAccount) {

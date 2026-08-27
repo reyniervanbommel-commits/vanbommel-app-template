@@ -2,7 +2,8 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { subscribeRccpSettingsSaved } from '../../hooks/rccpSettingsSync';
 import { clearPoBoardKpiCache, getPoBoardKpis } from '../../utils/poBoardKpiCache';
-import { aggregatePoBoardKpisFromByOrder, buildKpiQtyOverlay } from '../../utils/poBoardKpis';
+import { aggregatePoBoardKpisFromByOrder, buildKpiQtyOverlay, PO_BOARD_CLICKABLE_KPI_KEYS } from '../../utils/poBoardKpis';
+import { buildKpiSparklineSeries } from '../../utils/kpiSparklineSeries';
 import RccpKpiCards from './RccpKpiCards';
 
 const useStyles = makeStyles({
@@ -54,6 +55,14 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
     [payload, visibleOrderNumbers],
   );
 
+  const seriesByKey = useMemo(() => {
+    const map = {};
+    PO_BOARD_CLICKABLE_KPI_KEYS.forEach((key) => {
+      map[key] = buildKpiSparklineSeries(payload, visibleOrderNumbers, key);
+    });
+    return map;
+  }, [payload, visibleOrderNumbers]);
+
   const handleSelect = useCallback((key) => {
     onKpiFilter?.(key, matchByKey[key] || new Set(), {
       qtyOverlay: buildKpiQtyOverlay(payload, visibleOrderNumbers, key),
@@ -80,7 +89,12 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
         Values come from the purchase orders currently in the table. Click a tile to filter;
         quantity columns then show the units counted by that tile.
       </Text>
-      <RccpKpiCards kpis={kpis} selectedKey={selectedKey} onSelect={handleSelect} />
+      <RccpKpiCards
+        kpis={kpis}
+        selectedKey={selectedKey}
+        onSelect={handleSelect}
+        seriesByKey={seriesByKey}
+      />
     </>
   );
 }

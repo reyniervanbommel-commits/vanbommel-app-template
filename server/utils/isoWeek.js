@@ -91,7 +91,8 @@ function buildWeekRange(fromYear, fromWeek, toYear, toWeek) {
   const out = [];
   let y = fromYear;
   let w = fromWeek;
-  const maxGuard = 120;
+  const spanYears = Math.max(1, Number(toYear) - Number(fromYear) + 1);
+  const maxGuard = spanYears * 53 + 8;
   for (let i = 0; i < maxGuard; i += 1) {
     out.push({ year: y, week: w, key: isoWeekKey(y, w) });
     if (y === toYear && w === toWeek) break;

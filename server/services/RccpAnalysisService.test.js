@@ -46,6 +46,26 @@ describe('RccpAnalysisService', () => {
     expect(confirmedByCell.get(cellKey('V001', year, week, 'quantity'))).toBe(15);
   });
 
+  it('reports the vendor data week range even when load sits outside the selected window', () => {
+    const deliveryDate = '2022-06-08T00:00:00.000Z';
+    const year = getIsoWeekYear(deliveryDate);
+    const week = getIsoWeek(deliveryDate);
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open' },
+      details: [{
+        detailKey: '1',
+        values: { requestedDeliveryDate: deliveryDate, quantity: 10 },
+      }],
+    }];
+
+    const { confirmedByCell, dataRangeByVendor } = aggregatePoLoad(rows, config, window);
+    expect(confirmedByCell.size).toBe(0);
+    expect(dataRangeByVendor.get('V001')).toEqual({
+      fromYear: year, fromWeek: week, toYear: year, toWeek: week,
+    });
+  });
+
   it('counts a line-level quantity per line instead of spreading it', () => {
     const deliveryDate = '2026-03-10T00:00:00.000Z';
     const year = getIsoWeekYear(deliveryDate);

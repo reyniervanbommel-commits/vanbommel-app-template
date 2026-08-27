@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { useRccpPage } from '../../hooks/useRccpPage';
 import { useRccpVendorPrefetch } from '../../hooks/useRccpVendorPrefetch';
-import { resolveRccpDashboardKpis } from './rccpUtils';
+import { resolveRccpDashboardKpis, shouldOfferRccpDataWindow } from './rccpUtils';
 import {
   RCCP_PERIOD_GRAIN_MONTH,
   RCCP_PERIOD_GRAIN_WEEK,
@@ -13,6 +13,7 @@ import {
 } from './rccpPeriodGrain';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
+import RccpEmptyWindowCard from './RccpEmptyWindowCard';
 import RccpMissingDateCard from './RccpMissingDateCard';
 import RccpDiagnosticsCard from './RccpDiagnosticsCard';
 import RccpDrillDownPanel from './RccpDrillDownPanel';
@@ -20,6 +21,8 @@ import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import RccpWeekWindowFields from './RccpWeekWindowFields';
+import RccpItemFilter from './RccpItemFilter';
+import { useRccpItemFilter } from './useRccpItemFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import {
   resolveDefaultRccpVendorWithFallback,
@@ -101,8 +104,13 @@ export default function RccpPageContent() {
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
   const capacityReloadRef = useRef(null);
 
-  const handleWindowChange = useCallback((field, value) => {
-    setWindow((prev) => ({ ...prev, [field]: Number(value) }));
+  const handleWindowReplace = useCallback((next) => {
+    setWindow({
+      fromYear: Number(next.fromYear),
+      fromWeek: Number(next.fromWeek),
+      toYear: Number(next.toYear),
+      toWeek: Number(next.toWeek),
+    });
   }, [setWindow]);
 
   const handlePeriodGrainChange = useCallback((value) => {
@@ -122,6 +130,10 @@ export default function RccpPageContent() {
     cells,
   }), [periodGrain, periods, analysis?.chart, cells]);
 
+  const {
+    itemNumber, items: itemNumbers, filteredChart, handleItemChange,
+  } = useRccpItemFilter(chartView.chart);
+
   const handleCellClick = useCallback((cell) => {
     if (cell) setDrillCell(cell);
   }, []);
@@ -139,6 +151,10 @@ export default function RccpPageContent() {
   const handleTabSelect = useCallback((_, data) => {
     setActiveTab(data.value);
   }, []);
+
+  const handleShowDataWindow = useCallback(() => {
+    if (analysis?.dataWindow) setWindow(analysis.dataWindow);
+  }, [analysis, setWindow]);
 
   const handleRefresh = useCallback(() => {
     if (activeTab === 'capacity-planning') {
@@ -175,9 +191,16 @@ export default function RccpPageContent() {
           />
         )}
         {activeTab === 'dashboard' && (
+          <RccpItemFilter
+            value={itemNumber}
+            onChange={handleItemChange}
+            items={itemNumbers}
+          />
+        )}
+        {activeTab === 'dashboard' && (
           <RccpWeekWindowFields
             window={window}
-            onWindowChange={handleWindowChange}
+            onWindowReplace={handleWindowReplace}
             kpiWindowOnly={kpiWindowOnly}
             onKpiWindowOnlyChange={setKpiWindowOnly}
             periodGrain={periodGrain}
@@ -203,9 +226,15 @@ export default function RccpPageContent() {
 
           {!loading && !error && analysis && (
             <>
+              {shouldOfferRccpDataWindow(analysis) && (
+                <RccpEmptyWindowCard
+                  dataWindow={analysis.dataWindow}
+                  onShow={handleShowDataWindow}
+                />
+              )}
               <RccpKpiCards kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)} />
               <RccpChartMatrixPanel
-                chart={chartView.chart}
+                chart={filteredChart}
                 measureRows={measureRows}
                 periods={chartView.periods}
                 cellMap={chartView.cellMap}

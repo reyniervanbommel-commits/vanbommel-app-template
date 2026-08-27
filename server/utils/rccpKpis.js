@@ -257,6 +257,7 @@ function summarizeAcc(acc) {
   const totalOpen = acc.totalOpen;
   const totalDelivered = acc.totalDelivered;
   const totalOrdered = totalOpen + totalDelivered;
+  const validPlannedUnits = Math.max(0, totalOrdered - (acc.planned1900Units || 0));
   return {
     totalOrdered,
     totalDelivered,
@@ -276,6 +277,9 @@ function summarizeAcc(acc) {
     openLateAvgDays: mean(acc.openLateDays),
     planned1900Units: acc.planned1900Units,
     planned1900ItemCount: acc.planned1900Skus.size,
+    validPlannedUnits,
+    validPlannedPercent: percentOf(validPlannedUnits, totalOrdered),
+    deliveryReliabilityPercent: percentOf(acc.onTimeUnits, totalDelivered),
   };
 }
 

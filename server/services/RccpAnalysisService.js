@@ -45,6 +45,38 @@ function parseCellKey(key) {
   };
 }
 
+function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
+  if (aYear !== bYear) return aYear - bYear;
+  return aWeek - bWeek;
+}
+
+function expandDataRange(range, year, week) {
+  if (!range) return { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+  if (compareIsoWeek(year, week, range.fromYear, range.fromWeek) < 0) {
+    range.fromYear = year;
+    range.fromWeek = week;
+  }
+  if (compareIsoWeek(year, week, range.toYear, range.toWeek) > 0) {
+    range.toYear = year;
+    range.toWeek = week;
+  }
+  return range;
+}
+
+function pickDataWindow(dataRangeByVendor, vendorFilter) {
+  if (vendorFilter) return dataRangeByVendor.get(vendorFilter) || null;
+  let merged = null;
+  for (const range of dataRangeByVendor.values()) {
+    merged = expandDataRange(
+      merged ? { ...merged } : null,
+      range.fromYear,
+      range.fromWeek,
+    );
+    merged = expandDataRange(merged, range.toYear, range.toWeek);
+  }
+  return merged;
+}
+
 function aggregatePoLoad(rows, config, window) {
   const confirmedByCell = new Map();
   const missingDates = [];
@@ -60,6 +92,11 @@ function aggregatePoLoad(rows, config, window) {
     zeroQuantityLines: 0,
     countedLines: 0,
     totalConfirmedQty: 0,
+  };
+  const dataRangeByVendor = new Map();
+
+  const noteDataRange = (vendor, year, week) => {
+    dataRangeByVendor.set(vendor, expandDataRange(dataRangeByVendor.get(vendor), year, week));
   };
 
   const addLoad = (vendor, year, week, measureKey, qty) => {
@@ -122,18 +159,20 @@ function aggregatePoLoad(rows, config, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (!year || !week) return;
-      if (!isIsoWeekInWindow(year, week, window)) {
-        diagnostics.outOfWindowLines += 1;
-        return;
-      }
 
+      const inWindow = isIsoWeekInWindow(year, week, window);
       let hasQty = false;
       lineMeasures.forEach((measure) => {
         const qty = measureQty(measure);
         if (qty <= 0) return;
         hasQty = true;
-        addLoad(vendor, year, week, measure.columnKey, qty);
+        noteDataRange(vendor, year, week);
+        if (inWindow) addLoad(vendor, year, week, measure.columnKey, qty);
       });
+      if (!inWindow) {
+        diagnostics.outOfWindowLines += 1;
+        return;
+      }
       if (!hasQty && lineMeasures.length) diagnostics.zeroQuantityLines += 1;
     };
 
@@ -160,7 +199,7 @@ function aggregatePoLoad(rows, config, window) {
     }
   }
 
-  return { confirmedByCell, missingDates, diagnostics };
+  return { confirmedByCell, missingDates, diagnostics, dataRangeByVendor };
 }
 
 function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
@@ -366,14 +405,16 @@ async function analyze({
     supplierAccount: supplierAccount || null,
   }));
 
-  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poRows, config, window);
+  const { confirmedByCell, missingDates, diagnostics, dataRangeByVendor } = aggregatePoLoad(
+    poRows, config, window,
+  );
 
-  const capacityRows = await time('rccp_capacity', () => capacityService.listCapacity({
+  const allCapacity = await time('rccp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,
-    periodYear: window.fromYear,
-    fromWeek: window.fromWeek,
-    toWeek: window.toWeek,
   }));
+  const capacityRows = allCapacity.filter(
+    (row) => isIsoWeekInWindow(row.periodYear, row.isoWeek, window),
+  );
 
   const { cells, measureRows, periods } = buildMatrixCells({
     capacityRows,
@@ -410,6 +451,7 @@ async function analyze({
     diagnostics,
     kpis,
     kpisAll,
+    dataWindow: pickDataWindow(dataRangeByVendor, effectiveVendor),
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
 }
@@ -661,4 +703,5 @@ module.exports = {
   extractVendorNamesFromRows,
   cellKey,
   parseCellKey,
+  pickDataWindow,
 };

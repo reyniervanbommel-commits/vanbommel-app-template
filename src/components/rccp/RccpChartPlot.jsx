@@ -10,7 +10,13 @@ import { RCCP_PO_BAR_SIZE } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WARNING_MEASURE_KEY } from './rccpUtils';
 
 const useStyles = makeStyles({
-  plot: { position: 'relative' },
+  plot: {
+    position: 'relative',
+    outline: 'none',
+    '& .recharts-wrapper, & .recharts-wrapper:focus, & .recharts-surface, & svg:focus': {
+      outline: 'none',
+    },
+  },
   todaySvg: { position: 'absolute', inset: 0, pointerEvents: 'none' },
 });
 
@@ -47,6 +53,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
         margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
         barCategoryGap={0}
         barGap={0}
+        style={{ outline: 'none' }}
       >
         <CartesianGrid
           stroke={tokens.colorNeutralStroke2}

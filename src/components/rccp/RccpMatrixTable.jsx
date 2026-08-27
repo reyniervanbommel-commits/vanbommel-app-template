@@ -18,23 +18,26 @@ import { isCurrentMatrixPeriod } from './rccpPoStack';
 
 const useStyles = makeStyles({
   wrapper: {
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke2}`,
     borderRadius: '8px',
     backgroundColor: tokens.colorNeutralBackground1,
     overflow: 'visible',
     width: '100%',
+    boxSizing: 'border-box',
   },
   table: {
     tableLayout: 'fixed',
-    width: 'auto',
+    width: 'max-content',
     borderCollapse: 'separate',
     borderSpacing: 0,
+    boxSizing: 'border-box',
   },
   sticky: {
     position: 'sticky',
     left: 0,
     backgroundColor: tokens.colorNeutralBackground1,
     zIndex: 1,
+    boxSizing: 'border-box',
     width: `${RCCP_ROW_LABEL_WIDTH}px`,
     minWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
     maxWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
@@ -74,7 +77,12 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     lineHeight: 1.2,
   },
-  yearHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
+  yearHeader: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    minHeight: '14px',
+    lineHeight: '14px',
+  },
   weekHeaderLabel: { fontWeight: tokens.fontWeightSemibold },
   mondayHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   rowLabel: {
@@ -132,6 +140,10 @@ function RccpMatrixTable({
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
+  const showYearRow = useMemo(
+    () => periodHeaders.some((period) => period.yearLabel),
+    [periodHeaders],
+  );
 
   const handleClick = useCallback((cell) => {
     if (cell && onCellClick) onCellClick(cell);
@@ -143,7 +155,11 @@ function RccpMatrixTable({
 
   return (
     <div className={styles.wrapper}>
-    <Table size="small" className={styles.table} style={{ width: gridWidth || undefined }}>
+    <Table
+      size="small"
+      className={styles.table}
+      style={{ width: gridWidth || undefined, minWidth: gridWidth || undefined }}
+    >
       <TableHeader>
         <TableRow>
           <TableHeaderCell className={mergeClasses(styles.sticky, styles.headerSticky)}>Measure</TableHeaderCell>
@@ -157,7 +173,9 @@ function RccpMatrixTable({
               )}
             >
               <div className={styles.weekColInner}>
-                {period.yearLabel ? <div className={styles.yearHeader}>{period.yearLabel}</div> : null}
+                {showYearRow ? (
+                  <div className={styles.yearHeader}>{period.yearLabel || '\u00a0'}</div>
+                ) : null}
                 <div className={styles.weekHeaderLabel}>{period.weekLabel}</div>
                 <div className={styles.mondayHeader}>{period.mondayLabel}</div>
               </div>
