@@ -200,6 +200,20 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.kpiFilterKey).toBeNull();
     expect(result.current.processedItems).toHaveLength(2);
   });
+
+  it('shows on-time units in received columns while a KPI filter is active', () => {
+    const items = [{
+      orderNumber: 'PO-1',
+      dataAreaId: 'nl',
+      values: { receivedQty: 1453, orderedQty: 1453 },
+    }];
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items, columns: COLUMNS }));
+    act(() => {
+      result.current.applyKpiFilter('onTime', new Set(['PO-1']), { qtyOverlay: { 'PO-1': 1 } });
+    });
+    expect(result.current.processedItems[0].values.receivedQty).toBe(1);
+    expect(result.current.processedItems[0].values.orderedQty).toBe(1453);
+  });
 });
 
 describe('usePurchaseOrderGrouping saved-view serialisatie', () => {

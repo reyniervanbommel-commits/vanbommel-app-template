@@ -1,116 +1,16 @@
 import React, { memo, useCallback } from 'react';
-import { Card, Text, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
+import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { PO_BOARD_CLICKABLE_KPI_KEYS } from '../../utils/poBoardKpis';
+import KpiCard, { formatDays, formatItems, formatPct } from './RccpKpiCard';
 
 const useStyles = makeStyles({
   row: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))',
+    alignItems: 'stretch',
     ...shorthands.gap(tokens.spacingHorizontalM),
   },
-  card: {
-    ...shorthands.padding(tokens.spacingVerticalL),
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap(tokens.spacingVerticalXS),
-  },
-  clickable: { cursor: 'pointer' },
-  selected: {
-    ...shorthands.border('2px', 'solid', tokens.colorBrandStroke1),
-  },
-  label: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  valueRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    flexWrap: 'nowrap',
-    whiteSpace: 'nowrap',
-    ...shorthands.gap(tokens.spacingHorizontalXS),
-  },
-  value: {
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightSemibold,
-    width: 'auto',
-  },
-  hash: {
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightRegular,
-    color: tokens.colorNeutralForeground2,
-    width: 'auto',
-  },
-  aside: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    width: 'auto',
-  },
-  pct: {
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: tokens.fontWeightRegular,
-    color: tokens.colorNeutralForeground2,
-  },
-  detail: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
-
-function hasQty(value) {
-  return value !== null && value !== undefined;
-}
-
-function formatQty(value) {
-  if (!hasQty(value)) return '—';
-  return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
-}
-
-function formatPct(value) {
-  if (!hasQty(value)) return '';
-  return `${(Number(value) || 0).toFixed(1)}%`;
-}
-
-function formatDays(value) {
-  if (!hasQty(value)) return '—';
-  const rounded = Math.round(Number(value) * 10) / 10;
-  return `Ø ${rounded} days late`;
-}
-
-function formatItems(value) {
-  if (!hasQty(value)) return '';
-  return `${formatQty(value)} items`;
-}
-
-function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, clickable, onActivate }) {
-  const styles = useStyles();
-  const handleClick = useCallback(() => {
-    if (clickable) onActivate(kpiKey);
-  }, [clickable, kpiKey, onActivate]);
-  const handleKeyDown = useCallback((event) => {
-    if (!clickable) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onActivate(kpiKey);
-    }
-  }, [clickable, kpiKey, onActivate]);
-  const mark = hash === true ? '#' : (typeof hash === 'string' ? hash : '');
-  const showMark = Boolean(mark && hasQty(qty));
-  const markBefore = mark === 'Ø';
-  return (
-    <Card
-      className={mergeClasses(styles.card, clickable && styles.clickable, selected && styles.selected)}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-pressed={clickable ? selected : undefined}
-      onClick={clickable ? handleClick : undefined}
-      onKeyDown={clickable ? handleKeyDown : undefined}
-    >
-      <Text className={styles.label}>{label}</Text>
-      <div className={styles.valueRow}>
-        {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-        <Text className={styles.value}>{formatQty(qty)}</Text>
-        {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-        {aside ? <Text className={styles.aside}>{aside}</Text> : null}
-      </div>
-      {pct ? <Text className={styles.pct}>{pct}</Text> : null}
-      {detail ? <Text className={styles.detail}>{detail}</Text> : null}
-    </Card>
-  );
-}
 
 function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
   const styles = useStyles();
@@ -188,12 +88,22 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="openLate"
         label="Open and late"
-        qty={kpis.openLateItemCount}
+        qty={kpis.openLateUnits}
         hash
-        aside={formatItems(uniqueLateItems)}
+        aside={formatItems(kpis.openLateItemCount)}
         detail={formatDays(kpis.openLateAvgDays)}
         selected={selectedKey === 'openLate'}
         clickable={clickableSet.has('openLate')}
+        onActivate={handleActivate}
+      />
+      <KpiCard
+        kpiKey="planned1900"
+        label="1-1-1900"
+        qty={kpis.planned1900Units}
+        hash
+        aside={formatItems(kpis.planned1900ItemCount)}
+        selected={selectedKey === 'planned1900'}
+        clickable={clickableSet.has('planned1900')}
         onActivate={handleActivate}
       />
       <KpiCard

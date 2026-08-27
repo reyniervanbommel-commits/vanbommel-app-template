@@ -2,7 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { subscribeRccpSettingsSaved } from '../../hooks/rccpSettingsSync';
 import { clearPoBoardKpiCache, getPoBoardKpis } from '../../utils/poBoardKpiCache';
-import { aggregatePoBoardKpisFromByOrder } from '../../utils/poBoardKpis';
+import { aggregatePoBoardKpisFromByOrder, buildKpiQtyOverlay } from '../../utils/poBoardKpis';
 import RccpKpiCards from './RccpKpiCards';
 
 const useStyles = makeStyles({
@@ -55,13 +55,18 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   );
 
   const handleSelect = useCallback((key) => {
-    onKpiFilter?.(key, matchByKey[key] || new Set());
-  }, [matchByKey, onKpiFilter]);
+    onKpiFilter?.(key, matchByKey[key] || new Set(), {
+      qtyOverlay: buildKpiQtyOverlay(payload, visibleOrderNumbers, key),
+    });
+  }, [matchByKey, onKpiFilter, payload, visibleOrderNumbers]);
 
   useEffect(() => {
     if (!selectedKey) return;
-    onKpiFilter?.(selectedKey, matchByKey[selectedKey] || new Set(), { toggle: false });
-  }, [matchByKey, onKpiFilter, selectedKey]);
+    onKpiFilter?.(selectedKey, matchByKey[selectedKey] || new Set(), {
+      toggle: false,
+      qtyOverlay: buildKpiQtyOverlay(payload, visibleOrderNumbers, selectedKey),
+    });
+  }, [matchByKey, onKpiFilter, payload, selectedKey, visibleOrderNumbers]);
 
   if (loading) return <Spinner size="tiny" label="Loading KPIs…" />;
   if (error) return <Text className={styles.error}>{error}</Text>;
@@ -72,7 +77,8 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
   return (
     <>
       <Text className={styles.hint}>
-        Values come from the purchase orders currently in the table. Click a tile to filter.
+        Values come from the purchase orders currently in the table. Click a tile to filter;
+        quantity columns then show the units counted by that tile.
       </Text>
       <RccpKpiCards kpis={kpis} selectedKey={selectedKey} onSelect={handleSelect} />
     </>
