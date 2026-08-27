@@ -9,7 +9,7 @@
 import { apiRequest } from './api';
 import { isoWindowDateRange } from '../components/rccp/rccpUtils';
 import { BOARD_KEY } from '../components/bi/biConstants';
-import { setBiSeries, setBiRevision } from './biBoardCache';
+import { setBiCharts, setBiMeta, setBiSeries, setBiRevision } from './biBoardCache';
 import { chartFetchKey, dateFilterForChart, filtersFromColumnMap } from './biChartFetchKey';
 
 const MAX_CHARTS = 20;
@@ -34,6 +34,13 @@ export async function prefetchBiDashboard({ externalFilterByColumn } = {}) {
   ]);
 
   const charts = Array.isArray(chartsData?.charts) ? chartsData.charts.slice(0, MAX_CHARTS) : [];
+  if (metaData) {
+    setBiMeta(BOARD_KEY, {
+      columns: Array.isArray(metaData.columns) ? metaData.columns : [],
+      measureColumns: Array.isArray(metaData.measureColumns) ? metaData.measureColumns : [],
+    });
+  }
+  if (Array.isArray(chartsData?.charts)) setBiCharts(charts);
   if (!charts.length) return;
 
   const columnTypeByKey = {};

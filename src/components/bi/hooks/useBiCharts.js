@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
+import { getBiCharts, setBiCharts } from '../../../utils/biBoardCache';
 
 /**
  * CRUD van BI-grafiekdefinities via /api/bi/charts.
  * @returns {{ charts, loading, error, reload, createChart, updateChart, deleteChart }}
  */
 export function useBiCharts() {
-  const [charts, setCharts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [charts, setCharts] = useState(() => getBiCharts() || []);
+  const [loading, setLoading] = useState(() => getBiCharts() == null);
   const [error, setError] = useState(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await apiRequest('/bi/charts');
-      setCharts(Array.isArray(data.charts) ? data.charts : []);
+      const next = Array.isArray(data.charts) ? data.charts : [];
+      setCharts(next);
+      setBiCharts(next);
     } catch (err) {
       setError(err.message || 'Failed to load charts');
     } finally {
@@ -23,7 +26,7 @@ export function useBiCharts() {
     }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload({ silent: getBiCharts() != null }); }, [reload]);
 
   const createChart = useCallback(async ({ name, config, visibility, boardKey }) => {
     const data = await apiRequest('/bi/charts', { method: 'POST', body: { name, config, visibility, boardKey } });

@@ -7,6 +7,8 @@
 
 let cachedRevision = null;
 const seriesByKey = new Map();
+let chartsCache = null;
+const metaByBoard = new Map();
 
 /** Huidige gecachte revision (of null). */
 export function getBiRevision() {
@@ -35,8 +37,31 @@ export function setBiSeries(key, series) {
   seriesByKey.set(key, series);
 }
 
+/** Gecachte chart-definities (of null als er nog geen prefetch/fetch was). */
+export function getBiCharts() {
+  return chartsCache;
+}
+
+/** Bewaar de chart-lijst die `/bi/charts` teruggeeft. */
+export function setBiCharts(charts) {
+  chartsCache = Array.isArray(charts) ? charts : [];
+}
+
+/** Gecachte kolom-metadata per boardKey (of null). */
+export function getBiMeta(boardKey) {
+  return metaByBoard.get(boardKey) || null;
+}
+
+/** Bewaar `/bi/meta/:boardKey` zodat de BI-pagina de spinner kan overslaan. */
+export function setBiMeta(boardKey, meta) {
+  if (!boardKey) return;
+  metaByBoard.set(boardKey, meta || { columns: [], measureColumns: [] });
+}
+
 /** Leeg de volledige cache (bv. bij logout). */
 export function clearBiCache() {
   cachedRevision = null;
   seriesByKey.clear();
+  chartsCache = null;
+  metaByBoard.clear();
 }

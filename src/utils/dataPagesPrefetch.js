@@ -1,8 +1,8 @@
 // Orchestreert het achtergrondwerk dat ná board-idle de KPI-tab, RCCP en BI alvast warm maakt.
-// Stappen lopen bewust sequentieel (niet parallel) zodat SQL/JSON-werk niet gelijktijdig piekt —
-// zie docs/specs/2026-08-26-idle-prefetch-kpi-bi-rccp-design.md. Elke stap faalt stil: een
-// mislukte prefetch mag nooit een toast/spinner op de PO-tabel veroorzaken; tab-open of
-// paginanavigatie valt terug op de bestaande, normale fetch.
+// KPI, RCCP en BI lopen naast elkaar: een trage of falende board-kpis-call mag de eerste klik
+// op /rccp of /bi niet meer blokkeren. Elke stap faalt stil: een mislukte prefetch mag nooit
+// een toast/spinner op de PO-tabel veroorzaken; tab-open of paginanavigatie valt terug op de
+// bestaande, normale fetch.
 import { getPoBoardKpis } from './poBoardKpiCache';
 import { prefetchRccpAnalysis } from './rccpAnalysisPrefetch';
 import { prefetchBiDashboard } from './biBoardPrefetch';
@@ -79,15 +79,22 @@ export function startDataPagesPrefetch({ refreshKey, lastVendor, isoWindow, isSu
   if (inFlightKey === key) return inFlight;
   inFlightKey = key;
   inFlight = (async () => {
+    const kpiPromise = getPoBoardKpis(refreshKey).catch(() => {});
+    const chunksPromise = preloadDataPageChunks();
+    let rccpVendor = '';
+    let biExternalFilterByColumn;
     try {
-      await getPoBoardKpis(refreshKey);
-      await preloadDataPageChunks();
-      const { rccpVendor, biExternalFilterByColumn } = await resolveVendorScope({ isSupplier, lastVendor });
-      if (rccpVendor && isoWindow) prefetchRccpAnalysis(isoWindow, rccpVendor);
-      await prefetchBiDashboard({ externalFilterByColumn: biExternalFilterByColumn });
+      const scope = await resolveVendorScope({ isSupplier, lastVendor });
+      rccpVendor = scope.rccpVendor;
+      biExternalFilterByColumn = scope.biExternalFilterByColumn;
     } catch {
-      /* stil */
+      /* stil — BI blijft all-vendors prefetchen */
     }
+    if (rccpVendor && isoWindow) prefetchRccpAnalysis(isoWindow, rccpVendor);
+    const biPromise = prefetchBiDashboard({
+      externalFilterByColumn: biExternalFilterByColumn,
+    }).catch(() => {});
+    await Promise.all([kpiPromise, chunksPromise, biPromise]);
   })();
   return inFlight;
 }
