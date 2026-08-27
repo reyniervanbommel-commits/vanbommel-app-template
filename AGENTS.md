@@ -23,15 +23,19 @@ Geldt voor **elke agent** (Cursor, Claude Code, Codex) bij **elke feature en elk
 klaarmelden van het werk:
 
 1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
-   3+ UI-bestanden of nieuwe flyout/drawer/overlay → escaleer naar `ui-design-review` skill.
+   Daarna `final-check-feature` (die `ui-design-review` aanroept).
 2. **Snelheid** — geen onnodige extra `apiRequest`-calls, queries/berekeningen in loops, of
    ontbrekende `useMemo`/`useCallback`. Kies bij twijfel de oplossing die de **ervaren** snelheid
-   ten goede komt (caching, optimistic UI, memoization). Hot path geraakt (PO-board, tab-switches,
-   grote lijsten) → escaleer naar `perf-review` (modus `regression`).
+   ten goede komt (caching, optimistic UI, memoization). `final-check-feature` roept `perf-review`
+   aan (geen extra snelheid-skill).
 3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
-   routes, SQL via parameters. Auth/route/data-laag gewijzigd → escaleer naar `security-review`.
+   routes, SQL via parameters. `final-check-feature` roept `security-review` aan op de diff.
 
 Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
+
+Ná feature of bugfix: skill `final-check-feature` — die roept `ui-design-review`,
+`perf-review`, `security-review` en `browser-feature-test` aan (geen extra
+snelheid-skill; meten = `perf-review`).
 
 ## Cursor Cloud specific instructions
 

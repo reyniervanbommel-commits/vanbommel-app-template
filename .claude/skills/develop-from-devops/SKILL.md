@@ -30,8 +30,9 @@ Bouw een feature vanaf plan of work item.
 |-------|---------|
 | `writing-plans` | Geen plan |
 | `subagent-driven-development` of `executing-plans` | Implementatie |
-| `ui-design-review` | UI-diff, modus full |
-| `browser-feature-test` | Browser-test als die skill er is |
+| `final-check-feature` | Ná code: UI/perf/security/browser-review + grootte/tests |
+| `ui-design-review` | UI-diff; via `final-check-feature` of `/check-ui` |
+| `browser-feature-test` | Browser-test; via `final-check-feature` |
 | `create-adr` | Architectuurkeuze (otap full: automatisch; local: vragen) |
 
 ## Stap 0 — Detectie
@@ -81,7 +82,8 @@ Geen “wil je pushen?”.
 3. **Plan** — `dev_*` of `writing-plans` zonder vragen  
 4. **Code** — `subagent-driven-development`; migraties volgens *deze* repo  
 5. **Preview** — push; URL; DevOps-comment; URL in chat  
-6. **full:** `ui-design-review`, `browser-feature-test`, team (`.claude/team/`
+6. **full:** `final-check-feature` (die `ui-design-review`, `perf-review`, `security-review`,
+   `browser-feature-test` aanroept), team (`.claude/team/`
    of vier lenzen), blockers, PR naar integratiebranch (`develop` als die er is),
    Closed, `create-adr` bij architectuur  
 
@@ -95,8 +97,9 @@ devTestItems / version.js: alleen als die files bestaan.
 2. Branch `feature/<korte-naam>` (eerst vragen als de git-regel dat eist).  
 3. `executing-plans` of `subagent-driven-development`.  
 4. Test lokaal; meld poort/URL van *dit* project.  
-5. Commit/push alleen met ja.  
-6. full: team-review; PR alleen op verzoek.
+5. `final-check-feature`.  
+6. Commit/push alleen met ja.  
+7. full: team-review; PR alleen op verzoek.
 
 ## Vereisten
 
