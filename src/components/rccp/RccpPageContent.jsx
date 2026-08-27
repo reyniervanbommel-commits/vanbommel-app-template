@@ -12,7 +12,7 @@ import {
   resolveRccpChartView,
 } from './rccpPeriodGrain';
 import RccpKpiCards from './RccpKpiCards';
-import RccpChartMatrixPanel from './RccpChartMatrixPanel';
+import RccpChartWithPin from './RccpChartWithPin';
 import RccpEmptyWindowCard from './RccpEmptyWindowCard';
 import RccpMissingDateCard from './RccpMissingDateCard';
 import RccpDiagnosticsCard from './RccpDiagnosticsCard';
@@ -240,7 +240,7 @@ export default function RccpPageContent() {
                 kpis={resolveRccpDashboardKpis(analysis, kpiWindowOnly)}
                 planningDate={planning.date}
               />
-              <RccpChartMatrixPanel
+              <RccpChartWithPin
                 chart={filteredChart}
                 measureRows={measureRows}
                 periods={chartView.periods}
@@ -249,6 +249,11 @@ export default function RccpPageContent() {
                 onCellClick={handleCellClick}
                 interactive={periodGrain === RCCP_PERIOD_GRAIN_WEEK}
                 visibility={chartVisibility}
+                itemFilter={{ itemNumber, items: itemNumbers, onChange: handleItemChange }}
+                historyScope={{
+                  vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
+                  window,
+                }}
               />
               {(resolveRccpDashboardKpis(analysis, kpiWindowOnly)?.totalOrdered === 0) && (
                 <RccpDiagnosticsCard

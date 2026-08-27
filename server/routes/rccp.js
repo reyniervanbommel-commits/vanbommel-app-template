@@ -10,6 +10,10 @@ const capacityService = require('../services/RccpCapacityService');
 const importService = require('../services/RccpImportService');
 const analysisService = require('../services/RccpAnalysisService');
 const settingsService = require('../services/RccpSettingsService');
+const {
+  parseConfirmedHistoryItemNumber,
+  getConfirmedHistory,
+} = require('../utils/rccpConfirmedHistory');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -193,6 +197,26 @@ router.get('/analysis', async (req, res, next) => {
       planningDate: req.query.planningDate,
     });
     res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/confirmed-history', async (req, res, next) => {
+  try {
+    const window = parseWindowQuery(req);
+    const vendorAccount = resolveVendorQuery(req) || String(req.query.vendorAccount || '').trim();
+    if (!vendorAccount) return res.status(400).json({ error: 'vendorAccount is required' });
+    const itemNumber = parseConfirmedHistoryItemNumber(req.query.itemNumber);
+    const supplierAccount = resolveSupplierAccount(req);
+    const data = await getConfirmedHistory({
+      vendorAccount,
+      supplierAccount,
+      itemNumber,
+      ...window,
+    });
+    res.json(data);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);

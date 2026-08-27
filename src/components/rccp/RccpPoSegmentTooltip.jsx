@@ -39,7 +39,11 @@ export function isSameRccpHover(prev, next) {
 
 export function firstChartDataAreaId(chart) {
   for (const point of chart || []) {
-    const segs = [...(point.segmentsAbove || []), ...(point.segmentsBelow || [])];
+    const segs = [
+      ...(point.segmentsAbove || []),
+      ...(point.segmentsBelow || []),
+      ...(point.segmentsConfirmed || []),
+    ];
     for (const seg of segs) {
       const id = String(seg?.dataAreaId || '').trim();
       if (id) return id;
@@ -101,7 +105,9 @@ function RccpItemHoverImage({ dataAreaId, itemNumber }) {
 function RccpPoSegmentTooltip({ active, label, segment, fallbackDataAreaId = '' }) {
   const styles = useStyles();
   if (!active || !segment) return null;
-  const status = segment.status === 'open' ? 'Open' : 'Received';
+  const status = segment.status === 'open'
+    ? 'Open'
+    : (segment.status === 'confirmed' ? 'Confirmed' : 'Received');
   const dataAreaId = String(segment.dataAreaId || fallbackDataAreaId || '').trim();
   return (
     <div className={styles.box} role="tooltip">

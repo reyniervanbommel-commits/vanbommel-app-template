@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
 import {
@@ -89,6 +89,7 @@ function RccpChartMatrixPanel({
   const [hoveredSegment, setHoveredSegment] = useState(null);
   const hoverBoxRef = useRef(null);
   const hydratedRef = useRef(false);
+  const parentHover = useContext(RccpSegmentHoverContext);
   const fallbackDataAreaId = useMemo(() => firstChartDataAreaId(chart), [chart]);
 
   useEffect(() => {
@@ -127,10 +128,12 @@ function RccpChartMatrixPanel({
     setHoveredSegment((prev) => (isSameRccpHover(prev, next) ? prev : next));
   }, []);
   const highlightItem = hoveredSegment?.segment?.itemNumber || '';
+  const parentOnClick = parentHover?.onClick;
   const hoverValue = useMemo(() => ({
     onHover: handleSegmentHover,
+    onClick: parentOnClick,
     highlightItem,
-  }), [handleSegmentHover, highlightItem]);
+  }), [handleSegmentHover, parentOnClick, highlightItem]);
 
   const openRow = useMemo(() => orderedRows.find((row) => row.isOpen), [orderedRows]);
   const deliveredRow = useMemo(() => orderedRows.find((row) => row.isDelivered), [orderedRows]);
