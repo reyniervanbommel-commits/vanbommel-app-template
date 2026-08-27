@@ -26,6 +26,19 @@ describe('rccpPoStack', () => {
     );
   });
 
+  it('splits left and right slots inside 80% of the week band', () => {
+    const left = weekBarBox(0, RCCP_PO_BAR_SIZE, 'left');
+    const right = weekBarBox(0, RCCP_PO_BAR_SIZE, 'right');
+    const center = weekBarBox(0, RCCP_PO_BAR_SIZE, 'center');
+    expect(left.x + left.width).toBeLessThan(right.x);
+    expect(right.x + right.width).toBeLessThanOrEqual(center.x + center.width + 0.5);
+    expect(left.width + right.width).toBeLessThan(RCCP_WEEK_COL_WIDTH * 0.85);
+  });
+
+  it('keeps center slot as the current centered bar', () => {
+    expect(weekBarBox(0, RCCP_PO_BAR_SIZE)).toEqual(weekBarBox(0, RCCP_PO_BAR_SIZE, 'center'));
+  });
+
   it('returns null for todayLineX when the current week is outside the window', () => {
     const periods = [{ key: '2020-W01', year: 2020, week: 1 }];
     expect(todayLineX(periods, new Date('2026-03-16T00:00:00.000Z'))).toBeNull();

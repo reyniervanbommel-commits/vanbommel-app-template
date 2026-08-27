@@ -5,10 +5,18 @@ import {
 
 export const RCCP_PO_BAR_SIZE = Math.round(RCCP_WEEK_COL_WIDTH * 0.8);
 
-/** Center a bar of `barWidth` inside the ISO-week band at `index`. */
-export function weekBarBox(index, barWidth) {
+/** Place a bar inside the ISO-week band at `index`. `slot`: left | right | center. */
+export function weekBarBox(index, barWidth, slot = 'center') {
   const bandX = RCCP_CHART_Y_AXIS_WIDTH + Number(index) * RCCP_WEEK_COL_WIDTH;
   const width = Math.min(Math.max(0, Number(barWidth) || 0), RCCP_WEEK_COL_WIDTH);
+  if (slot === 'left' || slot === 'right') {
+    const pairWidth = Math.min(RCCP_WEEK_COL_WIDTH * 0.8, RCCP_WEEK_COL_WIDTH);
+    const gap = 4;
+    const half = Math.max(0, (pairWidth - gap) / 2);
+    const start = bandX + (RCCP_WEEK_COL_WIDTH - pairWidth) / 2;
+    if (slot === 'left') return { x: start, width: half };
+    return { x: start + half + gap, width: half };
+  }
   return { x: bandX + (RCCP_WEEK_COL_WIDTH - width) / 2, width };
 }
 

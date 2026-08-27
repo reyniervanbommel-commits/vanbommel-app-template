@@ -37,6 +37,13 @@ function lineDateValue(lineValues, masterValues, dateColumnKey) {
   return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
 }
 
+function isSentinelDate(value) {
+  if (value === null || value === undefined || value === '') return false;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
+}
+
 /**
  * Regels (of de header zelf) waarvan de gekozen datum in het RCCP-venster valt.
  * `fallbackKey` wordt alleen gebruikt als de primaire datum ontbreekt.
@@ -76,4 +83,5 @@ module.exports = {
   isHeaderOnlyMeasure,
   lineDateValue,
   collectDateSlots,
+  isSentinelDate,
 };

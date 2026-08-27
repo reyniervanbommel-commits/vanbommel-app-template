@@ -62,6 +62,9 @@ function RccpPoSegmentRect({
     });
   }, [hover, segment, weekLabel]);
   const handleLeave = useCallback(() => hover?.onHover?.(null), [hover]);
+  const handleClick = useCallback(() => {
+    hover?.onClick?.({ segment, label: weekLabel });
+  }, [hover, segment, weekLabel]);
   const stroke = segment.late ? LATE_STROKE : (highlighted ? PAIR_STROKE : 'none');
   return (
     <rect
@@ -78,6 +81,7 @@ function RccpPoSegmentRect({
       onMouseEnter={handleEnter}
       onMouseMove={handleEnter}
       onMouseLeave={handleLeave}
+      onClick={handleClick}
     />
   );
 }

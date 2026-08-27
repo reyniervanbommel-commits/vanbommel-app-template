@@ -9,7 +9,8 @@ import {
 import RccpChartPlot from './RccpChartPlot';
 import { RccpSegmentHoverContext } from './RccpPoStackBar';
 import { getRgbHex } from '../../utils/hexColor';
-import { todayBand, RCCP_PO_BAR_SIZE } from './rccpPoStack';
+import { todayBand } from './rccpPoStack';
+import { buildRccpChartRows } from './rccpChartStacks';
 import {
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
@@ -151,22 +152,8 @@ function RccpChartMatrixPanel({
     [orderedRows, visibleKeys],
   );
 
-  const chartRows = useMemo(() => (chart || []).map((point) => {
-    const segmentsAbove = (point.segmentsAbove || []).filter((seg) => (
-      (seg.status === 'open' && openVisible) || (seg.status === 'received' && deliveredVisible)
-    ));
-    const segmentsBelow = deliveredVisible ? (point.segmentsBelow || []) : [];
-    return {
-      ...point,
-      segmentsAbove,
-      segmentsBelow,
-      __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
-      __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
-      __openColor: openColor,
-      __receivedColor: receivedColor,
-      __barWidthAbove: RCCP_PO_BAR_SIZE,
-      __barWidthBelow: RCCP_PO_BAR_SIZE,
-    };
+  const chartRows = useMemo(() => buildRccpChartRows({
+    chart, openVisible, deliveredVisible, openColor, receivedColor,
   }), [chart, openVisible, deliveredVisible, openColor, receivedColor]);
   const todayMarker = useMemo(() => todayBand(periodHeaders), [periodHeaders]);
   const seriesSignature = useMemo(
