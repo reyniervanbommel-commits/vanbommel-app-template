@@ -118,6 +118,9 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         canToggleLineTotal={canToggleLineTotal}
         isLineColumnSummed={isLineColumnSummed}
         handleToggleLineTotal={handleToggleLineTotal}
+        canToggleColumnSum={sumFlags?.canToggleColumnSum}
+        isColumnSumColumn={Boolean(sumToggles?.isColumnSumColumn)}
+        handleToggleColumnSum={handleToggleColumnSum}
         canPushLineTotalToHeader={canPushLineTotalToHeader}
         handlePushLineTotalToHeader={handlePushLineTotalToHeader}
         canPushLineValuesToHeader={canPushLineValuesToHeader}
@@ -178,7 +181,6 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         sumToggles={sumToggles}
         sumFlags={sumFlags}
         handleToggleGroupSummary={handleToggleGroupSummary}
-        handleToggleColumnSum={handleToggleColumnSum}
       />
     </PopoverSurface>
   );

@@ -40,7 +40,6 @@ export function FilterMenuSubPane({
   sumToggles,
   sumFlags,
   handleToggleGroupSummary,
-  handleToggleColumnSum,
 }) {
   const flyout = usePurchaseOrderColumnMenuFlyoutPlacement({
     active: activeSubmenu !== 'none',
@@ -100,7 +99,7 @@ export function FilterMenuSubPane({
         onSetGroupingColumn={onSetGroupingColumn}
         onClearGrouping={onClearGrouping}
         onSetGroupingColor={onSetGroupingColor}
-        sumToggles={withSumToggleHandlers(sumToggles, sumFlags, handleToggleGroupSummary, handleToggleColumnSum)}
+        sumToggles={withSumToggleHandlers(sumToggles, { canToggleGroupSummary: sumFlags?.canToggleGroupSummary }, handleToggleGroupSummary)}
       />
     );
   }

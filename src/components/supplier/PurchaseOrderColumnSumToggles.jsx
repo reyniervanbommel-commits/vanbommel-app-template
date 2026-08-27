@@ -17,14 +17,31 @@ export function buildColumnSumToggles(columnKey, groupSummaryColumnKeys, columnS
   };
 }
 
-export function withSumToggleHandlers(sumToggles, sumFlags, onToggleGroupSummary, onToggleColumnSum) {
+export function withSumToggleHandlers(sumToggles, sumFlags, onToggleGroupSummary) {
   return {
     ...EMPTY_SUM_TOGGLES,
     ...sumToggles,
     ...sumFlags,
     onToggleGroupSummary,
-    onToggleColumnSum,
   };
+}
+
+export function PurchaseOrderShowSumSwitch({ styles, checked, onToggle, onMouseEnter }) {
+  const handleChange = useCallback((_, data) => {
+    if (data.checked === Boolean(checked)) return;
+    onToggle?.();
+  }, [checked, onToggle]);
+
+  return (
+    <div className={styles.groupingToggleRow} onMouseEnter={onMouseEnter}>
+      <Text size={300}>Show sum</Text>
+      <Switch
+        checked={Boolean(checked)}
+        onChange={handleChange}
+        aria-label="Show sum"
+      />
+    </div>
+  );
 }
 
 function PurchaseOrderColumnSumToggles({ styles, sumToggles }) {
@@ -33,36 +50,17 @@ function PurchaseOrderColumnSumToggles({ styles, sumToggles }) {
     sumToggles.onToggleGroupSummary?.();
   }, [sumToggles]);
 
-  const handleColumnSum = useCallback((_, data) => {
-    if (data.checked === Boolean(sumToggles.isColumnSumColumn)) return;
-    sumToggles.onToggleColumnSum?.();
-  }, [sumToggles]);
-
-  if (!sumToggles?.canToggleGroupSummary && !sumToggles?.canToggleColumnSum) return null;
+  if (!sumToggles?.canToggleGroupSummary) return null;
 
   return (
-    <>
-      {sumToggles?.canToggleGroupSummary ? (
-        <div className={styles.groupingToggleRow}>
-          <Text size={200}>Show sum in group header</Text>
-          <Switch
-            checked={Boolean(sumToggles.isGroupSummaryColumn)}
-            onChange={handleGroupSummary}
-            aria-label="Show sum in group header"
-          />
-        </div>
-      ) : null}
-      {sumToggles?.canToggleColumnSum ? (
-        <div className={styles.groupingToggleRow}>
-          <Text size={200}>Show sum</Text>
-          <Switch
-            checked={Boolean(sumToggles.isColumnSumColumn)}
-            onChange={handleColumnSum}
-            aria-label="Show sum"
-          />
-        </div>
-      ) : null}
-    </>
+    <div className={styles.groupingToggleRow}>
+      <Text size={200}>Show sum in group header</Text>
+      <Switch
+        checked={Boolean(sumToggles.isGroupSummaryColumn)}
+        onChange={handleGroupSummary}
+        aria-label="Show sum in group header"
+      />
+    </div>
   );
 }
 

@@ -5,6 +5,7 @@ import PurchaseOrderColumnFilterMenuSortSection from './PurchaseOrderColumnFilte
 import PurchaseOrderColumnFilterMenuColumnActionsSection from './PurchaseOrderColumnFilterMenuColumnActionsSection';
 import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
 import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
+import { PurchaseOrderShowSumSwitch } from './PurchaseOrderColumnSumToggles';
 
 export default function PurchaseOrderColumnFilterMenuMainPane({
   styles,
@@ -38,6 +39,9 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   canToggleLineTotal,
   isLineColumnSummed,
   handleToggleLineTotal,
+  canToggleColumnSum = false,
+  isColumnSumColumn = false,
+  handleToggleColumnSum,
   canPushLineTotalToHeader,
   handlePushLineTotalToHeader,
   canPushLineValuesToHeader,
@@ -133,6 +137,16 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
             setSortDesc={setSortDesc}
             clearSort={clearSort}
           />
+          {canToggleColumnSum ? (
+            <div className={styles.sectionBlock}>
+              <PurchaseOrderShowSumSwitch
+                styles={styles}
+                checked={isColumnSumColumn}
+                onToggle={handleToggleColumnSum}
+                onMouseEnter={closeSubmenu}
+              />
+            </div>
+          ) : null}
           <div className={styles.divider} />
           <PurchaseOrderColumnFilterMenuFilterSection
             styles={styles}

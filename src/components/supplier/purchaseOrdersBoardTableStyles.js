@@ -80,7 +80,7 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     zIndex: 1,
     backgroundColor: tokens.colorNeutralBackground2,
     fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase400,
     ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('4px', '8px'),

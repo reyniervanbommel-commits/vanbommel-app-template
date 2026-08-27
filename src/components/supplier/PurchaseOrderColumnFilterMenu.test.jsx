@@ -186,7 +186,6 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     renderMenu({ sumToggles: { onSetColumnSumColumn } });
 
     openColumnMenu();
-    fireEvent.click(await screen.findByRole('button', { name: /Category \/ group/i }));
     fireEvent.click(await screen.findByRole('switch', { name: /^Show sum$/i }));
 
     expect(onSetColumnSumColumn).toHaveBeenCalledWith('amount', true);
