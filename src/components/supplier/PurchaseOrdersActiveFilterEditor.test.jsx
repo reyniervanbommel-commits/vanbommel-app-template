@@ -143,4 +143,23 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(applyColumnFilter).not.toHaveBeenCalled();
   });
+
+  it('does not apply a remarks search longer than 200 characters', () => {
+    const overlong = 'a'.repeat(201);
+    const column = { key: 'remarks', label: 'Remarks', dataType: 'remarks' };
+    const { applyColumnFilter } = renderEditor({
+      item: {
+        columnKey: 'remarks',
+        column,
+        filter: { operator: 'contains', value: overlong, secondaryValue: '' },
+      },
+      headerColumns: [column],
+      filterByColumn: { remarks: { operator: 'contains', value: overlong, secondaryValue: '' } },
+    });
+
+    expect(screen.getByText('Enter at most 200 characters')).toBeTruthy();
+    expect(screen.queryByText('Enter at least 2 characters')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(applyColumnFilter).not.toHaveBeenCalled();
+  });
 });

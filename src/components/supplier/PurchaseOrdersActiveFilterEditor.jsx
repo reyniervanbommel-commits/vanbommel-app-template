@@ -153,9 +153,12 @@ export default function PurchaseOrdersActiveFilterEditor({
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek');
   const inputType = getValueInputType(isDate, isNumber, draft.operator);
-  const searchHint = isRemarks && String(draft.value ?? '').trim().length < 2
-    ? 'Enter at least 2 characters'
-    : '';
+  const remarksTermLength = isRemarks ? String(draft.value ?? '').trim().length : 0;
+  const searchHint = remarksTermLength > 200
+    ? 'Enter at most 200 characters'
+    : remarksTermLength < 2 && isRemarks
+      ? 'Enter at least 2 characters'
+      : '';
 
   return (
     <div className={styles.root}>

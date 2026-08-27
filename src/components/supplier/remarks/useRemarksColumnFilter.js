@@ -41,6 +41,7 @@ export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-or
           : new Set();
         setMatchKeys(keys);
       } catch (requestError) {
+        if (controller.signal.aborted || controllerRef.current !== controller) return;
         if (requestError?.name !== 'AbortError') {
           setError(requestError?.message || 'Failed to search remarks');
         }

@@ -87,9 +87,12 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   const showFilter = showSortAndFilter;
   const groupingEnabled = showGrouping && !isRemarks;
   const showColorFilter = Boolean(colorFilter?.supported) && !isRemarks;
-  const searchHint = isRemarks && String(draft?.value ?? '').trim().length < 2
-    ? 'Enter at least 2 characters'
-    : '';
+  const remarksTermLength = isRemarks ? String(draft?.value ?? '').trim().length : 0;
+  const searchHint = remarksTermLength > 200
+    ? 'Enter at most 200 characters'
+    : remarksTermLength < 2 && isRemarks
+      ? 'Enter at least 2 characters'
+      : '';
 
   const showColumnSection = useMemo(
     () => Boolean(

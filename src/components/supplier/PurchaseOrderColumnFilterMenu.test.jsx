@@ -239,6 +239,18 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.getByText('Enter at least 2 characters')).toBeTruthy();
   });
 
+  it('toont een max-lengte hint voor remarks-zoektermen langer dan 200 tekens', async () => {
+    renderMenu({
+      column: { ...COLUMN, key: 'remarks', label: 'Remarks', dataType: 'remarks', source: 'custom' },
+    });
+
+    openColumnMenu();
+    const valueInput = screen.getByLabelText(/Filter value for Remarks/i);
+    fireEvent.change(valueInput, { target: { value: 'a'.repeat(201) } });
+    expect(screen.getByText('Enter at most 200 characters')).toBeTruthy();
+    expect(screen.queryByText('Enter at least 2 characters')).toBeNull();
+  });
+
   it('past filter operator en waarde pas op bij Apply', async () => {
     const onApplyFilter = vi.fn();
     renderMenu({ onApplyFilter });

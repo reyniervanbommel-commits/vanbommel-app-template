@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../../../utils/api';
 import { rowKey } from './remarksFormatters';
@@ -93,6 +93,33 @@ describe('useRemarksColumnFilter', () => {
     });
     expect(result.current.error).toBe('');
     expect(result.current.matchKeys).toEqual(new Set([rowKey('nl', 'PO-1')]));
+  });
+
+  it('ignores a stale non-Abort rejection after a later query succeeds', async () => {
+    let rejectFirst;
+    apiRequest.mockImplementationOnce(
+      () => new Promise((_, reject) => { rejectFirst = reject; })
+    );
+    apiRequest.mockResolvedValueOnce({
+      keys: [{ partitionKey: 'nl', recordKey: 'PO-2' }],
+    });
+
+    const { result, rerender } = renderHook(
+      ({ query }) => useRemarksColumnFilter({ query, enabled: true }),
+      { initialProps: { query: 'delay' } }
+    );
+
+    rerender({ query: 'late' });
+    await waitFor(() => {
+      expect(result.current.matchKeys).toEqual(new Set([rowKey('nl', 'PO-2')]));
+    });
+
+    await act(async () => {
+      rejectFirst(new Error('stale search failed'));
+    });
+
+    expect(result.current.error).toBe('');
+    expect(result.current.matchKeys).toEqual(new Set([rowKey('nl', 'PO-2')]));
   });
 
   it('aborts the previous request when the query changes', async () => {
