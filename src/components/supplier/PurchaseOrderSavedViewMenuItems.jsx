@@ -5,14 +5,22 @@ import {
   MenuItem,
   Switch,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { CheckmarkRegular, ClockRegular } from '@fluentui/react-icons';
+import { ClockRegular } from '@fluentui/react-icons';
+import { viewVendorAccount } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   viewMenuItem: {
     ...shorthands.padding('0'),
+  },
+  viewMenuItemActive: {
+    backgroundColor: tokens.colorNeutralBackground1Selected,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Selected,
+    },
   },
   viewMenuItemRow: {
     display: 'flex',
@@ -28,6 +36,16 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  viewMenuItemLabelActive: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  vendorSuffix: {
+    marginLeft: '6px',
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightRegular,
+    textDecorationLine: 'underline',
   },
   historyControl: {
     display: 'flex',
@@ -76,15 +94,23 @@ export function SavedViewMenuItem({
     event.stopPropagation();
   }, []);
 
+  const handleApply = useCallback(() => {
+    onApplyView(view);
+  }, [onApplyView, view]);
+
+  const vendorAccount = viewVendorAccount(view);
+
   return (
     <MenuItem
-      icon={isActive ? <CheckmarkRegular /> : undefined}
-      className={styles.viewMenuItem}
-      onClick={() => onApplyView(view)}
+      className={mergeClasses(styles.viewMenuItem, isActive && styles.viewMenuItemActive)}
+      aria-current={isActive ? 'true' : undefined}
+      onClick={handleApply}
     >
       <span className={styles.viewMenuItemRow}>
-        <span className={styles.viewMenuItemLabel}>
-          {view.name}{view.isDefault ? ' (default)' : ''}
+        <span className={mergeClasses(styles.viewMenuItemLabel, isActive && styles.viewMenuItemLabelActive)}>
+          {view.name}
+          {vendorAccount ? <span className={styles.vendorSuffix}>{vendorAccount}</span> : null}
+          {view.isDefault ? ' (default)' : ''}
         </span>
         <span className={styles.historyControl} title="Show history indicators">
           <ClockRegular className={styles.historyIcon} aria-hidden />

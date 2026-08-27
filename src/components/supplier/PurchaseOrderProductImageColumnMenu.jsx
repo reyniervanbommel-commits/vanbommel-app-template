@@ -1,7 +1,8 @@
 import React, { memo, useCallback, useState } from 'react';
 import { Button, Popover, PopoverSurface, PopoverTrigger } from '@fluentui/react-components';
-import { ArrowRightRegular } from '@fluentui/react-icons';
+import { PinOffRegular, PinRegular } from '@fluentui/react-icons';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
+import { getStickyColumnMenuText } from './purchaseOrderColumnFilterMenuConstants';
 
 function PurchaseOrderProductImageColumnMenu({
   columnKey,
@@ -14,11 +15,7 @@ function PurchaseOrderProductImageColumnMenu({
   const styles = usePurchaseOrderColumnFilterMenuStyles();
   const [open, setOpen] = useState(false);
   const stickyActionDisabled = !canPromoteToSticky && !canUnstickSticky;
-  const stickyMenuText = canUnstickSticky
-    ? 'Unstick column'
-    : isStickyColumn
-      ? `Already sticky (${stickyColumnCount})`
-      : 'Make this the next sticky column';
+  const stickyMenuText = getStickyColumnMenuText({ canUnstickSticky, isStickyColumn, stickyColumnCount });
   const stickyLabelClassName = `${styles.menuItemContent} ${stickyActionDisabled ? styles.menuItemContentDisabled : ''}`.trim();
   const stickyIconClassName = `${styles.menuItemIcon} ${stickyActionDisabled ? styles.menuItemIconDisabled : ''}`.trim();
 
@@ -59,7 +56,7 @@ function PurchaseOrderProductImageColumnMenu({
           >
             <span className={stickyLabelClassName}>
               <span className={stickyIconClassName} aria-hidden>
-                <ArrowRightRegular />
+                {canUnstickSticky ? <PinOffRegular /> : <PinRegular />}
               </span>
               <span>{stickyMenuText}</span>
             </span>

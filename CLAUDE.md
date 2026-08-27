@@ -52,6 +52,7 @@ Project skills staan in `.claude/skills/`. Belangrijkste:
 |-------|---------------|---------|
 | `brd-td-feature-design` | — | Korte wens → één spec (`## BRD` / `## FRD` / `## TD`); vóór bouwplan/DevOps |
 | `ui-design-review` | `/check-ui` of `/ui-design-review` | Fluent UI design-consistentie na feature (ook kleine wijzigingen) |
+| `final-check-feature` | `/final-check-feature` | Ná feature/bugfix: roept UI-, perf-, security- en browser-review aan + grootte/tests |
 | `browser-feature-test` | — | Functionele browser-test (gedrag, API, console) |
 | `perf-review` | `/perf-check` | Laadtijden meten én toerekenen (SQL / backend / netwerk / client / render) |
 | `develop-from-devops` | — | OTAP-straat: build / test / full |
@@ -98,13 +99,13 @@ Bij **elke feature en elke snelle fix** in `src/` of `server/` — ook buiten `d
 doorloop je vóór het klaarmelden van het werk:
 
 1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
-   3+ UI-bestanden of nieuwe flyout/drawer/overlay → escaleer naar `ui-design-review` skill.
+   Daarna `final-check-feature` (die `ui-design-review` aanroept).
 2. **Snelheid** — geen onnodige extra `apiRequest`-calls, queries/berekeningen in loops, of
    ontbrekende `useMemo`/`useCallback`. Kies bij twijfel de oplossing die de **ervaren** snelheid
-   ten goede komt (caching, optimistic UI, memoization). Hot path geraakt (PO-board, tab-switches,
-   grote lijsten) → escaleer naar `perf-review` (modus `regression`).
+   ten goede komt (caching, optimistic UI, memoization). `final-check-feature` roept `perf-review`
+   aan (geen extra snelheid-skill; geen `perf-pipeline` na elke fix).
 3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
-   routes, SQL via parameters. Auth/route/data-laag gewijzigd → escaleer naar `security-review`.
+   routes, SQL via parameters. `final-check-feature` roept `security-review` aan op de diff.
 4. **Testen** — nieuwe of gewijzigde pure/business-logica in `server/services/`, `server/middleware/`,
    `server/utils/`, `src/utils/` of `src/hooks/` (de kernmappen) → verwacht een `.test.js`/`.test.jsx`
    ernaast, co-located zoals de rest van de repo (zie bestaande tests als voorbeeld). Dunne
@@ -113,7 +114,9 @@ doorloop je vóór het klaarmelden van het werk:
    kernbestanden zonder test in de PR-jobsummary, zodat het niet op menselijk onthouden hoeft te
    steunen.
 
-Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
+Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`. Ná de wijziging: skill
+`final-check-feature` (roept `ui-design-review`, `perf-review`, `security-review`,
+`browser-feature-test` aan).
 
 ## Performance / timing (verplicht bij nieuwe code)
 

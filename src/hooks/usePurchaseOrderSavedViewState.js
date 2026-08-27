@@ -6,6 +6,8 @@ import {
   readAllOrdersHistoryFromSettings,
 } from '../utils/allOrdersHistoryPreference';
 import { usePurchaseOrderSavedViews } from './usePurchaseOrderSavedViews';
+import { usePurchaseOrderViewTabs } from './usePurchaseOrderViewTabs';
+import { ALL_TAB_ID, normalizeTabsState } from '../utils/viewTabs';
 
 const BOARD_KEY = 'purchase-orders';
 
@@ -57,6 +59,8 @@ export function usePurchaseOrderSavedViewState({
   applyColumnLayout,
   boardView,
   isSupplier = false,
+  columns = [],
+  datePeriodDisplayModes = {},
 }) {
   const savedViews = usePurchaseOrderSavedViews({ boardKey: BOARD_KEY });
   const [activeViewId, setActiveViewId] = useState(null);
@@ -68,15 +72,34 @@ export function usePurchaseOrderSavedViewState({
   const activeViewIdRef = useRef(activeViewId);
   const allOrdersDirtyRef = useRef(false);
   activeViewIdRef.current = activeViewId;
+  const viewTabs = usePurchaseOrderViewTabs({
+    activeViewId,
+    boardView,
+    columns,
+    allItems: boardView.allItems || orders,
+    datePeriodDisplayModes,
+  });
 
-  const buildCurrentViewState = useCallback(() => ({
-    showHistoryIndicators,
-    columns: {
-      ...exportColumnLayout(),
-      stickyColumnKeys,
-    },
-    table: boardView.exportFilterSortGrouping(),
-  }), [exportColumnLayout, boardView, stickyColumnKeys, showHistoryIndicators]);
+  const buildCurrentViewState = useCallback(() => {
+    const peek = viewTabs.peekTabsState();
+    const table = boardView.exportFilterSortGrouping();
+    return {
+      showHistoryIndicators,
+      vendorAccount: savedViews.views.find((view) => view.id === activeViewId)?.viewState?.vendorAccount || '',
+      columns: {
+        ...exportColumnLayout(),
+        stickyColumnKeys,
+      },
+      table: {
+        ...table,
+        filterByColumn: peek.viewBaseFilters,
+      },
+      tabs: {
+        extraTabs: peek.extraTabs,
+        groups: peek.groups,
+      },
+    };
+  }, [activeViewId, boardView, exportColumnLayout, savedViews.views, stickyColumnKeys, showHistoryIndicators, viewTabs]);
 
   const buildCurrentFingerprint = useCallback(
     () => stableSerialize(buildCurrentViewState()),
@@ -95,8 +118,18 @@ export function usePurchaseOrderSavedViewState({
     boardView.applyFilterSortGrouping(state.table);
     setShowHistoryIndicators(state.showHistoryIndicators !== false);
     setActiveViewId(view?.id ?? null);
-    setSavedStateFingerprint(view?.id ? stableSerialize(state) : null);
-  }, [applyColumnLayout, boardView]);
+    if (view?.id) {
+      viewTabs.loadFromViewState({ ...state, viewId: view.id });
+      setSavedStateFingerprint(stableSerialize({
+        ...state,
+        vendorAccount: state.vendorAccount || '',
+        tabs: normalizeTabsState(state.tabs),
+      }));
+    } else {
+      viewTabs.resetTabs();
+      setSavedStateFingerprint(null);
+    }
+  }, [applyColumnLayout, boardView, viewTabs]);
 
   const persistAllOrdersHistory = useCallback((enabled) => {
     allOrdersDirtyRef.current = true;
@@ -114,10 +147,15 @@ export function usePurchaseOrderSavedViewState({
     setShowHistoryIndicators(allOrdersShowHistoryIndicators);
     setActiveViewId(null);
     setSavedStateFingerprint(null);
-  }, [boardView, allOrdersShowHistoryIndicators]);
+    viewTabs.resetTabs();
+  }, [boardView, allOrdersShowHistoryIndicators, viewTabs]);
 
-  const handleSaveAsNew = useCallback(async ({ name, scope, isDefault }) => {
-    const currentState = buildCurrentViewState();
+  const handleSaveAsNew = useCallback(async ({ name, scope, isDefault, vendorAccount }) => {
+    const currentState = {
+      ...buildCurrentViewState(),
+      vendorAccount: vendorAccount || '',
+      tabs: { extraTabs: [], groups: [] },
+    };
     const currentFingerprint = stableSerialize(currentState);
     const created = await savedViews.createView({
       name,
@@ -128,14 +166,26 @@ export function usePurchaseOrderSavedViewState({
     if (created?.id) {
       setActiveViewId(created.id);
       setSavedStateFingerprint(currentFingerprint);
+      viewTabs.loadFromViewState({ ...currentState, viewId: created.id });
     }
-  }, [savedViews, buildCurrentViewState]);
+    return created;
+  }, [savedViews, buildCurrentViewState, viewTabs]);
 
-  const handleUpdateActive = useCallback(async (view) => {
-    const currentState = buildCurrentViewState();
+  const handleUpdateActive = useCallback(async (view, saveScope = 'all') => {
+    let extraTabs = viewTabs.peekTabsState().extraTabs;
+    if (saveScope === 'group' && viewTabs.activeTabId !== ALL_TAB_ID) {
+      extraTabs = viewTabs.applySaveScope('group');
+    } else {
+      viewTabs.snapshotCurrentTab();
+      extraTabs = viewTabs.peekTabsState().extraTabs;
+    }
+    const currentState = {
+      ...buildCurrentViewState(),
+      tabs: { extraTabs, groups: viewTabs.groups },
+    };
     await savedViews.updateView(view.id, { viewState: currentState });
     setSavedStateFingerprint(stableSerialize(currentState));
-  }, [savedViews, buildCurrentViewState]);
+  }, [savedViews, buildCurrentViewState, viewTabs]);
 
   const handleRenameView = useCallback(async (view, name) => {
     await savedViews.updateView(view.id, { name });
@@ -151,8 +201,9 @@ export function usePurchaseOrderSavedViewState({
       setShowHistoryIndicators(allOrdersShowHistoryIndicators);
       setActiveViewId(null);
       setSavedStateFingerprint(null);
+      viewTabs.resetTabs();
     }
-  }, [savedViews, activeViewId, allOrdersShowHistoryIndicators]);
+  }, [savedViews, activeViewId, allOrdersShowHistoryIndicators, viewTabs]);
 
   const handleToggleShowHistory = useCallback(async (view, enabled) => {
     const nextEnabled = Boolean(enabled);
@@ -222,6 +273,7 @@ export function usePurchaseOrderSavedViewState({
     allOrdersShowHistoryIndicators,
     stickyColumnKeys,
     setStickyColumnKeys,
+    viewTabs,
   }), [
     savedViews,
     activeViewId,
@@ -237,6 +289,6 @@ export function usePurchaseOrderSavedViewState({
     showHistoryIndicators,
     allOrdersShowHistoryIndicators,
     stickyColumnKeys,
-    setStickyColumnKeys,
+    viewTabs,
   ]);
 }
