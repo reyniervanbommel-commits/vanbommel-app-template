@@ -2,33 +2,7 @@
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
-export const devTestItems = [
-  {
-    id: 'idle-prefetch-kpi-bi-rccp',
-    title: 'Idle prefetch: KPI-tab, BI & RCCP',
-    checks: [
-      'Open the PO table, wait ~2s without scrolling, open the KPI tab: tiles show non-zero numbers when Open/Delivered are configured in settings.',
-      'Scroll fast / type in a column filter while the idle-prefetch would normally run: no noticeable extra stutter compared to before this change.',
-      'First click on RCCP with a last-used vendor: chart/KPIs appear without a long empty state (at most a brief JS-chunk load if the prefetch had not finished yet).',
-    ],
-  },
-  {
-    id: 'feature-po-view-tabs-v1-52-10',
-    title: 'Feature PO view tabs (v1.52.10)',
-    checks: [
-      'Save a view, then create tabs from a column (unique values of the current filters).',
-      'All tab shows the shared view filters; extra tabs only add extra filters.',
-      'Open the view menu for Tab, Tabs from column…, and Group colors (nested).',
-      'A warning appears when a column would create more than 10 tabs.',
-      'Right-click an extra tab to change group color or delete this tab / the group.',
-      'Tab labels are at most 10 characters; hover shows the full name plus column and filter value in two columns.',
-      'Prefix and suffix options are not in the view menu, tab context menu, or create-tabs dialog.',
-      'Setting an extra filter on an extra tab immediately asks This tab only vs All tabs with the same filter.',
-      'Vendor views show the vendor account number after the view name in the view menu.',
-      'The tab bar stays flush under the toolbar and scrolls horizontally when there are many tabs.',
-    ],
-  },
-];
+export const devTestItems = [];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
 export function buildDevChecklistItems(items = devTestItems) {
