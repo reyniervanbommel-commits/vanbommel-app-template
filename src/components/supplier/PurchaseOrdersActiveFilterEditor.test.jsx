@@ -100,4 +100,47 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
 
     expect(getUniqueColumnValues).toHaveBeenCalledTimes(1);
   });
+
+  it('restricts remarks filters to contains without a unique picker', () => {
+    const column = { key: 'remarks', label: 'Remarks', dataType: 'remarks' };
+    const { applyColumnFilter } = renderEditor({
+      item: {
+        columnKey: 'remarks',
+        column,
+        filter: { operator: 'contains', value: 'ab', secondaryValue: '' },
+      },
+      headerColumns: [column],
+      filterByColumn: { remarks: { operator: 'contains', value: 'ab', secondaryValue: '' } },
+      items: [{ values: { remarks: 'older note' } }],
+    });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter operator for Remarks' }));
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['contains']);
+    expect(getUniqueColumnValues).not.toHaveBeenCalled();
+    expect(screen.queryByText('Filter by color')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(applyColumnFilter).toHaveBeenCalledWith('remarks', {
+      operator: 'contains',
+      value: 'ab',
+      secondaryValue: '',
+    });
+  });
+
+  it('does not apply a remarks search shorter than 2 characters', () => {
+    const column = { key: 'remarks', label: 'Remarks', dataType: 'remarks' };
+    const { applyColumnFilter } = renderEditor({
+      item: {
+        columnKey: 'remarks',
+        column,
+        filter: { operator: 'contains', value: 'a', secondaryValue: '' },
+      },
+      headerColumns: [column],
+      filterByColumn: { remarks: { operator: 'contains', value: 'a', secondaryValue: '' } },
+    });
+
+    expect(screen.getByText('Enter at least 2 characters')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(applyColumnFilter).not.toHaveBeenCalled();
+  });
 });

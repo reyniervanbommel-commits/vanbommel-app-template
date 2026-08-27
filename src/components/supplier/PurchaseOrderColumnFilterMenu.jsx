@@ -18,6 +18,7 @@ import {
   isColumnFilterActive,
   isDateColumn,
   isNumberColumn,
+  REMARKS_FILTER_OPERATORS,
 } from './purchaseOrderColumnFilterMenuConstants';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
 
@@ -94,14 +95,10 @@ function PurchaseOrderColumnFilterMenu({
     [groupingColumnKey]
   );
   const isGroupingColumn = groupingColumnKeys.includes(column.key);
-  const operatorLabels = isDate
-    ? DATE_FILTER_OPERATORS
-    : isNumber
-      ? NUMBER_FILTER_OPERATORS
-      : TEXT_FILTER_OPERATORS;
+  const operatorLabels = column.dataType === 'remarks' ? REMARKS_FILTER_OPERATORS : isDate ? DATE_FILTER_OPERATORS : isNumber ? NUMBER_FILTER_OPERATORS : TEXT_FILTER_OPERATORS;
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const uniqueColumnValues = useMemo(() => {
-    if (!open || isDate) return EMPTY_UNIQUE_VALUES;
+    if (!open || isDate || column.dataType === 'remarks') return EMPTY_UNIQUE_VALUES;
     return getUniqueColumnValues(column, items, referenceColumns, allFilters, allDatePeriodDisplayModes);
   }, [open, isDate, column, items, referenceColumns, allFilters, allDatePeriodDisplayModes]);
   const sortDirection = sortState.columnKey === column.key ? sortState.direction : 'none';
@@ -191,7 +188,7 @@ function PurchaseOrderColumnFilterMenu({
     setActiveSubmenu('none');
   }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
   const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleDraftValueChange, handleSecondaryValueChange, handleApplyFilter, handleApplyFilterWithValue, handleClearFilter } = usePurchaseOrderSortFilterActions({
-    columnKey: column.key,
+    columnKey: column.key, columnDataType: column.dataType,
     draft,
     onSetSortDirection,
     onSetOperator,

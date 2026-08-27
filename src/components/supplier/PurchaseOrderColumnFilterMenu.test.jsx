@@ -225,7 +225,18 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByRole('button', { name: /Conditional formatting/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Sort ascending/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Clear sort/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Category \/ group/i })).toBeNull();
+    expect(screen.queryByText('Filter by color')).toBeNull();
+    expect(screen.getByText('Filter')).toBeTruthy();
+    expect(screen.getByText('contains')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
+
+    const valueInput = screen.getByLabelText(/Filter value for Remarks/i);
+    fireEvent.focus(valueInput);
+    expect(screen.queryByRole('listbox', { name: /Suggestions for Remarks/i })).toBeNull();
+    expect(screen.getByText('Enter at least 2 characters')).toBeTruthy();
   });
 
   it('past filter operator en waarde pas op bij Apply', async () => {
