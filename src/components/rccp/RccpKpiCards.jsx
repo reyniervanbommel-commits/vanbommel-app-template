@@ -19,41 +19,63 @@ const useStyles = makeStyles({
     ...shorthands.border('2px', 'solid', tokens.colorBrandStroke1),
   },
   label: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  value: { fontSize: tokens.fontSizeBase500, fontWeight: tokens.fontWeightSemibold },
+  valueRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    flexWrap: 'nowrap',
+    whiteSpace: 'nowrap',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  value: {
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightSemibold,
+    width: 'auto',
+  },
+  hash: {
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground2,
+    width: 'auto',
+  },
+  aside: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    width: 'auto',
+  },
+  pct: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground2,
+  },
   detail: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
 });
 
+function hasQty(value) {
+  return value !== null && value !== undefined;
+}
+
 function formatQty(value) {
-  if (value === null || value === undefined) return '—';
+  if (!hasQty(value)) return '—';
   return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
 }
 
 function formatPct(value) {
-  if (value === null || value === undefined) return '';
-  return `${(Number(value) || 0).toFixed(1)}% of ordered`;
+  if (!hasQty(value)) return '';
+  return `${(Number(value) || 0).toFixed(1)}%`;
 }
 
 function formatDays(value) {
-  if (value === null || value === undefined) return '—';
+  if (!hasQty(value)) return '—';
   const rounded = Math.round(Number(value) * 10) / 10;
-  return `${rounded} days late`;
-}
-
-function formatUnits(value) {
-  if (value === null || value === undefined) return '';
-  return `${formatQty(value)} units`;
+  return `Ø ${rounded} days late`;
 }
 
 function formatItems(value) {
-  if (value === null || value === undefined) return '';
+  if (!hasQty(value)) return '';
   return `${formatQty(value)} items`;
 }
 
-function joinDetails(...parts) {
-  return parts.filter(Boolean).join(' · ');
-}
-
-function KpiCard({ kpiKey, label, value, detail, selected, clickable, onActivate }) {
+function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, clickable, onActivate }) {
   const styles = useStyles();
   const handleClick = useCallback(() => {
     if (clickable) onActivate(kpiKey);
@@ -65,6 +87,9 @@ function KpiCard({ kpiKey, label, value, detail, selected, clickable, onActivate
       onActivate(kpiKey);
     }
   }, [clickable, kpiKey, onActivate]);
+  const mark = hash === true ? '#' : (typeof hash === 'string' ? hash : '');
+  const showMark = Boolean(mark && hasQty(qty));
+  const markBefore = mark === 'Ø';
   return (
     <Card
       className={mergeClasses(styles.card, clickable && styles.clickable, selected && styles.selected)}
@@ -75,7 +100,13 @@ function KpiCard({ kpiKey, label, value, detail, selected, clickable, onActivate
       onKeyDown={clickable ? handleKeyDown : undefined}
     >
       <Text className={styles.label}>{label}</Text>
-      <Text className={styles.value}>{value}</Text>
+      <div className={styles.valueRow}>
+        {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+        <Text className={styles.value}>{formatQty(qty)}</Text>
+        {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+        {aside ? <Text className={styles.aside}>{aside}</Text> : null}
+      </div>
+      {pct ? <Text className={styles.pct}>{pct}</Text> : null}
       {detail ? <Text className={styles.detail}>{detail}</Text> : null}
     </Card>
   );
@@ -89,12 +120,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
   if (!kpis) return null;
   const clickable = Boolean(onSelect);
   const clickableSet = clickable ? new Set(PO_BOARD_CLICKABLE_KPI_KEYS) : new Set();
+  const uniqueLateItems = kpis.lateDeliveryItemCount;
   return (
     <div className={styles.row}>
       <KpiCard
         kpiKey="ordered"
         label="Total ordered"
-        value={formatQty(kpis.totalOrdered)}
+        qty={kpis.totalOrdered}
+        hash
         selected={selectedKey === 'ordered'}
         clickable={clickableSet.has('ordered')}
         onActivate={handleActivate}
@@ -102,8 +135,9 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="delivered"
         label="Total delivered"
-        value={formatQty(kpis.totalDelivered)}
-        detail={formatPct(kpis.deliveredPercent)}
+        qty={kpis.totalDelivered}
+        hash
+        pct={formatPct(kpis.deliveredPercent)}
         selected={selectedKey === 'delivered'}
         clickable={clickableSet.has('delivered')}
         onActivate={handleActivate}
@@ -111,8 +145,10 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="open"
         label="Total open"
-        value={formatQty(kpis.totalOpen)}
-        detail={joinDetails(formatItems(kpis.openItemCount), formatPct(kpis.openPercent))}
+        qty={kpis.totalOpen}
+        hash
+        aside={formatItems(kpis.openItemCount)}
+        pct={formatPct(kpis.openPercent)}
         selected={selectedKey === 'open'}
         clickable={clickableSet.has('open')}
         onActivate={handleActivate}
@@ -120,17 +156,20 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="lateDelivery"
         label="Late delivery"
-        value={formatDays(kpis.lateDeliveryAvgDays)}
-        detail={joinDetails(formatItems(kpis.lateDeliveryItemCount), formatUnits(kpis.lateDeliveryUnits), formatPct(kpis.lateDeliveryPercent))}
+        qty={kpis.lateDeliveryUnits}
+        hash
+        aside={formatItems(uniqueLateItems)}
+        pct={formatPct(kpis.lateDeliveryPercent)}
         selected={selectedKey === 'lateDelivery'}
         clickable={clickableSet.has('lateDelivery')}
         onActivate={handleActivate}
       />
       <KpiCard
         kpiKey="lateItems"
-        label="Late delivery items"
-        value={formatQty(kpis.lateDeliveryItemCount)}
-        detail={joinDetails(formatUnits(kpis.lateDeliveryUnits), formatPct(kpis.lateDeliveryPercent))}
+        label="Average days late"
+        qty={kpis.lateDeliveryAvgDays}
+        hash="Ø"
+        aside="days late"
         selected={selectedKey === 'lateItems'}
         clickable={clickableSet.has('lateItems')}
         onActivate={handleActivate}
@@ -138,8 +177,10 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="onTime"
         label="On time delivery"
-        value={formatQty(kpis.onTimeItemCount)}
-        detail={joinDetails(formatUnits(kpis.onTimeUnits), formatPct(kpis.onTimePercent))}
+        qty={kpis.onTimeUnits}
+        hash
+        aside={formatItems(kpis.onTimeItemCount)}
+        pct={formatPct(kpis.onTimePercent)}
         selected={selectedKey === 'onTime'}
         clickable={clickableSet.has('onTime')}
         onActivate={handleActivate}
@@ -147,7 +188,9 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="openLate"
         label="Open and late"
-        value={formatQty(kpis.openLateItemCount)}
+        qty={kpis.openLateItemCount}
+        hash
+        aside={formatItems(uniqueLateItems)}
         detail={formatDays(kpis.openLateAvgDays)}
         selected={selectedKey === 'openLate'}
         clickable={clickableSet.has('openLate')}
@@ -156,7 +199,8 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="capacityShortfall"
         label="Capacity shortfall"
-        value={formatQty(kpis.capacityShortfall)}
+        qty={kpis.capacityShortfall}
+        hash
         selected={false}
         clickable={false}
         onActivate={handleActivate}
@@ -164,7 +208,8 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
       <KpiCard
         kpiKey="overloadedWeeks"
         label="Overloaded weeks"
-        value={formatQty(kpis.overloadedWeeks)}
+        qty={kpis.overloadedWeeks}
+        hash
         selected={false}
         clickable={false}
         onActivate={handleActivate}
