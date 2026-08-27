@@ -166,7 +166,7 @@ function appendConfirmedDeliveryRow({
   return extra;
 }
 
-function matchConfirmedDeliveryDrill(row, cell, config) {
+function matchConfirmedDeliveryDrill(row, cell, config, window) {
   const result = [];
   const confirmedKey = String(config.confirmedDateColumnKey || '').trim();
   const openKey = String(config.openMeasureKey || '').trim();
@@ -181,16 +181,10 @@ function matchConfirmedDeliveryDrill(row, cell, config) {
   const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
   const share = details.length ? 1 / details.length : 1;
   const headerOnlyOpen = Boolean(openKey && isHeaderOnlyMeasure(details, masterValues, openKey));
-  const cellWindow = {
-    fromYear: cell.periodYear,
-    fromWeek: cell.isoWeek,
-    toYear: cell.periodYear,
-    toWeek: cell.isoWeek,
-  };
 
   if (headerOnlyOpen) {
     const slots = collectDateSlots(
-      details, masterValues, confirmedKey, null, cellWindow, excludedSet, masterStatus,
+      details, masterValues, confirmedKey, null, window, excludedSet, masterStatus,
     ).filter((slot) => !isSentinelDate(slot.dateValue));
     const total = toNumber(pickValue(masterValues, openKey));
     if (!(total > 0) || !slots.length) return result;

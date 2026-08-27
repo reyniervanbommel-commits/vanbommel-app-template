@@ -166,7 +166,7 @@ describe('rccpConfirmedLoad', () => {
       periodYear: confirmedWeek.year,
       isoWeek: confirmedWeek.week,
       measureKey: '__confirmed_delivery__',
-    }, baseConfig);
+    }, baseConfig, window);
     expect(onConfirmed).toEqual([
       expect.objectContaining({
         orderNumber: 'PO-A',
@@ -180,8 +180,41 @@ describe('rccpConfirmedLoad', () => {
       periodYear: plannedWeek.year,
       isoWeek: plannedWeek.week,
       measureKey: '__confirmed_delivery__',
-    }, baseConfig);
+    }, baseConfig, window);
     expect(onRequested).toEqual([]);
+  });
+
+  it('shares header-only drill qty over analysis-window slots, then the cell week', () => {
+    const header = {
+      recordKey: 'PO-H',
+      partitionKey: 'whsl',
+      values: { vendorAccount: 'V001', status: 'Open', dataAreaId: 'whsl', openQty: 30 },
+      details: [
+        {
+          detailKey: '1',
+          values: { requestedDeliveryDate: planned, confirmedDlvDate: planned, itemNumber: 'SKU-1' },
+        },
+        {
+          detailKey: '2',
+          values: { requestedDeliveryDate: planned, confirmedDlvDate: confirmed, itemNumber: 'SKU-2' },
+        },
+      ],
+    };
+    const cell = {
+      vendorAccount: 'V001',
+      periodYear: confirmedWeek.year,
+      isoWeek: confirmedWeek.week,
+      measureKey: '__confirmed_delivery__',
+    };
+    const rows = matchConfirmedDeliveryDrill(header, cell, baseConfig, window);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        orderNumber: 'PO-H',
+        itemNumber: 'SKU-2',
+        quantity: 15,
+        deliveryDate: confirmed,
+      }),
+    ]);
   });
 
   it('excludes the synthetic confirmed-delivery row from capacity load', () => {

@@ -544,7 +544,7 @@ function buildDrillDownRows(rows, config, cell, window) {
   if (!measureKey || measureKey === CAPACITY_MEASURE_KEY || measureKey === OVERCAPACITY_MEASURE_KEY) return result;
   if (measureKey === CONFIRMED_DELIVERY_MEASURE_KEY) {
     for (const row of rows) {
-      result.push(...matchConfirmedDeliveryDrill(row, cell, config));
+      result.push(...matchConfirmedDeliveryDrill(row, cell, config, window));
     }
     return result;
   }
