@@ -53,6 +53,7 @@ function RccpSettingsForm({
           onVendor={handlers.handleVendor}
           onDate={handlers.handleDate}
           onReceiptDate={handlers.handleReceiptDate}
+          onConfirmedDate={handlers.handleConfirmedDate}
           onStatuses={handlers.handleStatuses}
           onPolicy={handlers.handlePolicy}
         />

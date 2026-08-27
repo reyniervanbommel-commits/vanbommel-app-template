@@ -62,6 +62,7 @@ function defaultConfig() {
   return {
     dateColumnKey: 'requestedDeliveryDate',
     receiptDateColumnKey: '',
+    confirmedDateColumnKey: '',
     vendorColumnKey: 'vendorAccount',
     quantityMeasures: defaultQuantityMeasures(),
     openMeasureKey: '',
@@ -131,6 +132,13 @@ function validateConfig(raw) {
   if (receiptDateColumnKey && !/^[A-Za-z0-9_]+$/.test(receiptDateColumnKey)) {
     return { valid: false, error: 'receiptDateColumnKey may only contain letters, numbers and underscores' };
   }
+  const confirmedDateColumnKey = String(raw.confirmedDateColumnKey ?? '').trim();
+  if (confirmedDateColumnKey.length > 128) {
+    return { valid: false, error: 'confirmedDateColumnKey must be at most 128 characters' };
+  }
+  if (confirmedDateColumnKey && !/^[A-Za-z0-9_]+$/.test(confirmedDateColumnKey)) {
+    return { valid: false, error: 'confirmedDateColumnKey may only contain letters, numbers and underscores' };
+  }
   const vendorColumnKey = String(raw.vendorColumnKey ?? base.vendorColumnKey).trim();
   const quantityMeasures = normalizeQuantityMeasures(raw);
   if (!dateColumnKey || !vendorColumnKey || !quantityMeasures.length) {
@@ -182,6 +190,7 @@ function validateConfig(raw) {
     config: {
       dateColumnKey,
       receiptDateColumnKey,
+      confirmedDateColumnKey,
       vendorColumnKey,
       quantityMeasures,
       openMeasureKey,

@@ -18,6 +18,10 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     onUpdateField('receiptDateColumnKey', e.target.value);
   }, [onUpdateField]);
 
+  const handleConfirmedDate = useCallback((e) => {
+    onUpdateField('confirmedDateColumnKey', e.target.value);
+  }, [onUpdateField]);
+
   const handleMeasures = useCallback((quantityMeasures) => {
     onUpdateField('quantityMeasures', quantityMeasures);
   }, [onUpdateField]);
@@ -49,6 +53,7 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     handleVendor,
     handleDate,
     handleReceiptDate,
+    handleConfirmedDate,
     handleMeasures,
     handleRanges,
     handleStatuses,
@@ -56,7 +61,7 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     handleOrange,
     handlePolicy,
   }), [
-    handleVendor, handleDate, handleReceiptDate, handleMeasures, handleRanges,
+    handleVendor, handleDate, handleReceiptDate, handleConfirmedDate, handleMeasures, handleRanges,
     handleStatuses, handleGreen, handleOrange, handlePolicy,
   ]);
 }

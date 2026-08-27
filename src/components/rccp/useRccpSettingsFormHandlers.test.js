@@ -17,6 +17,13 @@ describe('useRccpSettingsFormHandlers', () => {
     expect(onUpdateField).toHaveBeenCalledWith('receiptDateColumnKey', 'productReceiptDate');
   });
 
+  it('zet de confirmed-date kolom via handleConfirmedDate', () => {
+    const onUpdateField = vi.fn();
+    const { result } = renderHook(() => useRccpSettingsFormHandlers({ thresholds: {} }, onUpdateField));
+    result.current.handleConfirmedDate({ target: { value: 'confirmedDlvDate' } });
+    expect(onUpdateField).toHaveBeenCalledWith('confirmedDateColumnKey', 'confirmedDlvDate');
+  });
+
   it('houdt de andere drempel vast bij een groene drempelwijziging', () => {
     const onUpdateField = vi.fn();
     const { result } = renderHook(() => (

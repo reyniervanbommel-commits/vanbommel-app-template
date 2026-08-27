@@ -68,6 +68,45 @@ describe('RccpSettingsService.validateConfig receiptDateColumnKey', () => {
   });
 });
 
+describe('RccpSettingsService.validateConfig confirmedDateColumnKey', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+    quantityMeasures: [
+      { columnKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+    ],
+  };
+
+  it('defaults to an empty confirmed date key', () => {
+    const { valid, config } = validateConfig(base);
+    expect(valid).toBe(true);
+    expect(config.confirmedDateColumnKey).toBe('');
+  });
+
+  it('keeps a valid confirmed date column key', () => {
+    const { valid, config } = validateConfig({ ...base, confirmedDateColumnKey: 'confirmedDlvDate' });
+    expect(valid).toBe(true);
+    expect(config.confirmedDateColumnKey).toBe('confirmedDlvDate');
+  });
+
+  it('trims whitespace on the confirmed date key', () => {
+    const { config } = validateConfig({ ...base, confirmedDateColumnKey: '  confirmedDlvDate  ' });
+    expect(config.confirmedDateColumnKey).toBe('confirmedDlvDate');
+  });
+
+  it('rejects a confirmed date key longer than 128 characters', () => {
+    const { valid, error } = validateConfig({ ...base, confirmedDateColumnKey: 'a'.repeat(129) });
+    expect(valid).toBe(false);
+    expect(error).toBe('confirmedDateColumnKey must be at most 128 characters');
+  });
+
+  it('rejects a confirmed date key with invalid characters', () => {
+    const { valid, error } = validateConfig({ ...base, confirmedDateColumnKey: 'confirmed-date' });
+    expect(valid).toBe(false);
+    expect(error).toBe('confirmedDateColumnKey may only contain letters, numbers and underscores');
+  });
+});
+
 describe('RccpSettingsService color opacity', () => {
   it('behoudt 8-cijferige hex-kleuren op measures en week ranges', () => {
     expect(normalizeQuantityMeasures({

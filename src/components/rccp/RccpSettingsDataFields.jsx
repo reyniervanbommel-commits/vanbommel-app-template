@@ -105,7 +105,7 @@ function CapacityImportFields({ compact, policy, onPolicy }) {
 }
 
 function RccpSettingsDataFields({
-  config, columns, statusOptions, compact, onVendor, onDate, onReceiptDate, onStatuses, onPolicy,
+  config, columns, statusOptions, compact, onVendor, onDate, onReceiptDate, onConfirmedDate, onStatuses, onPolicy,
 }) {
   const styles = useStyles();
   const masterColumns = columns.filter((c) => c.scope === 'master');
@@ -139,6 +139,15 @@ function RccpSettingsDataFields({
           info="Date used to place received quantity below the axis. If empty, the delivery date is used."
           value={config.receiptDateColumnKey || ''}
           onChange={onReceiptDate}
+          columns={columns}
+          allowEmpty
+        />
+        <ColumnSelect
+          compact={compact}
+          label="Confirmed delivery date"
+          info="Line date first; the order header is the fallback. Optional."
+          value={config.confirmedDateColumnKey || ''}
+          onChange={onConfirmedDate}
           columns={columns}
           allowEmpty
         />
