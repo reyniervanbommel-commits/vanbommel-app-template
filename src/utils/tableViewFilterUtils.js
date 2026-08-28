@@ -200,8 +200,14 @@ export function numberMatchesFilter(rawValue, filter) {
   return true;
 }
 
+export function isRemarksSearchTermValid(value) {
+  const term = String(value ?? '').trim();
+  return term.length >= 2 && term.length <= 200;
+}
+
 // Dispatcht op kolomtype naar de juiste match-functie.
 export function columnValueMatchesFilter(column, rawValue, filter, datePeriodDisplayModes = {}) {
+  if (column?.dataType === 'remarks') return true;
   if (isDateColumn(column)) return dateMatchesFilter(rawValue, filter);
   if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) return numberMatchesFilter(rawValue, filter);
   return textMatchesFilter(rawValue, filter);

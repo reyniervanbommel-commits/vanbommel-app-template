@@ -4,6 +4,7 @@ const ALLOWED_EMOJIS = Object.freeze(['👍', '😊', '🎉', '❤️', '😂', 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/u;
+const SEARCH_CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/u;
 
 function badRequest(message) {
   return Object.assign(new Error(message), { status: 400 });
@@ -40,6 +41,15 @@ function normalizeBody(value) {
     throw badRequest('Remark text must contain 1 to 2000 valid characters');
   }
   return body;
+}
+
+function normalizeSearchQuery(value) {
+  if (typeof value !== 'string') throw badRequest('Search text is required');
+  const query = value.normalize('NFC').trim();
+  if (query.length < 2 || query.length > 200 || SEARCH_CONTROL_CHARACTERS.test(query)) {
+    throw badRequest('Search text must contain 2 to 200 valid characters');
+  }
+  return query;
 }
 
 function normalizePositiveId(value, fieldName) {
@@ -110,5 +120,6 @@ module.exports = {
   normalizeOptionalColumnId,
   normalizePositiveId,
   normalizeRowIdentity,
+  normalizeSearchQuery,
   normalizeTableKey,
 };

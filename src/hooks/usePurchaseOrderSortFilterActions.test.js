@@ -34,3 +34,30 @@ describe('usePurchaseOrderSortFilterActions — handleDraftValueChange', () => {
     });
   });
 });
+
+describe('usePurchaseOrderSortFilterActions — handleApplyFilter', () => {
+  it('does not apply a remarks search shorter than 2 characters', () => {
+    const onApplyFilter = vi.fn();
+    const setOpen = vi.fn();
+    const { result } = renderHook(() => usePurchaseOrderSortFilterActions({
+      columnKey: 'remarks',
+      columnDataType: 'remarks',
+      draft: { operator: 'contains', value: 'a', secondaryValue: '' },
+      onSetSortDirection: vi.fn(),
+      onSetOperator: vi.fn(),
+      onSetValue: vi.fn(),
+      onSetSecondaryValue: vi.fn(),
+      onApplyFilter,
+      onClearFilter: vi.fn(),
+      setDraft: vi.fn(),
+      setOpen,
+    }));
+
+    act(() => {
+      result.current.handleApplyFilter();
+    });
+
+    expect(onApplyFilter).not.toHaveBeenCalled();
+    expect(setOpen).not.toHaveBeenCalled();
+  });
+});

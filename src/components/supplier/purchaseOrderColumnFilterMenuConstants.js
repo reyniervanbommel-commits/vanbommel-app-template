@@ -9,6 +9,8 @@ import {
 
 export { HEX_COLOR_PATTERN };
 
+export const REMARKS_FILTER_OPERATORS = { contains: 'contains' };
+
 export const NEW_COLUMN_TYPES = [
   { key: 'status', label: 'Status', dataType: 'status' },
   { key: 'text', label: 'Text', dataType: 'text' },

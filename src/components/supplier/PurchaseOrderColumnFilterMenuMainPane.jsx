@@ -82,6 +82,18 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
     [canConfigureDatePeriodDisplay, canSetColumnFormatRules, canSetColumnTextStyle]
   );
 
+  const isRemarks = column?.dataType === 'remarks';
+  const showSort = showSortAndFilter && !isRemarks;
+  const showFilter = showSortAndFilter;
+  const groupingEnabled = showGrouping && !isRemarks;
+  const showColorFilter = Boolean(colorFilter?.supported) && !isRemarks;
+  const remarksTermLength = isRemarks ? String(draft?.value ?? '').trim().length : 0;
+  const searchHint = remarksTermLength > 200
+    ? 'Enter at most 200 characters'
+    : remarksTermLength < 2 && isRemarks
+      ? 'Enter at least 2 characters'
+      : '';
+
   const showColumnSection = useMemo(
     () => Boolean(
       canHideColumn
@@ -125,48 +137,55 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
       <div className={styles.divider} />
       {showSortAndFilter ? (
         <>
-          <PurchaseOrderColumnFilterMenuSortSection
-            styles={styles}
-            closeSubmenu={closeSubmenu}
-            activeSubmenu={activeSubmenu}
-            openSubmenu={openSubmenu}
-            showGrouping={showGrouping}
-            isDate={isDate}
-            isNumber={isNumber}
-            setSortAsc={setSortAsc}
-            setSortDesc={setSortDesc}
-            clearSort={clearSort}
-          >
-            {canToggleColumnSum ? (
-              <PurchaseOrderShowSumSwitch
+          {showSort ? (
+            <>
+              <PurchaseOrderColumnFilterMenuSortSection
                 styles={styles}
-                checked={isColumnSumColumn}
-                onToggle={handleToggleColumnSum}
-                onMouseEnter={closeSubmenu}
-              />
-            ) : null}
-          </PurchaseOrderColumnFilterMenuSortSection>
-          <div className={styles.divider} />
-          <PurchaseOrderColumnFilterMenuFilterSection
-            styles={styles}
-            columnLabel={columnLabel}
-            closeSubmenu={closeSubmenu}
-            isDate={isDate}
-            isNumber={isNumber}
-            draft={draft}
-            operatorLabels={operatorLabels}
-            operatorEntries={operatorEntries}
-            handleOperatorSelect={handleOperatorSelect}
-            handleValueChange={handleValueChange}
-            handleDraftValueChange={handleDraftValueChange}
-            handleApplyFilterWithValue={handleApplyFilterWithValue}
-            uniqueColumnValues={uniqueColumnValues}
-            handleSecondaryValueChange={handleSecondaryValueChange}
-            handleApplyFilter={handleApplyFilter}
-            handleClearFilter={handleClearFilter}
-            onMouseEnter={handleFilterRowMouseEnter}
-          />
-          {colorFilter?.supported ? (
+                closeSubmenu={closeSubmenu}
+                activeSubmenu={activeSubmenu}
+                openSubmenu={openSubmenu}
+                showGrouping={groupingEnabled}
+                isDate={isDate}
+                isNumber={isNumber}
+                setSortAsc={setSortAsc}
+                setSortDesc={setSortDesc}
+                clearSort={clearSort}
+              >
+                {canToggleColumnSum ? (
+                  <PurchaseOrderShowSumSwitch
+                    styles={styles}
+                    checked={isColumnSumColumn}
+                    onToggle={handleToggleColumnSum}
+                    onMouseEnter={closeSubmenu}
+                  />
+                ) : null}
+              </PurchaseOrderColumnFilterMenuSortSection>
+              <div className={styles.divider} />
+            </>
+          ) : null}
+          {showFilter ? (
+            <PurchaseOrderColumnFilterMenuFilterSection
+              styles={styles}
+              columnLabel={columnLabel}
+              closeSubmenu={closeSubmenu}
+              isDate={isDate}
+              isNumber={isNumber}
+              draft={draft}
+              operatorLabels={operatorLabels}
+              operatorEntries={operatorEntries}
+              handleOperatorSelect={handleOperatorSelect}
+              handleValueChange={handleValueChange}
+              handleDraftValueChange={handleDraftValueChange}
+              handleApplyFilterWithValue={handleApplyFilterWithValue}
+              uniqueColumnValues={uniqueColumnValues}
+              handleSecondaryValueChange={handleSecondaryValueChange}
+              handleApplyFilter={handleApplyFilter}
+              handleClearFilter={handleClearFilter}
+              onMouseEnter={handleFilterRowMouseEnter}
+              searchHint={searchHint}
+            />
+          ) : null}
+          {showColorFilter ? (
             <>
               <div className={styles.divider} />
               <PurchaseOrderColumnColorFilterSection

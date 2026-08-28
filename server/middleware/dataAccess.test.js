@@ -57,7 +57,7 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(0);
   });
 
-  it.each(['/purchase-orders/history', '/purchase-orders/remarks/summary', '/purchase-orders/remarks', '/purchase-orders/activity'])(
+  it.each(['/purchase-orders/history', '/purchase-orders/remarks/summary', '/purchase-orders/remarks/search', '/purchase-orders/remarks', '/purchase-orders/activity'])(
     'laat supplier GET op %s door',
     (path) => {
       const { next } = callMiddleware({ user: { role: 'supplier' }, path, method: 'GET' });

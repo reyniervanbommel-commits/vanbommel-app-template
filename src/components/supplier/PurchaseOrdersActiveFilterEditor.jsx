@@ -12,7 +12,7 @@ import {
 import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
 import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
-import { getDraftFromFilter, isDateColumn, isNumberColumn } from './purchaseOrderColumnFilterMenuConstants';
+import { getDraftFromFilter, isDateColumn, isNumberColumn, REMARKS_FILTER_OPERATORS } from './purchaseOrderColumnFilterMenuConstants';
 import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
 import { measureSync } from '../../utils/perf';
@@ -20,6 +20,7 @@ import {
   DATE_FILTER_OPERATORS,
   NUMBER_FILTER_OPERATORS,
   TEXT_FILTER_OPERATORS,
+  isRemarksSearchTermValid,
 } from '../../utils/tableViewFilterUtils';
 
 const FIELD_CONTAINER_STYLE = { maxWidth: '520px' };
@@ -56,7 +57,8 @@ const useStyles = makeStyles({
   },
 });
 
-function getOperatorLabels(isDate, isNumber) {
+function getOperatorLabels(isDate, isNumber, isRemarks) {
+  if (isRemarks) return REMARKS_FILTER_OPERATORS;
   if (isDate) return DATE_FILTER_OPERATORS;
   if (isNumber) return NUMBER_FILTER_OPERATORS;
   return TEXT_FILTER_OPERATORS;
@@ -86,16 +88,17 @@ export default function PurchaseOrdersActiveFilterEditor({
   const columnLabel = column.label || columnKey || 'Column';
   const isDate = isDateColumn(column);
   const isNumber = isNumberColumn(column, datePeriodDisplayModes);
+  const isRemarks = column.dataType === 'remarks';
   const [draft, setDraft] = useState(() => getDraftFromFilter(column, item?.filter, datePeriodDisplayModes));
 
   useEffect(() => {
     setDraft(getDraftFromFilter(column, item?.filter, datePeriodDisplayModes));
   }, [column, item?.filter, datePeriodDisplayModes]);
 
-  const operatorLabels = getOperatorLabels(isDate, isNumber);
+  const operatorLabels = getOperatorLabels(isDate, isNumber, isRemarks);
   const operatorEntries = useMemo(() => Object.entries(operatorLabels), [operatorLabels]);
   const selectedOperatorLabel = operatorLabels[draft.operator] || draft.operator;
-  const usesValuePicker = draft.operator === 'oneOf' || (!isDate && draft.operator === 'equals');
+  const usesValuePicker = !isRemarks && (draft.operator === 'oneOf' || (!isDate && draft.operator === 'equals'));
 
   const uniqueColumnValues = useMemo(() => {
     if (!usesValuePicker) return EMPTY_UNIQUE_VALUES;
@@ -136,6 +139,7 @@ export default function PurchaseOrdersActiveFilterEditor({
   }, []);
 
   const handleApply = useCallback(() => {
+    if (isRemarks && !isRemarksSearchTermValid(draft.value)) return;
     const patch = {
       operator: draft.operator,
       value: draft.value,
@@ -144,11 +148,17 @@ export default function PurchaseOrdersActiveFilterEditor({
     startTransition(() => {
       applyColumnFilter(columnKey, patch);
     });
-  }, [applyColumnFilter, columnKey, draft]);
+  }, [applyColumnFilter, columnKey, draft, isRemarks]);
 
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek');
   const inputType = getValueInputType(isDate, isNumber, draft.operator);
+  const remarksTermLength = isRemarks ? String(draft.value ?? '').trim().length : 0;
+  const searchHint = remarksTermLength > 200
+    ? 'Enter at most 200 characters'
+    : remarksTermLength < 2 && isRemarks
+      ? 'Enter at least 2 characters'
+      : '';
 
   return (
     <div className={styles.root}>
@@ -217,13 +227,17 @@ export default function PurchaseOrdersActiveFilterEditor({
         <span className={styles.hint}>Matches records in the next calendar week.</span>
       ) : null}
 
+      {searchHint ? (
+        <span className={styles.hint}>{searchHint}</span>
+      ) : null}
+
       <div className={styles.actionRow}>
         <Button appearance="primary" size="small" onClick={handleApply}>
           Apply
         </Button>
       </div>
 
-      {colorFilter.supported ? (
+      {colorFilter.supported && !isRemarks ? (
         <PurchaseOrderColumnColorFilterSection
           styles={menuStyles}
           columnLabel={columnLabel}
