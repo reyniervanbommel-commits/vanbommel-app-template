@@ -215,6 +215,39 @@ export function isoWindowFromWeekClicks(anchor, next) {
   };
 }
 
+/** All ISO weeks in a week-year, with the calendar month of each Monday. */
+export function buildIsoYearWeeks(year) {
+  const count = isoWeeksInYear(year);
+  return Array.from({ length: count }, (_, index) => {
+    const week = index + 1;
+    const monday = isoWeekStartUtc(year, week);
+    return {
+      year,
+      week,
+      month: monday.getUTCMonth(),
+      monthYear: monday.getUTCFullYear(),
+      mondayLabel: formatIsoWeekMondayLabel(year, week),
+    };
+  });
+}
+
+export function groupIsoWeeksByMonth(weeks) {
+  return (weeks || []).reduce((groups, item) => {
+    const last = groups[groups.length - 1];
+    if (!last || last.month !== item.month || last.monthYear !== item.monthYear) {
+      groups.push({ month: item.month, monthYear: item.monthYear, weeks: [item] });
+    } else {
+      last.weeks.push(item);
+    }
+    return groups;
+  }, []);
+}
+
+export function isoYearPickerYears(anchorYear) {
+  const start = Number(anchorYear) - 6;
+  return Array.from({ length: 12 }, (_, index) => start + index);
+}
+
 export const RCCP_WEEK_COL_WIDTH = 68;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
@@ -241,6 +274,44 @@ export function currentIsoWindow(size = 8) {
     toYear: year,
     toWeek: Math.min(53, fromWeek + size - 1),
   };
+}
+
+/** Persist and idle-prefetch stay on a short range; dataWindow jumps are session-only. */
+export const RCCP_PERSIST_MAX_WEEKS = 12;
+
+/** Inclusive ISO-week count. Invalid or inverted windows return 0. */
+export function isoWindowWeekCount(window) {
+  const fromYear = Number(window?.fromYear);
+  const fromWeek = Number(window?.fromWeek);
+  const toYear = Number(window?.toYear);
+  const toWeek = Number(window?.toWeek);
+  if (![fromYear, fromWeek, toYear, toWeek].every(Number.isFinite)) return 0;
+  if (compareIsoWeek(fromYear, fromWeek, toYear, toWeek) > 0) return 0;
+  let count = 0;
+  let year = fromYear;
+  let week = fromWeek;
+  while (compareIsoWeek(year, week, toYear, toWeek) <= 0) {
+    count += 1;
+    if (count > 600) return count;
+    const max = isoWeeksInYear(year);
+    if (week >= max) {
+      year += 1;
+      week = 1;
+    } else {
+      week += 1;
+    }
+  }
+  return count;
+}
+
+export function isPersistableRccpIsoWindow(window, maxWeeks = RCCP_PERSIST_MAX_WEEKS) {
+  const count = isoWindowWeekCount(window);
+  return count > 0 && count <= maxWeeks;
+}
+
+/** Idle prefetch must not pull a multi-year dataWindow jump. */
+export function compactIsoWindowForPrefetch(window) {
+  return isPersistableRccpIsoWindow(window) ? window : currentIsoWindow(8);
 }
 
 function getIsoWeekNumber(date) {

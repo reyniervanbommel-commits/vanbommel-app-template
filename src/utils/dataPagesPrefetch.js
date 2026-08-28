@@ -7,6 +7,7 @@ import { getPoBoardKpis } from './poBoardKpiCache';
 import { prefetchRccpAnalysis } from './rccpAnalysisPrefetch';
 import { prefetchBiDashboard } from './biBoardPrefetch';
 import { apiRequest } from './api';
+import { compactIsoWindowForPrefetch } from '../components/rccp/rccpUtils';
 import { readPoFilterByColumnForRccp } from './poVendorFilterHandoff';
 import {
   resolveDefaultRccpVendor,
@@ -90,7 +91,9 @@ export function startDataPagesPrefetch({ refreshKey, lastVendor, isoWindow, isSu
     } catch {
       /* stil — BI blijft all-vendors prefetchen */
     }
-    if (rccpVendor && isoWindow) prefetchRccpAnalysis(isoWindow, rccpVendor);
+    if (rccpVendor && isoWindow) {
+      prefetchRccpAnalysis(compactIsoWindowForPrefetch(isoWindow), rccpVendor);
+    }
     const biPromise = prefetchBiDashboard({
       externalFilterByColumn: biExternalFilterByColumn,
     }).catch(() => {});

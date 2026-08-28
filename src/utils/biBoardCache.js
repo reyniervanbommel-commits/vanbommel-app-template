@@ -9,6 +9,8 @@ let cachedRevision = null;
 const seriesByKey = new Map();
 let chartsCache = null;
 const metaByBoard = new Map();
+const metaInFlight = new Map();
+let chartsInFlight = null;
 
 /** Huidige gecachte revision (of null). */
 export function getBiRevision() {
@@ -58,10 +60,70 @@ export function setBiMeta(boardKey, meta) {
   metaByBoard.set(boardKey, meta || { columns: [], measureColumns: [] });
 }
 
+function normalizeMeta(data) {
+  return {
+    columns: Array.isArray(data?.columns) ? data.columns : [],
+    measureColumns: Array.isArray(data?.measureColumns) ? data.measureColumns : [],
+  };
+}
+
+/**
+ * One in-flight `/bi/meta` per board. Prefetch and BiPage share this so the first
+ * click does not pay for two identical 4–5 s reads.
+ */
+export function loadBiMeta(boardKey, fetcher, { force = false } = {}) {
+  if (!boardKey || typeof fetcher !== 'function') {
+    return Promise.resolve(getBiMeta(boardKey) || { columns: [], measureColumns: [] });
+  }
+  if (!force) {
+    const cached = getBiMeta(boardKey);
+    if (cached) return Promise.resolve(cached);
+    if (metaInFlight.has(boardKey)) return metaInFlight.get(boardKey);
+  }
+  const pending = Promise.resolve(fetcher())
+    .then((data) => {
+      const meta = normalizeMeta(data);
+      setBiMeta(boardKey, meta);
+      return meta;
+    })
+    .finally(() => {
+      if (metaInFlight.get(boardKey) === pending) metaInFlight.delete(boardKey);
+    });
+  metaInFlight.set(boardKey, pending);
+  return pending;
+}
+
+/**
+ * One in-flight `/bi/charts`. Same sharing as `loadBiMeta`.
+ */
+export function loadBiCharts(fetcher, { force = false } = {}) {
+  if (typeof fetcher !== 'function') {
+    return Promise.resolve(getBiCharts() || []);
+  }
+  if (!force) {
+    const cached = getBiCharts();
+    if (cached) return Promise.resolve(cached);
+    if (chartsInFlight) return chartsInFlight;
+  }
+  const pending = Promise.resolve(fetcher())
+    .then((data) => {
+      const charts = Array.isArray(data?.charts) ? data.charts : (Array.isArray(data) ? data : []);
+      setBiCharts(charts);
+      return charts;
+    })
+    .finally(() => {
+      if (chartsInFlight === pending) chartsInFlight = null;
+    });
+  chartsInFlight = pending;
+  return pending;
+}
+
 /** Leeg de volledige cache (bv. bij logout). */
 export function clearBiCache() {
   cachedRevision = null;
   seriesByKey.clear();
   chartsCache = null;
   metaByBoard.clear();
+  metaInFlight.clear();
+  chartsInFlight = null;
 }

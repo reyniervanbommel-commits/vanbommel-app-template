@@ -13,7 +13,7 @@ describe('useBiMeta', () => {
   beforeEach(() => {
     clearBiCache();
     vi.clearAllMocks();
-    apiRequest.mockImplementation(() => new Promise(() => {}));
+    apiRequest.mockResolvedValue({ columns: [], measureColumns: [] });
   });
 
   it('paints from the prefetch cache without a loading spinner', () => {
@@ -25,5 +25,6 @@ describe('useBiMeta', () => {
     expect(result.current.loading).toBe(false);
     expect(result.current.columns).toEqual(cached.columns);
     expect(result.current.measureColumns).toEqual(cached.measureColumns);
+    expect(apiRequest).not.toHaveBeenCalled();
   });
 });

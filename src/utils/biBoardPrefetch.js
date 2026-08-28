@@ -9,7 +9,7 @@
 import { apiRequest } from './api';
 import { isoWindowDateRange } from '../components/rccp/rccpUtils';
 import { BOARD_KEY } from '../components/bi/biConstants';
-import { setBiCharts, setBiMeta, setBiSeries, setBiRevision } from './biBoardCache';
+import { loadBiCharts, loadBiMeta, setBiSeries, setBiRevision } from './biBoardCache';
 import { chartFetchKey, dateFilterForChart, filtersFromColumnMap } from './biChartFetchKey';
 
 const MAX_CHARTS = 20;
@@ -27,29 +27,22 @@ async function resolveDateRange() {
  *   `undefined` voor "alle vendors" (of een supplier — de server forceert dan toch hun scope).
  */
 export async function prefetchBiDashboard({ externalFilterByColumn } = {}) {
-  const [dateRange, metaData, chartsData] = await Promise.all([
+  const [dateRange, metaData, charts] = await Promise.all([
     resolveDateRange().catch(() => null),
-    apiRequest(`/bi/meta/${BOARD_KEY}`).catch(() => null),
-    apiRequest('/bi/charts').catch(() => null),
+    loadBiMeta(BOARD_KEY, () => apiRequest(`/bi/meta/${BOARD_KEY}`)).catch(() => null),
+    loadBiCharts(() => apiRequest('/bi/charts')).catch(() => null),
   ]);
 
-  const charts = Array.isArray(chartsData?.charts) ? chartsData.charts.slice(0, MAX_CHARTS) : [];
-  if (metaData) {
-    setBiMeta(BOARD_KEY, {
-      columns: Array.isArray(metaData.columns) ? metaData.columns : [],
-      measureColumns: Array.isArray(metaData.measureColumns) ? metaData.measureColumns : [],
-    });
-  }
-  if (Array.isArray(chartsData?.charts)) setBiCharts(charts);
-  if (!charts.length) return;
+  const list = Array.isArray(charts) ? charts.slice(0, MAX_CHARTS) : [];
+  if (!list.length) return;
 
   const columnTypeByKey = {};
   (metaData?.columns || []).forEach((col) => { if (col?.key) columnTypeByKey[col.key] = col.dataType; });
 
   const inheritedFilters = filtersFromColumnMap(externalFilterByColumn);
-  const chartDateFilters = charts.map((chart) => dateFilterForChart(chart, columnTypeByKey, dateRange));
+  const chartDateFilters = list.map((chart) => dateFilterForChart(chart, columnTypeByKey, dateRange));
 
-  const aggregateCharts = charts.map((chart, index) => ({
+  const aggregateCharts = list.map((chart, index) => ({
     ...chart.config,
     filters: [
       ...(chart.config?.filters || []),
@@ -65,7 +58,7 @@ export async function prefetchBiDashboard({ externalFilterByColumn } = {}) {
 
   setBiRevision(data?.revision ?? null);
   (data?.results || []).forEach((result, index) => {
-    const chart = charts[index];
+    const chart = list[index];
     if (!chart) return;
     const key = chartFetchKey(chart, inheritedFilters, null, chartDateFilters[index]);
     setBiSeries(key, result.series || []);

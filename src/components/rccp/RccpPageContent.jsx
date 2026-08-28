@@ -153,7 +153,7 @@ export default function RccpPageContent() {
   }, []);
 
   const handleShowDataWindow = useCallback(() => {
-    if (analysis?.dataWindow) setWindow(analysis.dataWindow);
+    if (analysis?.dataWindow) setWindow(analysis.dataWindow, { persist: false });
   }, [analysis, setWindow]);
 
   const handleRefresh = useCallback(() => {

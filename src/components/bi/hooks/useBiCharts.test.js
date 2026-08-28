@@ -12,7 +12,7 @@ describe('useBiCharts', () => {
   beforeEach(() => {
     clearBiCache();
     vi.clearAllMocks();
-    apiRequest.mockImplementation(() => new Promise(() => {}));
+    apiRequest.mockResolvedValue({ charts: [] });
   });
 
   it('paints from the prefetch cache without a loading spinner', () => {
@@ -23,5 +23,6 @@ describe('useBiCharts', () => {
 
     expect(result.current.loading).toBe(false);
     expect(result.current.charts).toEqual(cached);
+    expect(apiRequest).not.toHaveBeenCalled();
   });
 });

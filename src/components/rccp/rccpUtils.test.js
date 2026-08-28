@@ -3,11 +3,21 @@ import {
   applyRccpChartSettings,
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
+  buildIsoYearWeeks,
   clampIsoWeek,
+  compactIsoWindowForPrefetch,
   compareIsoWeekParts,
+  currentIsoWindow,
   formatIsoWeekMondayLabel,
+  isPersistableRccpIsoWindow,
+  isoWindowWeekCount,
   formatMatrixWeekLabel,
+  groupIsoWeeksByMonth,
+  isoYearPickerYears,
   isoWeekPartsFromLocalDate,
+  isoWindowFromWeekClicks,
+  isoWeeksInYear,
+  clampWeekPickerListHeight,
   isoWindowFromWeekClicks,
   isoWeeksInYear,
   currentIsoWeekParts,
@@ -68,6 +78,39 @@ describe('isoWeeksInYear', () => {
     expect(clampIsoWeek(2025, 53)).toBe(52);
     expect(clampIsoWeek(2020, 53)).toBe(53);
     expect(clampIsoWeek(2026, 0)).toBe(1);
+  });
+});
+
+describe('buildIsoYearWeeks', () => {
+  it('lists every ISO week in the year with the Monday month', () => {
+    const weeks = buildIsoYearWeeks(2020);
+    expect(weeks).toHaveLength(53);
+    expect(weeks[0]).toMatchObject({ year: 2020, week: 1, month: 11, monthYear: 2019 });
+    expect(weeks[52]).toMatchObject({ year: 2020, week: 53, month: 11, monthYear: 2020 });
+    expect(groupIsoWeeksByMonth(weeks)[0]).toMatchObject({ month: 11, monthYear: 2019 });
+  });
+
+  it('has 52 weeks in 2025 and groups January Mondays together', () => {
+    const weeks = buildIsoYearWeeks(2025);
+    expect(weeks).toHaveLength(52);
+    expect(weeks[0]).toMatchObject({ year: 2025, week: 1, month: 11, monthYear: 2024 });
+    const january = groupIsoWeeksByMonth(weeks).find((group) => group.month === 0 && group.monthYear === 2025);
+    expect(january.weeks.map((item) => item.week)).toEqual([2, 3, 4, 5]);
+  });
+});
+
+describe('isoYearPickerYears', () => {
+  it('shows a 12-year block around the anchor year', () => {
+    expect(isoYearPickerYears(2026)).toEqual([2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031]);
+  });
+});
+
+describe('clampWeekPickerListHeight', () => {
+  it('keeps the list between 96px and 520px', () => {
+    expect(clampWeekPickerListHeight(40)).toBe(96);
+    expect(clampWeekPickerListHeight(200)).toBe(200);
+    expect(clampWeekPickerListHeight(900)).toBe(520);
+    expect(clampWeekPickerListHeight('x')).toBe(132);
   });
 });
 
@@ -262,5 +305,29 @@ describe('shouldOfferRccpDataWindow', () => {
       kpisAll: { totalOrdered: 0 },
       dataWindow,
     })).toBe(false);
+  });
+});
+
+describe('isoWindowWeekCount / persistable RCCP window', () => {
+  it('counts weeks in a compact 8-week window', () => {
+    expect(isoWindowWeekCount({
+      fromYear: 2026, fromWeek: 31, toYear: 2026, toWeek: 38,
+    })).toBe(8);
+    expect(isPersistableRccpIsoWindow({
+      fromYear: 2026, fromWeek: 31, toYear: 2026, toWeek: 38,
+    })).toBe(true);
+  });
+
+  it('rejects a multi-year dataWindow jump as too wide to persist', () => {
+    const wide = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
+    expect(isoWindowWeekCount(wide)).toBeGreaterThan(12);
+    expect(isPersistableRccpIsoWindow(wide)).toBe(false);
+  });
+
+  it('falls back to the current 8-week window for prefetch when the stored range is wide', () => {
+    const wide = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
+    expect(compactIsoWindowForPrefetch(wide)).toEqual(currentIsoWindow(8));
+    const compact = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 };
+    expect(compactIsoWindowForPrefetch(compact)).toEqual(compact);
   });
 });

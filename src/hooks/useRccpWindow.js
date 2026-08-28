@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
-import { currentIsoWindow } from '../components/rccp/rccpUtils';
+import { currentIsoWindow, isPersistableRccpIsoWindow } from '../components/rccp/rccpUtils';
 
 const RCCP_BOARD_KEY = 'rccp';
 
@@ -21,6 +21,7 @@ export function useRccpWindow() {
 
   // Actuele waarden in refs zodat een debounced PATCH altijd beide velden meestuurt.
   const isoWindowRef = useRef(isoWindow);
+  const persistableWindowRef = useRef(isoWindow);
   const lastVendorRef = useRef(lastVendor);
   const kpiWindowOnlyRef = useRef(kpiWindowOnly);
   const chartVisibleKeysRef = useRef(chartVisibleKeys);
@@ -29,19 +30,47 @@ export function useRccpWindow() {
   useEffect(() => { kpiWindowOnlyRef.current = kpiWindowOnly; }, [kpiWindowOnly]);
   useEffect(() => { chartVisibleKeysRef.current = chartVisibleKeys; }, [chartVisibleKeys]);
 
+  // Schrijft isoWindow + lastVendorAccount samen weg (debounced), zodat de blob-replace op de
+  // server nooit één van beide velden verliest. Wide dataWindow jumps stay in session state only.
+  const schedulePersist = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      apiRequest(`/supplier/board-settings/${RCCP_BOARD_KEY}`, {
+        method: 'PATCH',
+        body: {
+          settings: {
+            isoWindow: persistableWindowRef.current,
+            lastVendorAccount: lastVendorRef.current,
+            kpiWindowOnly: kpiWindowOnlyRef.current,
+            chartVisibleKeys: chartVisibleKeysRef.current,
+          },
+        },
+      }).catch(() => { /* stil falen; lokale state blijft leidend */ });
+    }, 400);
+  }, []);
+
   useEffect(() => {
     let active = true;
     apiRequest(`/supplier/board-settings/${RCCP_BOARD_KEY}`)
       .then((data) => {
         if (!active) return;
         const stored = data?.settings?.isoWindow;
-        if (stored) {
-          setIsoWindowState({
+        if (stored && isPersistableRccpIsoWindow(stored)) {
+          const compact = {
             fromYear: stored.fromYear,
             fromWeek: stored.fromWeek,
             toYear: stored.toYear,
             toWeek: stored.toWeek,
-          });
+          };
+          setIsoWindowState(compact);
+          isoWindowRef.current = compact;
+          persistableWindowRef.current = compact;
+        } else if (stored) {
+          const fallback = currentIsoWindow(8);
+          setIsoWindowState(fallback);
+          isoWindowRef.current = fallback;
+          persistableWindowRef.current = fallback;
+          schedulePersist();
         }
         const vendor = data?.settings?.lastVendorAccount;
         if (typeof vendor === 'string' && vendor) setLastVendorState(vendor);
@@ -56,32 +85,15 @@ export function useRccpWindow() {
       .catch(() => { /* fallback naar defaults */ })
       .finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, []);
+  }, [schedulePersist]);
 
-  // Schrijft isoWindow + lastVendorAccount samen weg (debounced), zodat de blob-replace op de
-  // server nooit één van beide velden verliest.
-  const schedulePersist = useCallback(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      apiRequest(`/supplier/board-settings/${RCCP_BOARD_KEY}`, {
-        method: 'PATCH',
-        body: {
-          settings: {
-            isoWindow: isoWindowRef.current,
-            lastVendorAccount: lastVendorRef.current,
-            kpiWindowOnly: kpiWindowOnlyRef.current,
-            chartVisibleKeys: chartVisibleKeysRef.current,
-          },
-        },
-      }).catch(() => { /* stil falen; lokale state blijft leidend */ });
-    }, 400);
-  }, []);
-
-  const setIsoWindow = useCallback((next) => {
+  const setIsoWindow = useCallback((next, options = {}) => {
+    const persist = options.persist !== false;
     setIsoWindowState((prev) => {
       const value = typeof next === 'function' ? next(prev) : next;
       isoWindowRef.current = value;
-      schedulePersist();
+      if (isPersistableRccpIsoWindow(value)) persistableWindowRef.current = value;
+      if (persist) schedulePersist();
       return value;
     });
   }, [schedulePersist]);
