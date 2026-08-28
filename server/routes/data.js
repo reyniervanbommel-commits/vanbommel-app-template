@@ -19,8 +19,10 @@ const {
   normalizeOptionalColumnId,
   normalizePositiveId,
   normalizeRowIdentity,
+  normalizeSearchQuery,
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
+const { searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 const { getSupplierAccount } = require('../utils/supplierScope');
@@ -49,6 +51,16 @@ router.get('/:tableKey/remarks/summary', async (req, res, next) => {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const rows = await remarksService.summarizeRemarks(tableKey, remarksActor(req));
     return res.json({ rows });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/:tableKey/remarks/search', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    const query = normalizeSearchQuery(req.query.q);
+    return res.json(await searchRemarks(tableKey, query, remarksActor(req)));
   } catch (err) {
     return next(err);
   }

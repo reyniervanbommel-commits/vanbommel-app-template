@@ -225,7 +225,30 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByRole('button', { name: /Conditional formatting/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Text style/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Sort ascending/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sort A to Z/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Clear sort/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Category \/ group/i })).toBeNull();
+    expect(screen.queryByText('Filter by color')).toBeNull();
+    expect(screen.getByText('Filter')).toBeTruthy();
+    expect(screen.getByText('contains')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
+
+    const valueInput = screen.getByLabelText(/Filter value for Remarks/i);
+    fireEvent.focus(valueInput);
+    expect(screen.queryByRole('listbox', { name: /Suggestions for Remarks/i })).toBeNull();
+    expect(screen.getByText('Enter at least 2 characters')).toBeTruthy();
+  });
+
+  it('toont een max-lengte hint voor remarks-zoektermen langer dan 200 tekens', async () => {
+    renderMenu({
+      column: { ...COLUMN, key: 'remarks', label: 'Remarks', dataType: 'remarks', source: 'custom' },
+    });
+
+    openColumnMenu();
+    const valueInput = screen.getByLabelText(/Filter value for Remarks/i);
+    fireEvent.change(valueInput, { target: { value: 'a'.repeat(201) } });
+    expect(screen.getByText('Enter at most 200 characters')).toBeTruthy();
+    expect(screen.queryByText('Enter at least 2 characters')).toBeNull();
   });
 
   it('past filter operator en waarde pas op bij Apply', async () => {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { usePurchaseOrderColumnSums } from './usePurchaseOrderColumnSums';
+import { applyBoardMatchKeys } from './applyBoardMatchKeys';
+import { usePurchaseOrderRemarksFilterBridge } from './usePurchaseOrderRemarksFilterBridge';
 import { formatLinkedLineValues } from '../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
@@ -207,12 +209,19 @@ export function usePurchaseOrderBoardView({
     tableView.clearAllFilters();
   }, [tableView]);
 
-  const displayedItems = useMemo(() => {
-    const source = tableView.processedItems;
-    if (!kpiMatchKeys) return source;
-    const filtered = source.filter((order) => kpiMatchKeys.has(order.orderNumber));
-    return overlayKpiQtyOnOrders(filtered, kpiQtyOverlay, kpiFilterKey);
-  }, [kpiFilterKey, kpiMatchKeys, kpiQtyOverlay, tableView.processedItems]);
+  const remarksFilter = usePurchaseOrderRemarksFilterBridge(tableView.filterByColumn);
+  const { columnFiltered, displayedItems: matchedItems } = useMemo(() => applyBoardMatchKeys({
+    processedItems: tableView.processedItems,
+    remarksFilterEnabled: remarksFilter.enabled,
+    remarksMatchKeys: remarksFilter.matchKeys,
+    kpiMatchKeys,
+    kpiFilterKey,
+    kpiQtyOverlay,
+  }), [kpiFilterKey, kpiMatchKeys, kpiQtyOverlay, remarksFilter, tableView.processedItems]);
+  const displayedItems = useMemo(
+    () => overlayKpiQtyOnOrders(matchedItems, kpiQtyOverlay, kpiFilterKey),
+    [kpiFilterKey, kpiQtyOverlay, matchedItems]
+  );
 
   const rows = useMemo(
     () =>
@@ -256,7 +265,7 @@ export function usePurchaseOrderBoardView({
   return useMemo(
     () => ({
       processedItems: displayedItems,
-      kpiSourceItems: tableView.processedItems,
+      kpiSourceItems: columnFiltered,
       kpiFilterKey,
       applyKpiFilter,
       allItems: itemsWithDerivedDatePeriods,
@@ -294,6 +303,6 @@ export function usePurchaseOrderBoardView({
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, displayedItems, columnFiltered, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }
