@@ -92,7 +92,6 @@ export default function PurchaseOrdersPageTopBar({
   } = savedViewsState;
   const { openCreateTabs } = useViewTabsActions();
   const [saveTabsOpen, setSaveTabsOpen] = useState(false);
-  const [saveTabsMode, setSaveTabsMode] = useState('persist');
   const {
     isStaff,
     hasCache,
@@ -151,7 +150,6 @@ export default function PurchaseOrdersPageTopBar({
   const onRequestUpdate = useCallback(() => {
     if (!activeView) return;
     if (viewTabs?.activeTabId && viewTabs.activeTabId !== ALL_TAB_ID) {
-      setSaveTabsMode('persist');
       setSaveTabsOpen(true);
       return;
     }
@@ -159,19 +157,9 @@ export default function PurchaseOrdersPageTopBar({
   }, [activeView, handleUpdateActive, viewTabs]);
 
   const onSaveTabs = useCallback(async (scope) => {
-    if (saveTabsMode === 'scope') {
-      viewTabs?.applySaveScope(scope);
-      return;
-    }
     if (!activeView) return;
     await handleUpdateActive(activeView, scope);
-  }, [activeView, handleUpdateActive, saveTabsMode, viewTabs]);
-
-  useEffect(() => {
-    if (!viewTabs?.extraFilterPrompt) return;
-    setSaveTabsMode('scope');
-    setSaveTabsOpen(true);
-  }, [viewTabs?.extraFilterPrompt]);
+  }, [activeView, handleUpdateActive]);
 
   const showViewTabs = Boolean(activeViewId && hasExtraViewTabs(viewTabs?.extraTabs));
 
@@ -262,11 +250,9 @@ export default function PurchaseOrdersPageTopBar({
       <PurchaseOrderSaveTabsDialog
         open={saveTabsOpen}
         groupLabel={groupLabel}
-        confirmLabel={saveTabsMode === 'scope' ? 'Apply' : 'Save'}
-        title={saveTabsMode === 'scope' ? 'Apply extra filter' : 'Save tab changes'}
-        fieldLabel={saveTabsMode === 'scope'
-          ? 'Choose This tab only or All tabs with the same filter.'
-          : 'What should be saved?'}
+        confirmLabel="Save"
+        title="Save tab changes"
+        fieldLabel="What should be saved?"
         onOpenChange={setSaveTabsOpen}
         onSubmit={onSaveTabs}
       />

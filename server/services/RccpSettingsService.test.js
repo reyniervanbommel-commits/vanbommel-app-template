@@ -68,6 +68,38 @@ describe('RccpSettingsService.validateConfig receiptDateColumnKey', () => {
   });
 });
 
+describe('RccpSettingsService.validateConfig itemPickerColumnKeys', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+    quantityMeasures: [
+      { columnKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+    ],
+  };
+
+  it('defaults to an empty item picker column list', () => {
+    const { valid, config } = validateConfig(base);
+    expect(valid).toBe(true);
+    expect(config.itemPickerColumnKeys).toEqual([]);
+  });
+
+  it('keeps unique item-entity columns after the item number', () => {
+    const { config } = validateConfig({
+      ...base,
+      itemPickerColumnKeys: ['productName', 'itemNumber', 'productName', ' color '],
+    });
+    expect(config.itemPickerColumnKeys).toEqual(['productName', 'color']);
+  });
+
+  it('drops keys that are not safe column identifiers', () => {
+    const { config } = validateConfig({
+      ...base,
+      itemPickerColumnKeys: ['product-name', 'searchName'],
+    });
+    expect(config.itemPickerColumnKeys).toEqual(['searchName']);
+  });
+});
+
 describe('RccpSettingsService color opacity', () => {
   it('behoudt 8-cijferige hex-kleuren op measures en week ranges', () => {
     expect(normalizeQuantityMeasures({

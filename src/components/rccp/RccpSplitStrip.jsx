@@ -46,8 +46,9 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
   });
 
   const {
-    itemNumber, items: itemNumbers, filteredChart, handleItemChange,
-  } = useRccpItemFilter(chart);
+    selectedItems, items: itemNumbers, filteredChart, handleItemChange,
+    extraColumns, extraValues,
+  } = useRccpItemFilter(chart, analysis?.config?.itemPickerColumnKeys);
 
   return (
     <div className={styles.root}>
@@ -57,9 +58,11 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
           {vendorAccount ? ` · Vendor: ${vendorAccount}` : ' · All vendors'}
         </Text>
         <RccpItemFilter
-          value={itemNumber}
+          value={selectedItems}
           onChange={handleItemChange}
           items={itemNumbers}
+          extraColumns={extraColumns}
+          extraValues={extraValues}
         />
         <Button
           as={Link}

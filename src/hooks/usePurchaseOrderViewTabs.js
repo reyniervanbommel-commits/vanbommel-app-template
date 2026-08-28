@@ -12,6 +12,7 @@ import {
   nextGroupColor,
   normalizeTabsState,
   splitExtraFilters,
+  tabHasUnsharedExtraFilters,
   uniqueColumnValues,
   upsertGroup,
   removeTabsByScope,
@@ -41,11 +42,30 @@ export function usePurchaseOrderViewTabs({
   viewBaseRef.current = viewBaseFilters;
   extraTabsRef.current = extraTabs;
   activeTabIdRef.current = activeTabId;
-  const { extraFilterPrompt, skipFilterPrompt } = useViewTabExtraFilterPrompt({
+
+  const snapshotCurrentTab = useCallback(() => {
+    const live = boardView.exportFilterSortGrouping()?.filterByColumn || {};
+    if (activeTabIdRef.current === ALL_TAB_ID) {
+      const cloned = splitExtraFilters(live, {});
+      setViewBaseFilters(cloned);
+      viewBaseRef.current = cloned;
+      return { viewBaseFilters: cloned, extraTabs: extraTabsRef.current };
+    }
+    const extra = splitExtraFilters(live, viewBaseRef.current);
+    const nextTabs = extraTabsRef.current.map((tab) => (
+      tab.id === activeTabIdRef.current ? { ...tab, extraFilters: extra } : tab
+    ));
+    setExtraTabs(nextTabs);
+    extraTabsRef.current = nextTabs;
+    return { viewBaseFilters: viewBaseRef.current, extraTabs: nextTabs };
+  }, [boardView]);
+
+  const { skipFilterPrompt } = useViewTabExtraFilterPrompt({
     activeTabId,
     boardView,
     extraTabsRef,
     viewBaseRef,
+    onExtraChange: snapshotCurrentTab,
   });
 
   const applyMergedFilters = useCallback((baseFilters, extraFilters) => {
@@ -56,22 +76,6 @@ export function usePurchaseOrderViewTabs({
       filterByColumn: mergeFilters(baseFilters, extraFilters),
     });
   }, [boardView, skipFilterPrompt]);
-
-  const snapshotCurrentTab = useCallback(() => {
-    const live = boardView.exportFilterSortGrouping()?.filterByColumn || {};
-    if (activeTabIdRef.current === ALL_TAB_ID) {
-      setViewBaseFilters(live);
-      viewBaseRef.current = live;
-      return { viewBaseFilters: live, extraTabs: extraTabsRef.current };
-    }
-    const extra = splitExtraFilters(live, viewBaseRef.current);
-    const nextTabs = extraTabsRef.current.map((tab) => (
-      tab.id === activeTabIdRef.current ? { ...tab, extraFilters: extra } : tab
-    ));
-    setExtraTabs(nextTabs);
-    extraTabsRef.current = nextTabs;
-    return { viewBaseFilters: viewBaseRef.current, extraTabs: nextTabs };
-  }, [boardView]);
 
   const loadFromViewState = useCallback((viewState) => {
     skipFilterPrompt();
@@ -196,7 +200,6 @@ export function usePurchaseOrderViewTabs({
   }, [snapshotCurrentTab]);
 
   const applySaveScope = useCallback((scope) => {
-    skipFilterPrompt();
     const snap = snapshotCurrentTab();
     if (scope !== 'group' || activeTabIdRef.current === ALL_TAB_ID) {
       return snap.extraTabs;
@@ -208,7 +211,7 @@ export function usePurchaseOrderViewTabs({
     setExtraTabs(next);
     extraTabsRef.current = next;
     return next;
-  }, [skipFilterPrompt, snapshotCurrentTab]);
+  }, [snapshotCurrentTab]);
 
   const uniqueValueCount = useCallback((columnKey) => {
     const scopedRows = filterRowsByFilters(allItems, columns, viewBaseRef.current, datePeriodDisplayModes);
@@ -230,6 +233,11 @@ export function usePurchaseOrderViewTabs({
     };
   }, [activeTabId, boardView, extraTabs, groups, viewBaseFilters]);
 
+  const unsavedExtraTabIds = useMemo(() => {
+    const tabs = peekTabsState().extraTabs;
+    return tabs.filter((tab) => tabHasUnsharedExtraFilters(tab, tabs)).map((tab) => tab.id);
+  }, [boardView.filterByColumn, peekTabsState]);
+
   return useMemo(() => ({
     activeTabId,
     extraTabs,
@@ -248,7 +256,7 @@ export function usePurchaseOrderViewTabs({
     applySaveScope,
     uniqueValueCount,
     peekTabsState,
-    extraFilterPrompt,
+    unsavedExtraTabIds,
     hasExtraTabs: extraTabs.length > 0,
   }), [
     activeTabId,
@@ -268,6 +276,6 @@ export function usePurchaseOrderViewTabs({
     applySaveScope,
     uniqueValueCount,
     peekTabsState,
-    extraFilterPrompt,
+    unsavedExtraTabIds,
   ]);
 }

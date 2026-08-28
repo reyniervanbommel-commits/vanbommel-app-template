@@ -220,6 +220,7 @@ function RccpChartMatrixPanel({
           onCellClick={onCellClick}
           interactive={interactive}
           gridWidth={gridWidth}
+          kpiHighlight={visibility?.kpiHighlight}
         />
       )}
     />

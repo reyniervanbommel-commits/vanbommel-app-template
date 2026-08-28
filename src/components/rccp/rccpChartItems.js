@@ -15,28 +15,34 @@ export function collectRccpChartItemNumbers(chart) {
   return [...items].sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * Whether a stack segment belongs to the selected unique item.
- * An empty selection shows every item.
- * @param {{ itemNumber?: string }} segment
- * @param {string} itemNumber
- */
-export function matchRccpChartItem(segment, itemNumber) {
-  const selected = String(itemNumber || '').trim();
-  if (!selected) return true;
-  return String(segment?.itemNumber || '').trim() === selected;
+function selectedItemSet(selection) {
+  if (selection instanceof Set) return selection;
+  const values = Array.isArray(selection) ? selection : [selection];
+  return new Set(values.map((value) => String(value || '').trim()).filter(Boolean));
 }
 
 /**
- * Keep only stack segments for the selected unique item.
+ * Whether a stack segment belongs to the selected unique item(s).
+ * An empty selection shows every item.
+ * @param {{ itemNumber?: string }} segment
+ * @param {string | string[]} selection
+ */
+export function matchRccpChartItem(segment, selection) {
+  const selected = selectedItemSet(selection);
+  if (!selected.size) return true;
+  return selected.has(String(segment?.itemNumber || '').trim());
+}
+
+/**
+ * Keep only stack segments for the selected unique item(s).
  * Capacity/load series on the point are unchanged.
  * @param {object[]} chart
- * @param {string} itemNumber
+ * @param {string | string[]} selection
  */
-export function filterRccpChartByItem(chart, itemNumber) {
+export function filterRccpChartByItem(chart, selection) {
   const points = chart || [];
-  const selected = String(itemNumber || '').trim();
-  if (!selected) return points;
+  const selected = selectedItemSet(selection);
+  if (!selected.size) return points;
   return points.map((point) => ({
     ...point,
     segmentsAbove: (point.segmentsAbove || []).filter((seg) => matchRccpChartItem(seg, selected)),

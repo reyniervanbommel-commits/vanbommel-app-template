@@ -28,11 +28,17 @@ describe('collectRccpChartItemNumbers', () => {
 describe('matchRccpChartItem', () => {
   it('keeps every segment when no item is selected', () => {
     expect(matchRccpChartItem({ itemNumber: 'A' }, '')).toBe(true);
+    expect(matchRccpChartItem({ itemNumber: 'A' }, [])).toBe(true);
   });
 
   it('keeps only the selected unique item', () => {
     expect(matchRccpChartItem({ itemNumber: 'A' }, 'A')).toBe(true);
     expect(matchRccpChartItem({ itemNumber: 'B' }, 'A')).toBe(false);
+  });
+
+  it('keeps segments that match any selected item', () => {
+    expect(matchRccpChartItem({ itemNumber: 'A' }, ['A', 'C'])).toBe(true);
+    expect(matchRccpChartItem({ itemNumber: 'B' }, ['A', 'C'])).toBe(false);
   });
 });
 
@@ -58,5 +64,12 @@ describe('filterRccpChartByItem', () => {
       segmentsAbove: [{ itemNumber: 'A', qty: 2, status: 'open' }],
       segmentsBelow: [{ itemNumber: 'A', qty: 1, status: 'received' }],
     }]);
+  });
+
+  it('keeps stacks for every selected item', () => {
+    expect(filterRccpChartByItem(chart, ['A', 'B'])).toEqual(chart);
+    expect(filterRccpChartByItem(chart, ['B'])[0].segmentsAbove).toEqual([
+      { itemNumber: 'B', qty: 3, status: 'received' },
+    ]);
   });
 });

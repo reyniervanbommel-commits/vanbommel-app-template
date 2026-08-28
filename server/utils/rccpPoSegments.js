@@ -14,10 +14,18 @@ const {
   lineDateValue,
   collectDateSlots,
 } = require('./rccpPoRow');
+const { calendarDaysBetween } = require('./rccpKpis');
 
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   if (aYear !== bYear) return aYear - bYear;
   return aWeek - bWeek;
+}
+
+function isSentinelDate(value) {
+  if (value === null || value === undefined || value === '') return false;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
 }
 
 function emptyWeekBucket() {
@@ -34,7 +42,7 @@ function resolveDataAreaId(row, masterValues) {
   return String(pickValue(masterValues, 'dataAreaId') || '').trim();
 }
 
-function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId = '') {
+function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId = '', flags = {}) {
   if (!(qty > 0) || !week) return;
   let itemMap = weekMap.get(week);
   if (!itemMap) {
@@ -42,21 +50,31 @@ function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId =
     weekMap.set(week, itemMap);
   }
   const current = itemMap.get(itemNumber) || {
-    open: 0, received: 0, late: false, dataAreaId: '',
+    open: 0, received: 0, late: false, receivedLate: false, receivedOnTime: false,
+    planned1900: false, dataAreaId: '',
   };
   if (!current.dataAreaId && dataAreaId) current.dataAreaId = dataAreaId;
+  current.planned1900 = current.planned1900 || Boolean(flags.planned1900);
   if (status === 'open') {
     current.open += qty;
     current.late = current.late || Boolean(late);
   } else {
     current.received += qty;
+    current.receivedLate = current.receivedLate || Boolean(late);
+    current.receivedOnTime = current.receivedOnTime || Boolean(flags.onTime);
   }
   itemMap.set(itemNumber, current);
 }
 
-function emitSegment(itemNumber, qty, status, late, dataAreaId) {
+function emitSegment(itemNumber, qty, status, late, dataAreaId, flags = {}) {
   return {
-    itemNumber, qty, status, late, dataAreaId: dataAreaId || '',
+    itemNumber,
+    qty,
+    status,
+    late: Boolean(late),
+    onTime: Boolean(flags.onTime),
+    planned1900: Boolean(flags.planned1900),
+    dataAreaId: dataAreaId || '',
   };
 }
 
@@ -65,11 +83,12 @@ function emitAbove(itemMap) {
   const out = [];
   for (const itemNumber of items) {
     const entry = itemMap.get(itemNumber);
+    const flags = { planned1900: entry.planned1900 };
     if (entry.received > 0) {
-      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId));
+      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId, flags));
     }
     if (entry.open > 0) {
-      out.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId));
+      out.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
     }
   }
   return out;
@@ -81,7 +100,14 @@ function emitBelow(itemMap) {
   for (const itemNumber of items) {
     const entry = itemMap.get(itemNumber);
     if (entry.received > 0) {
-      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId));
+      out.push(emitSegment(
+        itemNumber,
+        entry.received,
+        'received',
+        Boolean(entry.receivedLate),
+        entry.dataAreaId,
+        { onTime: entry.receivedOnTime, planned1900: entry.planned1900 },
+      ));
     }
   }
   return out;
@@ -126,9 +152,9 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
   const above = new Map();
   const below = new Map();
 
-  const clipBump = (weekMap, week, itemNumber, status, qty, late, dataAreaId) => {
+  const clipBump = (weekMap, week, itemNumber, status, qty, late, dataAreaId, flags) => {
     if (!periodSet.has(week)) return;
-    bump(weekMap, week, itemNumber, status, qty, late, dataAreaId);
+    bump(weekMap, week, itemNumber, status, qty, late, dataAreaId, flags);
   };
 
   for (const row of rows || []) {
@@ -151,7 +177,9 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
 
       const itemNumber = lineItemNumber(lineValues, masterValues);
       const plannedDate = lineDateValue(lineValues, masterValues, dateKey);
-      const receiptDate = (receiptKey && lineDateValue(lineValues, masterValues, receiptKey)) || plannedDate;
+      const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
+      const receiptDate = rawReceipt || plannedDate;
+      const planned1900 = isSentinelDate(plannedDate);
       const share = details.length ? 1 / details.length : 1;
       const openQty = lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0;
       const deliveredQty = lineDelivered
@@ -166,8 +194,8 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
           const late = Boolean(
             nowYear && nowWeek && compareIsoWeek(plannedYear, plannedWeek, nowYear, nowWeek) < 0,
           );
-          clipBump(above, plannedKey, itemNumber, 'received', deliveredQty, false, dataAreaId);
-          clipBump(above, plannedKey, itemNumber, 'open', openQty, late, dataAreaId);
+          clipBump(above, plannedKey, itemNumber, 'received', deliveredQty, false, dataAreaId, { planned1900 });
+          clipBump(above, plannedKey, itemNumber, 'open', openQty, late, dataAreaId, { planned1900 });
         }
       }
 
@@ -175,7 +203,24 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
         const receiptYear = getIsoWeekYear(receiptDate);
         const receiptWeek = getIsoWeek(receiptDate);
         if (receiptYear && receiptWeek) {
-          clipBump(below, isoWeekKey(receiptYear, receiptWeek), itemNumber, 'received', deliveredQty, false, dataAreaId);
+          const hasReceipt = Boolean(rawReceipt) && !isSentinelDate(rawReceipt);
+          let receivedLate = false;
+          let receivedOnTime = false;
+          if (hasReceipt && plannedDate && !planned1900) {
+            const days = calendarDaysBetween(receiptDate, plannedDate);
+            receivedLate = days > 0;
+            receivedOnTime = days !== null && days <= 0;
+          }
+          clipBump(
+            below,
+            isoWeekKey(receiptYear, receiptWeek),
+            itemNumber,
+            'received',
+            deliveredQty,
+            receivedLate,
+            dataAreaId,
+            { onTime: receivedOnTime, planned1900 },
+          );
         }
       }
     };

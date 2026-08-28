@@ -71,6 +71,7 @@ function defaultConfig() {
     showWarningLine: true,
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
+    itemPickerColumnKeys: [],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
     periodMode: 'week',
@@ -117,6 +118,26 @@ function normalizeStringArray(value) {
   return [...new Set(value.map((v) => String(v || '').trim()).filter(Boolean))];
 }
 
+const ITEM_NUMBER_COLUMN_KEYS = new Set(['itemnumber', 'itemid', 'item_id']);
+const ITEM_PICKER_COLUMN_LIMIT = 8;
+
+function normalizeItemPickerColumnKeys(raw) {
+  const list = Array.isArray(raw?.itemPickerColumnKeys) ? raw.itemPickerColumnKeys : [];
+  const seen = new Set();
+  const keys = [];
+  for (const entry of list) {
+    const key = String(entry || '').trim();
+    if (!key || !/^[A-Za-z0-9_]+$/.test(key)) continue;
+    if (ITEM_NUMBER_COLUMN_KEYS.has(key.toLowerCase())) continue;
+    const id = key.toLowerCase();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    keys.push(key);
+    if (keys.length >= ITEM_PICKER_COLUMN_LIMIT) break;
+  }
+  return keys;
+}
+
 function validateConfig(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { valid: false, error: 'Config must be an object' };
@@ -160,6 +181,7 @@ function validateConfig(raw) {
 
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
+  const itemPickerColumnKeys = normalizeItemPickerColumnKeys(raw);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
   if (!VALID_DUPLICATE_POLICIES.includes(duplicatePolicy)) {
     return { valid: false, error: 'duplicatePolicy must be update or skip' };
@@ -191,6 +213,7 @@ function validateConfig(raw) {
       showWarningLine,
       chartWeekRanges,
       excludedStatuses,
+      itemPickerColumnKeys,
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
       periodMode,
@@ -258,6 +281,7 @@ module.exports = {
   defaultConfig,
   normalizeQuantityMeasures,
   normalizeChartWeekRanges,
+  normalizeItemPickerColumnKeys,
   validateConfig,
   getConfig,
   saveConfig,

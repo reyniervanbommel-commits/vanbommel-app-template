@@ -1,30 +1,79 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Combobox, Field, Option, makeStyles } from '@fluentui/react-components';
+import { Combobox, Field, Option, makeStyles, tokens } from '@fluentui/react-components';
+import {
+  ALL_ITEMS_LABEL,
+  filterRccpItemPickerItems,
+  rccpItemPickerDisplayValue,
+} from './rccpItemPicker';
 
 const useStyles = makeStyles({
   field: { maxWidth: '280px', minWidth: '180px' },
   listbox: {
     minWidth: '280px',
-    maxWidth: '420px',
+    maxWidth: '720px',
   },
-  option: {
+  listboxWide: {
+    minWidth: '560px',
+    maxWidth: '860px',
+  },
+  header: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+    display: 'grid',
+    columnGap: tokens.spacingHorizontalM,
+    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  row: {
+    display: 'grid',
+    columnGap: tokens.spacingHorizontalM,
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  cell: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
 });
 
 const LISTBOX_POSITIONING = { matchTargetSize: false };
-const ALL_ITEMS_LABEL = 'All items';
+
+function gridTemplate(extraCount) {
+  if (extraCount <= 0) return 'minmax(140px, 1fr)';
+  return `minmax(140px, 1.3fr) repeat(${extraCount}, minmax(90px, 1fr))`;
+}
+
+function cellText(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  return String(value);
+}
 
 /**
  * Searchable unique-item filter for the RCCP capacity vs load chart.
  */
-export default function RccpItemFilter({ value, onChange, items = [] }) {
+export default function RccpItemFilter({
+  value = [],
+  onChange,
+  items = [],
+  extraColumns = [],
+  extraValues = {},
+}) {
   const styles = useStyles();
   const inputRef = useRef(null);
-  const selectedLabel = value || ALL_ITEMS_LABEL;
+  const selectedItems = Array.isArray(value) ? value : (value ? [value] : []);
+  const selectedLabel = rccpItemPickerDisplayValue(selectedItems);
   const [query, setQuery] = useState(selectedLabel);
+  const hasExtra = extraColumns.length > 0;
+  const template = gridTemplate(extraColumns.length);
 
-  const listboxSlot = useMemo(() => ({ className: styles.listbox }), [styles.listbox]);
+  const listboxSlot = useMemo(() => ({
+    className: hasExtra ? styles.listboxWide : styles.listbox,
+  }), [hasExtra, styles.listbox, styles.listboxWide]);
 
   useEffect(() => {
     setQuery(selectedLabel);
@@ -34,17 +83,22 @@ export default function RccpItemFilter({ value, onChange, items = [] }) {
 
   const filteredItems = useMemo(() => {
     if (!isSearching) return items;
-    const term = query.trim().toLowerCase();
-    return items.filter((item) => item.toLowerCase().includes(term));
-  }, [items, query, isSearching]);
+    return filterRccpItemPickerItems(items, extraValues, extraColumns, query);
+  }, [items, extraValues, extraColumns, query, isSearching]);
 
   const showAllOption = !isSearching
     || ALL_ITEMS_LABEL.toLowerCase().includes(query.trim().toLowerCase());
 
   const handleOptionSelect = useCallback((_, data) => {
     if (data.optionValue === undefined) return;
-    onChange(data.optionValue || '');
-    setQuery(data.optionText || ALL_ITEMS_LABEL);
+    if (data.optionValue === '') {
+      onChange([]);
+      setQuery(ALL_ITEMS_LABEL);
+      return;
+    }
+    const next = (data.selectedOptions || []).filter(Boolean);
+    onChange(next);
+    setQuery(rccpItemPickerDisplayValue(next));
   }, [onChange]);
 
   const handleInputChange = useCallback((event) => {
@@ -81,10 +135,11 @@ export default function RccpItemFilter({ value, onChange, items = [] }) {
     >
       <Combobox
         freeform
+        multiselect
         disabled={!hasItems}
         value={query}
-        selectedOptions={[value || '']}
-        placeholder={hasItems ? 'Type item number...' : 'No items in this week range'}
+        selectedOptions={selectedItems}
+        placeholder={hasItems ? 'Search items...' : 'No items in this week range'}
         input={inputSlot}
         listbox={listboxSlot}
         positioning={LISTBOX_POSITIONING}
@@ -93,14 +148,32 @@ export default function RccpItemFilter({ value, onChange, items = [] }) {
         onChange={handleInputChange}
         onBlur={handleBlur}
       >
+        {hasExtra && (
+          <div className={styles.header} style={{ gridTemplateColumns: template }} role="presentation">
+            <span className={styles.cell}>Item number</span>
+            {extraColumns.map((column) => (
+              <span key={column.key} className={styles.cell}>{column.label || column.key}</span>
+            ))}
+          </div>
+        )}
         {showAllOption && (
           <Option value="" text={ALL_ITEMS_LABEL}>{ALL_ITEMS_LABEL}</Option>
         )}
-        {filteredItems.map((item) => (
-          <Option key={item} className={styles.option} value={item} text={item}>
-            {item}
-          </Option>
-        ))}
+        {filteredItems.map((item) => {
+          const rowValues = extraValues[item] || {};
+          return (
+            <Option key={item} value={item} text={item}>
+              {hasExtra ? (
+                <div className={styles.row} style={{ gridTemplateColumns: template }}>
+                  <span className={styles.cell}>{item}</span>
+                  {extraColumns.map((column) => (
+                    <span key={column.key} className={styles.cell}>{cellText(rowValues[column.key])}</span>
+                  ))}
+                </div>
+              ) : item}
+            </Option>
+          );
+        })}
       </Combobox>
     </Field>
   );

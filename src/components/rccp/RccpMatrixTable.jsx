@@ -102,6 +102,9 @@ const useStyles = makeStyles({
   },
   qty: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
   cellInteractive: { cursor: 'pointer' },
+  highlightCell: {
+    boxShadow: `inset 0 0 0 2px ${tokens.colorBrandStroke1}`,
+  },
   currentHeader: {
     backgroundColor: tokens.colorBrandBackground2,
     boxShadow: `inset 0 -3px 0 0 ${tokens.colorBrandStroke1}`,
@@ -136,9 +139,12 @@ function RccpMatrixTable({
   onCellClick,
   interactive,
   gridWidth,
+  kpiHighlight = null,
 }) {
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
+  const highlightWeeks = useMemo(() => new Set(kpiHighlight?.weeks || []), [kpiHighlight]);
+  const highlightMeasures = useMemo(() => new Set(kpiHighlight?.measureKeys || []), [kpiHighlight]);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
   const showYearRow = useMemo(
     () => periodHeaders.some((period) => period.yearLabel),
@@ -213,10 +219,16 @@ function RccpMatrixTable({
                   ? tokens.colorNeutralBackground3
                   : statusToken(cell ? cell.statusColor : 'grey');
                 const clickable = isInteractive && !isDerived && !period.month;
+                const highlighted = highlightWeeks.has(period.key)
+                  && highlightMeasures.has(row.measureKey);
                 return (
                   <TableCell
                     key={period.key}
-                    className={mergeClasses(styles.weekCol, clickable && styles.cellInteractive)}
+                    className={mergeClasses(
+                      styles.weekCol,
+                      clickable && styles.cellInteractive,
+                      highlighted && styles.highlightCell,
+                    )}
                     style={{ backgroundColor: bg }}
                     {...(clickable ? {
                       role: 'button',

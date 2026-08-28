@@ -48,6 +48,19 @@ router.get('/vendors', async (req, res, next) => {
   }
 });
 
+router.get('/item-lookup', async (req, res, next) => {
+  try {
+    const itemNumbers = String(req.query.itemNumbers || '')
+      .split(',')
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    const data = await analysisService.listItemPickerLookup({ itemNumbers });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/capacity', async (req, res, next) => {
   try {
     const vendorAccount = resolveVendorQuery(req);

@@ -42,7 +42,7 @@ function mergeSegments(lists) {
   const map = new Map();
   for (const segment of lists.flat()) {
     if (!segment) continue;
-    const id = `${segment.itemNumber}\0${segment.status}`;
+    const id = `${segment.itemNumber}\0${segment.status}\0${Number(Boolean(segment.late))}\0${Number(Boolean(segment.onTime))}\0${Number(Boolean(segment.planned1900))}`;
     const prev = map.get(id);
     if (!prev) {
       map.set(id, { ...segment, qty: Number(segment.qty) || 0 });
@@ -50,6 +50,8 @@ function mergeSegments(lists) {
     }
     prev.qty += Number(segment.qty) || 0;
     prev.late = Boolean(prev.late || segment.late);
+    prev.onTime = Boolean(prev.onTime || segment.onTime);
+    prev.planned1900 = Boolean(prev.planned1900 || segment.planned1900);
     if (!prev.dataAreaId && segment.dataAreaId) prev.dataAreaId = segment.dataAreaId;
   }
   return [...map.values()].sort((a, b) => {

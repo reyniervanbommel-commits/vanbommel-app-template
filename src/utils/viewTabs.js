@@ -63,6 +63,38 @@ export function extraFiltersEqual(left, right) {
   return true;
 }
 
+/** Extra filters on a tab excluding the group-split column. */
+export function nonGroupExtraFilters(tab) {
+  const extra = normalizeExtraFilters(tab?.extraFilters);
+  const groupKey = inferGroupColumnKey(tab);
+  if (!groupKey || !extra[groupKey]) return extra;
+  const rest = { ...extra };
+  delete rest[groupKey];
+  return rest;
+}
+
+function extraHasFiltersOthersLack(mine, other) {
+  const needle = normalizeExtraFilters(mine);
+  const hay = normalizeExtraFilters(other);
+  return Object.keys(needle).some((key) => !filtersEqual(needle[key], hay[key]));
+}
+
+/**
+ * True when this grouped tab has extra filters that at least one sibling in the
+ * same group does not have. Siblings without those extras stay unmarked.
+ */
+export function tabHasUnsharedExtraFilters(tab, extraTabs) {
+  const groupKey = inferGroupColumnKey(tab);
+  if (!groupKey) return false;
+  const mine = nonGroupExtraFilters(tab);
+  if (!Object.keys(mine).length) return false;
+  const siblings = (extraTabs || []).filter((entry) => (
+    entry.id !== tab.id && inferGroupColumnKey(entry) === groupKey
+  ));
+  if (!siblings.length) return true;
+  return siblings.some((sibling) => extraHasFiltersOthersLack(mine, nonGroupExtraFilters(sibling)));
+}
+
 export function createTabId() {
   return `tab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }

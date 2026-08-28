@@ -25,4 +25,11 @@ describe('useRccpSettingsFormHandlers', () => {
     result.current.handleGreen({ target: { value: '70' } });
     expect(onUpdateField).toHaveBeenCalledWith('thresholds', { greenMax: 70, orangeMax: 100 });
   });
+
+  it('zet item-picker kolommen via handleItemPickerColumns', () => {
+    const onUpdateField = vi.fn();
+    const { result } = renderHook(() => useRccpSettingsFormHandlers({ thresholds: {} }, onUpdateField));
+    result.current.handleItemPickerColumns(['productName', 'color']);
+    expect(onUpdateField).toHaveBeenCalledWith('itemPickerColumnKeys', ['productName', 'color']);
+  });
 });

@@ -4,7 +4,7 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
 
 describe('PurchaseOrderViewTabContextMenu', () => {
-  it('toont groepskleur en verwijderen voor een extra tab', () => {
+  it('toont groepskleur en verwijderen voor een extra tab, zonder Save', () => {
     render(
       <FluentProvider theme={webLightTheme}>
         <PurchaseOrderViewTabContextMenu
@@ -30,6 +30,7 @@ describe('PurchaseOrderViewTabContextMenu', () => {
 
     expect(screen.getByRole('menuitem', { name: 'Group color' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Prefix and suffix…' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Save' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'This tab only' })).toBeTruthy();
   });
 });

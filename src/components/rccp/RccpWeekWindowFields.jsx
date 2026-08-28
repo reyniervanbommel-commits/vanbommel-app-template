@@ -14,6 +14,7 @@ const useStyles = makeStyles({
  */
 function RccpWeekWindowFields({
   window, onWindowReplace, kpiWindowOnly, onKpiWindowOnlyChange, periodGrain, onPeriodGrainChange,
+  analysis, onShowDataWindow,
 }) {
   const styles = useStyles();
   const handleToggle = useCallback((_, data) => {
@@ -26,7 +27,12 @@ function RccpWeekWindowFields({
   return (
     <>
       <Field className={styles.periodField} label="Period">
-        <RccpIsoWeekRangePicker window={window} onReplaceWindow={onWindowReplace} />
+        <RccpIsoWeekRangePicker
+          window={window}
+          onReplaceWindow={onWindowReplace}
+          analysis={analysis}
+          onShowDataWindow={onShowDataWindow}
+        />
       </Field>
       <Field className={styles.viewField} label="View">
         <RadioGroup layout="horizontal" value={periodGrain} onChange={handleGrain}>

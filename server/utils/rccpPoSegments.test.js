@@ -50,9 +50,15 @@ describe('buildPoSegments', () => {
     };
   }
 
-  function seg(itemNumber, qty, status, late) {
+  function seg(itemNumber, qty, status, late, extra = {}) {
     return {
-      itemNumber, qty, status, late, dataAreaId: 'whsl',
+      itemNumber,
+      qty,
+      status,
+      late,
+      onTime: Boolean(extra.onTime),
+      planned1900: Boolean(extra.planned1900),
+      dataAreaId: extra.dataAreaId || 'whsl',
     };
   }
 
@@ -65,7 +71,7 @@ describe('buildPoSegments', () => {
       seg('SKU-1', 10, 'open', false),
     ]);
     expect(below).toEqual([
-      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 4, 'received', true),
     ]);
     expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
   });
@@ -104,7 +110,7 @@ describe('buildPoSegments', () => {
     };
     const byWeek = buildPoSegments([row()], baseConfig, clipWindow, { now: nowCurrent });
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([
-      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 4, 'received', true),
     ]);
     expect(byWeek.get(receivedWeek.key).segmentsAbove).toEqual([]);
     expect(byWeek.has(plannedWeek.key)).toBe(false);
@@ -180,5 +186,46 @@ describe('buildPoSegments', () => {
     );
     expect(chart[0].segmentsAbove).toHaveLength(2);
     expect(chart[0].segmentsBelow).toEqual([]);
+  });
+
+  it('marks received-below as late when the receipt date is after the planned date', () => {
+    const byWeek = buildPoSegments([row()], baseConfig, window, { now: nowCurrent });
+    expect(byWeek.get(receivedWeek.key).segmentsBelow[0]).toMatchObject({
+      late: true,
+      onTime: false,
+    });
+  });
+
+  it('marks received-below as on time when the receipt date is on the planned date', () => {
+    const byWeek = buildPoSegments(
+      [row({ line: { productReceiptDate: planned } })],
+      baseConfig,
+      window,
+      { now: nowCurrent },
+    );
+    expect(byWeek.get(plannedWeek.key).segmentsBelow[0]).toMatchObject({
+      late: false,
+      onTime: true,
+    });
+  });
+
+  it('flags planned 1-1-1900 segments', () => {
+    const sentinel = '1900-01-01T00:00:00.000Z';
+    const sentinelWeek = weekOf(new Date(sentinel));
+    const tight = {
+      fromYear: sentinelWeek.year,
+      fromWeek: sentinelWeek.week,
+      toYear: sentinelWeek.year,
+      toWeek: sentinelWeek.week,
+    };
+    const byWeek = buildPoSegments(
+      [row({ line: { requestedDeliveryDate: sentinel, productReceiptDate: '' } })],
+      baseConfig,
+      tight,
+      { now: nowCurrent },
+    );
+    const above = byWeek.get(sentinelWeek.key).segmentsAbove;
+    expect(above.length).toBeGreaterThan(0);
+    expect(above.every((seg) => seg.planned1900)).toBe(true);
   });
 });

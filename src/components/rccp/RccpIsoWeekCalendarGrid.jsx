@@ -1,137 +1,268 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
-import { buildCalendarWeeks, WEEKDAY_LABELS } from '../supplier/weekNumberCalendarUtils';
-import { compareIsoWeekParts, isoWeekPartsFromLocalDate } from './rccpUtils';
+import { MONTH_LABELS } from '../supplier/weekNumberCalendarUtils';
+import {
+  buildIsoYearWeeks,
+  clampWeekPickerListHeight,
+  compareIsoWeekParts,
+  groupIsoWeeksByMonth,
+} from './rccpUtils';
 
 const useStyles = makeStyles({
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '36px repeat(7, 32px)',
-    columnGap: '2px',
-    rowGap: '2px',
-    alignItems: 'center',
+  wrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '248px',
   },
-  weekHeader: {
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground1,
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap('2px'),
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    overscrollBehavior: 'contain',
+  },
+  yearLabel: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
+    backgroundColor: tokens.colorNeutralBackground1,
+    fontSize: tokens.fontSizeBase300,
     fontWeight: tokens.fontWeightSemibold,
-    textAlign: 'center',
-    backgroundColor: tokens.colorNeutralBackground3,
-    ...shorthands.borderRadius('4px'),
-    ...shorthands.padding('4px', '0'),
+    lineHeight: tokens.lineHeightBase300,
+    ...shorthands.padding('2px', '0'),
   },
-  dayHeader: {
-    fontSize: tokens.fontSizeBase200,
+  monthLabel: {
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground3,
-    textAlign: 'center',
-    fontWeight: tokens.fontWeightSemibold,
-    ...shorthands.padding('4px', '0'),
+    lineHeight: tokens.lineHeightBase100,
   },
-  weekNumber: {
+  weeks: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    ...shorthands.gap('2px'),
+  },
+  weekButton: {
     minWidth: '36px',
     width: '36px',
-    minHeight: '28px',
+    height: '24px',
+    minHeight: '24px',
     ...shorthands.padding('0'),
     fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
-  dayButton: {
-    minWidth: '32px',
-    width: '32px',
-    height: '28px',
-    ...shorthands.padding('0'),
-    fontSize: tokens.fontSizeBase200,
+  lockedWeek: {
+    backgroundColor: tokens.colorPaletteRedForeground1,
+    color: tokens.colorNeutralForegroundOnBrand,
+    ...shorthands.border('1px', 'solid', tokens.colorPaletteRedForeground1),
+    ':hover': {
+      backgroundColor: tokens.colorPaletteRedForeground1,
+      color: tokens.colorNeutralForegroundOnBrand,
+    },
+    ':active': {
+      backgroundColor: tokens.colorPaletteRedForeground1,
+      color: tokens.colorNeutralForegroundOnBrand,
+    },
   },
-  inRange: { backgroundColor: tokens.colorBrandBackground2 },
-  outsideMonth: { color: tokens.colorNeutralForeground4 },
+  lockedLabel: {
+    color: tokens.colorNeutralForegroundOnBrand,
+  },
   currentWeek: {
     outlineStyle: 'solid',
     outlineWidth: '1px',
     outlineColor: tokens.colorBrandStroke1,
   },
+  handle: {
+    height: '8px',
+    marginTop: '4px',
+    cursor: 'ns-resize',
+    touchAction: 'none',
+    flexShrink: 0,
+    backgroundColor: tokens.colorNeutralStroke2,
+    ...shorthands.borderRadius('4px'),
+    ':hover': { backgroundColor: tokens.colorBrandStroke1 },
+  },
+  dragging: { backgroundColor: tokens.colorBrandBackground2 },
 });
 
-function WeekDayCell({ date, viewMonth, selected, current, onSelect, styles }) {
-  const outside = date.getMonth() !== viewMonth;
+function ListResizeHandle({ height, onResize, styles }) {
+  const [dragging, setDragging] = useState(false);
+  const handlePointerDown = useCallback((event) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = height;
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    setDragging(true);
+    const handleMove = (moveEvent) => {
+      onResize(clampWeekPickerListHeight(startHeight + (moveEvent.clientY - startY)));
+    };
+    const handleUp = () => {
+      setDragging(false);
+      if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+      target.removeEventListener('pointermove', handleMove);
+      target.removeEventListener('pointerup', handleUp);
+      target.removeEventListener('pointercancel', handleUp);
+    };
+    target.addEventListener('pointermove', handleMove);
+    target.addEventListener('pointerup', handleUp);
+    target.addEventListener('pointercancel', handleUp);
+  }, [height, onResize]);
+  const handleKeyDown = useCallback((event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      onResize(clampWeekPickerListHeight(height + 24));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      onResize(clampWeekPickerListHeight(height - 24));
+    }
+  }, [height, onResize]);
+
+  return (
+    <div
+      className={mergeClasses(styles.handle, dragging && styles.dragging)}
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize week list"
+      aria-valuenow={height}
+      tabIndex={0}
+      title="Drag to show more weeks"
+      onPointerDown={handlePointerDown}
+      onKeyDown={handleKeyDown}
+    />
+  );
+}
+
+function IsoWeekButton({ item, selected, current, locked, onSelectWeek, styles }) {
+  const handleClick = useCallback(() => {
+    onSelectWeek({ year: item.year, week: item.week });
+  }, [onSelectWeek, item.year, item.week]);
+
   return (
     <Button
-      appearance="subtle"
+      appearance={selected && !locked ? 'primary' : 'subtle'}
       size="small"
       className={mergeClasses(
-        styles.dayButton,
-        selected && styles.inRange,
-        outside && styles.outsideMonth,
-        current && !selected && styles.currentWeek,
+        styles.weekButton,
+        locked && styles.lockedWeek,
+        current && !selected && !locked && styles.currentWeek,
       )}
-      aria-hidden
-      tabIndex={-1}
-      onClick={onSelect}
+      data-iso-week={`${item.year}-W${item.week}`}
+      title={`Week ${item.week} · ${item.mondayLabel}`}
+      aria-label={`Week ${item.week}, ${item.year}, starts ${item.mondayLabel}${locked ? ', locked' : ''}`}
+      aria-pressed={selected}
+      onClick={handleClick}
     >
-      {date.getDate()}
+      {locked ? <span className={styles.lockedLabel}>{item.week}</span> : item.week}
     </Button>
   );
 }
 
-function WeekCalendarRow({ week, viewMonth, from, to, now, onSelectWeek, styles }) {
-  const parts = isoWeekPartsFromLocalDate(week.days[0]);
-  const selected = compareIsoWeekParts(parts, from) >= 0 && compareIsoWeekParts(parts, to) <= 0;
-  const current = compareIsoWeekParts(parts, now) === 0;
-  const year = parts.year;
-  const weekNo = parts.week;
-  const handleClick = useCallback(() => {
-    onSelectWeek({ year, week: weekNo });
-  }, [onSelectWeek, year, weekNo]);
+function IsoMonthWeekGroup({ group, from, to, now, locked, onSelectWeek, styles }) {
+  const monthName = MONTH_LABELS[group.month];
+  const label = group.monthYear === group.weeks[0].year
+    ? monthName
+    : `${monthName} ${group.monthYear}`;
 
   return (
-    <>
-      <Button
-        appearance={selected ? 'primary' : 'subtle'}
-        size="small"
-        className={mergeClasses(styles.weekNumber, current && !selected && styles.currentWeek)}
-        aria-label={`Week ${weekNo}, ${year}`}
-        aria-pressed={selected}
-        onClick={handleClick}
-      >
-        {weekNo}
-      </Button>
-      {week.days.map((date) => (
-        <WeekDayCell
-          key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
-          date={date}
-          viewMonth={viewMonth}
-          selected={selected}
-          current={current}
-          onSelect={handleClick}
-          styles={styles}
-        />
-      ))}
-    </>
+    <div>
+      <div className={styles.monthLabel}>{label}</div>
+      <div className={styles.weeks}>
+        {group.weeks.map((item) => (
+          <IsoWeekButton
+            key={`${item.year}-W${item.week}`}
+            item={item}
+            selected={compareIsoWeekParts(item, from) >= 0 && compareIsoWeekParts(item, to) <= 0}
+            current={compareIsoWeekParts(item, now) === 0}
+            locked={Boolean(locked && compareIsoWeekParts(item, locked) === 0)}
+            onSelectWeek={onSelectWeek}
+            styles={styles}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
-function RccpIsoWeekCalendarGrid({ viewYear, viewMonth, from, to, now, onSelectWeek }) {
-  const styles = useStyles();
-  const weeks = useMemo(() => buildCalendarWeeks(viewYear, viewMonth), [viewYear, viewMonth]);
-
+function IsoYearBlock({ year, from, to, now, locked, onSelectWeek, styles }) {
+  const groups = useMemo(
+    () => groupIsoWeeksByMonth(buildIsoYearWeeks(year)),
+    [year],
+  );
   return (
-    <div className={styles.grid} role="grid" aria-label="ISO weeks">
-      <div className={styles.weekHeader} role="columnheader">Wk</div>
-      {WEEKDAY_LABELS.map((day) => (
-        <div key={day} className={styles.dayHeader} role="columnheader">{day}</div>
-      ))}
-      {weeks.map((week) => (
-        <WeekCalendarRow
-          key={`${viewYear}-${viewMonth}-${week.weekNumber}-${week.days[0].getDate()}`}
-          week={week}
-          viewMonth={viewMonth}
+    <div data-iso-year={year}>
+      <div className={styles.yearLabel}>{year}</div>
+      {groups.map((group) => (
+        <IsoMonthWeekGroup
+          key={`${year}-${group.monthYear}-${group.month}`}
+          group={group}
           from={from}
           to={to}
           now={now}
+          locked={locked}
           onSelectWeek={onSelectWeek}
           styles={styles}
         />
       ))}
+    </div>
+  );
+}
+
+function RccpIsoWeekCalendarGrid({
+  yearSpan, from, to, now, locked, onSelectWeek, listHeight, onListHeightChange, focusWeek, scrollYear,
+}) {
+  const styles = useStyles();
+  const listRef = useRef(null);
+  const years = useMemo(() => {
+    const start = Number(yearSpan?.fromYear);
+    const end = Number(yearSpan?.toYear);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [yearSpan?.fromYear, yearSpan?.toYear]);
+
+  useEffect(() => {
+    const root = listRef.current;
+    if (!root) return undefined;
+    const target = scrollYear != null
+      ? root.querySelector(`[data-iso-year="${scrollYear}"]`)
+      : (focusWeek
+        ? root.querySelector(`[data-iso-week="${focusWeek.year}-W${focusWeek.week}"]`)
+        : null);
+    if (!target) return undefined;
+    const block = scrollYear != null ? 'start' : 'center';
+    const scroll = () => target.scrollIntoView({ block, inline: 'nearest' });
+    const frame = requestAnimationFrame(scroll);
+    const timer = window.setTimeout(scroll, 50);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [scrollYear, focusWeek?.year, focusWeek?.week, listHeight, yearSpan?.fromYear, yearSpan?.toYear]);
+
+  return (
+    <div className={styles.wrap}>
+      <div
+        ref={listRef}
+        className={styles.list}
+        style={{ height: `${listHeight}px` }}
+        role="list"
+        aria-label={`ISO weeks ${years[0] || ''} to ${years[years.length - 1] || ''}`}
+      >
+        {years.map((year) => (
+          <IsoYearBlock
+            key={year}
+            year={year}
+            from={from}
+            to={to}
+            now={now}
+            locked={locked}
+            onSelectWeek={onSelectWeek}
+            styles={styles}
+          />
+        ))}
+      </div>
+      <ListResizeHandle height={listHeight} onResize={onListHeightChange} styles={styles} />
     </div>
   );
 }

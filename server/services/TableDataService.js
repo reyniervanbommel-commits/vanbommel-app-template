@@ -3901,7 +3901,11 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
       const lineRecords = lineRecordsByRecKey?.get(`${m.partition_key}|${m.record_key}`) || [];
       if (!recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords)) continue;
     }
-    rows.push({ values: buildValuesFromColumns(cols, masterJson, null) });
+    rows.push({
+      recordKey: m.record_key,
+      partitionKey: m.partition_key,
+      values: buildValuesFromColumns(cols, masterJson, null),
+    });
   }
   return rows;
 }

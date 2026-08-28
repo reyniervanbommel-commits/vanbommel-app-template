@@ -22,6 +22,7 @@ const {
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const { buildItemPickerLookupMap } = require('../utils/rccpItemPickerLookup');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -691,6 +692,58 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
   return payload;
 }
 
+const ITEMS_TABLE_KEY = 'items';
+const ITEM_LOOKUP_LIMIT = 500;
+const itemLookupCache = new Map();
+
+async function listItemPickerLookup({ itemNumbers = [] } = {}) {
+  const config = await settingsService.getConfig();
+  const columnKeys = config.itemPickerColumnKeys || [];
+  const wanted = [...new Set(
+    (itemNumbers || []).map((value) => String(value || '').trim()).filter(Boolean),
+  )].slice(0, ITEM_LOOKUP_LIMIT);
+  if (!columnKeys.length || !wanted.length) {
+    return { columns: [], byItem: {} };
+  }
+
+  const cacheKey = columnKeys.join(',');
+  let revision = null;
+  try {
+    ({ revision } = await tableDataService.getRevision({ tableKey: ITEMS_TABLE_KEY }));
+    const cached = itemLookupCache.get(cacheKey);
+    if (cached && revision && cached.revision === revision) {
+      return {
+        columns: cached.columns,
+        byItem: buildItemPickerLookupMap(cached.rows, wanted, columnKeys),
+      };
+    }
+  } catch {
+    revision = null;
+  }
+
+  let labelByKey = new Map();
+  try {
+    const defs = await tableDataService.getBoardColumnDefinitions(ITEMS_TABLE_KEY, { scope: 'master' });
+    for (const col of defs.master || []) {
+      labelByKey.set(col.key, col.label || col.key);
+    }
+  } catch {
+    labelByKey = new Map();
+  }
+
+  const rows = await time('rccp_item_lookup', () => tableDataService.listVendorValues({
+    tableKey: ITEMS_TABLE_KEY,
+    valueColumnKeys: columnKeys,
+  }));
+  const columns = columnKeys.map((key) => ({ key, label: labelByKey.get(key) || key }));
+  if (revision) itemLookupCache.set(cacheKey, { revision, columns, rows });
+
+  return {
+    columns,
+    byItem: buildItemPickerLookupMap(rows, wanted, columnKeys),
+  };
+}
+
 module.exports = {
   aggregatePoLoad,
   buildDrillDownRows,
@@ -699,6 +752,7 @@ module.exports = {
   boardKpis,
   getDrillDown,
   listMainTableVendors,
+  listItemPickerLookup,
   extractVendorsFromRows,
   extractVendorNamesFromRows,
   cellKey,

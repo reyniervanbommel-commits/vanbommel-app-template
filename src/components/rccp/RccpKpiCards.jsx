@@ -12,14 +12,16 @@ const useStyles = makeStyles({
   },
 });
 
-function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
+function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
   const styles = useStyles();
   const handleActivate = useCallback((key) => {
     onSelect?.(key);
   }, [onSelect]);
   if (!kpis) return null;
   const clickable = Boolean(onSelect);
-  const clickableSet = clickable ? new Set(PO_BOARD_CLICKABLE_KPI_KEYS) : new Set();
+  const clickableSet = clickable
+    ? new Set(clickableKeys || PO_BOARD_CLICKABLE_KPI_KEYS)
+    : new Set();
   const uniqueLateItems = kpis.lateDeliveryItemCount;
   return (
     <div className={styles.row}>
@@ -111,8 +113,8 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         label="Capacity shortfall"
         qty={kpis.capacityShortfall}
         hash
-        selected={false}
-        clickable={false}
+        selected={selectedKey === 'capacityShortfall'}
+        clickable={clickableSet.has('capacityShortfall')}
         onActivate={handleActivate}
       />
       <KpiCard
@@ -120,8 +122,8 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect }) {
         label="Overloaded weeks"
         qty={kpis.overloadedWeeks}
         hash
-        selected={false}
-        clickable={false}
+        selected={selectedKey === 'overloadedWeeks'}
+        clickable={clickableSet.has('overloadedWeeks')}
         onActivate={handleActivate}
       />
     </div>

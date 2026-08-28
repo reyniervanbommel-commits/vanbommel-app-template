@@ -11,25 +11,26 @@ describe('useRccpItemFilter', () => {
   it('lists unique items and leaves the chart unfiltered by default', () => {
     const { result } = renderHook(() => useRccpItemFilter(chart));
     expect(result.current.items).toEqual(['CBM-1', 'CFM-2']);
+    expect(result.current.selectedItems).toEqual([]);
     expect(result.current.filteredChart).toBe(chart);
   });
 
-  it('filters stacks to the selected item', () => {
+  it('filters stacks to the selected items', () => {
     const { result } = renderHook(() => useRccpItemFilter(chart));
-    act(() => result.current.handleItemChange('CBM-1'));
-    expect(result.current.itemNumber).toBe('CBM-1');
+    act(() => result.current.handleItemChange(['CBM-1']));
+    expect(result.current.selectedItems).toEqual(['CBM-1']);
     expect(result.current.filteredChart[0].segmentsAbove).toEqual([
       { itemNumber: 'CBM-1', qty: 2, status: 'open' },
     ]);
     expect(result.current.filteredChart[0].segmentsBelow).toEqual([]);
   });
 
-  it('clears the selection when the item disappears from the chart', () => {
+  it('keeps only selected items that still exist on the chart', () => {
     let nextChart = chart;
     const { result, rerender } = renderHook(() => useRccpItemFilter(nextChart));
-    act(() => result.current.handleItemChange('CBM-1'));
+    act(() => result.current.handleItemChange(['CBM-1', 'CFM-2']));
     nextChart = [{ segmentsAbove: [{ itemNumber: 'CFM-2', qty: 1 }], segmentsBelow: [] }];
     rerender();
-    expect(result.current.itemNumber).toBe('');
+    expect(result.current.selectedItems).toEqual(['CFM-2']);
   });
 });

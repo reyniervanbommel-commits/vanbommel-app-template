@@ -50,28 +50,157 @@ describe('usePurchaseOrderViewTabs', () => {
     expect(result.current.activeTabId).not.toBe(ALL_TAB_ID);
   });
 
-  it('vraagt extra-filter scope nadat een extra tab-filter verandert', () => {
+  it('markeert unshared extra filters op een groepstab zonder prompt', () => {
     const boardView = createBoardView();
     const { result, rerender } = renderHook(() => usePurchaseOrderViewTabs({
       activeViewId: 9,
       boardView,
-      columns: [{ key: 'status', label: 'Status', dataType: 'text' }],
-      allItems: [{ values: { status: 'Open' } }],
+      columns: [
+        { key: 'vendorAccount', label: 'Vendor', dataType: 'text' },
+        { key: 'status', label: 'Status', dataType: 'text' },
+      ],
+      allItems: [
+        { values: { vendorAccount: 'Q000104', status: 'Open' } },
+        { values: { vendorAccount: 'Q000105', status: 'Open' } },
+      ],
     }));
 
     act(() => {
-      result.current.addBlankTab('Dates');
+      result.current.addTabsFromColumn({ columnKey: 'vendorAccount', color: '#579bfc' });
     });
-    expect(result.current.extraFilterPrompt).toBe(0);
+    const firstId = result.current.extraTabs[0].id;
+    act(() => {
+      result.current.selectTab(firstId);
+    });
+    expect(result.current.unsavedExtraTabIds).toEqual([]);
 
     act(() => {
       boardView.applyFilterSortGrouping({
-        filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+        filterByColumn: {
+          vendorAccount: { operator: 'equals', value: 'Q000104', secondaryValue: '' },
+          status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+        },
       });
     });
     rerender();
 
-    expect(result.current.extraFilterPrompt).toBeGreaterThan(0);
+    expect(result.current.unsavedExtraTabIds).toContain(firstId);
+    expect(result.current.extraTabs.find((tab) => tab.id === firstId)?.extraFilters?.status?.value).toBe('Open');
+  });
+
+  it('houdt een extra filter na opslaan op de actieve tab, niet op de hele groep', () => {
+    const boardView = createBoardView();
+    const { result, rerender } = renderHook(() => usePurchaseOrderViewTabs({
+      activeViewId: 9,
+      boardView,
+      columns: [
+        { key: 'vendorAccount', label: 'Vendor', dataType: 'text' },
+        { key: 'status', label: 'Status', dataType: 'text' },
+        { key: 'delivery', label: 'Delivery', dataType: 'date' },
+      ],
+      allItems: [
+        { values: { vendorAccount: 'Q000104', status: 'Open', delivery: '2026-01-01' } },
+        { values: { vendorAccount: 'Q000105', status: 'Open', delivery: '2026-01-01' } },
+      ],
+    }));
+
+    act(() => {
+      result.current.addTabsFromColumn({ columnKey: 'vendorAccount', color: '#579bfc' });
+    });
+    const firstId = result.current.extraTabs[0].id;
+    const secondId = result.current.extraTabs[1].id;
+    act(() => {
+      result.current.selectTab(firstId);
+    });
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          vendorAccount: { operator: 'equals', value: 'Q000104', secondaryValue: '' },
+          status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+        },
+      });
+    });
+    rerender();
+    act(() => {
+      result.current.applySaveScope('tab');
+    });
+
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          vendorAccount: { operator: 'equals', value: 'Q000104', secondaryValue: '' },
+          status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+          delivery: { operator: 'after', value: '2026-01-01', secondaryValue: '' },
+        },
+      });
+    });
+    rerender();
+
+    expect(result.current.extraTabs.find((tab) => tab.id === firstId)?.extraFilters?.delivery?.value).toBe('2026-01-01');
+    expect(result.current.extraTabs.find((tab) => tab.id === secondId)?.extraFilters?.delivery).toBeUndefined();
+    expect(result.current.unsavedExtraTabIds).toEqual([firstId]);
+
+    act(() => {
+      result.current.selectTab(secondId);
+    });
+    const live = boardView.exportFilterSortGrouping().filterByColumn;
+    expect(live.delivery).toBeUndefined();
+    expect(live.status).toBeUndefined();
+  });
+
+  it('koppelt een nieuw extra-filter na group-save niet aan de andere groeptabs', () => {
+    const boardView = createBoardView();
+    const { result, rerender } = renderHook(() => usePurchaseOrderViewTabs({
+      activeViewId: 9,
+      boardView,
+      columns: [
+        { key: 'vendorAccount', label: 'Vendor', dataType: 'text' },
+        { key: 'status', label: 'Status', dataType: 'text' },
+        { key: 'delivery', label: 'Delivery', dataType: 'date' },
+      ],
+      allItems: [
+        { values: { vendorAccount: 'Q000104', status: 'Open', delivery: '2026-01-01' } },
+        { values: { vendorAccount: 'Q000105', status: 'Open', delivery: '2026-01-01' } },
+      ],
+    }));
+
+    act(() => {
+      result.current.addTabsFromColumn({ columnKey: 'vendorAccount', color: '#579bfc' });
+    });
+    const firstId = result.current.extraTabs[0].id;
+    const secondId = result.current.extraTabs[1].id;
+    act(() => {
+      result.current.selectTab(firstId);
+    });
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          vendorAccount: { operator: 'equals', value: 'Q000104', secondaryValue: '' },
+          status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+        },
+      });
+    });
+    rerender();
+    act(() => {
+      result.current.applySaveScope('group');
+    });
+    expect(result.current.extraTabs.every((tab) => tab.extraFilters?.status?.value === 'Open')).toBe(true);
+    expect(result.current.unsavedExtraTabIds).toEqual([]);
+
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          vendorAccount: { operator: 'equals', value: 'Q000104', secondaryValue: '' },
+          status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+          delivery: { operator: 'after', value: '2026-01-01', secondaryValue: '' },
+        },
+      });
+    });
+    rerender();
+
+    expect(result.current.extraTabs.find((tab) => tab.id === firstId)?.extraFilters?.delivery?.value).toBe('2026-01-01');
+    expect(result.current.extraTabs.find((tab) => tab.id === secondId)?.extraFilters?.delivery).toBeUndefined();
+    expect(result.current.unsavedExtraTabIds).toEqual([firstId]);
   });
 
   it('verwijdert alle tabs van dezelfde groep', () => {

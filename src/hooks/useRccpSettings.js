@@ -12,6 +12,7 @@ const PO_TABLE = 'purchase-orders';
 export function useRccpSettings() {
   const [config, setConfig] = useState(() => getCachedRccpConfig());
   const [columns, setColumns] = useState([]);
+  const [itemColumns, setItemColumns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -21,13 +22,14 @@ export function useRccpSettings() {
     setLoading(true);
     setError('');
     try {
-      const [settings, masterCols, detailCols] = await Promise.all([
+      const [settings, masterCols, detailCols, itemCols] = await Promise.all([
         apiRequest('/admin/rccp/settings'),
         // enriched=1: inclusief lookup-kolommen (bv. Received qty uit de ontvangstregels), zodat
         // die ook als waardekolom te kiezen zijn. Zonder deze vlag levert de route alleen de
         // tb_columns-rijen van deze tabel en ontbreken de afgeleide kolommen.
         apiRequest(`/data/${PO_TABLE}/columns?scope=master&enriched=1`),
         apiRequest(`/data/${PO_TABLE}/columns?scope=detail&enriched=1`),
+        apiRequest('/data/items/columns?scope=master').catch(() => ({ columns: [] })),
       ]);
       const nextConfig = settings.config;
       publishRccpSettingsSync(nextConfig);
@@ -36,6 +38,7 @@ export function useRccpSettings() {
         ...(masterCols.columns || []).map((c) => ({ ...c, scope: 'master' })),
         ...(detailCols.columns || []).map((c) => ({ ...c, scope: 'detail' })),
       ]);
+      setItemColumns(itemCols.columns || []);
     } catch (err) {
       setError(err.message || 'Failed to load RCCP settings');
     } finally {
@@ -82,6 +85,6 @@ export function useRccpSettings() {
   }, [columns]);
 
   return {
-    config, columns, loading, saving, error, saved, statusOptions, updateField, save, reload: load,
+    config, columns, itemColumns, loading, saving, error, saved, statusOptions, updateField, save, reload: load,
   };
 }

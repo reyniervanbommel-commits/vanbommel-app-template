@@ -215,6 +215,66 @@ export function isoWindowFromWeekClicks(anchor, next) {
   };
 }
 
+function sameIsoWeek(a, b) {
+  return Boolean(a && b && compareIsoWeekParts(a, b) === 0);
+}
+
+function orderedIsoWindow(a, b) {
+  const start = compareIsoWeekParts(a, b) <= 0 ? a : b;
+  const end = compareIsoWeekParts(a, b) <= 0 ? b : a;
+  return {
+    fromYear: start.year, fromWeek: start.week, toYear: end.year, toWeek: end.week,
+  };
+}
+
+/**
+ * Week-picker click: two clicks on the same week lock it; later clicks move the other end.
+ * @returns {{ pending: object|null, locked: object|null, window: object|null, apply: boolean }}
+ */
+export function applyIsoWeekPickerClick(state, parts) {
+  const pending = state?.pending || null;
+  const locked = state?.locked || null;
+  const current = state?.window || null;
+  const currentFrom = current ? { year: current.fromYear, week: current.fromWeek } : null;
+  const currentTo = current ? { year: current.toYear, week: current.toWeek } : null;
+
+  if (locked) {
+    if (sameIsoWeek(locked, parts)) {
+      if (pending && sameIsoWeek(pending, parts)) {
+        return { pending: null, locked: null, window: current, apply: false };
+      }
+      return { pending: parts, locked, window: current, apply: false };
+    }
+    return {
+      pending: null,
+      locked,
+      window: orderedIsoWindow(locked, parts),
+      apply: true,
+    };
+  }
+
+  if (pending && sameIsoWeek(pending, parts)) {
+    const keepRange = sameIsoWeek(parts, currentFrom) || sameIsoWeek(parts, currentTo);
+    return {
+      pending: null,
+      locked: parts,
+      window: keepRange ? current : orderedIsoWindow(parts, parts),
+      apply: !keepRange,
+    };
+  }
+
+  if (pending) {
+    return {
+      pending: null,
+      locked: null,
+      window: orderedIsoWindow(pending, parts),
+      apply: true,
+    };
+  }
+
+  return { pending: parts, locked: null, window: current, apply: false };
+}
+
 /** All ISO weeks in a week-year, with the calendar month of each Monday. */
 export function buildIsoYearWeeks(year) {
   const count = isoWeeksInYear(year);
@@ -246,6 +306,46 @@ export function groupIsoWeeksByMonth(weeks) {
 export function isoYearPickerYears(anchorYear) {
   const start = Number(anchorYear) - 6;
   return Array.from({ length: 12 }, (_, index) => start + index);
+}
+
+/**
+ * Inclusive ISO-year range for the scrollable week picker.
+ * Pads around the focused/current/data years, then caps around the viewed year.
+ */
+export function isoWeekPickerYearBounds({
+  focusYear,
+  viewYear,
+  nowYear,
+  dataFromYear,
+  dataToYear,
+  pad = 1,
+  maxSpan = 16,
+} = {}) {
+  const wanted = [focusYear, viewYear, nowYear, dataFromYear, dataToYear]
+    .map((year) => Number(year))
+    .filter((year) => Number.isFinite(year) && year >= 1990 && year <= 2100);
+  const fallback = new Date().getUTCFullYear();
+  const years = wanted.length ? wanted : [fallback];
+  let fromYear = Math.min(...years) - Number(pad);
+  let toYear = Math.max(...years) + Number(pad);
+  const span = toYear - fromYear + 1;
+  const limit = Math.max(2, Number(maxSpan) || 16);
+  if (span > limit) {
+    const center = Number(viewYear || focusYear || fallback);
+    fromYear = center - Math.floor((limit - 1) / 2);
+    toYear = fromYear + limit - 1;
+  }
+  return { fromYear, toYear };
+}
+
+export const RCCP_WEEK_PICKER_MIN_HEIGHT = 96;
+export const RCCP_WEEK_PICKER_MAX_HEIGHT = 720;
+export const RCCP_WEEK_PICKER_DEFAULT_HEIGHT = 520;
+
+export function clampWeekPickerListHeight(height) {
+  const n = Number(height);
+  if (!Number.isFinite(n)) return RCCP_WEEK_PICKER_DEFAULT_HEIGHT;
+  return Math.min(RCCP_WEEK_PICKER_MAX_HEIGHT, Math.max(RCCP_WEEK_PICKER_MIN_HEIGHT, Math.round(n)));
 }
 
 export const RCCP_WEEK_COL_WIDTH = 68;
@@ -335,6 +435,19 @@ export function resolveRccpDashboardKpis(analysis, kpiWindowOnly) {
   if (!analysis) return null;
   if (kpiWindowOnly) return analysis.kpis || null;
   return analysis.kpisAll || analysis.kpis || null;
+}
+
+/** True when the analysis includes a vendor load window, regardless of the selected weeks. */
+export function hasRccpDataWindow(analysis) {
+  return Boolean(analysis?.dataWindow?.fromYear && analysis?.dataWindow?.fromWeek);
+}
+
+export function isSameIsoWindow(a, b) {
+  if (!a || !b) return false;
+  return Number(a.fromYear) === Number(b.fromYear)
+    && Number(a.fromWeek) === Number(b.fromWeek)
+    && Number(a.toYear) === Number(b.toYear)
+    && Number(a.toWeek) === Number(b.toWeek);
 }
 
 /** True when the selected weeks are empty but the vendor has load in another period. */

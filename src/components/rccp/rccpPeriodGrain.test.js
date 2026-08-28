@@ -89,7 +89,8 @@ describe('resolveRccpChartView', () => {
     expect(view.chart[0].__capacity__).toBe(120);
     expect(view.chart[0].__overloaded__).toBe(false);
     expect(view.chart[0].segmentsAbove).toEqual([
-      expect.objectContaining({ itemNumber: 'A', qty: 30, status: 'open', late: true }),
+      expect.objectContaining({ itemNumber: 'A', qty: 10, status: 'open', late: false }),
+      expect.objectContaining({ itemNumber: 'A', qty: 20, status: 'open', late: true }),
     ]);
     expect(view.chart[0].segmentsBelow).toEqual([
       expect.objectContaining({ itemNumber: 'B', qty: 5, status: 'received' }),

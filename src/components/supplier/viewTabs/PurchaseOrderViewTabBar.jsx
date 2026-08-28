@@ -16,7 +16,8 @@ import {
 import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
 import PurchaseOrderViewTabHoverCard from './PurchaseOrderViewTabHoverCard';
-import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs, tabUnderlineColor, truncateTabLabel } from '../../../utils/viewTabs';
+import PurchaseOrderViewTabCaption from './PurchaseOrderViewTabCaption';
+import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs } from '../../../utils/viewTabs';
 
 const ALL_HOVER_TAB = { id: ALL_TAB_ID, name: 'All', extraFilters: {} };
 
@@ -34,6 +35,7 @@ const useStyles = makeStyles({
     minWidth: 0,
     flex: 1,
     overflowX: 'auto',
+    paddingTop: tokens.spacingVerticalXS,
     scrollbarWidth: 'thin',
     scrollbarColor: `${tokens.colorNeutralStrokeAccessible} transparent`,
     '::-webkit-scrollbar': {
@@ -53,8 +55,10 @@ const useStyles = makeStyles({
     },
   },
   tab: {
-    maxWidth: '11ch',
+    position: 'relative',
+    maxWidth: '12ch',
     minHeight: '28px',
+    overflow: 'visible',
     ...shorthands.margin('0', '4px', '0', '0'),
     '::after': {
       display: 'none',
@@ -65,31 +69,6 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
   },
-  colorBar: {
-    height: '3px',
-    width: '100%',
-    ...shorthands.borderRadius(tokens.borderRadiusSmall),
-    marginTop: '2px',
-  },
-  colorBarActive: {
-    height: '5px',
-  },
-  colorBarFallback: {
-    backgroundColor: tokens.colorBrandStroke1,
-  },
-  colorBarFallbackMuted: {
-    backgroundColor: `color-mix(in srgb, ${tokens.colorBrandStroke1} 25%, transparent)`,
-  },
-  tabInner: {
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
-  },
-  tabLabel: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
   actions: {
     display: 'flex',
     alignItems: 'center',
@@ -97,26 +76,13 @@ const useStyles = makeStyles({
   },
 });
 
-function TabColorBar({ color, isActive, styles }) {
-  const backgroundColor = tabUnderlineColor(color, isActive);
-  return (
-    <span
-      className={mergeClasses(
-        styles.colorBar,
-        isActive && styles.colorBarActive,
-        !backgroundColor && (isActive ? styles.colorBarFallback : styles.colorBarFallbackMuted),
-      )}
-      style={backgroundColor ? { backgroundColor } : undefined}
-    />
-  );
-}
-
 export default function PurchaseOrderViewTabBar({
   activeTabId,
   extraTabs,
   groups,
   columns = [],
   canManage,
+  unsavedExtraTabIds = [],
   onSelectTab,
   onRemoveTab,
   onSetGroupColor,
@@ -174,28 +140,32 @@ export default function PurchaseOrderViewTabBar({
             onMouseEnter={handleTabEnter}
             onMouseLeave={handleTabLeave}
           >
-            <span className={styles.tabInner}>
-              <span className={styles.tabLabel}>All</span>
-              <TabColorBar color="" isActive={activeTabId === ALL_TAB_ID} styles={styles} />
-            </span>
+            <PurchaseOrderViewTabCaption
+              label="All"
+              isActive={activeTabId === ALL_TAB_ID}
+            />
           </Tab>
           {extraTabs.map((tab) => {
             const color = groupColorForTab(tab, groups);
             const isActive = activeTabId === tab.id;
+            const hasUnsharedExtra = unsavedExtraTabIds.includes(tab.id);
             return (
               <Tab
                 key={tab.id}
                 className={mergeClasses(styles.tab, isActive && styles.tabActive)}
                 value={tab.id}
                 data-tab-id={tab.id}
+                title={hasUnsharedExtra ? 'This tab has an extra filter not used on other tabs in the group' : undefined}
                 onContextMenu={handleContextMenu}
                 onMouseEnter={handleTabEnter}
                 onMouseLeave={handleTabLeave}
               >
-                <span className={styles.tabInner}>
-                  <span className={styles.tabLabel}>{truncateTabLabel(tab.name)}</span>
-                  <TabColorBar color={color} isActive={isActive} styles={styles} />
-                </span>
+                <PurchaseOrderViewTabCaption
+                  label={tab.name}
+                  color={color}
+                  isActive={isActive}
+                  hasUnsharedExtra={hasUnsharedExtra}
+                />
               </Tab>
             );
           })}

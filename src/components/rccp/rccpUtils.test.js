@@ -14,16 +14,18 @@ import {
   formatMatrixWeekLabel,
   groupIsoWeeksByMonth,
   isoYearPickerYears,
+  isoWeekPickerYearBounds,
   isoWeekPartsFromLocalDate,
   isoWindowFromWeekClicks,
+  applyIsoWeekPickerClick,
   isoWeeksInYear,
   clampWeekPickerListHeight,
-  isoWindowFromWeekClicks,
-  isoWeeksInYear,
   currentIsoWeekParts,
   isMatrixCellEmpty,
   resolveChartWeekRangeBounds,
   resolveRccpDashboardKpis,
+  hasRccpDataWindow,
+  isSameIsoWindow,
   shouldOfferRccpDataWindow,
 } from './rccpUtils';
 
@@ -99,6 +101,31 @@ describe('buildIsoYearWeeks', () => {
   });
 });
 
+describe('isoWeekPickerYearBounds', () => {
+  it('pads around the focused, current and data years', () => {
+    expect(isoWeekPickerYearBounds({
+      focusYear: 2026,
+      viewYear: 2026,
+      nowYear: 2026,
+      dataFromYear: 2021,
+      dataToYear: 2022,
+      pad: 1,
+    })).toEqual({ fromYear: 2020, toYear: 2027 });
+  });
+
+  it('caps a wide span around the viewed year', () => {
+    expect(isoWeekPickerYearBounds({
+      focusYear: 2026,
+      viewYear: 2026,
+      nowYear: 2026,
+      dataFromYear: 2000,
+      dataToYear: 2026,
+      pad: 1,
+      maxSpan: 12,
+    })).toEqual({ fromYear: 2021, toYear: 2032 });
+  });
+});
+
 describe('isoYearPickerYears', () => {
   it('shows a 12-year block around the anchor year', () => {
     expect(isoYearPickerYears(2026)).toEqual([2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031]);
@@ -106,11 +133,11 @@ describe('isoYearPickerYears', () => {
 });
 
 describe('clampWeekPickerListHeight', () => {
-  it('keeps the list between 96px and 520px', () => {
+  it('keeps the list between 96px and 720px', () => {
     expect(clampWeekPickerListHeight(40)).toBe(96);
     expect(clampWeekPickerListHeight(200)).toBe(200);
-    expect(clampWeekPickerListHeight(900)).toBe(520);
-    expect(clampWeekPickerListHeight('x')).toBe(132);
+    expect(clampWeekPickerListHeight(900)).toBe(720);
+    expect(clampWeekPickerListHeight('x')).toBe(520);
   });
 });
 
@@ -130,6 +157,43 @@ describe('isoWindowFromWeekClicks', () => {
     expect(result.window).toEqual({
       fromYear: 2026, fromWeek: 8, toYear: 2026, toWeek: 12,
     });
+  });
+});
+
+describe('applyIsoWeekPickerClick', () => {
+  const range = { fromYear: 2026, fromWeek: 10, toYear: 2026, toWeek: 20 };
+  const w10 = { year: 2026, week: 10 };
+  const w20 = { year: 2026, week: 20 };
+  const w30 = { year: 2026, week: 30 };
+
+  it('locks a week on the second click and keeps the current range', () => {
+    const first = applyIsoWeekPickerClick({ pending: null, locked: null, window: range }, w10);
+    expect(first.pending).toEqual(w10);
+    expect(first.apply).toBe(false);
+    const lock = applyIsoWeekPickerClick(first, w10);
+    expect(lock.locked).toEqual(w10);
+    expect(lock.window).toEqual(range);
+    expect(lock.apply).toBe(false);
+  });
+
+  it('moves only the free end once a week is locked', () => {
+    const locked = { pending: null, locked: w10, window: range };
+    const next = applyIsoWeekPickerClick(locked, w30);
+    expect(next.window).toEqual({
+      fromYear: 2026, fromWeek: 10, toYear: 2026, toWeek: 30,
+    });
+    expect(next.locked).toEqual(w10);
+    expect(next.apply).toBe(true);
+  });
+
+  it('locks the end week so a later click moves the start', () => {
+    const first = applyIsoWeekPickerClick({ pending: null, locked: null, window: range }, w20);
+    const lock = applyIsoWeekPickerClick(first, w20);
+    expect(lock.locked).toEqual(w20);
+    const next = applyIsoWeekPickerClick(lock, w10);
+    expect(next.window.fromWeek).toBe(10);
+    expect(next.window.toWeek).toBe(20);
+    expect(next.locked).toEqual(w20);
   });
 });
 
@@ -277,6 +341,25 @@ describe('resolveRccpDashboardKpis', () => {
 
   it('falls back to windowed KPIs when all-data is missing', () => {
     expect(resolveRccpDashboardKpis({ kpis: windowed }, false)).toBe(windowed);
+  });
+});
+
+describe('hasRccpDataWindow', () => {
+  const dataWindow = { fromYear: 2022, fromWeek: 1, toYear: 2022, toWeek: 53 };
+
+  it('is true whenever the analysis knows a load window', () => {
+    expect(hasRccpDataWindow({ dataWindow })).toBe(true);
+    expect(hasRccpDataWindow({
+      kpis: { totalOrdered: 10 },
+      kpisAll: { totalOrdered: 99 },
+      dataWindow,
+    })).toBe(true);
+    expect(hasRccpDataWindow({})).toBe(false);
+  });
+
+  it('detects when the selected weeks already match the load window', () => {
+    expect(isSameIsoWindow(dataWindow, { ...dataWindow })).toBe(true);
+    expect(isSameIsoWindow(dataWindow, { ...dataWindow, toWeek: 10 })).toBe(false);
   });
 });
 
