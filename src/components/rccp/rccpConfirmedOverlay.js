@@ -31,16 +31,27 @@ function pointMatchesWeek(point, weekKey) {
   return monthBucketFromIsoWeek(parts.year, parts.week).key === point.key;
 }
 
+function isOpenSegment(segment) {
+  return segment.status === 'open' || segment.status === 'confirmed';
+}
+
 function itemOpenQty(chart, itemNumber) {
-  let qty = 0;
+  let confirmedOpen = 0;
+  let sawConfirmed = false;
+  let aboveOpen = 0;
   for (const point of chart || []) {
+    for (const segment of point.segmentsConfirmed || []) {
+      if (String(segment.itemNumber || '').trim() !== itemNumber) continue;
+      sawConfirmed = true;
+      if (isOpenSegment(segment)) confirmedOpen += Number(segment.qty) || 0;
+    }
     for (const segment of point.segmentsAbove || []) {
       if (segment.status === 'open' && String(segment.itemNumber || '').trim() === itemNumber) {
-        qty += Number(segment.qty) || 0;
+        aboveOpen += Number(segment.qty) || 0;
       }
     }
   }
-  return qty;
+  return sawConfirmed ? confirmedOpen : aboveOpen;
 }
 
 function firstDataAreaId(chart, itemNumber) {
@@ -78,9 +89,11 @@ function qtyByWeekFromLines(lines, versions, totalQty) {
 
 function replaceConfirmedSegments(chart, itemNumber, qtyByWeek, dataAreaId) {
   return (chart || []).map((point) => {
-    const rest = (point.segmentsConfirmed || []).filter(
-      (segment) => String(segment.itemNumber || '').trim() !== itemNumber,
-    );
+    const rest = (point.segmentsConfirmed || []).filter((segment) => {
+      const same = String(segment.itemNumber || '').trim() === itemNumber;
+      if (!same) return true;
+      return segment.status === 'received';
+    });
     let qty = 0;
     for (const [weekKey, weekQty] of qtyByWeek) {
       if (pointMatchesWeek(point, weekKey)) qty += weekQty;
@@ -91,7 +104,7 @@ function replaceConfirmedSegments(chart, itemNumber, qtyByWeek, dataAreaId) {
       segmentsConfirmed: [
         ...rest,
         {
-          itemNumber, qty, status: 'confirmed', late: false, dataAreaId,
+          itemNumber, qty, status: 'open', late: false, dataAreaId,
         },
       ],
     };
@@ -99,8 +112,8 @@ function replaceConfirmedSegments(chart, itemNumber, qtyByWeek, dataAreaId) {
 }
 
 /**
- * Move confirmed hatching for one item onto chosen history week(s).
- * Grain → item-filter → this overlay.
+ * Move confirmed-week open qty for one item onto chosen history week(s).
+ * Received on that stack stays. Grain → item-filter → this overlay.
  */
 export function overlayConfirmedHistory(chart, {
   itemNumber, selectedDate, versions = [], showAll = false, lines,

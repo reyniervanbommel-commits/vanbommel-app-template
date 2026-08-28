@@ -8,7 +8,10 @@ const baseChart = [
     week: 12,
     segmentsAbove: [{ itemNumber: 'SKU-1', qty: 10, status: 'open', dataAreaId: 'whsl' }],
     segmentsBelow: [],
-    segmentsConfirmed: [{ itemNumber: 'SKU-1', qty: 10, status: 'confirmed', dataAreaId: 'whsl' }],
+    segmentsConfirmed: [
+      { itemNumber: 'SKU-1', qty: 4, status: 'received', dataAreaId: 'whsl' },
+      { itemNumber: 'SKU-1', qty: 10, status: 'open', dataAreaId: 'whsl' },
+    ],
   },
   {
     key: '2026-W13',
@@ -28,13 +31,15 @@ describe('confirmedHistoryOverlay', () => {
       versions: [{ at: 't', date: '2026-03-23T00:00:00.000Z' }],
       showAll: false,
     });
-    expect(chart.find((point) => point.key === '2026-W12').segmentsConfirmed).toEqual([]);
+    expect(chart.find((point) => point.key === '2026-W12').segmentsConfirmed).toEqual([
+      { itemNumber: 'SKU-1', qty: 4, status: 'received', dataAreaId: 'whsl' },
+    ]);
     expect(chart.find((point) => point.key === '2026-W13').segmentsConfirmed).toEqual([
-      { itemNumber: 'SKU-1', qty: 10, status: 'confirmed', late: false, dataAreaId: 'whsl' },
+      { itemNumber: 'SKU-1', qty: 10, status: 'open', late: false, dataAreaId: 'whsl' },
     ]);
   });
 
-  it('draws one hatched bar per unique date with qty of lines that know that date', () => {
+  it('places open qty on each unique history date and keeps received', () => {
     const chart = overlayConfirmedHistory(baseChart, {
       itemNumber: 'SKU-1',
       selectedDate: '2026-03-23T00:00:00.000Z',
@@ -49,10 +54,11 @@ describe('confirmedHistoryOverlay', () => {
       ],
     });
     expect(chart.find((point) => point.key === '2026-W12').segmentsConfirmed).toEqual([
-      { itemNumber: 'SKU-1', qty: 6, status: 'confirmed', late: false, dataAreaId: 'whsl' },
+      { itemNumber: 'SKU-1', qty: 4, status: 'received', dataAreaId: 'whsl' },
+      { itemNumber: 'SKU-1', qty: 6, status: 'open', late: false, dataAreaId: 'whsl' },
     ]);
     expect(chart.find((point) => point.key === '2026-W13').segmentsConfirmed).toEqual([
-      { itemNumber: 'SKU-1', qty: 10, status: 'confirmed', late: false, dataAreaId: 'whsl' },
+      { itemNumber: 'SKU-1', qty: 10, status: 'open', late: false, dataAreaId: 'whsl' },
     ]);
   });
 

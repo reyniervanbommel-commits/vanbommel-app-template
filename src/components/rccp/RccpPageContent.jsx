@@ -252,7 +252,7 @@ export default function RccpPageContent() {
                 itemFilter={{ itemNumber, items: itemNumbers, onChange: handleItemChange }}
                 historyScope={{
                   vendorAccount: isSupplier ? undefined : (vendorAccount || undefined),
-                  window,
+                  window, planningDate: planning.date,
                 }}
               />
               {(resolveRccpDashboardKpis(analysis, kpiWindowOnly)?.totalOrdered === 0) && (

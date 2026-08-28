@@ -97,13 +97,11 @@ describe('rccpPoStack', () => {
     expect(below[0].height).toBe(50);
   });
 
-  it('highlights received and confirmed of the same item, not open or other items', () => {
+  it('highlights every segment of the hovered item', () => {
     expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
-    expect(isRccpItemHighlight({ status: 'confirmed', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
+    expect(isRccpItemHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
     expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
-    expect(isRccpItemHighlight({ status: 'confirmed', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
-    expect(isRccpItemHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
-    expect(isRccpItemHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
+    expect(isRccpItemHighlight({ status: 'open', itemNumber: 'SKU-1' }, '')).toBe(false);
   });
 
   it('detects the current week and month period', () => {

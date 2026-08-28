@@ -121,13 +121,18 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
         }
       }
 
-      if (confirmedKey && openQty > 0) {
+      if (confirmedKey) {
         const confirmedDate = lineDateValue(lineValues, masterValues, confirmedKey);
         if (confirmedDate && !isSentinelDate(confirmedDate)) {
           const confirmedYear = getIsoWeekYear(confirmedDate);
           const confirmedWeek = getIsoWeek(confirmedDate);
           if (confirmedYear && confirmedWeek) {
-            clipBump(confirmed, isoWeekKey(confirmedYear, confirmedWeek), itemNumber, 'open', openQty, false, dataAreaId);
+            const confirmedWeekKey = isoWeekKey(confirmedYear, confirmedWeek);
+            const late = Boolean(
+              nowYear && nowWeek && compareIsoWeek(confirmedYear, confirmedWeek, nowYear, nowWeek) < 0,
+            );
+            clipBump(confirmed, confirmedWeekKey, itemNumber, 'received', deliveredQty, false, dataAreaId);
+            clipBump(confirmed, confirmedWeekKey, itemNumber, 'open', openQty, late, dataAreaId);
             addFactoryLoad(factoryConfirmedByCell, vendor, confirmedYear, confirmedWeek, openQty, window);
           }
         }
@@ -169,7 +174,7 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
       );
       spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
     }
-    if (headerOnlyOpen && confirmedKey) {
+    if (confirmedKey && (headerOnlyOpen || headerOnlyDelivered)) {
       const confirmedSlots = collectDateSlots(
         details,
         masterValues,
@@ -179,21 +184,26 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
         excludedSet,
         masterStatus,
       ).filter((slot) => !isSentinelDate(slot.dateValue));
-      const confirmedTotal = toNumber(pickValue(masterValues, openKey));
-      spreadHeaderQty(
-        confirmed,
-        confirmedSlots,
-        masterValues,
-        'open',
-        confirmedTotal,
-        false,
-        dataAreaId,
-      );
-      if (confirmedTotal > 0 && confirmedSlots.length) {
-        const shareQty = confirmedTotal / confirmedSlots.length;
-        for (const slot of confirmedSlots) {
-          addFactoryLoad(factoryConfirmedByCell, vendor, slot.year, slot.week, shareQty, window);
+      if (headerOnlyOpen) {
+        const confirmedTotal = toNumber(pickValue(masterValues, openKey));
+        spreadHeaderQty(confirmed, confirmedSlots, masterValues, 'open', confirmedTotal, false, dataAreaId);
+        if (confirmedTotal > 0 && confirmedSlots.length) {
+          const shareQty = confirmedTotal / confirmedSlots.length;
+          for (const slot of confirmedSlots) {
+            addFactoryLoad(factoryConfirmedByCell, vendor, slot.year, slot.week, shareQty, window);
+          }
         }
+      }
+      if (headerOnlyDelivered) {
+        spreadHeaderQty(
+          confirmed,
+          confirmedSlots,
+          masterValues,
+          'received',
+          toNumber(pickValue(masterValues, deliveredKey)),
+          false,
+          dataAreaId,
+        );
       }
     }
   }

@@ -182,7 +182,7 @@ describe('buildPoSegments', () => {
     expect(chart[0].segmentsBelow).toEqual([]);
   });
 
-  it('places open qty on the confirmed week as segmentsConfirmed', () => {
+  it('places received and open on the confirmed week like the requested stack', () => {
     const confirmed = '2026-03-23T00:00:00.000Z';
     const confirmedWeek = weekOf(confirmed);
     const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
@@ -190,9 +190,21 @@ describe('buildPoSegments', () => {
       ...window, toWeek: Math.max(window.toWeek, confirmedWeek.week),
     }, { now: nowCurrent });
     expect(byWeek.get(confirmedWeek.key).segmentsConfirmed).toEqual([
-      { itemNumber: 'SKU-1', qty: 10, status: 'confirmed', late: false, dataAreaId: 'whsl' },
+      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 10, 'open', false),
     ]);
     expect(byWeek.get(plannedWeek.key).segmentsConfirmed || []).toEqual([]);
+  });
+
+  it('marks confirmed-week open as late when that week is before now', () => {
+    const confirmed = '2026-03-16T00:00:00.000Z';
+    const confirmedWeek = weekOf(confirmed);
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const byWeek = buildPoSegments([row({ line: { confirmedDlvDate: confirmed } })], config, window, {
+      now: nowNext,
+    });
+    const open = byWeek.get(confirmedWeek.key).segmentsConfirmed.find((s) => s.status === 'open');
+    expect(open.late).toBe(true);
   });
 
   it('fills factoryConfirmedByCell in the same pass as segments', () => {

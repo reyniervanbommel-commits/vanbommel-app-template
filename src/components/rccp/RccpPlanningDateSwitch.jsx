@@ -2,7 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Field, Radio, RadioGroup, makeStyles } from '@fluentui/react-components';
 import { rccpFieldLabel } from './rccpFieldLabel';
 
-const PLANNING_DATE_INFO = 'KPIs and overcapacity follow this date; chart bars stay on requested, receipt and hatching.';
+const PLANNING_DATE_INFO = 'KPIs, overcapacity and bars above the axis follow this date. Received below the axis stays on the receipt date.';
 
 const useStyles = makeStyles({
   field: { maxWidth: '280px' },

@@ -3,6 +3,7 @@ import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import RccpPoSegmentPinCard from './RccpPoSegmentPinCard';
 import { RccpSegmentHoverContext } from './RccpPoStackBar';
 import { overlayConfirmedHistory } from './rccpConfirmedOverlay';
+import { applyPlanningDateAbove } from './rccpChartStacks';
 import { useRccpSegmentPin } from './useRccpSegmentPin';
 import { useRccpConfirmedHistory } from '../../hooks/useRccpConfirmedHistory';
 
@@ -50,6 +51,11 @@ function RccpChartWithPin({
     showAll,
   }), [chart, pinnedItem, selectedDate, history.versions, showAll]);
 
+  const datedChart = useMemo(
+    () => applyPlanningDateAbove(overlayChart, historyScope?.planningDate),
+    [overlayChart, historyScope?.planningDate],
+  );
+
   const hoverValue = useMemo(() => ({ onClick: onSegmentClick }), [onSegmentClick]);
 
   const handleClose = useCallback(() => {
@@ -71,7 +77,7 @@ function RccpChartWithPin({
   return (
     <RccpSegmentHoverContext.Provider value={hoverValue}>
       <RccpChartMatrixPanel
-        chart={overlayChart}
+        chart={datedChart}
         measureRows={measureRows}
         periods={periods}
         cellMap={cellMap}

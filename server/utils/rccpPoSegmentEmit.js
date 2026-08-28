@@ -68,15 +68,7 @@ function emitBelow(itemMap) {
 }
 
 function emitConfirmed(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
-  const out = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
-    if (entry.open > 0) {
-      out.push(emitSegment(itemNumber, entry.open, 'confirmed', false, entry.dataAreaId));
-    }
-  }
-  return out;
+  return emitAbove(itemMap);
 }
 
 function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlot, dataAreaId) {

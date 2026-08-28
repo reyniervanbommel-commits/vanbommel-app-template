@@ -1,5 +1,4 @@
 import React, { createContext, memo, useCallback, useContext } from 'react';
-import { rccpItemColor } from './rccpItemColor';
 import { isRccpItemHighlight, stackRectLayout, weekBarBox } from './rccpPoStack';
 
 const LATE_STROKE = '#D13438';
@@ -28,7 +27,7 @@ function RccpPoStackBar({
   const barWidth = side === 'above'
     ? Number(payload?.__barWidthAbove)
     : Number(payload?.__barWidthBelow);
-  const box = weekBarBox(index, barWidth, side === 'above' ? 'left' : 'center');
+  const box = weekBarBox(index, barWidth);
   if (!box.width || !layout.length) return null;
   return (
     <g>
@@ -41,9 +40,7 @@ function RccpPoStackBar({
           height={rectH}
           segment={segment}
           weekLabel={payload?.key}
-          fill={segment.status === 'open'
-            ? payload.__openColor
-            : rccpItemColor(segment.itemNumber, { openColor: payload.__openColor })}
+          fill={segment.status === 'open' ? payload.__openColor : payload.__receivedColor}
           side={side}
           highlighted={isRccpItemHighlight(segment, highlightItem)}
         />
