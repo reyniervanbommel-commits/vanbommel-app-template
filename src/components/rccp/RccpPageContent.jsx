@@ -198,7 +198,8 @@ export default function RccpPageContent() {
             items={itemNumbers}
           />
         )}
-        {activeTab === 'dashboard' && analysis?.config?.confirmedDateColumnKey && (
+        {activeTab === 'dashboard' && (analysis?.config?.confirmedDateColumnKey
+          || measureRows.some((row) => row.isConfirmedDelivery)) && (
           <RccpPlanningDateSwitch value={planning.date} onChange={planning.setDate} />
         )}
         {activeTab === 'dashboard' && (

@@ -2,10 +2,10 @@ import React, { memo, useCallback } from 'react';
 import { Field, Radio, RadioGroup, makeStyles } from '@fluentui/react-components';
 import { rccpFieldLabel } from './rccpFieldLabel';
 
-const PLANNING_DATE_INFO = 'KPIs, overcapacity and bars above the axis follow this date. Received below the axis stays on the receipt date.';
+const PLANNING_DATE_INFO = 'Bars above the axis, KPIs and overcapacity follow Requested or Confirmed. Received below the axis stays on the receipt date.';
 
 const useStyles = makeStyles({
-  field: { maxWidth: '280px' },
+  field: { minWidth: '200px', maxWidth: '280px' },
 });
 
 /**
@@ -21,7 +21,6 @@ function RccpPlanningDateSwitch({ value = 'requested', onChange, disabled }) {
     <Field
       className={styles.field}
       label={rccpFieldLabel('Planning date', PLANNING_DATE_INFO)}
-      hint={PLANNING_DATE_INFO}
     >
       <RadioGroup
         layout="horizontal"
