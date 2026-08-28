@@ -275,7 +275,7 @@ export function shouldOfferRccpDataWindow(analysis) {
   return windowed === 0 && all > 0;
 }
 
-export function buildAnalysisQuery(window, vendorAccount, planningDate) {
+export function buildAnalysisQuery(window, vendorAccount) {
   const params = new URLSearchParams({
     fromYear: String(window.fromYear),
     fromWeek: String(window.fromWeek),
@@ -283,7 +283,6 @@ export function buildAnalysisQuery(window, vendorAccount, planningDate) {
     toWeek: String(window.toWeek),
   });
   if (vendorAccount) params.set('vendorAccount', vendorAccount);
-  if (planningDate && planningDate !== 'requested') params.set('planningDate', planningDate);
   return `/rccp/analysis?${params.toString()}`;
 }
 

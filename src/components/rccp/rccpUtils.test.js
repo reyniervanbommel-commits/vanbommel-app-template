@@ -269,8 +269,8 @@ describe('shouldOfferRccpDataWindow', () => {
 describe('buildAnalysisQuery', () => {
   const WINDOW = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 };
 
-  it('includes planningDate only when it is confirmed', () => {
-    expect(buildAnalysisQuery(WINDOW, 'V1', 'confirmed')).toContain('planningDate=confirmed');
+  it('does not put planningDate on the analysis query', () => {
     expect(buildAnalysisQuery(WINDOW, 'V1')).not.toContain('planningDate');
+    expect(buildAnalysisQuery(WINDOW, 'V1')).toContain('vendorAccount=V1');
   });
 });

@@ -3,8 +3,8 @@ import { isRccpItemHighlight, stackRectLayout, weekBarBox } from './rccpPoStack'
 
 const LATE_STROKE = '#D13438';
 const PAIR_STROKE = '#323130';
-const RECEIVED_ABOVE_OPACITY = 0.25;
-const RECEIVED_ABOVE_HIGHLIGHT_OPACITY = 0.4;
+const RECEIVED_ABOVE_OPACITY = 0.15;
+const RECEIVED_ABOVE_HIGHLIGHT_OPACITY = 0.28;
 
 export const RccpSegmentHoverContext = createContext(null);
 

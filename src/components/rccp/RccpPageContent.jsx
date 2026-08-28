@@ -99,7 +99,7 @@ export default function RccpPageContent() {
   // Terwijl de gebruiker een vendor zoekt (hover/keyboard-highlight in de dropdown, of een
   // exacte match tijdens het typen), laad de analyse voor die vendor alvast op de achtergrond —
   // zodra hij/zij die vendor echt selecteert, komt de data al (grotendeels) uit cache.
-  const handleHighlightVendor = useRccpVendorPrefetch(window, planning.date);
+  const handleHighlightVendor = useRccpVendorPrefetch(window);
 
   const [drillCell, setDrillCell] = useState(null);
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);

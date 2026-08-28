@@ -21,7 +21,7 @@ const useStyles = makeStyles({
 function EncodingSwatch({ kind, color }) {
   return (
     <svg width="14" height="10" aria-hidden>
-      <rect width="14" height="10" fill={color} fillOpacity={kind === 'received' ? 0.25 : 1} />
+      <rect width="14" height="10" fill={color} fillOpacity={kind === 'received' ? 0.15 : 1} />
     </svg>
   );
 }
@@ -34,7 +34,7 @@ function RccpChartLegend({
   if (openRow) items.push({ key: 'open', label: 'Open', kind: 'solid', color: openRow.color });
   if (deliveredRow) {
     items.push({
-      key: 'received', label: 'Received 25%', kind: 'received', color: receivedColor,
+      key: 'received', label: 'Received 15%', kind: 'received', color: receivedColor,
     });
   }
   (payload || []).forEach((entry) => {

@@ -111,4 +111,35 @@ describe('useRccpPage', () => {
     expect(result.current.measureRows[0].chartType).toBe('bar');
     expect(result.current.loading).toBe(false);
   }, 20000);
+
+  it('does not refetch analysis when the planning-date toggle changes', async () => {
+    const { apiRequest } = await import('../utils/api');
+    const payload = {
+      kpis: { totalOpen: 1 },
+      kpisConfirmed: { totalOpen: 1, planned1900Units: 4 },
+      periods: [],
+      cells: [],
+      chart: [],
+      measureRows: [],
+    };
+    apiRequest.mockImplementation((url) => {
+      if (String(url).includes('/rccp/analysis')) return Promise.resolve(payload);
+      return Promise.resolve({ settings: {} });
+    });
+    const { useRccpPage } = await import('./useRccpPage');
+
+    const { result } = renderHook(() => useRccpPage({ vendorAccount: 'V000583', enabled: true }));
+    await waitFor(() => expect(result.current.analysis).toBeTruthy(), { timeout: 15000 });
+    const analysisCalls = () => apiRequest.mock.calls.filter(([url]) => String(url).includes('/rccp/analysis'));
+    expect(analysisCalls()).toHaveLength(1);
+
+    act(() => {
+      result.current.planning.setDate('confirmed');
+    });
+
+    expect(analysisCalls()).toHaveLength(1);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.planning.date).toBe('confirmed');
+    expect(result.current.analysis.kpis.planned1900Units).toBe(4);
+  }, 20000);
 });

@@ -10,12 +10,10 @@ const PREFETCH_DEBOUNCE_MS = 250;
  * daadwerkelijke selectie instant aan (data komt al uit cache), zonder bij elke toetsaanslag
  * een apiRequest te vuren.
  *
- * Input: het actieve ISO-weekvenster (fromYear/fromWeek/toYear/toWeek) en de
- * planning-datum (`requested` | `confirmed`) zodat prefetch dezelfde cache-key
- * gebruikt als de echte analysis-fetch.
+ * Input: het actieve ISO-weekvenster (fromYear/fromWeek/toYear/toWeek).
  * Output: `highlightVendor(vendorAccount)` — aanroepen bij hover/highlight/exacte match.
  */
-export function useRccpVendorPrefetch(window, planningDate) {
+export function useRccpVendorPrefetch(window) {
   const timeoutRef = useRef(null);
   const pendingVendorRef = useRef('');
 
@@ -26,9 +24,9 @@ export function useRccpVendorPrefetch(window, planningDate) {
     pendingVendorRef.current = vendorAccount;
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      prefetchRccpAnalysis(window, pendingVendorRef.current, planningDate);
+      prefetchRccpAnalysis(window, pendingVendorRef.current);
     }, PREFETCH_DEBOUNCE_MS);
-  }, [window, planningDate]);
+  }, [window]);
 
   return highlightVendor;
 }

@@ -9,14 +9,12 @@ import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 const CACHE_TTL_MS = 2 * 60 * 1000;
 const cache = new Map();
 
-function cacheKey(window, vendorAccount, planningDate) {
-  const parts = [
+function cacheKey(window, vendorAccount) {
+  return [
     'rccp-analysis-v2',
     vendorAccount,
     window.fromYear, window.fromWeek, window.toYear, window.toWeek,
-  ];
-  if (planningDate && planningDate !== 'requested') parts.push(planningDate);
-  return parts.join('|');
+  ].join('|');
 }
 
 function readCache(key) {
@@ -35,16 +33,15 @@ function readCache(key) {
  * kan hergebruiken in plaats van opnieuw te fetchen.
  * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} window
  * @param {string} vendorAccount
- * @param {string} [planningDate]
  * @returns {Promise|null}
  */
-export function prefetchRccpAnalysis(window, vendorAccount, planningDate) {
+export function prefetchRccpAnalysis(window, vendorAccount) {
   if (!vendorAccount || !window) return null;
-  const key = cacheKey(window, vendorAccount, planningDate);
+  const key = cacheKey(window, vendorAccount);
   const cached = readCache(key);
   if (cached) return cached;
 
-  const promise = apiRequest(buildAnalysisQuery(window, vendorAccount, planningDate));
+  const promise = apiRequest(buildAnalysisQuery(window, vendorAccount));
   cache.set(key, { promise, expiresAt: Date.now() + CACHE_TTL_MS });
   promise.catch(() => cache.delete(key));
   return promise;
@@ -55,12 +52,11 @@ export function prefetchRccpAnalysis(window, vendorAccount, planningDate) {
  * useRccpPage geen dubbele apiRequest vuurt wanneer de gebruiker die vendor selecteert.
  * @param {{ fromYear: number, fromWeek: number, toYear: number, toWeek: number }} window
  * @param {string} vendorAccount
- * @param {string} [planningDate]
  * @returns {Promise|null}
  */
-export function getCachedRccpAnalysis(window, vendorAccount, planningDate) {
+export function getCachedRccpAnalysis(window, vendorAccount) {
   if (!vendorAccount || !window) return null;
-  return readCache(cacheKey(window, vendorAccount, planningDate));
+  return readCache(cacheKey(window, vendorAccount));
 }
 
 /** Alleen voor tests: cache leegmaken tussen scenario's. */

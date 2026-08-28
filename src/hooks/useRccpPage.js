@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/rccpUtils';
+import { applyRccpPlanningDateView } from '../components/rccp/rccpPlanningDateView';
 import { clearRccpAnalysisPrefetchCache, getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
 import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 import { useRccpWindow } from './useRccpWindow';
@@ -38,11 +39,10 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
       // expliciete reload (settings/refresh/PO-revisie), anders blijft de grafiek op de oude
       // chartType hangen.
       if (bypassCache) clearRccpAnalysisPrefetchCache();
-      const planningDate = planning.date;
       const cached = (!bypassCache && vendorAccount)
-        ? getCachedRccpAnalysis(isoWindow, vendorAccount, planningDate)
+        ? getCachedRccpAnalysis(isoWindow, vendorAccount)
         : null;
-      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined, planningDate)));
+      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined)));
       if (requestId !== requestIdRef.current) return;
       setAnalysis(data);
       setReadOnly(Boolean(data.readOnly));
@@ -53,7 +53,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     } finally {
       if (requestId === requestIdRef.current && !skipLoading) setLoading(false);
     }
-  }, [isoWindow, vendorAccount, windowLoaded, enabled, planning.date]);
+  }, [isoWindow, vendorAccount, windowLoaded, enabled]);
 
   const reload = useCallback(() => load({ bypassCache: true }), [load]);
 
@@ -82,9 +82,13 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   }, [load]);
   useBoardRevisionGate({ active: pageActive, onRevision: handleRevision, runOnMount: true });
 
-  const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
-  const periods = useMemo(() => analysis?.periods || [], [analysis]);
-  const cells = useMemo(() => analysis?.cells || [], [analysis]);
+  const analysisView = useMemo(
+    () => applyRccpPlanningDateView(analysis, planning.date),
+    [analysis, planning.date],
+  );
+  const measureRows = useMemo(() => analysisView?.measureRows || [], [analysisView]);
+  const periods = useMemo(() => analysisView?.periods || [], [analysisView]);
+  const cells = useMemo(() => analysisView?.cells || [], [analysisView]);
 
   const cellMap = useMemo(() => {
     const map = new Map();
@@ -105,7 +109,7 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     chartVisibleKeys,
     setChartVisibleKeys,
     planning,
-    analysis,
+    analysis: analysisView,
     loading,
     error,
     readOnly,

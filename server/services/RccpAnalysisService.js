@@ -409,7 +409,7 @@ async function analyze({
   planningDate: planningDateRaw,
 } = {}) {
   const config = await settingsService.getConfig();
-  const planningDate = parsePlanningDate(planningDateRaw, config);
+  parsePlanningDate(planningDateRaw, config);
   const effectiveVendor = supplierAccount || vendorAccount || null;
   const window = {
     fromYear: Number(fromYear),
@@ -446,7 +446,7 @@ async function analyze({
     capacityRows,
     confirmedByCell,
     factoryConfirmedByCell,
-    planningDate,
+    planningDate: 'requested',
     config,
     window,
     vendorFilter: effectiveVendor,
@@ -462,11 +462,19 @@ async function analyze({
   }
 
   const chart = buildChartSeries(cells, periods, measureRows);
+  const hasConfirmedColumn = Boolean(String(config.confirmedDateColumnKey || '').trim());
   const poKpiPair = await time('rccp_kpis', () => buildRccpPoKpisPair(poRows, config, window, {
     now,
     vendorAccount: effectiveVendor,
-    planningDate,
+    planningDate: 'requested',
   }));
+  const poKpiConfirmed = hasConfirmedColumn
+    ? buildRccpPoKpisPair(poRows, config, window, {
+      now,
+      vendorAccount: effectiveVendor,
+      planningDate: 'confirmed',
+    })
+    : poKpiPair;
   const capacityKpis = buildRccpCapacityKpis(chart, measureRows, CAPACITY_MEASURE_KEY);
   const kpis = { ...poKpiPair.windowed, ...capacityKpis };
   const kpisAll = { ...poKpiPair.all, ...capacityKpis };
@@ -484,6 +492,8 @@ async function analyze({
     diagnostics,
     kpis,
     kpisAll,
+    kpisConfirmed: poKpiConfirmed.windowed,
+    kpisAllConfirmed: poKpiConfirmed.all,
     dataWindow: pickDataWindow(dataRangeByVendor, effectiveVendor),
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
