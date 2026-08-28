@@ -5,7 +5,9 @@ import {
 } from '@fluentui/react-components';
 import { ArrowRightRegular } from '@fluentui/react-icons';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
+import RccpItemFilter from './RccpItemFilter';
 import { formatIsoWindowLabel } from './rccpUtils';
+import { useRccpItemFilter } from './useRccpItemFilter';
 import { useRccpSplitAnalysis } from '../../hooks/useRccpSplitAnalysis';
 
 const useStyles = makeStyles({
@@ -43,6 +45,11 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
     refreshKey,
   });
 
+  const {
+    selectedItems, items: itemNumbers, filteredChart, handleItemChange,
+    extraColumns, extraValues,
+  } = useRccpItemFilter(chart, analysis?.config?.itemPickerColumnKeys);
+
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -50,6 +57,13 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
           {windowLabel ? `Week range: ${windowLabel}` : 'Set week range on the RCCP page'}
           {vendorAccount ? ` · Vendor: ${vendorAccount}` : ' · All vendors'}
         </Text>
+        <RccpItemFilter
+          value={selectedItems}
+          onChange={handleItemChange}
+          items={itemNumbers}
+          extraColumns={extraColumns}
+          extraValues={extraValues}
+        />
         <Button
           as={Link}
           to="/rccp"
@@ -68,7 +82,7 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
       {!loading && !error && (
         <div className={styles.body}>
           <RccpChartMatrixPanel
-            chart={chart}
+            chart={filteredChart}
             measureRows={measureRows}
             periods={periods}
             cellMap={cellMap}

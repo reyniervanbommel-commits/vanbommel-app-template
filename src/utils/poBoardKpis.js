@@ -11,6 +11,7 @@ export const PO_BOARD_CLICKABLE_KPI_KEYS = [
   'lateItems',
   'onTime',
   'openLate',
+  'planned1900',
 ];
 
 function percentOf(part, whole) {
@@ -27,6 +28,7 @@ function emptyMatchByKey() {
     lateItems: new Set(),
     onTime: new Set(),
     openLate: new Set(),
+    planned1900: new Set(),
   };
 }
 
@@ -34,6 +36,70 @@ function addIndexedSkus(target, sku, indexes) {
   (indexes || []).forEach((index) => {
     const next = String(sku[index] || '').trim();
     if (next) target.add(next);
+  });
+}
+
+function kpiQtyFamily(kpiKey) {
+  if (kpiKey === 'onTime' || kpiKey === 'lateDelivery' || kpiKey === 'lateItems' || kpiKey === 'delivered') {
+    return 'delivered';
+  }
+  if (kpiKey === 'open' || kpiKey === 'openLate') return 'open';
+  if (kpiKey === 'ordered' || kpiKey === 'planned1900') return 'ordered';
+  return null;
+}
+
+export function isKpiQtyOverlayColumn(columnKey, kpiKey) {
+  const family = kpiQtyFamily(kpiKey);
+  if (!family) return false;
+  const key = String(columnKey || '').toLowerCase();
+  if (family === 'delivered') {
+    if (key.includes('remain') || key.includes('open') || key.includes('order')) return false;
+    return key.includes('receiv') || key.includes('deliver');
+  }
+  if (family === 'open') {
+    return key.includes('remain') || (key.includes('open') && !key.includes('order'));
+  }
+  return key.includes('order') && !key.includes('receiv') && !key.includes('remain');
+}
+
+export function kpiQtyForKey(entry, kpiKey) {
+  if (!entry) return null;
+  if (kpiKey === 'onTime') return Number(entry.tu) || 0;
+  if (kpiKey === 'lateDelivery' || kpiKey === 'lateItems') return Number(entry.lu) || 0;
+  if (kpiKey === 'open') return Number(entry.o) || 0;
+  if (kpiKey === 'openLate') return Number(entry.ou) || 0;
+  if (kpiKey === 'delivered') return Number(entry.d) || 0;
+  if (kpiKey === 'ordered') return (Number(entry.o) || 0) + (Number(entry.d) || 0);
+  if (kpiKey === 'planned1900') return Number(entry.yu) || 0;
+  return null;
+}
+
+export function buildKpiQtyOverlay(payload, visibleOrderNumbers, kpiKey) {
+  if (!kpiKey || !kpiQtyFamily(kpiKey)) return null;
+  const orders = payload?.orders || {};
+  const overlay = {};
+  for (const orderNumber of visibleOrderNumbers || []) {
+    const qty = kpiQtyForKey(orders[orderNumber], kpiKey);
+    if (qty == null) continue;
+    overlay[orderNumber] = qty;
+  }
+  return overlay;
+}
+
+export function overlayKpiQtyOnOrders(orders, overlayByOrder, kpiKey) {
+  if (!overlayByOrder || !kpiKey) return orders;
+  return (orders || []).map((order) => {
+    const qty = overlayByOrder[order?.orderNumber];
+    if (qty == null) return order;
+    const values = order.values || {};
+    let changed = false;
+    const nextValues = { ...values };
+    Object.keys(values).forEach((key) => {
+      if (!isKpiQtyOverlayColumn(key, kpiKey)) return;
+      nextValues[key] = qty;
+      changed = true;
+    });
+    return changed ? { ...order, values: nextValues } : order;
   });
 }
 
@@ -53,10 +119,13 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
   let onTimeUnits = 0;
   let openLateSum = 0;
   let openLateCount = 0;
+  let openLateUnits = 0;
+  let planned1900Units = 0;
   const lateDeliverySkus = new Set();
   const onTimeSkus = new Set();
   const openSkus = new Set();
   const openLateSkus = new Set();
+  const planned1900Skus = new Set();
 
   for (const orderNumber of visibleOrderNumbers || []) {
     const entry = orders[orderNumber];
@@ -85,8 +154,14 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
     if (entry.on) {
       openLateSum += Number(entry.os) || 0;
       openLateCount += Number(entry.on) || 0;
+      openLateUnits += Number(entry.ou) || 0;
       addIndexedSkus(openLateSkus, sku, entry.ok);
       matchByKey.openLate.add(orderNumber);
+    }
+    if (entry.yu || (entry.yk && entry.yk.length)) {
+      planned1900Units += Number(entry.yu) || 0;
+      addIndexedSkus(planned1900Skus, sku, entry.yk);
+      matchByKey.planned1900.add(orderNumber);
     }
   }
 
@@ -107,7 +182,10 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       onTimePercent: percentOf(onTimeUnits, totalOrdered),
       openItemCount: openSkus.size,
       openLateItemCount: openLateSkus.size,
+      openLateUnits,
       openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,
+      planned1900Units,
+      planned1900ItemCount: planned1900Skus.size,
       capacityShortfall: null,
       overloadedWeeks: null,
     },

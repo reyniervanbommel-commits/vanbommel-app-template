@@ -1,16 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
   todayLineX,
+  todayBand,
   stackRectLayout,
   isoWeekPartsUtc,
   RCCP_PO_BAR_SIZE,
+  weekBarBox,
   isReceivedPairHighlight,
+  isCurrentMatrixPeriod,
 } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 
 describe('rccpPoStack', () => {
   it('uses 80% of the week column as bar width', () => {
     expect(RCCP_PO_BAR_SIZE).toBe(Math.round(RCCP_WEEK_COL_WIDTH * 0.8));
+  });
+
+  it('centers a bar inside the week band', () => {
+    expect(weekBarBox(0, RCCP_PO_BAR_SIZE).width).toBe(RCCP_PO_BAR_SIZE);
+    expect(weekBarBox(0, RCCP_PO_BAR_SIZE).x).toBe(
+      RCCP_CHART_Y_AXIS_WIDTH + (RCCP_WEEK_COL_WIDTH - RCCP_PO_BAR_SIZE) / 2,
+    );
+    expect(weekBarBox(1, RCCP_PO_BAR_SIZE).x).toBe(
+      RCCP_CHART_Y_AXIS_WIDTH + RCCP_WEEK_COL_WIDTH + (RCCP_WEEK_COL_WIDTH - RCCP_PO_BAR_SIZE) / 2,
+    );
   });
 
   it('returns null for todayLineX when the current week is outside the window', () => {
@@ -26,6 +39,26 @@ describe('rccpPoStack', () => {
     const x = todayLineX(periods, now);
     expect(x).toBe(
       RCCP_CHART_Y_AXIS_WIDTH + (0 + (3 - 0.5) / 7) * RCCP_WEEK_COL_WIDTH,
+    );
+  });
+
+  it('returns a full-column band for the current period', () => {
+    const now = new Date('2026-03-18T12:00:00.000Z');
+    const parts = isoWeekPartsUtc(now);
+    const periods = [{ key: parts.key, year: parts.year, week: parts.week }];
+    const band = todayBand(periods, now);
+    expect(band.index).toBe(0);
+    expect(band.bandX).toBe(RCCP_CHART_Y_AXIS_WIDTH);
+    expect(band.bandWidth).toBe(RCCP_WEEK_COL_WIDTH);
+    expect(band.todayX).toBe(todayLineX(periods, now));
+  });
+
+  it('places the today line by day-of-month inside a month column', () => {
+    const now = new Date('2026-03-16T12:00:00.000Z');
+    const periods = [{ key: '2026-M03', year: 2026, month: 3, week: 10, lastWeek: 13 }];
+    const x = todayLineX(periods, now);
+    expect(x).toBe(
+      RCCP_CHART_Y_AXIS_WIDTH + (0 + (16 - 0.5) / 31) * RCCP_WEEK_COL_WIDTH,
     );
   });
 
@@ -51,10 +84,19 @@ describe('rccpPoStack', () => {
     expect(below[0].height).toBe(50);
   });
 
-  it('highlights matching received segments of the same PO', () => {
-    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-1' }, 'PO-1')).toBe(true);
-    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-2' }, 'PO-1')).toBe(false);
-    expect(isReceivedPairHighlight({ status: 'open', poNumber: 'PO-1' }, 'PO-1')).toBe(false);
-    expect(isReceivedPairHighlight({ status: 'received', poNumber: 'PO-1' }, '')).toBe(false);
+  it('highlights matching received segments of the same item', () => {
+    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
+    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
+    expect(isReceivedPairHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
+    expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
+  });
+
+  it('detects the current week and month period', () => {
+    const now = new Date('2026-03-18T12:00:00.000Z');
+    const parts = isoWeekPartsUtc(now);
+    expect(isCurrentMatrixPeriod({ key: parts.key, year: parts.year, week: parts.week }, now)).toBe(true);
+    expect(isCurrentMatrixPeriod({ key: '2020-W01', year: 2020, week: 1 }, now)).toBe(false);
+    expect(isCurrentMatrixPeriod({ key: '2026-M03', year: 2026, month: 3 }, now)).toBe(true);
+    expect(isCurrentMatrixPeriod({ key: '2026-M02', year: 2026, month: 2 }, now)).toBe(false);
   });
 });

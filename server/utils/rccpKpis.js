@@ -23,9 +23,17 @@ function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   return aWeek - bWeek;
 }
 
+function isSentinelDate(value) {
+  if (value === null || value === undefined || value === '') return false;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
+}
+
 function utcDayValue(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
+  if (isSentinelDate(date)) return null;
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
@@ -51,11 +59,30 @@ function addSku(set, itemNumber) {
   if (sku) set.add(sku);
 }
 
+function openLateDays(line, now, nowYear, nowWeek) {
+  if (
+    !(line.openQty > 0)
+    || !line.plannedYear
+    || !nowYear
+    || !nowWeek
+    || compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) >= 0
+  ) return null;
+  const days = calendarDaysBetween(now, line.plannedDate);
+  return days !== null && days > 0 ? days : null;
+}
+
 function visitUniverseLine(acc, line, nowYear, nowWeek) {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
+  if (isSentinelDate(line.plannedDate)) {
+    const qty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
+    if (qty > 0) {
+      acc.planned1900Units += qty;
+      addSku(acc.planned1900Skus, itemNumber);
+    }
+  }
   if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
     const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
     if (days > 0) {
@@ -67,18 +94,11 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
       addSku(acc.onTimeSkus, itemNumber);
     }
   }
-  if (
-    line.openQty > 0
-    && line.plannedYear
-    && nowYear
-    && nowWeek
-    && compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) < 0
-  ) {
-    const openDays = calendarDaysBetween(acc.now, line.plannedDate);
-    if (openDays !== null && openDays > 0) {
-      acc.openLateDays.push(openDays);
-      addSku(acc.openLateSkus, itemNumber);
-    }
+  const openDays = openLateDays(line, acc.now, nowYear, nowWeek);
+  if (openDays !== null) {
+    acc.openLateDays.push(openDays);
+    acc.openLateUnits += line.openQty;
+    addSku(acc.openLateSkus, itemNumber);
   }
 }
 
@@ -95,6 +115,9 @@ function emptyAcc(now) {
     openSkus: new Set(),
     openLateDays: [],
     openLateSkus: new Set(),
+    openLateUnits: 0,
+    planned1900Units: 0,
+    planned1900Skus: new Set(),
   };
 }
 
@@ -111,7 +134,10 @@ function emptyOrderStats() {
     openSkus: new Set(),
     openLateSum: 0,
     openLateCount: 0,
+    openLateUnits: 0,
     openLateSkus: new Set(),
+    planned1900Units: 0,
+    planned1900Skus: new Set(),
   };
 }
 
@@ -120,6 +146,13 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   entry.deliveredQty += line.deliveredQty;
   const sku = String(line.itemNumber || '').trim();
   if (line.openQty > 0 && sku) entry.openSkus.add(sku);
+  if (isSentinelDate(line.plannedDate)) {
+    const qty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
+    if (qty > 0) {
+      entry.planned1900Units += qty;
+      if (sku) entry.planned1900Skus.add(sku);
+    }
+  }
   if (line.deliveredQty > 0 && line.receiptDate && line.plannedDate) {
     const days = calendarDaysBetween(line.receiptDate, line.plannedDate);
     if (days > 0) {
@@ -132,19 +165,12 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
       if (sku) entry.onTimeSkus.add(sku);
     }
   }
-  if (
-    line.openQty > 0
-    && line.plannedYear
-    && nowYear
-    && nowWeek
-    && compareIsoWeek(line.plannedYear, line.plannedWeek, nowYear, nowWeek) < 0
-  ) {
-    const days = calendarDaysBetween(now, line.plannedDate);
-    if (days !== null && days > 0) {
-      entry.openLateSum += days;
-      entry.openLateCount += 1;
-      if (sku) entry.openLateSkus.add(sku);
-    }
+  const days = openLateDays(line, now, nowYear, nowWeek);
+  if (days !== null) {
+    entry.openLateSum += days;
+    entry.openLateCount += 1;
+    entry.openLateUnits += line.openQty;
+    if (sku) entry.openLateSkus.add(sku);
   }
 }
 
@@ -183,7 +209,8 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
         if (!isIsoWeekInWindow(plannedYear, plannedWeek, window)) return;
       }
       if (!(openQty > 0 || deliveredQty > 0)) return;
-      const receiptDate = (receiptKey && lineDateValue(lineValues, masterValues, receiptKey)) || plannedDate;
+      const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
+      const receiptDate = utcDayValue(rawReceipt) === null ? null : rawReceipt;
       onLine({
         poNumber,
         itemNumber: pickValue(lineValues, 'itemNumber') ?? pickValue(masterValues, 'itemNumber'),
@@ -245,7 +272,10 @@ function summarizeAcc(acc) {
     onTimePercent: percentOf(acc.onTimeUnits, totalOrdered),
     openItemCount: acc.openSkus.size,
     openLateItemCount: acc.openLateSkus.size,
+    openLateUnits: acc.openLateUnits,
     openLateAvgDays: mean(acc.openLateDays),
+    planned1900Units: acc.planned1900Units,
+    planned1900ItemCount: acc.planned1900Skus.size,
   };
 }
 

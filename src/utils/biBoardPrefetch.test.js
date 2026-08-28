@@ -4,7 +4,7 @@ vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 
 import { apiRequest } from './api';
 import { prefetchBiDashboard } from './biBoardPrefetch';
-import { clearBiCache, getBiSeries } from './biBoardCache';
+import { clearBiCache, getBiCharts, getBiMeta, getBiSeries } from './biBoardCache';
 import { chartFetchKey } from './biChartFetchKey';
 
 describe('prefetchBiDashboard', () => {
@@ -115,6 +115,25 @@ describe('prefetchBiDashboard', () => {
     expect(apiRequest).toHaveBeenCalledWith('/bi/aggregate', expect.objectContaining({
       body: expect.objectContaining({ charts: [expect.objectContaining({ filters: [] })] }),
     }));
+  });
+
+  it('seeds charts and meta so BiPage can skip the loading spinner', async () => {
+    const charts = [{ id: 1, config: { type: 'bar', filters: [] } }];
+    const columns = [{ key: 'status', dataType: 'string' }];
+    apiRequest.mockImplementation((path) => {
+      if (path === '/bi/date-filter') return Promise.resolve({ dateFilter: null });
+      if (path === '/bi/meta/purchase-orders') {
+        return Promise.resolve({ columns, measureColumns: [] });
+      }
+      if (path === '/bi/charts') return Promise.resolve({ charts });
+      if (path === '/bi/aggregate') return Promise.resolve({ revision: 1, results: [{ series: [] }] });
+      throw new Error(`unexpected apiRequest(${path})`);
+    });
+
+    await prefetchBiDashboard();
+
+    expect(getBiCharts()).toEqual(charts);
+    expect(getBiMeta('purchase-orders')).toEqual({ columns, measureColumns: [] });
   });
 
   it('does nothing when there are no charts to prefetch', async () => {

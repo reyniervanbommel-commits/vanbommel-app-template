@@ -45,6 +45,10 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     onUpdateField('duplicatePolicy', e.target.value);
   }, [onUpdateField]);
 
+  const handleItemPickerColumns = useCallback((itemPickerColumnKeys) => {
+    onUpdateField('itemPickerColumnKeys', itemPickerColumnKeys);
+  }, [onUpdateField]);
+
   return useMemo(() => ({
     handleVendor,
     handleDate,
@@ -55,8 +59,9 @@ export function useRccpSettingsFormHandlers(config, onUpdateField) {
     handleGreen,
     handleOrange,
     handlePolicy,
+    handleItemPickerColumns,
   }), [
     handleVendor, handleDate, handleReceiptDate, handleMeasures, handleRanges,
-    handleStatuses, handleGreen, handleOrange, handlePolicy,
+    handleStatuses, handleGreen, handleOrange, handlePolicy, handleItemPickerColumns,
   ]);
 }

@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 const updateView = vi.fn(async () => ({ id: 7 }));
+const createView = vi.fn(async ({ viewState }) => ({ id: 8, viewState }));
 const apiRequest = vi.fn(async () => ({ settings: null }));
 
 vi.mock('../utils/api', () => ({
@@ -16,7 +17,7 @@ vi.mock('./usePurchaseOrderSavedViews', () => ({
     error: '',
     saving: false,
     reload: vi.fn(),
-    createView: vi.fn(),
+    createView,
     updateView,
     deleteView: vi.fn(),
   }),
@@ -107,5 +108,62 @@ describe('usePurchaseOrderSavedViewState All orders history toggle', () => {
     expect(result.current.showHistoryIndicators).toBe(true);
     expect(result.current.allOrdersShowHistoryIndicators).toBe(false);
     expect(result.current.activeViewId).toBe(7);
+  });
+});
+
+describe('usePurchaseOrderSavedViewState columnSumKeys', () => {
+  beforeEach(() => {
+    updateView.mockClear();
+    createView.mockClear();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ settings: null });
+  });
+
+  it('neemt columnSumKeys op in de view-state bij opslaan', async () => {
+    const boardView = createBoardView();
+    boardView.exportFilterSortGrouping = () => ({
+      filterByColumn: {},
+      sortState: { columnKey: '', direction: 'none' },
+      grouping: {},
+      columnSumKeys: ['amount'],
+    });
+    const { result } = renderSavedViewState(boardView);
+
+    await act(async () => {
+      await result.current.handleUpdateActive({ id: 7 });
+    });
+    expect(updateView).toHaveBeenCalledWith(7, expect.objectContaining({
+      viewState: expect.objectContaining({
+        table: expect.objectContaining({ columnSumKeys: ['amount'] }),
+      }),
+    }));
+
+    await act(async () => {
+      await result.current.handleSaveAsNew({ name: 'Sums', scope: 'personal' });
+    });
+    expect(createView).toHaveBeenCalledWith(expect.objectContaining({
+      viewState: expect.objectContaining({
+        table: expect.objectContaining({ columnSumKeys: ['amount'] }),
+      }),
+    }));
+  });
+
+  it('past columnSumKeys uit de opgeslagen view toe', () => {
+    const boardView = createBoardView();
+    const { result } = renderSavedViewState(boardView);
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: {
+          columns: {},
+          table: { columnSumKeys: ['amount'] },
+        },
+      });
+    });
+
+    expect(boardView.applyFilterSortGrouping).toHaveBeenCalledWith(
+      expect.objectContaining({ columnSumKeys: ['amount'] })
+    );
   });
 });

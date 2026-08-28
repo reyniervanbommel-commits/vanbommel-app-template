@@ -22,6 +22,7 @@ const {
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
+const { buildItemPickerLookupMap } = require('../utils/rccpItemPickerLookup');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -45,6 +46,38 @@ function parseCellKey(key) {
   };
 }
 
+function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
+  if (aYear !== bYear) return aYear - bYear;
+  return aWeek - bWeek;
+}
+
+function expandDataRange(range, year, week) {
+  if (!range) return { fromYear: year, fromWeek: week, toYear: year, toWeek: week };
+  if (compareIsoWeek(year, week, range.fromYear, range.fromWeek) < 0) {
+    range.fromYear = year;
+    range.fromWeek = week;
+  }
+  if (compareIsoWeek(year, week, range.toYear, range.toWeek) > 0) {
+    range.toYear = year;
+    range.toWeek = week;
+  }
+  return range;
+}
+
+function pickDataWindow(dataRangeByVendor, vendorFilter) {
+  if (vendorFilter) return dataRangeByVendor.get(vendorFilter) || null;
+  let merged = null;
+  for (const range of dataRangeByVendor.values()) {
+    merged = expandDataRange(
+      merged ? { ...merged } : null,
+      range.fromYear,
+      range.fromWeek,
+    );
+    merged = expandDataRange(merged, range.toYear, range.toWeek);
+  }
+  return merged;
+}
+
 function aggregatePoLoad(rows, config, window) {
   const confirmedByCell = new Map();
   const missingDates = [];
@@ -60,6 +93,11 @@ function aggregatePoLoad(rows, config, window) {
     zeroQuantityLines: 0,
     countedLines: 0,
     totalConfirmedQty: 0,
+  };
+  const dataRangeByVendor = new Map();
+
+  const noteDataRange = (vendor, year, week) => {
+    dataRangeByVendor.set(vendor, expandDataRange(dataRangeByVendor.get(vendor), year, week));
   };
 
   const addLoad = (vendor, year, week, measureKey, qty) => {
@@ -122,18 +160,20 @@ function aggregatePoLoad(rows, config, window) {
       const year = getIsoWeekYear(dateValue);
       const week = getIsoWeek(dateValue);
       if (!year || !week) return;
-      if (!isIsoWeekInWindow(year, week, window)) {
-        diagnostics.outOfWindowLines += 1;
-        return;
-      }
 
+      const inWindow = isIsoWeekInWindow(year, week, window);
       let hasQty = false;
       lineMeasures.forEach((measure) => {
         const qty = measureQty(measure);
         if (qty <= 0) return;
         hasQty = true;
-        addLoad(vendor, year, week, measure.columnKey, qty);
+        noteDataRange(vendor, year, week);
+        if (inWindow) addLoad(vendor, year, week, measure.columnKey, qty);
       });
+      if (!inWindow) {
+        diagnostics.outOfWindowLines += 1;
+        return;
+      }
       if (!hasQty && lineMeasures.length) diagnostics.zeroQuantityLines += 1;
     };
 
@@ -160,7 +200,7 @@ function aggregatePoLoad(rows, config, window) {
     }
   }
 
-  return { confirmedByCell, missingDates, diagnostics };
+  return { confirmedByCell, missingDates, diagnostics, dataRangeByVendor };
 }
 
 function sumCapacityByVendorWeek(capacityRows, vendorFilter) {
@@ -366,14 +406,16 @@ async function analyze({
     supplierAccount: supplierAccount || null,
   }));
 
-  const { confirmedByCell, missingDates, diagnostics } = aggregatePoLoad(poRows, config, window);
+  const { confirmedByCell, missingDates, diagnostics, dataRangeByVendor } = aggregatePoLoad(
+    poRows, config, window,
+  );
 
-  const capacityRows = await time('rccp_capacity', () => capacityService.listCapacity({
+  const allCapacity = await time('rccp_capacity', () => capacityService.listCapacity({
     vendorAccount: effectiveVendor,
-    periodYear: window.fromYear,
-    fromWeek: window.fromWeek,
-    toWeek: window.toWeek,
   }));
+  const capacityRows = allCapacity.filter(
+    (row) => isIsoWeekInWindow(row.periodYear, row.isoWeek, window),
+  );
 
   const { cells, measureRows, periods } = buildMatrixCells({
     capacityRows,
@@ -410,6 +452,7 @@ async function analyze({
     diagnostics,
     kpis,
     kpisAll,
+    dataWindow: pickDataWindow(dataRangeByVendor, effectiveVendor),
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
 }
@@ -649,6 +692,58 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
   return payload;
 }
 
+const ITEMS_TABLE_KEY = 'items';
+const ITEM_LOOKUP_LIMIT = 500;
+const itemLookupCache = new Map();
+
+async function listItemPickerLookup({ itemNumbers = [] } = {}) {
+  const config = await settingsService.getConfig();
+  const columnKeys = config.itemPickerColumnKeys || [];
+  const wanted = [...new Set(
+    (itemNumbers || []).map((value) => String(value || '').trim()).filter(Boolean),
+  )].slice(0, ITEM_LOOKUP_LIMIT);
+  if (!columnKeys.length || !wanted.length) {
+    return { columns: [], byItem: {} };
+  }
+
+  const cacheKey = columnKeys.join(',');
+  let revision = null;
+  try {
+    ({ revision } = await tableDataService.getRevision({ tableKey: ITEMS_TABLE_KEY }));
+    const cached = itemLookupCache.get(cacheKey);
+    if (cached && revision && cached.revision === revision) {
+      return {
+        columns: cached.columns,
+        byItem: buildItemPickerLookupMap(cached.rows, wanted, columnKeys),
+      };
+    }
+  } catch {
+    revision = null;
+  }
+
+  let labelByKey = new Map();
+  try {
+    const defs = await tableDataService.getBoardColumnDefinitions(ITEMS_TABLE_KEY, { scope: 'master' });
+    for (const col of defs.master || []) {
+      labelByKey.set(col.key, col.label || col.key);
+    }
+  } catch {
+    labelByKey = new Map();
+  }
+
+  const rows = await time('rccp_item_lookup', () => tableDataService.listVendorValues({
+    tableKey: ITEMS_TABLE_KEY,
+    valueColumnKeys: columnKeys,
+  }));
+  const columns = columnKeys.map((key) => ({ key, label: labelByKey.get(key) || key }));
+  if (revision) itemLookupCache.set(cacheKey, { revision, columns, rows });
+
+  return {
+    columns,
+    byItem: buildItemPickerLookupMap(rows, wanted, columnKeys),
+  };
+}
+
 module.exports = {
   aggregatePoLoad,
   buildDrillDownRows,
@@ -657,8 +752,10 @@ module.exports = {
   boardKpis,
   getDrillDown,
   listMainTableVendors,
+  listItemPickerLookup,
   extractVendorsFromRows,
   extractVendorNamesFromRows,
   cellKey,
   parseCellKey,
+  pickDataWindow,
 };

@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Field, Input, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
+import RccpItemPickerColumnsEditor from './RccpItemPickerColumnsEditor';
 import { rccpFieldLabel, RccpInfoLabel, RccpHoverHint } from './rccpFieldLabel';
 
 const useStyles = makeStyles({
@@ -95,12 +96,25 @@ function ChartOverlaySwitches({ config, onUpdateField }) {
 }
 
 function RccpSettingsDisplayFields({
-  config, compact, onUpdateField, onRanges, onGreen, onOrange,
+  config, compact, itemColumns = [], onUpdateField, onRanges, onGreen, onOrange, onItemPickerColumns,
 }) {
   const styles = useStyles();
 
   return (
     <div className={styles.stack}>
+      <div className={styles.group}>
+        <Text weight="semibold" className={styles.groupTitle}>
+          <RccpInfoLabel info="Extra item-entity fields shown after the unique item number in the Item dropdown.">
+            Item picker
+          </RccpInfoLabel>
+        </Text>
+        <RccpItemPickerColumnsEditor
+          columns={itemColumns}
+          selectedKeys={config.itemPickerColumnKeys || []}
+          compact={compact}
+          onChange={onItemPickerColumns}
+        />
+      </div>
       <div className={styles.group}>
         <Text weight="semibold" className={styles.groupTitle}>
           <RccpInfoLabel info="Show or hide extra lines on the capacity chart.">

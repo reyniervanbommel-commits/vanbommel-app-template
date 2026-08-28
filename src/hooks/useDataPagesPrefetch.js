@@ -5,9 +5,9 @@ import { runWhenIdleAndQuiet } from '../utils/idleWhenQuiet';
 import { setDataPagesPrefetchParams, startDataPagesPrefetch } from '../utils/dataPagesPrefetch';
 
 /**
- * Start ná board-idle (en zolang de PO-pagina actief is) het achtergrondwerk dat de KPI-tab,
- * RCCP en BI alvast warm maakt. `enabled` moet pas true worden na de eerste succesvolle
- * board-read (niet tijdens de skeleton) — vóór dat moment mag er geen extra round-trip zijn.
+ * Start ná board-idle het achtergrondwerk dat de KPI-tab, RCCP en BI alvast warm maakt.
+ * Verlaat de gebruiker de PO-pagina vóór idle, dan start de prefetch meteen (geen cancel zonder start).
+ * `enabled` moet pas true worden na de eerste succesvolle board-read (niet tijdens de skeleton).
  * @param {{ enabled: boolean, refreshKey: string|number, isSupplier?: boolean }} params
  */
 export function useDataPagesPrefetch({ enabled, refreshKey, isSupplier = false }) {
@@ -25,9 +25,16 @@ export function useDataPagesPrefetch({ enabled, refreshKey, isSupplier = false }
   }, [windowLoaded, refreshKey, lastVendor, isoWindow, isSupplier]);
 
   useEffect(() => {
-    if (!enabled || !pageActive || !windowLoaded || !refreshKey) return undefined;
+    if (!enabled || !windowLoaded || !refreshKey) return undefined;
+    const params = { refreshKey, lastVendor, isoWindow, isSupplier };
+    // Weg van de PO-pagina (keep-alive hidden) = waarschijnlijk onderweg naar RCCP/BI:
+    // niet de idle-wacht cancellen zonder start, maar meteen prefetchen.
+    if (!pageActive) {
+      startDataPagesPrefetch(params);
+      return undefined;
+    }
     const handle = runWhenIdleAndQuiet(() => {
-      startDataPagesPrefetch({ refreshKey, lastVendor, isoWindow, isSupplier });
+      startDataPagesPrefetch(params);
     });
     return () => handle.cancel();
   }, [enabled, pageActive, windowLoaded, refreshKey, lastVendor, isoWindow, isSupplier]);

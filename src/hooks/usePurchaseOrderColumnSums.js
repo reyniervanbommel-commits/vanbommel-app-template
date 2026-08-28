@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   calculateHeaderColumnSums,
   isSummableHeaderColumn,
@@ -13,6 +13,11 @@ function isSafeColumnKey(key) {
   return Boolean(normalized) && !RESERVED_COLUMN_KEYS.has(normalized);
 }
 
+function sameKeys(left, right) {
+  return left === right
+    || (left.length === right.length && left.every((key, index) => key === right[index]));
+}
+
 /**
  * Board-wide header column sums (footer), independent of grouping summaries.
  * Input: filtered board rows + column definitions.
@@ -20,6 +25,7 @@ function isSafeColumnKey(key) {
  */
 export function usePurchaseOrderColumnSums({ rows, columns }) {
   const [columnSumKeys, setColumnSumKeys] = useState(EMPTY_KEYS);
+  const columnSumKeysRef = useRef(columnSumKeys);
   const columnByKey = useMemo(() => {
     const map = {};
     (Array.isArray(columns) ? columns : []).forEach((column) => {
@@ -30,39 +36,60 @@ export function usePurchaseOrderColumnSums({ rows, columns }) {
 
   const sanitizeKeys = useCallback((keys) => {
     const next = [];
+    const catalogReady = Object.keys(columnByKey).length > 0;
     (Array.isArray(keys) ? keys : []).forEach((rawKey) => {
       if (!isSafeColumnKey(rawKey)) return;
       const key = String(rawKey).trim();
       if (next.includes(key)) return;
-      if (!isSummableHeaderColumn(columnByKey[key])) return;
-      next.push(key);
+      const column = columnByKey[key];
+      if (column) {
+        if (!isSummableHeaderColumn(column)) return;
+        next.push(key);
+        return;
+      }
+      if (!catalogReady) next.push(key);
     });
     return next.length ? next : EMPTY_KEYS;
   }, [columnByKey]);
+
+  const commitKeys = useCallback((next) => {
+    columnSumKeysRef.current = next;
+    setColumnSumKeys(next);
+  }, []);
 
   const setColumnSumColumn = useCallback((columnKey, enabled) => {
     if (!isSafeColumnKey(columnKey) || !isSummableHeaderColumn(columnByKey[columnKey])) return;
     const key = String(columnKey).trim();
     setColumnSumKeys((current) => {
       const hasKey = current.includes(key);
-      if (enabled && !hasKey) return [...current, key];
-      if (!enabled && hasKey) {
-        const next = current.filter((entry) => entry !== key);
-        return next.length ? next : EMPTY_KEYS;
-      }
-      return current;
+      let next = current;
+      if (enabled && !hasKey) next = [...current, key];
+      else if (!enabled && hasKey) next = current.filter((entry) => entry !== key);
+      const resolved = next.length ? next : EMPTY_KEYS;
+      columnSumKeysRef.current = resolved;
+      return resolved;
     });
   }, [columnByKey]);
 
   const clearColumnSums = useCallback(() => {
-    setColumnSumKeys(EMPTY_KEYS);
-  }, []);
+    commitKeys(EMPTY_KEYS);
+  }, [commitKeys]);
 
   const applyKeys = useCallback((keys) => {
-    setColumnSumKeys(sanitizeKeys(keys));
+    commitKeys(sanitizeKeys(keys));
+  }, [commitKeys, sanitizeKeys]);
+
+  useEffect(() => {
+    setColumnSumKeys((current) => {
+      if (!current.length) return current;
+      const next = sanitizeKeys(current);
+      if (sameKeys(next, current)) return current;
+      columnSumKeysRef.current = next;
+      return next;
+    });
   }, [sanitizeKeys]);
 
-  const exportKeys = useCallback(() => columnSumKeys, [columnSumKeys]);
+  const exportKeys = useCallback(() => columnSumKeysRef.current, []);
 
   const summedValuesByColumn = useMemo(() => {
     if (!columnSumKeys.length) return EMPTY_SUMS;

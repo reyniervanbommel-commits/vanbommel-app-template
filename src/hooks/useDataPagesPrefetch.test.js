@@ -42,10 +42,27 @@ describe('useDataPagesPrefetch', () => {
     expect(runWhenIdleAndQuiet).not.toHaveBeenCalled();
   });
 
-  it('does nothing while the page is not active (keep-alive, hidden tab)', () => {
+  it('starts prefetch immediately when the PO page is hidden instead of waiting for idle', () => {
     usePageActive.mockReturnValue(false);
     renderHook(() => useDataPagesPrefetch({ enabled: true, refreshKey: 'r1' }));
     expect(runWhenIdleAndQuiet).not.toHaveBeenCalled();
+    expect(startDataPagesPrefetch).toHaveBeenCalledWith({
+      refreshKey: 'r1', lastVendor: 'V1', isoWindow: { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 }, isSupplier: false,
+    });
+  });
+
+  it('kicks prefetch when the page becomes inactive instead of dropping a pending idle wait', () => {
+    const cancel = vi.fn();
+    runWhenIdleAndQuiet.mockImplementation(() => ({ cancel }));
+    const { rerender } = renderHook(() => useDataPagesPrefetch({ enabled: true, refreshKey: 'r1' }));
+    expect(startDataPagesPrefetch).not.toHaveBeenCalled();
+
+    usePageActive.mockReturnValue(false);
+    rerender();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(startDataPagesPrefetch).toHaveBeenCalledWith({
+      refreshKey: 'r1', lastVendor: 'V1', isoWindow: { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 }, isSupplier: false,
+    });
   });
 
   it('does nothing before the RCCP window settings have loaded', () => {

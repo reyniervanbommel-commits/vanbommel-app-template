@@ -7,7 +7,7 @@
 export function filtersFromColumnMap(filterByColumn) {
   if (!filterByColumn || typeof filterByColumn !== 'object') return [];
   return Object.entries(filterByColumn)
-    .filter(([, filter]) => filter && filter.operator)
+    .filter(([columnKey, filter]) => columnKey !== 'remarks' && filter && filter.operator)
     .map(([columnKey, filter]) => ({
       columnKey,
       operator: filter.operator,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useViewTabExtraFilterPrompt } from './useViewTabExtraFilterPrompt';
 
@@ -16,28 +16,32 @@ function createBoardView(filters = {}) {
 }
 
 describe('useViewTabExtraFilterPrompt', () => {
-  it('telt geen prompt op de All-tab', () => {
+  it('roept geen sync op de All-tab', () => {
     const extraTabsRef = { current: [] };
     const viewBaseRef = { current: {} };
+    const onExtraChange = vi.fn();
     const boardView = createBoardView({ status: { operator: 'equals', value: 'Open' } });
-    const { result } = renderHook(() => useViewTabExtraFilterPrompt({
+    renderHook(() => useViewTabExtraFilterPrompt({
       activeTabId: 'all',
       boardView,
       extraTabsRef,
       viewBaseRef,
+      onExtraChange,
     }));
-    expect(result.current.extraFilterPrompt).toBe(0);
+    expect(onExtraChange).not.toHaveBeenCalled();
   });
 
-  it('telt een prompt wanneer extra filters wijzigen', () => {
+  it('synchroniseert extra filters wanneer ze wijzigen', () => {
     const extraTabsRef = { current: [{ id: 'tab_1', extraFilters: {} }] };
     const viewBaseRef = { current: {} };
+    const onExtraChange = vi.fn();
     const boardView = createBoardView();
-    const { result, rerender } = renderHook(() => useViewTabExtraFilterPrompt({
+    const { rerender } = renderHook(() => useViewTabExtraFilterPrompt({
       activeTabId: 'tab_1',
       boardView,
       extraTabsRef,
       viewBaseRef,
+      onExtraChange,
     }));
 
     act(() => {
@@ -46,6 +50,6 @@ describe('useViewTabExtraFilterPrompt', () => {
       });
     });
     rerender();
-    expect(result.current.extraFilterPrompt).toBeGreaterThan(0);
+    expect(onExtraChange).toHaveBeenCalled();
   });
 });

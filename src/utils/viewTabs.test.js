@@ -14,6 +14,8 @@ import {
   uniqueColumnValues,
   upsertGroup,
   extraFiltersEqual,
+  nonGroupExtraFilters,
+  tabHasUnsharedExtraFilters,
   viewVendorAccount,
   vendorCanSeeView,
   removeTabsByScope,
@@ -202,5 +204,45 @@ describe('viewTabs', () => {
     expect(hasExtraViewTabs([])).toBe(false);
     expect(hasExtraViewTabs(null)).toBe(false);
     expect(hasExtraViewTabs([{ id: 'tab_1' }])).toBe(true);
+  });
+
+  it('markeert extra filters die andere tabs in dezelfde groep niet hebben', () => {
+    const source = {
+      id: 'a',
+      groupColumnKey: 'vendorAccount',
+      extraFilters: {
+        vendorAccount: { operator: 'equals', value: 'A', secondaryValue: '' },
+        status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+      },
+    };
+    const sibling = {
+      id: 'b',
+      groupColumnKey: 'vendorAccount',
+      extraFilters: {
+        vendorAccount: { operator: 'equals', value: 'B', secondaryValue: '' },
+      },
+    };
+    const blank = { id: 'c', extraFilters: { status: { operator: 'equals', value: 'Open' } } };
+    expect(Object.keys(nonGroupExtraFilters(source))).toEqual(['status']);
+    expect(tabHasUnsharedExtraFilters(source, [source, sibling])).toBe(true);
+    expect(tabHasUnsharedExtraFilters(sibling, [source, sibling])).toBe(false);
+    expect(tabHasUnsharedExtraFilters(blank, [blank])).toBe(false);
+    const withSharedStatus = {
+      ...sibling,
+      extraFilters: {
+        ...sibling.extraFilters,
+        status: { operator: 'equals', value: 'Open', secondaryValue: '' },
+      },
+    };
+    const withDelivery = {
+      ...withSharedStatus,
+      id: 'a',
+      extraFilters: {
+        ...withSharedStatus.extraFilters,
+        delivery: { operator: 'after', value: '2026-01-01', secondaryValue: '' },
+      },
+    };
+    expect(tabHasUnsharedExtraFilters(withDelivery, [withDelivery, withSharedStatus])).toBe(true);
+    expect(tabHasUnsharedExtraFilters(withSharedStatus, [withDelivery, withSharedStatus])).toBe(false);
   });
 });

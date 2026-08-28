@@ -5,34 +5,69 @@ import {
 } from '@fluentui/react-components';
 import {
   buildMatrixPeriodHeaders,
+  formatMatrixPeriodAria,
   formatMatrixQty,
-  formatWeekLabel,
+  matrixPeriodToken,
   RCCP_CAPACITY_MEASURE_KEY,
   RCCP_OVERCAPACITY_MEASURE_KEY,
   RCCP_ROW_LABEL_WIDTH,
   RCCP_WEEK_COL_WIDTH,
   statusToken,
 } from './rccpUtils';
+import { isCurrentMatrixPeriod } from './rccpPoStack';
 
 const useStyles = makeStyles({
-  table: { tableLayout: 'fixed', width: 'auto', borderCollapse: 'collapse' },
+  wrapper: {
+    boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke2}`,
+    borderRadius: '8px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    overflow: 'visible',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  table: {
+    tableLayout: 'fixed',
+    width: 'max-content',
+    borderCollapse: 'separate',
+    borderSpacing: 0,
+    boxSizing: 'border-box',
+  },
   sticky: {
     position: 'sticky',
     left: 0,
     backgroundColor: tokens.colorNeutralBackground1,
     zIndex: 1,
+    boxSizing: 'border-box',
     width: `${RCCP_ROW_LABEL_WIDTH}px`,
     minWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
     maxWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
+    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.padding('8px', '10px'),
+    textAlign: 'left',
+    verticalAlign: 'middle',
+  },
+  headerSticky: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    zIndex: 3,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
   },
   weekCol: {
     width: `${RCCP_WEEK_COL_WIDTH}px`,
     minWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     maxWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     boxSizing: 'border-box',
-    ...shorthands.padding(tokens.spacingVerticalXXS, '0'),
+    ...shorthands.padding('8px', '4px'),
     textAlign: 'center',
     verticalAlign: 'middle',
+    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  weekHeader: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
   },
   weekColInner: {
     width: '100%',
@@ -42,8 +77,13 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     lineHeight: 1.2,
   },
-  yearHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
-  weekHeader: { fontWeight: tokens.fontWeightSemibold },
+  yearHeader: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    minHeight: '14px',
+    lineHeight: '14px',
+  },
+  weekHeaderLabel: { fontWeight: tokens.fontWeightSemibold },
   mondayHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   rowLabel: {
     display: 'flex',
@@ -52,20 +92,43 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  cell: {
-    width: '100%',
-    boxSizing: 'border-box',
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalXXS),
-    display: 'flex',
+  switchWrap: {
+    display: 'inline-flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '28px',
+    flexShrink: 0,
+    transform: 'scale(0.7)',
+    transformOrigin: 'center left',
+    marginRight: '-10px',
   },
+  qty: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
   cellInteractive: { cursor: 'pointer' },
-  loadValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
-  capacityValue: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
+  highlightCell: {
+    boxShadow: `inset 0 0 0 2px ${tokens.colorBrandStroke1}`,
+  },
+  currentHeader: {
+    backgroundColor: tokens.colorBrandBackground2,
+    boxShadow: `inset 0 -3px 0 0 ${tokens.colorBrandStroke1}`,
+  },
+  bodyRow: {
+    ':hover td:first-child': { backgroundColor: tokens.colorNeutralBackground1Hover },
+  },
 });
+
+function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle }) {
+  const handleChange = useCallback((_, data) => {
+    onToggle(measureKey, Boolean(data.checked));
+  }, [measureKey, onToggle]);
+  return (
+    <span className={styles.switchWrap}>
+      <Switch
+        checked={Boolean(checked)}
+        onChange={handleChange}
+        size="small"
+        aria-label={`Show ${label} in chart`}
+      />
+    </span>
+  );
+}
 
 function RccpMatrixTable({
   measureRows,
@@ -75,12 +138,18 @@ function RccpMatrixTable({
   onToggleVisible,
   onCellClick,
   interactive,
-  compact,
   gridWidth,
+  kpiHighlight = null,
 }) {
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
+  const highlightWeeks = useMemo(() => new Set(kpiHighlight?.weeks || []), [kpiHighlight]);
+  const highlightMeasures = useMemo(() => new Set(kpiHighlight?.measureKeys || []), [kpiHighlight]);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
+  const showYearRow = useMemo(
+    () => periodHeaders.some((period) => period.yearLabel),
+    [periodHeaders],
+  );
 
   const handleClick = useCallback((cell) => {
     if (cell && onCellClick) onCellClick(cell);
@@ -91,15 +160,29 @@ function RccpMatrixTable({
   }
 
   return (
-    <Table size="small" className={styles.table} style={{ width: gridWidth || undefined }}>
+    <div className={styles.wrapper}>
+    <Table
+      size="small"
+      className={styles.table}
+      style={{ width: gridWidth || undefined, minWidth: gridWidth || undefined }}
+    >
       <TableHeader>
         <TableRow>
-          <TableHeaderCell className={styles.sticky}>Measure</TableHeaderCell>
+          <TableHeaderCell className={mergeClasses(styles.sticky, styles.headerSticky)}>Measure</TableHeaderCell>
           {periodHeaders.map((period) => (
-            <TableHeaderCell key={period.key} className={styles.weekCol}>
+            <TableHeaderCell
+              key={period.key}
+              className={mergeClasses(
+                styles.weekCol,
+                styles.weekHeader,
+                isCurrentMatrixPeriod(period) && styles.currentHeader,
+              )}
+            >
               <div className={styles.weekColInner}>
-                {period.yearLabel ? <div className={styles.yearHeader}>{period.yearLabel}</div> : null}
-                <div className={styles.weekHeader}>{period.weekLabel}</div>
+                {showYearRow ? (
+                  <div className={styles.yearHeader}>{period.yearLabel || '\u00a0'}</div>
+                ) : null}
+                <div className={styles.weekHeaderLabel}>{period.weekLabel}</div>
                 <div className={styles.mondayHeader}>{period.mondayLabel}</div>
               </div>
             </TableHeaderCell>
@@ -112,53 +195,55 @@ function RccpMatrixTable({
           const isOvercapacity = row.measureKey === RCCP_OVERCAPACITY_MEASURE_KEY;
           const isDerived = isCapacity || isOvercapacity;
           return (
-            <TableRow key={row.measureKey}>
+            <TableRow key={row.measureKey} className={styles.bodyRow}>
               <TableCell className={styles.sticky}>
                 <div className={styles.rowLabel}>
-                  {!isCapacity && onToggleVisible ? (
-                    <Switch
+                  {onToggleVisible ? (
+                    <MatrixVisibilitySwitch
+                      styles={styles}
+                      measureKey={row.measureKey}
+                      label={row.label}
                       checked={Boolean(visibleKeys?.[row.measureKey])}
-                      onChange={(_, data) => onToggleVisible(row.measureKey, Boolean(data.checked))}
-                      aria-label={`Show ${row.label} in chart`}
+                      onToggle={onToggleVisible}
                     />
                   ) : null}
                   <span className={styles.rowName} title={row.label}>{row.label}</span>
                 </div>
               </TableCell>
               {periodHeaders.map((period) => {
-                const cell = cellMap.get(`${row.measureKey}|${period.year}|${period.week}`);
-                // Altijd een getal tonen (0 als er geen cel is), zodat een measure met alleen nullen
-                // niet als lege regel oogt. Capaciteit toont zijn beschikbare aantal; load en
-                // overcapaciteit tonen confirmedQty (overcapaciteit kan negatief zijn = tekort).
+                const periodToken = matrixPeriodToken(period);
+                const cell = cellMap.get(`${row.measureKey}|${period.year}|${periodToken}`);
+                const periodLabel = formatMatrixPeriodAria(period);
                 const value = isCapacity ? (cell?.availableQty ?? 0) : (cell?.confirmedQty ?? 0);
                 const bg = isCapacity
                   ? tokens.colorNeutralBackground3
                   : statusToken(cell ? cell.statusColor : 'grey');
-                const clickable = isInteractive && !isDerived;
+                const clickable = isInteractive && !isDerived && !period.month;
+                const highlighted = highlightWeeks.has(period.key)
+                  && highlightMeasures.has(row.measureKey);
                 return (
-                  <TableCell key={period.key} className={styles.weekCol}>
-                    <div className={styles.weekColInner}>
-                      <div
-                        className={mergeClasses(styles.cell, clickable && styles.cellInteractive)}
-                        style={{ backgroundColor: bg }}
-                        {...(clickable ? {
-                          role: 'button',
-                          tabIndex: 0,
-                          'aria-label': `${row.label}, ${formatWeekLabel(period.year, period.week)}: ${formatMatrixQty(cell?.confirmedQty ?? 0)} of ${formatMatrixQty(cell?.availableQty ?? 0)}. Show purchase order lines.`,
-                          onClick: () => handleClick(cell),
-                          onKeyDown: (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleClick(cell);
-                            }
-                          },
-                        } : {})}
-                      >
-                        <Text className={isCapacity ? styles.capacityValue : styles.loadValue}>
-                          {formatMatrixQty(value)}
-                        </Text>
-                      </div>
-                    </div>
+                  <TableCell
+                    key={period.key}
+                    className={mergeClasses(
+                      styles.weekCol,
+                      clickable && styles.cellInteractive,
+                      highlighted && styles.highlightCell,
+                    )}
+                    style={{ backgroundColor: bg }}
+                    {...(clickable ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      'aria-label': `${row.label}, ${periodLabel}: ${formatMatrixQty(cell?.confirmedQty ?? 0)} of ${formatMatrixQty(cell?.availableQty ?? 0)}. Show purchase order lines.`,
+                      onClick: () => handleClick(cell),
+                      onKeyDown: (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleClick(cell);
+                        }
+                      },
+                    } : {})}
+                  >
+                    <Text className={styles.qty}>{formatMatrixQty(value)}</Text>
                   </TableCell>
                 );
               })}
@@ -167,6 +252,7 @@ function RccpMatrixTable({
         })}
       </TableBody>
     </Table>
+    </div>
   );
 }
 

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
 import { usePurchaseOrderColumnSums } from './usePurchaseOrderColumnSums';
+import { applyBoardMatchKeys } from './applyBoardMatchKeys';
+import { usePurchaseOrderRemarksFilterBridge } from './usePurchaseOrderRemarksFilterBridge';
 import { formatLinkedLineValues } from '../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
@@ -16,6 +18,7 @@ import {
   ACTIVITY_FILTER_REMOVED,
   ACTIVITY_FILTERS,
 } from './purchaseOrderActivityFilter';
+import { overlayKpiQtyOnOrders } from '../utils/poBoardKpis';
 
 /**
  * Compositiepunt: filter/sort + grouping + column sums, met één export/apply voor saved views.
@@ -185,27 +188,40 @@ export function usePurchaseOrderBoardView({
 
   const [kpiFilterKey, setKpiFilterKey] = useState(null);
   const [kpiMatchKeys, setKpiMatchKeys] = useState(null);
+  const [kpiQtyOverlay, setKpiQtyOverlay] = useState(null);
   const applyKpiFilter = useCallback((key, matchKeys, options = {}) => {
     const shouldToggle = options.toggle !== false;
     setKpiFilterKey((prev) => {
       if (shouldToggle && prev === key) {
         setKpiMatchKeys(null);
+        setKpiQtyOverlay(null);
         return null;
       }
       setKpiMatchKeys(matchKeys || null);
+      setKpiQtyOverlay(options.qtyOverlay || null);
       return key;
     });
   }, []);
   const clearAllFilters = useCallback(() => {
     setKpiFilterKey(null);
     setKpiMatchKeys(null);
+    setKpiQtyOverlay(null);
     tableView.clearAllFilters();
   }, [tableView]);
 
-  const displayedItems = useMemo(() => {
-    if (!kpiMatchKeys) return tableView.processedItems;
-    return tableView.processedItems.filter((order) => kpiMatchKeys.has(order.orderNumber));
-  }, [kpiMatchKeys, tableView.processedItems]);
+  const remarksFilter = usePurchaseOrderRemarksFilterBridge(tableView.filterByColumn);
+  const { columnFiltered, displayedItems: matchedItems } = useMemo(() => applyBoardMatchKeys({
+    processedItems: tableView.processedItems,
+    remarksFilterEnabled: remarksFilter.enabled,
+    remarksMatchKeys: remarksFilter.matchKeys,
+    kpiMatchKeys,
+    kpiFilterKey,
+    kpiQtyOverlay,
+  }), [kpiFilterKey, kpiMatchKeys, kpiQtyOverlay, remarksFilter, tableView.processedItems]);
+  const displayedItems = useMemo(
+    () => overlayKpiQtyOnOrders(matchedItems, kpiQtyOverlay, kpiFilterKey),
+    [kpiFilterKey, kpiQtyOverlay, matchedItems]
+  );
 
   const rows = useMemo(
     () =>
@@ -228,7 +244,7 @@ export function usePurchaseOrderBoardView({
       filterByColumn: tableState.filterByColumn,
       sortState: tableState.sortState,
       grouping: grouping.exportState(),
-      columnSumKeys: columnSums.columnSumKeys,
+      columnSumKeys: columnSums.exportKeys(),
     };
   }, [activityFilter, columnSums.columnSumKeys, tableView, grouping]);
 
@@ -248,12 +264,10 @@ export function usePurchaseOrderBoardView({
 
   return useMemo(
     () => ({
-      // filter/sort API + processedItems
       processedItems: displayedItems,
-      kpiSourceItems: tableView.processedItems,
+      kpiSourceItems: columnFiltered,
       kpiFilterKey,
       applyKpiFilter,
-      // volledige dataset (alle rijen, afgeleide waarden, zonder filter/sort) voor exports
       allItems: itemsWithDerivedDatePeriods,
       sortState: tableView.sortState,
       filterByColumn: tableView.filterByColumn,
@@ -273,9 +287,7 @@ export function usePurchaseOrderBoardView({
       activityFilter,
       toggleActivityFilter,
       activityCounts,
-      // afgeleide rijen
       rows,
-      // grouping API
       groupedRows: grouping.groupedRows,
       groupingColumnKey: grouping.groupingColumnKey,
       groupingColumnLabel: grouping.groupingColumnLabel,
@@ -288,10 +300,9 @@ export function usePurchaseOrderBoardView({
       setGroupSummaryColumn: grouping.setGroupSummaryColumn,
       clearGroupSummaries: grouping.clearGroupSummaries,
       columnSums,
-      // gecombineerde serialisatie voor saved views
       exportFilterSortGrouping,
       applyFilterSortGrouping,
     }),
-    [tableView, displayedItems, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
+    [tableView, displayedItems, columnFiltered, kpiFilterKey, applyKpiFilter, clearAllFilters, itemsWithDerivedDatePeriods, activityFilter, toggleActivityFilter, activityCounts, rows, grouping, columnSums, exportFilterSortGrouping, applyFilterSortGrouping]
   );
 }

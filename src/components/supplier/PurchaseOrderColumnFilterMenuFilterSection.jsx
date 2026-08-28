@@ -23,8 +23,10 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   handleApplyFilter,
   handleClearFilter,
   onMouseEnter,
+  searchHint = '',
 }) {
   const [operatorFlyoutOpen, setOperatorFlyoutOpen] = useState(false);
+  const canPickOperator = operatorEntries.length > 1;
   const operatorFlyout = usePurchaseOrderColumnMenuFlyoutPlacement({
     active: operatorFlyoutOpen,
   });
@@ -35,8 +37,9 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   }, [onMouseEnter]);
 
   const handleOperatorToggle = useCallback(() => {
+    if (operatorEntries.length <= 1) return;
     setOperatorFlyoutOpen((prev) => !prev);
-  }, []);
+  }, [operatorEntries.length]);
 
   const handleOperatorPick = useCallback((operatorKey) => {
     handleOperatorSelect(null, { optionValue: operatorKey });
@@ -66,10 +69,12 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
           >
             <span className={styles.filterOperatorLinkContent}>
               {operatorLabels[draft.operator]}
-              <ChevronDownRegular className={styles.filterOperatorChevron} aria-hidden="true" />
+              {canPickOperator ? (
+                <ChevronDownRegular className={styles.filterOperatorChevron} aria-hidden="true" />
+              ) : null}
             </span>
           </Button>
-          {operatorFlyoutOpen ? (
+          {operatorFlyoutOpen && canPickOperator ? (
             <div
               ref={operatorFlyout.ref}
               className={mergeClasses(
@@ -195,6 +200,9 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
       ) : null}
       {isDate && draft.operator === 'nextWeek' ? (
         <Text className={styles.filterHint}>Matches records in the next calendar week.</Text>
+      ) : null}
+      {searchHint ? (
+        <Text className={styles.filterHint}>{searchHint}</Text>
       ) : null}
       <div className={styles.filterActionRow}>
         <PurchaseOrderColumnFilterMenuButton

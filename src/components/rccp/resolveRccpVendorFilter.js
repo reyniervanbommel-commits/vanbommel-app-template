@@ -83,3 +83,26 @@ export function resolveDefaultRccpVendorWithFallback({
   const list = Array.isArray(vendors) ? vendors : [];
   return lastVendor && list.includes(lastVendor) ? lastVendor : '';
 }
+
+/**
+ * Vendor voor de RCCP-tab onderaan het PO-board. View-tabs filteren vaak op vendorName
+ * (of zetten de naam in vendorAccount); /rccp/analysis verwacht het accountnummer.
+ * Zonder mapping laadt de split-pane leeg, terwijl /rccp wél data toont.
+ *
+ * @returns {string|undefined} account, '' (alle vendors) of undefined (nog niet klaar)
+ */
+export function resolvePoBoardRccpVendor({
+  isSupplier = false,
+  supplierAccount = '',
+  filterByColumn,
+  vendors = [],
+  vendorNames = {},
+  vendorColumnKey = 'vendorAccount',
+  vendorsReady = true,
+} = {}) {
+  if (isSupplier) return supplierAccount || '';
+  if (!vendorsReady) return undefined;
+  return resolveDefaultRccpVendor({
+    vendors, vendorNames, filterByColumn, vendorColumnKey,
+  });
+}

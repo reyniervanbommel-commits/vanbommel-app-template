@@ -13,6 +13,7 @@ import { prefetchRccpAnalysis } from './rccpAnalysisPrefetch';
 import { prefetchBiDashboard } from './biBoardPrefetch';
 import { apiRequest } from './api';
 import { readPoFilterByColumnForRccp } from './poVendorFilterHandoff';
+import { isPersistableRccpIsoWindow } from '../components/rccp/rccpUtils';
 import { kickDataPagesPrefetch, setDataPagesPrefetchParams, startDataPagesPrefetch } from './dataPagesPrefetch';
 
 const WINDOW = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 };
@@ -31,19 +32,27 @@ describe('startDataPagesPrefetch', () => {
     });
   });
 
-  it('runs the steps in order: board-kpis, then RCCP analysis, then BI', async () => {
-    const order = [];
-    getPoBoardKpis.mockImplementation(async () => { order.push('kpis'); return {}; });
-    prefetchRccpAnalysis.mockImplementation(() => { order.push('rccp'); return Promise.resolve({}); });
-    prefetchBiDashboard.mockImplementation(async () => { order.push('bi'); });
+  it('starts RCCP and BI without waiting for board-kpis to finish', async () => {
+    let resolveKpis;
+    getPoBoardKpis.mockImplementation(() => new Promise((resolve) => { resolveKpis = resolve; }));
     apiRequest.mockImplementation((path) => {
-      if (path === '/rccp/vendors') return Promise.resolve({ vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
+      if (path === '/rccp/vendors') {
+        return Promise.resolve({ vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
+      }
       throw new Error(`unexpected apiRequest(${path})`);
     });
 
-    await startDataPagesPrefetch({ refreshKey: 'r1', lastVendor: 'V1', isoWindow: WINDOW });
+    const pending = startDataPagesPrefetch({
+      refreshKey: 'r-parallel', lastVendor: 'V1', isoWindow: WINDOW,
+    });
 
-    expect(order).toEqual(['kpis', 'rccp', 'bi']);
+    await vi.waitFor(() => {
+      expect(prefetchRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V1');
+      expect(prefetchBiDashboard).toHaveBeenCalled();
+    });
+
+    resolveKpis({});
+    await pending;
   });
 
   it('resolves the RCCP vendor from the active PO column filter, not from lastVendor, when both exist', async () => {
@@ -106,15 +115,20 @@ describe('startDataPagesPrefetch', () => {
     expect(prefetchBiDashboard).toHaveBeenCalledWith({ externalFilterByColumn: undefined });
   });
 
-  it('swallows a getPoBoardKpis rejection without throwing to the caller', async () => {
+  it('still prefetches RCCP and BI when getPoBoardKpis rejects', async () => {
     getPoBoardKpis.mockRejectedValue(new Error('boom'));
+    apiRequest.mockImplementation((path) => {
+      if (path === '/rccp/vendors') {
+        return Promise.resolve({ vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
+      }
+      throw new Error(`unexpected apiRequest(${path})`);
+    });
 
     await expect(
       startDataPagesPrefetch({ refreshKey: 'r3', lastVendor: 'V1', isoWindow: WINDOW }),
     ).resolves.toBeUndefined();
-    // Sequentiële keten: een vroege stap die faalt stopt de rest stil, geen losse fouten per stap.
-    expect(prefetchRccpAnalysis).not.toHaveBeenCalled();
-    expect(prefetchBiDashboard).not.toHaveBeenCalled();
+    expect(prefetchRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V1');
+    expect(prefetchBiDashboard).toHaveBeenCalled();
   });
 
   it('dedupeert: een tweede call met dezelfde refreshKey doet geen tweede board-kpis-call', async () => {
@@ -122,6 +136,22 @@ describe('startDataPagesPrefetch', () => {
     await startDataPagesPrefetch({ refreshKey: 'r4', lastVendor: 'V1', isoWindow: WINDOW });
 
     expect(getPoBoardKpis).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefetches RCCP with a compact window when the stored range spans years', async () => {
+    const wide = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
+    apiRequest.mockImplementation((path) => {
+      if (path === '/rccp/vendors') {
+        return Promise.resolve({ vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
+      }
+      throw new Error(`unexpected apiRequest(${path})`);
+    });
+
+    await startDataPagesPrefetch({ refreshKey: 'r-wide', lastVendor: 'V1', isoWindow: wide });
+
+    const sent = prefetchRccpAnalysis.mock.calls[0][0];
+    expect(sent).not.toEqual(wide);
+    expect(isPersistableRccpIsoWindow(sent)).toBe(true);
   });
 });
 

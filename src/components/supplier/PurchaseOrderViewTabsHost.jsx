@@ -28,6 +28,7 @@ export default function PurchaseOrderViewTabsHost({
         extraTabs={viewTabs.extraTabs}
         groups={viewTabs.groups}
         canManage={canManage}
+        unsavedExtraTabIds={viewTabs.unsavedExtraTabIds || []}
         onSelectTab={viewTabs.selectTab}
         onRemoveTab={viewTabs.removeTab}
         onSetGroupColor={viewTabs.setGroupColor}

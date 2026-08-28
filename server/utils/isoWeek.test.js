@@ -37,6 +37,13 @@ describe('isoWeek', () => {
     expect(range[range.length - 1]).toEqual({ year: 2021, week: 2, key: '2021-W02' });
   });
 
+  it('keeps a multi-year RCCP window instead of stopping after 120 weeks', () => {
+    const range = buildWeekRange(2023, 22, 2026, 47);
+    expect(range[0]).toEqual({ year: 2023, week: 22, key: '2023-W22' });
+    expect(range[range.length - 1]).toEqual({ year: 2026, week: 47, key: '2026-W47' });
+    expect(range.length).toBeGreaterThan(120);
+  });
+
   it('parses iso week keys', () => {
     expect(parseIsoWeekKey('2024-W09')).toEqual({ year: 2024, week: 9 });
     expect(parseIsoWeekKey('bad')).toBeNull();

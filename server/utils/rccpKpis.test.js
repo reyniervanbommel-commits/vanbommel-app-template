@@ -99,6 +99,65 @@ describe('rccpKpis', () => {
     expect(kpis.onTimePercent).toBeCloseTo(4 / 14 * 100);
   });
 
+  it('does not count delivered quantity as on time without a real receipt date', () => {
+    const kpis = buildRccpPoKpis(
+      [row({ line: { productReceiptDate: '' } })],
+      baseConfig,
+      window,
+      { now: nowCurrent, vendorAccount: 'V001' },
+    );
+    expect(kpis.totalDelivered).toBe(4);
+    expect(kpis.onTimeUnits).toBe(0);
+    expect(kpis.onTimeItemCount).toBe(0);
+    expect(kpis.lateDeliveryUnits).toBe(0);
+  });
+
+  it('does not count sentinel receipt dates as on time', () => {
+    const kpis = buildRccpPoKpis(
+      [row({ line: { productReceiptDate: '1900-01-01T00:00:00.000Z' } })],
+      baseConfig,
+      window,
+      { now: nowCurrent, vendorAccount: 'V001' },
+    );
+    expect(kpis.onTimeUnits).toBe(0);
+    expect(kpis.lateDeliveryUnits).toBe(0);
+  });
+
+  it('counts 1-1-1900 planned dates as a separate KPI', () => {
+    const sentinel = row({
+      line: {
+        requestedDeliveryDate: '1900-01-01T00:00:00.000Z',
+        productReceiptDate: '',
+        openQty: 6,
+        deliveredQty: 2,
+        itemNumber: 'SKU-1900',
+      },
+    });
+    const windowed = buildRccpPoKpis([sentinel], baseConfig, window, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+    });
+    expect(windowed.planned1900Units).toBe(0);
+    expect(windowed.planned1900ItemCount).toBe(0);
+
+    const all = buildRccpPoKpis([sentinel], baseConfig, window, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+      skipWindow: true,
+    });
+    expect(all.planned1900Units).toBe(8);
+    expect(all.planned1900ItemCount).toBe(1);
+    expect(all.totalOrdered).toBe(8);
+
+    const byOrder = buildRccpPoKpiByOrder([sentinel], baseConfig, {
+      now: nowCurrent,
+      vendorAccount: 'V001',
+    });
+    expect(byOrder.orders['PO-A'].yu).toBe(8);
+    expect(byOrder.orders['PO-A'].yk).toEqual(expect.any(Array));
+    expect(byOrder.sku).toContain('SKU-1900');
+  });
+
   it('counts unique SKUs once and averages late days per line', () => {
     const rows = [row(), {
       recordKey: 'PO-B',
@@ -139,12 +198,14 @@ describe('rccpKpis', () => {
       { now: nowNext, vendorAccount: 'V001' },
     );
     expect(kpis.openLateItemCount).toBe(0);
+    expect(kpis.openLateUnits).toBe(10);
     expect(kpis.openLateAvgDays).toBe(calendarDaysBetween(nowNext, planned));
   });
 
   it('counts open-and-late unique SKUs when still open and planned week is past', () => {
     const kpis = buildRccpPoKpis([row()], baseConfig, window, { now: nowNext, vendorAccount: 'V001' });
     expect(kpis.openLateItemCount).toBe(1);
+    expect(kpis.openLateUnits).toBe(10);
     expect(kpis.openLateAvgDays).toBe(calendarDaysBetween(nowNext, planned));
   });
 

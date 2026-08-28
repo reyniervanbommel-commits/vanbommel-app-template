@@ -4,7 +4,8 @@ import {
 } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
-import { resolveRccpVendorFromFilter } from '../rccp/resolveRccpVendorFilter';
+import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { resolvePoBoardRccpVendor } from '../rccp/resolveRccpVendorFilter';
 import { useSplitPane } from './hooks/useSplitPane';
 import SplitPaneResizeHandle from './SplitPaneResizeHandle';
 import { useBiCharts } from './hooks/useBiCharts';
@@ -72,6 +73,9 @@ export default function BoardSplitView({
   const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
   const { isoWindow } = useRccpWindow();
+  const {
+    vendors, vendorNames, vendorColumnKey, loading: vendorsLoading,
+  } = useRccpVendorOptions();
   const { charts } = useBiCharts();
   const meta = useBiMeta(BOARD_KEY);
 
@@ -87,14 +91,21 @@ export default function BoardSplitView({
   );
 
   const dataRevision = useMemo(() => buildTableDataRevision(tableRows), [tableRows]);
-  // Staff leidt de vendor af uit een actief kolomfilter; een supplier is altijd zijn eigen
-  // leveranciersaccount (het bord is voor hem al op die vendor gescoped).
+  // View-tabs filteren vaak op vendorName; /rccp/analysis verwacht het accountnummer
+  // (zelfde mapping als de RCCP-pagina). Wacht op de vendorlijst om een lege fetch te vermijden.
   const vendorAccount = useMemo(
-    () => (isSupplier
-      ? (user?.vendor_account || '')
-      : resolveRccpVendorFromFilter(filterByColumn)),
-    [isSupplier, user?.vendor_account, filterByColumn],
+    () => resolvePoBoardRccpVendor({
+      isSupplier,
+      supplierAccount: user?.vendor_account || '',
+      filterByColumn,
+      vendors,
+      vendorNames,
+      vendorColumnKey: vendorColumnKey || 'vendorAccount',
+      vendorsReady: !vendorsLoading,
+    }),
+    [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading],
   );
+  const rccpVendorReady = isSupplier || !vendorsLoading;
   const rccpRefreshKey = useMemo(
     () => `${dataRevision}|${vendorAccount || ''}`,
     [dataRevision, vendorAccount],
@@ -165,13 +176,17 @@ export default function BoardSplitView({
         <div hidden={!showRccpPane}>
           {showRccpPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
-              <RccpSplitStrip
-                vendorAccount={vendorAccount}
-                refreshKey={rccpRefreshKey}
-                height={split.height}
-                enabled
-                isoWindow={isoWindow}
-              />
+              {rccpVendorReady ? (
+                <RccpSplitStrip
+                  vendorAccount={vendorAccount}
+                  refreshKey={rccpRefreshKey}
+                  height={split.height}
+                  enabled
+                  isoWindow={isoWindow}
+                />
+              ) : (
+                <Spinner size="tiny" label="Loading RCCP…" />
+              )}
             </Suspense>
           ) : null}
         </div>

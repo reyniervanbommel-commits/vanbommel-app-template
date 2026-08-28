@@ -25,7 +25,7 @@ export function usePurchaseOrderColumnMenuFlags({
   connectionTargets = [],
 }) {
   const isRemarksColumn = column?.dataType === 'remarks';
-  const isImageColumn = column?.dataType === 'image' || isRemarksColumn;
+  const isImageColumn = column?.dataType === 'image';
   const staffMenu = isStaff !== false;
   const canToggleWriteback = Boolean(staffMenu && isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
   const showWritebackLocked = Boolean(staffMenu && column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);

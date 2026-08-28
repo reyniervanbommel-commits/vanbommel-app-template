@@ -1,5 +1,5 @@
 import React, { createContext, memo, useCallback, useContext } from 'react';
-import { isReceivedPairHighlight, stackRectLayout } from './rccpPoStack';
+import { isReceivedPairHighlight, stackRectLayout, weekBarBox } from './rccpPoStack';
 
 const LATE_STROKE = '#D13438';
 const PAIR_STROKE = '#323130';
@@ -16,29 +16,33 @@ function segmentFillOpacity(status, side, highlighted) {
 }
 
 function RccpPoStackBar({
-  x, y, width, height, payload, side,
+  y, height, payload, side, index,
 }) {
   const hover = useContext(RccpSegmentHoverContext);
-  const highlightPo = hover?.highlightPo || '';
+  const highlightItem = hover?.highlightItem || '';
   const segments = side === 'above'
     ? (payload?.segmentsAbove || [])
     : (payload?.segmentsBelow || []);
   const layout = stackRectLayout(segments, y, height, side);
-  if (!width || !layout.length) return null;
+  const barWidth = side === 'above'
+    ? Number(payload?.__barWidthAbove)
+    : Number(payload?.__barWidthBelow);
+  const box = weekBarBox(index, barWidth);
+  if (!box.width || !layout.length) return null;
   return (
     <g>
-      {layout.map(({ y: rectY, height: rectH, segment }, index) => (
+      {layout.map(({ y: rectY, height: rectH, segment }, segIndex) => (
         <RccpPoSegmentRect
-          key={`${segment.poNumber}-${segment.status}-${index}`}
-          x={x}
+          key={`${segment.itemNumber}-${segment.status}-${segIndex}`}
+          x={box.x}
           y={rectY}
-          width={width}
+          width={box.width}
           height={rectH}
           segment={segment}
           weekLabel={payload?.key}
           fill={segment.status === 'open' ? payload.__openColor : payload.__receivedColor}
           side={side}
-          highlighted={isReceivedPairHighlight(segment, highlightPo)}
+          highlighted={isReceivedPairHighlight(segment, highlightItem)}
         />
       ))}
     </g>

@@ -24,6 +24,7 @@ import {
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
+import UnsavedYellowDot from './UnsavedYellowDot';
 import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
@@ -43,7 +44,8 @@ const useStyles = makeStyles({
     ...shorthands.padding('0'),
     ...shorthands.border('none'),
     justifyContent: 'flex-start',
-    ...shorthands.gap('4px'),
+    alignItems: 'flex-start',
+    ...shorthands.gap('6px'),
     color: tokens.colorNeutralForeground1,
     backgroundColor: 'transparent',
   },
@@ -58,14 +60,10 @@ const useStyles = makeStyles({
   titleChevron: {
     fontSize: '20px',
     flexShrink: 0,
+    alignSelf: 'center',
   },
-  unsavedIndicator: {
-    color: tokens.colorBrandForeground1,
-    fontWeight: tokens.fontWeightBold,
-    verticalAlign: 'super',
-    marginLeft: '4px',
-    fontSize: '18px',
-    lineHeight: '1',
+  unsavedDot: {
+    marginTop: '6px',
   },
   menuPopover: {
     minWidth: '240px',
@@ -154,10 +152,10 @@ export default function PurchaseOrderSavedViewsControl({
               className={styles.titleTrigger}
               disabled={saving}
             >
-              <span className={styles.titleName}>
-                {triggerLabel}
-                {hasUnsavedChanges ? <span className={styles.unsavedIndicator} aria-hidden>*</span> : null}
-              </span>
+              <span className={styles.titleName}>{triggerLabel}</span>
+              {hasUnsavedChanges ? (
+                <UnsavedYellowDot className={styles.unsavedDot} testId="view-unsaved-dot" />
+              ) : null}
               <ChevronDownRegular className={styles.titleChevron} />
             </Button>
           ) : (

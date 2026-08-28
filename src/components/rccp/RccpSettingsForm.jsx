@@ -22,7 +22,8 @@ const useStyles = makeStyles({
 });
 
 function RccpSettingsForm({
-  variant = 'page', config, columns, saving, error, saved, statusOptions, onUpdateField, onSave,
+  variant = 'page', config, columns, itemColumns = [], saving, error, saved, statusOptions,
+  onUpdateField, onSave,
 }) {
   const styles = useStyles();
   const isFlyout = variant === 'flyout';
@@ -71,10 +72,12 @@ function RccpSettingsForm({
         <RccpSettingsDisplayFields
           config={config}
           compact={isFlyout}
+          itemColumns={itemColumns}
           onUpdateField={onUpdateField}
           onRanges={handlers.handleRanges}
           onGreen={handlers.handleGreen}
           onOrange={handlers.handleOrange}
+          onItemPickerColumns={handlers.handleItemPickerColumns}
         />
       )}
       {!isFlyout && (

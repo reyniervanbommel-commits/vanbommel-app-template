@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveDefaultRccpVendor,
   resolveDefaultRccpVendorWithFallback,
+  resolvePoBoardRccpVendor,
   resolveRccpVendorFromFilter,
 } from './resolveRccpVendorFilter';
 
@@ -120,5 +121,53 @@ describe('resolveDefaultRccpVendorWithFallback', () => {
       lastVendorReady: false,
     });
     expect(result).toBe('V000696');
+  });
+});
+
+describe('resolvePoBoardRccpVendor', () => {
+  const vendors = ['V000622', 'V000696'];
+  const vendorNames = {
+    V000622: 'Ladrical, Unipessoal, Lda',
+    V000696: 'Procalcado For Ever',
+  };
+
+  it('maps a vendor-name PO-tab filter to the vendor account, not the display name', () => {
+    const result = resolvePoBoardRccpVendor({
+      filterByColumn: { vendorName: { operator: 'equals', value: 'Ladrical, Unipessoal, Lda' } },
+      vendors,
+      vendorNames,
+      vendorsReady: true,
+    });
+    expect(result).toBe('V000622');
+  });
+
+  it('maps a vendorAccount filter that holds a display name to the account number', () => {
+    const result = resolvePoBoardRccpVendor({
+      filterByColumn: { vendorAccount: { operator: 'equals', value: 'Ladrical, Unipessoal, Lda' } },
+      vendors,
+      vendorNames,
+      vendorsReady: true,
+    });
+    expect(result).toBe('V000622');
+  });
+
+  it('returns undefined until the vendor list is ready so the split pane does not fetch with a name', () => {
+    const result = resolvePoBoardRccpVendor({
+      filterByColumn: { vendorName: { operator: 'equals', value: 'Ladrical, Unipessoal, Lda' } },
+      vendors: [],
+      vendorNames: {},
+      vendorsReady: false,
+    });
+    expect(result).toBeUndefined();
+  });
+
+  it('returns the supplier account without waiting for the vendor list', () => {
+    const result = resolvePoBoardRccpVendor({
+      isSupplier: true,
+      supplierAccount: 'V000622',
+      filterByColumn: { vendorName: { operator: 'equals', value: 'Ladrical, Unipessoal, Lda' } },
+      vendorsReady: false,
+    });
+    expect(result).toBe('V000622');
   });
 });

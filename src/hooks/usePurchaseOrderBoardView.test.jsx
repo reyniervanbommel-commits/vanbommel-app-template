@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePurchaseOrderTableView } from './usePurchaseOrderTableView';
 import { usePurchaseOrderBoardView } from './usePurchaseOrderBoardView';
 import { usePurchaseOrderGrouping } from './usePurchaseOrderGrouping';
+
+vi.mock('./useAppToast', () => ({
+  useAppToast: () => ({ notifyError: vi.fn() }),
+}));
 
 const COLUMNS = [
   { key: 'status', dataType: 'text', label: 'Status' },
@@ -133,6 +137,22 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.columnSums.summedValuesByColumn).toEqual({ amount: 30 });
   });
 
+  it('keeps columnSumKeys when a filter overlay is applied in the same tick', () => {
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
+
+    act(() => {
+      result.current.applyFilterSortGrouping({ columnSumKeys: ['amount'] });
+      const exported = result.current.exportFilterSortGrouping();
+      result.current.applyFilterSortGrouping({
+        ...exported,
+        filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+      });
+    });
+
+    expect(result.current.columnSums.columnSumKeys).toEqual(['amount']);
+    expect(result.current.filterByColumn.status.value).toBe('Open');
+  });
+
   it('drops unknown columnSumKeys from an old or stale view', () => {
     const { result } = renderHook(() => usePurchaseOrderBoardView({ items: ITEMS, columns: COLUMNS }));
 
@@ -199,6 +219,20 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     });
     expect(result.current.kpiFilterKey).toBeNull();
     expect(result.current.processedItems).toHaveLength(2);
+  });
+
+  it('shows on-time units in received columns while a KPI filter is active', () => {
+    const items = [{
+      orderNumber: 'PO-1',
+      dataAreaId: 'nl',
+      values: { receivedQty: 1453, orderedQty: 1453 },
+    }];
+    const { result } = renderHook(() => usePurchaseOrderBoardView({ items, columns: COLUMNS }));
+    act(() => {
+      result.current.applyKpiFilter('onTime', new Set(['PO-1']), { qtyOverlay: { 'PO-1': 1 } });
+    });
+    expect(result.current.processedItems[0].values.receivedQty).toBe(1);
+    expect(result.current.processedItems[0].values.orderedQty).toBe(1453);
   });
 });
 

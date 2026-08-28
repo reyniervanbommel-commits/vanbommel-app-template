@@ -62,6 +62,7 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
             variant="flyout"
             config={settings.config}
             columns={settings.columns}
+            itemColumns={settings.itemColumns}
             statusOptions={settings.statusOptions}
             onUpdateField={settings.updateField}
           />

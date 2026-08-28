@@ -38,6 +38,21 @@ describe('usePurchaseOrderColumnSums', () => {
     expect(result.current.exportKeys()).toEqual(['amount']);
   });
 
+  it('keeps applied keys while the column catalog is still empty', () => {
+    const { result, rerender } = renderHook(
+      ({ columns }) => usePurchaseOrderColumnSums({ rows: ROWS, columns }),
+      { initialProps: { columns: [] } },
+    );
+
+    act(() => {
+      result.current.applyKeys(['amount']);
+    });
+    expect(result.current.columnSumKeys).toEqual(['amount']);
+
+    rerender({ columns: COLUMNS });
+    expect(result.current.columnSumKeys).toEqual(['amount']);
+  });
+
   it('clears keys and round-trips empty apply to a stable empty array', () => {
     const { result } = renderHook(() => usePurchaseOrderColumnSums({ rows: ROWS, columns: COLUMNS }));
 

@@ -1,4 +1,5 @@
 import { startTransition, useCallback } from 'react';
+import { isRemarksSearchTermValid } from '../utils/tableViewFilterUtils';
 
 function persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue) {
   onSetValue(columnKey, draft.value);
@@ -20,6 +21,7 @@ export function usePurchaseOrderSortFilterActions({
   onClearFilter,
   setDraft,
   setOpen,
+  columnDataType,
 }) {
   const setSortAsc = useCallback(() => {
     onSetSortDirection(columnKey, 'asc');
@@ -57,6 +59,7 @@ export function usePurchaseOrderSortFilterActions({
   }, [setDraft]);
 
   const handleApplyFilter = useCallback(() => {
+    if (columnDataType === 'remarks' && !isRemarksSearchTermValid(draft.value)) return;
     const patch = {
       operator: draft.operator,
       value: draft.value,
@@ -71,7 +74,7 @@ export function usePurchaseOrderSortFilterActions({
       }
     });
     setOpen(false);
-  }, [columnKey, draft, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
+  }, [columnDataType, columnKey, draft, onApplyFilter, onSetOperator, onSetSecondaryValue, onSetValue, setOpen]);
 
   // Gebruikt voor auto-apply vanuit de value picker na een suggestie-klik.
   // Neemt de nieuwe waarde direct mee zodat de draft-closure niet stale is.
