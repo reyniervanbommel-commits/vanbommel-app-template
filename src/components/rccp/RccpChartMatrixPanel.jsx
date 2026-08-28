@@ -19,7 +19,13 @@ import {
   RCCP_WEEK_COL_WIDTH,
   resolveChartWeekRangeBounds,
 } from './rccpUtils';
-import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
+import {
+  applyPlanningDateRowToggle,
+  mergeChartVisibleKeys,
+  overlayPlanningDateSwitches,
+  planningDateFromMeasureKey,
+  sortRccpMatrixRows,
+} from './rccpMatrixRows';
 import RccpLinkedHScroll from './RccpLinkedHScroll';
 
 const useStyles = makeStyles({
@@ -45,7 +51,8 @@ const useStyles = makeStyles({
 
 function isStackRow(row) {
   return Boolean(
-    row?.isOpen || row?.isDelivered || row?.isConfirmedDelivery || row?.isRequestedDelivery,
+    row?.isOpen || row?.isDelivered || row?.isConfirmedDelivery
+      || row?.isRequestedDelivery || row?.isPlanningDateGroup,
   );
 }
 
@@ -87,6 +94,7 @@ function RccpChartMatrixPanel({
     [periodHeaders.length],
   );
 
+  const planningDate = visibility?.planningDate === 'confirmed' ? 'confirmed' : 'requested';
   const [visibleKeys, setVisibleKeys] = useState({});
   const [hoveredSegment, setHoveredSegment] = useState(null);
   const hoverBoxRef = useRef(null);
@@ -112,6 +120,11 @@ function RccpChartMatrixPanel({
   }, [orderedRows, visibility, visibility?.savedKeys, visibility?.ready]);
 
   const handleToggle = useCallback((measureKey, checked) => {
+    if (planningDateFromMeasureKey(measureKey)) {
+      const next = applyPlanningDateRowToggle(measureKey, checked, visibility?.planningDate);
+      if (next !== visibility?.planningDate) visibility?.onPlanningDateChange?.(next);
+      return;
+    }
     setVisibleKeys((prev) => {
       const next = { ...prev, [measureKey]: checked };
       visibility?.onChange?.(next);
@@ -137,6 +150,10 @@ function RccpChartMatrixPanel({
     highlightItem,
   }), [handleSegmentHover, parentOnClick, highlightItem]);
 
+  const matrixVisibleKeys = useMemo(
+    () => overlayPlanningDateSwitches(visibleKeys, matrixRows, planningDate),
+    [visibleKeys, matrixRows, planningDate],
+  );
   const openRow = useMemo(() => orderedRows.find((row) => row.isOpen), [orderedRows]);
   const deliveredRow = useMemo(() => orderedRows.find((row) => row.isDelivered), [orderedRows]);
   const receivedColor = useMemo(
@@ -205,7 +222,7 @@ function RccpChartMatrixPanel({
           measureRows={matrixRows}
           periods={periods}
           cellMap={cellMap}
-          visibleKeys={visibleKeys}
+          visibleKeys={matrixVisibleKeys}
           onToggleVisible={handleToggle}
           onCellClick={onCellClick}
           interactive={interactive}

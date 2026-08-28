@@ -22,7 +22,6 @@ import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import RccpWeekWindowFields from './RccpWeekWindowFields';
 import RccpItemFilter from './RccpItemFilter';
-import RccpPlanningDateSwitch from './RccpPlanningDateSwitch';
 import { useRccpItemFilter } from './useRccpItemFilter';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import {
@@ -122,7 +121,9 @@ export default function RccpPageContent() {
     savedKeys: chartVisibleKeys,
     onChange: setChartVisibleKeys,
     ready: windowLoaded,
-  }), [chartVisibleKeys, setChartVisibleKeys, windowLoaded]);
+    planningDate: planning.date,
+    onPlanningDateChange: planning.setDate,
+  }), [chartVisibleKeys, setChartVisibleKeys, windowLoaded, planning.date, planning.setDate]);
 
   const chartView = useMemo(() => resolveRccpChartView({
     grain: periodGrain,
@@ -197,10 +198,6 @@ export default function RccpPageContent() {
             onChange={handleItemChange}
             items={itemNumbers}
           />
-        )}
-        {activeTab === 'dashboard' && (analysis?.config?.confirmedDateColumnKey
-          || measureRows.some((row) => row.isConfirmedDelivery)) && (
-          <RccpPlanningDateSwitch value={planning.date} onChange={planning.setDate} />
         )}
         {activeTab === 'dashboard' && (
           <RccpWeekWindowFields

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
+import {
+  applyPlanningDateRowToggle,
+  mergeChartVisibleKeys,
+  overlayPlanningDateSwitches,
+  sortRccpMatrixRows,
+} from './rccpMatrixRows';
 
 describe('sortRccpMatrixRows', () => {
   it('orders ordered, received, remaining, capacity, overcapacity', () => {
@@ -16,6 +21,7 @@ describe('sortRccpMatrixRows', () => {
       'ordered',
       'delivered',
       'open',
+      '__planning_date__',
       '__requested_delivery__',
       '__confirmed_delivery__',
       '__capacity__',
@@ -32,6 +38,31 @@ describe('sortRccpMatrixRows', () => {
       'ordered',
       '__warning__',
     ]);
+  });
+});
+
+describe('planning-date row toggles', () => {
+  const rows = [
+    { measureKey: '__requested_delivery__', isRequestedDelivery: true },
+    { measureKey: '__confirmed_delivery__', isConfirmedDelivery: true },
+  ];
+
+  it('turns confirmed on and requested off, and ignores turning the active row off', () => {
+    expect(applyPlanningDateRowToggle('__confirmed_delivery__', true, 'requested')).toBe('confirmed');
+    expect(applyPlanningDateRowToggle('__requested_delivery__', true, 'confirmed')).toBe('requested');
+    expect(applyPlanningDateRowToggle('__confirmed_delivery__', false, 'confirmed')).toBe('confirmed');
+    expect(applyPlanningDateRowToggle('open', true, 'requested')).toBe('requested');
+  });
+
+  it('checks only the active planning-date row', () => {
+    expect(overlayPlanningDateSwitches({}, rows, 'confirmed')).toEqual({
+      __requested_delivery__: false,
+      __confirmed_delivery__: true,
+    });
+    expect(overlayPlanningDateSwitches({}, rows, 'requested')).toEqual({
+      __requested_delivery__: true,
+      __confirmed_delivery__: false,
+    });
   });
 });
 

@@ -92,6 +92,11 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  nestedName: { paddingLeft: tokens.spacingHorizontalM },
+  groupHeader: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    fontWeight: tokens.fontWeightSemibold,
+  },
   switchWrap: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -111,7 +116,7 @@ const useStyles = makeStyles({
   },
 });
 
-function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle }) {
+function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle, planningDate }) {
   const handleChange = useCallback((_, data) => {
     onToggle(measureKey, Boolean(data.checked));
   }, [measureKey, onToggle]);
@@ -121,7 +126,7 @@ function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle }
         checked={Boolean(checked)}
         onChange={handleChange}
         size="small"
-        aria-label={`Show ${label} in chart`}
+        aria-label={planningDate ? `Use ${label} as planning date` : `Show ${label} in chart`}
       />
     </span>
   );
@@ -185,9 +190,25 @@ function RccpMatrixTable({
       </TableHeader>
       <TableBody>
         {measureRows.map((row) => {
+          if (row.isPlanningDateGroup) {
+            return (
+              <TableRow key={row.measureKey}>
+                <TableCell className={mergeClasses(styles.sticky, styles.groupHeader)}>
+                  <span className={styles.rowName}>{row.label}</span>
+                </TableCell>
+                {periodHeaders.map((period) => (
+                  <TableCell
+                    key={period.key}
+                    className={mergeClasses(styles.weekCol, styles.groupHeader)}
+                  />
+                ))}
+              </TableRow>
+            );
+          }
           const isCapacity = row.measureKey === RCCP_CAPACITY_MEASURE_KEY;
           const isOvercapacity = row.measureKey === RCCP_OVERCAPACITY_MEASURE_KEY;
           const isDerived = isCapacity || isOvercapacity;
+          const isPlanningDate = Boolean(row.isRequestedDelivery || row.isConfirmedDelivery);
           return (
             <TableRow key={row.measureKey} className={styles.bodyRow}>
               <TableCell className={styles.sticky}>
@@ -199,9 +220,15 @@ function RccpMatrixTable({
                       label={row.label}
                       checked={Boolean(visibleKeys?.[row.measureKey])}
                       onToggle={onToggleVisible}
+                      planningDate={isPlanningDate}
                     />
                   ) : null}
-                  <span className={styles.rowName} title={row.label}>{row.label}</span>
+                  <span
+                    className={mergeClasses(styles.rowName, isPlanningDate && styles.nestedName)}
+                    title={row.label}
+                  >
+                    {row.label}
+                  </span>
                 </div>
               </TableCell>
               {periodHeaders.map((period) => {
