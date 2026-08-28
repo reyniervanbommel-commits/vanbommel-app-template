@@ -136,7 +136,7 @@ function RccpSettingsDataFields({
         <ColumnSelect
           compact={compact}
           label="Receipt date"
-          info="Date used to place received quantity below the axis. If empty, the delivery date is used."
+          info="Date used to place actually delivered quantity below the axis. Empty or 1-1-1900 is not shown below the axis."
           value={config.receiptDateColumnKey || ''}
           onChange={onReceiptDate}
           columns={columns}

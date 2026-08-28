@@ -2,6 +2,7 @@ import {
   RCCP_CAPACITY_MEASURE_KEY,
   RCCP_CONFIRMED_DELIVERY_MEASURE_KEY,
   RCCP_OVERCAPACITY_MEASURE_KEY,
+  overcapacityStatus,
 } from './rccpUtils';
 
 function qtyInWeek(cells, year, week, measureKey) {
@@ -44,12 +45,13 @@ export function applyRccpPlanningDateView(analysis, planningDate) {
       analysis.cells, cell.periodYear, cell.isoWeek, RCCP_CONFIRMED_DELIVERY_MEASURE_KEY,
     );
     const over = available - load;
+    const status = overcapacityStatus(over);
     return {
       ...cell,
       confirmedQty: over,
       remainingQty: over,
-      statusColor: over < 0 ? 'red' : 'green',
-      statusLabel: over < 0 ? 'Shortage' : 'OK',
+      statusColor: status.color,
+      statusLabel: status.label,
     };
   });
 

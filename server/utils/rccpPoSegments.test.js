@@ -70,15 +70,33 @@ describe('buildPoSegments', () => {
     expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
   });
 
-  it('falls back to the planned week below the axis when receipt date is empty', () => {
+  it('does not place received below the axis without an actual receipt date', () => {
     const config = { ...baseConfig, receiptDateColumnKey: '' };
     const byWeek = buildPoSegments([row({ line: { productReceiptDate: '' } })], config, window, {
       now: nowCurrent,
     });
-    expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([
-      seg('SKU-1', 4, 'received', false),
-    ]);
+    expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([]);
+  });
+
+  it('skips empty and sentinel receipt dates below the axis', () => {
+    const empty = buildPoSegments([row({ line: { productReceiptDate: '' } })], baseConfig, window, {
+      now: nowCurrent,
+    });
+    const sentinel = buildPoSegments(
+      [row({ line: { productReceiptDate: '1900-01-01T00:00:00.000Z' } })],
+      baseConfig,
+      window,
+      { now: nowCurrent },
+    );
+    expect(empty.get(plannedWeek.key).segmentsBelow).toEqual([]);
+    expect(empty.get(receivedWeek.key).segmentsBelow).toEqual([]);
+    expect(sentinel.get(plannedWeek.key).segmentsBelow).toEqual([]);
+    expect(sentinel.get(receivedWeek.key).segmentsBelow).toEqual([]);
+    expect(empty.get(plannedWeek.key).segmentsAbove).toEqual([
+      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 10, 'open', false),
+    ]);
   });
 
   it('marks open as late when the planned week is strictly before now', () => {

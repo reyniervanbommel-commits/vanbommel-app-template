@@ -13,6 +13,13 @@ export function statusToken(color) {
   }
 }
 
+export function overcapacityStatus(over) {
+  const qty = Number(over) || 0;
+  if (qty < 0) return { color: 'red', label: 'Shortage' };
+  if (qty >= 1) return { color: 'green', label: 'OK' };
+  return { color: 'grey', label: 'Even' };
+}
+
 export function formatWeekLabel(year, week) {
   return `${year}-W${String(week).padStart(2, '0')}`;
 }

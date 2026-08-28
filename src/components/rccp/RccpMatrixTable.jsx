@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
   Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow,
-  Text, Switch, makeStyles, mergeClasses, tokens, shorthands,
+  Text, makeStyles, mergeClasses, tokens, shorthands,
 } from '@fluentui/react-components';
 import {
   buildMatrixPeriodHeaders,
@@ -15,6 +15,7 @@ import {
   statusToken,
 } from './rccpUtils';
 import { isCurrentMatrixPeriod } from './rccpPoStack';
+import RccpMatrixRowToggle from './RccpMatrixRowToggle';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -85,25 +86,10 @@ const useStyles = makeStyles({
   },
   weekHeaderLabel: { fontWeight: tokens.fontWeightSemibold },
   mondayHeader: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
-  rowLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalSNudge),
-    minWidth: 0,
-  },
   rowName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  nestedName: { paddingLeft: tokens.spacingHorizontalM },
   groupHeader: {
     backgroundColor: tokens.colorNeutralBackground2,
     fontWeight: tokens.fontWeightSemibold,
-  },
-  switchWrap: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    flexShrink: 0,
-    transform: 'scale(0.7)',
-    transformOrigin: 'center left',
-    marginRight: '-10px',
   },
   qty: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
   cellInteractive: { cursor: 'pointer' },
@@ -114,23 +100,14 @@ const useStyles = makeStyles({
   bodyRow: {
     ':hover td:first-child': { backgroundColor: tokens.colorNeutralBackground1Hover },
   },
+  activeSticky: {
+    backgroundColor: tokens.colorBrandBackground2,
+    boxShadow: `inset 3px 0 0 0 ${tokens.colorBrandStroke1}`,
+  },
+  activeRow: {
+    ':hover td:first-child': { backgroundColor: tokens.colorBrandBackground2 },
+  },
 });
-
-function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle, planningDate }) {
-  const handleChange = useCallback((_, data) => {
-    onToggle(measureKey, Boolean(data.checked));
-  }, [measureKey, onToggle]);
-  return (
-    <span className={styles.switchWrap}>
-      <Switch
-        checked={Boolean(checked)}
-        onChange={handleChange}
-        size="small"
-        aria-label={planningDate ? `Use ${label} as planning date` : `Show ${label} in chart`}
-      />
-    </span>
-  );
-}
 
 function RccpMatrixTable({
   measureRows,
@@ -209,27 +186,25 @@ function RccpMatrixTable({
           const isOvercapacity = row.measureKey === RCCP_OVERCAPACITY_MEASURE_KEY;
           const isDerived = isCapacity || isOvercapacity;
           const isPlanningDate = Boolean(row.isRequestedDelivery || row.isConfirmedDelivery);
+          const isActivePlanning = isPlanningDate && Boolean(visibleKeys?.[row.measureKey]);
           return (
-            <TableRow key={row.measureKey} className={styles.bodyRow}>
-              <TableCell className={styles.sticky}>
-                <div className={styles.rowLabel}>
+            <TableRow
+              key={row.measureKey}
+              className={mergeClasses(styles.bodyRow, isActivePlanning && styles.activeRow)}
+            >
+              <TableCell className={mergeClasses(styles.sticky, isActivePlanning && styles.activeSticky)}>
                   {onToggleVisible ? (
-                    <MatrixVisibilitySwitch
-                      styles={styles}
+                    <RccpMatrixRowToggle
                       measureKey={row.measureKey}
                       label={row.label}
                       checked={Boolean(visibleKeys?.[row.measureKey])}
                       onToggle={onToggleVisible}
                       planningDate={isPlanningDate}
+                      nested={isPlanningDate}
                     />
-                  ) : null}
-                  <span
-                    className={mergeClasses(styles.rowName, isPlanningDate && styles.nestedName)}
-                    title={row.label}
-                  >
-                    {row.label}
-                  </span>
-                </div>
+                  ) : (
+                    <span className={styles.rowName} title={row.label}>{row.label}</span>
+                  )}
               </TableCell>
               {periodHeaders.map((period) => {
                 const periodToken = matrixPeriodToken(period);

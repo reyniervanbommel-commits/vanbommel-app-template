@@ -57,15 +57,15 @@ describe('resolveRccpChartView', () => {
   const cells = [
     {
       measureKey: 'open', periodYear: 2026, isoWeek: 10, vendorAccount: 'V1',
-      confirmedQty: 10, availableQty: 40, statusColor: 'green', statusLabel: 'OK',
+      confirmedQty: 10, availableQty: 40, statusColor: 'grey', statusLabel: 'N/A',
     },
     {
       measureKey: 'open', periodYear: 2026, isoWeek: 11, vendorAccount: 'V1',
-      confirmedQty: 30, availableQty: 40, statusColor: 'orange', statusLabel: 'Warning',
+      confirmedQty: 30, availableQty: 40, statusColor: 'grey', statusLabel: 'N/A',
     },
     {
       measureKey: 'open', periodYear: 2026, isoWeek: 12, vendorAccount: 'V1',
-      confirmedQty: 50, availableQty: 40, statusColor: 'red', statusLabel: 'Shortage',
+      confirmedQty: 50, availableQty: 40, statusColor: 'grey', statusLabel: 'N/A',
     },
   ];
 
@@ -102,7 +102,7 @@ describe('resolveRccpChartView', () => {
     ]);
     expect(view.cellMap.get('open|2026|3').confirmedQty).toBe(90);
     expect(view.cellMap.get('open|2026|3').availableQty).toBe(120);
-    expect(view.cellMap.get('open|2026|3').statusColor).toBe('red');
+    expect(view.cellMap.get('open|2026|3').statusColor).toBe('grey');
   });
 
   it('marks a month overloaded when summed load exceeds summed capacity', () => {

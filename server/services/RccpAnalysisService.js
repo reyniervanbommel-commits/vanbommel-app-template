@@ -11,7 +11,7 @@ const { CAPACITY_MEASURE_KEY, OVERCAPACITY_MEASURE_KEY, WARNING_MEASURE_KEY } = 
 // geen door de gebruiker toegevoegde measure maar een berekende regel.
 const OVERCAPACITY_COLOR = '#8764B8';
 const { getIsoWeek, getIsoWeekYear, buildWeekRange, isIsoWeekInWindow } = require('../utils/isoWeek');
-const { computeRccpStatus } = require('../utils/rccpStatus');
+const { computeRccpStatus, overcapacityStatus } = require('../utils/rccpStatus');
 const {
   toNumber,
   pickValue,
@@ -256,8 +256,8 @@ function buildMatrixCells({
           confirmedQty: confirmed,
           remainingQty: available - confirmed,
           utilPercent: status.utilPercent,
-          statusColor: status.color,
-          statusLabel: status.label,
+          statusColor: 'grey',
+          statusLabel: 'N/A',
         });
       }
 
@@ -305,6 +305,7 @@ function buildMatrixCells({
           openMeasureKey,
         });
         const over = available - openLoad;
+        const overStatus = overcapacityStatus(over);
         cells.push({
           vendorAccount: vendor,
           periodYear: period.year,
@@ -314,8 +315,8 @@ function buildMatrixCells({
           confirmedQty: over,
           remainingQty: over,
           utilPercent: null,
-          statusColor: over < 0 ? 'red' : 'green',
-          statusLabel: over < 0 ? 'Shortage' : 'OK',
+          statusColor: overStatus.color,
+          statusLabel: overStatus.label,
         });
       }
     }

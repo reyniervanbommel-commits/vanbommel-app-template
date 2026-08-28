@@ -27,4 +27,11 @@ function computeRccpStatus(available, confirmed, thresholds = {}) {
   return { color: 'red', label: 'Overloaded', utilPercent };
 }
 
-module.exports = { computeRccpStatus };
+function overcapacityStatus(over) {
+  const qty = Number(over) || 0;
+  if (qty < 0) return { color: 'red', label: 'Shortage' };
+  if (qty >= 1) return { color: 'green', label: 'OK' };
+  return { color: 'grey', label: 'Even' };
+}
+
+module.exports = { computeRccpStatus, overcapacityStatus };

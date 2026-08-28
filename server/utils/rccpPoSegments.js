@@ -93,7 +93,9 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
 
       const itemNumber = lineItemNumber(lineValues, masterValues);
       const plannedDate = lineDateValue(lineValues, masterValues, dateKey);
-      const receiptDate = (receiptKey && lineDateValue(lineValues, masterValues, receiptKey)) || plannedDate;
+      const receiptDate = receiptKey
+        ? lineDateValue(lineValues, masterValues, receiptKey)
+        : null;
       const share = details.length ? 1 / details.length : 1;
       const openQty = lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0;
       const deliveredQty = lineDelivered
@@ -113,7 +115,7 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
         }
       }
 
-      if (receiptDate && deliveredQty > 0) {
+      if (receiptDate && !isSentinelDate(receiptDate) && deliveredQty > 0) {
         const receiptYear = getIsoWeekYear(receiptDate);
         const receiptWeek = getIsoWeek(receiptDate);
         if (receiptYear && receiptWeek) {
@@ -163,16 +165,18 @@ function buildPoSegmentState(rows, config, window, { now, vendorAccount } = {}) 
     if (headerOnlyDelivered) {
       const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
       spreadHeaderQty(above, plannedSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
-      const receiptSlots = collectDateSlots(
-        details,
-        masterValues,
-        receiptKey || dateKey,
-        receiptKey ? dateKey : null,
-        window,
-        excludedSet,
-        masterStatus,
-      );
-      spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
+      if (receiptKey) {
+        const receiptSlots = collectDateSlots(
+          details,
+          masterValues,
+          receiptKey,
+          null,
+          window,
+          excludedSet,
+          masterStatus,
+        ).filter((slot) => !isSentinelDate(slot.dateValue));
+        spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
+      }
     }
     if (confirmedKey && (headerOnlyOpen || headerOnlyDelivered)) {
       const confirmedSlots = collectDateSlots(
