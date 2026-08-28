@@ -1,5 +1,6 @@
 export const KPI_FORMULAS = {
   ordered: 'open + delivered\non visible purchase-order lines',
+  dateCoverage: 'requested % = qty with a valid requested date / ordered × 100\nconfirmed % = qty with a valid confirmed date / ordered × 100\n1-1-1900 and missing dates are not dated',
   delivered: 'delivered\n% = delivered / ordered × 100',
   open: 'open\nitems = unique item numbers still open\n% = open / ordered × 100',
   lateDelivery: 'delivered where receipt date > comparison date\n(comparison = requested or confirmed planning date)\nitems = unique item numbers on those lines\n% = late / ordered × 100',

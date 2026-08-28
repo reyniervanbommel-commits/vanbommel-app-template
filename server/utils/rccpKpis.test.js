@@ -296,6 +296,20 @@ describe('rccpKpis', () => {
     expect(pair.windowed.totalOpen).toBe(10); // still in window via requested date
   });
 
+  it('reports requested and confirmed dated qty as percent of ordered', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
+    const dated = row({ line: { confirmedDlvDate: '2026-03-23T00:00:00.000Z' } });
+    const missing = row({
+      values: { vendorAccount: 'V001', status: 'Open' },
+      line: { confirmedDlvDate: '', openQty: 6, deliveredQty: 0, itemNumber: 'SKU-2' },
+    });
+    missing.recordKey = 'PO-B';
+    const kpis = buildRccpPoKpis([dated, missing], config, window, { now: nowCurrent, vendorAccount: 'V001' });
+    expect(kpis.totalOrdered).toBe(20);
+    expect(kpis.requestedPercent).toBe(100);
+    expect(kpis.confirmedPercent).toBe(70);
+  });
+
   it('treats missing confirmed date as planned1900, not late', () => {
     const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDlvDate' };
     const rows = [row({ line: { confirmedDlvDate: '', openQty: 10, deliveredQty: 0 } })];

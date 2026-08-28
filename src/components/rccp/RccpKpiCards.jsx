@@ -32,6 +32,17 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, planningDate }) {
         clickable={clickableSet.has('ordered')}
         onActivate={handleActivate}
       />
+      {kpis.requestedPercent != null && (
+        <KpiCard
+          kpiKey="dateCoverage"
+          label="Requested / confirmed"
+          pct={`${formatPct(kpis.requestedPercent)} requested`}
+          detail={`${formatPct(kpis.confirmedPercent)} confirmed`}
+          selected={false}
+          clickable={false}
+          onActivate={handleActivate}
+        />
+      )}
       <KpiCard
         kpiKey="delivered"
         label="Total delivered"

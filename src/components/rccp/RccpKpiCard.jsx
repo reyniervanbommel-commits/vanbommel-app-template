@@ -109,12 +109,14 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
         onKeyDown={clickable ? handleKeyDown : undefined}
       >
         <Text className={styles.label}>{label}</Text>
-        <div className={styles.valueRow}>
-          {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-          <Text className={styles.value}>{formatQty(qty)}</Text>
-          {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-          {aside ? <Text className={styles.aside}>{aside}</Text> : null}
-        </div>
+        {(hasQty(qty) || aside) ? (
+          <div className={styles.valueRow}>
+            {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+            {hasQty(qty) ? <Text className={styles.value}>{formatQty(qty)}</Text> : null}
+            {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+            {aside ? <Text className={styles.aside}>{aside}</Text> : null}
+          </div>
+        ) : null}
         {pct ? <Text className={styles.pct}>{pct}</Text> : null}
         {detail ? <Text className={styles.detail}>{detail}</Text> : null}
       </Card>

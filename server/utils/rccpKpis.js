@@ -72,6 +72,11 @@ function visitUniverseLine(acc, line, nowYear, nowWeek, planningDate = 'requeste
   acc.totalDelivered += line.deliveredQty;
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
+  const orderedQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
+  if (orderedQty > 0) {
+    if (line.plannedDate && !isSentinelDate(line.plannedDate)) acc.requestedDatedUnits += orderedQty;
+    if (line.confirmedDate && !isSentinelDate(line.confirmedDate)) acc.confirmedDatedUnits += orderedQty;
+  }
   const compareDate = planningDate === 'confirmed' ? line.confirmedDate : line.plannedDate;
   const confirmedMissing = planningDate === 'confirmed' && (!compareDate || isSentinelDate(compareDate));
   if (confirmedMissing || isSentinelDate(compareDate)) {
@@ -117,6 +122,8 @@ function emptyAcc(now) {
     openLateUnits: 0,
     planned1900Units: 0,
     planned1900Skus: new Set(),
+    requestedDatedUnits: 0,
+    confirmedDatedUnits: 0,
   };
 }
 
@@ -278,6 +285,8 @@ function summarizeAcc(acc) {
     openLateAvgDays: mean(acc.openLateDays),
     planned1900Units: acc.planned1900Units,
     planned1900ItemCount: acc.planned1900Skus.size,
+    requestedPercent: percentOf(acc.requestedDatedUnits, totalOrdered),
+    confirmedPercent: percentOf(acc.confirmedDatedUnits, totalOrdered),
   };
 }
 
