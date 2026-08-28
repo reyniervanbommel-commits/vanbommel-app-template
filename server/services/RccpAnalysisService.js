@@ -25,8 +25,11 @@ const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = re
 const { parsePlanningDate } = require('../utils/rccpPlanningDate');
 const {
   CONFIRMED_DELIVERY_MEASURE_KEY,
+  REQUESTED_DELIVERY_MEASURE_KEY,
   appendConfirmedDeliveryRow,
+  appendRequestedDeliveryRow,
   matchConfirmedDeliveryDrill,
+  matchRequestedDeliveryDrill,
   openLoadForOvercapacity,
 } = require('../utils/rccpConfirmedLoad');
 
@@ -368,7 +371,8 @@ function buildMatrixCells({
 function buildChartSeries(cells, periods, measureRows) {
   // Open/remaining measures (niet delivered, niet afgeleid) voor de overload-berekening.
   const userLoadKeys = measureRows
-    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered && !r.isConfirmedDelivery)
+    .filter((r) => !r.isCapacity && !r.isOvercapacity && !r.isWarning && !r.isDelivered
+      && !r.isConfirmedDelivery && !r.isRequestedDelivery)
     .map((r) => r.measureKey);
 
   return periods.map(({ year, week, key }) => {
@@ -452,6 +456,14 @@ async function analyze({
     vendorFilter: effectiveVendor,
   });
   if (String(config.confirmedDateColumnKey || '').trim()) {
+    appendRequestedDeliveryRow({
+      cells,
+      measureRows,
+      confirmedByCell,
+      openMeasureKey: config.openMeasureKey,
+      periods,
+      vendorFilter: effectiveVendor,
+    });
     appendConfirmedDeliveryRow({
       cells,
       measureRows,
@@ -570,6 +582,12 @@ function buildDrillDownRows(rows, config, cell, window) {
   if (measureKey === CONFIRMED_DELIVERY_MEASURE_KEY) {
     for (const row of rows) {
       result.push(...matchConfirmedDeliveryDrill(row, cell, config, window));
+    }
+    return result;
+  }
+  if (measureKey === REQUESTED_DELIVERY_MEASURE_KEY) {
+    for (const row of rows) {
+      result.push(...matchRequestedDeliveryDrill(row, cell, config, window));
     }
     return result;
   }

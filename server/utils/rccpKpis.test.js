@@ -347,4 +347,18 @@ describe('rccpKpis', () => {
     expect(kpis.capacityShortfall).toBe(20);
     expect(kpis.overloadedWeeks).toBe(1);
   });
+
+  it('excludes the requested-delivery synthetic row from capacity load', () => {
+    const chart = [
+      { key: '2026-W11', openQty: 80, __requested_delivery__: 80, __capacity__: 100 },
+    ];
+    const measureRows = [
+      { measureKey: 'openQty' },
+      { measureKey: '__requested_delivery__', isRequestedDelivery: true },
+      { measureKey: '__capacity__', isCapacity: true },
+    ];
+    const kpis = buildRccpCapacityKpis(chart, measureRows, '__capacity__');
+    expect(kpis.capacityShortfall).toBe(0);
+    expect(kpis.overloadedWeeks).toBe(0);
+  });
 });

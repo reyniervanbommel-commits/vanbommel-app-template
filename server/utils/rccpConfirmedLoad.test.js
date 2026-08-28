@@ -3,10 +3,13 @@
 const { getIsoWeek, getIsoWeekYear, isoWeekKey } = require('./isoWeek');
 const {
   CONFIRMED_DELIVERY_MEASURE_KEY,
+  REQUESTED_DELIVERY_MEASURE_KEY,
   buildFactoryConfirmedByCell,
   buildConfirmedDeliveryCells,
   appendConfirmedDeliveryRow,
+  appendRequestedDeliveryRow,
   matchConfirmedDeliveryDrill,
+  matchRequestedDeliveryDrill,
   openLoadForOvercapacity,
 } = require('./rccpConfirmedLoad');
 const { buildRccpCapacityKpis } = require('./rccpKpis');
@@ -85,6 +88,71 @@ describe('rccpConfirmedLoad', () => {
         confirmedQty: 10,
       }),
     ]);
+  });
+
+  it('appends a Requested delivery row on the requested week', () => {
+    const cells = [];
+    const measureRows = [];
+    appendRequestedDeliveryRow({
+      cells,
+      measureRows,
+      confirmedByCell: new Map([
+        [`V001|${plannedWeek.year}|${plannedWeek.week}|openQty`, 10],
+        [`V001|${confirmedWeek.year}|${confirmedWeek.week}|openQty`, 0],
+      ]),
+      openMeasureKey: 'openQty',
+      periods: [
+        { year: plannedWeek.year, week: plannedWeek.week, key: plannedWeek.key },
+        { year: confirmedWeek.year, week: confirmedWeek.week, key: confirmedWeek.key },
+      ],
+      vendorFilter: 'V001',
+    });
+    expect(measureRows).toEqual([
+      expect.objectContaining({
+        measureKey: REQUESTED_DELIVERY_MEASURE_KEY,
+        label: 'Requested delivery',
+        showInChart: false,
+        isRequestedDelivery: true,
+      }),
+    ]);
+    expect(cells).toEqual([
+      expect.objectContaining({
+        measureKey: REQUESTED_DELIVERY_MEASURE_KEY,
+        periodYear: plannedWeek.year,
+        isoWeek: plannedWeek.week,
+        confirmedQty: 10,
+      }),
+      expect.objectContaining({
+        measureKey: REQUESTED_DELIVERY_MEASURE_KEY,
+        periodYear: confirmedWeek.year,
+        isoWeek: confirmedWeek.week,
+        confirmedQty: 0,
+      }),
+    ]);
+  });
+
+  it('matches requested-delivery drill on the requested week', () => {
+    const onRequested = matchRequestedDeliveryDrill(row(), {
+      vendorAccount: 'V001',
+      periodYear: plannedWeek.year,
+      isoWeek: plannedWeek.week,
+      measureKey: '__requested_delivery__',
+    }, baseConfig, window);
+    expect(onRequested).toEqual([
+      expect.objectContaining({
+        orderNumber: 'PO-A',
+        itemNumber: 'SKU-1',
+        quantity: 10,
+        deliveryDate: planned,
+      }),
+    ]);
+    const onConfirmed = matchRequestedDeliveryDrill(row(), {
+      vendorAccount: 'V001',
+      periodYear: confirmedWeek.year,
+      isoWeek: confirmedWeek.week,
+      measureKey: '__requested_delivery__',
+    }, baseConfig, window);
+    expect(onConfirmed).toEqual([]);
   });
 
   it('appends the extra row onto existing matrix cells', () => {

@@ -328,7 +328,8 @@ function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount } = {}) {
 
 function buildRccpCapacityKpis(chart, measureRows, capacityMeasureKey) {
   const openKeys = (measureRows || [])
-    .filter((row) => !row.isCapacity && !row.isOvercapacity && !row.isWarning && !row.isDelivered && !row.isConfirmedDelivery)
+    .filter((row) => !row.isCapacity && !row.isOvercapacity && !row.isWarning && !row.isDelivered
+      && !row.isConfirmedDelivery && !row.isRequestedDelivery)
     .map((row) => row.measureKey);
   let capacityShortfall = 0;
   let overloadedWeeks = 0;

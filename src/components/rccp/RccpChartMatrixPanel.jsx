@@ -44,7 +44,9 @@ const useStyles = makeStyles({
 });
 
 function isStackRow(row) {
-  return Boolean(row?.isOpen || row?.isDelivered || row?.isConfirmedDelivery);
+  return Boolean(
+    row?.isOpen || row?.isDelivered || row?.isConfirmedDelivery || row?.isRequestedDelivery,
+  );
 }
 
 function RccpChartMatrixPanel({
