@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { columnUsesNumberSemantics } from '../utils/datePeriodColumnUtils';
+import { readLastPoTableSession } from '../utils/poTableSessionState';
 import {
   buildFilterFromCellValue,
   columnValueMatchesFilter,
@@ -67,8 +68,14 @@ function compareValues(a, b, column, datePeriodDisplayModes = {}) {
 }
 
 export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {}, columnFormatRules = {} }) {
-  const [sortState, setSortState] = useState({ columnKey: '', direction: SORT_DIRECTIONS.none });
-  const [filterByColumn, setFilterByColumn] = useState({});
+  const [sortState, setSortState] = useState(() => {
+    const last = readLastPoTableSession()?.sortState;
+    return last && typeof last === 'object' ? last : { columnKey: '', direction: SORT_DIRECTIONS.none };
+  });
+  const [filterByColumn, setFilterByColumn] = useState(() => {
+    const last = readLastPoTableSession()?.filterByColumn;
+    return last && typeof last === 'object' ? last : {};
+  });
   // Keep header filter chips snappy; defer the heavy filter→sort pass for board rows.
   const deferredFilterByColumn = useDeferredValue(filterByColumn);
 
