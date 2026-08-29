@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { Text } from '@fluentui/react-components';
 import { LockClosedRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
@@ -10,6 +10,7 @@ export default function PurchaseOrderColumnFilterMenuTitleRow({
   columnLabel,
   columnTypeMeta,
   columnSourceMeta,
+  columnLevel = 'header',
   connectionTargets = [],
   canRenameColumn,
   handleRenameColumn,
@@ -21,52 +22,39 @@ export default function PurchaseOrderColumnFilterMenuTitleRow({
   const normalizedConnectionTargets = Array.isArray(connectionTargets)
     ? connectionTargets.filter((target) => String(target || '').trim())
     : [];
-  const [connectionsExpanded, setConnectionsExpanded] = useState(false);
-
-  const toggleConnections = useCallback(() => {
-    setConnectionsExpanded((prev) => !prev);
-  }, []);
 
   return (
-    <>
-      <div className={styles.titleRow}>
-        <span className={styles.titleLabelWrap}>
-          <PurchaseOrderColumnSourceIndicator
-            sourceMeta={resolvedSourceMeta}
-            connectionTargets={normalizedConnectionTargets}
-            connectionsExpanded={connectionsExpanded}
-            onToggleConnections={toggleConnections}
-          />
-          {canRenameColumn ? (
-            <PurchaseOrderColumnFilterMenuButton
-              className={styles.titleLabelButton}
-              appearance="transparent"
-              size="small"
-              closeSubmenu={closeSubmenu}
-              onClick={handleRenameColumn}
-              aria-label={`Rename column ${columnLabel}`}
-            >
-              <Text className={styles.fieldTitle}>{columnLabel}</Text>
-            </PurchaseOrderColumnFilterMenuButton>
-          ) : (
+    <div className={styles.titleRow}>
+      <span className={styles.titleLabelWrap}>
+        <PurchaseOrderColumnSourceIndicator
+          sourceMeta={resolvedSourceMeta}
+          columnLevel={columnLevel}
+          connectionTargets={normalizedConnectionTargets}
+        />
+        {canRenameColumn ? (
+          <PurchaseOrderColumnFilterMenuButton
+            className={styles.titleLabelButton}
+            appearance="transparent"
+            size="small"
+            closeSubmenu={closeSubmenu}
+            onClick={handleRenameColumn}
+            aria-label={`Rename column ${columnLabel}`}
+          >
             <Text className={styles.fieldTitle}>{columnLabel}</Text>
-          )}
-          {showWritebackLocked ? (
-            <LockClosedRegular className={styles.titleLockIcon} aria-label="Write-back not available" />
-          ) : null}
+          </PurchaseOrderColumnFilterMenuButton>
+        ) : (
+          <Text className={styles.fieldTitle}>{columnLabel}</Text>
+        )}
+        {showWritebackLocked ? (
+          <LockClosedRegular className={styles.titleLockIcon} aria-label="Write-back not available" />
+        ) : null}
+      </span>
+      <span className={styles.typeMeta}>
+        <span className={styles.typeIcon} aria-hidden>
+          {renderColumnTypeIcon(resolvedTypeMeta.key)}
         </span>
-        <span className={styles.typeMeta}>
-          <span className={styles.typeIcon} aria-hidden>
-            {renderColumnTypeIcon(resolvedTypeMeta.key)}
-          </span>
-          <span className={styles.typeText} data-testid="column-type-label">{resolvedTypeMeta.label}</span>
-        </span>
-      </div>
-      {connectionsExpanded && normalizedConnectionTargets.length ? (
-        <ul className={styles.inlineConnectionList}>
-          {normalizedConnectionTargets.map((target) => <li key={target}>{target}</li>)}
-        </ul>
-      ) : null}
-    </>
+        <span className={styles.typeText} data-testid="column-type-label">{resolvedTypeMeta.label}</span>
+      </span>
+    </div>
   );
 }

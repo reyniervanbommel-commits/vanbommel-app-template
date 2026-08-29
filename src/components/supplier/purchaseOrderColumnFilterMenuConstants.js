@@ -1,6 +1,7 @@
 import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
 import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
 import { COLOR_FILTER_OPERATOR, hasActiveFilter } from '../../utils/tableViewFilterUtils';
+import { formatColumnOriginTooltip, getColumnOriginMeta } from '../../utils/columnOriginMeta';
 import {
   FORMAT_RULE_COLOR_PALETTE,
   FORMAT_RULE_OPERATORS,
@@ -37,18 +38,12 @@ const COLUMN_TYPE_META = {
   date_period: { key: 'date_period', label: 'Date W/M' },
 };
 
-const COLUMN_SOURCE_META = {
-  d365: { key: 'd365', label: 'Dynamics 365' },
-  connected: { key: 'connected', label: 'Connected' },
-  formula: { key: 'formula', label: 'Formula' },
-  user: { key: 'user', label: 'Custom' },
-};
-
-export function getColumnSourceMeta(column, { isConnected = false, hasConnectionTargets = false } = {}) {
-  if (isConnected || hasConnectionTargets) return COLUMN_SOURCE_META.connected;
-  if (String(column?.formulaExpr || '').trim()) return COLUMN_SOURCE_META.formula;
-  if (column?.source !== 'custom') return COLUMN_SOURCE_META.d365;
-  return COLUMN_SOURCE_META.user;
+export function getColumnSourceMeta(column) {
+  const origin = getColumnOriginMeta(column);
+  return {
+    key: origin.key,
+    label: formatColumnOriginTooltip(origin),
+  };
 }
 
 export function getColumnTypeMeta(column) {
