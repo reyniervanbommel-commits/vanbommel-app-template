@@ -24,7 +24,11 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
-const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
+const {
+  loadRuntimeHeaderLinks,
+  loadStaffRuntimeHeaderLinks,
+  annotateAdminColumnsWithLineLinks,
+} = require('../utils/runtimeHeaderLinks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
@@ -50,6 +54,11 @@ const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWin
 const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
 const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
 const { accumulateChunkFetchProgress } = require('../utils/refreshProgress');
+const {
+  FORBIDDEN_HEADER_D365_FIELDS,
+  FORBIDDEN_LINE_D365_FIELDS,
+  buildD365SelectFields,
+} = require('../utils/d365SelectFields');
 const refreshRunService = require('./RefreshRunService');
 
 const MASTER_DETAIL_KEY = -1; // sentinel: master-rij / master-niveau custom-waarde
@@ -519,6 +528,9 @@ async function refreshRetainedPurchaseOrders({
       });
     },
   });
+  if (retainedResult.droppedSelectFields?.length) {
+    await applyDroppedSelectFields(table, retainedResult.droppedSelectFields);
+  }
   const retainedRecords = mapPurchaseOrderRecordsToCacheRecords(retainedResult.items, company);
   updateRefreshProgress(tableKey, {
     retainedPhase: 'saving',
@@ -575,8 +587,8 @@ async function resolvePurchaseOrderSelectFields(table) {
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
   ]);
   return {
-    selectFields: buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols),
-    lineSelectFields: buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols),
+    selectFields: buildD365SelectFields(REQUIRED_HEADER_D365_FIELDS, masterCols, FORBIDDEN_HEADER_D365_FIELDS),
+    lineSelectFields: buildD365SelectFields(REQUIRED_LINE_D365_FIELDS, detailCols, FORBIDDEN_LINE_D365_FIELDS),
   };
 }
 
@@ -593,6 +605,9 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
   const { selectFields, lineSelectFields } = await resolvePurchaseOrderSelectFields(table);
+  let activeSelectFields = selectFields;
+  let activeLineSelectFields = lineSelectFields;
+  const droppedSelectFields = [];
   const seen = new Map();
   let total = 0;
   let truncated = false;
@@ -614,9 +629,14 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
       onProgress: typeof onProgress === 'function'
         ? (progress) => onProgress(accumulateChunkFetchProgress(completedCount, progress, maxItems))
         : undefined,
-      selectFields,
-      lineSelectFields,
+      selectFields: activeSelectFields,
+      lineSelectFields: activeLineSelectFields,
     });
+    if (result.droppedSelectFields?.length) {
+      droppedSelectFields.push(...result.droppedSelectFields);
+      activeSelectFields = narrowSelectFields(activeSelectFields, result.droppedSelectFields);
+      activeLineSelectFields = narrowSelectFields(activeLineSelectFields, result.droppedSelectFields);
+    }
     total += Number(result.total) || 0;
     truncated = truncated || Boolean(result.truncated);
     for (const item of Array.isArray(result.items) ? result.items : []) {
@@ -627,6 +647,9 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   }
   const items = [...seen.values()];
   const records = mapPurchaseOrderRecordsToCacheRecords(items, company);
+  if (droppedSelectFields.length) {
+    await applyDroppedSelectFields(table, droppedSelectFields);
+  }
   return { records, total, truncated: Boolean(truncated) };
 }
 
@@ -645,9 +668,10 @@ const REQUIRED_HEADER_D365_FIELDS = [
   'PurchaseOrderName', 'PurchaseOrderStatus',
   'CurrencyCode', 'RequestedDeliveryDate', 'AccountingDate',
 ];
-// LET OP: alleen velden die écht op PurchaseOrderLineV2 bestaan. CurrencyCode en RequestedReceiptDate
-// bestaan NIET op deze regel-entiteit (geverifieerd via $metadata / #131-2) — ze in $select opnemen laat
-// D365 de hele query met 400 afwijzen (en brak zo de refresh sinds #177). De mapper valt netjes terug op null.
+// LET OP: alleen velden die écht op PurchaseOrderLineV2 bestaan. CurrencyCode, RequestedReceiptDate
+// en RemainingPurchasePhysicalQuantity bestaan NIET op deze regel-entiteit (LIVE 2026-08-29 /
+// $metadata #131-2) — ze in $select opnemen laat D365 de hele query met 400 afwijzen. De mapper
+// valt netjes terug op null. fetchPurchaseOrderRecords drop't ongeldige $select-velden na een 400.
 const REQUIRED_LINE_D365_FIELDS = [
   'PurchaseOrderNumber', 'LineNumber', 'ItemNumber', 'LineDescription',
   'OrderedPurchaseQuantity', 'PurchaseUnitSymbol', 'LineAmount',
@@ -965,20 +989,6 @@ async function getTableSyncFilter(table) {
   if (!rules.length) return '';
   const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
   return compileSyncRules(resolved);
-}
-
-// Bouwt de $select-lijst uit de verplichte velden + de source_field van de actieve bron-kolommen.
-// Retourneert ALTIJD een lijst (minimaal de verplichte sleutel-/watermerkvelden), zodat de board-sync
-// nooit de volledige bron-entiteit ophaalt. Veld-discovery loopt via het aparte discoverSourceFields-pad
-// (alle velden, kleine sample, geen cache-write) i.p.v. als neveneffect van een ongefilterde refresh.
-function buildD365SelectFields(requiredFields, columns) {
-  const fields = new Set(requiredFields);
-  for (const col of columns) {
-    if (col.source === 'source' && col.sourceField && !String(col.sourceField).startsWith('@')) {
-      fields.add(col.sourceField);
-    }
-  }
-  return [...fields];
 }
 
 function normalizeLookupKeyPart(value) {
@@ -1713,10 +1723,16 @@ async function dropIllegalSelectSourceColumns(table, droppedFields) {
   const protectedFields = new Set(uniqueFieldList([
     ...(table.keyFields || []),
     ...requiredMasterFieldsFromTable(table),
+    ...(table.key === 'purchase-orders' ? REQUIRED_HEADER_D365_FIELDS : []),
+    ...(table.key === 'purchase-orders' ? REQUIRED_LINE_D365_FIELDS : []),
   ]).map((field) => field.toLowerCase()));
   const removable = names.filter((name) => !protectedFields.has(name.toLowerCase()));
   if (!removable.length) return [];
-  const columns = await listColumns({ tableId: table.id, scope: 'master', includeInactive: true });
+  const [masterCols, detailCols] = await Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: true }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
+  ]);
+  const columns = [...masterCols, ...detailCols];
   const stale = columns.filter((column) => (
     column.source === 'source'
     && removable.some((name) => name.toLowerCase() === String(column.sourceField || '').toLowerCase())
@@ -2603,7 +2619,12 @@ function buildSyntheticLookupColumn({
     isActive: true,
     sortOrder: 9000,
     rccpMeasure: tc ? Boolean(tc.rccpMeasure) : false,
-    lookup: { targetTableKey, targetColumnKey: targetColKey },
+    lookup: {
+      targetTableKey,
+      targetColumnKey: targetColKey,
+      targetTableLabel,
+      targetColumnLabel: tc ? tc.label : targetColKey,
+    },
   };
 }
 
@@ -4885,12 +4906,15 @@ async function getDataModel(tableKey) {
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
   ]);
   // lookup-kolommen zijn afgeleid/read-only en horen niet in de admin-config.
-  const headerCols = masterCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
+  let headerCols = masterCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
   const lineCols = detailCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
 
   const hasDetail = Boolean(table.relation && table.relation.kind && table.relation.kind !== 'none');
+  // Alleen bij custom headerkolommen: markeer "push to header"-koppelingen. Draait parallel
+  // met de preview-queries en hergebruikt de 60s staff-links-cache — geen extra werk op het board.
+  const hasCustomHeader = headerCols.some((column) => column.source === 'custom');
 
-  const [headerPreviewRowsRes, linePreviewRowsRes] = await Promise.all([
+  const [headerPreviewRowsRes, linePreviewRowsRes, runtimeHeaderLinks] = await Promise.all([
     pool.request()
       .input('tableId', sql.BigInt, table.id)
       .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
@@ -4911,7 +4935,13 @@ async function getDataModel(tableKey) {
           ORDER BY synced_at DESC, record_key ASC, detail_key ASC
         `)
       : Promise.resolve({ recordset: [] }),
+    hasCustomHeader
+      ? time('dm_header_links', () => loadStaffRuntimeHeaderLinks(pool, table.key))
+      : Promise.resolve(null),
   ]);
+  if (runtimeHeaderLinks) {
+    headerCols = annotateAdminColumnsWithLineLinks(headerCols, runtimeHeaderLinks);
+  }
 
   const [baseUrl, company] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),

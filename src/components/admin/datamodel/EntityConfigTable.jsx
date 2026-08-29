@@ -20,10 +20,10 @@ import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import {
   BULK_TOGGLE_CONFIG,
   DATA_TYPE_LABELS,
+  columnMatchesFilter,
   createSampleByField,
   getExampleRowValues,
   lookupSampleValue,
-  matchesText,
   toExcelCellValue,
 } from './entityConfigTableUtils';
 
@@ -144,10 +144,7 @@ export default function EntityConfigTable({
   const handleColumnFilter = useCallback((_, data) => setColumnFilter(data.value), []);
   const filteredColumns = useMemo(() => columns.filter((column) => {
     const sampleValue = lookupSampleValue(sampleByField, column.d365Field, column.key, column.label);
-    return matchesText(column.label, columnFilter)
-      || matchesText(column.d365Field, columnFilter)
-      || matchesText(DATA_TYPE_LABELS[column.dataType] || column.dataType, columnFilter)
-      || matchesText(sampleValue, columnFilter);
+    return columnMatchesFilter(column, columnFilter, sampleValue);
   }), [columns, sampleByField, columnFilter]);
   const exportColumnNames = useMemo(
     () => columns.map((column) => column.label || column.d365Field),

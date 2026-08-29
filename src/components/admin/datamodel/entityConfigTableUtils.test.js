@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  columnMatchesFilter,
+  customColumnDeleteMessage,
+  linkedFromLineLabel,
   lookupSampleValue,
   mergeDiscoverySamples,
   mergeSampleByField,
@@ -33,5 +36,30 @@ describe('entityConfigTableUtils samples', () => {
       { header: { ItemNumber: 'ART-2' }, line: {} },
     );
     expect(preview.header.sampleByField.ItemNumber).toBe('ART-2');
+  });
+});
+
+describe('entityConfigTableUtils linked-from-line', () => {
+  it('geeft een badge-label per koppelsoort', () => {
+    expect(linkedFromLineLabel('total')).toBe('Linked line total');
+    expect(linkedFromLineLabel('values')).toBe('Linked line values');
+    expect(linkedFromLineLabel(null)).toBe('');
+  });
+
+  it('waarschuwt extra bij delete van een gekoppelde headerkolom', () => {
+    const message = customColumnDeleteMessage({
+      label: 'Remaining qty Total',
+      linkedFromLine: 'total',
+    });
+    expect(message).toContain('Remaining qty Total');
+    expect(message).toContain('Push total to header column');
+    expect(message).toContain('all users');
+  });
+
+  it('vindt gekoppelde kolommen via de filter "linked"', () => {
+    const column = { label: 'Qty Total', source: 'custom', linkedFromLine: 'total', dataType: 'number' };
+    expect(columnMatchesFilter(column, 'linked', '—')).toBe(true);
+    expect(columnMatchesFilter(column, 'custom column', '—')).toBe(true);
+    expect(columnMatchesFilter({ ...column, linkedFromLine: undefined }, 'linked', '—')).toBe(false);
   });
 });

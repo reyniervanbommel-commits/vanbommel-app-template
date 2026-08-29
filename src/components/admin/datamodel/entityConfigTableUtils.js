@@ -39,6 +39,41 @@ export function matchesText(value, query) {
   return String(value || '').toLowerCase().includes(q);
 }
 
+export function linkedFromLineLabel(kind) {
+  if (kind === 'total') return 'Linked line total';
+  if (kind === 'values') return 'Linked line values';
+  return '';
+}
+
+export function linkedFromLineHint(kind) {
+  if (kind === 'total') {
+    return 'Filled from a line column via Push total to header column. Values are calculated when the board loads and are not stored in this column.';
+  }
+  if (kind === 'values') {
+    return 'Filled from a line column via Push values to header column. Values are calculated when the board loads and are not stored in this column.';
+  }
+  return '';
+}
+
+export function customColumnDeleteMessage(column) {
+  const label = column?.label || 'this column';
+  const hint = linkedFromLineHint(column?.linkedFromLine);
+  if (hint) {
+    return `Delete custom column "${label}"? ${hint} Deleting it removes the header column for all users.`;
+  }
+  return `Delete custom column "${label}"? This permanently removes the column and all related values from SQL.`;
+}
+
+export function columnMatchesFilter(column, columnFilter, sampleValue) {
+  return matchesText(column?.label, columnFilter)
+    || matchesText(column?.d365Field, columnFilter)
+    || matchesText(DATA_TYPE_LABELS[column?.dataType] || column?.dataType, columnFilter)
+    || matchesText(sampleValue, columnFilter)
+    || matchesText(linkedFromLineLabel(column?.linkedFromLine), columnFilter)
+    || Boolean(column?.linkedFromLine && matchesText('linked from line', columnFilter))
+    || Boolean(column?.source === 'custom' && matchesText('custom column', columnFilter));
+}
+
 export function toExcelCellValue(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') return JSON.stringify(value);

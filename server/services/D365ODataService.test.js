@@ -51,6 +51,23 @@ describe('D365ODataService', () => {
     expect(message).toContain("Could not find a property named 'BadField'");
   });
 
+  it('gebruikt innererror wanneer D365 alleen "An error has occurred" teruggeeft', () => {
+    const message = summarizeODataFailure(
+      400,
+      'https://vanbommel.operations.dynamics.com/data/PurchaseOrderHeadersV2',
+      JSON.stringify({
+        error: {
+          message: 'An error has occurred.',
+          innererror: {
+            message: "Could not find a property named 'RemainingPurchasePhysicalQuantity' on type 'Microsoft.Dynamics.DataEntities.PurchaseOrderLine'.",
+          },
+        },
+      }),
+    );
+    expect(message).toContain('RemainingPurchasePhysicalQuantity');
+    expect(message).not.toMatch(/An error has occurred\.?$/);
+  });
+
   it('bouwt een OR-filter voor retained purchase order keys', () => {
     const filter = buildPurchaseOrderKeysFilter([
       { dataAreaId: 'WHSL', orderNumber: 'PO-1' },
@@ -629,5 +646,79 @@ describe('D365ODataService', () => {
       expect(result.items).toHaveLength(1);
       expect(result.items[0].ItemNumber).toBe('ART-1');
     });
+  });
+
+  it('haalt illegale regel-$select-velden weg na een 400 op PurchaseOrderHeadersV2', async () => {
+    const calls = [];
+    global.fetch = vi.fn().mockImplementation(async (url) => {
+      const urlString = String(url);
+      if (urlString.includes('/data/VendorsV2')) {
+        return { ok: true, json: async () => ({ value: [] }) };
+      }
+      const parsed = new URL(urlString);
+      const expand = parsed.searchParams.get('$expand') || '';
+      const headerSelect = parsed.searchParams.get('$select');
+      calls.push({
+        expand,
+        headerSelect,
+        top: parsed.searchParams.get('$top'),
+      });
+      if (expand.includes('RemainingPurchasePhysicalQuantity')) {
+        return {
+          ok: false,
+          status: 400,
+          text: async () => JSON.stringify({
+            error: {
+              message: 'An error has occurred.',
+              innererror: {
+                message: "Could not find a property named 'RemainingPurchasePhysicalQuantity' on type 'Microsoft.Dynamics.DataEntities.PurchaseOrderLine'.",
+              },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          '@odata.count': 1,
+          value: [{
+            dataAreaId: 'WHSL',
+            PurchaseOrderNumber: 'PO-1',
+            OrderVendorAccountNumber: 'SUPP1',
+            PurchaseOrderLines: [{
+              PurchaseOrderNumber: 'PO-1',
+              LineNumber: 1,
+              ItemNumber: 'ART-1',
+              LineDescription: 'Boot',
+              OrderedPurchaseQuantity: 10,
+              PurchaseUnitSymbol: 'PR',
+              LineAmount: 20,
+              RequestedDeliveryDate: '2026-08-01',
+            }],
+          }],
+        }),
+      };
+    });
+
+    const result = await fetchPurchaseOrders({
+      supplierAccount: null,
+      top: 50,
+      skip: 0,
+      fetchAll: false,
+      selectFields: ['dataAreaId', 'PurchaseOrderNumber', 'OrderVendorAccountNumber'],
+      lineSelectFields: [
+        'PurchaseOrderNumber', 'LineNumber', 'ItemNumber',
+        'RemainingPurchasePhysicalQuantity',
+      ],
+    });
+
+    expect(calls[0].expand).toContain('RemainingPurchasePhysicalQuantity');
+    expect(calls[1].top).toBe('1');
+    expect(calls[1].headerSelect).toBeNull();
+    expect(calls[1].expand).toBe('PurchaseOrderLines');
+    expect(calls[2].expand).not.toContain('RemainingPurchasePhysicalQuantity');
+    expect(result.droppedSelectFields).toEqual(['RemainingPurchasePhysicalQuantity']);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].orderNumber).toBe('PO-1');
   });
 });

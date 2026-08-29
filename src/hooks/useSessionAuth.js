@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clearCachedBoard } from '../utils/boardSessionStore';
 import { clearBoardPresentationCache } from '../utils/boardPresentationCache';
+import { clearAllPoTableSessions } from '../utils/poTableSessionState';
 
 // Leegt alle in-memory board-caches (data + presentatie). Nodig bij een sessiewissel zodat
 // bijv. een supplier niet kortstondig het (ongescopete) bord/totaal van een vorige gebruiker
@@ -8,6 +9,7 @@ import { clearBoardPresentationCache } from '../utils/boardPresentationCache';
 function clearBoardCaches() {
   clearCachedBoard();
   clearBoardPresentationCache();
+  clearAllPoTableSessions();
 }
 
 async function apiRequest(path, options) {

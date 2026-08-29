@@ -74,10 +74,15 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
   });
 
   it('toont kolomtype rechts en bron links voor gelinkte value-headerkolommen', async () => {
-    renderMenu({ isConnectedType: true });
+    renderMenu({
+      isConnectedType: true,
+      connectionTargets: ['Subitem column "Qty" (values)'],
+    });
     openColumnMenu();
     const typeLabel = await screen.findByTestId('column-type-label');
     expect(typeLabel.textContent).toBe('Number');
+    expect(screen.getByTestId('column-source-icon')).toBeTruthy();
+    expect(screen.getByTestId('column-connection-icon')).toBeTruthy();
   });
 
   it('maakt de kolomnaam klikbaar voor hernoemen (ook d365)', async () => {

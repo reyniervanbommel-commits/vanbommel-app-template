@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDraftFromFilter, getStickyColumnMenuText, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
+import { getColumnSourceMeta, getDraftFromFilter, getStickyColumnMenuText, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 
 describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   const textColumn = { key: 'vendor', dataType: 'text' };
@@ -22,6 +22,19 @@ describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   it('isColumnFilterActive is alleen actief met een niet-lege oneOf-array', () => {
     expect(isColumnFilterActive(textColumn, { operator: 'oneOf', value: [] })).toBe(false);
     expect(isColumnFilterActive(textColumn, { operator: 'oneOf', value: ['Acme'] })).toBe(true);
+  });
+});
+
+describe('getColumnSourceMeta', () => {
+  it('laat connected-status de D365-bron niet overschrijven', () => {
+    expect(getColumnSourceMeta({
+      source: 'd365',
+      level: 'header',
+      label: 'Amount',
+    })).toEqual({
+      key: 'purchase-orders',
+      label: 'Purchase orders · Amount',
+    });
   });
 });
 

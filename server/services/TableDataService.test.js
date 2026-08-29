@@ -989,6 +989,12 @@ describe('TableDataService.buildSyntheticLookupColumn', () => {
     expect(column.key).toBe('receivedPurchaseQuantity');
     expect(column.dataType).toBe('number');
     expect(column.source).toBe('lookup');
+    expect(column.lookup).toEqual({
+      targetTableKey: 'product-receipt-lines',
+      targetColumnKey: 'receivedPurchaseQuantity',
+      targetTableLabel: 'Ontvangstregels',
+      targetColumnLabel: 'Received qty',
+    });
     // Synthetisch: geen tb_columns-rij, dus niet zelf toggelbaar via de kolom-id.
     expect(column.id).toBeNull();
   });

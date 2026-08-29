@@ -368,18 +368,27 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
   return { ok: true };
 }
 
+function odataErrorDetail(parsed) {
+  const inner = parsed?.error?.innererror?.message
+    || parsed?.error?.innererror?.internalexception?.message;
+  const message = parsed?.error?.message;
+  const outer = typeof message === 'string' ? message : String(message?.value || '');
+  const generic = !outer || /^an error has occurred\.?$/i.test(outer.trim());
+  if (inner && generic) return String(inner);
+  return outer || (inner ? String(inner) : '');
+}
+
+function parseMissingODataProperty(detail) {
+  const match = String(detail || '').match(/Could not find a property named '([^']+)'/i);
+  return match ? match[1] : null;
+}
+
 function summarizeODataFailure(status, url, body) {
   let detail = '';
   const raw = String(body || '').trim();
   if (raw) {
     try {
-      const parsed = JSON.parse(raw);
-      const message = parsed?.error?.message;
-      if (typeof message === 'string') detail = message;
-      else if (message && typeof message === 'object') detail = String(message.value || '');
-      if (!detail && parsed?.error?.innererror?.message) {
-        detail = String(parsed.error.innererror.message);
-      }
+      detail = odataErrorDetail(JSON.parse(raw));
     } catch {
       detail = raw;
     }
@@ -421,8 +430,10 @@ async function fetchODataJson(url, timeout) {
       bodyPreview: responseBody.slice(0, 300),
     });
 
-    const err = new Error(summarizeODataFailure(response.status, url, responseBody));
+    const summary = summarizeODataFailure(response.status, url, responseBody);
+    const err = new Error(summary);
     err.status = response.status || 502;
+    err.missingProperty = parseMissingODataProperty(summary);
     throw err;
   }
 
@@ -547,6 +558,25 @@ function buildManualNextPageUrl(currentUrl, pageSize, effectiveMax, fetchedCount
   return url.toString();
 }
 
+function narrowFieldList(fields, droppedFields) {
+  if (!Array.isArray(fields) || !fields.length) return fields;
+  const dropped = new Set((droppedFields || []).map((field) => String(field).toLowerCase()));
+  if (!dropped.size) return fields;
+  return fields.filter((field) => !dropped.has(String(field).toLowerCase()));
+}
+
+function listDroppedPoSelectFields(selectFields, lineSelectFields, sampleRecord, missingProperty) {
+  const headerDropped = listSelectFieldsMissingFromRecord(selectFields, sampleRecord);
+  const firstLine = Array.isArray(sampleRecord?.PurchaseOrderLines) ? sampleRecord.PurchaseOrderLines[0] : null;
+  const lineDropped = listSelectFieldsMissingFromRecord(lineSelectFields, firstLine);
+  const dropped = [...new Set([...headerDropped, ...lineDropped])];
+  const named = String(missingProperty || '').trim();
+  if (named && !dropped.some((field) => field.toLowerCase() === named.toLowerCase())) {
+    dropped.push(named);
+  }
+  return dropped;
+}
+
 async function fetchPurchaseOrderRecords({
   supplierAccount,
   top,
@@ -559,83 +589,125 @@ async function fetchPurchaseOrderRecords({
   selectFields = null,
   lineSelectFields = null,
 }) {
-  const records = [];
-  let total = null;
-  let pagesFetched = 0;
-  let hasMore = false;
-  let truncated = false;
-  // Harde bovengrens: nooit meer dan de geconfigureerde cap (en nooit boven de absolute MAX).
+  const hasSelect = (Array.isArray(selectFields) && selectFields.length > 0)
+    || (Array.isArray(lineSelectFields) && lineSelectFields.length > 0);
   const effectiveMax = Number.isFinite(maxItems) && maxItems > 0
     ? Math.min(maxItems, MAX_PURCHASE_ORDER_ITEMS)
     : MAX_PURCHASE_ORDER_ITEMS;
-  const initialTop = fetchAll ? Math.min(top, effectiveMax) : top;
-  let currentUrl = await buildPurchaseOrderUrl({
-    supplierAccount, top: initialTop, skip, extraFilter, selectFields, lineSelectFields,
-  });
-  const emitProgress = (isTruncated = false) => {
-    if (typeof onProgress !== 'function') return;
-    onProgress({
-      fetched: records.length,
-      totalToFetch: total === null ? null : Math.min(total, effectiveMax),
-      sourceTotal: total,
-      pagesFetched,
-      truncated: isTruncated,
+
+  async function run(activeSelectFields, activeLineSelectFields, { topOverride, fetchAllOverride, skipOverride } = {}) {
+    const records = [];
+    let total = null;
+    let pagesFetched = 0;
+    let hasMore = false;
+    let truncated = false;
+    const shouldFetchAll = fetchAllOverride ?? fetchAll;
+    const pageTop = topOverride ?? (shouldFetchAll ? Math.min(top, effectiveMax) : top);
+    const pageSkip = skipOverride ?? skip;
+    let currentUrl = await buildPurchaseOrderUrl({
+      supplierAccount,
+      top: pageTop,
+      skip: pageSkip,
+      extraFilter,
+      selectFields: activeSelectFields,
+      lineSelectFields: activeLineSelectFields,
     });
-  };
+    const emitProgress = (isTruncated = false) => {
+      if (typeof onProgress !== 'function') return;
+      onProgress({
+        fetched: records.length,
+        totalToFetch: total === null ? null : Math.min(total, effectiveMax),
+        sourceTotal: total,
+        pagesFetched,
+        truncated: isTruncated,
+      });
+    };
 
-  while (currentUrl) {
-    const payload = await fetchODataJson(currentUrl, timeout);
-    const pageRecords = Array.isArray(payload.value) ? payload.value : [];
-    if (total === null) {
-      const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
-      if (Number.isFinite(parsedTotal)) {
-        total = parsedTotal;
+    while (currentUrl) {
+      const payload = await fetchODataJson(currentUrl, timeout);
+      const pageRecords = Array.isArray(payload.value) ? payload.value : [];
+      if (total === null) {
+        const parsedTotal = Number.parseInt(payload['@odata.count'], 10);
+        if (Number.isFinite(parsedTotal)) {
+          total = parsedTotal;
+        }
       }
+      const remaining = shouldFetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
+      const recordsToAdd = pageRecords.slice(0, remaining);
+      pagesFetched += 1;
+
+      for (const record of recordsToAdd) {
+        records.push(record);
+      }
+
+      const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
+      const manualNextLink = shouldFetchAll && !serverNextLink
+        ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
+        : null;
+      const nextLink = serverNextLink || manualNextLink;
+      const hitItemCap = shouldFetchAll
+        && records.length >= effectiveMax
+        && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
+      emitProgress(hitItemCap);
+
+      if (!shouldFetchAll || !nextLink) {
+        currentUrl = null;
+        hasMore = Boolean(nextLink) || hitItemCap;
+        truncated = hitItemCap;
+        break;
+      }
+
+      if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
+        currentUrl = null;
+        hasMore = true;
+        truncated = true;
+        emitProgress(true);
+        break;
+      }
+
+      currentUrl = nextLink;
     }
-    const remaining = fetchAll ? Math.max(effectiveMax - records.length, 0) : pageRecords.length;
-    const recordsToAdd = pageRecords.slice(0, remaining);
-    pagesFetched += 1;
 
-    for (const record of recordsToAdd) {
-      records.push(record);
-    }
-
-    const serverNextLink = resolveNextLink(payload['@odata.nextLink'], currentUrl);
-    const manualNextLink = fetchAll && !serverNextLink
-      ? buildManualNextPageUrl(currentUrl, pageRecords.length, effectiveMax, records.length, total)
-      : null;
-    const nextLink = serverNextLink || manualNextLink;
-    const hitItemCap = fetchAll
-      && records.length >= effectiveMax
-      && (pageRecords.length > recordsToAdd.length || Boolean(nextLink) || (total !== null && records.length < total));
-    emitProgress(hitItemCap);
-
-    if (!fetchAll || !nextLink) {
-      currentUrl = null;
-      hasMore = Boolean(nextLink) || hitItemCap;
-      truncated = hitItemCap;
-      break;
-    }
-
-    if (pagesFetched >= MAX_PURCHASE_ORDER_PAGES || hitItemCap) {
-      currentUrl = null;
-      hasMore = true;
-      truncated = true;
-      emitProgress(true);
-      break;
-    }
-
-    currentUrl = nextLink;
+    return {
+      records,
+      total: total ?? records.length,
+      hasMore,
+      truncated,
+      pagesFetched,
+      fetchedAll: shouldFetchAll ? !hasMore : false,
+    };
   }
 
-  return {
-    records,
-    total: total ?? records.length,
-    hasMore,
-    truncated,
-    pagesFetched,
-    fetchedAll: fetchAll ? !hasMore : false,
-  };
+  try {
+    return await run(selectFields, lineSelectFields);
+  } catch (err) {
+    if (!hasSelect || Number(err?.status) !== 400) throw err;
+    let probe;
+    try {
+      probe = await run(null, null, { topOverride: 1, fetchAllOverride: false, skipOverride: 0 });
+    } catch {
+      throw err;
+    }
+    const sampleRecord = Array.isArray(probe?.records) ? probe.records[0] : null;
+    const droppedSelectFields = listDroppedPoSelectFields(
+      selectFields,
+      lineSelectFields,
+      sampleRecord,
+      err.missingProperty,
+    );
+    if (!droppedSelectFields.length) throw err;
+    const nextSelect = narrowFieldList(selectFields, droppedSelectFields);
+    const nextLineSelect = narrowFieldList(lineSelectFields, droppedSelectFields);
+    logger.warn('D365 $select rejected; dropping fields that D365 did not return', {
+      sourceEntity: DEFAULT_PURCHASE_ORDERS_PATH,
+      droppedSelectFields,
+    });
+    const result = await run(
+      nextSelect && nextSelect.length ? nextSelect : null,
+      nextLineSelect && nextLineSelect.length ? nextLineSelect : null,
+    );
+    return { ...result, droppedSelectFields };
+  }
 }
 
 async function fetchEntityRecords({
@@ -806,7 +878,7 @@ async function fetchPurchaseOrdersByKeys({
     deduped.push({ dataAreaId, orderNumber });
   }
   if (!deduped.length) {
-    return { items: [], total: 0, truncated: false, pagesFetched: 0, fetchedAll: true };
+    return { items: [], total: 0, truncated: false, pagesFetched: 0, fetchedAll: true, droppedSelectFields: [] };
   }
 
   const timeoutRaw = await settingsService.getAsync('D365_ODATA_TIMEOUT_MS', String(DEFAULT_REQUEST_TIMEOUT_MS));
@@ -819,6 +891,9 @@ async function fetchPurchaseOrdersByKeys({
   const allRecords = [];
   let truncated = false;
   let pagesFetched = 0;
+  let droppedSelectFields = [];
+  let activeSelectFields = selectFields;
+  let activeLineSelectFields = lineSelectFields;
 
   for (let offset = 0; offset < deduped.length; offset += RETAINED_PO_CHUNK_SIZE) {
     if (allRecords.length >= effectiveMax) {
@@ -832,6 +907,7 @@ async function fetchPurchaseOrdersByKeys({
       records,
       truncated: chunkTruncated,
       pagesFetched: chunkPages,
+      droppedSelectFields: chunkDropped,
     } = await fetchPurchaseOrderRecords({
       supplierAccount: null,
       top: Math.min(remaining, RETAINED_PO_CHUNK_SIZE),
@@ -841,9 +917,14 @@ async function fetchPurchaseOrdersByKeys({
       extraFilter: keysFilter,
       maxItems: remaining,
       onProgress,
-      selectFields,
-      lineSelectFields,
+      selectFields: activeSelectFields,
+      lineSelectFields: activeLineSelectFields,
     });
+    if (Array.isArray(chunkDropped) && chunkDropped.length) {
+      droppedSelectFields = [...new Set([...droppedSelectFields, ...chunkDropped])];
+      activeSelectFields = narrowFieldList(activeSelectFields, droppedSelectFields);
+      activeLineSelectFields = narrowFieldList(activeLineSelectFields, droppedSelectFields);
+    }
     pagesFetched += Number(chunkPages) || 0;
     allRecords.push(...records);
     if (chunkTruncated || allRecords.length >= effectiveMax) {
@@ -883,6 +964,7 @@ async function fetchPurchaseOrdersByKeys({
     truncated,
     pagesFetched,
     fetchedAll: !truncated,
+    droppedSelectFields,
   };
 }
 
@@ -907,6 +989,7 @@ async function fetchPurchaseOrders({
     truncated,
     pagesFetched,
     fetchedAll,
+    droppedSelectFields,
   } = await fetchPurchaseOrderRecords({
     supplierAccount,
     top,
@@ -952,6 +1035,7 @@ async function fetchPurchaseOrders({
     truncated,
     pagesFetched,
     fetchedAll,
+    droppedSelectFields,
   };
 }
 

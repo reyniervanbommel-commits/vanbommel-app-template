@@ -66,6 +66,27 @@ function mergeRuntimeHeaderLinks(...groups) {
   };
 }
 
+function collectLinkedHeaderKinds(runtimeLinks) {
+  const kinds = Object.create(null);
+  for (const link of normalizeRuntimeLinkArray(runtimeLinks?.lineTotalHeaderLinks)) {
+    kinds[link.headerColumnKey] = 'total';
+  }
+  for (const link of normalizeRuntimeLinkArray(runtimeLinks?.lineValueHeaderLinks)) {
+    if (!kinds[link.headerColumnKey]) kinds[link.headerColumnKey] = 'values';
+  }
+  return kinds;
+}
+
+function annotateAdminColumnsWithLineLinks(columns, runtimeLinks) {
+  const list = Array.isArray(columns) ? columns : [];
+  const kinds = collectLinkedHeaderKinds(runtimeLinks);
+  if (!Object.keys(kinds).length) return list;
+  return list.map((column) => {
+    const kind = kinds[column?.key];
+    return kind ? { ...column, linkedFromLine: kind } : column;
+  });
+}
+
 async function loadOwnRuntimeHeaderLinks(pool, userId, boardKey) {
   if (!pool || !userId || !boardKey) return emptyRuntimeHeaderLinks();
   const result = await pool.request()
@@ -119,6 +140,9 @@ module.exports = {
   parseRuntimeHeaderLinks,
   mergeRuntimeHeaderLinks,
   loadRuntimeHeaderLinks,
+  loadStaffRuntimeHeaderLinks,
+  collectLinkedHeaderKinds,
+  annotateAdminColumnsWithLineLinks,
   normalizeRuntimeLinkArray,
   clearRuntimeHeaderLinksCache,
 };

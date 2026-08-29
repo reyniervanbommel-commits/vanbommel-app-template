@@ -21,8 +21,6 @@ export function usePurchaseOrderColumnMenuFlags({
   isStickyActionEnabled,
   onMakeColumnSticky,
   onToggleColumnCollapsed,
-  isConnectedType,
-  connectionTargets = [],
 }) {
   const isRemarksColumn = column?.dataType === 'remarks';
   const isImageColumn = column?.dataType === 'image';
@@ -69,13 +67,7 @@ export function usePurchaseOrderColumnMenuFlags({
   );
   const readOnlyColumnMenu = isImageColumn;
   const columnTypeMeta = useMemo(() => getColumnTypeMeta(column), [column]);
-  const columnSourceMeta = useMemo(
-    () => getColumnSourceMeta(column, {
-      isConnected: isConnectedType,
-      hasConnectionTargets: Array.isArray(connectionTargets) && connectionTargets.length > 0,
-    }),
-    [column, isConnectedType, connectionTargets]
-  );
+  const columnSourceMeta = useMemo(() => getColumnSourceMeta(column), [column]);
 
   return {
     canToggleWriteback,

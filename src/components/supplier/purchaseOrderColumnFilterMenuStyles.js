@@ -195,28 +195,6 @@ export const usePurchaseOrderColumnFilterMenuStyles = makeStyles({
     alignItems: 'center',
     ...shorthands.gap('4px'),
   },
-  typeMetaConnectionButton: {
-    minWidth: '16px',
-    width: '16px',
-    height: '16px',
-    ...shorthands.padding('0'),
-    color: tokens.colorBrandForeground1,
-  },
-  typeMetaConnectionButtonActive: {
-    backgroundColor: tokens.colorNeutralBackground1Selected,
-  },
-  typeMetaConnectionList: {
-    margin: 0,
-    paddingLeft: '16px',
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-  },
-  inlineConnectionList: {
-    margin: 0,
-    paddingLeft: '16px',
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-  },
   d365SyncLabel: {
     display: 'inline-flex',
     alignItems: 'center',

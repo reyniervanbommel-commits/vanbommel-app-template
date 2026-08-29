@@ -97,3 +97,24 @@ describe('usePurchaseOrderTableView equals filter', () => {
     expect(result.current.processedItems.map((item) => item.values.deliveryWeek)).toEqual(['2', '5', '12']);
   });
 });
+
+describe('usePurchaseOrderTableView session hydrate', () => {
+  const columns = [
+    { key: 'status', dataType: 'text' },
+  ];
+  const items = [
+    { values: { status: 'Open' } },
+    { values: { status: 'Closed' } },
+  ];
+
+  it('filters rows on the first render from the last session snapshot', async () => {
+    window.sessionStorage.clear();
+    const { savePoTableSession } = await import('../utils/poTableSessionState');
+    savePoTableSession(7, {
+      filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+    });
+    const { result } = renderHook(() => usePurchaseOrderTableView({ items, columns }));
+    expect(result.current.processedItems).toHaveLength(1);
+    expect(result.current.processedItems[0].values.status).toBe('Open');
+  });
+});

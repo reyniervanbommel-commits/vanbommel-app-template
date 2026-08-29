@@ -128,6 +128,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         columnLabel={columnLabel}
         columnTypeMeta={columnTypeMeta}
         columnSourceMeta={columnSourceMeta}
+        columnLevel={column?.level}
         connectionTargets={connectionTargets}
         canRenameColumn={canRenameColumn}
         handleRenameColumn={handleRenameColumn}

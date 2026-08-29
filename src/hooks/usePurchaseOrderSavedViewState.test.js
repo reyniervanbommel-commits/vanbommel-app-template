@@ -25,6 +25,7 @@ vi.mock('./usePurchaseOrderSavedViews', () => ({
 
 import { usePurchaseOrderSavedViewState } from './usePurchaseOrderSavedViewState';
 import { ALL_ORDERS_SETTINGS_BOARD_KEY } from '../utils/allOrdersHistoryPreference';
+import { readPoTableSession, savePoTableSession } from '../utils/poTableSessionState';
 
 function createBoardView() {
   return {
@@ -51,6 +52,7 @@ function renderSavedViewState(boardView = createBoardView()) {
 
 describe('usePurchaseOrderSavedViewState All orders history toggle', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     updateView.mockClear();
     apiRequest.mockReset();
     apiRequest.mockResolvedValue({ settings: null });
@@ -113,6 +115,7 @@ describe('usePurchaseOrderSavedViewState All orders history toggle', () => {
 
 describe('usePurchaseOrderSavedViewState columnSumKeys', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     updateView.mockClear();
     createView.mockClear();
     apiRequest.mockReset();
@@ -167,3 +170,86 @@ describe('usePurchaseOrderSavedViewState columnSumKeys', () => {
     );
   });
 });
+
+describe('usePurchaseOrderSavedViewState session snapshot', () => {
+  const sessionSnapshot = {
+    filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+    sortState: { columnKey: 'vendor', direction: 'asc' },
+    grouping: { columnKey: 'status' },
+  };
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    updateView.mockClear();
+    createView.mockClear();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ settings: null });
+  });
+
+  it('legt het sessie-snapshot over de saved view heen', () => {
+    savePoTableSession(7, sessionSnapshot);
+    const boardView = createBoardView();
+    const { result } = renderSavedViewState(boardView);
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: { columns: {}, table: { filterByColumn: {} } },
+      });
+    });
+
+    expect(boardView.applyFilterSortGrouping).toHaveBeenLastCalledWith(sessionSnapshot);
+    expect(boardView.applyFilterSortGrouping).not.toHaveBeenCalledWith({ filterByColumn: {} });
+  });
+
+  it('herstelt All-orders sessie wanneer er geen default view is', async () => {
+    savePoTableSession(null, sessionSnapshot);
+    const boardView = createBoardView();
+    renderSavedViewState(boardView);
+
+    await waitFor(() => {
+      expect(boardView.applyFilterSortGrouping).toHaveBeenCalledWith(sessionSnapshot);
+    });
+  });
+
+  it('wist het sessie-snapshot bij reset van de actieve view', () => {
+    savePoTableSession(7, sessionSnapshot);
+    const boardView = createBoardView();
+    const { result } = renderSavedViewState(boardView);
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: { columns: {}, table: {} },
+      });
+    });
+    act(() => {
+      result.current.handleResetView();
+    });
+
+    expect(readPoTableSession(7)).toBeNull();
+  });
+
+  it('wist het sessie-snapshot na opslaan van de actieve view', async () => {
+    savePoTableSession(7, sessionSnapshot);
+    const { result } = renderSavedViewState();
+
+    await act(async () => {
+      await result.current.handleUpdateActive({ id: 7 });
+    });
+
+    expect(readPoTableSession(7)).toBeNull();
+  });
+
+  it('wist het sessie-snapshot van de nieuwe view na save-as-new', async () => {
+    savePoTableSession(8, sessionSnapshot);
+    const { result } = renderSavedViewState();
+
+    await act(async () => {
+      await result.current.handleSaveAsNew({ name: 'New', scope: 'personal' });
+    });
+
+    expect(readPoTableSession(8)).toBeNull();
+  });
+});
+
