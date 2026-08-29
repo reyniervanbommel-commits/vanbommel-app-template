@@ -373,7 +373,7 @@ git commit -m "feat: POST /api/internal/night-refresh/start-failed"
 **Files:**
 - Modify: `src/components/admin/d365RefreshInfoCopy.js`
 - Create: `src/components/admin/d365RefreshInfoCopy.test.js`
-- Modify: `src/config/version.js` (`v1.52.55` → `v1.52.56`)
+- Modify: `src/config/version.js` (PATCH +1 t.o.v. de huidige waarde bij uitvoering — niet hardcoderen; check `APP_VERSION` in het bestand vlak vóór deze stap, plangeschreven waarde kan stale zijn)
 
 - [ ] **Step 1: Failing test**
 
@@ -404,7 +404,7 @@ export const D365_REFRESH_INFO = 'Night refresh runs once a day in production vi
 
 `D365_REFRESH_SERVER_HINT` ongewijzigd.
 
-Zet `APP_VERSION` op `v1.52.56`.
+Zet `APP_VERSION` op de eerstvolgende PATCH-waarde t.o.v. wat op dat moment in `src/config/version.js` staat (niet blind `v1.52.56` invullen — dat nummer kan al gepasseerd zijn door ander werk).
 
 - [ ] **Step 4: Tests**
 
@@ -614,6 +614,10 @@ Run: `az bicep build --file infra/azure/night-refresh-wekker.bicep`
 
 Expected: geen errors. Los quote-escaping op tot build slaagt.
 
+- [ ] **Step 2b: Pre-flight RBAC-check (vóór de eerste echte deploy)**
+
+`infra/azure/main.bicep` kent nog geen `Microsoft.Authorization/roleAssignments` — dit is de eerste keer dat de deploy-service-principal (`AZURE_CREDENTIALS` in `deploy-prod.yml`) zelf een RBAC-toewijzing moet aanmaken (Key Vault Secrets User op de Logic App's managed identity, scope = het secret). Controleer vooraf dat die SP `User Access Administrator` (of `Owner`) heeft op minstens dat secret-scope; zo niet, ken dit eenmalig handmatig toe vóór Task 6 in productie draait. Zonder deze check faalt de deploy-stap pas zichtbaar bij de eerste echte `deploy-prod`-run met een autorisatiefout.
+
 - [ ] **Step 3: Commit** (op verzoek)
 
 ```bash
@@ -664,14 +668,14 @@ git commit -m "feat: deploy Azure Logic App wekker on prod"
 ### Task 7: Docs fase 1
 
 **Files:**
-- Modify: `docs/devops/262-d365-night-refresh.md`
+- Modify: `docs/devops/291-azure-night-refresh-wekker.md` (bestaat al — dit is het devops-doc van déze feature, genummerd naar #291; `262-d365-night-refresh.md` hoort bij de oude Feature #262 en blijft ongemoeid)
 
-- [ ] **Step 1:** Vervang “GitHub workflow cron 00:00 UTC” als **enige** wekker door: productie-wekker = Logic App 03:00 W. Europe Standard Time; GitHub `night-refresh-prod.yml` blijft tijdelijk (fase 1 overlap, `attached: true`). Link naar de spec.
+- [ ] **Step 1:** Update de "Wat is al gedaan"-tabel in `291-azure-night-refresh-wekker.md` met de fase-1-resultaten (Bicep, start-failed endpoint, settings-copy) en vink af welke AC's (1–8) fase 1 al dekt. Vermeld: productie-wekker = Logic App 03:00 W. Europe Standard Time; GitHub `night-refresh-prod.yml` blijft tijdelijk (fase 1 overlap, `attached: true`). Link naar de spec staat er al.
 
 - [ ] **Step 2: Commit** (op verzoek)
 
 ```bash
-git add docs/devops/262-d365-night-refresh.md docs/specs/2026-08-28-azure-night-refresh-wekker-design.md
+git add docs/devops/291-azure-night-refresh-wekker.md docs/specs/2026-08-28-azure-night-refresh-wekker-design.md
 git commit -m "docs: night refresh wekker moves to Azure Logic App"
 ```
 
@@ -694,8 +698,8 @@ git commit -m "docs: night refresh wekker moves to Azure Logic App"
 **Files:**
 - Delete: `.github/workflows/night-refresh-prod.yml`
 - GitHub UI/API: verwijder secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN`
-- Modify: `docs/devops/262-d365-night-refresh.md` (alleen Logic App)
-- Modify: `src/config/version.js` PATCH
+- Modify: `docs/devops/291-azure-night-refresh-wekker.md` (alleen Logic App; AC #7 fase-2-deel afvinken)
+- Modify: `src/config/version.js` PATCH (eerstvolgende waarde t.o.v. wat er dan staat, niet hardcoderen)
 
 - [ ] **Step 1:** Verwijder de workflow-file
 - [ ] **Step 2:** Verwijder de twee GitHub-secrets

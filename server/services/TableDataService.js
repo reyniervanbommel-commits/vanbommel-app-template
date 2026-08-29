@@ -2619,7 +2619,12 @@ function buildSyntheticLookupColumn({
     isActive: true,
     sortOrder: 9000,
     rccpMeasure: tc ? Boolean(tc.rccpMeasure) : false,
-    lookup: { targetTableKey, targetColumnKey: targetColKey },
+    lookup: {
+      targetTableKey,
+      targetColumnKey: targetColKey,
+      targetTableLabel,
+      targetColumnLabel: tc ? tc.label : targetColKey,
+    },
   };
 }
 

@@ -56,6 +56,7 @@ Twee starts tegelijk (Logic App + admin-Start, of een tweede Portal-run): bestaa
 - Night-run start wel maar faalt/interrupted/entity-error → bestaande ACS-digest naar `NIGHT_REFRESH_ALERT_EMAILS` (ongewijzigd).
 - Logic App krijgt geen 202 (app down, 401, 503, timeout) ná retries → **extra mail** naar dezelfde alert-adressen: wekker kon de refresh niet starten. Geen stack, geen token in de mail.
 - Als de Logic App helemaal niet afgaat (platform-storing): geen mail vanuit de app; zichtbaar in Logic App run history. Geen tweede GitHub-wekker.
+- Als de Key Vault-token-fetch (`Get_token`) faalt: `Start_night_refresh` en `Notify_start_failed` worden beide geskipt (geen `runAfter`-match, en geen token om de alert-call zelf te authenticeren — kip-en-ei). Geen mail; alleen zichtbaar in Logic App run history. Geaccepteerd restrisico — geen extra always-on monitoring toegevoegd (BRD non-goal: geen extra infra alleen voor deze wekker).
 
 ### UI
 Alleen de Engelse (i)-tekst op D365 refresh: Azure Logic App, 03:00 Europe/Amsterdam, niet GitHub / 00:00 UTC. Geen nieuw scherm, geen extra knop.
@@ -68,7 +69,7 @@ Geen nieuwe empty state. Token en Logic App-URL blijven uit de UI. Historie blij
 
 ### Acceptatiecriteria
 1. PROD night-run start ± enkele minuten na 03:00 Nederlandse tijd, zomer én winter.
-2. `.github/workflows/night-refresh-prod.yml` is weg; GitHub start geen night-run meer.
+2. Fase 1: `.github/workflows/night-refresh-prod.yml` blijft (overlap veilig via `attached`). Fase 2, ná één groene Logic App-nacht: workflow weg, GitHub start geen night-run meer.
 3. Logic App: fire-and-forget POST; geen 45-minuten-poll.
 4. HTTP-fout van de wekker → mail naar dezelfde alert-adressen.
 5. Portal Run Trigger toegestaan; admin-Start ongewijzigd.
