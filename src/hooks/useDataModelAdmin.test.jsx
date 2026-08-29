@@ -131,6 +131,14 @@ describe('useDataModelAdmin — losse kolom-toggles', () => {
     expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/columns/2', { method: 'DELETE' });
     expect(result.current.columns.header).toHaveLength(0);
   });
+
+  it('behoudt linkedFromLine van de datamodel-payload', async () => {
+    const payload = datamodelPayload({
+      columns: { header: [columnFixture({ id: 3, source: 'custom', linkedFromLine: 'values' })], line: [] },
+    });
+    const { result } = await renderReady(payload);
+    expect(result.current.columns.header[0].linkedFromLine).toBe('values');
+  });
 });
 
 describe('useDataModelAdmin — bulk-toggle (setColumnToggleState)', () => {

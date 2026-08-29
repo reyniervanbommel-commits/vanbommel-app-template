@@ -4,6 +4,7 @@ const {
   parseRuntimeHeaderLinks,
   mergeRuntimeHeaderLinks,
   loadRuntimeHeaderLinks,
+  annotateAdminColumnsWithLineLinks,
   clearRuntimeHeaderLinksCache,
 } = require('./runtimeHeaderLinks');
 
@@ -103,5 +104,29 @@ describe('loadRuntimeHeaderLinks', () => {
     expect(links.lineValueHeaderLinks).toEqual([
       { lineColumnKey: 'itemNumber', headerColumnKey: 'items_on_header' },
     ]);
+  });
+});
+
+describe('annotateAdminColumnsWithLineLinks', () => {
+  it('markeert headerkolommen die via push-total of push-values gekoppeld zijn', () => {
+    const columns = [
+      { key: 'status', source: 'd365' },
+      { key: 'qty_total', source: 'custom', label: 'Qty Total' },
+      { key: 'item_values', source: 'custom', label: 'Item Values' },
+      { key: 'notes', source: 'custom', label: 'Notes' },
+    ];
+    const annotated = annotateAdminColumnsWithLineLinks(columns, {
+      lineTotalHeaderLinks: [{ lineColumnKey: 'quantity', headerColumnKey: 'qty_total' }],
+      lineValueHeaderLinks: [{ lineColumnKey: 'itemNumber', headerColumnKey: 'item_values' }],
+    });
+    expect(annotated[0].linkedFromLine).toBeUndefined();
+    expect(annotated[1].linkedFromLine).toBe('total');
+    expect(annotated[2].linkedFromLine).toBe('values');
+    expect(annotated[3].linkedFromLine).toBeUndefined();
+  });
+
+  it('laat de originele lijst ongemoeid als er geen koppelingen zijn', () => {
+    const columns = [{ key: 'notes', source: 'custom' }];
+    expect(annotateAdminColumnsWithLineLinks(columns, {})).toBe(columns);
   });
 });

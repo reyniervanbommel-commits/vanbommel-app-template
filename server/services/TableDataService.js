@@ -24,7 +24,11 @@ const {
 const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
-const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
+const {
+  loadRuntimeHeaderLinks,
+  loadStaffRuntimeHeaderLinks,
+  annotateAdminColumnsWithLineLinks,
+} = require('../utils/runtimeHeaderLinks');
 const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
@@ -4885,12 +4889,15 @@ async function getDataModel(tableKey) {
     listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
   ]);
   // lookup-kolommen zijn afgeleid/read-only en horen niet in de admin-config.
-  const headerCols = masterCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
+  let headerCols = masterCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
   const lineCols = detailCols.filter((c) => c.source !== 'lookup').map(toAdminColumn);
 
   const hasDetail = Boolean(table.relation && table.relation.kind && table.relation.kind !== 'none');
+  // Alleen bij custom headerkolommen: markeer "push to header"-koppelingen. Draait parallel
+  // met de preview-queries en hergebruikt de 60s staff-links-cache — geen extra werk op het board.
+  const hasCustomHeader = headerCols.some((column) => column.source === 'custom');
 
-  const [headerPreviewRowsRes, linePreviewRowsRes] = await Promise.all([
+  const [headerPreviewRowsRes, linePreviewRowsRes, runtimeHeaderLinks] = await Promise.all([
     pool.request()
       .input('tableId', sql.BigInt, table.id)
       .input('rowLimit', sql.Int, DATA_MODEL_PREVIEW_ROW_LIMIT)
@@ -4911,7 +4918,13 @@ async function getDataModel(tableKey) {
           ORDER BY synced_at DESC, record_key ASC, detail_key ASC
         `)
       : Promise.resolve({ recordset: [] }),
+    hasCustomHeader
+      ? time('dm_header_links', () => loadStaffRuntimeHeaderLinks(pool, table.key))
+      : Promise.resolve(null),
   ]);
+  if (runtimeHeaderLinks) {
+    headerCols = annotateAdminColumnsWithLineLinks(headerCols, runtimeHeaderLinks);
+  }
 
   const [baseUrl, company] = await Promise.all([
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),

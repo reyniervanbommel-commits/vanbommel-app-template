@@ -14,6 +14,11 @@ import {
 } from '@fluentui/react-components';
 import { ArrowUploadRegular, LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
 import ConfirmDialog from '../../shared/ConfirmDialog';
+import {
+  customColumnDeleteMessage,
+  linkedFromLineHint,
+  linkedFromLineLabel,
+} from './entityConfigTableUtils';
 
 const useStyles = makeStyles({
   mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200 },
@@ -28,7 +33,15 @@ const useStyles = makeStyles({
   },
   hiddenRow: { opacity: 0.55 },
   relationRow: { backgroundColor: 'rgba(255, 179, 0, 0.09)' },
+  fieldCell: { whiteSpace: 'normal' },
   cellCenter: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px') },
+  fieldBadges: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: tokens.spacingHorizontalXS,
+    rowGap: tokens.spacingVerticalXXS,
+  },
   deleteButton: { minWidth: '92px' },
 });
 
@@ -71,6 +84,8 @@ export default function DataPreviewColumnConfigRow({
     !column.isActive && styles.hiddenRow,
     isRelationField && styles.relationRow,
   );
+  const linkedLabel = linkedFromLineLabel(column.linkedFromLine);
+  const linkedHint = linkedLabel ? linkedFromLineHint(column.linkedFromLine) : '';
 
   return (
     <>
@@ -87,11 +102,18 @@ export default function DataPreviewColumnConfigRow({
         <TableCell className={styles.valueCell}>
           <Text weight="semibold">{column.label}</Text>
         </TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.fieldCell)}>
           {column.source === 'd365' ? (
             <span className={styles.mono}>{column.d365Field || '(derived)'}</span>
           ) : (
-            <Badge appearance="tint" color="informative" size="small">Custom column</Badge>
+            <span className={styles.fieldBadges} title={linkedHint || undefined}>
+              <Badge appearance="tint" color="informative" size="small">Custom column</Badge>
+              {linkedLabel ? (
+                <Badge appearance="tint" color="warning" size="small" icon={<LinkRegular />}>
+                  {linkedLabel}
+                </Badge>
+              ) : null}
+            </span>
           )}
         </TableCell>
         <TableCell className={styles.valueCell}>{typeLabel}</TableCell>
@@ -186,7 +208,7 @@ export default function DataPreviewColumnConfigRow({
         <ConfirmDialog
           open={deleteConfirmOpen}
           title="Delete custom column"
-          message={`Delete custom column "${column.label}"? This permanently removes the column and all related values from SQL.`}
+          message={customColumnDeleteMessage(column)}
           confirmText="Delete"
           cancelText="Cancel"
           onConfirm={handleConfirmDelete}
