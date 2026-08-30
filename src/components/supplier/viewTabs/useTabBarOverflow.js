@@ -70,7 +70,6 @@ export function useTabBarOverflow(contentKey, activeTabId) {
       if (el.scrollWidth <= el.clientWidth) return;
       pointerId = event.pointerId;
       session.start(event.clientX, el.scrollLeft);
-      if (typeof el.setPointerCapture === 'function') el.setPointerCapture(event.pointerId);
     };
 
     const handlePointerMove = (event) => {
@@ -78,6 +77,8 @@ export function useTabBarOverflow(contentKey, activeTabId) {
       const nextLeft = session.move(event.clientX);
       if (nextLeft == null) return;
       const max = Math.max(0, el.scrollWidth - el.clientWidth);
+      // Capture only after the drag threshold, otherwise the tab click is stolen.
+      if (typeof el.setPointerCapture === 'function') el.setPointerCapture(event.pointerId);
       setIsDragging(true);
       el.scrollLeft = Math.min(max, Math.max(0, nextLeft));
       event.preventDefault();
