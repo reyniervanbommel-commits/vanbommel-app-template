@@ -5,9 +5,11 @@ import PurchaseOrderViewTabMenuSection from './viewTabs/PurchaseOrderViewTabMenu
 
 const useStyles = makeStyles({
   viewTitle: {
-    flexShrink: 0,
+    flexShrink: 1,
     minWidth: 0,
-    maxWidth: '260px',
+    maxWidth: '100%',
+    width: 'fit-content',
+    overflow: 'visible',
   },
 });
 
@@ -24,6 +26,7 @@ export default function PurchaseOrderViewTitleRow({
     savedViews,
     activeViewId,
     hasUnsavedChanges,
+    getUnsavedViewDiff,
     applyViewState,
     handleResetView,
     handleRenameView,
@@ -44,6 +47,7 @@ export default function PurchaseOrderViewTitleRow({
         canManageViews={isStaff}
         saving={savedViews.saving}
         hasUnsavedChanges={hasUnsavedChanges}
+        getUnsavedViewDiff={getUnsavedViewDiff}
         onApplyView={applyViewState}
         onResetView={handleResetView}
         onSaveAsNew={onSaveAsNew}

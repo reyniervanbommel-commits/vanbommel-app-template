@@ -11,27 +11,9 @@ import { ALL_TAB_ID, normalizeTabsState } from '../utils/viewTabs';
 import { pickStartupView } from '../utils/purchaseOrderStartupView';
 import { readPoTableSession } from '../utils/poTableSessionState';
 import { usePurchaseOrderTableSession } from './usePurchaseOrderTableSession';
+import { describeViewStateDiff, stableSerializeViewState } from '../utils/viewStateDiff';
 
 const BOARD_KEY = 'purchase-orders';
-
-function normalizeForComparison(value) {
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeForComparison(entry));
-  }
-  if (value && typeof value === 'object') {
-    return Object.keys(value)
-      .sort()
-      .reduce((result, key) => {
-        result[key] = normalizeForComparison(value[key]);
-        return result;
-      }, {});
-  }
-  return value;
-}
-
-function stableSerialize(value) {
-  return JSON.stringify(normalizeForComparison(value));
-}
 
 /**
  * Bundelt saved-view state en handlers voor de purchase-order board.
@@ -55,6 +37,7 @@ export function usePurchaseOrderSavedViewState({
   const autoAppliedRef = useRef(false);
   const activeViewIdRef = useRef(activeViewId);
   const allOrdersDirtyRef = useRef(false);
+  const savedViewStateRef = useRef(null);
   activeViewIdRef.current = activeViewId;
   const viewTabs = usePurchaseOrderViewTabs({
     activeViewId,
@@ -87,9 +70,17 @@ export function usePurchaseOrderSavedViewState({
   }, [activeViewId, boardView, exportColumnLayout, savedViews.views, stickyColumnKeys, showHistoryIndicators, viewTabs]);
 
   const buildCurrentFingerprint = useCallback(
-    () => stableSerialize(buildCurrentViewState()),
+    () => stableSerializeViewState(buildCurrentViewState()),
     [buildCurrentViewState]
   );
+
+  const getUnsavedViewDiff = useCallback((options = {}) => {
+    if (!activeViewId || !savedViewStateRef.current) return { rows: [], moreCount: 0 };
+    return describeViewStateDiff(savedViewStateRef.current, buildCurrentViewState(), {
+      columns,
+      maxRows: Number.isFinite(options.maxRows) ? options.maxRows : 250,
+    });
+  }, [activeViewId, buildCurrentViewState, columns]);
 
   const hasUnsavedChanges = useMemo(() => {
     if (!activeViewId || !savedStateFingerprint) return false;
@@ -108,13 +99,16 @@ export function usePurchaseOrderSavedViewState({
       setActiveViewId(view?.id ?? null);
       if (view?.id) {
         viewTabs.loadFromViewState({ ...state, viewId: view.id });
-        setSavedStateFingerprint(stableSerialize({
+        const nextSaved = {
           ...state,
           vendorAccount: state.vendorAccount || '',
           tabs: normalizeTabsState(state.tabs),
-        }));
+        };
+        savedViewStateRef.current = nextSaved;
+        setSavedStateFingerprint(stableSerializeViewState(nextSaved));
       } else {
         viewTabs.resetTabs();
+        savedViewStateRef.current = null;
         setSavedStateFingerprint(null);
       }
     });
@@ -137,6 +131,7 @@ export function usePurchaseOrderSavedViewState({
     boardView.columnSums?.clearColumnSums?.();
     setShowHistoryIndicators(allOrdersShowHistoryIndicators);
     setActiveViewId(null);
+    savedViewStateRef.current = null;
     setSavedStateFingerprint(null);
     viewTabs.resetTabs();
   }, [boardView, allOrdersShowHistoryIndicators, tableSession, activeViewId, viewTabs]);
@@ -147,7 +142,7 @@ export function usePurchaseOrderSavedViewState({
       vendorAccount: vendorAccount || '',
       tabs: { extraTabs: [], groups: [] },
     };
-    const currentFingerprint = stableSerialize(currentState);
+    const currentFingerprint = stableSerializeViewState(currentState);
     const created = await savedViews.createView({
       name,
       scope,
@@ -158,6 +153,7 @@ export function usePurchaseOrderSavedViewState({
       tableSession.suppressNextPersist();
       tableSession.clear(created.id);
       setActiveViewId(created.id);
+      savedViewStateRef.current = currentState;
       setSavedStateFingerprint(currentFingerprint);
       viewTabs.loadFromViewState({ ...currentState, viewId: created.id });
     }
@@ -179,7 +175,8 @@ export function usePurchaseOrderSavedViewState({
     await savedViews.updateView(view.id, { viewState: currentState });
     tableSession.suppressNextPersist();
     tableSession.clear(view.id);
-    setSavedStateFingerprint(stableSerialize(currentState));
+    savedViewStateRef.current = currentState;
+    setSavedStateFingerprint(stableSerializeViewState(currentState));
   }, [savedViews, buildCurrentViewState, tableSession, viewTabs]);
 
   const handleRenameView = useCallback(async (view, name) => {
@@ -196,6 +193,7 @@ export function usePurchaseOrderSavedViewState({
     if (view.id === activeViewId) {
       setShowHistoryIndicators(allOrdersShowHistoryIndicators);
       setActiveViewId(null);
+      savedViewStateRef.current = null;
       setSavedStateFingerprint(null);
       viewTabs.resetTabs();
     }
@@ -223,7 +221,8 @@ export function usePurchaseOrderSavedViewState({
     };
     await savedViews.updateView(view.id, { viewState: nextViewState });
     if (decision.updateLive) {
-      setSavedStateFingerprint(stableSerialize(nextViewState));
+      savedViewStateRef.current = nextViewState;
+      setSavedStateFingerprint(stableSerializeViewState(nextViewState));
     }
   }, [activeViewId, allOrdersShowHistoryIndicators, persistAllOrdersHistory, savedViews]);
 
@@ -268,6 +267,7 @@ export function usePurchaseOrderSavedViewState({
     handleDeleteView,
     handleToggleShowHistory,
     hasUnsavedChanges,
+    getUnsavedViewDiff,
     showHistoryIndicators,
     allOrdersShowHistoryIndicators,
     stickyColumnKeys,
@@ -285,6 +285,7 @@ export function usePurchaseOrderSavedViewState({
     handleDeleteView,
     handleToggleShowHistory,
     hasUnsavedChanges,
+    getUnsavedViewDiff,
     showHistoryIndicators,
     allOrdersShowHistoryIndicators,
     stickyColumnKeys,
