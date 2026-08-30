@@ -25,6 +25,16 @@ describe('KpiFormulaFold', () => {
     expect(onParentClick).not.toHaveBeenCalled();
   });
 
+  it('shows a threshold field on percentage KPI cards', () => {
+    renderWithFluent(
+      <KpiFormulaFold formula="delivered / ordered × 100" kpiKey="delivered" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Card settings' }));
+    expect(screen.getByLabelText('Threshold percent')).toBeTruthy();
+    expect(screen.queryByText('Below threshold')).toBeNull();
+    expect(screen.getByText('Formula')).toBeTruthy();
+  });
+
   it('keeps the fold graphic hidden until hover', () => {
     const { container } = renderWithFluent(
       <KpiFormulaFold formula="open + delivered" kpiKey="ordered" />,

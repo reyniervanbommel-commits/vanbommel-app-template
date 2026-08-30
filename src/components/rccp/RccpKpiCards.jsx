@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { PO_BOARD_CLICKABLE_KPI_KEYS } from '../../utils/poBoardKpis';
+import KpiCardStyleProvider from './KpiCardStyleProvider';
 import KpiCard, { formatDays, formatItems, formatPct } from './RccpKpiCard';
 
 const useStyles = makeStyles({
@@ -24,6 +25,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
     : new Set();
   const uniqueLateItems = kpis.lateDeliveryItemCount;
   return (
+    <KpiCardStyleProvider>
     <div className={styles.row}>
       <KpiCard
         kpiKey="ordered"
@@ -127,6 +129,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         onActivate={handleActivate}
       />
     </div>
+    </KpiCardStyleProvider>
   );
 }
 
