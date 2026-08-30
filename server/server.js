@@ -24,9 +24,8 @@ const { rccpAccess } = require('./middleware/rccpAccess');
 const { createMediaRouter } = require('./routes/media');
 const { requireSession, requireAnyRole, requireRole } = require('./middleware/auth');
 const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
-const { requireNightRefreshToken } = require('./utils/nightRefreshToken');
 const refreshRunService = require('./services/RefreshRunService');
-const dataService = require('./services/TableDataService');
+const internalNightRefreshRouter = require('./routes/internalNightRefresh');
 const errorHandler = require('./middleware/errorHandler');
 const { ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
@@ -151,29 +150,7 @@ app.use((req, res, next) => {
   });
 });
 
-const nightRefreshPostLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  message: { error: 'Too many attempts. Try again in one minute.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.post('/api/internal/night-refresh', nightRefreshPostLimiter, requireNightRefreshToken, async (req, res, next) => {
-  try {
-    const result = await dataService.startRefresh('purchase-orders', { source: 'night' });
-    if (result.attached) {
-      return res.status(202).json({ attached: true, runId: result.runId });
-    }
-    return res.status(202).json({ attached: false, runId: result.runId, running: true });
-  } catch (err) {
-    return next(err);
-  }
-});
-
-app.get('/api/internal/night-refresh/status', requireNightRefreshToken, (_req, res) => {
-  res.json(refreshRunService.getNightStatus());
-});
+app.use('/api/internal/night-refresh', internalNightRefreshRouter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
