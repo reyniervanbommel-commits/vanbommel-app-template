@@ -12,6 +12,7 @@ const {
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
+  isSentinelDate,
   collectDateSlots,
 } = require('./rccpPoRow');
 const { compactByOrder } = require('./rccpKpiCompact');
@@ -21,13 +22,6 @@ const WIDE_WINDOW = { fromYear: 2000, fromWeek: 1, toYear: 2100, toWeek: 53 };
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   if (aYear !== bYear) return aYear - bYear;
   return aWeek - bWeek;
-}
-
-function isSentinelDate(value) {
-  if (value === null || value === undefined || value === '') return false;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
 }
 
 function utcDayValue(value) {

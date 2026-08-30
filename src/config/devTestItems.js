@@ -12,6 +12,16 @@ export const devTestItems = [
       'Night API on DEV returns 503 (production-only); no Logic App on DEV',
     ],
   },
+  {
+    id: 'rccp-semantic-slots',
+    title: 'RCCP semantic field slots (#298)',
+    checks: [
+      'RCCP Settings → Data shows Vendor, Requested delivery date, Confirmed delivery date, Receipt date; date lists exclude text columns such as item name',
+      'RCCP Settings → Quantities shows exactly three slots Open / Received / Ordered, with no Add or Delete; Ordered shows Chart type',
+      'Data model has no RCCP value column toggle',
+      'A PO with confirmed delivery in another ISO week than requested appears in the confirmed week in the matrix, chart and drill-down; 1-1-1900 confirmed falls back to requested',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

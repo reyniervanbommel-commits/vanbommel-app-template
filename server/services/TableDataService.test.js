@@ -407,9 +407,7 @@ describe('TableDataService runtime linked header values', () => {
     expect(masterValues.aantal_total_2).toBe(5);
   });
 
-  it('toAdminColumn geeft rccpMeasure en formulaExpr door aan de admin-UI', () => {
-    // Zonder deze velden kan de "RCCP value column"-toggle zijn eigen stand niet tonen en
-    // wordt een custom kolom met formule onterecht als onbruikbaar gemarkeerd.
+  it('toAdminColumn geeft formulaExpr door aan de admin-UI', () => {
     const mapped = toAdminColumn({
       id: 1,
       key: 'quantity',
@@ -417,11 +415,10 @@ describe('TableDataService runtime linked header values', () => {
       scope: 'detail',
       source: 'source',
       dataType: 'number',
-      rccpMeasure: true,
       formulaExpr: '(a)+(b)',
     });
-    expect(mapped.rccpMeasure).toBe(true);
     expect(mapped.formulaExpr).toBe('(a)+(b)');
+    expect(mapped).not.toHaveProperty('rccpMeasure');
   });
 
   it('calculateLinkedLineTotal telt robuust numerieke waarden', () => {
@@ -978,41 +975,30 @@ describe('TableDataService.buildSyntheticLookupColumn', () => {
     targetTableLabel: 'Ontvangstregels',
   };
 
-  it('erft de RCCP-vrijgave van de doelkolom', () => {
+  it('erft label en datatype van de doelkolom', () => {
     const column = buildSyntheticLookupColumn({
       ...base,
       targetColumn: {
-        label: 'Received qty', dataType: 'number', rccpMeasure: true,
+        label: 'Received qty', dataType: 'number',
       },
     });
-    expect(column.rccpMeasure).toBe(true);
     expect(column.key).toBe('receivedPurchaseQuantity');
     expect(column.dataType).toBe('number');
     expect(column.source).toBe('lookup');
+    expect(column).not.toHaveProperty('rccpMeasure');
     expect(column.lookup).toEqual({
       targetTableKey: 'product-receipt-lines',
       targetColumnKey: 'receivedPurchaseQuantity',
       targetTableLabel: 'Ontvangstregels',
       targetColumnLabel: 'Received qty',
     });
-    // Synthetisch: geen tb_columns-rij, dus niet zelf toggelbaar via de kolom-id.
     expect(column.id).toBeNull();
   });
 
-  it('blijft niet-vrijgegeven wanneer de doelkolom dat niet is', () => {
-    const column = buildSyntheticLookupColumn({
-      ...base,
-      targetColumn: {
-        label: 'Received qty', dataType: 'number', rccpMeasure: false,
-      },
-    });
-    expect(column.rccpMeasure).toBe(false);
-  });
-
-  it('valt terug op niet-vrijgegeven zonder doelkolom', () => {
+  it('valt terug op text zonder doelkolom', () => {
     const column = buildSyntheticLookupColumn({ ...base, targetColumn: undefined });
-    expect(column.rccpMeasure).toBe(false);
     expect(column.dataType).toBe('text');
+    expect(column).not.toHaveProperty('rccpMeasure');
   });
 });
 

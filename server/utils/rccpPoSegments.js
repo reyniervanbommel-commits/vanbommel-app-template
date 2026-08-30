@@ -12,20 +12,16 @@ const {
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
+  isSentinelDate,
+  planningDateValue,
   collectDateSlots,
+  collectPlanningSlots,
 } = require('./rccpPoRow');
 const { calendarDaysBetween } = require('./rccpKpis');
 
 function compareIsoWeek(aYear, aWeek, bYear, bWeek) {
   if (aYear !== bYear) return aYear - bYear;
   return aWeek - bWeek;
-}
-
-function isSentinelDate(value) {
-  if (value === null || value === undefined || value === '') return false;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
 }
 
 function emptyWeekBucket() {
@@ -176,7 +172,9 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
       if (status && excludedSet.has(String(status).toLowerCase())) return;
 
       const itemNumber = lineItemNumber(lineValues, masterValues);
-      const plannedDate = lineDateValue(lineValues, masterValues, dateKey);
+      const plannedDate = planningDateValue(
+        lineValues, masterValues, dateKey, config.confirmedDateColumnKey,
+      );
       const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
       const receiptDate = rawReceipt || plannedDate;
       const planned1900 = isSentinelDate(plannedDate);
@@ -233,7 +231,9 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
     }
 
     const plannedSlots = (headerOnlyOpen || headerOnlyDelivered)
-      ? collectDateSlots(details, masterValues, dateKey, null, window, excludedSet, masterStatus)
+      ? collectPlanningSlots(
+        details, masterValues, dateKey, config.confirmedDateColumnKey, window, excludedSet, masterStatus,
+      )
       : [];
     if (headerOnlyOpen) {
       spreadHeaderQty(

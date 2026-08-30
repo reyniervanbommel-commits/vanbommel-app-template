@@ -18,7 +18,8 @@ const {
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
-  collectDateSlots,
+  collectPlanningSlots,
+  planningDateValue,
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
@@ -26,9 +27,15 @@ const { buildItemPickerLookupMap } = require('../utils/rccpItemPickerLookup');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
-function collectInWindowSlots(details, masterValues, dateColumnKey, window, excludedSet, masterStatus) {
-  return collectDateSlots(
-    details, masterValues, dateColumnKey, null, window, excludedSet, masterStatus,
+function collectInWindowSlots(details, masterValues, config, window, excludedSet, masterStatus) {
+  return collectPlanningSlots(
+    details,
+    masterValues,
+    config.dateColumnKey,
+    config.confirmedDateColumnKey,
+    window,
+    excludedSet,
+    masterStatus,
   );
 }
 
@@ -141,10 +148,9 @@ function aggregatePoLoad(rows, config, window) {
         return;
       }
 
-      let dateValue = pickValue(lineValues, config.dateColumnKey);
-      if (!dateValue) {
-        dateValue = pickValue(masterValues, config.dateColumnKey);
-      }
+      let dateValue = planningDateValue(
+        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey,
+      );
       if (!dateValue) {
         diagnostics.missingDateLines += 1;
         missingDates.push({
@@ -187,7 +193,7 @@ function aggregatePoLoad(rows, config, window) {
 
     if (!headerOnlyKeys.size) continue;
     const slots = collectInWindowSlots(
-      details, masterValues, config.dateColumnKey, window, excludedSet, masterStatus,
+      details, masterValues, config, window, excludedSet, masterStatus,
     );
     for (const measure of measures) {
       if (!headerOnlyKeys.has(measure.columnKey)) continue;
@@ -537,7 +543,7 @@ function buildDrillDownRows(rows, config, cell, window) {
 
     if (isHeaderOnlyMeasure(details, masterValues, measureKey)) {
       const slots = collectInWindowSlots(
-        details, masterValues, config.dateColumnKey, window, excludedSet, masterStatus,
+        details, masterValues, config, window, excludedSet, masterStatus,
       );
       const total = toNumber(pickValue(masterValues, measureKey));
       if (total <= 0 || !slots.length) continue;
@@ -582,18 +588,23 @@ function buildDrillDownRows(rows, config, cell, window) {
     };
 
     if (!details.length) {
-      pushLine(null, masterValues, pickValue(masterValues, config.dateColumnKey), true);
+      pushLine(
+        null,
+        masterValues,
+        planningDateValue(masterValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey),
+        true,
+      );
       continue;
     }
 
     for (const detail of details) {
       const lineValues = detail.values || {};
-      let dateValue = pickValue(lineValues, config.dateColumnKey);
-      let dateFromHeader = false;
-      if (!dateValue) {
-        dateValue = pickValue(masterValues, config.dateColumnKey);
-        dateFromHeader = Boolean(dateValue);
-      }
+      const dateValue = planningDateValue(
+        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey,
+      );
+      const dateFromHeader = Boolean(dateValue)
+        && !pickValue(lineValues, config.dateColumnKey)
+        && !pickValue(lineValues, config.confirmedDateColumnKey);
       pushLine(detail.detailKey, lineValues, dateValue, dateFromHeader);
     }
   }

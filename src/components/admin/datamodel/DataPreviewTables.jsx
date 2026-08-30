@@ -74,7 +74,6 @@ function DataPreviewTables({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
-  onToggleRccpMeasure,
   onDeleteColumn,
   onSetColumnToggleState,
   onDiscoverFields,
@@ -130,7 +129,6 @@ function DataPreviewTables({
           onToggleVisibility={onToggleVisibility}
           onToggleVisibleAtDelete={onToggleVisibleAtDelete}
           onToggleWriteback={onToggleWriteback}
-          onToggleRccpMeasure={onToggleRccpMeasure}
           onDeleteColumn={onDeleteColumn}
           onExportExcel={handleExportExcel}
           onSetColumnToggleState={onSetColumnToggleState}

@@ -1,11 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
-  Button, Field, Select, Switch, Text, makeStyles, shorthands, tokens,
+  Field, Select, Switch, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
-import { Delete24Regular } from '@fluentui/react-icons';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
-import { rccpFieldLabel } from './rccpFieldLabel';
 import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
 
 const CHART_TYPES = [
@@ -52,16 +50,16 @@ const useStyles = makeStyles({
 });
 
 function RccpQuantityMeasureCard({
-  measure, index, numberCols, canRemove, chartRole, onUpdate, onRemove, onRole,
+  measure, index, numberCols, slotTitle, showChartType, onUpdate,
 }) {
   const styles = useStyles();
   const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
-  const title = measure.label || measure.columnKey;
+  const columnLabel = measure.label || measure.columnKey;
 
   const columnOptions = useMemo(() => {
     const list = [];
     if (isUnavailable) {
-      list.push({ value: measure.columnKey, text: `${title} — unavailable` });
+      list.push({ value: measure.columnKey, text: `${columnLabel} — unavailable` });
     }
     numberCols.forEach((col) => list.push({
       value: col.key,
@@ -69,7 +67,7 @@ function RccpQuantityMeasureCard({
       group: rccpColumnGroupLabel(col),
     }));
     return list;
-  }, [isUnavailable, measure.columnKey, title, numberCols]);
+  }, [isUnavailable, measure.columnKey, columnLabel, numberCols]);
 
   const handleColumn = useCallback((key) => {
     const col = numberCols.find((c) => c.key === key);
@@ -88,22 +86,10 @@ function RccpQuantityMeasureCard({
     onUpdate(index, { showInChart: data.checked });
   }, [index, onUpdate]);
 
-  const handleRemove = useCallback(() => onRemove(index), [index, onRemove]);
-  const handleRole = useCallback((e) => {
-    onRole(index, e.target.value);
-  }, [index, onRole]);
-
   return (
     <div className={styles.card}>
       <div className={styles.header}>
-        <Text weight="semibold" className={styles.title}>{title}</Text>
-        <Button
-          appearance="subtle"
-          icon={<Delete24Regular />}
-          disabled={!canRemove}
-          onClick={handleRemove}
-          aria-label={`Remove ${title}`}
-        />
+        <Text weight="semibold" className={styles.title}>{slotTitle}</Text>
       </div>
       <div className={styles.field}>
         <Field
@@ -113,28 +99,14 @@ function RccpQuantityMeasureCard({
         >
           <RccpNarrowDropdown
             selectedValue={measure.columnKey}
-            selectedText={title}
+            selectedText={columnLabel}
             options={columnOptions}
             onSelect={handleColumn}
           />
         </Field>
       </div>
-      <div className={styles.field}>
-        <Field
-          label={rccpFieldLabel(
-            'Chart role',
-            'Optional. Open = full-color boxes above the axis. Received = 50% opacity of this color above the axis, and 100% of the same color below the axis on the receipt date.',
-          )}
-        >
-          <Select size="small" value={chartRole || ''} onChange={handleRole}>
-            <option value="">Matrix row only</option>
-            <option value="open">Open (boxes above)</option>
-            <option value="delivered">Received (boxes below)</option>
-          </Select>
-        </Field>
-      </div>
       <div className={styles.row}>
-        {!chartRole && (
+        {showChartType && (
           <div className={styles.chartSlot}>
             <Field label="Chart type">
               <Select size="small" value={measure.chartType || 'line'} onChange={handleChart}>
@@ -150,7 +122,7 @@ function RccpQuantityMeasureCard({
                 layout="popover"
                 selectedColor={measure.color || SELECTABLE_STATUS_COLORS[0]}
                 onSelect={handleColor}
-                ariaLabel={`${title} color`}
+                ariaLabel={`${slotTitle} color`}
               />
             </div>
           </Field>

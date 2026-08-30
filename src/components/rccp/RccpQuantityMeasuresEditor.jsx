@@ -1,10 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Button, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import { Add24Regular } from '@fluentui/react-icons';
-import { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
-import { isRccpQuantityColumn } from '../../utils/rccpQuantityColumns';
+import { Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { isRccpQuantityColumn, SLOT_DEFAULT_KEYS } from '../../utils/rccpQuantityColumns';
 import RccpQuantityMeasureCard from './RccpQuantityMeasureCard';
-import { assignChartRole, chartRoleForColumn } from './rccpChartRole';
 
 const useStyles = makeStyles({
   root: {
@@ -14,11 +11,16 @@ const useStyles = makeStyles({
     width: '100%',
   },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  add: { alignSelf: 'flex-start' },
 });
 
+const SLOTS = [
+  { title: 'Open', field: 'openMeasureKey', fallback: SLOT_DEFAULT_KEYS.open },
+  { title: 'Received', field: 'deliveredMeasureKey', fallback: SLOT_DEFAULT_KEYS.received },
+  { title: 'Ordered', field: 'orderedMeasureKey', fallback: SLOT_DEFAULT_KEYS.ordered },
+];
+
 function RccpQuantityMeasuresEditor({
-  measures, columns, hideIntro, openMeasureKey, deliveredMeasureKey, onChange, onUpdateField,
+  measures, columns, hideIntro, openMeasureKey, deliveredMeasureKey, orderedMeasureKey, onChange, onUpdateField,
 }) {
   const styles = useStyles();
   const numberCols = useMemo(() => {
@@ -30,89 +32,49 @@ function RccpQuantityMeasuresEditor({
     return [...byKey.values()];
   }, [columns]);
 
-  const updateMeasure = useCallback((index, patch) => {
-    const prev = measures[index];
-    onChange(measures.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
-    if (patch.columnKey && patch.columnKey !== prev?.columnKey) {
-      if (openMeasureKey === prev.columnKey) onUpdateField('openMeasureKey', patch.columnKey);
-      if (deliveredMeasureKey === prev.columnKey) onUpdateField('deliveredMeasureKey', patch.columnKey);
-    }
-  }, [measures, onChange, openMeasureKey, deliveredMeasureKey, onUpdateField]);
-
-  const nextFreeColumn = useMemo(
-    () => numberCols.find((col) => !measures.some((m) => m.columnKey === col.key)) || null,
-    [numberCols, measures],
+  const slotMeasures = useMemo(
+    () => SLOTS.map((slot, index) => {
+      const key = [openMeasureKey, deliveredMeasureKey, orderedMeasureKey][index] || slot.fallback;
+      return measures.find((m) => m.columnKey === key) || {
+        columnKey: key,
+        label: key,
+        chartType: 'line',
+        color: '#D13438',
+        showInChart: true,
+      };
+    }),
+    [measures, openMeasureKey, deliveredMeasureKey, orderedMeasureKey],
   );
 
-  const addMeasure = useCallback(() => {
-    if (!nextFreeColumn) return;
-    onChange([...measures, {
-      columnKey: nextFreeColumn.key,
-      label: nextFreeColumn.label || nextFreeColumn.key,
-      chartType: 'line',
-      color: SELECTABLE_STATUS_COLORS[4] || '#579bfc',
-      showInChart: true,
-    }]);
-  }, [nextFreeColumn, measures, onChange]);
-
-  const removeMeasure = useCallback((index) => {
-    const removed = measures[index];
-    onChange(measures.filter((_, i) => i !== index));
-    if (!removed) return;
-    const next = assignChartRole(openMeasureKey, deliveredMeasureKey, removed.columnKey, '');
-    if (next.openMeasureKey !== openMeasureKey) onUpdateField('openMeasureKey', next.openMeasureKey);
-    if (next.deliveredMeasureKey !== deliveredMeasureKey) {
-      onUpdateField('deliveredMeasureKey', next.deliveredMeasureKey);
-    }
-  }, [measures, onChange, openMeasureKey, deliveredMeasureKey, onUpdateField]);
-
-  const handleRole = useCallback((index, role) => {
-    const columnKey = measures[index]?.columnKey;
-    if (!columnKey) return;
-    const next = assignChartRole(openMeasureKey, deliveredMeasureKey, columnKey, role);
-    if (next.openMeasureKey !== openMeasureKey) onUpdateField('openMeasureKey', next.openMeasureKey);
-    if (next.deliveredMeasureKey !== deliveredMeasureKey) {
-      onUpdateField('deliveredMeasureKey', next.deliveredMeasureKey);
-    }
-  }, [measures, openMeasureKey, deliveredMeasureKey, onUpdateField]);
+  const updateMeasure = useCallback((index, patch) => {
+    const next = slotMeasures.map((entry, i) => (i === index ? { ...entry, ...patch } : entry));
+    onChange(next);
+    if (patch.columnKey) onUpdateField(SLOTS[index].field, patch.columnKey);
+  }, [slotMeasures, onChange, onUpdateField]);
 
   return (
     <div className={styles.root}>
       {!hideIntro && (
         <Text className={styles.hint}>
-          Admin → Data model “RCCP value column” is the allowlist. Each card picks one of
-          those columns for the matrix. Chart role is optional: Open or Received.
+          Each slot maps one numeric column. Open and Received drive the chart boxes; Ordered is a matrix row.
         </Text>
       )}
       {!numberCols.length && (
         <Text className={styles.hint}>
-          No quantity columns found. Enable “RCCP value column” under Admin → Data model,
-          or add a custom/formula total on the order header.
+          No numeric columns found. Add a number column or a formula on the order header.
         </Text>
       )}
-      {measures.map((measure, index) => (
+      {slotMeasures.map((measure, index) => (
         <RccpQuantityMeasureCard
-          key={`${measure.columnKey}-${index}`}
+          key={SLOTS[index].field}
           measure={measure}
           index={index}
           numberCols={numberCols}
-          canRemove={measures.length > 1}
-          chartRole={chartRoleForColumn(measure.columnKey, openMeasureKey, deliveredMeasureKey)}
+          slotTitle={SLOTS[index].title}
+          showChartType={index === 2}
           onUpdate={updateMeasure}
-          onRemove={removeMeasure}
-          onRole={handleRole}
         />
       ))}
-      <Button
-        className={styles.add}
-        appearance="secondary"
-        icon={<Add24Regular />}
-        disabled={!nextFreeColumn}
-        onClick={addMeasure}
-        title={nextFreeColumn ? undefined : 'Every released column is already in use'}
-      >
-        Add quantity column
-      </Button>
     </div>
   );
 }

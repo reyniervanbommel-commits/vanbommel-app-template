@@ -18,7 +18,6 @@ function columnFixture(overrides = {}) {
     sourceField: 'PurchaseOrderNumber',
     isActive: true,
     writable: false,
-    rccpMeasure: false,
     visibleAtDelete: false,
     ...overrides,
   };
@@ -61,7 +60,6 @@ describe('useDataModelAdmin — laden', () => {
       key: 'poNumber',
       writeBackAllowed: true,
       hideAllowed: true,
-      rccpMeasureAllowed: false,
     });
     expect(result.current.error).toBe('');
   });

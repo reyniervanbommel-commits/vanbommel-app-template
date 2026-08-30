@@ -442,6 +442,10 @@ router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) =>
     const config = await rccpSettingsService.saveConfig(req.body || {}, req.user?.id ?? null);
     await auditLog(req.user.id, req.user.email, 'UPDATE_RCCP_SETTINGS', 'app_settings', null, {
       dateColumnKey: config.dateColumnKey,
+      vendorColumnKey: config.vendorColumnKey,
+      confirmedDateColumnKey: config.confirmedDateColumnKey,
+      receiptDateColumnKey: config.receiptDateColumnKey,
+      orderedMeasureKey: config.orderedMeasureKey,
       quantityMeasures: (config.quantityMeasures || []).map((m) => m.columnKey),
     });
     res.json({ success: true, config });

@@ -37,6 +37,28 @@ function lineDateValue(lineValues, masterValues, dateColumnKey) {
   return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
 }
 
+function isSentinelDate(value) {
+  if (value === null || value === undefined || value === '') return false;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
+}
+
+/**
+ * Planningdatum per regel: confirmed als echte ISO-week, anders requested.
+ */
+function planningDateValue(lineValues, masterValues, requestedKey, confirmedKey) {
+  if (confirmedKey) {
+    const confirmed = lineDateValue(lineValues, masterValues, confirmedKey);
+    if (confirmed && !isSentinelDate(confirmed)) {
+      const year = getIsoWeekYear(confirmed);
+      const week = getIsoWeek(confirmed);
+      if (year && week) return confirmed;
+    }
+  }
+  return lineDateValue(lineValues, masterValues, requestedKey);
+}
+
 /**
  * Regels (of de header zelf) waarvan de gekozen datum in het RCCP-venster valt.
  * `fallbackKey` wordt alleen gebruikt als de primaire datum ontbreekt.
@@ -69,11 +91,42 @@ function collectDateSlots(
   return slots;
 }
 
+function collectPlanningSlots(
+  details, masterValues, requestedKey, confirmedKey, window, excludedSet, masterStatus,
+) {
+  const sources = details.length
+    ? details.map((detail) => ({ lineNumber: detail.detailKey, lineValues: detail.values || {} }))
+    : [{ lineNumber: null, lineValues: masterValues }];
+  const slots = [];
+  for (const source of sources) {
+    const status = pickValue(source.lineValues, 'status') ?? masterStatus;
+    if (status && excludedSet.has(String(status).toLowerCase())) continue;
+    const dateValue = planningDateValue(source.lineValues, masterValues, requestedKey, confirmedKey);
+    if (!dateValue) continue;
+    const year = getIsoWeekYear(dateValue);
+    const week = getIsoWeek(dateValue);
+    if (!year || !week || !isIsoWeekInWindow(year, week, window)) continue;
+    slots.push({
+      ...source,
+      dateValue,
+      year,
+      week,
+      key: isoWeekKey(year, week),
+      dateFromHeader: !lineDateValue(source.lineValues, {}, requestedKey)
+        && !lineDateValue(source.lineValues, {}, confirmedKey),
+    });
+  }
+  return slots;
+}
+
 module.exports = {
   toNumber,
   pickValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
+  isSentinelDate,
+  planningDateValue,
   collectDateSlots,
+  collectPlanningSlots,
 };

@@ -3,7 +3,7 @@
 const {
   DATA_TYPES,
   ensureRemarksColumn,
-  resolveRccpMeasureEligibility,
+  resolveRccpQuantityEligibility,
   resolveWriteback,
   slugify,
   findDependentFormulaColumn,
@@ -35,22 +35,22 @@ describe('TableColumnsService.resolveWriteback', () => {
   });
 });
 
-describe('TableColumnsService.resolveRccpMeasureEligibility', () => {
+describe('TableColumnsService.resolveRccpQuantityEligibility', () => {
   it('accepts a synced number column', () => {
-    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source', isActive: true });
+    const result = resolveRccpQuantityEligibility({ dataType: 'number', source: 'source', isActive: true });
     expect(result.eligible).toBe(true);
     expect(result.reason).toBeNull();
   });
 
   it('accepts a custom number column that has a formula', () => {
-    const result = resolveRccpMeasureEligibility({
+    const result = resolveRccpQuantityEligibility({
       dataType: 'number', source: 'custom', formulaExpr: '(a)+(b)', isActive: true,
     });
     expect(result.eligible).toBe(true);
   });
 
   it('rejects a custom number column without a formula (per-user rollup, always empty in RCCP)', () => {
-    const result = resolveRccpMeasureEligibility({
+    const result = resolveRccpQuantityEligibility({
       dataType: 'number', source: 'custom', formulaExpr: null, isActive: true,
     });
     expect(result.eligible).toBe(false);
@@ -58,7 +58,7 @@ describe('TableColumnsService.resolveRccpMeasureEligibility', () => {
   });
 
   it('rejects a non-number column', () => {
-    const result = resolveRccpMeasureEligibility({ dataType: 'text', source: 'source', isActive: true });
+    const result = resolveRccpQuantityEligibility({ dataType: 'text', source: 'source', isActive: true });
     expect(result.eligible).toBe(false);
     expect(result.reason).toMatch(/number/i);
   });
@@ -66,7 +66,7 @@ describe('TableColumnsService.resolveRccpMeasureEligibility', () => {
   // De admin-tab toont inactieve kolommen (nodig om ze te heractiveren), maar ze worden niet
   // gesynct en staan niet in de board-read — als measure leveren ze altijd 0.
   it('rejects an inactive column', () => {
-    const result = resolveRccpMeasureEligibility({ dataType: 'number', source: 'source', isActive: false });
+    const result = resolveRccpQuantityEligibility({ dataType: 'number', source: 'source', isActive: false });
     expect(result.eligible).toBe(false);
     expect(result.reason).toMatch(/inactive/i);
   });

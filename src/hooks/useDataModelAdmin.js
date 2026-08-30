@@ -32,23 +32,6 @@ function resolveHideAllowed(column) {
   return !(NON_HIDEABLE_KEYS[column.level] || new Set()).has(column.key);
 }
 
-/**
- * Mag deze kolom als RCCP-waardekolom worden vrijgegeven? Alleen een technische check: RCCP leest
- * de tabel zonder userId, dus custom kolommen zonder formule (gevuld vanuit persoonlijke
- * bord-instellingen) zijn daar altijd leeg. Wélke kolom zinvol is, bepaalt de admin.
- * Spiegelt resolveRccpMeasureEligibility in server/services/TableColumnsService.js.
- */
-function resolveRccpMeasureBlockedReason(column) {
-  if (column.dataType !== 'number') return 'Only number columns can be used as an RCCP value';
-  // Deze tab toont ook inactieve kolommen (nodig om ze te kunnen heractiveren), maar die worden
-  // niet gesynct en zijn in RCCP dus altijd leeg.
-  if (!column.isActive) return 'Inactive columns are not synced, so they are always empty in RCCP';
-  if (column.source === 'custom' && !column.formulaExpr) {
-    return 'Filled from personal board settings, so always empty in RCCP';
-  }
-  return null;
-}
-
 function mapAdminColumn(col) {
   if (!col || !BOARD_TB_SOURCE) return col;
   const source = col.source === 'source' ? 'd365' : col.source;
@@ -59,15 +42,11 @@ function mapAdminColumn(col) {
     source,
     d365Field: col.sourceField ?? col.d365Field ?? null,
     writableToD365: Boolean(col.writable ?? col.writableToD365),
-    rccpMeasure: Boolean(col.rccpMeasure),
   };
-  const rccpMeasureBlockedReason = resolveRccpMeasureBlockedReason(mappedColumn);
   return {
     ...mappedColumn,
     writeBackAllowed: resolveWriteBackAllowed(mappedColumn),
     hideAllowed: resolveHideAllowed(mappedColumn),
-    rccpMeasureAllowed: !rccpMeasureBlockedReason,
-    rccpMeasureBlockedReason,
   };
 }
 
@@ -201,22 +180,6 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
       const result = await apiRequest(`${adminBasePath}/columns/${column.id}/writeback`, {
         method: 'PATCH',
         body: { writable: !column.writableToD365, mechanism: 'patch' },
-      });
-      applyColumnUpdate(mapAdminColumn(result.column));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setTogglingKey(null);
-    }
-  }, [adminBasePath, applyColumnUpdate]);
-
-  const toggleRccpMeasure = useCallback(async (column) => {
-    setTogglingKey(`rccp-${column.id}`);
-    setError('');
-    try {
-      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/rccp-measure`, {
-        method: 'PATCH',
-        body: { enabled: !column.rccpMeasure },
       });
       applyColumnUpdate(mapAdminColumn(result.column));
     } catch (err) {
@@ -385,8 +348,7 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     toggleVisibility,
     toggleVisibleAtDelete,
     toggleWriteback,
-    toggleRccpMeasure,
     setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleRccpMeasure, setColumnToggleState, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, setColumnToggleState, deleteColumn]);
 }

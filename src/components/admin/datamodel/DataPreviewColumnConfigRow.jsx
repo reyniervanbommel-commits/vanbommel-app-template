@@ -54,7 +54,6 @@ export default function DataPreviewColumnConfigRow({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
-  onToggleRccpMeasure,
   onDeleteColumn,
 }) {
   const styles = useStyles();
@@ -62,7 +61,6 @@ export default function DataPreviewColumnConfigRow({
   const handleVisibility = useCallback(() => onToggleVisibility(column), [onToggleVisibility, column]);
   const handleVisibleAtDelete = useCallback(() => onToggleVisibleAtDelete(column), [onToggleVisibleAtDelete, column]);
   const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
-  const handleRccpMeasure = useCallback(() => onToggleRccpMeasure(column), [onToggleRccpMeasure, column]);
   const handleDelete = useCallback(() => {
     if (column.source !== 'custom') return;
     setDeleteConfirmOpen(true);
@@ -77,7 +75,6 @@ export default function DataPreviewColumnConfigRow({
   const visibilityBusy = togglingKey === `vis-${column.id}`;
   const visibleAtDeleteBusy = togglingKey === `vad-${column.id}`;
   const writebackBusy = togglingKey === `wb-${column.id}`;
-  const rccpBusy = togglingKey === `rccp-${column.id}`;
   const deletingBusy = togglingKey === `del-${column.id}`;
   const bulkBusy = typeof togglingKey === 'string' && togglingKey.startsWith('bulk-');
   const rowClassName = mergeClasses(
@@ -165,23 +162,6 @@ export default function DataPreviewColumnConfigRow({
               content={column.source === 'custom'
                 ? 'Custom columns only exist in this app and are never written to D365'
                 : 'Key or system field: write-back is not allowed'}
-              relationship="label"
-            >
-              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-            </Tooltip>
-          )}
-        </TableCell>
-        <TableCell className={styles.valueCell}>
-          {column.rccpMeasureAllowed ? (
-            <Switch
-              checked={Boolean(column.rccpMeasure)}
-              disabled={rccpBusy || bulkBusy}
-              onChange={handleRccpMeasure}
-              aria-label={`Allow ${column.label} as an RCCP value column`}
-            />
-          ) : (
-            <Tooltip
-              content={column.rccpMeasureBlockedReason || 'Not available as an RCCP value'}
               relationship="label"
             >
               <Badge appearance="outline" color="subtle" size="small">Not available</Badge>

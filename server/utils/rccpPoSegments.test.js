@@ -228,4 +228,32 @@ describe('buildPoSegments', () => {
     expect(above.length).toBeGreaterThan(0);
     expect(above.every((seg) => seg.planned1900)).toBe(true);
   });
+
+  it('places open on confirmed week when that date is real', () => {
+    const requested = '2026-09-14T00:00:00.000Z';
+    const confirmed = '2026-09-28T00:00:00.000Z';
+    const requestedWeek = weekOf(requested);
+    const confirmedWeek = weekOf(confirmed);
+    const span = {
+      fromYear: requestedWeek.year,
+      fromWeek: Math.min(requestedWeek.week, confirmedWeek.week),
+      toYear: confirmedWeek.year,
+      toWeek: Math.max(requestedWeek.week, confirmedWeek.week),
+    };
+    const byWeek = buildPoSegments(
+      [row({
+        line: {
+          requestedDeliveryDate: requested,
+          confirmedDeliveryDate: confirmed,
+          productReceiptDate: '',
+        },
+      })],
+      { ...baseConfig, confirmedDateColumnKey: 'confirmedDeliveryDate' },
+      span,
+      { now: nowCurrent },
+    );
+    const confirmedOpen = byWeek.get(confirmedWeek.key)?.segmentsAbove.find((s) => s.status === 'open');
+    expect(confirmedOpen?.qty).toBe(10);
+    expect(byWeek.get(requestedWeek.key)?.segmentsAbove.find((s) => s.status === 'open')).toBeUndefined();
+  });
 });
