@@ -1,5 +1,7 @@
 # RCCP: bevestigde leverdatum fabrikant
 
+> **Status:** settings-mapping en load-plaatsing zijn vervangen door `docs/specs/2026-08-30-rccp-semantic-field-slots-design.md`. Dit document geldt alleen nog voor latere visualisatie (hatching, Planning-date-schakelaar, pin, history) en moet dan herzien worden.
+
 ## BRD
 
 **Als** planner (employee/admin; leverancier ziet hetzelfde voor de eigen vendor)
