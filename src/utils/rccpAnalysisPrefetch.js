@@ -9,11 +9,12 @@ import { buildAnalysisQuery } from '../components/rccp/rccpUtils';
 const CACHE_TTL_MS = 2 * 60 * 1000;
 const cache = new Map();
 
-function cacheKey(window, vendorAccount) {
+function cacheKey(window, vendorAccount, planningDateMode) {
   return [
-    'rccp-analysis-v2',
+    'rccp-analysis-v3',
     vendorAccount,
     window.fromYear, window.fromWeek, window.toYear, window.toWeek,
+    planningDateMode || 'requested',
   ].join('|');
 }
 
@@ -35,13 +36,13 @@ function readCache(key) {
  * @param {string} vendorAccount
  * @returns {Promise|null}
  */
-export function prefetchRccpAnalysis(window, vendorAccount) {
+export function prefetchRccpAnalysis(window, vendorAccount, planningDateMode) {
   if (!vendorAccount || !window) return null;
-  const key = cacheKey(window, vendorAccount);
+  const key = cacheKey(window, vendorAccount, planningDateMode);
   const cached = readCache(key);
   if (cached) return cached;
 
-  const promise = apiRequest(buildAnalysisQuery(window, vendorAccount));
+  const promise = apiRequest(buildAnalysisQuery(window, vendorAccount, planningDateMode));
   cache.set(key, { promise, expiresAt: Date.now() + CACHE_TTL_MS });
   promise.catch(() => cache.delete(key));
   return promise;
@@ -52,9 +53,9 @@ export function prefetchRccpAnalysis(window, vendorAccount) {
  * useRccpPage geen dubbele apiRequest vuurt wanneer de gebruiker die vendor selecteert.
  * @returns {Promise|null}
  */
-export function getCachedRccpAnalysis(window, vendorAccount) {
+export function getCachedRccpAnalysis(window, vendorAccount, planningDateMode) {
   if (!vendorAccount || !window) return null;
-  return readCache(cacheKey(window, vendorAccount));
+  return readCache(cacheKey(window, vendorAccount, planningDateMode));
 }
 
 /** Alleen voor tests: cache leegmaken tussen scenario's. */

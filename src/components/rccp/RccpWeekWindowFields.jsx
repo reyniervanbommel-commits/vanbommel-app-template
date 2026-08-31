@@ -1,11 +1,15 @@
 import React, { memo, useCallback } from 'react';
 import { Field, Radio, RadioGroup, Switch, makeStyles } from '@fluentui/react-components';
-import { RCCP_PERIOD_GRAIN_MONTH, RCCP_PERIOD_GRAIN_WEEK } from './rccpPeriodGrain';
+import {
+  RCCP_PERIOD_GRAIN_MONTH,
+  RCCP_PERIOD_GRAIN_WEEK,
+} from './rccpPeriodGrain';
 import RccpIsoWeekRangePicker from './RccpIsoWeekRangePicker';
+import RccpLoadDateToggle from './RccpLoadDateToggle';
 
 const useStyles = makeStyles({
   switchField: { alignSelf: 'flex-end' },
-  viewField: { minWidth: '160px', maxWidth: '220px' },
+  viewField: { minWidth: '160px', maxWidth: '320px' },
   periodField: { minWidth: '220px', maxWidth: '280px' },
 });
 
@@ -14,7 +18,7 @@ const useStyles = makeStyles({
  */
 function RccpWeekWindowFields({
   window, onWindowReplace, kpiWindowOnly, onKpiWindowOnlyChange, periodGrain, onPeriodGrainChange,
-  analysis, onShowDataWindow,
+  analysis, onShowDataWindow, planningDateMode, onPlanningDateModeChange,
 }) {
   const styles = useStyles();
   const handleToggle = useCallback((_, data) => {
@@ -39,6 +43,13 @@ function RccpWeekWindowFields({
           <Radio value={RCCP_PERIOD_GRAIN_WEEK} label="Week" />
           <Radio value={RCCP_PERIOD_GRAIN_MONTH} label="Month" />
         </RadioGroup>
+      </Field>
+      <Field className={styles.viewField} label="Load date">
+          <RccpLoadDateToggle
+            value={planningDateMode}
+            onChange={onPlanningDateModeChange}
+            confirmedPercent={analysis?.kpis?.confirmedPercent}
+          />
       </Field>
       <Switch
         className={styles.switchField}

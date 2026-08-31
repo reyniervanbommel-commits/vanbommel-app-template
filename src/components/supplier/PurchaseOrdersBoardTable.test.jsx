@@ -187,4 +187,11 @@ describe('PurchaseOrdersBoardTable empty filter state', () => {
     expect(screen.getByText('No rows match the active filters')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
   });
+
+  it('renders the empty filter message outside the table so it stays in the visible viewport', () => {
+    renderTable();
+
+    const message = screen.getByText('No rows match the active filters');
+    expect(message.closest('table')).toBeNull();
+  });
 });

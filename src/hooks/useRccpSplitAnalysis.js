@@ -4,29 +4,36 @@ import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/r
 import { clearRccpAnalysisPrefetchCache, getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
 import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 
-export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refreshKey }) {
+export function useRccpSplitAnalysis({ vendorAccount, isoWindow, enabled, refreshKey, planningDateMode }) {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const debounceRef = useRef(null);
+  const analysisRef = useRef(null);
 
   const load = useCallback(async ({ skipLoading = false } = {}) => {
     if (!enabled || !isoWindow) return;
-    if (!skipLoading) setLoading(true);
+    const keepPrevious = skipLoading || Boolean(analysisRef.current);
+    if (!keepPrevious) setLoading(true);
     setError('');
     try {
       // Zonder vendor (all-vendors op de split-tab) is er nooit een prefetch — geen cache-lookup,
       // gewoon de bestaande fetch.
-      const cached = vendorAccount ? getCachedRccpAnalysis(isoWindow, vendorAccount) : null;
-      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined)));
+      const cached = vendorAccount
+        ? getCachedRccpAnalysis(isoWindow, vendorAccount, planningDateMode)
+        : null;
+      const data = await (cached || apiRequest(
+        buildAnalysisQuery(isoWindow, vendorAccount || undefined, planningDateMode),
+      ));
+      analysisRef.current = data;
       setAnalysis(data);
     } catch (err) {
       setError(err.message || 'Failed to load RCCP analysis');
-      setAnalysis(null);
+      if (!analysisRef.current) setAnalysis(null);
     } finally {
-      if (!skipLoading) setLoading(false);
+      if (!keepPrevious) setLoading(false);
     }
-  }, [enabled, isoWindow, vendorAccount]);
+  }, [enabled, isoWindow, vendorAccount, planningDateMode]);
 
   useEffect(() => {
     if (!enabled) return undefined;

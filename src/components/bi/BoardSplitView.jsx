@@ -3,9 +3,14 @@ import {
   Button, Tab, TabList, makeStyles, mergeClasses, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
+import AdminInfoHint from '../admin/AdminInfoHint';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import { resolvePoBoardRccpVendor } from '../rccp/resolveRccpVendorFilter';
+import {
+  nextRccpItemTableFilter,
+  resolveRccpItemColumnKey,
+} from '../rccp/resolveRccpItemFilter';
 import { useSplitPane } from './hooks/useSplitPane';
 import SplitPaneResizeHandle from './SplitPaneResizeHandle';
 import { useBiCharts } from './hooks/useBiCharts';
@@ -19,6 +24,9 @@ import { ROLES } from '../../constants/roles';
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
 const PoBoardKpiStrip = lazy(() => import('../rccp/PoBoardKpiStrip'));
+
+const PO_BOARD_KPI_INFO =
+  'Values come from the purchase orders currently in the table. Click a tile to filter; quantity columns then show the units counted by that tile.';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 },
@@ -63,7 +71,7 @@ const useStyles = makeStyles({
 });
 
 export default function BoardSplitView({
-  filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, children,
+  filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, tableFilter, children,
 }) {
   const styles = useStyles();
   const { user } = useAuth();
@@ -72,7 +80,7 @@ export default function BoardSplitView({
   // (RCCP + BI worden server-side op hun leveranciersaccount gescoped).
   const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
-  const { isoWindow } = useRccpWindow();
+  const { isoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
   const {
     vendors, vendorNames, vendorColumnKey, loading: vendorsLoading,
   } = useRccpVendorOptions();
@@ -106,10 +114,22 @@ export default function BoardSplitView({
     [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading],
   );
   const rccpVendorReady = isSupplier || !vendorsLoading;
+  // Item-filters blijven client-side op de al geladen analysis. Alleen vendor of
+  // load-date mag een nieuwe /rccp/analysis-call triggeren — niet de PO-tabel-fingerprint.
   const rccpRefreshKey = useMemo(
-    () => `${dataRevision}|${vendorAccount || ''}`,
-    [dataRevision, vendorAccount],
+    () => `${vendorAccount || ''}|${planningDateMode}`,
+    [vendorAccount, planningDateMode],
   );
+  const itemColumnKey = useMemo(
+    () => resolveRccpItemColumnKey(tableFilter?.columns, tableFilter?.lineValueLinks),
+    [tableFilter],
+  );
+  const handleRccpItemClick = useCallback((itemNumber) => {
+    if (!itemColumnKey || !tableFilter?.applyColumnFilter) return;
+    const next = nextRccpItemTableFilter(itemNumber, filterByColumn?.[itemColumnKey], itemColumnKey);
+    if (next.action === 'clear') tableFilter.clearColumnFilter?.(itemColumnKey);
+    else tableFilter.applyColumnFilter(itemColumnKey, next.filter);
+  }, [filterByColumn, tableFilter, itemColumnKey]);
   const showBiPane = split.open && split.activeTab === 'bi';
   const showRccpPane = split.open && split.activeTab === 'rccp';
   const kpiEnabled = split.open && split.activeTab === 'kpis';
@@ -153,6 +173,7 @@ export default function BoardSplitView({
           <Tab value="rccp">RCCP</Tab>
           <Tab value="kpis">KPIs</Tab>
         </TabList>
+        {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
       </div>
 
       <div
@@ -183,6 +204,11 @@ export default function BoardSplitView({
                   height={split.height}
                   enabled
                   isoWindow={isoWindow}
+                  filterByColumn={filterByColumn}
+                  itemColumnKey={itemColumnKey}
+                  onItemClick={handleRccpItemClick}
+                  planningDateMode={planningDateMode}
+                  onPlanningDateModeChange={setPlanningDateMode}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />

@@ -26,6 +26,7 @@ const {
   normalizeViewTabSelection,
   vendorCanSeeView,
 } = require('../utils/viewTabs');
+const { normalizeKpiCardStyles } = require('../utils/kpiCardStyles');
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
@@ -223,6 +224,7 @@ function normalizeBoardSettings(rawSettings) {
     collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
     productImageColumnVisible: input.productImageColumnVisible !== false,
     viewTabSelection: normalizeViewTabSelection(input.viewTabSelection),
+    kpiCardStyles: normalizeKpiCardStyles(input.kpiCardStyles),
   };
 }
 

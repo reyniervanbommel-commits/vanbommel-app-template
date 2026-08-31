@@ -20,7 +20,6 @@ function renderRow(column) {
           onToggleVisibility={NOOP}
           onToggleVisibleAtDelete={NOOP}
           onToggleWriteback={NOOP}
-          onToggleRccpMeasure={NOOP}
           onDeleteColumn={NOOP}
         />
       </TableBody>
@@ -40,7 +39,6 @@ describe('DataPreviewColumnConfigRow', () => {
       hideAllowed: true,
       visibleAtDelete: false,
       writeBackAllowed: false,
-      rccpMeasureAllowed: false,
       linkedFromLine: 'total',
     });
     expect(screen.getByText('Custom column')).toBeTruthy();
@@ -58,7 +56,6 @@ describe('DataPreviewColumnConfigRow', () => {
       hideAllowed: true,
       visibleAtDelete: false,
       writeBackAllowed: false,
-      rccpMeasureAllowed: false,
       linkedFromLine: 'values',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));

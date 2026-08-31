@@ -2592,10 +2592,6 @@ async function discoverSourceFields(tableKey) {
 /**
  * Bouwt de synthetische kolom voor één lookup-veld. Synthetisch = geen tb_columns-rij, dus id null;
  * hij bestaat alleen in de response.
- *
- * De RCCP-vrijgave (rccpMeasure) erft hij van de doelkolom. Die heeft wél een echte rij en is dus
- * wat de admin op de data model-tab van de doeltabel togglet — bijvoorbeeld 'Received qty' op de
- * ontvangstregels, die op het PO-bord als lookup binnenkomt.
  */
 function buildSyntheticLookupColumn({
   derivedKey, targetColKey, targetColumn, tableId, sourceScope, targetTableKey, targetTableLabel,
@@ -2618,7 +2614,6 @@ function buildSyntheticLookupColumn({
     sortable: true,
     isActive: true,
     sortOrder: 9000,
-    rccpMeasure: tc ? Boolean(tc.rccpMeasure) : false,
     lookup: {
       targetTableKey,
       targetColumnKey: targetColKey,
@@ -4829,9 +4824,6 @@ function toAdminColumn(col) {
     filterable: Boolean(col.filterable),
     sortable: Boolean(col.sortable),
     sortOrder: col.sortOrder,
-    // Nodig voor de "RCCP value column"-toggle: de stand zelf, en formulaExpr omdat een custom
-    // kolom mét formule wél als RCCP-waarde bruikbaar is.
-    rccpMeasure: Boolean(col.rccpMeasure),
     formulaExpr: col.formulaExpr || null,
   };
 }

@@ -230,6 +230,12 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
         visibleOrders={boardView.kpiSourceItems}
         kpiFilterKey={boardView.kpiFilterKey}
         onKpiFilter={boardView.applyKpiFilter}
+        tableFilter={{
+          columns: pageModel.visibleHeaderColumns,
+          lineValueLinks: pageModel.lineValueHeaderLinks,
+          applyColumnFilter: boardView.applyColumnFilter,
+          clearColumnFilter: boardView.clearColumnFilter,
+        }}
         isStaff={isStaff}
       >
         <div className={styles.tableRegion}>

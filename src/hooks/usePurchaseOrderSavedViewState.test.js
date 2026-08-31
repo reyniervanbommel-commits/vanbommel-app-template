@@ -253,3 +253,48 @@ describe('usePurchaseOrderSavedViewState session snapshot', () => {
   });
 });
 
+describe('usePurchaseOrderSavedViewState unsaved diff', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    updateView.mockClear();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ settings: null });
+  });
+
+  it('beschrijft een extra filter pas wanneer getUnsavedViewDiff wordt aangeroepen', () => {
+    const boardView = createBoardView();
+    boardView.exportFilterSortGrouping = () => ({ filterByColumn: {} });
+    const { result } = renderHook(() => usePurchaseOrderSavedViewState({
+      orders: [{ id: 1 }],
+      loading: false,
+      exportColumnLayout: () => ({}),
+      applyColumnLayout: vi.fn(),
+      boardView,
+      isSupplier: false,
+      columns: [{ key: 'status', label: 'Status', dataType: 'text' }],
+    }));
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: {
+          showHistoryIndicators: true,
+          columns: { stickyColumnKeys: [] },
+          table: { filterByColumn: {} },
+        },
+      });
+    });
+
+    boardView.exportFilterSortGrouping = () => ({
+      filterByColumn: { status: { operator: 'equals', value: 'Open', secondaryValue: '' } },
+    });
+
+    const diff = result.current.getUnsavedViewDiff();
+    expect(diff.rows).toContainEqual({
+      kind: 'filter',
+      label: 'Filter added:',
+      detail: 'Status is exactly Open',
+    });
+  });
+});
+

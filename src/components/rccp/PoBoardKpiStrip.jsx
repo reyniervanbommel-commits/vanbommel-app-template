@@ -74,15 +74,7 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
     return <Text className={styles.hint}>KPI columns are not configured yet.</Text>;
   }
 
-  return (
-    <>
-      <Text className={styles.hint}>
-        Values come from the purchase orders currently in the table. Click a tile to filter;
-        quantity columns then show the units counted by that tile.
-      </Text>
-      <RccpKpiCards kpis={kpis} selectedKey={selectedKey} onSelect={handleSelect} />
-    </>
-  );
+  return <RccpKpiCards kpis={kpis} selectedKey={selectedKey} onSelect={handleSelect} />;
 }
 
 export default memo(PoBoardKpiStrip);

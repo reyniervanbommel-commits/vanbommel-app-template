@@ -12,20 +12,57 @@ describe('RccpSettingsService.validateConfig openMeasureKey', () => {
     ],
   };
 
-  it('keeps an open measure that points to a configured measure', () => {
-    const { valid, config } = validateConfig({ ...base, openMeasureKey: 'receivedPurchaseQuantity' });
+  it('keeps an open measure that is set explicitly', () => {
+    const { valid, config } = validateConfig({
+      ...base,
+      openMeasureKey: 'quantity',
+      deliveredMeasureKey: 'receivedPurchaseQuantity',
+      orderedMeasureKey: 'remainingPurchaseQuantity',
+    });
     expect(valid).toBe(true);
-    expect(config.openMeasureKey).toBe('receivedPurchaseQuantity');
+    expect(config.openMeasureKey).toBe('quantity');
   });
 
-  it('defaults to empty when no open measure is given', () => {
+  it('defaults open/received/ordered to the slot keys', () => {
     const { config } = validateConfig(base);
-    expect(config.openMeasureKey).toBe('');
+    expect(config.openMeasureKey).toBe('remainingPurchaseQuantity');
+    expect(config.deliveredMeasureKey).toBe('receivedPurchaseQuantity');
+    expect(config.orderedMeasureKey).toBe('quantity');
+    expect(config.quantityMeasures.map((m) => m.columnKey)).toEqual([
+      'remainingPurchaseQuantity', 'receivedPurchaseQuantity', 'quantity',
+    ]);
   });
 
-  it('resets to empty when the open measure is not among the measures', () => {
-    const { config } = validateConfig({ ...base, openMeasureKey: 'somethingRemoved' });
-    expect(config.openMeasureKey).toBe('');
+  it('rejects duplicate quantity slots', () => {
+    const { valid, error } = validateConfig({
+      ...base,
+      openMeasureKey: 'quantity',
+      deliveredMeasureKey: 'quantity',
+      orderedMeasureKey: 'remainingPurchaseQuantity',
+    });
+    expect(valid).toBe(false);
+    expect(error).toBe('Each quantity slot must use a different column');
+  });
+
+  it('maps remainingMeasureKey to orderedMeasureKey', () => {
+    const { config } = validateConfig({
+      ...base,
+      remainingMeasureKey: 'quantity',
+      openMeasureKey: 'remainingPurchaseQuantity',
+      deliveredMeasureKey: 'receivedPurchaseQuantity',
+    });
+    expect(config.orderedMeasureKey).toBe('quantity');
+    expect(config.remainingMeasureKey).toBeUndefined();
+  });
+
+  it('preserves measure color when the column is reused', () => {
+    const { config } = validateConfig({
+      ...base,
+      openMeasureKey: 'remainingPurchaseQuantity',
+      deliveredMeasureKey: 'receivedPurchaseQuantity',
+      orderedMeasureKey: 'quantity',
+    });
+    expect(config.quantityMeasures.find((m) => m.columnKey === 'quantity').color).toBe('#d13438');
   });
 });
 
@@ -65,6 +102,40 @@ describe('RccpSettingsService.validateConfig receiptDateColumnKey', () => {
     const { valid, error } = validateConfig({ ...base, receiptDateColumnKey: 'product-receipt' });
     expect(valid).toBe(false);
     expect(error).toBe('receiptDateColumnKey may only contain letters, numbers and underscores');
+  });
+});
+
+describe('RccpSettingsService.validateConfig confirmedDateColumnKey', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+    quantityMeasures: [
+      { columnKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+    ],
+  };
+
+  it('defaults to an empty confirmed date key', () => {
+    const { valid, config } = validateConfig(base);
+    expect(valid).toBe(true);
+    expect(config.confirmedDateColumnKey).toBe('');
+  });
+
+  it('keeps a valid confirmed date column key', () => {
+    const { valid, config } = validateConfig({ ...base, confirmedDateColumnKey: 'confirmedDeliveryDate' });
+    expect(valid).toBe(true);
+    expect(config.confirmedDateColumnKey).toBe('confirmedDeliveryDate');
+  });
+
+  it('rejects a confirmed date key longer than 128 characters', () => {
+    const { valid, error } = validateConfig({ ...base, confirmedDateColumnKey: 'a'.repeat(129) });
+    expect(valid).toBe(false);
+    expect(error).toBe('confirmedDateColumnKey must be at most 128 characters');
+  });
+
+  it('rejects a confirmed date key with invalid characters', () => {
+    const { valid, error } = validateConfig({ ...base, confirmedDateColumnKey: 'product-receipt' });
+    expect(valid).toBe(false);
+    expect(error).toBe('confirmedDateColumnKey may only contain letters, numbers and underscores');
   });
 });
 

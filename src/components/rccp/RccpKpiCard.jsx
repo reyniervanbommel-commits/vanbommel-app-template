@@ -1,7 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Card, Text, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
+import { KPI_STYLE_KEYS, resolveKpiAccentColor } from '../../utils/kpiCardStyles';
 import { KPI_FORMULAS } from './rccpKpiFormulas';
 import KpiFormulaFold from './KpiFormulaFold';
+import KpiPctPie from './KpiPctPie';
+import { kpiPiePercent } from './kpiPctPieUtils';
+import { useKpiCardStyle } from './useKpiCardStyles';
 
 const useStyles = makeStyles({
   wrap: {
@@ -12,14 +16,25 @@ const useStyles = makeStyles({
     flexDirection: 'column',
   },
   card: {
+    position: 'relative',
     boxSizing: 'border-box',
     flexGrow: 1,
     width: '100%',
     height: '100%',
+    overflowX: 'hidden',
+    overflowY: 'hidden',
     ...shorthands.padding(tokens.spacingVerticalL),
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap(tokens.spacingVerticalXS),
+  },
+  front: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap(tokens.spacingVerticalXS),
+    minWidth: 0,
   },
   clickable: { cursor: 'pointer' },
   selected: {
@@ -98,6 +113,12 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
   const mark = hash === true ? '#' : (typeof hash === 'string' ? hash : '');
   const showMark = Boolean(mark && hasQty(qty));
   const markBefore = mark === 'Ø';
+  const piePercent = pct ? kpiPiePercent(Number.parseFloat(pct)) : null;
+  const { style } = useKpiCardStyle(kpiKey);
+  const accent = piePercent == null || !KPI_STYLE_KEYS.includes(kpiKey)
+    ? null
+    : resolveKpiAccentColor(piePercent, style);
+  const pctStyle = useMemo(() => (accent ? { color: accent } : undefined), [accent]);
   return (
     <div className={styles.wrap}>
       <Card
@@ -108,15 +129,18 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
         onClick={clickable ? handleClick : undefined}
         onKeyDown={clickable ? handleKeyDown : undefined}
       >
-        <Text className={styles.label}>{label}</Text>
-        <div className={styles.valueRow}>
-          {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-          <Text className={styles.value}>{formatQty(qty)}</Text>
-          {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
-          {aside ? <Text className={styles.aside}>{aside}</Text> : null}
+        <KpiPctPie percent={piePercent} fillColor={accent} />
+        <div className={styles.front}>
+          <Text className={styles.label}>{label}</Text>
+          <div className={styles.valueRow}>
+            {showMark && markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+            <Text className={styles.value}>{formatQty(qty)}</Text>
+            {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
+            {aside ? <Text className={styles.aside}>{aside}</Text> : null}
+          </div>
+          {pct ? <Text className={styles.pct} style={pctStyle}>{pct}</Text> : null}
+          {detail ? <Text className={styles.detail}>{detail}</Text> : null}
         </div>
-        {pct ? <Text className={styles.pct}>{pct}</Text> : null}
-        {detail ? <Text className={styles.detail}>{detail}</Text> : null}
       </Card>
       <KpiFormulaFold formula={formula} kpiKey={kpiKey} />
     </div>

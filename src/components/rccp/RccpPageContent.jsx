@@ -19,6 +19,7 @@ import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
 import RccpWeekWindowFields from './RccpWeekWindowFields';
 import RccpItemFilter from './RccpItemFilter';
 import { useRccpItemFilter } from './useRccpItemFilter';
+import { filterRccpMatrixByItem } from './rccpChartItems';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import {
   resolveDefaultRccpVendorWithFallback,
@@ -60,6 +61,7 @@ export default function RccpPageContent() {
   const {
     window, setWindow, windowLoaded, lastVendor, setLastVendor,
     kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
+    planningDateMode, setPlanningDateMode,
     analysis, loading, error, readOnly,
     measureRows, periods, cells, reload,
   } = useRccpPage({
@@ -93,7 +95,7 @@ export default function RccpPageContent() {
   // Terwijl de gebruiker een vendor zoekt (hover/keyboard-highlight in de dropdown, of een
   // exacte match tijdens het typen), laad de analyse voor die vendor alvast op de achtergrond —
   // zodra hij/zij die vendor echt selecteert, komt de data al (grotendeels) uit cache.
-  const handleHighlightVendor = useRccpVendorPrefetch(window);
+  const handleHighlightVendor = useRccpVendorPrefetch(window, planningDateMode);
 
   const [drillCell, setDrillCell] = useState(null);
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
@@ -112,6 +114,10 @@ export default function RccpPageContent() {
     setPeriodGrain(value === RCCP_PERIOD_GRAIN_MONTH ? RCCP_PERIOD_GRAIN_MONTH : RCCP_PERIOD_GRAIN_WEEK);
   }, []);
 
+  const handlePlanningDateModeChange = useCallback((value) => {
+    setPlanningDateMode(value);
+  }, [setPlanningDateMode]);
+
   const chartVisibility = useMemo(() => ({
     savedKeys: chartVisibleKeys,
     onChange: setChartVisibleKeys,
@@ -129,6 +135,15 @@ export default function RccpPageContent() {
     selectedItems, items: itemNumbers, filteredChart, handleItemChange,
     extraColumns, extraValues,
   } = useRccpItemFilter(chartView.chart, analysis?.config?.itemPickerColumnKeys);
+
+  const filteredCellMap = useMemo(
+    () => filterRccpMatrixByItem(chartView.cellMap, {
+      chart: filteredChart,
+      measureRows,
+      active: selectedItems.length > 0,
+    }),
+    [chartView.cellMap, filteredChart, measureRows, selectedItems],
+  );
 
   const handleCellClick = useCallback((cell) => {
     if (cell) setDrillCell(cell);
@@ -151,11 +166,11 @@ export default function RccpPageContent() {
   const dashboardMatrix = useMemo(() => ({
     measureRows,
     periods: chartView.periods,
-    cellMap: chartView.cellMap,
-  }), [measureRows, chartView.periods, chartView.cellMap]);
+    cellMap: filteredCellMap,
+  }), [measureRows, chartView.periods, filteredCellMap]);
 
   const handleShowDataWindow = useCallback(() => {
-    if (analysis?.dataWindow) setWindow(analysis.dataWindow, { persist: false });
+    if (analysis?.dataWindow) setWindow(analysis.dataWindow);
   }, [analysis, setWindow]);
 
   const handleRefresh = useCallback(() => {
@@ -204,6 +219,8 @@ export default function RccpPageContent() {
             onKpiWindowOnlyChange={setKpiWindowOnly}
             periodGrain={periodGrain}
             onPeriodGrainChange={handlePeriodGrainChange}
+            planningDateMode={planningDateMode}
+            onPlanningDateModeChange={handlePlanningDateModeChange}
             analysis={analysis}
             onShowDataWindow={handleShowDataWindow}
           />
@@ -250,6 +267,7 @@ export default function RccpPageContent() {
         open={Boolean(drillCell)}
         cell={drillCell}
         window={window}
+        planningDateMode={planningDateMode}
         onClose={handleCloseDrill}
       />
 

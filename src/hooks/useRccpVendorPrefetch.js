@@ -13,7 +13,7 @@ const PREFETCH_DEBOUNCE_MS = 250;
  * Input: het actieve ISO-weekvenster (fromYear/fromWeek/toYear/toWeek).
  * Output: `highlightVendor(vendorAccount)` — aanroepen bij hover/highlight/exacte match.
  */
-export function useRccpVendorPrefetch(window) {
+export function useRccpVendorPrefetch(window, planningDateMode) {
   const timeoutRef = useRef(null);
   const pendingVendorRef = useRef('');
 
@@ -24,9 +24,9 @@ export function useRccpVendorPrefetch(window) {
     pendingVendorRef.current = vendorAccount;
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      prefetchRccpAnalysis(window, pendingVendorRef.current);
+      prefetchRccpAnalysis(window, pendingVendorRef.current, planningDateMode);
     }, PREFETCH_DEBOUNCE_MS);
-  }, [window]);
+  }, [window, planningDateMode]);
 
   return highlightVendor;
 }

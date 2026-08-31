@@ -5,9 +5,10 @@ import {
 } from '@fluentui/react-components';
 import { ArrowRightRegular } from '@fluentui/react-icons';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
-import RccpItemFilter from './RccpItemFilter';
+import RccpLoadDateToggle from './RccpLoadDateToggle';
+import { filterRccpChartByItem, filterRccpMatrixByItem } from './rccpChartItems';
 import { formatIsoWindowLabel } from './rccpUtils';
-import { useRccpItemFilter } from './useRccpItemFilter';
+import { resolveRccpItemsFromFilter } from './resolveRccpItemFilter';
 import { useRccpSplitAnalysis } from '../../hooks/useRccpSplitAnalysis';
 
 const useStyles = makeStyles({
@@ -26,29 +27,59 @@ const useStyles = makeStyles({
     ...shorthands.gap(tokens.spacingHorizontalS),
     flexWrap: 'wrap',
   },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    flexWrap: 'wrap',
+  },
   meta: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   body: { flex: 1, minHeight: 0, overflow: 'hidden' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
-function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow }) {
+function RccpSplitStrip({
+  vendorAccount, refreshKey, height, enabled, isoWindow, filterByColumn, itemColumnKey, onItemClick,
+  planningDateMode, onPlanningDateModeChange,
+}) {
   const styles = useStyles();
   const windowLabel = useMemo(() => formatIsoWindowLabel(isoWindow), [isoWindow]);
-  const chartHeight = Math.max(120, (height || 280) - 120);
+  const chartHeight = Math.max(120, (height || 280) - 72);
 
   const {
-    loading, error, measureRows, periods, cellMap, chart, chartWeekRanges,
+    analysis, loading, error, measureRows, periods, cellMap, chart, chartWeekRanges,
   } = useRccpSplitAnalysis({
     vendorAccount,
     isoWindow,
     enabled,
     refreshKey,
+    planningDateMode,
   });
 
-  const {
-    selectedItems, items: itemNumbers, filteredChart, handleItemChange,
-    extraColumns, extraValues,
-  } = useRccpItemFilter(chart, analysis?.config?.itemPickerColumnKeys);
+  const itemFilter = useMemo(
+    () => resolveRccpItemsFromFilter(filterByColumn, undefined, itemColumnKey),
+    [filterByColumn, itemColumnKey],
+  );
+  const filteredChart = useMemo(
+    () => filterRccpChartByItem(chart, itemFilter.items, {
+      emptyHidesAll: itemFilter.active,
+      containsTerm: itemFilter.containsTerm,
+    }),
+    [chart, itemFilter],
+  );
+  const filteredCellMap = useMemo(
+    () => filterRccpMatrixByItem(cellMap, {
+      chart: filteredChart,
+      measureRows,
+      active: itemFilter.active,
+    }),
+    [cellMap, filteredChart, measureRows, itemFilter],
+  );
+  const focusItem = itemFilter.items.length === 1 ? itemFilter.items[0] : '';
+  const itemFocus = useMemo(
+    () => ({ item: focusItem, onSelect: onItemClick }),
+    [focusItem, onItemClick],
+  );
 
   return (
     <div className={styles.root}>
@@ -57,38 +88,39 @@ function RccpSplitStrip({ vendorAccount, refreshKey, height, enabled, isoWindow 
           {windowLabel ? `Week range: ${windowLabel}` : 'Set week range on the RCCP page'}
           {vendorAccount ? ` · Vendor: ${vendorAccount}` : ' · All vendors'}
         </Text>
-        <RccpItemFilter
-          value={selectedItems}
-          onChange={handleItemChange}
-          items={itemNumbers}
-          extraColumns={extraColumns}
-          extraValues={extraValues}
-        />
-        <Button
-          as={Link}
-          to="/rccp"
-          size="small"
-          appearance="subtle"
-          icon={<ArrowRightRegular />}
-          iconPosition="after"
-        >
-          Open RCCP page
-        </Button>
+        <div className={styles.headerActions}>
+          <RccpLoadDateToggle
+            value={planningDateMode}
+            onChange={onPlanningDateModeChange}
+            confirmedPercent={analysis?.kpis?.confirmedPercent}
+          />
+          <Button
+            as={Link}
+            to="/rccp"
+            size="small"
+            appearance="subtle"
+            icon={<ArrowRightRegular />}
+            iconPosition="after"
+          >
+            Open RCCP page
+          </Button>
+        </div>
       </div>
 
-      {loading && <Spinner size="tiny" label="Loading RCCP…" />}
+      {loading && !analysis && <Spinner size="tiny" label="Loading RCCP…" />}
       {error && <Text className={styles.error}>{error}</Text>}
 
-      {!loading && !error && (
+      {analysis && !error && (
         <div className={styles.body}>
           <RccpChartMatrixPanel
             chart={filteredChart}
             measureRows={measureRows}
             periods={periods}
-            cellMap={cellMap}
+            cellMap={filteredCellMap}
             chartWeekRanges={chartWeekRanges}
             compact
             chartHeight={chartHeight}
+            itemFocus={itemFocus}
           />
         </div>
       )}

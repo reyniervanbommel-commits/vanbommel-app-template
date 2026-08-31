@@ -15,7 +15,7 @@ const useStyles = makeStyles({
   empty: { color: tokens.colorNeutralForeground3 },
 });
 
-export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
+export default function RccpDrillDownPanel({ cell, window, planningDateMode, open, onClose }) {
   const styles = useStyles();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,6 +39,7 @@ export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
           toYear: String(window.toYear),
           toWeek: String(window.toWeek),
         });
+        if (planningDateMode) params.set('planningDateMode', planningDateMode);
         const data = await apiRequest(`/rccp/drill-down?${params.toString()}`);
         if (active) setRows(data.rows || []);
       } catch (err) {
@@ -48,7 +49,7 @@ export default function RccpDrillDownPanel({ cell, window, open, onClose }) {
       }
     })();
     return () => { active = false; };
-  }, [open, cell, window]);
+  }, [open, cell, window, planningDateMode]);
 
   const handleClose = useCallback(() => onClose?.(), [onClose]);
 

@@ -12,13 +12,13 @@ function point(key, above = [], below = [], extra = {}) {
 const chart = [
   point('2026-W10', [
     { itemNumber: 'A', qty: 8, status: 'open', late: false },
-    { itemNumber: 'A', qty: 2, status: 'received', late: false },
+    { itemNumber: 'A', qty: 2, status: 'ordered', late: false },
   ], [
     { itemNumber: 'A', qty: 2, status: 'received', late: false, onTime: true },
   ]),
   point('2026-W11', [
     { itemNumber: 'B', qty: 5, status: 'open', late: true },
-    { itemNumber: 'B', qty: 3, status: 'received', late: false, planned1900: true },
+    { itemNumber: 'B', qty: 3, status: 'ordered', late: false, planned1900: true },
   ], [
     { itemNumber: 'B', qty: 4, status: 'received', late: true, onTime: false },
   ], { __overloaded__: true }),
@@ -26,7 +26,7 @@ const chart = [
 ];
 
 const measureRows = [
-  { measureKey: 'ordered' },
+  { measureKey: 'ordered', isOrdered: true },
   { measureKey: 'open', isOpen: true },
   { measureKey: 'delivered', isDelivered: true },
   { measureKey: '__overcapacity__', isOvercapacity: true },
@@ -46,7 +46,7 @@ describe('filterRccpChartByKpi', () => {
     expect(filterRccpChartByKpi(chart, null)).toBe(chart);
   });
 
-  it('keeps open and received segments for total ordered', () => {
+  it('keeps open and ordered segments for total ordered', () => {
     const [week10] = filterRccpChartByKpi(chart, 'ordered');
     expect(week10.segmentsAbove).toHaveLength(2);
     expect(week10.segmentsBelow).toHaveLength(1);
@@ -54,11 +54,9 @@ describe('filterRccpChartByKpi', () => {
 
   it('keeps only received segments for delivered', () => {
     const [week10, week11] = filterRccpChartByKpi(chart, 'delivered');
-    expect(week10.segmentsAbove).toEqual([
-      { itemNumber: 'A', qty: 2, status: 'received', late: false },
-    ]);
+    expect(week10.segmentsAbove).toEqual([]);
     expect(week10.segmentsBelow).toHaveLength(1);
-    expect(week11.segmentsAbove.every((seg) => seg.status === 'received')).toBe(true);
+    expect(week11.segmentsAbove).toEqual([]);
   });
 
   it('keeps only open segments for total open', () => {
@@ -100,7 +98,7 @@ describe('filterRccpChartByKpi', () => {
   it('keeps planned-1900 segments', () => {
     const [, week11] = filterRccpChartByKpi(chart, 'planned1900');
     expect(week11.segmentsAbove).toEqual([
-      { itemNumber: 'B', qty: 3, status: 'received', late: false, planned1900: true },
+      { itemNumber: 'B', qty: 3, status: 'ordered', late: false, planned1900: true },
     ]);
   });
 

@@ -4,6 +4,7 @@ import { ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import { rccpFieldLabel } from './rccpFieldLabel';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
 import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
+import { isRccpDateColumn, isRccpVendorColumn } from '../../utils/rccpQuantityColumns';
 
 const useStyles = makeStyles({
   stack: {
@@ -105,13 +106,36 @@ function CapacityImportFields({ compact, policy, onPolicy }) {
 }
 
 function RccpSettingsDataFields({
-  config, columns, statusOptions, compact, onVendor, onDate, onReceiptDate, onStatuses, onPolicy,
+  config, columns, statusOptions, compact, onUpdateField,
 }) {
   const styles = useStyles();
-  const masterColumns = columns.filter((c) => c.scope === 'master');
+  const vendorColumns = useMemo(() => columns.filter(isRccpVendorColumn), [columns]);
+  const dateColumns = useMemo(() => columns.filter(isRccpDateColumn), [columns]);
   const known = statusOptions.length
     ? `Comma-separated labels to ignore in the matrix. Known statuses: ${statusOptions.join(', ')}.`
     : 'Comma-separated status labels to ignore in the matrix.';
+
+  const handleVendor = useCallback((e) => {
+    onUpdateField('vendorColumnKey', e.target.value);
+  }, [onUpdateField]);
+  const handleDate = useCallback((e) => {
+    onUpdateField('dateColumnKey', e.target.value);
+  }, [onUpdateField]);
+  const handleConfirmed = useCallback((e) => {
+    onUpdateField('confirmedDateColumnKey', e.target.value);
+  }, [onUpdateField]);
+  const handleReceipt = useCallback((e) => {
+    onUpdateField('receiptDateColumnKey', e.target.value);
+  }, [onUpdateField]);
+  const handleStatuses = useCallback((e) => {
+    onUpdateField(
+      'excludedStatuses',
+      e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+    );
+  }, [onUpdateField]);
+  const handlePolicy = useCallback((e) => {
+    onUpdateField('duplicatePolicy', e.target.value);
+  }, [onUpdateField]);
 
   return (
     <div className={styles.stack}>
@@ -122,24 +146,33 @@ function RccpSettingsDataFields({
           label="Vendor"
           info="Purchase order column that identifies the vendor."
           value={config.vendorColumnKey}
-          onChange={onVendor}
-          columns={masterColumns}
+          onChange={handleVendor}
+          columns={vendorColumns}
         />
         <ColumnSelect
           compact={compact}
-          label="Delivery date"
-          info="Line date first; the order header is the fallback."
+          label="Requested delivery date"
+          info="Line date first; the order header is the fallback. Used when confirmed date is empty."
           value={config.dateColumnKey}
-          onChange={onDate}
-          columns={columns}
+          onChange={handleDate}
+          columns={dateColumns}
+        />
+        <ColumnSelect
+          compact={compact}
+          label="Confirmed delivery date"
+          info="Line date first; header fallback. When filled, this week is used for open and ordered load. Empty or 1-1-1900 falls back to requested."
+          value={config.confirmedDateColumnKey || ''}
+          onChange={handleConfirmed}
+          columns={dateColumns}
+          allowEmpty
         />
         <ColumnSelect
           compact={compact}
           label="Receipt date"
           info="Date used to place received quantity below the axis. If empty, the delivery date is used."
           value={config.receiptDateColumnKey || ''}
-          onChange={onReceiptDate}
-          columns={columns}
+          onChange={handleReceipt}
+          columns={dateColumns}
           allowEmpty
         />
       </div>
@@ -150,7 +183,7 @@ function RccpSettingsDataFields({
             <Input
               size={compact ? 'small' : 'medium'}
               value={(config.excludedStatuses || []).join(', ')}
-              onChange={onStatuses}
+              onChange={handleStatuses}
             />
           </Field>
         </div>
@@ -158,7 +191,7 @@ function RccpSettingsDataFields({
       <CapacityImportFields
         compact={compact}
         policy={config.duplicatePolicy}
-        onPolicy={onPolicy}
+        onPolicy={handlePolicy}
       />
     </div>
   );

@@ -6,6 +6,7 @@
 
 const settingsService = require('./SettingsService');
 const dataService = require('./TableDataService');
+const { resolveRccpQuantityEligibility } = require('./TableColumnsService');
 const { isHexColor } = require('../utils/hexColor');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
@@ -22,14 +23,54 @@ const OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
 // Getoond als gestippelde lijn in de grafiek; niet zichtbaar in de matrix.
 const WARNING_MEASURE_KEY = '__warning__';
 
+const SLOT_DEFAULT_KEYS = Object.freeze({
+  vendor: 'vendorAccount',
+  requested: 'requestedDeliveryDate',
+  confirmed: 'confirmedDeliveryDate',
+  receipt: 'productReceiptDate',
+  open: 'remainingPurchaseQuantity',
+  received: 'receivedPurchaseQuantity',
+  ordered: 'quantity',
+});
+
 function defaultQuantityMeasures() {
   return [{
-    columnKey: 'quantity',
+    columnKey: SLOT_DEFAULT_KEYS.ordered,
     label: 'Quantity',
     chartType: 'line',
     color: '#D13438',
     showInChart: true,
   }];
+}
+
+function measureForKey(columnKey, index, byKey) {
+  const prev = byKey.get(columnKey);
+  return {
+    columnKey,
+    label: prev?.label || columnKey,
+    chartType: prev?.chartType || 'line',
+    color: prev?.color || MEASURE_COLORS[index % MEASURE_COLORS.length],
+    showInChart: prev ? prev.showInChart !== false : true,
+  };
+}
+
+function parseOptionalKey(raw, fieldName) {
+  const value = String(raw ?? '').trim();
+  if (value.length > 128) {
+    return { error: `${fieldName} must be at most 128 characters` };
+  }
+  if (value && !/^[A-Za-z0-9_]+$/.test(value)) {
+    return { error: `${fieldName} may only contain letters, numbers and underscores` };
+  }
+  return { value };
+}
+
+function parseRequiredKey(raw, fallback, fieldName) {
+  const parsed = parseOptionalKey(raw ?? fallback, fieldName);
+  if (parsed.error) return parsed;
+  const value = parsed.value || String(fallback || '').trim();
+  if (!value) return { error: `${fieldName} is required` };
+  return { value };
 }
 
 function normalizeChartWeekRanges(raw) {
@@ -59,14 +100,20 @@ function normalizeChartWeekRanges(raw) {
 }
 
 function defaultConfig() {
+  const byKey = new Map();
   return {
-    dateColumnKey: 'requestedDeliveryDate',
+    dateColumnKey: SLOT_DEFAULT_KEYS.requested,
     receiptDateColumnKey: '',
-    vendorColumnKey: 'vendorAccount',
-    quantityMeasures: defaultQuantityMeasures(),
-    openMeasureKey: '',
-    deliveredMeasureKey: '',
-    remainingMeasureKey: '',
+    confirmedDateColumnKey: '',
+    vendorColumnKey: SLOT_DEFAULT_KEYS.vendor,
+    quantityMeasures: [
+      measureForKey(SLOT_DEFAULT_KEYS.open, 0, byKey),
+      measureForKey(SLOT_DEFAULT_KEYS.received, 1, byKey),
+      measureForKey(SLOT_DEFAULT_KEYS.ordered, 2, byKey),
+    ],
+    openMeasureKey: SLOT_DEFAULT_KEYS.open,
+    deliveredMeasureKey: SLOT_DEFAULT_KEYS.received,
+    orderedMeasureKey: SLOT_DEFAULT_KEYS.ordered,
     showCapacityLine: true,
     showWarningLine: true,
     chartWeekRanges: [],
@@ -144,37 +191,43 @@ function validateConfig(raw) {
   }
 
   const base = defaultConfig();
-  const dateColumnKey = String(raw.dateColumnKey ?? base.dateColumnKey).trim();
-  const receiptDateColumnKey = String(raw.receiptDateColumnKey ?? '').trim();
-  if (receiptDateColumnKey.length > 128) {
-    return { valid: false, error: 'receiptDateColumnKey must be at most 128 characters' };
-  }
-  if (receiptDateColumnKey && !/^[A-Za-z0-9_]+$/.test(receiptDateColumnKey)) {
-    return { valid: false, error: 'receiptDateColumnKey may only contain letters, numbers and underscores' };
-  }
-  const vendorColumnKey = String(raw.vendorColumnKey ?? base.vendorColumnKey).trim();
-  const quantityMeasures = normalizeQuantityMeasures(raw);
-  if (!dateColumnKey || !vendorColumnKey || !quantityMeasures.length) {
-    return { valid: false, error: 'Column keys and at least one quantity measure are required' };
+  const dateParsed = parseRequiredKey(raw.dateColumnKey, base.dateColumnKey, 'dateColumnKey');
+  if (dateParsed.error) return { valid: false, error: dateParsed.error };
+  const vendorParsed = parseRequiredKey(raw.vendorColumnKey, base.vendorColumnKey, 'vendorColumnKey');
+  if (vendorParsed.error) return { valid: false, error: vendorParsed.error };
+  const receiptParsed = parseOptionalKey(raw.receiptDateColumnKey ?? '', 'receiptDateColumnKey');
+  if (receiptParsed.error) return { valid: false, error: receiptParsed.error };
+  const confirmedParsed = parseOptionalKey(raw.confirmedDateColumnKey ?? '', 'confirmedDateColumnKey');
+  if (confirmedParsed.error) return { valid: false, error: confirmedParsed.error };
+
+  const existing = normalizeQuantityMeasures(raw);
+  const byKey = new Map(existing.map((entry) => [entry.columnKey, entry]));
+
+  const openParsed = parseRequiredKey(raw.openMeasureKey, base.openMeasureKey, 'openMeasureKey');
+  if (openParsed.error) return { valid: false, error: openParsed.error };
+  const deliveredParsed = parseRequiredKey(
+    raw.deliveredMeasureKey, base.deliveredMeasureKey, 'deliveredMeasureKey',
+  );
+  if (deliveredParsed.error) return { valid: false, error: deliveredParsed.error };
+  const orderedParsed = parseRequiredKey(
+    raw.orderedMeasureKey ?? raw.remainingMeasureKey,
+    base.orderedMeasureKey,
+    'orderedMeasureKey',
+  );
+  if (orderedParsed.error) return { valid: false, error: orderedParsed.error };
+
+  const openMeasureKey = openParsed.value;
+  const deliveredMeasureKey = deliveredParsed.value;
+  const orderedMeasureKey = orderedParsed.value;
+  if (new Set([openMeasureKey, deliveredMeasureKey, orderedMeasureKey]).size < 3) {
+    return { valid: false, error: 'Each quantity slot must use a different column' };
   }
 
-  // Welke measure als "openstaand" van de capaciteit wordt afgetrokken. Leeg = uit. Alleen geldig
-  // als hij naar een van de gekozen measures wijst; anders stil terug naar uit, zodat een
-  // verwijderde measure de config niet ongeldig maakt.
-  const openMeasureKeyRaw = String(raw.openMeasureKey ?? '').trim();
-  const openMeasureKey = quantityMeasures.some((m) => m.columnKey === openMeasureKeyRaw)
-    ? openMeasureKeyRaw
-    : '';
-
-  // Delivered measure: waarden worden negatief getoond (onder de x-as).
-  const deliveredMeasureKeyRaw = String(raw.deliveredMeasureKey ?? '').trim();
-  const deliveredMeasureKey = quantityMeasures.some((m) => m.columnKey === deliveredMeasureKeyRaw)
-    ? deliveredMeasureKeyRaw : '';
-
-  // Remaining measure: getoond als positieve balk (boven de x-as), aparte kleur.
-  const remainingMeasureKeyRaw = String(raw.remainingMeasureKey ?? '').trim();
-  const remainingMeasureKey = quantityMeasures.some((m) => m.columnKey === remainingMeasureKeyRaw)
-    ? remainingMeasureKeyRaw : '';
+  const quantityMeasures = [
+    measureForKey(openMeasureKey, 0, byKey),
+    measureForKey(deliveredMeasureKey, 1, byKey),
+    measureForKey(orderedMeasureKey, 2, byKey),
+  ];
 
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
@@ -202,13 +255,14 @@ function validateConfig(raw) {
   return {
     valid: true,
     config: {
-      dateColumnKey,
-      receiptDateColumnKey,
-      vendorColumnKey,
+      dateColumnKey: dateParsed.value,
+      receiptDateColumnKey: receiptParsed.value,
+      confirmedDateColumnKey: confirmedParsed.value,
+      vendorColumnKey: vendorParsed.value,
       quantityMeasures,
       openMeasureKey,
       deliveredMeasureKey,
-      remainingMeasureKey,
+      orderedMeasureKey,
       showCapacityLine,
       showWarningLine,
       chartWeekRanges,
@@ -234,30 +288,46 @@ async function getConfig() {
   }
 }
 
-/**
- * Alleen kolommen die de admin op de data model-tab heeft vrijgegeven mogen als waardekolom
- * dienen. Deze check zit bewust in het schrijfpad: getConfig() draait bij elke analyse en moet
- * geen database-lookup doen.
- *
- * We lezen via getBoardColumnDefinitions in plaats van registry.listColumns, zodat lookup-kolommen
- * (bv. Received qty uit de ontvangstregels) meetellen. Die staan niet in tb_columns van deze tabel;
- * ze erven hun vrijgave van de doelkolom. Dat is dezelfde kolomlijst die de analyse gebruikt, dus
- * wat hier valideert, kan de aggregatie ook echt resolven.
- */
-async function assertMeasuresAreReleased(measures) {
+function findColumn(columns, key) {
+  return columns.find((col) => col?.key === key) || null;
+}
+
+async function assertSlotsExist(config) {
   const defs = await dataService.getBoardColumnDefinitions(PO_TABLE_KEY);
-  const columns = [...(defs.master || []), ...(defs.detail || [])];
-  const released = new Set(columns.filter((c) => c.rccpMeasure).map((c) => c.key));
-  const rejected = (measures || [])
-    .map((m) => m.columnKey)
-    .filter((key) => !released.has(key));
-  if (rejected.length) {
-    const err = new Error(
-      `Not released as an RCCP value column: ${[...new Set(rejected)].join(', ')}. `
-      + 'Enable it under Admin → Data model first.',
-    );
+  const master = defs.master || [];
+  const all = [...master, ...(defs.detail || [])];
+
+  const vendorCol = findColumn(master, config.vendorColumnKey);
+  if (!vendorCol || vendorCol.dataType !== 'text' || vendorCol.isActive === false) {
+    const err = new Error(`Vendor column is not an active header text field: ${config.vendorColumnKey}`);
     err.status = 400;
     throw err;
+  }
+
+  const assertDate = (key, label) => {
+    if (!key) return;
+    const col = findColumn(all, key);
+    const ok = col && col.isActive !== false
+      && (col.dataType === 'date' || col.dataType === 'date_period');
+    if (!ok) {
+      const err = new Error(`${label} is not an active date column: ${key}`);
+      err.status = 400;
+      throw err;
+    }
+  };
+  assertDate(config.dateColumnKey, 'Requested delivery date');
+  assertDate(config.confirmedDateColumnKey, 'Confirmed delivery date');
+  assertDate(config.receiptDateColumnKey, 'Receipt date');
+
+  const qtyKeys = [config.openMeasureKey, config.deliveredMeasureKey, config.orderedMeasureKey];
+  for (const key of qtyKeys) {
+    const col = findColumn(all, key);
+    const { eligible, reason } = resolveRccpQuantityEligibility(col);
+    if (!eligible) {
+      const err = new Error(reason || `Quantity column is not eligible: ${key}`);
+      err.status = 400;
+      throw err;
+    }
   }
 }
 
@@ -268,7 +338,7 @@ async function saveConfig(raw, userId = null) {
     err.status = 400;
     throw err;
   }
-  await assertMeasuresAreReleased(result.config.quantityMeasures);
+  await assertSlotsExist(result.config);
   await settingsService.set(CONFIG_KEY, JSON.stringify(result.config), userId);
   return result.config;
 }
@@ -278,6 +348,7 @@ module.exports = {
   CAPACITY_MEASURE_KEY,
   OVERCAPACITY_MEASURE_KEY,
   WARNING_MEASURE_KEY,
+  SLOT_DEFAULT_KEYS,
   defaultConfig,
   normalizeQuantityMeasures,
   normalizeChartWeekRanges,

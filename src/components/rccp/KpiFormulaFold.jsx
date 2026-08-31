@@ -10,6 +10,9 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { brandColor, interaction } from '../../styles/brandTokens';
+import { KPI_STYLE_KEYS } from '../../utils/kpiCardStyles';
+import KpiCardStyleFields from './KpiCardStyleFields';
+import { useKpiCardStyle } from './useKpiCardStyles';
 
 const HIT_SIZE = '32px';
 const FOLD_SIZE = '10px';
@@ -101,7 +104,7 @@ const useStyles = makeStyles({
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     display: 'flex',
     flexDirection: 'column',
-    ...shorthands.gap(tokens.spacingVerticalXS),
+    ...shorthands.gap(tokens.spacingVerticalS),
   },
   title: {
     color: tokens.colorNeutralForeground3,
@@ -115,13 +118,14 @@ const useStyles = makeStyles({
 });
 
 /**
- * Folded-corner trigger (same visual as cell history). Visible on corner hover; click opens the formula.
- * @param {{ formula: string, kpiKey: string }} props
+ * Folded-corner trigger. Opens formula; percentage cards also get a threshold field.
  */
 function KpiFormulaFold({ formula, kpiKey }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
   const formulaId = `kpi-formula-${kpiKey}`;
+  const showStyle = KPI_STYLE_KEYS.includes(kpiKey);
+  const { style, updateStyle } = useKpiCardStyle(kpiKey);
   const stopCardClick = useCallback((event) => {
     event.stopPropagation();
   }, []);
@@ -129,14 +133,15 @@ function KpiFormulaFold({ formula, kpiKey }) {
     setOpen(Boolean(data.open));
   }, []);
   if (!formula) return null;
+  const triggerLabel = showStyle ? 'Card settings' : 'View formula';
   return (
     <Popover withArrow size="small" open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger disableButtonEnhancement>
         <button
           type="button"
           className={mergeClasses(styles.trigger, open && styles.triggerOpen)}
-          aria-label="View formula"
-          title="View formula"
+          aria-label={triggerLabel}
+          title={triggerLabel}
           data-kpi-formula-trigger="true"
           onClick={stopCardClick}
           onMouseDown={stopCardClick}
@@ -145,7 +150,8 @@ function KpiFormulaFold({ formula, kpiKey }) {
           <span className={styles.foldDivider} data-fold-divider aria-hidden="true" />
         </button>
       </PopoverTrigger>
-      <PopoverSurface className={styles.surface}>
+      <PopoverSurface className={styles.surface} onClick={stopCardClick}>
+        {showStyle ? <KpiCardStyleFields style={style} onChange={updateStyle} /> : null}
         <Text className={styles.title} id={formulaId}>Formula</Text>
         <Text className={styles.formula}>{formula}</Text>
       </PopoverSurface>

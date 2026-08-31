@@ -91,7 +91,7 @@ export function normalizeBarBox(barY, barHeight) {
 
 /**
  * Stack layout from the axis outward. Segments are drawn in array order
- * (received first, then open).
+ * (ordered filled first, then open).
  */
 export function stackRectLayout(segments, barY, barHeight, side) {
   const list = Array.isArray(segments) ? segments : [];
@@ -109,14 +109,12 @@ export function stackRectLayout(segments, barY, barHeight, side) {
 }
 
 /**
- * Received-vakjes van hetzelfde item (boven én onder de as) horen bij elkaar.
- * @param {{ status?: string, itemNumber?: string }} segment
- * @param {string} highlightItem
+ * Received-vakjes onder de as en ordered-vakjes boven horen bij hetzelfde item.
  */
 export function isReceivedPairHighlight(segment, highlightItem) {
   return Boolean(
     highlightItem
-    && segment?.status === 'received'
+    && (segment?.status === 'received' || segment?.status === 'ordered')
     && segment.itemNumber === highlightItem
   );
 }

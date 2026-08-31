@@ -37,6 +37,24 @@
 | Alert-adressen + ACS digest bij run-fout | `NIGHT_REFRESH_ALERT_EMAILS`, `EmailService.sendNightRefreshDigest` |
 | GitHub-cron (fase 1 nog actief) | `.github/workflows/night-refresh-prod.yml` |
 | PROD token in Key Vault | `night-refresh-token-prod` via `deploy-prod.yml` |
+| Wekker-failed mail + start-failed API | `POST /api/internal/night-refresh/start-failed`, `NightRefreshWekkerAlert`, `EmailService.sendNightRefreshWekkerFailed` |
+| Settings-copy 03:00 Europe/Amsterdam | `src/components/admin/d365RefreshInfoCopy.js` |
+| Logic App Bicep (fase 1) | `infra/azure/night-refresh-wekker.bicep`, deploy via `deploy-prod.yml` ná health |
+
+### Fase 1 — acceptatiecriteria
+
+| AC | Status |
+|----|--------|
+| 1. PROD start ± enkele minuten na 03:00 NL (zomer/winter) | Na `deploy-prod` + eerste nachtrun |
+| 2. Enige startpad: bestaande night-POST + Bearer | Gedekt (geen tweede startpad) |
+| 3. Fire-and-forget HTTP 202 | Bicep `Start_night_refresh` (geen poll) |
+| 4. HTTP-fout wekker → ACS-mail, geen token | `start-failed` + sanitize/redact |
+| 5. Portal Run Trigger + admin-Start | Gedekt (Run Trigger op Logic App; Start ongewijzigd) |
+| 6. Settings-info Azure Logic App + 03:00 | Gedekt |
+| 7. Fase 1: GitHub-cron blijft; fase 2 later | `night-refresh-prod.yml` blijft; #AB:294 later |
+| 8. Geen Logic App op DEV/preview; geen RefreshRunService; geen SQL | Gedekt |
+
+Productie-wekker = Logic App 03:00 **W. Europe Standard Time**. GitHub `night-refresh-prod.yml` blijft tijdelijk (fase 1 overlap, `attached: true`). Spec: [docs/specs/2026-08-28-azure-night-refresh-wekker-design.md](../specs/2026-08-28-azure-night-refresh-wekker-design.md).
 
 ---
 

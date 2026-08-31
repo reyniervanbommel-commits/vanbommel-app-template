@@ -17,7 +17,7 @@ function matchAbove(segment, kpiKey) {
   const status = segment?.status;
   const late = Boolean(segment?.late);
   const planned1900 = Boolean(segment?.planned1900);
-  if (kpiKey === 'ordered') return status === 'open' || status === 'received';
+  if (kpiKey === 'ordered') return status === 'open' || status === 'ordered';
   if (kpiKey === 'delivered') return status === 'received';
   if (kpiKey === 'open') return status === 'open';
   if (kpiKey === 'openLate') return status === 'open' && late;
@@ -72,7 +72,7 @@ function highlightMeasureKeys(measureRows, kpiKey) {
     return rows.filter((row) => row.isDelivered).map((row) => row.measureKey);
   }
   if (kpiKey === 'ordered' || kpiKey === 'planned1900') {
-    return rows.filter((row) => row.isOpen || row.isDelivered).map((row) => row.measureKey);
+    return rows.filter((row) => row.isOpen || row.isOrdered || row.isDelivered).map((row) => row.measureKey);
   }
   return [];
 }

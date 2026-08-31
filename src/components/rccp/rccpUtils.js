@@ -376,8 +376,11 @@ export function currentIsoWindow(size = 8) {
   };
 }
 
-/** Persist and idle-prefetch stay on a short range; dataWindow jumps are session-only. */
-export const RCCP_PERSIST_MAX_WEEKS = 12;
+/** Idle prefetch stays on a short range so background loads stay cheap. */
+export const RCCP_PREFETCH_MAX_WEEKS = 12;
+
+/** User-chosen Period (including Show weeks with data) is persisted up to two ISO years. */
+export const RCCP_PERSIST_MAX_WEEKS = 104;
 
 /** Inclusive ISO-week count. Invalid or inverted windows return 0. */
 export function isoWindowWeekCount(window) {
@@ -411,7 +414,9 @@ export function isPersistableRccpIsoWindow(window, maxWeeks = RCCP_PERSIST_MAX_W
 
 /** Idle prefetch must not pull a multi-year dataWindow jump. */
 export function compactIsoWindowForPrefetch(window) {
-  return isPersistableRccpIsoWindow(window) ? window : currentIsoWindow(8);
+  return isPersistableRccpIsoWindow(window, RCCP_PREFETCH_MAX_WEEKS)
+    ? window
+    : currentIsoWindow(8);
 }
 
 function getIsoWeekNumber(date) {
@@ -458,7 +463,7 @@ export function shouldOfferRccpDataWindow(analysis) {
   return windowed === 0 && all > 0;
 }
 
-export function buildAnalysisQuery(window, vendorAccount) {
+export function buildAnalysisQuery(window, vendorAccount, planningDateMode) {
   const params = new URLSearchParams({
     fromYear: String(window.fromYear),
     fromWeek: String(window.fromWeek),
@@ -466,6 +471,8 @@ export function buildAnalysisQuery(window, vendorAccount) {
     toWeek: String(window.toWeek),
   });
   if (vendorAccount) params.set('vendorAccount', vendorAccount);
+  const mode = String(planningDateMode || '').toLowerCase() === 'confirmed' ? 'confirmed' : 'requested';
+  params.set('planningDateMode', mode);
   return `/rccp/analysis?${params.toString()}`;
 }
 

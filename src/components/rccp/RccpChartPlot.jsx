@@ -13,15 +13,20 @@ const useStyles = makeStyles({
   plot: {
     position: 'relative',
     outline: 'none',
-    '& .recharts-wrapper, & .recharts-wrapper:focus, & .recharts-surface, & svg:focus': {
-      outline: 'none',
-    },
+    '& .recharts-wrapper': { outline: 'none', boxShadow: 'none' },
+    '& .recharts-surface': { outline: 'none', boxShadow: 'none' },
+    '& svg:focus': { outline: 'none', boxShadow: 'none' },
+    '& svg:focus-visible': { outline: 'none', boxShadow: 'none' },
   },
   todaySvg: { position: 'absolute', inset: 0, pointerEvents: 'none' },
 });
 
 function EmptyTooltip() {
   return null;
+}
+
+function preventChartFocus(event) {
+  event.preventDefault();
 }
 
 function renderStackAbove(props) {
@@ -45,7 +50,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
   const labelOnRight = todayMarker?.todayX != null && (todayMarker.todayX + 48) < width;
 
   return (
-    <div className={styles.plot} style={{ width, height }}>
+    <div className={styles.plot} style={{ width, height }} onMouseDown={preventChartFocus}>
       <ComposedChart
         width={width}
         height={height}
@@ -54,6 +59,8 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
         barCategoryGap={0}
         barGap={0}
         style={{ outline: 'none' }}
+        accessibilityLayer={false}
+        tabIndex={-1}
       >
         <CartesianGrid
           stroke={tokens.colorNeutralStroke2}

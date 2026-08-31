@@ -40,9 +40,6 @@ const useStyles = makeStyles({
   },
   scrollerGrab: {
     cursor: 'grab',
-    '& *': {
-      cursor: 'grab',
-    },
   },
   scrollerDragging: {
     cursor: 'grabbing',

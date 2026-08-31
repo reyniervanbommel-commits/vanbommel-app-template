@@ -63,8 +63,7 @@ const COLUMN_OUTPUT = `
   OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label, INSERTED.source,
          INSERTED.source_field, INSERTED.data_type, INSERTED.options_json, INSERTED.writable,
          INSERTED.write_mechanism, INSERTED.is_default_visible, INSERTED.filterable, INSERTED.sortable,
-         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr,
-         INSERTED.rccp_measure
+         INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr
 `;
 
 const WRITE_MECHANISMS = ['patch', 'action', 'sql'];
@@ -650,7 +649,7 @@ async function setVisibleAtDelete(columnId, flag, userId) {
  *
  * Wélke van de bruikbare kolommen zinvol is, bepaalt de admin — dat is geen codebeslissing.
  */
-function resolveRccpMeasureEligibility(column) {
+function resolveRccpQuantityEligibility(column) {
   if (!column) return { eligible: false, reason: 'Column not found' };
   if (column.dataType !== 'number') {
     return { eligible: false, reason: 'Only number columns can be used as an RCCP value' };
@@ -668,29 +667,6 @@ function resolveRccpMeasureEligibility(column) {
     };
   }
   return { eligible: true, reason: null };
-}
-
-// Admin-keuze: mag deze kolom als waardekolom in de RCCP-analyse gekozen worden.
-async function setRccpMeasure(columnId, flag, userId) {
-  const existing = await getColumnById(columnId);
-  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
-  if (flag) {
-    const { eligible, reason } = resolveRccpMeasureEligibility(existing);
-    if (!eligible) throw Object.assign(new Error(reason), { status: 400 });
-  }
-  const pool = await getPool();
-  const result = await pool.request()
-    .input('id', sql.BigInt, columnId)
-    .input('flag', sql.Bit, flag ? 1 : 0)
-    .input('userId', sql.Int, userId || null)
-    .query(`
-      UPDATE dbo.tb_columns
-      SET rccp_measure = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
-      ${COLUMN_OUTPUT}
-      WHERE id = @id
-    `);
-  if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
-  return mapColumnRow(result.recordset[0]);
 }
 
 // Write-back-config (admin): welke kolommen naar de bron terugschrijfbaar zijn en via welk mechanisme.
@@ -739,6 +715,5 @@ module.exports = {
   setColumnVisibility,
   setVisibleAtDelete,
   setWriteBackConfig,
-  resolveRccpMeasureEligibility,
-  setRccpMeasure,
+  resolveRccpQuantityEligibility,
 };

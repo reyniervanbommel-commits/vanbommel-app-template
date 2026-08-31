@@ -3,6 +3,12 @@ import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 
 export const usePurchaseOrdersBoardTableStyles = makeStyles({
+  frame: {
+    position: 'relative',
+    height: '100%',
+    minHeight: 0,
+    overflow: 'hidden',
+  },
   wrapper: {
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: '8px',
@@ -63,16 +69,24 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
   },
-  emptyFilterCell: {
-    ...shorthands.padding('24px', '16px'),
-    color: tokens.colorNeutralForeground3,
-    textAlign: 'center',
+  emptyFilterOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+    zIndex: 1,
   },
   emptyFilterContent: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     ...shorthands.gap('8px'),
+    ...shorthands.padding('24px', '16px'),
+    color: tokens.colorNeutralForeground3,
+    pointerEvents: 'auto',
   },
   totalsCell: {
     position: 'sticky',

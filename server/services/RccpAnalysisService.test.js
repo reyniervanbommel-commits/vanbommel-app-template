@@ -395,4 +395,64 @@ describe('RccpAnalysisService', () => {
     expect(result[0].quantity).toBe(150);
     expect(result[0].orderNumber).toBe('WSPO-1');
   });
+
+  it('places load and drill-down on confirmed week when that date is real', () => {
+    const requested = '2026-09-14T00:00:00.000Z';
+    const confirmed = '2026-09-28T00:00:00.000Z';
+    const requestedWeek = { year: getIsoWeekYear(requested), week: getIsoWeek(requested) };
+    const confirmedWeek = { year: getIsoWeekYear(confirmed), week: getIsoWeek(confirmed) };
+    const testWindow = {
+      fromYear: requestedWeek.year,
+      fromWeek: Math.min(requestedWeek.week, confirmedWeek.week),
+      toYear: confirmedWeek.year,
+      toWeek: Math.max(requestedWeek.week, confirmedWeek.week),
+    };
+    const planningConfig = { ...config, confirmedDateColumnKey: 'confirmedDeliveryDate' };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open', quantity: 10 },
+      details: [{
+        detailKey: '1',
+        values: {
+          requestedDeliveryDate: requested,
+          confirmedDeliveryDate: confirmed,
+          quantity: 10,
+        },
+      }],
+    }];
+    const { confirmedByCell } = aggregatePoLoad(rows, planningConfig, testWindow, 'confirmed');
+    expect(confirmedByCell.get(cellKey('V001', confirmedWeek.year, confirmedWeek.week, 'quantity'))).toBe(10);
+    expect(confirmedByCell.get(cellKey('V001', requestedWeek.year, requestedWeek.week, 'quantity'))).toBeUndefined();
+    const drill = buildDrillDownRows(rows, planningConfig, {
+      vendorAccount: 'V001',
+      periodYear: confirmedWeek.year,
+      isoWeek: confirmedWeek.week,
+      measureKey: 'quantity',
+    }, testWindow, 'confirmed');
+    expect(drill).toHaveLength(1);
+  });
+
+  it('places load on requested week when confirmed is 1-1-1900 and mode is requested', () => {
+    const requested = '2026-09-14T00:00:00.000Z';
+    const requestedWeek = { year: getIsoWeekYear(requested), week: getIsoWeek(requested) };
+    const testWindow = {
+      fromYear: requestedWeek.year, fromWeek: requestedWeek.week,
+      toYear: requestedWeek.year, toWeek: requestedWeek.week,
+    };
+    const planningConfig = { ...config, confirmedDateColumnKey: 'confirmedDeliveryDate' };
+    const rows = [{
+      recordKey: 'PO-1',
+      values: { vendorAccount: 'V001', status: 'Open', quantity: 8 },
+      details: [{
+        detailKey: '1',
+        values: {
+          requestedDeliveryDate: requested,
+          confirmedDeliveryDate: '1900-01-01',
+          quantity: 8,
+        },
+      }],
+    }];
+    const { confirmedByCell } = aggregatePoLoad(rows, planningConfig, testWindow);
+    expect(confirmedByCell.get(cellKey('V001', requestedWeek.year, requestedWeek.week, 'quantity'))).toBe(8);
+  });
 });

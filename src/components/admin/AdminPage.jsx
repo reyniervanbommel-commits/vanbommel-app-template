@@ -22,16 +22,23 @@ import AdminD365Refresh from './AdminD365Refresh';
 import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
-  page: { display: 'flex', minHeight: '100%' },
+  page: {
+    display: 'flex',
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
+    overflow: 'hidden',
+  },
   sidebar: {
     width: '220px',
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    paddingTop: '8px',
-    paddingBottom: '8px',
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
+    overflowY: 'auto',
   },
   sectionHeading: {
     ...shorthands.margin(0),
@@ -44,6 +51,8 @@ const useStyles = makeStyles({
   },
   content: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 0,
     ...shorthands.padding('28px', '32px'),
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',

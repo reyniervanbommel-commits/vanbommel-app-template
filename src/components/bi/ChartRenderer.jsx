@@ -4,7 +4,9 @@ import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { usePrefersReducedMotion } from '../../hooks/useAnimatedNumber';
 import ChartAxisTick from './ChartAxisTick';
+import { chartMotionProps } from './chartMotion';
 import {
   COLOR_MODE_RANDOM, defaultColorForIndex, MEASURE_STYLE_LINE, resolveChartColor, resolveColorMode,
   resolveMeasureStyle, resolveMeasures, resolveSingleColor, resolveValueDisplay, SERIES_COLOR_KEY,
@@ -12,7 +14,7 @@ import {
 } from './biConstants';
 
 const useStyles = makeStyles({
-  root: { width: '100%', height: '100%', minHeight: 0 },
+  root: { width: '100%', height: '100%', minHeight: 0, overflow: 'visible' },
   kpi: {
     display: 'flex',
     flexDirection: 'column',
@@ -77,6 +79,7 @@ function formatDisplayValue(value, total, config) {
 
 function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
   const styles = useStyles();
+  const motion = chartMotionProps(usePrefersReducedMotion());
   const data = Array.isArray(series) ? series : [];
   const measureKeys = useMemo(() => resolveMeasures(config || {}), [config]);
   const showPercent = resolveValueDisplay(config) === VALUE_DISPLAY_PERCENT;
@@ -149,6 +152,7 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
           dataKey={effectiveMeasureKeys[0]}
           name={effectiveMeasureKeys[0] === 'value' ? 'Value' : measureLabel(effectiveMeasureKeys[0], columns)}
           radius={[4, 4, 0, 0]}
+          {...motion}
         >
           {data.map((entry, index) => (
             <Cell key={entry.name} fill={segmentColor(config, entry, index)} />
@@ -173,6 +177,7 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
             stroke={color}
             strokeWidth={2}
             dot={{ r: 3, fill: color }}
+            {...motion}
           >
             <LabelList dataKey={key} position="top" formatter={labelFormatter} style={{ fontSize: 10 }} />
           </Line>
@@ -186,6 +191,7 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
           name={label}
           fill={color}
           radius={[4, 4, 0, 0]}
+          {...motion}
         >
           <LabelList dataKey={key} position="top" formatter={labelFormatter} style={{ fontSize: 10 }} />
         </Bar>
@@ -223,16 +229,17 @@ function ChartRenderer({ type, series, config, columns = [], height = 260 }) {
                 stroke={useSegmentColors ? seriesStrokeColor(config, index) : resolveChartColor(config, measureKeys[index] || key, index)}
                 strokeWidth={2}
                 dot={lineDot}
+                {...motion}
               >
                 <LabelList dataKey={key} position="top" formatter={labelFormatter} style={{ fontSize: 10 }} />
               </Line>
             ))}
           </LineChart>
         ) : type === 'pie' ? (
-          <PieChart>
+          <PieChart margin={{ top: 12, right: 12, bottom: 28, left: 12 }}>
             <Tooltip formatter={formatNumber} labelFormatter={(label) => String(label)} />
             <Legend />
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="75%">
+            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="68%" {...motion}>
               {data.map((entry, index) => (
                 <Cell key={entry.name} fill={segmentColor(config, entry, index)} />
               ))}

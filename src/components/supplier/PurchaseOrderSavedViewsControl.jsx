@@ -14,7 +14,6 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import {
-  ArrowSyncRegular,
   ChevronDownRegular,
   DeleteRegular,
   EditRegular,
@@ -25,6 +24,7 @@ import {
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
 import UnsavedYellowDot from './UnsavedYellowDot';
+import PurchaseOrderUpdateCurrentViewItem from './PurchaseOrderUpdateCurrentViewItem';
 import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
@@ -37,14 +37,17 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
   },
   titleTrigger: {
-    maxWidth: '260px',
+    maxWidth: '100%',
     minWidth: 0,
-    flexShrink: 0,
+    width: 'max-content',
     height: 'auto',
-    ...shorthands.padding('0'),
+    minHeight: 'unset',
+    overflow: 'visible',
+    lineHeight: '1.35',
+    ...shorthands.padding('2px', '0', '4px'),
     ...shorthands.border('none'),
     justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     ...shorthands.gap('6px'),
     color: tokens.colorNeutralForeground1,
     backgroundColor: 'transparent',
@@ -52,7 +55,8 @@ const useStyles = makeStyles({
   titleName: {
     fontSize: tokens.fontSizeHero700,
     fontWeight: tokens.fontWeightSemibold,
-    lineHeight: '1.1',
+    lineHeight: '1.35',
+    minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -60,10 +64,6 @@ const useStyles = makeStyles({
   titleChevron: {
     fontSize: '20px',
     flexShrink: 0,
-    alignSelf: 'center',
-  },
-  unsavedDot: {
-    marginTop: '6px',
   },
   menuPopover: {
     minWidth: '240px',
@@ -73,10 +73,6 @@ const useStyles = makeStyles({
     ...shorthands.padding('4px', '10px'),
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
-  },
-  updateActionLabel: {
-    color: tokens.colorBrandForeground1,
-    fontWeight: tokens.fontWeightSemibold,
   },
   deleteAction: {
     color: tokens.colorPaletteRedForeground1,
@@ -95,6 +91,7 @@ export default function PurchaseOrderSavedViewsControl({
   canManageViews = true,
   saving,
   hasUnsavedChanges = false,
+  getUnsavedViewDiff = null,
   titleMode = false,
   onApplyView,
   onResetView,
@@ -134,6 +131,10 @@ export default function PurchaseOrderSavedViewsControl({
     await onRenameView(activeView, name);
   }, [activeView, onRenameView]);
 
+  const handleUpdateCurrent = useCallback(() => {
+    if (activeView) onUpdateActive(activeView);
+  }, [activeView, onUpdateActive]);
+
   const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
   const allOrdersView = useMemo(() => ({
     id: null,
@@ -151,10 +152,11 @@ export default function PurchaseOrderSavedViewsControl({
               appearance="subtle"
               className={styles.titleTrigger}
               disabled={saving}
+              title={triggerLabel}
             >
               <span className={styles.titleName}>{triggerLabel}</span>
               {hasUnsavedChanges ? (
-                <UnsavedYellowDot className={styles.unsavedDot} testId="view-unsaved-dot" />
+                <UnsavedYellowDot testId="view-unsaved-dot" />
               ) : null}
               <ChevronDownRegular className={styles.titleChevron} />
             </Button>
@@ -215,12 +217,10 @@ export default function PurchaseOrderSavedViewsControl({
                 <MenuGroup>
                   <MenuGroupHeader>Manage view</MenuGroupHeader>
                   {hasUnsavedChanges ? (
-                    <MenuItem
-                      icon={<ArrowSyncRegular />}
-                      onClick={() => onUpdateActive(activeView)}
-                    >
-                      <span className={styles.updateActionLabel}>Update current view</span>
-                    </MenuItem>
+                    <PurchaseOrderUpdateCurrentViewItem
+                      getUnsavedViewDiff={getUnsavedViewDiff}
+                      onClick={handleUpdateCurrent}
+                    />
                   ) : null}
                   <MenuItem
                     icon={<EditRegular />}

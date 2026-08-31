@@ -29,6 +29,18 @@ describe('rccpAnalysisPrefetch', () => {
     await promise;
   });
 
+  it('keeps requested and confirmed prefetch caches separate', async () => {
+    const { apiRequest } = await import('./api');
+    apiRequest.mockResolvedValue({ kpis: {} });
+    const { prefetchRccpAnalysis } = await import('./rccpAnalysisPrefetch');
+
+    prefetchRccpAnalysis(WINDOW, 'V000583', 'requested');
+    prefetchRccpAnalysis(WINDOW, 'V000583', 'confirmed');
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+    expect(apiRequest.mock.calls[0][0]).toContain('planningDateMode=requested');
+    expect(apiRequest.mock.calls[1][0]).toContain('planningDateMode=confirmed');
+  });
+
   it('returns null and does not fetch when no vendor is given', async () => {
     const { apiRequest } = await import('./api');
     const { prefetchRccpAnalysis, getCachedRccpAnalysis } = await import('./rccpAnalysisPrefetch');

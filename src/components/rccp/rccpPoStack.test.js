@@ -88,6 +88,7 @@ describe('rccpPoStack', () => {
     expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
     expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-2' }, 'SKU-1')).toBe(false);
     expect(isReceivedPairHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
+    expect(isReceivedPairHighlight({ status: 'ordered', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
     expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
   });
 

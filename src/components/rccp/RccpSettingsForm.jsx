@@ -51,11 +51,7 @@ function RccpSettingsForm({
           columns={columns}
           statusOptions={statusOptions}
           compact={isFlyout}
-          onVendor={handlers.handleVendor}
-          onDate={handlers.handleDate}
-          onReceiptDate={handlers.handleReceiptDate}
-          onStatuses={handlers.handleStatuses}
-          onPolicy={handlers.handlePolicy}
+          onUpdateField={onUpdateField}
         />
       )}
       {tab === 'quantities' && (
@@ -64,6 +60,7 @@ function RccpSettingsForm({
           columns={columns}
           openMeasureKey={config.openMeasureKey}
           deliveredMeasureKey={config.deliveredMeasureKey}
+          orderedMeasureKey={config.orderedMeasureKey}
           onChange={handlers.handleMeasures}
           onUpdateField={onUpdateField}
         />
