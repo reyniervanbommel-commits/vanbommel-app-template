@@ -129,6 +129,15 @@ const useStyles = makeStyles({
       },
     },
   },
+  adminMain: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.padding(0),
+    overflow: 'hidden',
+    '@media (max-width: 768px)': {
+      ...shorthands.padding(0),
+    },
+  },
 });
 
 export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
@@ -141,6 +150,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const isAdminLike = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const vendorCompanyName = useVendorCompanyName(user);
   const isPurchaseOrdersRoute = location.pathname === '/';
+  const isAdminRoute = location.pathname === '/admin';
 
   const navItems = useMemo(
     () => [
@@ -248,7 +258,11 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
           </aside>
         )}
 
-        <main className={mergeClasses(styles.main, isPurchaseOrdersRoute ? styles.purchaseOrdersMain : undefined)}>{children}</main>
+        <main className={mergeClasses(
+          styles.main,
+          isPurchaseOrdersRoute ? styles.purchaseOrdersMain : undefined,
+          isAdminRoute ? styles.adminMain : undefined,
+        )}>{children}</main>
       </div>
     </div>
   );
