@@ -19,7 +19,9 @@ export const devTestItems = [
       'RCCP Settings → Data shows Vendor, Requested delivery date, Confirmed delivery date, Receipt date; date lists exclude text columns such as item name',
       'RCCP Settings → Quantities shows exactly three slots Open / Received / Ordered, with no Add or Delete; Ordered shows Chart type',
       'Data model has no RCCP value column toggle',
-      'A PO with confirmed delivery in another ISO week than requested appears in the confirmed week in the matrix, chart and drill-down; 1-1-1900 confirmed falls back to requested',
+      'A PO with confirmed delivery in another ISO week than requested stays on the requested week until Load date is Confirmed; empty or 1-1-1900 confirmed then has no above-axis load',
+      'RCCP toolbar Load date Requested/Confirmed places open and ordered on that date with no fallback; Received stays below the axis only when both confirmed and receipt dates are real',
+      'Stacked bar: dark Open on light Ordered−Open; toggling Ordered off leaves only the dark Open slice',
     ],
   },
 ];

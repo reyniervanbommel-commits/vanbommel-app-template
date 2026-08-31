@@ -14,6 +14,7 @@ const {
   lineDateValue,
   isSentinelDate,
   collectDateSlots,
+  planningDateValue,
 } = require('./rccpPoRow');
 const { compactByOrder } = require('./rccpKpiCompact');
 
@@ -68,6 +69,8 @@ function openLateDays(line, now, nowYear, nowWeek) {
 function visitUniverseLine(acc, line, nowYear, nowWeek) {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
+  const pairQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
+  if (line.hasConfirmedDate && pairQty > 0) acc.confirmedUnits += pairQty;
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
   if (isSentinelDate(line.plannedDate)) {
@@ -112,6 +115,7 @@ function emptyAcc(now) {
     openLateUnits: 0,
     planned1900Units: 0,
     planned1900Skus: new Set(),
+    confirmedUnits: 0,
   };
 }
 
@@ -172,6 +176,7 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
+  const confirmedKey = config.confirmedDateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
@@ -214,6 +219,9 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
         receiptDate,
         plannedYear,
         plannedWeek,
+        hasConfirmedDate: Boolean(planningDateValue(
+          lineValues, masterValues, dateKey, confirmedKey, 'confirmed',
+        )),
       });
     };
 
@@ -270,6 +278,8 @@ function summarizeAcc(acc) {
     openLateAvgDays: mean(acc.openLateDays),
     planned1900Units: acc.planned1900Units,
     planned1900ItemCount: acc.planned1900Skus.size,
+    confirmedUnits: acc.confirmedUnits,
+    confirmedPercent: percentOf(acc.confirmedUnits, totalOrdered),
   };
 }
 

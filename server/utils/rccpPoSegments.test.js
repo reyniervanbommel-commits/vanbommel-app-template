@@ -21,7 +21,9 @@ describe('buildPoSegments', () => {
     vendorColumnKey: 'vendorAccount',
     openMeasureKey: 'openQty',
     deliveredMeasureKey: 'deliveredQty',
+    orderedMeasureKey: 'orderedQty',
     excludedStatuses: ['Canceled'],
+    confirmedDateColumnKey: 'confirmedDeliveryDate',
   };
 
   const window = {
@@ -40,9 +42,11 @@ describe('buildPoSegments', () => {
         detailKey: '1',
         values: {
           requestedDeliveryDate: planned,
+          confirmedDeliveryDate: planned,
           productReceiptDate: received,
           openQty: 10,
           deliveredQty: 4,
+          orderedQty: 14,
           itemNumber: 'SKU-1',
           ...(overrides.line || {}),
         },
@@ -62,12 +66,12 @@ describe('buildPoSegments', () => {
     };
   }
 
-  it('places received above on the planned week and below on the receipt week', () => {
+  it('stacks ordered-minus-open above and received below when confirmed date exists', () => {
     const byWeek = buildPoSegments([row()], baseConfig, window, { now: nowCurrent });
     const above = byWeek.get(plannedWeek.key).segmentsAbove;
     const below = byWeek.get(receivedWeek.key).segmentsBelow;
     expect(above).toEqual([
-      seg('SKU-1', 4, 'received', false),
+      seg('SKU-1', 4, 'ordered', false),
       seg('SKU-1', 10, 'open', false),
     ]);
     expect(below).toEqual([
@@ -76,14 +80,18 @@ describe('buildPoSegments', () => {
     expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
   });
 
-  it('falls back to the planned week below the axis when receipt date is empty', () => {
-    const config = { ...baseConfig, receiptDateColumnKey: '' };
-    const byWeek = buildPoSegments([row({ line: { productReceiptDate: '' } })], config, window, {
+  it('hides received below the axis when the line has no confirmed date', () => {
+    const byWeek = buildPoSegments([row({ line: { confirmedDeliveryDate: '' } })], baseConfig, window, { now: nowCurrent });
+    expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([]);
+    expect(byWeek.get(plannedWeek.key).segmentsAbove.find((s) => s.status === 'open')?.qty).toBe(10);
+  });
+
+  it('does not place received below the axis when receipt date is empty', () => {
+    const config = { ...baseConfig, receiptDateColumnKey: '', confirmedDateColumnKey: 'confirmedDeliveryDate' };
+    const byWeek = buildPoSegments([row({ line: { productReceiptDate: '', confirmedDeliveryDate: planned } })], config, window, {
       now: nowCurrent,
     });
-    expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([
-      seg('SKU-1', 4, 'received', false),
-    ]);
+    expect(byWeek.get(plannedWeek.key).segmentsBelow).toEqual([]);
     expect(byWeek.get(receivedWeek.key).segmentsBelow).toEqual([]);
   });
 
@@ -91,7 +99,7 @@ describe('buildPoSegments', () => {
     const byWeek = buildPoSegments([row()], baseConfig, window, { now: nowNext });
     const open = byWeek.get(plannedWeek.key).segmentsAbove.find((s) => s.status === 'open');
     expect(open.late).toBe(true);
-    const receivedSeg = byWeek.get(plannedWeek.key).segmentsAbove.find((s) => s.status === 'received');
+    const receivedSeg = byWeek.get(plannedWeek.key).segmentsAbove.find((s) => s.status === 'ordered');
     expect(receivedSeg.late).toBe(false);
   });
 
@@ -135,9 +143,9 @@ describe('buildPoSegments', () => {
     a.recordKey = 'PO-A';
     const byWeek = buildPoSegments([b, a], baseConfig, window, { now: nowCurrent });
     expect(byWeek.get(plannedWeek.key).segmentsAbove.map((s) => `${s.itemNumber}:${s.status}`)).toEqual([
-      'SKU-A:received',
+      'SKU-A:ordered',
       'SKU-A:open',
-      'SKU-B:received',
+      'SKU-B:ordered',
       'SKU-B:open',
     ]);
   });
@@ -147,13 +155,13 @@ describe('buildPoSegments', () => {
     second.recordKey = 'PO-B';
     const byWeek = buildPoSegments([row(), second], baseConfig, window, { now: nowCurrent });
     expect(byWeek.get(plannedWeek.key).segmentsAbove).toEqual([
-      seg('SKU-1', 8, 'received', false),
+      seg('SKU-1', 8, 'ordered', false),
       seg('SKU-1', 20, 'open', false),
     ]);
   });
 
   it('skips zero and negative quantities', () => {
-    const byWeek = buildPoSegments([row({ line: { openQty: 0, deliveredQty: -3 } })], baseConfig, window, {
+    const byWeek = buildPoSegments([row({ line: { openQty: 0, deliveredQty: -3, orderedQty: 0 } })], baseConfig, window, {
       now: nowCurrent,
     });
     expect(byWeek.get(plannedWeek.key).segmentsAbove).toEqual([]);
@@ -250,7 +258,7 @@ describe('buildPoSegments', () => {
       })],
       { ...baseConfig, confirmedDateColumnKey: 'confirmedDeliveryDate' },
       span,
-      { now: nowCurrent },
+      { now: nowCurrent, planningDateMode: 'confirmed' },
     );
     const confirmedOpen = byWeek.get(confirmedWeek.key)?.segmentsAbove.find((s) => s.status === 'open');
     expect(confirmedOpen?.qty).toBe(10);

@@ -2,6 +2,14 @@ import { isoWeekStartUtc } from './rccpUtils';
 
 export const RCCP_PERIOD_GRAIN_WEEK = 'week';
 export const RCCP_PERIOD_GRAIN_MONTH = 'month';
+export const RCCP_PLANNING_DATE_REQUESTED = 'requested';
+export const RCCP_PLANNING_DATE_CONFIRMED = 'confirmed';
+
+export function parseRccpPlanningDateMode(raw) {
+  return String(raw || '').toLowerCase() === RCCP_PLANNING_DATE_CONFIRMED
+    ? RCCP_PLANNING_DATE_CONFIRMED
+    : RCCP_PLANNING_DATE_REQUESTED;
+}
 
 function pad2(value) {
   return String(value).padStart(2, '0');

@@ -62,6 +62,30 @@ describe('rccpKpis', () => {
     expect(kpis.openPercent).toBeCloseTo(10 / 14 * 100);
   });
 
+  it('counts the share of pairs with a real confirmed date', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDeliveryDate' };
+    const confirmed = row({ line: { confirmedDeliveryDate: planned } });
+    const missing = row({
+      values: { vendorAccount: 'V001' },
+      details: [{
+        detailKey: '2',
+        values: {
+          requestedDeliveryDate: planned,
+          productReceiptDate: received,
+          openQty: 6,
+          deliveredQty: 0,
+          itemNumber: 'SKU-2',
+        },
+      }],
+    });
+    missing.recordKey = 'PO-B';
+    const kpis = buildRccpPoKpis([confirmed, missing], config, window, {
+      now: nowCurrent, vendorAccount: 'V001',
+    });
+    expect(kpis.confirmedUnits).toBe(14);
+    expect(kpis.confirmedPercent).toBeCloseTo(14 / 20 * 100);
+  });
+
   it('includes delivered of in-window planned lines when receipt week is outside the range', () => {
     const plannedOnly = {
       fromYear: plannedWeek.year,

@@ -9,6 +9,7 @@ function matrixRowRank(row) {
   if (row?.isCapacity) return 40;
   if (row?.isOpen) return 30;
   if (row?.isDelivered) return 20;
+  if (row?.isOrdered) return 10;
   return 10;
 }
 

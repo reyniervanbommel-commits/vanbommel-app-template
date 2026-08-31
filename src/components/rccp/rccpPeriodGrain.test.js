@@ -3,7 +3,10 @@ import { isoWeekStartUtc } from './rccpUtils';
 import {
   RCCP_PERIOD_GRAIN_MONTH,
   RCCP_PERIOD_GRAIN_WEEK,
+  RCCP_PLANNING_DATE_CONFIRMED,
+  RCCP_PLANNING_DATE_REQUESTED,
   monthBucketFromIsoWeek,
+  parseRccpPlanningDateMode,
   resolveRccpChartView,
 } from './rccpPeriodGrain';
 
@@ -111,5 +114,15 @@ describe('resolveRccpChartView', () => {
       cells: [],
     });
     expect(view.chart[0].__overloaded__).toBe(true);
+  });
+});
+
+describe('parseRccpPlanningDateMode', () => {
+  it('defaults to requested and only accepts confirmed', () => {
+    expect(parseRccpPlanningDateMode(undefined)).toBe(RCCP_PLANNING_DATE_REQUESTED);
+    expect(parseRccpPlanningDateMode('requested')).toBe(RCCP_PLANNING_DATE_REQUESTED);
+    expect(parseRccpPlanningDateMode('confirmed')).toBe(RCCP_PLANNING_DATE_CONFIRMED);
+    expect(parseRccpPlanningDateMode('CONFIRMED')).toBe(RCCP_PLANNING_DATE_CONFIRMED);
+    expect(parseRccpPlanningDateMode('other')).toBe(RCCP_PLANNING_DATE_REQUESTED);
   });
 });

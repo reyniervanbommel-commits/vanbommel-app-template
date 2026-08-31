@@ -19,6 +19,7 @@ const {
   isHeaderOnlyMeasure,
   lineDateValue,
   collectPlanningSlots,
+  parsePlanningDateMode,
   planningDateValue,
 } = require('../utils/rccpPoRow');
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
@@ -27,7 +28,7 @@ const { buildItemPickerLookupMap } = require('../utils/rccpItemPickerLookup');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
-function collectInWindowSlots(details, masterValues, config, window, excludedSet, masterStatus) {
+function collectInWindowSlots(details, masterValues, config, window, excludedSet, masterStatus, planningDateMode) {
   return collectPlanningSlots(
     details,
     masterValues,
@@ -36,6 +37,7 @@ function collectInWindowSlots(details, masterValues, config, window, excludedSet
     window,
     excludedSet,
     masterStatus,
+    planningDateMode,
   );
 }
 
@@ -85,7 +87,8 @@ function pickDataWindow(dataRangeByVendor, vendorFilter) {
   return merged;
 }
 
-function aggregatePoLoad(rows, config, window) {
+function aggregatePoLoad(rows, config, window, planningDateMode) {
+  const dateMode = parsePlanningDateMode(planningDateMode);
   const confirmedByCell = new Map();
   const missingDates = [];
   const measures = config.quantityMeasures || [];
@@ -149,7 +152,7 @@ function aggregatePoLoad(rows, config, window) {
       }
 
       let dateValue = planningDateValue(
-        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey,
+        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode,
       );
       if (!dateValue) {
         diagnostics.missingDateLines += 1;
@@ -193,7 +196,7 @@ function aggregatePoLoad(rows, config, window) {
 
     if (!headerOnlyKeys.size) continue;
     const slots = collectInWindowSlots(
-      details, masterValues, config, window, excludedSet, masterStatus,
+      details, masterValues, config, window, excludedSet, masterStatus, dateMode,
     );
     for (const measure of measures) {
       if (!headerOnlyKeys.has(measure.columnKey)) continue;
@@ -323,6 +326,7 @@ function buildMatrixCells({
       isCapacity: false,
       isOpen: Boolean(openMeasureKey && m.columnKey === openMeasureKey),
       isDelivered: Boolean(deliveredMeasureKey && m.columnKey === deliveredMeasureKey),
+      isOrdered: Boolean(config.orderedMeasureKey && m.columnKey === config.orderedMeasureKey),
     })),
     {
       measureKey: CAPACITY_MEASURE_KEY,
@@ -397,7 +401,9 @@ async function analyze({
   toYear,
   toWeek,
   supplierAccount = null,
+  planningDateMode = null,
 } = {}) {
+  const dateMode = parsePlanningDateMode(planningDateMode);
   const config = await settingsService.getConfig();
   const effectiveVendor = supplierAccount || vendorAccount || null;
   const window = {
@@ -413,7 +419,7 @@ async function analyze({
   }));
 
   const { confirmedByCell, missingDates, diagnostics, dataRangeByVendor } = aggregatePoLoad(
-    poRows, config, window,
+    poRows, config, window, dateMode,
   );
 
   const allCapacity = await time('rccp_capacity', () => capacityService.listCapacity({
@@ -436,6 +442,7 @@ async function analyze({
   const segmentsByWeek = await time('rccp_po_segments', () => buildPoSegments(poRows, config, window, {
     now,
     vendorAccount: effectiveVendor,
+    planningDateMode: dateMode,
   }));
   const poKpiPair = await time('rccp_kpis', () => buildRccpPoKpisPair(poRows, config, window, {
     now,
@@ -525,7 +532,8 @@ async function boardKpis({ supplierAccount = null } = {}) {
   return payload;
 }
 
-function buildDrillDownRows(rows, config, cell, window) {
+function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
+  const dateMode = parsePlanningDateMode(planningDateMode);
   const result = [];
   const excludedSet = new Set(config.excludedStatuses.map((s) => s.toLowerCase()));
   const measureKey = cell.measureKey;
@@ -543,7 +551,7 @@ function buildDrillDownRows(rows, config, cell, window) {
 
     if (isHeaderOnlyMeasure(details, masterValues, measureKey)) {
       const slots = collectInWindowSlots(
-        details, masterValues, config, window, excludedSet, masterStatus,
+        details, masterValues, config, window, excludedSet, masterStatus, dateMode,
       );
       const total = toNumber(pickValue(masterValues, measureKey));
       if (total <= 0 || !slots.length) continue;
@@ -591,7 +599,7 @@ function buildDrillDownRows(rows, config, cell, window) {
       pushLine(
         null,
         masterValues,
-        planningDateValue(masterValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey),
+        planningDateValue(masterValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode),
         true,
       );
       continue;
@@ -600,7 +608,7 @@ function buildDrillDownRows(rows, config, cell, window) {
     for (const detail of details) {
       const lineValues = detail.values || {};
       const dateValue = planningDateValue(
-        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey,
+        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode,
       );
       const dateFromHeader = Boolean(dateValue)
         && !pickValue(lineValues, config.dateColumnKey)
@@ -632,7 +640,7 @@ async function getDrillDown(params) {
   };
   return {
     cell,
-    rows: buildDrillDownRows(poRows, config, cell, window),
+    rows: buildDrillDownRows(poRows, config, cell, window, parsePlanningDateMode(params.planningDateMode)),
   };
 }
 

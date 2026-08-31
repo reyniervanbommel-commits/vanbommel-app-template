@@ -202,6 +202,7 @@ router.get('/analysis', async (req, res, next) => {
     const data = await analysisService.analyze({
       vendorAccount,
       supplierAccount,
+      planningDateMode: req.query.planningDateMode,
       ...window,
     });
     res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
@@ -223,6 +224,7 @@ router.get('/drill-down', async (req, res, next) => {
       isoWeek: req.query.isoWeek,
       measureKey: req.query.measureKey || req.query.capacityCategory,
       supplierAccount,
+      planningDateMode: req.query.planningDateMode,
       ...window,
     });
     res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });

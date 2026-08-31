@@ -420,7 +420,7 @@ describe('RccpAnalysisService', () => {
         },
       }],
     }];
-    const { confirmedByCell } = aggregatePoLoad(rows, planningConfig, testWindow);
+    const { confirmedByCell } = aggregatePoLoad(rows, planningConfig, testWindow, 'confirmed');
     expect(confirmedByCell.get(cellKey('V001', confirmedWeek.year, confirmedWeek.week, 'quantity'))).toBe(10);
     expect(confirmedByCell.get(cellKey('V001', requestedWeek.year, requestedWeek.week, 'quantity'))).toBeUndefined();
     const drill = buildDrillDownRows(rows, planningConfig, {
@@ -428,11 +428,11 @@ describe('RccpAnalysisService', () => {
       periodYear: confirmedWeek.year,
       isoWeek: confirmedWeek.week,
       measureKey: 'quantity',
-    }, testWindow);
+    }, testWindow, 'confirmed');
     expect(drill).toHaveLength(1);
   });
 
-  it('falls back to requested week when confirmed is 1-1-1900', () => {
+  it('places load on requested week when confirmed is 1-1-1900 and mode is requested', () => {
     const requested = '2026-09-14T00:00:00.000Z';
     const requestedWeek = { year: getIsoWeekYear(requested), week: getIsoWeek(requested) };
     const testWindow = {

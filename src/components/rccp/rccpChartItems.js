@@ -38,14 +38,89 @@ export function matchRccpChartItem(segment, selection) {
  * Capacity/load series on the point are unchanged.
  * @param {object[]} chart
  * @param {string | string[]} selection
+ * @param {{ emptyHidesAll?: boolean, containsTerm?: string }} [options]
  */
-export function filterRccpChartByItem(chart, selection) {
+export function filterRccpChartByItem(chart, selection, options = {}) {
   const points = chart || [];
+  const term = String(options.containsTerm || '').trim().toLowerCase();
+  if (term) {
+    return points.map((point) => ({
+      ...point,
+      segmentsAbove: (point.segmentsAbove || []).filter(
+        (seg) => String(seg?.itemNumber || '').toLowerCase().includes(term),
+      ),
+      segmentsBelow: (point.segmentsBelow || []).filter(
+        (seg) => String(seg?.itemNumber || '').toLowerCase().includes(term),
+      ),
+    }));
+  }
   const selected = selectedItemSet(selection);
-  if (!selected.size) return points;
+  if (!selected.size) {
+    if (!options.emptyHidesAll) return points;
+    return points.map((point) => ({ ...point, segmentsAbove: [], segmentsBelow: [] }));
+  }
   return points.map((point) => ({
     ...point,
     segmentsAbove: (point.segmentsAbove || []).filter((seg) => matchRccpChartItem(seg, selected)),
     segmentsBelow: (point.segmentsBelow || []).filter((seg) => matchRccpChartItem(seg, selected)),
   }));
+}
+
+function periodToken(point) {
+  if (point?.month != null) return `${point.year}|${point.month}`;
+  return `${point.year}|${point.week}`;
+}
+
+function cellPeriodToken(cell) {
+  return `${cell.periodYear}|${cell.periodMonth || cell.isoWeek}`;
+}
+
+function sumStatus(segments, status) {
+  return (segments || []).reduce((sum, segment) => (
+    segment?.status === status ? sum + (Number(segment.qty) || 0) : sum
+  ), 0);
+}
+
+/**
+ * Align PO-stack matrix rows with the (item-filtered) chart segments.
+ * Capacity and warning rows stay vendor-level. Inactive filter returns the same Map.
+ * @param {Map<string, object>} cellMap
+ * @param {{ chart?: object[], measureRows?: object[], active?: boolean }} [options]
+ * @returns {Map<string, object>}
+ */
+export function filterRccpMatrixByItem(cellMap, options = {}) {
+  if (!options.active || !(cellMap instanceof Map)) return cellMap;
+  const rows = options.measureRows || [];
+  const openKey = rows.find((row) => row.isOpen)?.measureKey;
+  const orderedKey = rows.find((row) => row.isOrdered)?.measureKey;
+  const deliveredKey = rows.find((row) => row.isDelivered)?.measureKey;
+  const overKey = rows.find((row) => row.isOvercapacity)?.measureKey;
+  if (!openKey && !orderedKey && !deliveredKey) return cellMap;
+
+  const qtyByPeriod = new Map();
+  for (const point of options.chart || []) {
+    qtyByPeriod.set(periodToken(point), {
+      open: sumStatus(point.segmentsAbove, 'open'),
+      ordered: sumStatus(point.segmentsAbove, 'ordered'),
+      received: sumStatus(point.segmentsBelow, 'received'),
+    });
+  }
+
+  const next = new Map();
+  for (const [key, cell] of cellMap) {
+    const qty = qtyByPeriod.get(cellPeriodToken(cell)) || { open: 0, ordered: 0, received: 0 };
+    if (cell.measureKey === openKey) {
+      next.set(key, { ...cell, confirmedQty: qty.open });
+    } else if (cell.measureKey === orderedKey) {
+      next.set(key, { ...cell, confirmedQty: qty.ordered });
+    } else if (cell.measureKey === deliveredKey) {
+      next.set(key, { ...cell, confirmedQty: qty.received });
+    } else if (cell.measureKey === overKey) {
+      const over = (Number(cell.availableQty) || 0) - qty.open;
+      next.set(key, { ...cell, confirmedQty: over, remainingQty: over });
+    } else {
+      next.set(key, cell);
+    }
+  }
+  return next;
 }

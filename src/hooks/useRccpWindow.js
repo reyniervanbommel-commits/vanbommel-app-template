@@ -1,37 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { currentIsoWindow, isPersistableRccpIsoWindow } from '../components/rccp/rccpUtils';
+import {
+  RCCP_PLANNING_DATE_REQUESTED,
+  parseRccpPlanningDateMode,
+} from '../components/rccp/rccpPeriodGrain';
 
 const RCCP_BOARD_KEY = 'rccp';
 
 /**
- * Persistente RCCP board-settings (board-key `rccp`): ISO-weekrange, vendor,
- * KPI-window en grafiek-toggles. De server vervangt de settings-blob (geen merge) —
+ * Persistente RCCP board-settings (board-key `rccp`): ISO-weekrange (Period, tot 52 weken),
+ * vendor, KPI-window en grafiek-toggles. De server vervangt de settings-blob (geen merge) —
  * elk veld moet dus altijd meegestuurd worden.
  *
- * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, loaded }}
+ * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, planningDateMode, setPlanningDateMode, loaded }}
  */
 export function useRccpWindow() {
   const [isoWindow, setIsoWindowState] = useState(() => currentIsoWindow(8));
   const [lastVendor, setLastVendorState] = useState('');
   const [kpiWindowOnly, setKpiWindowOnlyState] = useState(true);
   const [chartVisibleKeys, setChartVisibleKeysState] = useState({});
+  const [planningDateMode, setPlanningDateModeState] = useState(RCCP_PLANNING_DATE_REQUESTED);
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);
 
   // Actuele waarden in refs zodat een debounced PATCH altijd beide velden meestuurt.
   const isoWindowRef = useRef(isoWindow);
   const persistableWindowRef = useRef(isoWindow);
+  const isoWindowTouchedRef = useRef(false);
   const lastVendorRef = useRef(lastVendor);
   const kpiWindowOnlyRef = useRef(kpiWindowOnly);
   const chartVisibleKeysRef = useRef(chartVisibleKeys);
+  const planningDateModeRef = useRef(planningDateMode);
   useEffect(() => { isoWindowRef.current = isoWindow; }, [isoWindow]);
   useEffect(() => { lastVendorRef.current = lastVendor; }, [lastVendor]);
   useEffect(() => { kpiWindowOnlyRef.current = kpiWindowOnly; }, [kpiWindowOnly]);
   useEffect(() => { chartVisibleKeysRef.current = chartVisibleKeys; }, [chartVisibleKeys]);
+  useEffect(() => { planningDateModeRef.current = planningDateMode; }, [planningDateMode]);
 
   // Schrijft isoWindow + lastVendorAccount samen weg (debounced), zodat de blob-replace op de
-  // server nooit één van beide velden verliest. Wide dataWindow jumps stay in session state only.
+  // server nooit één van beide velden verliest. Show-weeks-with-data blijft tot twee jaar
+  // persistable; grotere ranges blijven sessie-only.
   const schedulePersist = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -43,6 +52,7 @@ export function useRccpWindow() {
             lastVendorAccount: lastVendorRef.current,
             kpiWindowOnly: kpiWindowOnlyRef.current,
             chartVisibleKeys: chartVisibleKeysRef.current,
+            planningDateMode: planningDateModeRef.current,
           },
         },
       }).catch(() => { /* stil falen; lokale state blijft leidend */ });
@@ -55,7 +65,7 @@ export function useRccpWindow() {
       .then((data) => {
         if (!active) return;
         const stored = data?.settings?.isoWindow;
-        if (stored && isPersistableRccpIsoWindow(stored)) {
+        if (!isoWindowTouchedRef.current && stored && isPersistableRccpIsoWindow(stored)) {
           const compact = {
             fromYear: stored.fromYear,
             fromWeek: stored.fromWeek,
@@ -65,7 +75,7 @@ export function useRccpWindow() {
           setIsoWindowState(compact);
           isoWindowRef.current = compact;
           persistableWindowRef.current = compact;
-        } else if (stored) {
+        } else if (!isoWindowTouchedRef.current && stored) {
           const fallback = currentIsoWindow(8);
           setIsoWindowState(fallback);
           isoWindowRef.current = fallback;
@@ -81,6 +91,11 @@ export function useRccpWindow() {
         if (storedKeys && typeof storedKeys === 'object' && !Array.isArray(storedKeys)) {
           setChartVisibleKeysState(storedKeys);
         }
+        if (data?.settings?.planningDateMode) {
+          const mode = parseRccpPlanningDateMode(data.settings.planningDateMode);
+          setPlanningDateModeState(mode);
+          planningDateModeRef.current = mode;
+        }
       })
       .catch(() => { /* fallback naar defaults */ })
       .finally(() => { if (active) setLoaded(true); });
@@ -89,10 +104,11 @@ export function useRccpWindow() {
 
   const setIsoWindow = useCallback((next, options = {}) => {
     const persist = options.persist !== false;
+    isoWindowTouchedRef.current = true;
     setIsoWindowState((prev) => {
       const value = typeof next === 'function' ? next(prev) : next;
       isoWindowRef.current = value;
-      if (isPersistableRccpIsoWindow(value)) persistableWindowRef.current = value;
+      if (persist && isPersistableRccpIsoWindow(value)) persistableWindowRef.current = value;
       if (persist) schedulePersist();
       return value;
     });
@@ -131,6 +147,16 @@ export function useRccpWindow() {
     });
   }, [schedulePersist]);
 
+  const setPlanningDateMode = useCallback((value) => {
+    const next = parseRccpPlanningDateMode(value);
+    setPlanningDateModeState((prev) => {
+      if (prev === next) return prev;
+      planningDateModeRef.current = next;
+      schedulePersist();
+      return next;
+    });
+  }, [schedulePersist]);
+
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
   }, []);
@@ -138,11 +164,13 @@ export function useRccpWindow() {
   return useMemo(
     () => ({
       isoWindow, setIsoWindow, lastVendor, setLastVendor,
-      kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, loaded,
+      kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
+      planningDateMode, setPlanningDateMode, loaded,
     }),
     [
       isoWindow, setIsoWindow, lastVendor, setLastVendor,
-      kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, loaded,
+      kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
+      planningDateMode, setPlanningDateMode, loaded,
     ],
   );
 }

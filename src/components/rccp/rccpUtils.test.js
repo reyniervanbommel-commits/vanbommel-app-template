@@ -399,12 +399,18 @@ describe('isoWindowWeekCount / persistable RCCP window', () => {
     expect(isPersistableRccpIsoWindow({
       fromYear: 2026, fromWeek: 31, toYear: 2026, toWeek: 38,
     })).toBe(true);
+    expect(isPersistableRccpIsoWindow({
+      fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 16,
+    })).toBe(true);
   });
 
-  it('rejects a multi-year dataWindow jump as too wide to persist', () => {
-    const wide = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
-    expect(isoWindowWeekCount(wide)).toBeGreaterThan(12);
-    expect(isPersistableRccpIsoWindow(wide)).toBe(false);
+  it('rejects a range longer than two years as too wide to persist', () => {
+    const huge = { fromYear: 2018, fromWeek: 1, toYear: 2026, toWeek: 1 };
+    expect(isoWindowWeekCount(huge)).toBeGreaterThan(104);
+    expect(isPersistableRccpIsoWindow(huge)).toBe(false);
+    expect(isPersistableRccpIsoWindow({
+      fromYear: 2021, fromWeek: 47, toYear: 2022, toWeek: 51,
+    })).toBe(true);
   });
 
   it('falls back to the current 8-week window for prefetch when the stored range is wide', () => {
@@ -412,5 +418,8 @@ describe('isoWindowWeekCount / persistable RCCP window', () => {
     expect(compactIsoWindowForPrefetch(wide)).toEqual(currentIsoWindow(8));
     const compact = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8 };
     expect(compactIsoWindowForPrefetch(compact)).toEqual(compact);
+    const quarter = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 16 };
+    expect(isPersistableRccpIsoWindow(quarter)).toBe(true);
+    expect(compactIsoWindowForPrefetch(quarter)).toEqual(currentIsoWindow(8));
   });
 });

@@ -204,7 +204,6 @@ function PurchaseOrdersBoardTable({
     linkedLineValueByHeaderKey,
   }), [lineTotalColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
   const hasFilteredEmptyState = processedItems.length === 0;
-  const totalColCount = 1 + decoratedColumns.length;
   const handleClearAllFilters = useCallback(() => {
     clearAllFilters?.();
   }, [clearAllFilters]);
@@ -215,63 +214,62 @@ function PurchaseOrdersBoardTable({
 
   return (
     <>
-      <div className={styles.wrapper} ref={wrapperRef}>
-        <table className={styles.table}>
-          <PurchaseOrdersBoardTableHeader
-            styles={styles}
-            selection={selection}
-            onSetExpansion={handleSetExpansion}
-            items={items}
-            columns={decoratedColumns}
-            headerColumnWidths={effectiveHeaderColumnWidths}
-            boardView={resolvedBoardView}
-            columnActions={columnActions}
-            formatting={formatting}
-            links={{ linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
-            lineColumns={lineColumns}
-            stickyState={{ stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky }}
-            collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
-            activeRulesControls={activeRulesControls}
-          />
-          {hasFilteredEmptyState ? (
-            <tbody>
-              <tr>
-                <td colSpan={totalColCount} className={styles.emptyFilterCell}>
-                  <div className={styles.emptyFilterContent}>
-                    <span>No rows match the active filters</span>
-                    {activeFilterCount > 0 ? (
-                      <Button appearance="subtle" onClick={handleClearAllFilters}>
-                        Clear filters
-                      </Button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          ) : (
-            <PurchaseOrdersBoardRows
-              data={rowsData}
-              layout={rowsLayout}
-              formatting={formatting}
-              actions={rowsActions}
-              links={rowsLinks}
+      <div className={styles.frame}>
+        <div className={styles.wrapper} ref={wrapperRef}>
+          <table className={styles.table}>
+            <PurchaseOrdersBoardTableHeader
+              styles={styles}
               selection={selection}
-              contextMenu={contextMenu}
-              remarks={remarks}
-              scrollRef={wrapperRef}
-            />
-          )}
-          {!hasFilteredEmptyState && resolvedBoardView.columnSums?.columnSumKeys?.length ? (
-            <PurchaseOrdersBoardTotalsRow
+              onSetExpansion={handleSetExpansion}
+              items={items}
               columns={decoratedColumns}
-              columnSumKeys={resolvedBoardView.columnSums.columnSumKeys}
-              summedValuesByColumn={resolvedBoardView.columnSums.summedValuesByColumn}
+              headerColumnWidths={effectiveHeaderColumnWidths}
+              boardView={resolvedBoardView}
+              columnActions={columnActions}
+              formatting={formatting}
+              links={{ linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey }}
+              lineColumns={lineColumns}
+              stickyState={{ stickyColumnKeys, firstNonStickyColumnKey, makeColumnSticky }}
               collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
-              totalsCellClassName={styles.totalsCell}
-              controlCellClassName={styles.totalsControlCell}
+              activeRulesControls={activeRulesControls}
             />
-          ) : null}
-        </table>
+            {hasFilteredEmptyState ? null : (
+              <PurchaseOrdersBoardRows
+                data={rowsData}
+                layout={rowsLayout}
+                formatting={formatting}
+                actions={rowsActions}
+                links={rowsLinks}
+                selection={selection}
+                contextMenu={contextMenu}
+                remarks={remarks}
+                scrollRef={wrapperRef}
+              />
+            )}
+            {!hasFilteredEmptyState && resolvedBoardView.columnSums?.columnSumKeys?.length ? (
+              <PurchaseOrdersBoardTotalsRow
+                columns={decoratedColumns}
+                columnSumKeys={resolvedBoardView.columnSums.columnSumKeys}
+                summedValuesByColumn={resolvedBoardView.columnSums.summedValuesByColumn}
+                collapsedHeaderColumnKeys={collapsedHeaderColumnKeys}
+                totalsCellClassName={styles.totalsCell}
+                controlCellClassName={styles.totalsControlCell}
+              />
+            ) : null}
+          </table>
+        </div>
+        {hasFilteredEmptyState ? (
+          <div className={styles.emptyFilterOverlay}>
+            <div className={styles.emptyFilterContent}>
+              <span>No rows match the active filters</span>
+              {activeFilterCount > 0 ? (
+                <Button appearance="subtle" onClick={handleClearAllFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
       <PurchaseOrderCellContextMenu
         context={cellContext}

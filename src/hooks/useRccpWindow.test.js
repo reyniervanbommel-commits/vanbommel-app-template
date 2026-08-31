@@ -9,7 +9,10 @@ import { currentIsoWindow } from '../components/rccp/rccpUtils';
 import { useRccpWindow } from './useRccpWindow';
 
 const WIDE = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
+const HUGE = { fromYear: 2018, fromWeek: 1, toYear: 2026, toWeek: 1 };
 const COMPACT = { fromYear: 2026, fromWeek: 31, toYear: 2026, toWeek: 38 };
+const QUARTER = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 16 };
+const DATA_WEEKS = { fromYear: 2021, fromWeek: 47, toYear: 2022, toWeek: 51 };
 
 describe('useRccpWindow', () => {
   beforeEach(() => {
@@ -21,10 +24,10 @@ describe('useRccpWindow', () => {
     vi.useRealTimers();
   });
 
-  it('ignores a stored multi-year window and keeps the compact default', async () => {
+  it('ignores a stored range longer than two years and keeps the compact default', async () => {
     apiRequest.mockImplementation((path) => {
       if (String(path).includes('/supplier/board-settings/rccp')) {
-        return Promise.resolve({ settings: { isoWindow: WIDE, lastVendorAccount: 'V1' } });
+        return Promise.resolve({ settings: { isoWindow: HUGE, lastVendorAccount: 'V1' } });
       }
       return Promise.resolve({});
     });
@@ -34,6 +37,34 @@ describe('useRccpWindow', () => {
 
     expect(result.current.isoWindow).toEqual(currentIsoWindow(8));
     expect(result.current.lastVendor).toBe('V1');
+  });
+
+  it('loads a stored weeks-with-data period', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (String(path).includes('/supplier/board-settings/rccp')) {
+        return Promise.resolve({ settings: { isoWindow: DATA_WEEKS } });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.isoWindow).toEqual(DATA_WEEKS);
+  });
+
+  it('persists a weeks-with-data period', async () => {
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    apiRequest.mockClear();
+
+    act(() => {
+      result.current.setIsoWindow(DATA_WEEKS);
+    });
+    await waitFor(() => {
+      expect(apiRequest.mock.calls.some((call) => call[1]?.method === 'PATCH')).toBe(true);
+    });
+    const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
+    expect(patch[1].body.settings.isoWindow).toEqual(DATA_WEEKS);
   });
 
   it('does not persist a dataWindow jump', async () => {
@@ -75,5 +106,78 @@ describe('useRccpWindow', () => {
     const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
     expect(patch[1].body.settings.isoWindow).toEqual(COMPACT);
     expect(patch[1].body.settings.lastVendorAccount).toBe('V9');
+    expect(patch[1].body.settings.planningDateMode).toBe('requested');
+  });
+
+  it('loads a stored 16-week period instead of the compact default', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (String(path).includes('/supplier/board-settings/rccp')) {
+        return Promise.resolve({ settings: { isoWindow: QUARTER } });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.isoWindow).toEqual(QUARTER);
+  });
+
+  it('persists a 16-week user-chosen period', async () => {
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    apiRequest.mockClear();
+
+    act(() => {
+      result.current.setIsoWindow(QUARTER);
+    });
+    await waitFor(() => {
+      expect(apiRequest.mock.calls.some((call) => call[1]?.method === 'PATCH')).toBe(true);
+    });
+    const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
+    expect(patch[1].body.settings.isoWindow).toEqual(QUARTER);
+  });
+
+  it('does not overwrite a user-chosen period with late-arriving stored settings', async () => {
+    let resolveGet;
+    apiRequest.mockImplementation((_path, options) => {
+      if (options?.method === 'PATCH') return Promise.resolve({});
+      return new Promise((resolve) => { resolveGet = resolve; });
+    });
+
+    const { result } = renderHook(() => useRccpWindow());
+    act(() => {
+      result.current.setIsoWindow(QUARTER);
+    });
+    expect(result.current.isoWindow).toEqual(QUARTER);
+
+    await act(async () => {
+      resolveGet({ settings: { isoWindow: COMPACT, lastVendorAccount: 'V1' } });
+    });
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    expect(result.current.isoWindow).toEqual(QUARTER);
+    expect(result.current.lastVendor).toBe('V1');
+  });
+
+  it('loads and persists the confirmed load-date mode', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (String(path).includes('/supplier/board-settings/rccp')) {
+        return Promise.resolve({ settings: { planningDateMode: 'confirmed' } });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.planningDateMode).toBe('confirmed');
+
+    act(() => {
+      result.current.setPlanningDateMode('requested');
+    });
+    await waitFor(() => {
+      expect(apiRequest.mock.calls.some((call) => call[1]?.method === 'PATCH')).toBe(true);
+    });
+    const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
+    expect(patch[1].body.settings.planningDateMode).toBe('requested');
   });
 });

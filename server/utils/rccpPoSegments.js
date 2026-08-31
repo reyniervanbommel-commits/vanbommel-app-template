@@ -13,6 +13,7 @@ const {
   isHeaderOnlyMeasure,
   lineDateValue,
   isSentinelDate,
+  parsePlanningDateMode,
   planningDateValue,
   collectDateSlots,
   collectPlanningSlots,
@@ -46,7 +47,7 @@ function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId =
     weekMap.set(week, itemMap);
   }
   const current = itemMap.get(itemNumber) || {
-    open: 0, received: 0, late: false, receivedLate: false, receivedOnTime: false,
+    open: 0, received: 0, ordered: 0, late: false, receivedLate: false, receivedOnTime: false,
     planned1900: false, dataAreaId: '',
   };
   if (!current.dataAreaId && dataAreaId) current.dataAreaId = dataAreaId;
@@ -54,6 +55,8 @@ function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId =
   if (status === 'open') {
     current.open += qty;
     current.late = current.late || Boolean(late);
+  } else if (status === 'ordered') {
+    current.ordered += qty;
   } else {
     current.received += qty;
     current.receivedLate = current.receivedLate || Boolean(late);
@@ -80,8 +83,8 @@ function emitAbove(itemMap) {
   for (const itemNumber of items) {
     const entry = itemMap.get(itemNumber);
     const flags = { planned1900: entry.planned1900 };
-    if (entry.received > 0) {
-      out.push(emitSegment(itemNumber, entry.received, 'received', false, entry.dataAreaId, flags));
+    if (entry.ordered > 0) {
+      out.push(emitSegment(itemNumber, entry.ordered, 'ordered', false, entry.dataAreaId, flags));
     }
     if (entry.open > 0) {
       out.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
@@ -133,11 +136,13 @@ function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlo
  * @param {{ now: Date, vendorAccount?: string|null }} options
  * @returns {Map<string, { segmentsAbove: object[], segmentsBelow: object[] }>}
  */
-function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
+function buildPoSegments(rows, config, window, { now, vendorAccount, planningDateMode } = {}) {
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
+  const orderedKey = String(config.orderedMeasureKey || '').trim();
   const dateKey = config.dateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
+  const dateMode = parsePlanningDateMode(planningDateMode);
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
   const nowYear = getIsoWeekYear(now);
@@ -164,8 +169,10 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
     const details = (Array.isArray(row.details) ? row.details : []).filter((d) => !d.isRemoved);
     const headerOnlyOpen = Boolean(openKey && isHeaderOnlyMeasure(details, masterValues, openKey));
     const headerOnlyDelivered = Boolean(deliveredKey && isHeaderOnlyMeasure(details, masterValues, deliveredKey));
+    const headerOnlyOrdered = Boolean(orderedKey && isHeaderOnlyMeasure(details, masterValues, orderedKey));
     const lineOpen = Boolean(openKey && !headerOnlyOpen);
     const lineDelivered = Boolean(deliveredKey && !headerOnlyDelivered);
+    const lineOrdered = Boolean(orderedKey && !headerOnlyOrdered);
 
     const processLine = (lineValues) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
@@ -173,16 +180,23 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
 
       const itemNumber = lineItemNumber(lineValues, masterValues);
       const plannedDate = planningDateValue(
-        lineValues, masterValues, dateKey, config.confirmedDateColumnKey,
+        lineValues, masterValues, dateKey, config.confirmedDateColumnKey, dateMode,
+      );
+      const confirmedDate = planningDateValue(
+        lineValues, masterValues, dateKey, config.confirmedDateColumnKey, 'confirmed',
       );
       const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
-      const receiptDate = rawReceipt || plannedDate;
+      const hasReceipt = Boolean(rawReceipt) && !isSentinelDate(rawReceipt);
       const planned1900 = isSentinelDate(plannedDate);
       const share = details.length ? 1 / details.length : 1;
       const openQty = lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0;
       const deliveredQty = lineDelivered
         ? resolveLineMeasureQty(lineValues, masterValues, deliveredKey, share)
         : 0;
+      const orderedQty = lineOrdered
+        ? resolveLineMeasureQty(lineValues, masterValues, orderedKey, share)
+        : 0;
+      const orderedFilled = Math.max(0, orderedQty - openQty);
 
       if (plannedDate) {
         const plannedYear = getIsoWeekYear(plannedDate);
@@ -192,47 +206,42 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
           const late = Boolean(
             nowYear && nowWeek && compareIsoWeek(plannedYear, plannedWeek, nowYear, nowWeek) < 0,
           );
-          clipBump(above, plannedKey, itemNumber, 'received', deliveredQty, false, dataAreaId, { planned1900 });
+          clipBump(above, plannedKey, itemNumber, 'ordered', orderedFilled, false, dataAreaId, { planned1900 });
           clipBump(above, plannedKey, itemNumber, 'open', openQty, late, dataAreaId, { planned1900 });
         }
       }
 
-      if (receiptDate && deliveredQty > 0) {
-        const receiptYear = getIsoWeekYear(receiptDate);
-        const receiptWeek = getIsoWeek(receiptDate);
+      if (confirmedDate && hasReceipt && deliveredQty > 0) {
+        const receiptYear = getIsoWeekYear(rawReceipt);
+        const receiptWeek = getIsoWeek(rawReceipt);
         if (receiptYear && receiptWeek) {
-          const hasReceipt = Boolean(rawReceipt) && !isSentinelDate(rawReceipt);
-          let receivedLate = false;
-          let receivedOnTime = false;
-          if (hasReceipt && plannedDate && !planned1900) {
-            const days = calendarDaysBetween(receiptDate, plannedDate);
-            receivedLate = days > 0;
-            receivedOnTime = days !== null && days <= 0;
-          }
+          const days = plannedDate && !planned1900
+            ? calendarDaysBetween(rawReceipt, plannedDate)
+            : calendarDaysBetween(rawReceipt, confirmedDate);
           clipBump(
             below,
             isoWeekKey(receiptYear, receiptWeek),
             itemNumber,
             'received',
             deliveredQty,
-            receivedLate,
+            days > 0,
             dataAreaId,
-            { onTime: receivedOnTime, planned1900 },
+            { onTime: days !== null && days <= 0, planned1900 },
           );
         }
       }
     };
 
-    if (lineOpen || lineDelivered) {
+    if (lineOpen || lineDelivered || lineOrdered) {
       if (!details.length) processLine(masterValues);
       else {
         for (const detail of details) processLine(detail.values || {});
       }
     }
 
-    const plannedSlots = (headerOnlyOpen || headerOnlyDelivered)
+    const plannedSlots = (headerOnlyOpen || headerOnlyOrdered)
       ? collectPlanningSlots(
-        details, masterValues, dateKey, config.confirmedDateColumnKey, window, excludedSet, masterStatus,
+        details, masterValues, dateKey, config.confirmedDateColumnKey, window, excludedSet, masterStatus, dateMode,
       )
       : [];
     if (headerOnlyOpen) {
@@ -246,18 +255,24 @@ function buildPoSegments(rows, config, window, { now, vendorAccount } = {}) {
         dataAreaId,
       );
     }
+    if (headerOnlyOrdered) {
+      const orderedTotal = toNumber(pickValue(masterValues, orderedKey));
+      const openTotal = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) : 0;
+      spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId);
+    }
     if (headerOnlyDelivered) {
       const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
-      spreadHeaderQty(above, plannedSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
       const receiptSlots = collectDateSlots(
         details,
         masterValues,
-        receiptKey || dateKey,
-        receiptKey ? dateKey : null,
+        receiptKey,
+        null,
         window,
         excludedSet,
         masterStatus,
-      );
+      ).filter((slot) => Boolean(planningDateValue(
+        slot.lineValues, masterValues, dateKey, config.confirmedDateColumnKey, 'confirmed',
+      )));
       spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
     }
   }

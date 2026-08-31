@@ -44,19 +44,30 @@ function isSentinelDate(value) {
   return date.getUTCFullYear() <= 1900 || date.getFullYear() <= 1900;
 }
 
+const PLANNING_DATE_CONFIRMED = 'confirmed';
+const PLANNING_DATE_REQUESTED = 'requested';
+
+function parsePlanningDateMode(raw) {
+  return String(raw || '').toLowerCase() === PLANNING_DATE_CONFIRMED
+    ? PLANNING_DATE_CONFIRMED
+    : PLANNING_DATE_REQUESTED;
+}
+
+function realIsoDate(value) {
+  if (!value || isSentinelDate(value)) return null;
+  const year = getIsoWeekYear(value);
+  const week = getIsoWeek(value);
+  return year && week ? value : null;
+}
+
 /**
- * Planningdatum per regel: confirmed als echte ISO-week, anders requested.
+ * Planningdatum per regel: requested of confirmed, zonder automatische fallback.
  */
-function planningDateValue(lineValues, masterValues, requestedKey, confirmedKey) {
-  if (confirmedKey) {
-    const confirmed = lineDateValue(lineValues, masterValues, confirmedKey);
-    if (confirmed && !isSentinelDate(confirmed)) {
-      const year = getIsoWeekYear(confirmed);
-      const week = getIsoWeek(confirmed);
-      if (year && week) return confirmed;
-    }
+function planningDateValue(lineValues, masterValues, requestedKey, confirmedKey, mode) {
+  if (parsePlanningDateMode(mode) === PLANNING_DATE_CONFIRMED) {
+    return realIsoDate(lineDateValue(lineValues, masterValues, confirmedKey));
   }
-  return lineDateValue(lineValues, masterValues, requestedKey);
+  return lineDateValue(lineValues, masterValues, requestedKey) || null;
 }
 
 /**
@@ -92,7 +103,7 @@ function collectDateSlots(
 }
 
 function collectPlanningSlots(
-  details, masterValues, requestedKey, confirmedKey, window, excludedSet, masterStatus,
+  details, masterValues, requestedKey, confirmedKey, window, excludedSet, masterStatus, mode,
 ) {
   const sources = details.length
     ? details.map((detail) => ({ lineNumber: detail.detailKey, lineValues: detail.values || {} }))
@@ -101,7 +112,9 @@ function collectPlanningSlots(
   for (const source of sources) {
     const status = pickValue(source.lineValues, 'status') ?? masterStatus;
     if (status && excludedSet.has(String(status).toLowerCase())) continue;
-    const dateValue = planningDateValue(source.lineValues, masterValues, requestedKey, confirmedKey);
+    const dateValue = planningDateValue(
+      source.lineValues, masterValues, requestedKey, confirmedKey, mode,
+    );
     if (!dateValue) continue;
     const year = getIsoWeekYear(dateValue);
     const week = getIsoWeek(dateValue);
@@ -126,6 +139,9 @@ module.exports = {
   isHeaderOnlyMeasure,
   lineDateValue,
   isSentinelDate,
+  PLANNING_DATE_CONFIRMED,
+  PLANNING_DATE_REQUESTED,
+  parsePlanningDateMode,
   planningDateValue,
   collectDateSlots,
   collectPlanningSlots,

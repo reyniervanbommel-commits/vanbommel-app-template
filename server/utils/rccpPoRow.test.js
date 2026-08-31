@@ -21,40 +21,47 @@ describe('isSentinelDate', () => {
 describe('planningDateValue', () => {
   const requested = '2026-09-14'; // ISO week 38
   const confirmed = '2026-09-28'; // ISO week 40
+  const line = { requestedDeliveryDate: requested, confirmedDeliveryDate: confirmed };
 
-  it('kiest confirmed wanneer die een echte week heeft', () => {
-    expect(planningDateValue(
-      { requestedDeliveryDate: requested, confirmedDeliveryDate: confirmed },
-      {},
-      'requestedDeliveryDate',
-      'confirmedDeliveryDate',
-    )).toBe(confirmed);
+  it('in confirmed-modus gebruikt alleen confirmed', () => {
+    expect(planningDateValue(line, {}, 'requestedDeliveryDate', 'confirmedDeliveryDate', 'confirmed'))
+      .toBe(confirmed);
   });
 
-  it('valt terug op requested bij lege confirmed', () => {
+  it('in confirmed-modus geeft null bij lege of 1900 confirmed', () => {
     expect(planningDateValue(
       { requestedDeliveryDate: requested },
       {},
       'requestedDeliveryDate',
       'confirmedDeliveryDate',
-    )).toBe(requested);
-  });
-
-  it('valt terug op requested bij 1-1-1900', () => {
+      'confirmed',
+    )).toBeNull();
     expect(planningDateValue(
       { requestedDeliveryDate: requested, confirmedDeliveryDate: '1900-01-01' },
       {},
       'requestedDeliveryDate',
       'confirmedDeliveryDate',
-    )).toBe(requested);
+      'confirmed',
+    )).toBeNull();
   });
 
-  it('valt terug op requested bij onparseerbare confirmed', () => {
+  it('in requested-modus gebruikt requested ook als confirmed bestaat', () => {
+    expect(planningDateValue(line, {}, 'requestedDeliveryDate', 'confirmedDeliveryDate', 'requested'))
+      .toBe(requested);
+  });
+
+  it('in requested-modus houdt 1-1-1900 zodat die week gemarkeerd kan worden', () => {
     expect(planningDateValue(
-      { requestedDeliveryDate: requested, confirmedDeliveryDate: 'not-a-date' },
+      { requestedDeliveryDate: '1900-01-01' },
       {},
       'requestedDeliveryDate',
       'confirmedDeliveryDate',
-    )).toBe(requested);
+      'requested',
+    )).toBe('1900-01-01');
+  });
+
+  it('default is requested (geen automatische fallback naar confirmed)', () => {
+    expect(planningDateValue(line, {}, 'requestedDeliveryDate', 'confirmedDeliveryDate'))
+      .toBe(requested);
   });
 });

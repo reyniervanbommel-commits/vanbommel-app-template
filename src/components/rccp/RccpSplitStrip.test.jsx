@@ -21,23 +21,8 @@ vi.mock('./RccpChartMatrixPanel', () => ({
   default: () => <div>chart-matrix</div>,
 }));
 
-vi.mock('./RccpItemFilter', () => ({
-  default: () => <div>item-filter</div>,
-}));
-
-vi.mock('./useRccpItemFilter', () => ({
-  useRccpItemFilter: () => ({
-    selectedItems: [],
-    items: [],
-    filteredChart: [],
-    handleItemChange: vi.fn(),
-    extraColumns: [],
-    extraValues: {},
-  }),
-}));
-
 describe('RccpSplitStrip', () => {
-  it('renders the PO-board RCCP pane without crashing', () => {
+  it('renders the PO-board RCCP pane without an item picker', () => {
     const { container } = renderWithFluent(
       <MemoryRouter>
         <RccpSplitStrip
@@ -50,6 +35,9 @@ describe('RccpSplitStrip', () => {
       </MemoryRouter>,
     );
     expect(container.textContent).toContain('Open RCCP page');
+    expect(container.textContent).toContain('Requested');
+    expect(container.textContent).toContain('Confirmed');
     expect(container.textContent).toContain('chart-matrix');
+    expect(container.textContent).not.toContain('item-filter');
   });
 });
