@@ -1,0 +1,100 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "prodAppUrl": {
+      "type": "String"
+    }
+  },
+  "triggers": {
+    "Recurrence": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "schedule": {
+          "hours": [3],
+          "minutes": [0]
+        },
+        "timeZone": "W. Europe Standard Time"
+      },
+      "runtimeConfiguration": {
+        "concurrency": {
+          "runs": 1
+        }
+      }
+    }
+  },
+  "actions": {
+    "Get_token": {
+      "type": "Http",
+      "inputs": {
+        "method": "GET",
+        "uri": "__VAULT_URI__secrets/night-refresh-token-prod?api-version=7.4",
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://vault.azure.net"
+        }
+      },
+      "runtimeConfiguration": {
+        "secureData": {
+          "properties": ["inputs", "outputs"]
+        }
+      }
+    },
+    "Start_night_refresh": {
+      "type": "Http",
+      "runAfter": {
+        "Get_token": ["Succeeded"]
+      },
+      "inputs": {
+        "method": "POST",
+        "uri": "@{parameters('prodAppUrl')}/api/internal/night-refresh",
+        "headers": {
+          "Authorization": "Bearer @{body('Get_token')?['value']}",
+          "Content-Type": "application/json"
+        },
+        "retryPolicy": {
+          "type": "fixed",
+          "count": 3,
+          "interval": "PT20S"
+        }
+      },
+      "runtimeConfiguration": {
+        "secureData": {
+          "properties": ["inputs", "outputs"]
+        }
+      },
+      "limit": {
+        "timeout": "PT1M"
+      }
+    },
+    "Notify_start_failed": {
+      "type": "Http",
+      "runAfter": {
+        "Start_night_refresh": ["Failed", "TimedOut"]
+      },
+      "inputs": {
+        "method": "POST",
+        "uri": "@{parameters('prodAppUrl')}/api/internal/night-refresh/start-failed",
+        "headers": {
+          "Authorization": "Bearer @{body('Get_token')?['value']}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "httpStatus": "@{coalesce(outputs('Start_night_refresh')?['statusCode'], json(null))}",
+          "message": "Night refresh HTTP start failed"
+        },
+        "retryPolicy": {
+          "type": "none"
+        }
+      },
+      "runtimeConfiguration": {
+        "secureData": {
+          "properties": ["inputs", "outputs"]
+        }
+      }
+    }
+  },
+  "outputs": {}
+}

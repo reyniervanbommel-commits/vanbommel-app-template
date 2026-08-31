@@ -124,6 +124,18 @@ jobs:
           curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors \
             "https://${FQDN}/api/health"
 
+      - name: Logic App night-refresh wekker
+        run: |
+          set -euo pipefail
+          FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$ACA_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
+          PROD_URL="https://${FQDN}"
+          echo "Wekker target: ${PROD_URL}/api/internal/night-refresh"
+          az deployment group create \
+            --resource-group "$ACA_RESOURCE_GROUP" \
+            --name vendorportal-night-refresh-wekker \
+            --template-file infra/azure/night-refresh-wekker.bicep \
+            --parameters prodAppUrl="$PROD_URL" keyVaultName="$KEY_VAULT_NAME"
+
       - name: D365-koppeling verifiëren
         run: |
           FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$ACA_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"

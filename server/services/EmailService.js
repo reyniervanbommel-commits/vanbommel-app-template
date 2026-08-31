@@ -66,6 +66,55 @@ async function sendNightRefreshDigest({ recipients, run }) {
   return { skipped: false };
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function redactNightToken(value) {
+  let text = String(value || '');
+  const token = String(process.env.NIGHT_REFRESH_TOKEN || '');
+  if (token) text = text.split(token).join('[redacted]');
+  return text.replace(/Bearer/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+function buildNightWekkerFailedContent({ httpStatus, message } = {}) {
+  const statusLabel = httpStatus == null ? 'unknown' : String(httpStatus);
+  const safeMessage = redactNightToken(String(message || 'No details').slice(0, 200));
+  const subject = 'D365 night refresh did not start';
+  const plainText = [
+    'The Azure night-refresh alarm could not start the D365 refresh.',
+    `HTTP status: ${statusLabel}`,
+    `Detail: ${safeMessage}`,
+  ].join('\n');
+  return {
+    subject,
+    html: `<p>${escapeHtml(plainText).replace(/\n/g, '<br/>')}</p>`,
+    plainText,
+  };
+}
+
+async function sendNightRefreshWekkerFailed({ recipients, httpStatus, message } = {}) {
+  const client = getClient();
+  const senderAddress = process.env.ACS_FROM_EMAIL;
+  const to = (Array.isArray(recipients) ? recipients : []).filter(Boolean);
+  if (!client || !senderAddress || !to.length) {
+    console.warn('[EmailService] ACS not configured or no recipients; wekker-failed mail skipped');
+    return { skipped: true };
+  }
+  const content = buildNightWekkerFailedContent({ httpStatus, message });
+  const poller = await client.beginSend({
+    senderAddress,
+    content,
+    recipients: { to: to.map((address) => ({ address })) },
+  });
+  await poller.pollUntilDone();
+  return { skipped: false };
+}
+
 async function sendInviteEmail(toEmail, setPasswordUrl) {
   const client = getClient();
   const senderAddress = process.env.ACS_FROM_EMAIL;
@@ -85,4 +134,11 @@ async function sendInviteEmail(toEmail, setPasswordUrl) {
   return poller.pollUntilDone();
 }
 
-module.exports = { sendPasswordResetEmail, sendInviteEmail, sendNightRefreshDigest, buildNightDigestContent };
+module.exports = {
+  sendPasswordResetEmail,
+  sendInviteEmail,
+  sendNightRefreshDigest,
+  buildNightDigestContent,
+  sendNightRefreshWekkerFailed,
+  buildNightWekkerFailedContent,
+};
