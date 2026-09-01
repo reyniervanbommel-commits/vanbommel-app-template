@@ -215,9 +215,7 @@ export function usePurchaseOrderBoardView({
     remarksFilterEnabled: remarksFilter.enabled,
     remarksMatchKeys: remarksFilter.matchKeys,
     kpiMatchKeys,
-    kpiFilterKey,
-    kpiQtyOverlay,
-  }), [kpiFilterKey, kpiMatchKeys, kpiQtyOverlay, remarksFilter, tableView.processedItems]);
+  }), [kpiMatchKeys, remarksFilter, tableView.processedItems]);
   const displayedItems = useMemo(
     () => overlayKpiQtyOnOrders(matchedItems, kpiQtyOverlay, kpiFilterKey),
     [kpiFilterKey, kpiQtyOverlay, matchedItems]
