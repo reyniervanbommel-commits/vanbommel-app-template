@@ -33,6 +33,57 @@ function isEmptySampleValue(value) {
   return value === null || value === undefined || value === '';
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+const DATE_FIELD_NAME_RE = /Date(?:Time(?:Offset)?)?$/i;
+
+function isIsoDateString(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!ISO_DATE_RE.test(trimmed)) return false;
+  return Number.isFinite(Date.parse(trimmed));
+}
+
+function looksLikeDateFieldName(field) {
+  return DATE_FIELD_NAME_RE.test(String(field || '').trim());
+}
+
+/**
+ * D365 OData levert datums als ISO-strings, geen Date-objecten.
+ * Veldnamen die op Date/DateTime eindigen zijn een fallback bij lege samples.
+ */
+function inferSourceDataType(value, field) {
+  if (value instanceof Date) return 'date';
+  if (typeof value === 'number' && Number.isFinite(value)) return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (isIsoDateString(value)) return 'date';
+  if (looksLikeDateFieldName(field) && (isEmptySampleValue(value) || typeof value === 'string')) {
+    return 'date';
+  }
+  return 'text';
+}
+
+function shouldPromoteSourceDataType(currentType, inferredType) {
+  const current = String(currentType || '').toLowerCase();
+  const inferred = String(inferredType || '').toLowerCase();
+  return current === 'text' && Boolean(inferred) && inferred !== 'text';
+}
+
+function listSourceColumnsToPromote(existingColumns, discoveredFields) {
+  const byField = new Map(
+    (Array.isArray(existingColumns) ? existingColumns : [])
+      .filter((column) => String(column?.source || '') === 'source' && column?.sourceField)
+      .map((column) => [String(column.sourceField).toLowerCase(), column])
+  );
+  const promoted = [];
+  for (const fieldMeta of Array.isArray(discoveredFields) ? discoveredFields : []) {
+    const existing = byField.get(String(fieldMeta?.field || '').toLowerCase());
+    if (!existing) continue;
+    if (!shouldPromoteSourceDataType(existing.dataType, fieldMeta.dataType)) continue;
+    promoted.push({ id: existing.id, dataType: fieldMeta.dataType });
+  }
+  return promoted;
+}
+
 function formatSampleValue(value) {
   if (isEmptySampleValue(value)) return '—';
   if (typeof value === 'object') return JSON.stringify(value);
@@ -119,4 +170,7 @@ module.exports = {
   listSelectFieldsMissingFromRecord,
   formatSelectDropNotice,
   sampleMapFromDiscoveredFields,
+  inferSourceDataType,
+  shouldPromoteSourceDataType,
+  listSourceColumnsToPromote,
 };

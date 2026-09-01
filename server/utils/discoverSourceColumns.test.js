@@ -80,3 +80,63 @@ describe('D365 sample values', () => {
     });
   });
 });
+
+describe('inferSourceDataType', () => {
+  const { inferSourceDataType, shouldPromoteSourceDataType } = require('./discoverSourceColumns');
+
+  it('herkent een D365 ISO-datetime string als date', () => {
+    expect(inferSourceDataType('2050-12-31T12:00:00Z')).toBe('date');
+    expect(inferSourceDataType('2026-03-10T00:00:00.000Z')).toBe('date');
+  });
+
+  it('herkent een ISO-datum zonder tijd als date', () => {
+    expect(inferSourceDataType('2026-03-10')).toBe('date');
+  });
+
+  it('gebruikt de D365-veldnaam wanneer de sample leeg is', () => {
+    expect(inferSourceDataType(null, 'ConfirmedDeliveryDate')).toBe('date');
+    expect(inferSourceDataType('', 'CreatedDateTime')).toBe('date');
+  });
+
+  it('laat echte tekst- en getalwaarden met rust', () => {
+    expect(inferSourceDataType('Q000104', 'OrderVendorAccountNumber')).toBe('text');
+    expect(inferSourceDataType(12.5, 'LineAmount')).toBe('number');
+    expect(inferSourceDataType(true)).toBe('boolean');
+    expect(inferSourceDataType(new Date('2026-03-10T00:00:00Z'))).toBe('date');
+  });
+
+  it('promoveert alleen text naar een scherper type', () => {
+    expect(shouldPromoteSourceDataType('text', 'date')).toBe(true);
+    expect(shouldPromoteSourceDataType('date', 'text')).toBe(false);
+    expect(shouldPromoteSourceDataType('number', 'date')).toBe(false);
+  });
+});
+
+describe('listSourceColumnsToPromote', () => {
+  const { listSourceColumnsToPromote } = require('./discoverSourceColumns');
+
+  it('merkt een bestaande text-kolom ConfirmedDeliveryDate als date', () => {
+    const existing = [{
+      id: 9,
+      source: 'source',
+      sourceField: 'ConfirmedDeliveryDate',
+      dataType: 'text',
+    }];
+    const discovered = [{ field: 'ConfirmedDeliveryDate', dataType: 'date' }];
+    expect(listSourceColumnsToPromote(existing, discovered)).toEqual([
+      { id: 9, dataType: 'date' },
+    ]);
+  });
+
+  it('laat een kolom die al date is met rust', () => {
+    const existing = [{
+      id: 3,
+      source: 'source',
+      sourceField: 'RequestedDeliveryDate',
+      dataType: 'date',
+    }];
+    expect(listSourceColumnsToPromote(existing, [
+      { field: 'RequestedDeliveryDate', dataType: 'date' },
+    ])).toEqual([]);
+  });
+});

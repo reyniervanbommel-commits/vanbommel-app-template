@@ -38,6 +38,8 @@ const {
   fillMissingSamplesFromRawRows,
   sampleMapFromDiscoveredFields,
   formatSelectDropNotice,
+  inferSourceDataType,
+  listSourceColumnsToPromote,
 } = require('../utils/discoverSourceColumns');
 const {
   listVendorGroupIds,
@@ -1627,13 +1629,6 @@ function slugifyColumnKey(label) {
   return base || 'kolom';
 }
 
-function inferSourceDataType(value) {
-  if (value instanceof Date) return 'date';
-  if (typeof value === 'number' && Number.isFinite(value)) return 'number';
-  if (typeof value === 'boolean') return 'boolean';
-  return 'text';
-}
-
 function shouldDiscoverSourceField(field, value) {
   const normalizedField = String(field || '').trim();
   if (!normalizedField || normalizedField.startsWith('@')) return false;
@@ -1666,7 +1661,7 @@ function collectDiscoveredFields(records, level) {
           discovered.set(normalizedField, {
             field: normalizedField,
             label: toColumnLabelFromField(normalizedField) || normalizedField,
-            dataType: 'text',
+            dataType: inferSourceDataType(value, normalizedField),
             sample: null,
           });
         }
@@ -1674,7 +1669,7 @@ function collectDiscoveredFields(records, level) {
         if (isEmptySampleValue(current.sample) && !isEmptySampleValue(value)) {
           current.sample = value;
         }
-        const inferredType = inferSourceDataType(value);
+        const inferredType = inferSourceDataType(value, normalizedField);
         if (current.dataType === 'text' && inferredType !== 'text') current.dataType = inferredType;
       });
     }
@@ -1765,6 +1760,19 @@ async function syncSourceColumnsFromRecords(table, records, { prune = false } = 
     const existingKeys = new Set(existingColumns.map((col) => String(col.key || '').toLowerCase()));
     let nextSortOrder = existingColumns.reduce((maxSort, col) => Math.max(maxSort, Number(col.sortOrder) || 0), 0);
     let inserted = 0;
+
+    const promotions = listSourceColumnsToPromote(existingColumns, discoveredFields);
+    for (const promotion of promotions) {
+      await pool.request()
+        .input('columnId', sql.BigInt, promotion.id)
+        .input('dataType', sql.NVarChar(16), promotion.dataType)
+        .query(`
+          UPDATE dbo.tb_columns
+          SET data_type = @dataType, updated_at = SYSUTCDATETIME()
+          WHERE id = @columnId AND source = 'source' AND data_type = 'text'
+        `);
+    }
+    if (promotions.length) invalidateTableCache(table.key);
 
     for (const fieldMeta of discoveredFields) {
       if (existingSourceFields.has(fieldMeta.field.toLowerCase())) continue;
