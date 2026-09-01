@@ -1,6 +1,6 @@
 # D365 refresh — inzicht, night job en Seen (DevOps)
 
-**Doel:** Eén D365-refresh-run (PO + cascade) met Settings-inzicht, per-gebruiker Mark as seen, en een GitHub-nachtwekker die dezelfde run start. Foutmails naar instelbare adressen.  
+**Doel:** Eén D365-refresh-run (PO + cascade) met Settings-inzicht, per-gebruiker Mark as seen, en een nachtelijke productierun (Azure Logic App) met foutmail.  
 **Referentie in repo:** [.cursor/plans/dev_2026-08-22-d365-night-refresh.plan.md](../../.cursor/plans/dev_2026-08-22-d365-night-refresh.plan.md)  
 **Tags:** d365; refresh; night-job; seen  
 **Work item:** Feature #AB:262 met child User Stories #AB:263–#AB:265
@@ -25,7 +25,7 @@
 6. Kaders: eigen `last_viewed_at`; `sinceMs = max(baseline, now-14d)` met `baseline = last_viewed_at ?? last_full_sync_at`. Inloggen telt niet als Seen. Ouder dan 14 dagen: highlight weg, data blijft.
 7. Night: `POST /api/internal/night-refresh` fail-closed token (min 32), alleen `APP_ENV=production`, Bearer-header, POST 5/min. Al running → 202 `attached: true`.
 8. Run-status: `error` alleen als PO zelf faalt; lookup-falen → entity.error + run.done. Night-mail bij error, interrupted, of minstens één entity.error. ACS-fout wijzigt run-status niet (`alert_status`).
-9. GitHub workflow `night-refresh-prod.yml` cron 00:00 UTC, geen `environment: production`. `deploy-prod.yml` zet `NIGHT_REFRESH_TOKEN`, `ACS_CONNECTION_STRING` en `ACS_FROM_EMAIL`.
+9. Night-wekker is Azure Logic App `vendorportal-night-refresh-prod` (03:00 Europe/Amsterdam). GitHub-cron is verwijderd (fase 2 #AB:294). `deploy-prod.yml` zet `NIGHT_REFRESH_TOKEN`, `ACS_CONNECTION_STRING` en `ACS_FROM_EMAIL` op de Container App.
 10. Migratie 041 idempotent; live in geheugen (1 SQL insert start + 1 batch einde); UI Engels; tests groen; versie PATCH.
 
 ---
@@ -80,7 +80,7 @@
 4. `run.status=error` alleen als purchase-orders faalt. Lookup-falen: `entity.status=error`, `run.status=done`. Night-mail wel bij error, interrupted, of minstens één entity.error.
 5. Mail asynchroon via bestaande ACS. ACS skip/fout wijzigt run-status niet; `alert_status`.
 6. Process-start: SQL `running` → `interrupted`; night daarvan mailt wel.
-7. `.github/workflows/night-refresh-prod.yml` cron `0 0 * * *`, geen `environment: production`.
+7. Night-wekker: Logic App `vendorportal-night-refresh-prod` (niet GitHub Actions).
 8. `deploy-prod.yml` secretref voor `NIGHT_REFRESH_TOKEN`, `ACS_CONNECTION_STRING`, `ACS_FROM_EMAIL`.
 9. Unit-tests token/attached/mail/cascade; geen localhost-E2E van night-HTTP.
 
