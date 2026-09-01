@@ -44,9 +44,12 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
     return () => { active = false; };
   }, [refreshKey, settingsTick]);
 
+  // Fingerprint i.p.v. de orders-array: het board maakt bij elke KPI-filter een nieuwe
+  // rij-identiteit. Die mag de sync-effect niet opnieuw triggeren (update-loop / crash).
+  const visibleOrderKey = (orders || []).map((order) => order?.orderNumber).filter(Boolean).join('\0');
   const visibleOrderNumbers = useMemo(
-    () => (orders || []).map((order) => order?.orderNumber).filter(Boolean),
-    [orders],
+    () => (visibleOrderKey ? visibleOrderKey.split('\0') : []),
+    [visibleOrderKey],
   );
 
   const { kpis, matchByKey } = useMemo(
