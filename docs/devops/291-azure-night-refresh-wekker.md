@@ -1,6 +1,6 @@
 # Azure-wekker D365 night refresh (DevOps)
 
-**Doel:** Productie-night-refresh start om 03:00 Europe/Amsterdam (zomer en winter) via Azure Logic App; GitHub-cron verdwijnt pas in fase 2.  
+**Doel:** Productie-night-refresh start om 03:00 Europe/Amsterdam (zomer en winter) via Azure Logic App `vendorportal-night-refresh-prod`. GitHub-cron is verwijderd (fase 2, 2026-09-01).  
 **Referentie in repo:** [.cursor/plans/dev_2026-08-28-azure-night-refresh-wekker.plan.md](../../.cursor/plans/dev_2026-08-28-azure-night-refresh-wekker.plan.md)  
 **Spec:** [docs/specs/2026-08-28-azure-night-refresh-wekker-design.md](../specs/2026-08-28-azure-night-refresh-wekker-design.md)  
 **Tags:** d365; night-refresh; azure; logic-app  
@@ -24,7 +24,7 @@
 4. HTTP-fout van de wekker → ACS-mail naar `NIGHT_REFRESH_ALERT_EMAILS` (geen token in mail/logs/run history).
 5. Portal Run Trigger mag als noodknop; admin-Start ongewijzigd.
 6. Settings-info (Engels) noemt Azure Logic App en 03:00 Europe/Amsterdam.
-7. Fase 1: GitHub-workflow `night-refresh-prod.yml` blijft (overlap veilig via `attached`). Fase 2 ná één groene Logic App-nacht: workflow + GitHub-secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` weg.
+7. Fase 2 gedaan (2026-09-01): GitHub-workflow `night-refresh-prod.yml` verwijderd; secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` verwijderd. Enige wekker is de Logic App.
 8. Geen Logic App op DEV/preview; `RefreshRunService.js` ongewijzigd; geen SQL-migratie.
 
 ---
@@ -35,7 +35,7 @@
 |------|---------|
 | Night-start API + token | `POST /api/internal/night-refresh`, `server/utils/nightRefreshToken.js` |
 | Alert-adressen + ACS digest bij run-fout | `NIGHT_REFRESH_ALERT_EMAILS`, `EmailService.sendNightRefreshDigest` |
-| GitHub-cron (fase 1 nog actief) | `.github/workflows/night-refresh-prod.yml` |
+| GitHub-cron (fase 2 verwijderd) | workflow + secrets `PROD_APP_URL` / `NIGHT_REFRESH_TOKEN` weg op 2026-09-01 |
 | PROD token in Key Vault | `night-refresh-token-prod` via `deploy-prod.yml` |
 | Wekker-failed mail + start-failed API | `POST /api/internal/night-refresh/start-failed`, `NightRefreshWekkerAlert`, `EmailService.sendNightRefreshWekkerFailed` |
 | Settings-copy 03:00 Europe/Amsterdam | `src/components/admin/d365RefreshInfoCopy.js` |
@@ -45,16 +45,16 @@
 
 | AC | Status |
 |----|--------|
-| 1. PROD start ± enkele minuten na 03:00 NL (zomer/winter) | Na `deploy-prod` + eerste nachtrun |
+| 1. PROD start ± enkele minuten na 03:00 NL (zomer/winter) | Groene Night-run 2026-09-01 03:00:25 |
 | 2. Enige startpad: bestaande night-POST + Bearer | Gedekt (geen tweede startpad) |
 | 3. Fire-and-forget HTTP 202 | Bicep `Start_night_refresh` (geen poll) |
 | 4. HTTP-fout wekker → ACS-mail, geen token | `start-failed` + sanitize/redact |
 | 5. Portal Run Trigger + admin-Start | Gedekt (Run Trigger op Logic App; Start ongewijzigd) |
 | 6. Settings-info Azure Logic App + 03:00 | Gedekt |
-| 7. Fase 1: GitHub-cron blijft; fase 2 later | `night-refresh-prod.yml` blijft; #AB:294 later |
+| 7. Fase 2: GitHub-cron weg | Gedekt 2026-09-01 (#AB:294) |
 | 8. Geen Logic App op DEV/preview; geen RefreshRunService; geen SQL | Gedekt |
 
-Productie-wekker = Logic App 03:00 **W. Europe Standard Time**. GitHub `night-refresh-prod.yml` blijft tijdelijk (fase 1 overlap, `attached: true`). Spec: [docs/specs/2026-08-28-azure-night-refresh-wekker-design.md](../specs/2026-08-28-azure-night-refresh-wekker-design.md).
+Productie-wekker = Logic App 03:00 **W. Europe Standard Time**. GitHub start geen night-run meer. Spec: [docs/specs/2026-08-28-azure-night-refresh-wekker-design.md](../specs/2026-08-28-azure-night-refresh-wekker-design.md).
 
 ---
 
@@ -77,11 +77,11 @@ Productie-wekker = Logic App 03:00 **W. Europe Standard Time**. GitHub `night-re
 4. Fire-and-forget POST night-refresh; start-failed zonder retry; concurrency 1.
 5. Portal Run Trigger werkt; run history toont geen Authorization-header.
 
-### Story C (#AB:294): GitHub night-refresh cron verwijderen (fase 2)
-**Beschrijving:** Pas ná minstens één groene Logic App-run rond 03:00 NL. Tot die tijd blijft `night-refresh-prod.yml`.  
+### Story C (#AB:294): GitHub night-refresh cron verwijderen (fase 2) — gedaan 2026-09-01
+**Beschrijving:** Ná groene Logic App-run 2026-09-01 03:00 NL.  
 **Acceptatiecriteria:**
 1. `.github/workflows/night-refresh-prod.yml` verwijderd.
-2. GitHub-secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` verwijderd.
+2. GitHub-secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` verwijderd; workflow disabled.
 3. Docs bijgewerkt: enige wekker is de Logic App.
 
 ---

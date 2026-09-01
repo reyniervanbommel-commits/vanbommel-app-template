@@ -126,7 +126,7 @@ OTAP: `feature/<id>-azure-night-wekker` → PR naar `develop` (DEV: UI-copy, end
 
 **Fase 1 (eerste PR-reeks tot prod-deploy):** Bicep + deploy-stap + app-code (`start-failed`, info-copy, tests). GitHub-workflow `night-refresh-prod.yml` **blijft**. Overlap is veilig (`attached: true`).
 
-**Fase 2 (ná minstens één groene Logic App-run om ~03:00 NL):** verwijder `.github/workflows/night-refresh-prod.yml`; verwijder GitHub-secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` (verplicht in deze fase, niet optioneel).
+**Fase 2 (ná minstens één groene Logic App-run om ~03:00 NL):** verwijder `.github/workflows/night-refresh-prod.yml`; verwijder GitHub-secrets `PROD_APP_URL` en `NIGHT_REFRESH_TOKEN` (verplicht in deze fase, niet optioneel). **Gedaan 2026-09-01** na groene Night-run 03:00:25.
 
 Geen Logic App op DEV/preview. `deploy-dev.yml` / `preview.yml` ongemoeid.
 
