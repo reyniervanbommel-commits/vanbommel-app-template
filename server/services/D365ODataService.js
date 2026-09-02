@@ -329,7 +329,11 @@ async function writeBackField({ level, dataAreaId, orderNumber, lineNumber, d365
   if (!patchRes.ok) {
     const body = await patchRes.text().catch(() => '');
     logger.error('D365 write-back PATCH mislukt', { status: patchRes.status, bodyPreview: body.slice(0, 300) });
-    const e = new Error('Write-back to D365 failed'); e.status = 502; throw e;
+    const PATCH_FAILURE_STATUS_WHITELIST = new Set([400, 404, 409, 422, 423]);
+    const message = summarizeODataFailure(patchRes.status, entityUrl, body);
+    const e = new Error(message);
+    e.status = PATCH_FAILURE_STATUS_WHITELIST.has(patchRes.status) ? patchRes.status : 502;
+    throw e;
   }
   return { ok: true };
 }

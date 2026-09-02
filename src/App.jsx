@@ -9,6 +9,7 @@ import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
 import AppToaster from './components/shared/AppToaster';
 import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
+import { BulkWriteBackJobProvider } from './context/BulkWriteBackJobContext';
 import { usePreventTrackpadNavigation } from './hooks/usePreventTrackpadNavigation';
 import { useRouteAnalytics } from './hooks/useRouteAnalytics';
 
@@ -122,7 +123,9 @@ export default function App() {
   return (
     <FluentProvider theme={theme}>
       <IdleSessionGuard />
-      <AppInner isDarkMode={isDarkMode} onToggleTheme={handleToggleTheme} />
+      <BulkWriteBackJobProvider>
+        <AppInner isDarkMode={isDarkMode} onToggleTheme={handleToggleTheme} />
+      </BulkWriteBackJobProvider>
     </FluentProvider>
   );
 }

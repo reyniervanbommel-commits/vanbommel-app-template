@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useBulkWriteBackJob } from '../context/BulkWriteBackJobContext';
+import { LARGE_BULK_SELECTION, isJobRunning } from './bulkWriteBackJobState';
 import { resolveOrderSelectionKey, rowSelectionKey } from './usePurchaseOrderRowSelection';
+import { valuesEqual } from './purchaseOrderBulkEditRun';
 import { usePurchaseOrderCorrectAllLines } from './usePurchaseOrderCorrectAllLines';
 
 const EMPTY_DIALOG_STATE = {
@@ -10,18 +13,13 @@ const EMPTY_DIALOG_STATE = {
   processedCount: 0,
   busy: false,
   summaryMessage: '',
+  failedRows: [],
+  updated: 0,
+  skipped: 0,
 };
 
 function isHeaderCellUpdate(payload) {
   return payload?.lineNumber === null || payload?.lineNumber === undefined;
-}
-
-function valuesEqual(left, right) {
-  if (Object.is(left, right)) return true;
-  const normalizedLeft = left === undefined ? null : left;
-  const normalizedRight = right === undefined ? null : right;
-  if (Object.is(normalizedLeft, normalizedRight)) return true;
-  return String(normalizedLeft ?? '') === String(normalizedRight ?? '');
 }
 
 function linkedLineValuesEqual(row, headerColumnKey, value) {
@@ -43,7 +41,7 @@ function createBulkErrorMessage({ updated, skipped, notTried }) {
 
 /**
  * Regelt bulk-bewerken van header-cellen voor zichtbare geselecteerde orderrijen.
- * Input: selectie + zichtbare orders + save/correct handlers. Output: wrapped handlers en dialoog-state/acties.
+ * D365-correcties gaan naar de achtergrondjob; save en correctAll blijven blokkerend.
  */
 export function usePurchaseOrderBulkEdit({
   visibleHeaderColumns = [],
@@ -62,6 +60,7 @@ export function usePurchaseOrderBulkEdit({
   const correctAllLines = correctAllLinesOverride || onCorrectAllLines;
   const decisionResolverRef = useRef(null);
   const [dialogState, setDialogState] = useState(EMPTY_DIALOG_STATE);
+  const { startCorrectJob, job } = useBulkWriteBackJob();
 
   const columnLabelByKey = useMemo(
     () => new Map((Array.isArray(visibleHeaderColumns) ? visibleHeaderColumns : []).map((column) => [column.key, column.label || column.key])),
@@ -96,13 +95,11 @@ export function usePurchaseOrderBulkEdit({
     new Promise((resolve) => {
       decisionResolverRef.current = resolve;
       setDialogState({
+        ...EMPTY_DIALOG_STATE,
         open: true,
         mode: 'confirm',
         columnLabel,
         selectedCount,
-        processedCount: 0,
-        busy: false,
-        summaryMessage: '',
       });
     })
   ), []);
@@ -192,14 +189,29 @@ export function usePurchaseOrderBulkEdit({
       await runSingleUpdate(mode, payload);
       return;
     }
+    if (mode === 'correct') {
+      const started = startCorrectJob({
+        payload,
+        rows: selectedVisibleOrders,
+        columnLabel,
+        runSingleUpdate,
+      });
+      closeDialog();
+      if (!started) {
+        throw new Error('A write-back is already running. Wait until it finishes.');
+      }
+      return { background: true };
+    }
     await runBulkUpdate({ mode, payload, rows: selectedVisibleOrders });
   }, [
+    closeDialog,
     columnLabelByKey,
     runBulkUpdate,
     runSingleUpdate,
     selectedVisibleKeys,
     selectedVisibleOrders,
     showDecisionDialog,
+    startCorrectJob,
   ]);
 
   const handleSaveValue = useCallback(
@@ -223,11 +235,20 @@ export function usePurchaseOrderBulkEdit({
     closeDialog();
   }, [closeDialog, dialogState.mode, resolveDialogDecision]);
 
+  const exposedDialogState = useMemo(
+    () => ({
+      ...dialogState,
+      writeBackBusy: isJobRunning(job),
+      largeSelection: dialogState.selectedCount >= LARGE_BULK_SELECTION,
+    }),
+    [dialogState, job],
+  );
+
   return useMemo(() => ({
     handleSaveValue,
     handleCorrectField,
     handleCorrectAllLines,
-    dialogState,
+    dialogState: exposedDialogState,
     dialogActions: {
       onOpenChange: handleDialogOpenChange,
       onChooseSingleCell: () => resolveDialogDecision('single'),
@@ -236,7 +257,7 @@ export function usePurchaseOrderBulkEdit({
     },
   }), [
     closeDialog,
-    dialogState,
+    exposedDialogState,
     handleCorrectAllLines,
     handleCorrectField,
     handleDialogOpenChange,

@@ -105,6 +105,7 @@ export default function AppShellHeader({
   canAccessAdmin,
   onNavigateAdmin,
   onLogout,
+  endSlot = null,
 }) {
   const styles = useStyles();
   const avatarName = user?.display_name || user?.email || 'User';
@@ -141,6 +142,7 @@ export default function AppShellHeader({
       <div className={styles.headerCenter} />
 
       <div className={styles.headerRight}>
+        {endSlot}
         <Button
           appearance="subtle"
           icon={isDarkMode ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />}

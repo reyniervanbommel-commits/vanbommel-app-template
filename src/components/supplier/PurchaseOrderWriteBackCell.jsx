@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Input, Spinner, Tooltip, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
+import { Input, Spinner, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
 import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
 import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
+import { useWriteBackCellLock } from '../../hooks/useWriteBackCellLock';
 import {
   isDateLikeColumn,
   normalizeDateValue,
@@ -19,6 +20,8 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     minWidth: 0,
     width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
     position: 'relative',
   },
   input: {
@@ -31,6 +34,7 @@ const useStyles = makeStyles({
   },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase300, whiteSpace: 'nowrap' },
   errIcon: { color: tokens.colorPaletteRedForeground1 },
+  queued: { backgroundColor: tokens.colorNeutralBackground3 },
 });
 
 const useFormattedControlStyles = makeStyles({
@@ -99,6 +103,8 @@ export default function PurchaseOrderWriteBackCell({
   const savedTimer = useRef(null);
   const savingRef = useRef(false);
   const isDate = isDateLikeColumn(column, value);
+  const jobLock = useWriteBackCellLock(column.key, cellKeys?.dataAreaId, cellKeys?.orderNumber);
+  const locked = jobLock.status === 'queued' || jobLock.status === 'writing' || jobLock.status === 'failed';
   const resolvedAriaLabel = ariaLabel || `${column.label} (write back to D365)`;
 
   useEffect(() => {
@@ -110,6 +116,7 @@ export default function PurchaseOrderWriteBackCell({
   const onLocalChange = useCallback((_, data) => setLocal(data.value), []);
 
   const commit = useCallback(async (draftValue = local) => {
+    if (locked) return;
     if (savingRef.current || status === 'saving') return;
     const treatAsDate = isDateLikeColumn(column, value) || isDateLikeColumn(column, draftValue);
     const resolvedValue = treatAsDate ? normalizeDateValue(draftValue) : draftValue;
@@ -119,8 +126,12 @@ export default function PurchaseOrderWriteBackCell({
     setStatus('saving');
     setError('');
     try {
-      await onCorrect({ value: resolvedValue, basedOnValue: value });
+      const result = await onCorrect({ value: resolvedValue, basedOnValue: value });
       setLocal(toInputValue(resolvedValue, column.dataType, treatAsDate));
+      if (result?.background) {
+        setStatus('idle');
+        return;
+      }
       setStatus('saved');
       if (savedTimer.current) window.clearTimeout(savedTimer.current);
       savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
@@ -134,7 +145,7 @@ export default function PurchaseOrderWriteBackCell({
     } finally {
       savingRef.current = false;
     }
-  }, [local, value, column, onCorrect, status]);
+  }, [local, value, column, onCorrect, locked, status]);
 
   const commitLocal = useCallback(() => commit(local), [commit, local]);
 
@@ -155,6 +166,17 @@ export default function PurchaseOrderWriteBackCell({
     }
   }, [value, column]);
 
+  const showSpinner = status === 'saving' || jobLock.status === 'writing';
+  const showSaved = status === 'saved' && !jobLock.status;
+  const errorMessage = jobLock.status === 'failed' ? (jobLock.errorMessage || error) : error;
+  const statusAfter = showSpinner
+    ? <Spinner size="extra-tiny" aria-label="Write back" />
+    : showSaved
+      ? <span className={styles.saved}>✓</span>
+      : (status === 'error' || jobLock.status === 'failed')
+        ? <ErrorCircleRegular className={styles.errIcon} title={errorMessage || undefined} />
+        : undefined;
+
   const inputControl = isDate ? (
     <WeekNumberCalendarPopover
       open={calendarOpen}
@@ -170,6 +192,8 @@ export default function PurchaseOrderWriteBackCell({
         type="text"
         inputMode="numeric"
         value={local}
+        disabled={locked}
+        contentAfter={statusAfter}
         aria-label={resolvedAriaLabel}
         onChange={onLocalChange}
         onBlur={commitLocal}
@@ -185,6 +209,8 @@ export default function PurchaseOrderWriteBackCell({
       size="small"
       type={column.dataType === 'number' ? 'number' : 'text'}
       value={local}
+      disabled={locked}
+      contentAfter={statusAfter}
       aria-label={resolvedAriaLabel}
       onChange={onLocalChange}
       onBlur={commitLocal}
@@ -193,7 +219,7 @@ export default function PurchaseOrderWriteBackCell({
   );
 
   return (
-    <span className={styles.cell}>
+    <span className={mergeClasses(styles.cell, jobLock.status === 'queued' ? styles.queued : undefined)}>
       {cellKeys ? (
         <CellHistoryPopover cellKeys={cellKeys} dataType={column.dataType} hasHistory={hasHistory}>
           {inputControl}
@@ -201,13 +227,6 @@ export default function PurchaseOrderWriteBackCell({
       ) : (
         inputControl
       )}
-      {status === 'saving' ? <Spinner size="extra-tiny" aria-label="Write back" /> : null}
-      {status === 'saved' ? <span className={styles.saved}>✓</span> : null}
-      {status === 'error' ? (
-        <Tooltip content={error} relationship="label">
-          <ErrorCircleRegular className={styles.errIcon} />
-        </Tooltip>
-      ) : null}
     </span>
   );
 }

@@ -1,20 +1,7 @@
-# Perf — review
+# Perf gebruikersverslag — 2026-09-02
 
-**Omgeving:** preview https://preview-header-push-line-wri.graysand-65442c41.northeurope.azurecontainerapps.io  
-**Datum:** 2026-09-02  
-**Verdict:** NIET GEMETEN (login faalde)
+**Verdict:** niet meetbaar op deze merge (#295 + #302/#303)
 
-## Wat is gedaan
-- Statische check van de PO-board-wijziging: geen extra load-calls; write-back alleen bij opslaan.
-- Geen HUD-meting omdat inloggen op preview niet lukte.
+Geen HUD-meting van de achtergrond-write-back of header-push. Baseline ongewijzigd.
 
-## Wat jij kunt testen
-1. Inloggen als staff, PO-board openen, ⚡ HUD linksonder.
-2. Eén gepushte header-cel wijzigen: in Network één `correct-all-details`, in HUD `tb_correct_all_details`.
-3. Meerdere rijen selecteren en bulk kiezen: meerdere van die calls, board-scroll mag niet trager voelen.
-
-## PERF HUD (⚡ linksonder)
-- Baseline blijft de bestaande (`public/perf-baseline.json`); deze run heeft niets overschreven.
-
-## Nog open
-- Hermeting board-load vs baseline na een werkende staff-sessie.
+**Wat testen op DEV:** Apply op een D365-kolom — badge telt zonder dat het board vastloopt; gepushte header-cel blijft één `correct-all-details` per order.
