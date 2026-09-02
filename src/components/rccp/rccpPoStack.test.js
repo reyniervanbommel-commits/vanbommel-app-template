@@ -10,6 +10,7 @@ import {
   poSegmentStroke,
   isCurrentMatrixPeriod,
   rccpChartYDomain,
+  rccpNiceYExtent,
   rccpSymmetricYAxisDomain,
   rccpPoStackBarFlags,
   visibleAboveSegments,
@@ -108,14 +109,24 @@ describe('rccpPoStack', () => {
     expect(rccpChartYDomain([
       { __stackAbove: 1601, __stackBelow: 0, remaining: 21 },
       { __stackAbove: 0, __stackBelow: -3000, remaining: 0 },
-    ], ['remaining'])).toEqual([-3000, 3000]);
+    ], ['remaining'])).toEqual([-5000, 5000]);
+  });
+
+  it('snaps the Y extent to round steps like 100, 250, 500, 1000', () => {
+    expect(rccpNiceYExtent(100)).toBe(100);
+    expect(rccpNiceYExtent(21)).toBe(50);
+    expect(rccpNiceYExtent(240)).toBe(500);
+    expect(rccpNiceYExtent(501)).toBe(1000);
+    expect(rccpNiceYExtent(1601)).toBe(2000);
+    expect(rccpNiceYExtent(3000)).toBe(5000);
   });
 
   it('forces Recharts to keep equal scale when visible series are one-sided', () => {
     const props = rccpSymmetricYAxisDomain([-3000, 3000]);
     expect(props.type).toBe('number');
     expect(props.allowDataOverflow).toBe(true);
-    expect(props.domain).toEqual([-3000, 3000]);
+    expect(props.domain).toEqual([-5000, 5000]);
+    expect(props.ticks).toEqual([-5000, -2500, 0, 2500, 5000]);
     expect(Math.abs(props.domain[0])).toBe(Math.abs(props.domain[1]));
   });
 

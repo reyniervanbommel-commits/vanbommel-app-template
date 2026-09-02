@@ -145,9 +145,31 @@ export function visibleAboveSegments(segments, { openVisible, orderedVisible } =
 }
 
 /**
+ * Snap a magnitude up to 1-2-5 × 10^n (100, 200, 500, 1000, …).
+ * Mid-ticks then land on round values including 250 and 2500.
+ */
+export function rccpNiceYExtent(value) {
+  const n = Math.abs(Number(value) || 0);
+  if (n === 0) return 1;
+  const exp = Math.floor(Math.log10(n));
+  const base = 10 ** exp;
+  const mantissa = n / base;
+  let nice = 10;
+  if (mantissa <= 1) nice = 1;
+  else if (mantissa <= 2) nice = 2;
+  else if (mantissa <= 5) nice = 5;
+  return nice * base;
+}
+
+function rccpYAxisTicks(extent) {
+  const half = extent / 2;
+  return [-extent, -half, 0, half, extent];
+}
+
+/**
  * Y-domain for Capacity vs load. Custom PO-stack bars are ignored by Recharts 3,
  * so a negative-only received series would otherwise hide quantity above the axis.
- * Positive and negative sides share the same absolute scale.
+ * Positive and negative sides share the same absolute scale, snapped to round ticks.
  */
 export function rccpChartYDomain(points, measureKeys = []) {
   let min = 0;
@@ -162,7 +184,7 @@ export function rccpChartYDomain(points, measureKeys = []) {
     }
   }
   if (min === 0 && max === 0) return [0, 1];
-  const extent = Math.max(Math.abs(min), Math.abs(max));
+  const extent = rccpNiceYExtent(Math.max(Math.abs(min), Math.abs(max)));
   return [-extent, extent];
 }
 
@@ -171,11 +193,16 @@ export function rccpChartYDomain(points, measureKeys = []) {
  * Without that, custom PO bars are ignored and the axis falls back to [0, auto].
  */
 export function rccpSymmetricYAxisDomain(yDomain) {
-  const domain = Array.isArray(yDomain) && yDomain.length === 2 ? yDomain : [0, 1];
+  const raw = Math.max(
+    Math.abs(Number(yDomain?.[0]) || 0),
+    Math.abs(Number(yDomain?.[1]) || 0),
+  );
+  const extent = rccpNiceYExtent(raw);
   return {
     type: 'number',
-    domain,
+    domain: [-extent, extent],
     allowDataOverflow: true,
+    ticks: rccpYAxisTicks(extent),
   };
 }
 
