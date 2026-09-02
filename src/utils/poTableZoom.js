@@ -51,6 +51,11 @@ export function poTableZoomedPx(px) {
   return `calc(${px}px * var(--po-table-zoom, ${PO_TABLE_ZOOM_DEFAULT}))`;
 }
 
+/** Inline `zoom` — Griffel makeStyles drops the CSS zoom property. */
+export const PO_TABLE_SPLIT_ZOOM_STYLE = {
+  zoom: `var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT})`,
+};
+
 /**
  * @param {number} visualPx
  * @param {number} scale

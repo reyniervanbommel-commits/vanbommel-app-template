@@ -27,6 +27,7 @@ import { buildTableDataRevision } from './tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import {
+  PO_TABLE_SPLIT_ZOOM_STYLE,
   PO_TABLE_ZOOM_CSS_VAR,
   PO_TABLE_ZOOM_DEFAULT,
 } from '../../utils/poTableZoom';
@@ -60,9 +61,6 @@ const useStyles = makeStyles({
       overflow: 'hidden',
       scrollbarGutter: 'stable',
     },
-  },
-  splitZoom: {
-    zoom: `var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT})`,
   },
   toggleBar: {
     display: 'flex',
@@ -187,7 +185,10 @@ export default function BoardSplitView({
         <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
       ) : null}
 
-      <div className={mergeClasses(styles.toggleBar, styles.splitZoom, !split.open && styles.toggleBarCollapsed)}>
+      <div
+        className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}
+        style={PO_TABLE_SPLIT_ZOOM_STYLE}
+      >
         <Button
           size="small"
           appearance="subtle"
@@ -225,7 +226,7 @@ export default function BoardSplitView({
         style={split.open ? { height: `${split.height}px` } : undefined}
         aria-hidden={!split.open}
       >
-        <div className={styles.splitZoom} hidden={!showBiPane}>
+        <div hidden={!showBiPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showBiPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
               <BiChartStrip
@@ -238,7 +239,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div className={styles.splitZoom} hidden={!showRccpPane}>
+        <div hidden={!showRccpPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showRccpPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
               {rccpVendorReady ? (
@@ -259,7 +260,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div className={styles.splitZoom} hidden={!kpiEnabled}>
+        <div hidden={!kpiEnabled} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {kpiEnabled ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
               <PoBoardKpiStrip

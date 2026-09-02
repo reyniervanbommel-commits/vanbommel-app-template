@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PO_TABLE_ZOOM_DEFAULT,
+  PO_TABLE_SPLIT_ZOOM_STYLE,
   applyPoTableZoom,
   clampPoTableZoom,
   formatPoTableZoomPercent,
@@ -65,5 +66,11 @@ describe('persist and store', () => {
     setPoTableZoom(0.95);
     expect(seen).toEqual([0.95]);
     unsub();
+  });
+});
+
+describe('PO_TABLE_SPLIT_ZOOM_STYLE', () => {
+  it('uses the CSS variable so Griffel is not required', () => {
+    expect(PO_TABLE_SPLIT_ZOOM_STYLE.zoom).toBe('var(--po-table-zoom, 0.85)');
   });
 });
