@@ -14,6 +14,7 @@ import { LineDetailsContext } from './lineDetailsContext';
 import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useDataPagesPrefetch } from '../../hooks/useDataPagesPrefetch';
+import { usePurchaseOrderCorrectAllLines } from '../../hooks/usePurchaseOrderCorrectAllLines';
 
 // Vendors mogen nooit terugschrijven naar D365. Forceer write-back uit op alle kolommen zodat
 // zowel de inline write-back editor als de D365-sync-indicator verdwijnen voor niet-staff.
@@ -50,6 +51,10 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
+  const { onCorrectAllLines } = usePurchaseOrderCorrectAllLines({
+    patchLinkedLineValues: pageModel.patchLinkedLineValues,
+    applyLineValuesBatch: pageModel.lineDetails?.applyLineValuesBatch,
+  });
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
   // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
@@ -122,6 +127,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onSaveValue: bulkEdit.handleSaveValue,
     // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
     onCorrect: isStaff ? bulkEdit.handleCorrectField : undefined,
+    onCorrectAllLines: isStaff ? onCorrectAllLines : undefined,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
     isStaff: tableContext.isStaff,
@@ -130,6 +136,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
     isStaff,
+    onCorrectAllLines,
     pageModel.updateStatusOptions,
     tableContext.isAdmin,
     tableContext.isStaff,

@@ -4,6 +4,13 @@ import { ErrorCircleRegular } from '@fluentui/react-icons';
 import CellHistoryPopover from './CellHistoryPopover';
 import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
 import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
+import {
+  isDateLikeColumn,
+  normalizeDateValue,
+  toCalendarValue,
+  toDisplayDateValue,
+  toInputValue,
+} from '../../utils/writeBackDateUtils';
 
 const useStyles = makeStyles({
   cell: {
@@ -53,75 +60,6 @@ const useFormattedControlStyles = makeStyles({
   },
 });
 
-function padDatePart(value) {
-  return String(value).padStart(2, '0');
-}
-
-function isDateDataType(dataType) {
-  const normalized = String(dataType || '').trim().toLowerCase();
-  return normalized === 'date' || normalized === 'datetime' || normalized === 'date-time';
-}
-
-function normalizeDateValue(value) {
-  const text = String(value ?? '').trim();
-  if (!text) return '';
-
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-
-  const dmyMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (dmyMatch) {
-    const day = Number(dmyMatch[1]);
-    const month = Number(dmyMatch[2]);
-    const year = Number(dmyMatch[3]);
-    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      const probe = new Date(Date.UTC(year, month - 1, day));
-      if (
-        probe.getUTCFullYear() === year
-        && probe.getUTCMonth() === month - 1
-        && probe.getUTCDate() === day
-      ) {
-        return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
-      }
-    }
-  }
-
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) return text;
-  return parsed.toISOString().slice(0, 10);
-}
-
-function toDisplayDateValue(value) {
-  const normalized = normalizeDateValue(value);
-  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return String(value ?? '');
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
-
-function isDateLikeColumn(column, value) {
-  if (isDateDataType(column?.dataType)) return true;
-  const hints = `${String(column?.key || '')} ${String(column?.label || '')}`;
-  if (/date|datum|aangemaakt|created/i.test(hints)) return true;
-  if (typeof value === 'string') {
-    return /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/.test(value.trim());
-  }
-  return false;
-}
-
-function toInputValue(value, dataType, treatAsDate = false) {
-  if (value === null || value === undefined) return '';
-  if (treatAsDate || isDateDataType(dataType)) {
-    return toDisplayDateValue(value);
-  }
-  return String(value);
-}
-
-function toCalendarValue(value) {
-  const normalized = normalizeDateValue(value);
-  const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : '';
-}
-
 /**
  * Inline write-back-cel voor een D365-veld dat admin als terugschrijfbaar markeerde (#134).
  * Bewerken gebeurt direct in de cel (geen popup). Bij blur/Enter wordt de waarde teruggeschreven
@@ -136,6 +74,7 @@ export default function PurchaseOrderWriteBackCell({
   hasHistory = false,
   cellBackgroundColor = '',
   isConditionalFormat = false,
+  ariaLabel,
 }) {
   const styles = useStyles();
   const formattedStyles = useFormattedControlStyles();
@@ -158,7 +97,9 @@ export default function PurchaseOrderWriteBackCell({
   const [error, setError] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const savedTimer = useRef(null);
+  const savingRef = useRef(false);
   const isDate = isDateLikeColumn(column, value);
+  const resolvedAriaLabel = ariaLabel || `${column.label} (write back to D365)`;
 
   useEffect(() => {
     const nextIsDate = isDateLikeColumn(column, value);
@@ -166,11 +107,15 @@ export default function PurchaseOrderWriteBackCell({
   }, [value, column.dataType, column.key, column.label]);
   useEffect(() => () => { if (savedTimer.current) window.clearTimeout(savedTimer.current); }, []);
 
+  const onLocalChange = useCallback((_, data) => setLocal(data.value), []);
+
   const commit = useCallback(async (draftValue = local) => {
+    if (savingRef.current || status === 'saving') return;
     const treatAsDate = isDateLikeColumn(column, value) || isDateLikeColumn(column, draftValue);
     const resolvedValue = treatAsDate ? normalizeDateValue(draftValue) : draftValue;
     const currentValue = treatAsDate ? normalizeDateValue(value) : toInputValue(value, column.dataType);
-    if (resolvedValue === currentValue) return; // niets gewijzigd
+    if (resolvedValue === currentValue) return;
+    savingRef.current = true;
     setStatus('saving');
     setError('');
     try {
@@ -182,9 +127,16 @@ export default function PurchaseOrderWriteBackCell({
     } catch (err) {
       setStatus('error');
       setError(err.message || 'Write-back failed');
-      setLocal(toInputValue(value, column.dataType, treatAsDate)); // oude waarde terug
+      const fallback = err.remainingDisplayValue !== undefined && err.remainingDisplayValue !== null
+        ? err.remainingDisplayValue
+        : value;
+      setLocal(toInputValue(fallback, column.dataType, treatAsDate));
+    } finally {
+      savingRef.current = false;
     }
-  }, [local, value, column, onCorrect]);
+  }, [local, value, column, onCorrect, status]);
+
+  const commitLocal = useCallback(() => commit(local), [commit, local]);
 
   const openDatePicker = useCallback(() => {
     setCalendarOpen(true);
@@ -218,9 +170,9 @@ export default function PurchaseOrderWriteBackCell({
         type="text"
         inputMode="numeric"
         value={local}
-        aria-label={`${column.label} (write back to D365)`}
-        onChange={(_, data) => setLocal(data.value)}
-        onBlur={() => commit(local)}
+        aria-label={resolvedAriaLabel}
+        onChange={onLocalChange}
+        onBlur={commitLocal}
         onKeyDown={onKeyDown}
         onDoubleClick={openDatePicker}
       />
@@ -233,9 +185,9 @@ export default function PurchaseOrderWriteBackCell({
       size="small"
       type={column.dataType === 'number' ? 'number' : 'text'}
       value={local}
-      aria-label={`${column.label} (write back to D365)`}
-      onChange={(_, data) => setLocal(data.value)}
-      onBlur={() => commit(local)}
+      aria-label={resolvedAriaLabel}
+      onChange={onLocalChange}
+      onBlur={commitLocal}
       onKeyDown={onKeyDown}
     />
   );

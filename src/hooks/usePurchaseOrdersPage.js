@@ -458,6 +458,17 @@ export function usePurchaseOrdersPage() {
     )));
   }, []);
 
+  const patchLinkedLineValues = useCallback((dataAreaId, orderNumber, headerKey, remainingValues) => {
+    setOrders((prev) => prev.map((order) => (
+      order.dataAreaId !== dataAreaId || order.orderNumber !== orderNumber
+        ? order
+        : {
+          ...order,
+          linkedLineValues: { ...(order.linkedLineValues || {}), [headerKey]: remainingValues },
+        }
+    )));
+  }, []);
+
   // Optimistic update van één cel; bij fout wordt de oude waarde teruggezet.
   const saveValue = useCallback(async ({ columnId, columnKey, dataAreaId, orderNumber, lineNumber, value }) => {
     const isLine = lineNumber !== null && lineNumber !== undefined;
@@ -1322,6 +1333,7 @@ export function usePurchaseOrdersPage() {
     deleteRows,
     saveValue,
     correctField,
+    patchLinkedLineValues,
     toggleWriteback,
     addColumn,
     addHeaderColumnAfter,
@@ -1389,6 +1401,7 @@ export function usePurchaseOrdersPage() {
     deleteRows,
     saveValue,
     correctField,
+    patchLinkedLineValues,
     toggleWriteback,
     addColumn,
     addHeaderColumnAfter,
