@@ -33,10 +33,12 @@ export default function PurchaseOrderColumnHeader({
   autoEdit = false,
   onEditingDone,
   showConditionalFormattingIndicator = false,
+  showWriteBackIcon = false,
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
   const writable = !!column.writableToD365;
+  const showD365WriteBackIcon = showWriteBackIcon || (!isCustom && writable);
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [label, setLabel] = useState(column.label);
@@ -83,7 +85,7 @@ export default function PurchaseOrderColumnHeader({
 
   const columnLabel = (
     <span className={styles.labelWrap}>
-      {!isCustom && writable ? (
+      {showD365WriteBackIcon ? (
         <span aria-label="Write-back to D365 enabled">
           <D365LogoIcon alt="" />
         </span>

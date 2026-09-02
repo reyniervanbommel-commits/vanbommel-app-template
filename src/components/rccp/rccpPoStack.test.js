@@ -37,6 +37,13 @@ describe('rccpPoStack', () => {
     expect(todayLineX(periods, new Date('2026-03-16T00:00:00.000Z'))).toBeNull();
   });
 
+  it('uses the ISO week-1 Monday (Jan 4 method) when 1 Jan is a Friday', () => {
+    const parts = isoWeekPartsUtc(new Date('2021-11-08T12:00:00.000Z'));
+    expect(parts).toMatchObject({ year: 2021, week: 45, key: '2021-W45', weekday: 1 });
+    expect(isoWeekPartsUtc(new Date('2021-11-19T12:00:00.000Z')).week).toBe(46);
+    expect(isoWeekPartsUtc(new Date('2021-12-10T12:00:00.000Z')).week).toBe(49);
+  });
+
   it('places the today line on the real weekday inside the current ISO week column', () => {
     const now = new Date('2026-03-18T12:00:00.000Z'); // Wednesday
     const parts = isoWeekPartsUtc(now);

@@ -84,6 +84,28 @@ describe('usePurchaseOrderLineDetails', () => {
     expect(result.current.entries.get(KEY).lines[0].values.qty).toBe(5);
   });
 
+  it('past een batch-wijziging toe op alle geladen regels van één order', async () => {
+    apiRequest.mockResolvedValue({
+      details: [
+        { detailKey: 10, values: { color: 'Red' } },
+        { detailKey: 11, values: { color: 'Blue' } },
+      ],
+    });
+    const { result } = renderHook(() => usePurchaseOrderLineDetails());
+    await act(async () => {
+      await result.current.loadLines('nl01', 'PO-1');
+    });
+
+    act(() => {
+      result.current.applyLineValuesBatch('nl01', 'PO-1', (line) => (
+        line.lineNumber === 10
+          ? { ...line, values: { ...line.values, color: 'Green' } }
+          : line
+      ));
+    });
+    expect(result.current.entries.get(KEY).lines.map((line) => line.values.color)).toEqual(['Green', 'Blue']);
+  });
+
   it('gooit de cache leeg na een board-herlaad', async () => {
     apiRequest.mockResolvedValue({ details: [] });
     const { result } = renderHook(() => usePurchaseOrderLineDetails());

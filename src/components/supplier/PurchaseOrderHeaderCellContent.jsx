@@ -4,9 +4,8 @@ import EditableCell from './EditableCell';
 import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
-import PurchaseOrderLinkedValueCell from './PurchaseOrderLinkedValueCell';
+import PurchaseOrderLinkedHeaderValue from './PurchaseOrderLinkedHeaderValue';
 import { formatCellValue, isDateLikeCellValue } from '../../utils/purchaseOrderFormat';
-import { getLinkedLineValuePreview } from '../../utils/purchaseOrderTotals';
 import {
   isDatePeriodColumn,
   normalizeDatePeriodDisplayMode,
@@ -44,16 +43,12 @@ const useStyles = makeStyles({
 function PurchaseOrderHeaderCellContent({
   order,
   column,
-  onSaveValue,
-  onCorrect,
-  onUpdateStatusOptions,
-  isAdmin = false,
+  actions = {},
   linkedLineTotalMap,
   linkedLineValueMap,
   cellBackgroundColor = '',
   isConditionalFormat = false,
   productImageSummary = EMPTY_PRODUCT_IMAGE_SUMMARY,
-  showHistoryIndicators = true,
   datePeriodDisplayModes = {},
 }) {
   const styles = useStyles();
@@ -66,6 +61,13 @@ function PurchaseOrderHeaderCellContent({
   const linkedLineValueMeta = linkedLineValueMap?.[key] || null;
   const changedFieldKeys = Array.isArray(order?.changedFieldKeys) ? order.changedFieldKeys : [];
   const isChangedCell = !order?.removedInD365 && !order?.isNew && changedFieldKeys.includes(key);
+  const onSaveValue = actions.onSaveValue;
+  const onCorrect = actions.onCorrect;
+  const onUpdateStatusOptions = actions.onUpdateStatusOptions;
+  const isAdmin = actions.isAdmin === true;
+  const showHistoryIndicators = actions.showHistoryIndicators !== false;
+  const onCorrectAllLines = actions.onCorrectAllLines;
+  const resolvedDatePeriodModes = datePeriodDisplayModes || actions.datePeriodDisplayModes || {};
   const showHistory = showHistoryIndicators !== false && Boolean(order.historyByColumnId?.[column.id]);
 
   const handleSave = useCallback((value) => {
@@ -111,7 +113,7 @@ function PurchaseOrderHeaderCellContent({
   }
 
   if (isDatePeriodColumn(column)) {
-    const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
+    const displayMode = normalizeDatePeriodDisplayMode(resolvedDatePeriodModes[column.key]);
     const display = resolveDatePeriodCellValue(column, order?.values, displayMode) || '-';
     const displayNode = isChangedCell && !cellBackgroundColor
       ? <span className={styles.changedCell}>{display}</span>
@@ -125,26 +127,21 @@ function PurchaseOrderHeaderCellContent({
   }
 
   if (linkedLineValueMeta) {
-    // Ruwe, ontdubbelde regelwaarden komen mee met de board-rollup (order.linkedLineValues);
-    // val terug op order.lines zodra die (bijv. na expand) wel beschikbaar zijn.
-    let rawLineValues = order?.linkedLineValues?.[key]
-      ?? (Array.isArray(order?.lines)
-        ? order.lines.map((line) => line?.values?.[linkedLineValueMeta.lineColumnKey])
-        : null);
-    if (!Array.isArray(rawLineValues) && rawValue != null && rawValue !== '') {
-      rawLineValues = String(rawValue).split(',').map((part) => part.trim()).filter(Boolean);
-    }
-    const preview = getLinkedLineValuePreview(
-      rawLineValues,
-      linkedLineValueMeta.lineDataType,
-      { columnKey: linkedLineValueMeta.lineColumnKey, columnLabel: linkedLineValueMeta.lineColumnLabel },
-    );
     const linkedValueNode = (
-      <PurchaseOrderLinkedValueCell
-        firstValue={preview.firstValue}
-        additionalCount={preview.additionalCount}
-        allValuesLabel={preview.allValuesLabel}
+      <PurchaseOrderLinkedHeaderValue
+        order={order}
+        headerColumnKey={key}
+        meta={linkedLineValueMeta}
+        onCorrectAllLines={onCorrectAllLines}
+        cellBackgroundColor={cellBackgroundColor}
         isConditionalFormat={isConditionalFormat}
+        hasHistory={showHistory}
+        cellKeys={{
+          columnId: column.id,
+          dataAreaId: order.dataAreaId,
+          orderNumber: order.orderNumber,
+          lineNumber: null,
+        }}
       />
     );
     const wrappedLinkedValueNode = isChangedCell && !cellBackgroundColor

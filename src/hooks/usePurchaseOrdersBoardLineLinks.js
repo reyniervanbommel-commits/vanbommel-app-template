@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { buildLinkedLineValueByHeaderKey } from '../utils/linkedLineValueMeta';
 
 /**
  * Maps configured line-to-header links to lookup objects for board cells.
@@ -7,6 +8,7 @@ export function usePurchaseOrdersBoardLineLinks({
   lineTotalHeaderLinks,
   lineValueHeaderLinks,
   lineColumns,
+  isStaff = true,
 }) {
   const linkedLineTotalByHeaderKey = useMemo(
     () => (Array.isArray(lineTotalHeaderLinks)
@@ -20,19 +22,8 @@ export function usePurchaseOrdersBoardLineLinks({
     [lineTotalHeaderLinks]
   );
   const linkedLineValueByHeaderKey = useMemo(
-    () => (Array.isArray(lineValueHeaderLinks)
-      ? lineValueHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-        const lineColumn = lineColumns.find((entry) => entry.key === link.lineColumnKey);
-        acc[link.headerColumnKey] = {
-          lineColumnKey: link.lineColumnKey,
-          lineDataType: lineColumn?.dataType || 'text',
-          lineColumnLabel: lineColumn?.label || '',
-        };
-        return acc;
-      }, {})
-      : {}),
-    [lineValueHeaderLinks, lineColumns]
+    () => buildLinkedLineValueByHeaderKey(lineValueHeaderLinks, lineColumns, { isStaff }),
+    [isStaff, lineColumns, lineValueHeaderLinks]
   );
 
   return { linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey };

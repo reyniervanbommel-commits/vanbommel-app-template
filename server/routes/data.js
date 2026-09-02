@@ -507,6 +507,22 @@ router.post('/:tableKey/correct', async (req, res, next) => {
   }
 });
 
+// POST /api/data/:tableKey/correct-all-details — header-fan-out naar alle D365-regels van één PO. #AB:302
+router.post('/:tableKey/correct-all-details', async (req, res, next) => {
+  try {
+    const { columnId, partitionKey, recordKey, value } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    const result = await dataService.correctAllDetailFields(
+      { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, value },
+      req.user,
+    );
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // POST /api/data/:tableKey/rows/exclude — bulk "verwijderen" (persistente exclusion). #AB:171
 router.post('/:tableKey/rows/exclude', async (req, res, next) => {
   try {

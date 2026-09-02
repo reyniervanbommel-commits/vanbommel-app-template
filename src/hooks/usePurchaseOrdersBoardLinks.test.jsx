@@ -14,8 +14,10 @@ describe('usePurchaseOrdersBoardLinks', () => {
     expect(result.current.linkedLineTotalByHeaderKey).toEqual({
       total: 'quantity',
     });
-    expect(result.current.linkedLineValueByHeaderKey).toEqual({
-      values: { lineColumnKey: 'quantity', lineDataType: 'number', lineColumnLabel: '' },
+    expect(result.current.linkedLineValueByHeaderKey.values).toMatchObject({
+      lineColumnKey: 'quantity',
+      lineDataType: 'number',
+      lineColumnLabel: '',
     });
   });
 
@@ -32,8 +34,12 @@ describe('usePurchaseOrdersBoardLinks', () => {
 
     expect(result.current).toBe(firstResult);
     expect(result.current.linkedLineTotalByHeaderKey).toEqual({});
-    expect(result.current.linkedLineValueByHeaderKey).toEqual({
-      values: { lineColumnKey: 'missing', lineDataType: 'text', lineColumnLabel: '' },
+    expect(result.current.linkedLineValueByHeaderKey.values).toMatchObject({
+      lineColumnKey: 'missing',
+      lineDataType: 'text',
+      lineColumnLabel: '',
+      writableToD365: false,
+      lineColumnId: null,
     });
   });
 });

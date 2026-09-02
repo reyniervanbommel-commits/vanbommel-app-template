@@ -172,6 +172,7 @@ function PurchaseOrdersBoardTable({
     lineColumns,
     lineTotalHeaderLinks,
     lineValueHeaderLinks,
+    isStaff,
   });
   const colCount = columns.length + 1;
   // locateActive: zolang er een locate-verzoek loopt moeten álle rijen gemount zijn, anders

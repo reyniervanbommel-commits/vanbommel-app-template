@@ -124,7 +124,7 @@ export default function PurchaseOrdersPage() {
     setEditingColumnKey,
     setDatePeriodDisplayMode,
   });
-  const bulkEdit = usePurchaseOrderBulkEdit({ visibleHeaderColumns, visibleOrders: boardView.processedItems, selection, saveValue, correctField });
+  const bulkEdit = usePurchaseOrderBulkEdit({ visibleHeaderColumns, visibleOrders: boardView.processedItems, selection, saveValue, correctField, patchLinkedLineValues: pageModel.patchLinkedLineValues, applyLineValuesBatch: pageModel.lineDetails?.applyLineValuesBatch });
 
   const handleAddColumnRightOf = useCallback(async (sourceColumn, typeDef) => {
     if (handleFormulaTypeSelection(sourceColumn, typeDef)) {
