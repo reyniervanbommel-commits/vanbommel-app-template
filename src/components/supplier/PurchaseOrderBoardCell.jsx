@@ -142,16 +142,12 @@ export const PurchaseOrderBoardCell = memo(function PurchaseOrderBoardCell({
         <PurchaseOrderHeaderCellContent
           order={order}
           column={column}
-          onSaveValue={actions.onSaveValue}
-          onCorrect={actions.onCorrect}
-          onUpdateStatusOptions={actions.onUpdateStatusOptions}
-          isAdmin={actions.isAdmin}
+          actions={actions}
           cellBackgroundColor={cellBackgroundColor}
           isConditionalFormat={isConditionalFormat}
           linkedLineTotalMap={links.linkedLineTotalByHeaderKey}
           linkedLineValueMap={links.linkedLineValueByHeaderKey}
           productImageSummary={order.productImageSummary}
-          showHistoryIndicators={actions.showHistoryIndicators}
           datePeriodDisplayModes={actions.datePeriodDisplayModes}
         />
       )}

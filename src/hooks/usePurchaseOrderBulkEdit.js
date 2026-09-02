@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { resolveOrderSelectionKey, rowSelectionKey } from './usePurchaseOrderRowSelection';
+import { usePurchaseOrderCorrectAllLines } from './usePurchaseOrderCorrectAllLines';
 
 const EMPTY_DIALOG_STATE = {
   open: false,
@@ -23,6 +24,19 @@ function valuesEqual(left, right) {
   return String(normalizedLeft ?? '') === String(normalizedRight ?? '');
 }
 
+function linkedLineValuesEqual(row, headerColumnKey, value) {
+  const vals = row?.linkedLineValues?.[headerColumnKey];
+  if (!Array.isArray(vals) || vals.length !== 1) return false;
+  return valuesEqual(vals[0], value);
+}
+
+function shouldSkipBulkRow(mode, row, payload) {
+  if (mode === 'correctAll') {
+    return linkedLineValuesEqual(row, payload.headerColumnKey, payload.value);
+  }
+  return valuesEqual(row?.values?.[payload.columnKey], payload.value);
+}
+
 function createBulkErrorMessage({ updated, skipped, notTried }) {
   return `Bulk edit stopped due to an error. Updated: ${updated}. Skipped (already equal): ${skipped}. Not attempted (after error): ${notTried}.`;
 }
@@ -37,7 +51,15 @@ export function usePurchaseOrderBulkEdit({
   selection,
   saveValue,
   correctField,
+  correctAllLines: correctAllLinesOverride,
+  patchLinkedLineValues,
+  applyLineValuesBatch,
 }) {
+  const { onCorrectAllLines } = usePurchaseOrderCorrectAllLines({
+    patchLinkedLineValues,
+    applyLineValuesBatch,
+  });
+  const correctAllLines = correctAllLinesOverride || onCorrectAllLines;
   const decisionResolverRef = useRef(null);
   const [dialogState, setDialogState] = useState(EMPTY_DIALOG_STATE);
 
@@ -59,12 +81,16 @@ export function usePurchaseOrderBulkEdit({
   );
 
   const runSingleUpdate = useCallback(async (mode, payload) => {
+    if (mode === 'correctAll') {
+      await correctAllLines?.(payload);
+      return;
+    }
     if (mode === 'correct') {
       await correctField(payload);
       return;
     }
     await saveValue(payload);
-  }, [correctField, saveValue]);
+  }, [correctAllLines, correctField, saveValue]);
 
   const showDecisionDialog = useCallback(({ columnLabel, selectedCount }) => (
     new Promise((resolve) => {
@@ -117,8 +143,7 @@ export function usePurchaseOrderBulkEdit({
     const total = rows.length;
     for (let index = 0; index < total; index += 1) {
       const row = rows[index];
-      const currentValue = row?.values?.[payload.columnKey];
-      if (valuesEqual(currentValue, payload.value)) {
+      if (shouldSkipBulkRow(mode, row, payload)) {
         skipped += 1;
         setDialogState((previous) => ({ ...previous, processedCount: index + 1 }));
         continue;
@@ -127,10 +152,12 @@ export function usePurchaseOrderBulkEdit({
         ...payload,
         dataAreaId: row.dataAreaId,
         orderNumber: row.orderNumber,
-        lineNumber: null,
       };
+      if (mode !== 'correctAll') {
+        rowPayload.lineNumber = null;
+      }
       if (mode === 'correct') {
-        rowPayload.basedOnValue = currentValue;
+        rowPayload.basedOnValue = row?.values?.[payload.columnKey];
       }
       try {
         await runSingleUpdate(mode, rowPayload);
@@ -158,7 +185,8 @@ export function usePurchaseOrderBulkEdit({
       return;
     }
 
-    const columnLabel = columnLabelByKey.get(payload.columnKey) || payload.columnKey || 'this column';
+    const columnKey = payload.columnKey || payload.headerColumnKey;
+    const columnLabel = columnLabelByKey.get(columnKey) || columnKey || 'this column';
     const decision = await showDecisionDialog({ columnLabel, selectedCount: visibleSelectionCount });
     if (decision !== 'bulk') {
       await runSingleUpdate(mode, payload);
@@ -182,6 +210,10 @@ export function usePurchaseOrderBulkEdit({
     async (payload) => executeWithBulkOption('correct', payload),
     [executeWithBulkOption]
   );
+  const handleCorrectAllLines = useCallback(
+    async (payload) => executeWithBulkOption('correctAll', payload),
+    [executeWithBulkOption]
+  );
   const handleDialogOpenChange = useCallback((open) => {
     if (open) return;
     if (dialogState.mode === 'confirm') {
@@ -194,6 +226,7 @@ export function usePurchaseOrderBulkEdit({
   return useMemo(() => ({
     handleSaveValue,
     handleCorrectField,
+    handleCorrectAllLines,
     dialogState,
     dialogActions: {
       onOpenChange: handleDialogOpenChange,
@@ -204,6 +237,7 @@ export function usePurchaseOrderBulkEdit({
   }), [
     closeDialog,
     dialogState,
+    handleCorrectAllLines,
     handleCorrectField,
     handleDialogOpenChange,
     handleSaveValue,

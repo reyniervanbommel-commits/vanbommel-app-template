@@ -74,6 +74,16 @@ export function usePurchaseOrderLineDetails() {
     return entry.lines;
   }, [commit]);
 
+  const applyLineValuesBatch = useCallback((dataAreaId, orderNumber, updateLine) => {
+    const key = lineDetailsKey(dataAreaId, orderNumber);
+    const entry = entriesRef.current.get(key);
+    if (!entry || !Array.isArray(entry.lines)) return null;
+    const next = new Map(entriesRef.current);
+    next.set(key, { ...entry, lines: entry.lines.map(updateLine) });
+    commit(next);
+    return entry.lines;
+  }, [commit]);
+
   const restoreLines = useCallback((dataAreaId, orderNumber, lines) => {
     if (!Array.isArray(lines)) return;
     patchEntry(lineDetailsKey(dataAreaId, orderNumber), { lines });
@@ -113,9 +123,10 @@ export function usePurchaseOrderLineDetails() {
     entries,
     loadLines,
     applyLineValues,
+    applyLineValuesBatch,
     restoreLines,
     resetLines,
     clearUnseenLineFlags,
     restoreEntries,
-  }), [applyLineValues, clearUnseenLineFlags, entries, loadLines, resetLines, restoreEntries, restoreLines]);
+  }), [applyLineValues, applyLineValuesBatch, clearUnseenLineFlags, entries, loadLines, resetLines, restoreEntries, restoreLines]);
 }
