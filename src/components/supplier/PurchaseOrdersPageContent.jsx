@@ -15,6 +15,7 @@ import { savePoRccpHandoff } from '../../utils/poVendorFilterHandoff';
 import {
   collectOrderNumbers,
   orderNumbersFingerprint,
+  orderNumbersIfSubset,
   resolveSharedVendorFromOrders,
 } from '../../utils/poVisibleRccpScope';
 import { buildTableDataRevision } from '../bi/tableDataRevision';
@@ -56,7 +57,7 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
   const orderNumbersCacheRef = useRef({ fingerprint: '', orderNumbers: [] });
-  const rccpOrderNumbers = useMemo(
+  const visibleOrderNumbers = useMemo(
     () => {
       const orderNumbers = collectOrderNumbers(boardView.processedItems);
       const fingerprint = orderNumbersFingerprint(orderNumbers);
@@ -67,13 +68,13 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     },
     [boardView.processedItems],
   );
-  const visibleOrderNumbersFingerprint = useMemo(
-    () => orderNumbersFingerprint(rccpOrderNumbers),
-    [rccpOrderNumbers],
+  const rccpOrderNumbers = useMemo(
+    () => orderNumbersIfSubset(visibleOrderNumbers, pageModel.orders),
+    [visibleOrderNumbers, pageModel.orders],
   );
   const derivedVendor = useMemo(
     () => resolveSharedVendorFromOrders(boardView.processedItems, { vendors: [], vendorNames: {} }),
-    [boardView.processedItems, visibleOrderNumbersFingerprint],
+    [boardView.processedItems],
   );
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen

@@ -32,6 +32,21 @@ export function orderNumbersFingerprint(orderNumbers) {
   return (orderNumbers || []).join('\0');
 }
 
+/**
+ * Only pass a PO subset when visible orders are not the full unfiltered set.
+ * @param {string[]} visibleOrderNumbers
+ * @param {object[]} allOrders
+ * @returns {string[] | undefined}
+ */
+export function orderNumbersIfSubset(visibleOrderNumbers, allOrders) {
+  const visible = visibleOrderNumbers || [];
+  const all = collectOrderNumbers(allOrders);
+  if (orderNumbersFingerprint(visible) === orderNumbersFingerprint(all)) {
+    return undefined;
+  }
+  return visible;
+}
+
 export function resolveSharedVendorFromOrders(orders, { vendors = [], vendorNames = {}, vendorColumnKey } = {}) {
   const accounts = new Set();
   for (const order of orders || []) {

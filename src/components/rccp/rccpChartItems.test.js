@@ -146,6 +146,22 @@ describe('filterRccpChartBySegments', () => {
     expect(filterRccpChartBySegments(chart, { orderNumbers: ['PO-1'], emptyHidesAll: true })[0].segmentsAbove)
       .toEqual([{ itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' }]);
   });
+
+  it('does not rewrite measure keys when no item or PO filter is set', () => {
+    const loaded = [{
+      week: '2026-W12',
+      quantity: 99,
+      segmentsAbove: [
+        { itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' },
+      ],
+      segmentsBelow: [],
+    }];
+    const result = filterRccpChartBySegments(loaded, {
+      measureRows: [{ measureKey: 'quantity', isOrdered: true }],
+    });
+    expect(result).toBe(loaded);
+    expect(result[0].quantity).toBe(99);
+  });
 });
 
 describe('filterRccpMatrixByItem', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectOrderNumbers,
   orderNumbersFingerprint,
+  orderNumbersIfSubset,
   resolveSharedVendorFromOrders,
 } from './poVisibleRccpScope';
 
@@ -49,5 +50,25 @@ describe('poVisibleRccpScope', () => {
       [{ values: { customVendor: '', vendorAccount: 'V1' } }],
       { vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'customVendor' },
     )).toBe('V1');
+  });
+});
+
+describe('orderNumbersIfSubset', () => {
+  it('returns undefined when visible POs match the full set', () => {
+    expect(orderNumbersIfSubset(
+      ['PO-A', 'PO-B'],
+      [{ orderNumber: 'PO-B' }, { orderNumber: 'PO-A' }],
+    )).toBeUndefined();
+  });
+
+  it('returns the visible list when at least one PO is hidden', () => {
+    expect(orderNumbersIfSubset(
+      ['PO-A'],
+      [{ orderNumber: 'PO-A' }, { orderNumber: 'PO-B' }],
+    )).toEqual(['PO-A']);
+  });
+
+  it('returns an empty list when every PO is filtered out', () => {
+    expect(orderNumbersIfSubset([], [{ orderNumber: 'PO-A' }])).toEqual([]);
   });
 });

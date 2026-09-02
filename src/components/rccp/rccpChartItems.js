@@ -106,7 +106,12 @@ function filterRccpChartPoStacks(points, orderNumbers, emptyHidesAll) {
  * @returns {object[]}
  */
 export function filterRccpChartBySegments(chart, options = {}) {
-  const hasItemFilter = Object.prototype.hasOwnProperty.call(options, 'items');
+  const hasItemFilter = options.items !== undefined;
+  const hasPoFilter = Array.isArray(options.orderNumbers);
+  const hasContains = Boolean(String(options.containsTerm || '').trim());
+  if (!hasItemFilter && !hasPoFilter && !hasContains) {
+    return chart || [];
+  }
   const itemFiltered = filterRccpChartItemStacks(chart, options.items, {
     ...options,
     emptyHidesAll: options.emptyHidesAll && hasItemFilter,

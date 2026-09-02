@@ -54,6 +54,7 @@ describe('RccpSplitStrip', () => {
     expect(container.textContent).not.toContain('item-filter');
     expect(queryByRole('tab', { name: 'Week' })).toBeNull();
     expect(queryByRole('tab', { name: 'Requested' })).toBeNull();
+    expect(captured.chart[0].segmentsAbove).toHaveLength(2);
   });
 
   it('keeps a fixed chart height when the split pane is resized', () => {
