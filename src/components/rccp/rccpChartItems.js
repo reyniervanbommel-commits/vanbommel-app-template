@@ -106,7 +106,11 @@ function filterRccpChartPoStacks(points, orderNumbers, emptyHidesAll) {
  * @returns {object[]}
  */
 export function filterRccpChartBySegments(chart, options = {}) {
-  const itemFiltered = filterRccpChartItemStacks(chart, options.items, options);
+  const hasItemFilter = Object.prototype.hasOwnProperty.call(options, 'items');
+  const itemFiltered = filterRccpChartItemStacks(chart, options.items, {
+    ...options,
+    emptyHidesAll: options.emptyHidesAll && hasItemFilter,
+  });
   const poFiltered = filterRccpChartPoStacks(itemFiltered, options.orderNumbers, options.emptyHidesAll);
   return applyMeasureTotals(poFiltered, options.measureRows);
 }

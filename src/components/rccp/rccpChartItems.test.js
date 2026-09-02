@@ -141,6 +141,11 @@ describe('filterRccpChartBySegments', () => {
     expect(filterRccpChartBySegments(chart, { orderNumbers: [], emptyHidesAll: true })[0].segmentsAbove)
       .toEqual([]);
   });
+
+  it('keeps matching PO stacks with emptyHidesAll when no item filter is set', () => {
+    expect(filterRccpChartBySegments(chart, { orderNumbers: ['PO-1'], emptyHidesAll: true })[0].segmentsAbove)
+      .toEqual([{ itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' }]);
+  });
 });
 
 describe('filterRccpMatrixByItem', () => {
