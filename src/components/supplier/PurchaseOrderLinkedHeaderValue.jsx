@@ -54,6 +54,7 @@ function PurchaseOrderLinkedHeaderValue({
     lineColumnId: meta.lineColumnId,
     lineColumnKey: meta.lineColumnKey,
     headerColumnKey,
+    columnKey: headerColumnKey,
     dataAreaId: order.dataAreaId,
     orderNumber: order.orderNumber,
     value,

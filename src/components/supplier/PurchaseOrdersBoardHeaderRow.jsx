@@ -144,6 +144,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                     autoEdit={editingColumnKey === column.key}
                     onEditingDone={onEditingDone}
                     showConditionalFormattingIndicator={hasActiveConditionalFormatting}
+                    showWriteBackIcon={Boolean(linkedLineValueByHeaderKey[column.key]?.writableToD365)}
                   />
                 )}
               </div>

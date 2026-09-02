@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
+import { withHistoryFlag } from '../utils/withHistoryFlag';
 
 /**
  * Staff-only fan-out: één POST schrijft een D365-line-waarde terug op alle regels van één PO.
@@ -19,10 +20,14 @@ export function usePurchaseOrderCorrectAllLines({
     });
     const remaining = Array.isArray(response.remainingValues) ? response.remainingValues : [];
     patchLinkedLineValues(dataAreaId, orderNumber, headerColumnKey, remaining);
-    const updated = new Set(response.updatedDetailKeys || []);
+    const updated = new Set((response.updatedDetailKeys || []).map((key) => Number(key)));
     applyLineValuesBatch?.(dataAreaId, orderNumber, (line) => (
-      updated.has(line.lineNumber)
-        ? { ...line, values: { ...line.values, [lineColumnKey]: value } }
+      updated.has(Number(line.lineNumber))
+        ? {
+          ...line,
+          values: { ...line.values, [lineColumnKey]: value },
+          historyByColumnId: withHistoryFlag(line.historyByColumnId, lineColumnId),
+        }
         : line
     ));
     if (response.failed > 0) {
