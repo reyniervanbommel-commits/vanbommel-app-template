@@ -26,6 +26,13 @@ import {
   normalizeVisibleColumns,
 } from '../utils/boardColumnSettings';
 import {
+  createPersistQueue,
+  mergeBoardSettingsPatch,
+  mergeIncomingPatches,
+  pickPartialBoardSettings,
+  snapshotFromLocalSettings,
+} from '../utils/boardSettingsPersist';
+import {
   normalizeCollapsedColumnKeys,
   toggleCollapsedColumnKey,
 } from '../utils/collapsedColumnUtils';
@@ -43,6 +50,39 @@ import {
 import { withHistoryFlag } from '../utils/withHistoryFlag';
 
 const BOARD_KEY = 'purchase-orders';
+
+function hasPatchKey(patch, key) {
+  return Object.prototype.hasOwnProperty.call(patch || {}, key);
+}
+
+function normalizeBoardSettingsSnapshot(snapshot, { defaultHeaderKeys, defaultLineKeys, lineColumns }) {
+  return {
+    visibleColumns: normalizeVisibleColumns(snapshot?.visibleColumns, defaultHeaderKeys),
+    columnOrder: normalizeColumnOrder(snapshot?.columnOrder, defaultHeaderKeys),
+    lineColumnOrder: normalizeColumnOrder(snapshot?.lineColumnOrder, defaultLineKeys),
+    headerColumnWidths: normalizeColumnWidths(snapshot?.headerColumnWidths, defaultHeaderKeys),
+    lineColumnWidths: normalizeColumnWidths(snapshot?.lineColumnWidths, defaultLineKeys),
+    headerColumnTextStyles: normalizeColumnTextStyleMap(snapshot?.headerColumnTextStyles, defaultHeaderKeys),
+    headerColumnFormatRules: normalizeColumnFormatRulesMap(snapshot?.headerColumnFormatRules, defaultHeaderKeys),
+    lineColumnTextStyles: normalizeColumnTextStyleMap(snapshot?.lineColumnTextStyles, defaultLineKeys),
+    lineColumnFormatRules: normalizeColumnFormatRulesMap(snapshot?.lineColumnFormatRules, defaultLineKeys),
+    lineTotalColumns: filterSummableLineColumnKeys(
+      normalizeSelectedColumns(snapshot?.lineTotalColumns, defaultLineKeys),
+      lineColumns
+    ),
+    lineTotalHeaderLinks: normalizeLineTotalLinks(snapshot?.lineTotalHeaderLinks, defaultLineKeys),
+    lineValueHeaderLinks: normalizeLineTotalLinks(snapshot?.lineValueHeaderLinks, defaultLineKeys),
+    collapsedHeaderColumnKeys: normalizeCollapsedColumnKeys(
+      snapshot?.collapsedHeaderColumnKeys,
+      defaultHeaderKeys
+    ),
+    collapsedLineColumnKeys: normalizeCollapsedColumnKeys(
+      snapshot?.collapsedLineColumnKeys,
+      defaultLineKeys
+    ),
+    productImageColumnVisible: snapshot?.productImageColumnVisible !== false,
+  };
+}
 
 // Optimistische track-change update: zet de meest rechter stip (huidige sessie/week,
 // offset 0 = laatste teken) direct op rood na een celwijziging, zonder board-herlaad.
@@ -150,6 +190,16 @@ export function usePurchaseOrdersPage() {
   const [savingColumns, setSavingColumns] = useState(false);
   // Onthoudt een net-aangemaakte kolom die nog rechts van zijn bron gezet moet worden.
   const [pendingInsertAfter, setPendingInsertAfter] = useState(null);
+  const boardSettingsSnapshotRef = useRef(null);
+  if (boardSettingsSnapshotRef.current === null) {
+    boardSettingsSnapshotRef.current = snapshotFromLocalSettings(seededBoardSettings);
+  }
+  const persistQueueRef = useRef(null);
+  if (persistQueueRef.current === null) {
+    persistQueueRef.current = createPersistQueue();
+  }
+  const boardSettingsPersistTimerRef = useRef(null);
+  const boardSettingsPersistPendingRef = useRef(null);
 
   // Schrijft de response-body (van GET of POST refresh) weg in de losse state.
   const applyData = useCallback((data, revisionOverride) => {
@@ -216,6 +266,7 @@ export function usePurchaseOrdersPage() {
     setCollapsedHeaderColumnKeys(normalized.collapsedHeaderColumnKeys);
     setCollapsedLineColumnKeys(normalized.collapsedLineColumnKeys);
     setProductImageColumnVisible(normalized.productImageColumnVisible);
+    boardSettingsSnapshotRef.current = snapshotFromLocalSettings(normalized);
   }, []);
 
   const loadBoardSettings = useCallback(async () => {
@@ -747,128 +798,79 @@ export function usePurchaseOrdersPage() {
     [collapsedLineColumnKeys, defaultLineKeys]
   );
 
-  const persistBoardSettings = useCallback(async ({
-    nextVisibleKeys = visibleColumnKeys,
-    nextHeaderOrder = columnOrder,
-    nextLineOrder = lineColumnOrder,
-    nextHeaderWidths = headerColumnWidths,
-    nextLineWidths = lineColumnWidths,
-    nextHeaderTextStyles = headerColumnTextStyles,
-    nextHeaderFormatRules = headerColumnFormatRules,
-    nextLineTextStyles = lineColumnTextStyles,
-    nextLineFormatRules = lineColumnFormatRules,
-    nextLineTotalColumns = lineTotalColumns,
-    nextLineTotalHeaderLinks = lineTotalHeaderLinks,
-    nextLineValueHeaderLinks = lineValueHeaderLinks,
-    nextCollapsedHeaderColumnKeys = collapsedHeaderColumnKeys,
-    nextCollapsedLineColumnKeys = collapsedLineColumnKeys,
-    nextProductImageColumnVisible = productImageColumnVisible,
-  } = {}, { applyState = true } = {}) => {
-    const normalizedVisible = normalizeVisibleColumns(nextVisibleKeys, defaultHeaderKeys);
-    const normalizedHeaderOrder = normalizeColumnOrder(nextHeaderOrder, defaultHeaderKeys);
-    const normalizedLineOrder = normalizeColumnOrder(nextLineOrder, defaultLineKeys);
-    const normalizedHeaderWidths = normalizeColumnWidths(nextHeaderWidths, defaultHeaderKeys);
-    const normalizedLineWidths = normalizeColumnWidths(nextLineWidths, defaultLineKeys);
-    const normalizedHeaderTextStyles = normalizeColumnTextStyleMap(nextHeaderTextStyles, defaultHeaderKeys);
-    const normalizedHeaderFormatRules = normalizeColumnFormatRulesMap(nextHeaderFormatRules, defaultHeaderKeys);
-    const normalizedLineTextStyles = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
-    const normalizedLineFormatRules = normalizeColumnFormatRulesMap(nextLineFormatRules, defaultLineKeys);
-    const normalizedLineTotalColumns = filterSummableLineColumnKeys(
-      normalizeSelectedColumns(nextLineTotalColumns, defaultLineKeys),
-      lineColumns
-    );
-    const normalizedLineTotalHeaderLinks = normalizeLineTotalLinks(
-      nextLineTotalHeaderLinks,
-      defaultLineKeys
-    );
-    const normalizedLineValueHeaderLinks = normalizeLineTotalLinks(
-      nextLineValueHeaderLinks,
-      defaultLineKeys
-    );
-    const normalizedCollapsedHeaderColumnKeys = normalizeCollapsedColumnKeys(
-      nextCollapsedHeaderColumnKeys,
-      defaultHeaderKeys
-    );
-    const normalizedCollapsedLineColumnKeys = normalizeCollapsedColumnKeys(
-      nextCollapsedLineColumnKeys,
-      defaultLineKeys
-    );
+  const normalizeCtxRef = useRef({ defaultHeaderKeys: [], defaultLineKeys: [], lineColumns: [] });
+  normalizeCtxRef.current = { defaultHeaderKeys, defaultLineKeys, lineColumns };
 
-    // applyState=false: de aanroeper heeft de wijziging al optimistisch in state gezet (text-style).
-    // De volledige setter-blast dan overslaan voorkomt een tweede render-golf waarbij o.a. format-
-    // rules/orders nieuwe referenties krijgen en board-cellen onnodig hertekenen (BL-006).
-    if (applyState) {
-      setVisibleColumnKeys(normalizedVisible);
-      setColumnOrder(normalizedHeaderOrder);
-      setLineColumnOrder(normalizedLineOrder);
-      setHeaderColumnWidths(normalizedHeaderWidths);
-      setLineColumnWidths(normalizedLineWidths);
-      setHeaderColumnTextStyles(normalizedHeaderTextStyles);
-      setHeaderColumnFormatRules(normalizedHeaderFormatRules);
-      setLineColumnTextStyles(normalizedLineTextStyles);
-      setLineColumnFormatRules(normalizedLineFormatRules);
-      setLineTotalColumns(normalizedLineTotalColumns);
-      setLineTotalHeaderLinks(normalizedLineTotalHeaderLinks);
-      setLineValueHeaderLinks(normalizedLineValueHeaderLinks);
-      setCollapsedHeaderColumnKeys(normalizedCollapsedHeaderColumnKeys);
-      setCollapsedLineColumnKeys(normalizedCollapsedLineColumnKeys);
-      setProductImageColumnVisible(nextProductImageColumnVisible !== false);
-    }
-    // Houd de sessie-cache in sync met wat we opslaan, zodat een volgende mount de nieuwe layout
-    // meteen seedt en er geen "oude layout → correctie"-flits ontstaat.
-    const persistedSettings = {
-      visibleColumns: normalizedVisible,
-      columnOrder: normalizedHeaderOrder,
-      lineColumnOrder: normalizedLineOrder,
-      headerColumnWidths: normalizedHeaderWidths,
-      lineColumnWidths: normalizedLineWidths,
-      headerColumnTextStyles: normalizedHeaderTextStyles,
-      headerColumnFormatRules: normalizedHeaderFormatRules,
-      lineColumnTextStyles: normalizedLineTextStyles,
-      lineColumnFormatRules: normalizedLineFormatRules,
-      lineTotalColumns: normalizedLineTotalColumns,
-      lineTotalHeaderLinks: normalizedLineTotalHeaderLinks,
-      lineValueHeaderLinks: normalizedLineValueHeaderLinks,
-      collapsedHeaderColumnKeys: normalizedCollapsedHeaderColumnKeys,
-      collapsedLineColumnKeys: normalizedCollapsedLineColumnKeys,
-      productImageColumnVisible: nextProductImageColumnVisible !== false,
-    };
-    setCachedBoardSettings(BOARD_KEY, persistedSettings);
-    setSavingColumns(true);
-    try {
-      await apiRequest('/supplier/board-settings/' + BOARD_KEY, {
-        method: 'PATCH',
-        body: {
-          settings: persistedSettings,
-        },
+  const persistBoardSettings = useCallback((incomingPatch = {}, { applyState = true } = {}) => {
+    return persistQueueRef.current(async () => {
+      if (boardSettingsPersistTimerRef.current) {
+        clearTimeout(boardSettingsPersistTimerRef.current);
+        boardSettingsPersistTimerRef.current = null;
+      }
+      const pending = boardSettingsPersistPendingRef.current;
+      boardSettingsPersistPendingRef.current = null;
+      const patch = mergeIncomingPatches(pending, incomingPatch);
+      if (!Object.keys(patch).length) return;
+
+      const normalized = normalizeBoardSettingsSnapshot(
+        mergeBoardSettingsPatch(boardSettingsSnapshotRef.current, patch),
+        normalizeCtxRef.current
+      );
+      boardSettingsSnapshotRef.current = normalized;
+
+      // applyState=false: de aanroeper heeft de wijziging al optimistisch in state gezet
+      // (text-style). Alleen de gepatchte velden zetten voorkomt de setter-blast (BL-006).
+      if (applyState) {
+        if (hasPatchKey(patch, 'nextVisibleKeys')) setVisibleColumnKeys(normalized.visibleColumns);
+        if (hasPatchKey(patch, 'nextHeaderOrder')) setColumnOrder(normalized.columnOrder);
+        if (hasPatchKey(patch, 'nextLineOrder')) setLineColumnOrder(normalized.lineColumnOrder);
+        if (hasPatchKey(patch, 'nextHeaderWidths')) setHeaderColumnWidths(normalized.headerColumnWidths);
+        if (hasPatchKey(patch, 'nextLineWidths')) setLineColumnWidths(normalized.lineColumnWidths);
+        if (hasPatchKey(patch, 'nextHeaderTextStyles')) {
+          setHeaderColumnTextStyles(normalized.headerColumnTextStyles);
+        }
+        if (hasPatchKey(patch, 'nextHeaderFormatRules')) {
+          setHeaderColumnFormatRules(normalized.headerColumnFormatRules);
+        }
+        if (hasPatchKey(patch, 'nextLineTextStyles')) setLineColumnTextStyles(normalized.lineColumnTextStyles);
+        if (hasPatchKey(patch, 'nextLineFormatRules')) {
+          setLineColumnFormatRules(normalized.lineColumnFormatRules);
+        }
+        if (hasPatchKey(patch, 'nextLineTotalColumns')) setLineTotalColumns(normalized.lineTotalColumns);
+        if (hasPatchKey(patch, 'nextLineTotalHeaderLinks')) {
+          setLineTotalHeaderLinks(normalized.lineTotalHeaderLinks);
+        }
+        if (hasPatchKey(patch, 'nextLineValueHeaderLinks')) {
+          setLineValueHeaderLinks(normalized.lineValueHeaderLinks);
+        }
+        if (hasPatchKey(patch, 'nextCollapsedHeaderColumnKeys')) {
+          setCollapsedHeaderColumnKeys(normalized.collapsedHeaderColumnKeys);
+        }
+        if (hasPatchKey(patch, 'nextCollapsedLineColumnKeys')) {
+          setCollapsedLineColumnKeys(normalized.collapsedLineColumnKeys);
+        }
+        if (hasPatchKey(patch, 'nextProductImageColumnVisible')) {
+          setProductImageColumnVisible(normalized.productImageColumnVisible !== false);
+        }
+      }
+
+      setCachedBoardSettings(BOARD_KEY, {
+        ...(getCachedBoardSettings(BOARD_KEY) || {}),
+        ...normalized,
       });
-    } finally {
-      setSavingColumns(false);
-    }
-  }, [
-    visibleColumnKeys,
-    columnOrder,
-    lineColumnOrder,
-    headerColumnWidths,
-    lineColumnWidths,
-    headerColumnTextStyles,
-    headerColumnFormatRules,
-    lineColumnTextStyles,
-    lineColumnFormatRules,
-    lineTotalColumns,
-    lineTotalHeaderLinks,
-    lineValueHeaderLinks,
-    collapsedHeaderColumnKeys,
-    collapsedLineColumnKeys,
-    productImageColumnVisible,
-    defaultHeaderKeys,
-    defaultLineKeys,
-    lineColumns,
-  ]);
-
-  // Coalesce text-style / small layout writes so UI is not blocked on PATCH latency.
-  const boardSettingsPersistTimerRef = useRef(null);
-  const boardSettingsPersistPendingRef = useRef(null);
+      setSavingColumns(true);
+      try {
+        await apiRequest('/supplier/board-settings/' + BOARD_KEY, {
+          method: 'PATCH',
+          body: {
+            settings: pickPartialBoardSettings(normalized, patch),
+          },
+        });
+      } finally {
+        setSavingColumns(false);
+      }
+    });
+  }, []);
 
   const scheduleBoardSettingsPersist = useCallback((patch) => {
     boardSettingsPersistPendingRef.current = {
@@ -1031,6 +1033,54 @@ export function usePurchaseOrdersPage() {
     if (Object.prototype.hasOwnProperty.call(layout, 'productImageColumnVisible')) {
       setProductImageColumnVisible(layout.productImageColumnVisible !== false);
     }
+    boardSettingsSnapshotRef.current = {
+      ...boardSettingsSnapshotRef.current,
+      ...(Array.isArray(layout.visibleColumns)
+        ? { visibleColumns: normalizeVisibleColumns(layout.visibleColumns, defaultHeaderKeys) }
+        : {}),
+      ...(Array.isArray(layout.columnOrder)
+        ? { columnOrder: normalizeColumnOrder(layout.columnOrder, defaultHeaderKeys) }
+        : {}),
+      ...(Array.isArray(layout.lineColumnOrder)
+        ? { lineColumnOrder: normalizeColumnOrder(layout.lineColumnOrder, defaultLineKeys) }
+        : {}),
+      ...(layout.headerColumnWidths && typeof layout.headerColumnWidths === 'object'
+        ? { headerColumnWidths: normalizeColumnWidths(layout.headerColumnWidths, defaultHeaderKeys) }
+        : {}),
+      ...(layout.lineColumnWidths && typeof layout.lineColumnWidths === 'object'
+        ? { lineColumnWidths: normalizeColumnWidths(layout.lineColumnWidths, defaultLineKeys) }
+        : {}),
+      ...(layout.headerColumnTextStyles && typeof layout.headerColumnTextStyles === 'object'
+        ? { headerColumnTextStyles: normalizeColumnTextStyleMap(layout.headerColumnTextStyles, defaultHeaderKeys) }
+        : {}),
+      ...(layout.headerColumnFormatRules && typeof layout.headerColumnFormatRules === 'object'
+        ? { headerColumnFormatRules: normalizeColumnFormatRulesMap(layout.headerColumnFormatRules, defaultHeaderKeys) }
+        : {}),
+      ...(layout.lineColumnTextStyles && typeof layout.lineColumnTextStyles === 'object'
+        ? { lineColumnTextStyles: normalizeColumnTextStyleMap(layout.lineColumnTextStyles, defaultLineKeys) }
+        : {}),
+      ...(layout.lineColumnFormatRules && typeof layout.lineColumnFormatRules === 'object'
+        ? { lineColumnFormatRules: normalizeColumnFormatRulesMap(layout.lineColumnFormatRules, defaultLineKeys) }
+        : {}),
+      ...(Array.isArray(layout.lineTotalColumns)
+        ? { lineTotalColumns: normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys) }
+        : {}),
+      ...(Array.isArray(layout.lineTotalHeaderLinks)
+        ? { lineTotalHeaderLinks: normalizeLineTotalLinks(layout.lineTotalHeaderLinks, defaultLineKeys) }
+        : {}),
+      ...(Array.isArray(layout.lineValueHeaderLinks)
+        ? { lineValueHeaderLinks: normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys) }
+        : {}),
+      ...(Array.isArray(layout.collapsedHeaderColumnKeys)
+        ? { collapsedHeaderColumnKeys: normalizeCollapsedColumnKeys(layout.collapsedHeaderColumnKeys, defaultHeaderKeys) }
+        : {}),
+      ...(Array.isArray(layout.collapsedLineColumnKeys)
+        ? { collapsedLineColumnKeys: normalizeCollapsedColumnKeys(layout.collapsedLineColumnKeys, defaultLineKeys) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(layout, 'productImageColumnVisible')
+        ? { productImageColumnVisible: layout.productImageColumnVisible !== false }
+        : {}),
+    };
   }, [defaultHeaderKeys, defaultLineKeys]);
 
   const setProductImageColumnVisiblePreference = useCallback(async (visible) => {
@@ -1096,6 +1146,10 @@ export function usePurchaseOrdersPage() {
     const normalized = normalizeColumnTextStyleMap(nextHeaderTextStyles, defaultHeaderKeys);
     // Optimistic: paint immediately; PATCH is coalesced in the background.
     setHeaderColumnTextStyles(normalized);
+    boardSettingsSnapshotRef.current = {
+      ...boardSettingsSnapshotRef.current,
+      headerColumnTextStyles: normalized,
+    };
     const cached = getCachedBoardSettings(BOARD_KEY) || {};
     setCachedBoardSettings(BOARD_KEY, { ...cached, headerColumnTextStyles: normalized });
     scheduleBoardSettingsPersist({ nextHeaderTextStyles: normalized });
@@ -1154,6 +1208,10 @@ export function usePurchaseOrdersPage() {
     else nextLineTextStyles[key] = merged;
     const normalized = normalizeColumnTextStyleMap(nextLineTextStyles, defaultLineKeys);
     setLineColumnTextStyles(normalized);
+    boardSettingsSnapshotRef.current = {
+      ...boardSettingsSnapshotRef.current,
+      lineColumnTextStyles: normalized,
+    };
     const cached = getCachedBoardSettings(BOARD_KEY) || {};
     setCachedBoardSettings(BOARD_KEY, { ...cached, lineColumnTextStyles: normalized });
     scheduleBoardSettingsPersist({ nextLineTextStyles: normalized });
@@ -1190,23 +1248,25 @@ export function usePurchaseOrdersPage() {
     const lineKey = String(lineColumnKey || '').trim();
     const headerKey = String(headerColumnKey || '').trim();
     if (!lineKey || !headerKey) return;
+    const currentLinks = boardSettingsSnapshotRef.current?.lineTotalHeaderLinks || [];
     const nextLinks = normalizeLineTotalLinks(
-      [...lineTotalHeaderLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
+      [...currentLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
       defaultLineKeys
     );
     await persistBoardSettings({ nextLineTotalHeaderLinks: nextLinks });
-  }, [lineTotalHeaderLinks, defaultLineKeys, persistBoardSettings]);
+  }, [defaultLineKeys, persistBoardSettings]);
 
   const addLineValueHeaderLink = useCallback(async ({ lineColumnKey, headerColumnKey }) => {
     const lineKey = String(lineColumnKey || '').trim();
     const headerKey = String(headerColumnKey || '').trim();
     if (!lineKey || !headerKey) return;
+    const currentLinks = boardSettingsSnapshotRef.current?.lineValueHeaderLinks || [];
     const nextLinks = normalizeLineTotalLinks(
-      [...lineValueHeaderLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
+      [...currentLinks, { lineColumnKey: lineKey, headerColumnKey: headerKey }],
       defaultLineKeys
     );
     await persistBoardSettings({ nextLineValueHeaderLinks: nextLinks });
-  }, [lineValueHeaderLinks, defaultLineKeys, persistBoardSettings]);
+  }, [defaultLineKeys, persistBoardSettings]);
 
   // Verplaats een net-aangemaakte kolom naar rechts van zijn bron zodra beide keys
   // in de (herladen) kolomdefinities bestaan.
