@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function useColumnReorderDrag({ onReorder, disabled = false }) {
   const [draggingKey, setDraggingKey] = useState('');
@@ -8,6 +8,17 @@ export function useColumnReorderDrag({ onReorder, disabled = false }) {
   const resetDropTarget = useCallback(() => {
     setDropTarget((prev) => (prev.key ? { key: '', position: 'before' } : prev));
   }, []);
+
+  const resetDragState = useCallback(() => {
+    setDraggingKey('');
+    resetDropTarget();
+  }, [resetDropTarget]);
+
+  useEffect(() => {
+    if (!disabled) return undefined;
+    resetDragState();
+    return undefined;
+  }, [disabled, resetDragState]);
 
   const handleDragStart = useCallback((event, columnKey) => {
     if (!canDrag) return;
@@ -32,32 +43,31 @@ export function useColumnReorderDrag({ onReorder, disabled = false }) {
   }, [resetDropTarget]);
 
   const handleDrop = useCallback(async (event, columnKey) => {
-    if (!canDrag) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     const position = (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
     const sourceKey = String(event.dataTransfer.getData('text/plain') || '');
-    resetDropTarget();
+    resetDragState();
+    if (!canDrag) return;
     if (!sourceKey || sourceKey === columnKey) return;
     await onReorder(sourceKey, columnKey, position);
-  }, [canDrag, onReorder, resetDropTarget]);
+  }, [canDrag, onReorder, resetDragState]);
 
   const handleDragEnd = useCallback(() => {
-    setDraggingKey('');
-    resetDropTarget();
-  }, [resetDropTarget]);
+    resetDragState();
+  }, [resetDragState]);
 
   const getCellDragProps = useCallback((columnKey) => {
-    if (!canDrag) return {};
+    if (!canDrag && !draggingKey) return {};
     return {
-      draggable: true,
-      onDragStart: (event) => handleDragStart(event, columnKey),
-      onDragOver: (event) => handleDragOver(event, columnKey),
-      onDragLeave: handleDragLeave,
-      onDrop: (event) => handleDrop(event, columnKey),
+      draggable: canDrag,
+      onDragStart: canDrag ? (event) => handleDragStart(event, columnKey) : undefined,
+      onDragOver: canDrag ? (event) => handleDragOver(event, columnKey) : undefined,
+      onDragLeave: canDrag ? handleDragLeave : undefined,
+      onDrop: canDrag ? (event) => handleDrop(event, columnKey) : undefined,
       onDragEnd: handleDragEnd,
     };
-  }, [canDrag, handleDragEnd, handleDragLeave, handleDragOver, handleDragStart, handleDrop]);
+  }, [canDrag, draggingKey, handleDragEnd, handleDragLeave, handleDragOver, handleDragStart, handleDrop]);
 
   return useMemo(() => ({
     canDrag,
