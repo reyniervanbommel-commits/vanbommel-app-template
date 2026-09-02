@@ -15,6 +15,17 @@ import { viewVendorAccount } from '../../utils/viewTabs';
 const useStyles = makeStyles({
   viewMenuItem: {
     ...shorthands.padding('0'),
+    maxWidth: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  viewMenuItemContent: {
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
   },
   viewMenuItemActive: {
     backgroundColor: tokens.colorNeutralBackground1Selected,
@@ -28,10 +39,15 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     width: '100%',
     minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
     ...shorthands.gap('12px'),
   },
   viewMenuItemLabel: {
-    flex: 1,
+    display: 'block',
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
     minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -99,15 +115,20 @@ export function SavedViewMenuItem({
   }, [onApplyView, view]);
 
   const vendorAccount = viewVendorAccount(view);
+  const labelText = `${view.name}${vendorAccount ? ` ${vendorAccount}` : ''}${view.isDefault ? ' (default)' : ''}`;
 
   return (
     <MenuItem
       className={mergeClasses(styles.viewMenuItem, isActive && styles.viewMenuItemActive)}
+      content={{ className: styles.viewMenuItemContent }}
       aria-current={isActive ? 'true' : undefined}
       onClick={handleApply}
     >
       <span className={styles.viewMenuItemRow}>
-        <span className={mergeClasses(styles.viewMenuItemLabel, isActive && styles.viewMenuItemLabelActive)}>
+        <span
+          className={mergeClasses(styles.viewMenuItemLabel, isActive && styles.viewMenuItemLabelActive)}
+          title={labelText}
+        >
           {view.name}
           {vendorAccount ? <span className={styles.vendorSuffix}>{vendorAccount}</span> : null}
           {view.isDefault ? ' (default)' : ''}
