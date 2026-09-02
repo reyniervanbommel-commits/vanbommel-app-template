@@ -11,7 +11,7 @@ import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardL
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
 import { applyCollapsedColumnWidths } from '../../utils/collapsedColumnUtils';
-import { applyPoTableZoom, subscribePoTableZoom } from '../../utils/poTableZoom';
+import { usePoTableZoomNode } from '../../hooks/usePoTableZoomNode';
 
 function PurchaseOrdersBoardTable({
   data,
@@ -208,20 +208,7 @@ function PurchaseOrdersBoardTable({
   const handleClearAllFilters = useCallback(() => {
     clearAllFilters?.();
   }, [clearAllFilters]);
-  const frameRef = useRef(null);
-  const frameUnsubRef = useRef(null);
-  const setFrameNode = useCallback((node) => {
-    if (frameRef.current && frameUnsubRef.current) frameUnsubRef.current();
-    frameUnsubRef.current = null;
-    frameRef.current = node;
-    if (!node) return;
-    applyPoTableZoom(node);
-    frameUnsubRef.current = subscribePoTableZoom(() => applyPoTableZoom(node));
-  }, []);
-  useEffect(() => () => {
-    frameUnsubRef.current?.();
-    frameUnsubRef.current = null;
-  }, []);
+  const setFrameNode = usePoTableZoomNode();
 
   if (!items.length) {
     return <div className={styles.empty}>No data found</div>;
