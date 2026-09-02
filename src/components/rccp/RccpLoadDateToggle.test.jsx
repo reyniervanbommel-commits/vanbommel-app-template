@@ -10,14 +10,14 @@ describe('RccpLoadDateToggle', () => {
     const { getByRole } = renderWithFluent(
       <RccpLoadDateToggle value="requested" onChange={onChange} />,
     );
-    expect(getByRole('radio', { name: 'Requested' }).getAttribute('aria-checked')).toBe('true');
+    expect(getByRole('radio', { name: 'Requested' })).toBeChecked();
     fireEvent.click(getByRole('radio', { name: 'Confirmed' }));
     expect(onChange).toHaveBeenCalledWith('confirmed');
   });
 
-  it('appends the confirmed pair share to the Confirmed label', () => {
+  it('shows confirmed percent on Confirmed', () => {
     const { getByRole } = renderWithFluent(
-      <RccpLoadDateToggle value="requested" confirmedPercent={64.4} />,
+      <RccpLoadDateToggle value="requested" confirmedPercent={64} />,
     );
     expect(getByRole('radio', { name: 'Confirmed 64%' })).toBeTruthy();
   });

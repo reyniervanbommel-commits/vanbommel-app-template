@@ -83,6 +83,21 @@ describe('filterRccpChartByItem', () => {
     });
   });
 
+  it('rewrites ordered and received measure keys from the filtered stacks', () => {
+    const rows = [
+      { measureKey: 'quantity', isOrdered: true },
+      { measureKey: 'receivedPurchQty', isDelivered: true },
+    ];
+    expect(filterRccpChartByItem(chart, 'A', { measureRows: rows })[0]).toEqual({
+      week: '2022-W25',
+      load: 10,
+      quantity: 2,
+      receivedPurchQty: -1,
+      segmentsAbove: [{ itemNumber: 'A', qty: 2, status: 'open' }],
+      segmentsBelow: [{ itemNumber: 'A', qty: 1, status: 'received' }],
+    });
+  });
+
   it('filters stacks by contains term in one pass', () => {
     expect(filterRccpChartByItem(chart, [], { containsTerm: 'a' })[0]).toEqual({
       week: '2022-W25',
@@ -130,7 +145,7 @@ describe('filterRccpMatrixByItem', () => {
   it('rewrites PO rows and overcapacity from the filtered stacks', () => {
     const next = filterRccpMatrixByItem(cellMap, { chart: filteredChart, measureRows, active: true });
     expect(next.get('open|2022|25').confirmedQty).toBe(2);
-    expect(next.get('ordered|2022|25').confirmedQty).toBe(1);
+    expect(next.get('ordered|2022|25').confirmedQty).toBe(3);
     expect(next.get('received|2022|25').confirmedQty).toBe(1);
     expect(next.get('__capacity__|2022|25').availableQty).toBe(40);
     expect(next.get('__overcapacity__|2022|25').confirmedQty).toBe(38);

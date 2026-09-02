@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useMemo } from 'react';
+import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import {
   Button, Tab, TabList, makeStyles, mergeClasses, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
@@ -7,6 +7,11 @@ import AdminInfoHint from '../admin/AdminInfoHint';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
 import { resolvePoBoardRccpVendor } from '../rccp/resolveRccpVendorFilter';
+import {
+  parseRccpPeriodGrain,
+  RCCP_PERIOD_GRAIN_WEEK,
+} from '../rccp/rccpPeriodGrain';
+import RccpSplitToolbar from '../rccp/RccpSplitToolbar';
 import {
   nextRccpItemTableFilter,
   resolveRccpItemColumnKey,
@@ -80,7 +85,19 @@ export default function BoardSplitView({
   // (RCCP + BI worden server-side op hun leveranciersaccount gescoped).
   const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
-  const { isoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
+  const { isoWindow, setIsoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
+  const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
+  const handlePeriodGrainChange = useCallback((value) => {
+    setPeriodGrain(parseRccpPeriodGrain(value));
+  }, []);
+  const handleWindowReplace = useCallback((next) => {
+    setIsoWindow({
+      fromYear: Number(next.fromYear),
+      fromWeek: Number(next.fromWeek),
+      toYear: Number(next.toYear),
+      toWeek: Number(next.toWeek),
+    });
+  }, [setIsoWindow]);
   const {
     vendors, vendorNames, vendorColumnKey, loading: vendorsLoading,
   } = useRccpVendorOptions();
@@ -174,6 +191,17 @@ export default function BoardSplitView({
           <Tab value="kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
+        {split.activeTab === 'rccp' ? (
+          <RccpSplitToolbar
+            isoWindow={isoWindow}
+            onReplaceWindow={handleWindowReplace}
+            periodGrain={periodGrain}
+            onPeriodGrainChange={handlePeriodGrainChange}
+            planningDateMode={planningDateMode}
+            onPlanningDateModeChange={setPlanningDateMode}
+            vendorAccount={vendorAccount}
+          />
+        ) : null}
       </div>
 
       <div
@@ -201,14 +229,13 @@ export default function BoardSplitView({
                 <RccpSplitStrip
                   vendorAccount={vendorAccount}
                   refreshKey={rccpRefreshKey}
-                  height={split.height}
                   enabled
                   isoWindow={isoWindow}
                   filterByColumn={filterByColumn}
                   itemColumnKey={itemColumnKey}
                   onItemClick={handleRccpItemClick}
                   planningDateMode={planningDateMode}
-                  onPlanningDateModeChange={setPlanningDateMode}
+                  periodGrain={periodGrain}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />

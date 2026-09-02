@@ -20,8 +20,12 @@ export function resolveRccpItemColumnKey(columns = [], lineValueLinks = []) {
 }
 
 function oneOfValues(filter) {
-  if (!Array.isArray(filter?.value)) return [];
-  return filter.value.map((value) => String(value || '').trim()).filter(Boolean);
+  if (Array.isArray(filter?.value)) {
+    return filter.value.map((value) => String(value || '').trim()).filter(Boolean);
+  }
+  const raw = String(filter?.value ?? '').trim();
+  if (!raw) return [];
+  return raw.split(/[,;]/).map((value) => value.trim()).filter(Boolean);
 }
 
 /**
@@ -52,7 +56,7 @@ export function resolveRccpItemsFromFilter(filterByColumn, chartItems = [], colu
       const items = oneOfValues(filter);
       if (items.length) return { items, active: true };
     }
-    if (filter.operator === 'contains') {
+    if (filter.operator === 'contains' || filter.operator === 'startsWith') {
       const term = String(filter.value ?? '').trim().toLowerCase();
       if (!term) continue;
       return { items: [], active: true, containsTerm: term };

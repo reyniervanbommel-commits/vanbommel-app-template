@@ -118,3 +118,70 @@ export function isReceivedPairHighlight(segment, highlightItem) {
     && segment.itemNumber === highlightItem
   );
 }
+
+const PAIR_STROKE = '#323130';
+
+/** Hover pair outline only — late receipts have no extra frame. */
+export function poSegmentStroke(_segment, highlighted) {
+  if (highlighted) return { stroke: PAIR_STROKE, strokeWidth: 2.5 };
+  return { stroke: 'none', strokeWidth: 0 };
+}
+
+/**
+ * Quantity (ordered) against the axis, remaining (open) grouped at the top.
+ * Remaining stays visible when quantity is toggled off.
+ */
+export function visibleAboveSegments(segments, { openVisible, orderedVisible } = {}) {
+  const ordered = [];
+  const remaining = [];
+  for (const segment of segments || []) {
+    if (segment?.status === 'open') {
+      if (openVisible) remaining.push(segment);
+    } else if (segment?.status === 'ordered') {
+      if (orderedVisible) ordered.push(segment);
+    }
+  }
+  return [...ordered, ...remaining];
+}
+
+/**
+ * Y-domain for Capacity vs load. Custom PO-stack bars are ignored by Recharts 3,
+ * so a negative-only received series would otherwise hide quantity above the axis.
+ * Positive and negative sides share the same absolute scale.
+ */
+export function rccpChartYDomain(points, measureKeys = []) {
+  let min = 0;
+  let max = 0;
+  for (const point of points || []) {
+    max = Math.max(max, Number(point.__stackAbove) || 0);
+    min = Math.min(min, Number(point.__stackBelow) || 0);
+    for (const key of measureKeys) {
+      const value = Number(point[key]) || 0;
+      max = Math.max(max, value);
+      min = Math.min(min, value);
+    }
+  }
+  if (min === 0 && max === 0) return [0, 1];
+  const extent = Math.max(Math.abs(min), Math.abs(max));
+  return [-extent, extent];
+}
+
+/**
+ * Recharts 3 discards a numeric Y domain unless allowDataOverflow is set.
+ * Without that, custom PO bars are ignored and the axis falls back to [0, auto].
+ */
+export function rccpSymmetricYAxisDomain(yDomain) {
+  const domain = Array.isArray(yDomain) && yDomain.length === 2 ? yDomain : [0, 1];
+  return {
+    type: 'number',
+    domain,
+    allowDataOverflow: true,
+  };
+}
+
+export function rccpPoStackBarFlags({ openVisible, orderedVisible, deliveredVisible }) {
+  return {
+    showAbove: Boolean(openVisible || orderedVisible || deliveredVisible),
+    showBelow: Boolean(deliveredVisible),
+  };
+}
