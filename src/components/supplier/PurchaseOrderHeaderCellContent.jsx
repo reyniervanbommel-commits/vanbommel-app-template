@@ -79,17 +79,15 @@ function PurchaseOrderHeaderCellContent({
     });
   }, [column.id, key, onSaveValue, order.dataAreaId, order.orderNumber]);
 
-  const handleCorrect = useCallback(({ value, basedOnValue }) => {
-    onCorrect({
-      columnId: column.id,
-      columnKey: key,
-      dataAreaId: order.dataAreaId,
-      orderNumber: order.orderNumber,
-      lineNumber: null,
-      value,
-      basedOnValue,
-    });
-  }, [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
+  const handleCorrect = useCallback(({ value, basedOnValue }) => onCorrect({
+    columnId: column.id,
+    columnKey: key,
+    dataAreaId: order.dataAreaId,
+    orderNumber: order.orderNumber,
+    lineNumber: null,
+    value,
+    basedOnValue,
+  }), [column.id, key, onCorrect, order.dataAreaId, order.orderNumber]);
 
   const handleUpdateStatusOptions = useCallback((options, statusReassignments) => {
     if (typeof onUpdateStatusOptions !== 'function') return Promise.resolve();

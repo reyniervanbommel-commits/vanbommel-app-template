@@ -7,11 +7,13 @@ export const devTestItems = [
     id: 'bulk-writeback-conflicts-295',
     title: 'Bulk write-back per-row outcome and retry (#295)',
     checks: [
-      'Bulk-edit a D365-writable column on 3 selected rows where the middle row fails: rows 1 and 3 still update; summary lists the failed PO and D365 error',
-      'Retry on a resolved failed row removes it from the list and updates Failed: N',
-      'Retry all failed runs remaining failed rows sequentially',
-      'Bulk-edit without failures still closes the dialog silently',
-      'Bulk-edit on a non-D365 column still stops on first error with the old summary text (no retry list)',
+      'Apply to selected rows on a D365 column closes the confirm dialog immediately; a header badge shows Write-back n/total',
+      'Locked cells are only the selected rows in that one column (queued tint, writing spinner); other columns stay editable',
+      'A second bulk write-back is blocked until the first job finishes',
+      'When every row succeeds the badge disappears and a green toast appears',
+      'When a row fails the badge stays, the result panel lists the PO and D365 error, and Retry / Retry all failed work',
+      'Selecting 25+ rows shows the one-by-one warning in the confirm dialog',
+      'Bulk-edit on a non-D365 column still blocks the dialog and stops on first error (no background job)',
     ],
   },
 ];

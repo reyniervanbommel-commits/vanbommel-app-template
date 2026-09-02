@@ -12,16 +12,20 @@ export function valuesEqual(left, right) {
  * Sequentiële D365-correcties: gaat door na een fout en verzamelt failedRows.
  * I/O via geïnjecteerde runSingleUpdate; onSettled vuurt na elke kandidaat.
  */
-export async function runCorrectRows({ candidates, payload, runSingleUpdate, onSettled }) {
+export async function runCorrectRows({
+  candidates, payload, runSingleUpdate, onSettled, onRowStart,
+}) {
   let updated = 0;
   let skipped = 0;
   const failedRows = [];
   for (const candidate of candidates) {
+    const key = rowSelectionKey(candidate.dataAreaId, candidate.orderNumber);
     if (valuesEqual(candidate.currentValue, payload.value)) {
       skipped += 1;
-      onSettled?.();
+      onSettled?.({ key, outcome: 'skipped' });
       continue;
     }
+    onRowStart?.(key);
     try {
       await runSingleUpdate('correct', {
         columnId: payload.columnId,
@@ -33,9 +37,11 @@ export async function runCorrectRows({ candidates, payload, runSingleUpdate, onS
         basedOnValue: candidate.currentValue,
       });
       updated += 1;
+      onSettled?.({ key, outcome: 'updated' });
+      continue;
     } catch (err) {
       failedRows.push({
-        key: rowSelectionKey(candidate.dataAreaId, candidate.orderNumber),
+        key,
         dataAreaId: candidate.dataAreaId,
         orderNumber: candidate.orderNumber,
         columnId: payload.columnId,
@@ -44,8 +50,8 @@ export async function runCorrectRows({ candidates, payload, runSingleUpdate, onS
         basedOnValue: candidate.currentValue,
         errorMessage: err.message || 'Write-back failed',
       });
+      onSettled?.({ key, outcome: 'failed', failedRow: failedRows[failedRows.length - 1] });
     }
-    onSettled?.();
   }
   return { updated, skipped, failedRows };
 }

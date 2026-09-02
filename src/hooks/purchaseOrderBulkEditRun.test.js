@@ -58,4 +58,23 @@ describe('runCorrectRows', () => {
     expect(runSingleUpdate).toHaveBeenCalledTimes(1);
     expect(onSettled).toHaveBeenCalledTimes(2);
   });
+
+  it('roept onRowStart alleen voor rijen die echt schrijven', async () => {
+    const onRowStart = vi.fn();
+    const onSettled = vi.fn();
+    await runCorrectRows({
+      candidates: [
+        { dataAreaId: 'USMF', orderNumber: 'PO1', currentValue: 'Closed' },
+        { dataAreaId: 'USMF', orderNumber: 'PO2', currentValue: 'Open' },
+      ],
+      payload,
+      runSingleUpdate: vi.fn().mockResolvedValue(),
+      onRowStart,
+      onSettled,
+    });
+    expect(onRowStart).toHaveBeenCalledTimes(1);
+    expect(onRowStart).toHaveBeenCalledWith('USMF|PO2');
+    expect(onSettled).toHaveBeenNthCalledWith(1, { key: 'USMF|PO1', outcome: 'skipped' });
+    expect(onSettled).toHaveBeenNthCalledWith(2, { key: 'USMF|PO2', outcome: 'updated' });
+  });
 });
