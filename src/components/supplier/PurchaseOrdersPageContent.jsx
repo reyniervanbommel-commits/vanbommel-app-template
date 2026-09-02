@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { makeStyles } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
@@ -55,9 +55,21 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
-  const visibleOrderNumbersFingerprint = useMemo(
-    () => orderNumbersFingerprint(collectOrderNumbers(boardView.processedItems)),
+  const orderNumbersCacheRef = useRef({ fingerprint: '', orderNumbers: [] });
+  const rccpOrderNumbers = useMemo(
+    () => {
+      const orderNumbers = collectOrderNumbers(boardView.processedItems);
+      const fingerprint = orderNumbersFingerprint(orderNumbers);
+      if (orderNumbersCacheRef.current.fingerprint !== fingerprint) {
+        orderNumbersCacheRef.current = { fingerprint, orderNumbers };
+      }
+      return orderNumbersCacheRef.current.orderNumbers;
+    },
     [boardView.processedItems],
+  );
+  const visibleOrderNumbersFingerprint = useMemo(
+    () => orderNumbersFingerprint(rccpOrderNumbers),
+    [rccpOrderNumbers],
   );
   const derivedVendor = useMemo(
     () => resolveSharedVendorFromOrders(boardView.processedItems, { vendors: [], vendorNames: {} }),
@@ -250,6 +262,8 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
           clearColumnFilter: boardView.clearColumnFilter,
         }}
         isStaff={isStaff}
+        orderNumbers={rccpOrderNumbers}
+        derivedVendor={derivedVendor}
       >
         <div className={styles.tableRegion}>
           <TrackChangesContext.Provider value={trackChangesMeta}>

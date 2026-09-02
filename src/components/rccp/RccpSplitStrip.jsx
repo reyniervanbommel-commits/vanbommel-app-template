@@ -3,7 +3,7 @@ import {
   Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
-import { filterRccpChartByItem, filterRccpMatrixByItem } from './rccpChartItems';
+import { filterRccpChartBySegments, filterRccpMatrixByItem } from './rccpChartItems';
 import {
   parseRccpPeriodGrain,
   resolveRccpChartView,
@@ -28,7 +28,7 @@ const useStyles = makeStyles({
 
 function RccpSplitStrip({
   vendorAccount, refreshKey, enabled, isoWindow, filterByColumn, itemColumnKey, onItemClick,
-  planningDateMode, periodGrain: periodGrainProp,
+  planningDateMode, periodGrain: periodGrainProp, orderNumbers,
 }) {
   const styles = useStyles();
   const periodGrain = parseRccpPeriodGrain(periodGrainProp);
@@ -55,20 +55,25 @@ function RccpSplitStrip({
     [filterByColumn, itemColumnKey],
   );
   const filteredChart = useMemo(
-    () => filterRccpChartByItem(chartView.chart, itemFilter.items, {
-      emptyHidesAll: itemFilter.active,
-      containsTerm: itemFilter.containsTerm,
-      measureRows,
-    }),
-    [chartView.chart, itemFilter, measureRows],
+    () => {
+      const filterOptions = {
+        emptyHidesAll: itemFilter.active || Array.isArray(orderNumbers),
+        orderNumbers,
+        containsTerm: itemFilter.containsTerm,
+        measureRows,
+      };
+      if (itemFilter.active) filterOptions.items = itemFilter.items;
+      return filterRccpChartBySegments(chartView.chart, filterOptions);
+    },
+    [chartView.chart, itemFilter, orderNumbers, measureRows],
   );
   const filteredCellMap = useMemo(
     () => filterRccpMatrixByItem(chartView.cellMap, {
       chart: filteredChart,
       measureRows,
-      active: itemFilter.active,
+      active: itemFilter.active || Array.isArray(orderNumbers),
     }),
-    [chartView.cellMap, filteredChart, measureRows, itemFilter],
+    [chartView.cellMap, filteredChart, measureRows, itemFilter, orderNumbers],
   );
   const focusItem = itemFilter.items.length === 1 ? itemFilter.items[0] : '';
   const itemFocus = useMemo(
