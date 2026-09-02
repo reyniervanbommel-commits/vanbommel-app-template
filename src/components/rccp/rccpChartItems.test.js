@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectRccpChartItemNumbers,
+  filterRccpChartBySegments,
   filterRccpChartByItem,
   filterRccpMatrixByItem,
   matchRccpChartItem,
@@ -105,6 +106,61 @@ describe('filterRccpChartByItem', () => {
       segmentsAbove: [{ itemNumber: 'A', qty: 2, status: 'open' }],
       segmentsBelow: [{ itemNumber: 'A', qty: 1, status: 'received' }],
     });
+  });
+});
+
+describe('filterRccpChartBySegments', () => {
+  const chart = [{
+    week: '2026-W12',
+    segmentsAbove: [
+      { itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' },
+      { itemNumber: 'A', poNumber: 'PO-2', qty: 3, status: 'open' },
+    ],
+    segmentsBelow: [],
+  }];
+
+  it('keeps only stacks whose poNumber is in the visible set', () => {
+    expect(filterRccpChartBySegments(chart, { orderNumbers: ['PO-1'] })[0].segmentsAbove)
+      .toEqual([{ itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' }]);
+  });
+
+  it('ANDs item and PO', () => {
+    const mixed = [{
+      week: '2026-W12',
+      segmentsAbove: [
+        { itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' },
+        { itemNumber: 'B', poNumber: 'PO-1', qty: 4, status: 'open' },
+      ],
+      segmentsBelow: [],
+    }];
+    expect(filterRccpChartBySegments(mixed, { items: ['A'], orderNumbers: ['PO-1'] })[0].segmentsAbove)
+      .toEqual([{ itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' }]);
+  });
+
+  it('hides all stacks when orderNumbers is an empty list and emptyHidesAll', () => {
+    expect(filterRccpChartBySegments(chart, { orderNumbers: [], emptyHidesAll: true })[0].segmentsAbove)
+      .toEqual([]);
+  });
+
+  it('keeps matching PO stacks with emptyHidesAll when no item filter is set', () => {
+    expect(filterRccpChartBySegments(chart, { orderNumbers: ['PO-1'], emptyHidesAll: true })[0].segmentsAbove)
+      .toEqual([{ itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' }]);
+  });
+
+  it('does not rewrite measure keys when no item or PO filter is set', () => {
+    const loaded = [{
+      week: '2026-W12',
+      quantity: 99,
+      segmentsAbove: [
+        { itemNumber: 'A', poNumber: 'PO-1', qty: 2, status: 'open' },
+      ],
+      segmentsBelow: [],
+    }];
+    const result = filterRccpChartBySegments(loaded, {
+      measureRows: [{ measureKey: 'quantity', isOrdered: true }],
+    });
+    expect(result).toBe(loaded);
+    expect(result[0].quantity).toBe(99);
   });
 });
 

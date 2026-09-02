@@ -8,7 +8,7 @@ import { prefetchRccpAnalysis } from './rccpAnalysisPrefetch';
 import { prefetchBiDashboard } from './biBoardPrefetch';
 import { apiRequest } from './api';
 import { compactIsoWindowForPrefetch } from '../components/rccp/rccpUtils';
-import { readPoFilterByColumnForRccp } from './poVendorFilterHandoff';
+import { readPoRccpHandoff } from './poVendorFilterHandoff';
 import {
   resolveDefaultRccpVendor,
   resolveDefaultRccpVendorWithFallback,
@@ -56,10 +56,12 @@ async function resolveVendorScope({ isSupplier, lastVendor }) {
   const vendors = Array.isArray(vendorsData?.vendors) ? vendorsData.vendors : [];
   const vendorNames = vendorsData?.vendorNames || {};
   const vendorColumnKey = vendorsData?.vendorColumnKey || '';
-  const filterByColumn = readPoFilterByColumnForRccp();
+  const handoff = readPoRccpHandoff();
+  const filterByColumn = handoff?.filterByColumn || null;
+  const derivedVendor = handoff?.derivedVendor || '';
 
   const rccpVendor = resolveDefaultRccpVendorWithFallback({
-    vendors, vendorNames, filterByColumn, vendorColumnKey, lastVendor, lastVendorReady: true,
+    vendors, vendorNames, filterByColumn, vendorColumnKey, lastVendor, lastVendorReady: true, derivedVendor,
   }) || '';
 
   const biVendor = resolveDefaultRccpVendor({

@@ -90,6 +90,7 @@ const useStyles = makeStyles({
 
 export default function BoardSplitView({
   filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, tableFilter, children,
+  orderNumbers, derivedVendor,
 }) {
   const styles = useStyles();
   const setSplitRootNode = usePoTableZoomNode();
@@ -141,8 +142,9 @@ export default function BoardSplitView({
       vendorNames,
       vendorColumnKey: vendorColumnKey || 'vendorAccount',
       vendorsReady: !vendorsLoading,
+      derivedVendor,
     }),
-    [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading],
+    [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading, derivedVendor],
   );
   const rccpVendorReady = isSupplier || !vendorsLoading;
   // Item-filters blijven client-side op de al geladen analysis. Alleen vendor of
@@ -253,6 +255,7 @@ export default function BoardSplitView({
                   onItemClick={handleRccpItemClick}
                   planningDateMode={planningDateMode}
                   periodGrain={periodGrain}
+                  orderNumbers={orderNumbers}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />

@@ -12,7 +12,6 @@ import {
 } from './rccpPeriodGrain';
 import RccpPageHeader from './RccpPageHeader';
 import RccpDashboardCharts from './RccpDashboardCharts';
-import RccpDrillDownPanel from './RccpDrillDownPanel';
 import RccpSettingsFlyout from './RccpSettingsFlyout';
 import RccpVendorFilter from './RccpVendorFilter';
 import RccpCapacityPlanningTab from './RccpCapacityPlanningTab';
@@ -25,7 +24,7 @@ import {
   resolveDefaultRccpVendorWithFallback,
   resolveRccpVendorFromFilter,
 } from './resolveRccpVendorFilter';
-import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
+import { readPoRccpHandoff } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
@@ -56,9 +55,10 @@ export default function RccpPageContent() {
   // PO-tabelpagina? Bepaal dit één keer bij mount (los van of de vendorlijst al geladen is) —
   // zo weten we meteen of het zoekveld autofocus moet krijgen (geen PO-filter → gebruiker gaat
   // zelf zoeken) of niet (PO-filter aanwezig → vendor wordt automatisch voor-ingevuld).
-  const [hadPoFilterHandoff] = useState(() => (
-    Boolean(resolveRccpVendorFromFilter(readPoFilterByColumnForRccp()))
-  ));
+  const [hadPoFilterHandoff] = useState(() => {
+    const handoff = readPoRccpHandoff();
+    return Boolean(resolveRccpVendorFromFilter(handoff?.filterByColumn)) || Boolean(handoff?.derivedVendor);
+  });
 
   // hasVendor bepaalt of er daadwerkelijk data geladen wordt (en dus of chart/matrix/capacity
   // planning vullen) — pas waar wanneer er echt een vendor gekozen is, niet zodra het
@@ -81,9 +81,14 @@ export default function RccpPageContent() {
   // bewust ná useRccpPage: het leunt op windowLoaded/lastVendor uit die hook (TDZ voorkomen).
   useEffect(() => {
     if (isSupplier || vendorsLoading || vendorAccount !== null) return;
-    const filterByColumn = readPoFilterByColumnForRccp();
+    const handoff = readPoRccpHandoff();
     const resolved = resolveDefaultRccpVendorWithFallback({
-      vendors, vendorNames, filterByColumn, lastVendor, lastVendorReady: windowLoaded,
+      vendors,
+      vendorNames,
+      filterByColumn: handoff?.filterByColumn,
+      derivedVendor: handoff?.derivedVendor,
+      lastVendor,
+      lastVendorReady: windowLoaded,
     });
     // undefined = nog niet resolvable (geen PO-filter, lastVendor nog niet geladen) — geen state
     // zetten, effect draait opnieuw zodra windowLoaded true wordt.
@@ -103,7 +108,6 @@ export default function RccpPageContent() {
   // zodra hij/zij die vendor echt selecteert, komt de data al (grotendeels) uit cache.
   const handleHighlightVendor = useRccpVendorPrefetch(window, planningDateMode);
 
-  const [drillCell, setDrillCell] = useState(null);
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
   const capacityReloadRef = useRef(null);
 
@@ -150,12 +154,6 @@ export default function RccpPageContent() {
     }),
     [chartView.cellMap, filteredChart, measureRows, selectedItems],
   );
-
-  const handleCellClick = useCallback((cell) => {
-    if (cell) setDrillCell(cell);
-  }, []);
-
-  const handleCloseDrill = useCallback(() => setDrillCell(null), []);
 
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
@@ -252,8 +250,7 @@ export default function RccpPageContent() {
           chart={filteredChart}
           matrix={dashboardMatrix}
           visibility={chartVisibility}
-          interactive={periodGrain === RCCP_PERIOD_GRAIN_WEEK}
-          onCellClick={handleCellClick}
+          interactive={false}
           onShowDataWindow={handleShowDataWindow}
         />
       )}
@@ -268,14 +265,6 @@ export default function RccpPageContent() {
           onRegisterReload={handleRegisterCapacityReload}
         />
       )}
-
-      <RccpDrillDownPanel
-        open={Boolean(drillCell)}
-        cell={drillCell}
-        window={window}
-        planningDateMode={planningDateMode}
-        onClose={handleCloseDrill}
-      />
 
       {isAdmin && (
         <RccpSettingsFlyout

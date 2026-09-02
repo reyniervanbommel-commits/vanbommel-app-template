@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { makeStyles } from '@fluentui/react-components';
 import EmptyState from '../shared/EmptyState';
 import PurchaseOrdersBoardTable from './PurchaseOrdersBoardTable';
@@ -11,7 +11,13 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
-import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
+import { savePoRccpHandoff } from '../../utils/poVendorFilterHandoff';
+import {
+  collectOrderNumbers,
+  orderNumbersFingerprint,
+  orderNumbersIfSubset,
+  resolveSharedVendorFromOrders,
+} from '../../utils/poVisibleRccpScope';
 import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useDataPagesPrefetch } from '../../hooks/useDataPagesPrefetch';
 
@@ -50,12 +56,32 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
+  const orderNumbersCacheRef = useRef({ fingerprint: '', orderNumbers: [] });
+  const visibleOrderNumbers = useMemo(
+    () => {
+      const orderNumbers = collectOrderNumbers(boardView.processedItems);
+      const fingerprint = orderNumbersFingerprint(orderNumbers);
+      if (orderNumbersCacheRef.current.fingerprint !== fingerprint) {
+        orderNumbersCacheRef.current = { fingerprint, orderNumbers };
+      }
+      return orderNumbersCacheRef.current.orderNumbers;
+    },
+    [boardView.processedItems],
+  );
+  const rccpOrderNumbers = useMemo(
+    () => orderNumbersIfSubset(visibleOrderNumbers, pageModel.orders),
+    [visibleOrderNumbers, pageModel.orders],
+  );
+  const derivedVendor = useMemo(
+    () => resolveSharedVendorFromOrders(boardView.processedItems, { vendors: [], vendorNames: {} }),
+    [boardView.processedItems],
+  );
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
   // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
   useEffect(() => {
-    savePoFilterByColumnForRccp(boardView.filterByColumn);
-  }, [boardView.filterByColumn]);
+    savePoRccpHandoff({ filterByColumn: boardView.filterByColumn, derivedVendor });
+  }, [boardView.filterByColumn, derivedVendor]);
 
   // Zelfde fingerprint als BoardSplitView's `dataRevision` — zo hergebruikt de KPI-tab
   // (PoBoardKpiStrip) de idle-geprefetchte `getPoBoardKpis`-cache in plaats van een tweede call.
@@ -239,6 +265,8 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
           clearColumnFilter: boardView.clearColumnFilter,
         }}
         isStaff={isStaff}
+        orderNumbers={rccpOrderNumbers}
+        derivedVendor={derivedVendor}
       >
         <div className={styles.tableRegion}>
           <TrackChangesContext.Provider value={trackChangesMeta}>

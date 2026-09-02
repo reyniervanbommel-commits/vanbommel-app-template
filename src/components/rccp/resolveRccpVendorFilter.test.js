@@ -122,6 +122,17 @@ describe('resolveDefaultRccpVendorWithFallback', () => {
     });
     expect(result).toBe('V000696');
   });
+
+  it('uses derivedVendor before lastVendor', () => {
+    expect(resolveDefaultRccpVendorWithFallback({
+      vendors: ['V000583', 'V000696'],
+      vendorNames: {},
+      filterByColumn: null,
+      derivedVendor: 'V000696',
+      lastVendor: 'V000583',
+      lastVendorReady: true,
+    })).toBe('V000696');
+  });
 });
 
 describe('resolvePoBoardRccpVendor', () => {
@@ -169,5 +180,24 @@ describe('resolvePoBoardRccpVendor', () => {
       vendorsReady: false,
     });
     expect(result).toBe('V000622');
+  });
+
+  it('uses derivedVendor when there is no column vendor filter', () => {
+    expect(resolvePoBoardRccpVendor({
+      derivedVendor: 'V000696',
+      vendors: ['V000696'],
+      vendorNames: {},
+      vendorsReady: true,
+    })).toBe('V000696');
+  });
+
+  it('lets the column filter win over derivedVendor', () => {
+    expect(resolvePoBoardRccpVendor({
+      filterByColumn: { vendorAccount: { operator: 'equals', value: 'V000622' } },
+      derivedVendor: 'V000696',
+      vendors: ['V000622', 'V000696'],
+      vendorNames: {},
+      vendorsReady: true,
+    })).toBe('V000622');
   });
 });

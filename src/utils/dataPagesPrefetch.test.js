@@ -4,7 +4,10 @@ vi.mock('./poBoardKpiCache', () => ({ getPoBoardKpis: vi.fn() }));
 vi.mock('./rccpAnalysisPrefetch', () => ({ prefetchRccpAnalysis: vi.fn() }));
 vi.mock('./biBoardPrefetch', () => ({ prefetchBiDashboard: vi.fn() }));
 vi.mock('./api', () => ({ apiRequest: vi.fn() }));
-vi.mock('./poVendorFilterHandoff', () => ({ readPoFilterByColumnForRccp: vi.fn() }));
+vi.mock('./poVendorFilterHandoff', () => ({
+  readPoFilterByColumnForRccp: vi.fn(),
+  readPoRccpHandoff: vi.fn(),
+}));
 vi.mock('../components/rccp/RccpPage.jsx', () => ({ default: () => null }));
 vi.mock('../components/bi/BiPage.jsx', () => ({ default: () => null }));
 
@@ -12,7 +15,7 @@ import { getPoBoardKpis } from './poBoardKpiCache';
 import { prefetchRccpAnalysis } from './rccpAnalysisPrefetch';
 import { prefetchBiDashboard } from './biBoardPrefetch';
 import { apiRequest } from './api';
-import { readPoFilterByColumnForRccp } from './poVendorFilterHandoff';
+import { readPoFilterByColumnForRccp, readPoRccpHandoff } from './poVendorFilterHandoff';
 import { isPersistableRccpIsoWindow } from '../components/rccp/rccpUtils';
 import { kickDataPagesPrefetch, setDataPagesPrefetchParams, startDataPagesPrefetch } from './dataPagesPrefetch';
 
@@ -26,6 +29,7 @@ describe('startDataPagesPrefetch', () => {
     prefetchRccpAnalysis.mockResolvedValue({});
     prefetchBiDashboard.mockResolvedValue(undefined);
     readPoFilterByColumnForRccp.mockReturnValue(null);
+    readPoRccpHandoff.mockReturnValue(null);
     apiRequest.mockImplementation((path) => {
       if (path === '/rccp/vendors') return Promise.resolve(NO_VENDORS);
       throw new Error(`unexpected apiRequest(${path})`);
@@ -56,7 +60,9 @@ describe('startDataPagesPrefetch', () => {
   });
 
   it('resolves the RCCP vendor from the active PO column filter, not from lastVendor, when both exist', async () => {
-    readPoFilterByColumnForRccp.mockReturnValue({ vendorAccount: { operator: 'equals', value: 'V2' } });
+    const filterByColumn = { vendorAccount: { operator: 'equals', value: 'V2' } };
+    readPoFilterByColumnForRccp.mockReturnValue(filterByColumn);
+    readPoRccpHandoff.mockReturnValue({ filterByColumn, derivedVendor: '' });
     apiRequest.mockImplementation((path) => {
       if (path === '/rccp/vendors') return Promise.resolve({ vendors: ['V1', 'V2'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
       throw new Error(`unexpected apiRequest(${path})`);
@@ -80,6 +86,18 @@ describe('startDataPagesPrefetch', () => {
     expect(prefetchRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V1');
   });
 
+  it('uses the derived vendor from the PO handoff before lastVendor for RCCP prefetch', async () => {
+    readPoRccpHandoff.mockReturnValue({ filterByColumn: {}, derivedVendor: 'V2' });
+    apiRequest.mockImplementation((path) => {
+      if (path === '/rccp/vendors') return Promise.resolve({ vendors: ['V1', 'V2'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
+      throw new Error(`unexpected apiRequest(${path})`);
+    });
+
+    await startDataPagesPrefetch({ refreshKey: 'r-derived', lastVendor: 'V1', isoWindow: WINDOW });
+
+    expect(prefetchRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V2');
+  });
+
   it('skips the RCCP analysis prefetch when no vendor resolves at all', async () => {
     await startDataPagesPrefetch({ refreshKey: 'r2', lastVendor: '', isoWindow: WINDOW });
 
@@ -88,7 +106,9 @@ describe('startDataPagesPrefetch', () => {
   });
 
   it('passes the PO-filter vendor to prefetchBiDashboard as externalFilterByColumn (no lastVendor fallback for BI)', async () => {
-    readPoFilterByColumnForRccp.mockReturnValue({ vendorAccount: { operator: 'equals', value: 'V2' } });
+    const filterByColumn = { vendorAccount: { operator: 'equals', value: 'V2' } };
+    readPoFilterByColumnForRccp.mockReturnValue(filterByColumn);
+    readPoRccpHandoff.mockReturnValue({ filterByColumn, derivedVendor: '' });
     apiRequest.mockImplementation((path) => {
       if (path === '/rccp/vendors') return Promise.resolve({ vendors: ['V1', 'V2'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
       throw new Error(`unexpected apiRequest(${path})`);
@@ -103,6 +123,7 @@ describe('startDataPagesPrefetch', () => {
 
     prefetchBiDashboard.mockClear();
     readPoFilterByColumnForRccp.mockReturnValue(null);
+    readPoRccpHandoff.mockReturnValue(null);
     await startDataPagesPrefetch({ refreshKey: 'r-bi-nofilter', lastVendor: 'V1', isoWindow: WINDOW });
     expect(prefetchBiDashboard).toHaveBeenCalledWith({ externalFilterByColumn: undefined });
   });
@@ -163,6 +184,7 @@ describe('kickDataPagesPrefetch (rail-hover)', () => {
     prefetchRccpAnalysis.mockResolvedValue({});
     prefetchBiDashboard.mockResolvedValue(undefined);
     readPoFilterByColumnForRccp.mockReturnValue(null);
+    readPoRccpHandoff.mockReturnValue(null);
     apiRequest.mockImplementation((path) => {
       if (path === '/rccp/vendors') return Promise.resolve({ vendors: ['V9'], vendorNames: {}, vendorColumnKey: 'vendorAccount' });
       throw new Error(`unexpected apiRequest(${path})`);
