@@ -11,7 +11,12 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
-import { savePoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
+import { savePoRccpHandoff } from '../../utils/poVendorFilterHandoff';
+import {
+  collectOrderNumbers,
+  orderNumbersFingerprint,
+  resolveSharedVendorFromOrders,
+} from '../../utils/poVisibleRccpScope';
 import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useDataPagesPrefetch } from '../../hooks/useDataPagesPrefetch';
 
@@ -50,12 +55,20 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;
+  const visibleOrderNumbersFingerprint = useMemo(
+    () => orderNumbersFingerprint(collectOrderNumbers(boardView.processedItems)),
+    [boardView.processedItems],
+  );
+  const derivedVendor = useMemo(
+    () => resolveSharedVendorFromOrders(boardView.processedItems, { vendors: [], vendorNames: {} }),
+    [boardView.processedItems, visibleOrderNumbersFingerprint],
+  );
 
   // Geeft het actieve vendor-filter door aan de RCCP-pagina, zodat die bij openen
   // dezelfde vendor toont in plaats van standaard de eerste vendor uit de lijst.
   useEffect(() => {
-    savePoFilterByColumnForRccp(boardView.filterByColumn);
-  }, [boardView.filterByColumn]);
+    savePoRccpHandoff({ filterByColumn: boardView.filterByColumn, derivedVendor });
+  }, [boardView.filterByColumn, derivedVendor]);
 
   // Zelfde fingerprint als BoardSplitView's `dataRevision` — zo hergebruikt de KPI-tab
   // (PoBoardKpiStrip) de idle-geprefetchte `getPoBoardKpis`-cache in plaats van een tweede call.
