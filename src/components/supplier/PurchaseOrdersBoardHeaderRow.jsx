@@ -12,6 +12,7 @@ import { getPoHeaderConnectionTargets } from './poHeaderHoverModel';
 import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../utils/purchaseOrderProductImageColumn';
 import { isColumnCollapsed } from '../../utils/collapsedColumnUtils';
 import { buildColumnSumToggles } from './PurchaseOrderColumnSumToggles';
+import { getPoTableZoom } from '../../utils/poTableZoom';
 
 export default function PurchaseOrdersBoardHeaderRow({
   styles,
@@ -124,6 +125,7 @@ export default function PurchaseOrdersBoardHeaderRow({
             data-column-filtered={hasActiveFilter ? 'true' : undefined}
             width={headerColumnWidths[column.key]}
             minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
+            getScale={getPoTableZoom}
             className={[styles.headerCell, hasActiveFilter ? styles.headerCellFiltered : '', headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
             onResizeEnd={onSaveHeaderColumnWidth}
             cellStyle={stickyHeaderStyle}

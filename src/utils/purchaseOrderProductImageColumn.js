@@ -3,6 +3,7 @@ import {
   PURCHASE_ORDER_BOARD_ROW_HEIGHT_PX,
   PURCHASE_ORDER_SUB_ROW_HEIGHT_PX,
 } from '../components/supplier/purchaseOrderBoardLayout';
+import { poTableZoomedPx } from './poTableZoom';
 
 export const PRODUCT_IMAGE_COLUMN_KEY = '__productImage';
 export const DEFAULT_PRODUCT_IMAGE_COLUMN_WIDTH = 52;
@@ -24,8 +25,8 @@ export function getProductImageCellStyle(baseStyle, heightPx = PRODUCT_IMAGE_CEL
   return {
     ...(baseStyle || {}),
     padding: 0,
-    height: `${heightPx}px`,
-    maxHeight: `${heightPx}px`,
+    height: poTableZoomedPx(heightPx),
+    maxHeight: poTableZoomedPx(heightPx),
     verticalAlign: 'middle',
     overflow: 'hidden',
     lineHeight: 0,

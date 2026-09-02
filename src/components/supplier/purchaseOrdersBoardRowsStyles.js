@@ -1,4 +1,5 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 import {
   purchaseOrderBoardControlColumnWidth,
   purchaseOrderBoardHeaderHeight,
@@ -132,14 +133,14 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     flexShrink: 0,
   },
   itemCell: {
-    '--po-cell-padding-y': '2px',
-    '--po-cell-padding-x': '10px',
+    '--po-cell-padding-y': poTableZoomedPx(2),
+    '--po-cell-padding-x': poTableZoomedPx(10),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px', '10px'),
+    ...shorthands.padding(poTableZoomedPx(2), poTableZoomedPx(10)),
     height: purchaseOrderBoardRowHeight,
     maxHeight: purchaseOrderBoardRowHeight,
-    fontSize: tokens.fontSizeBase300,
+    fontSize: `calc(${tokens.fontSizeBase300} * var(--po-table-zoom, 0.85))`,
     color: tokens.colorNeutralForeground1,
     // A4: layout-isolatie per cel — voorkomt reflow-cascade bij ~500 cellen
     contain: 'layout',

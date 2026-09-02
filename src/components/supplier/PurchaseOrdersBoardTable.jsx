@@ -11,6 +11,7 @@ import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardL
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
 import { applyCollapsedColumnWidths } from '../../utils/collapsedColumnUtils';
+import { usePoTableZoomNode } from '../../hooks/usePoTableZoomNode';
 
 function PurchaseOrdersBoardTable({
   data,
@@ -208,6 +209,7 @@ function PurchaseOrdersBoardTable({
   const handleClearAllFilters = useCallback(() => {
     clearAllFilters?.();
   }, [clearAllFilters]);
+  const setFrameNode = usePoTableZoomNode();
 
   if (!items.length) {
     return <div className={styles.empty}>No data found</div>;
@@ -215,7 +217,7 @@ function PurchaseOrdersBoardTable({
 
   return (
     <>
-      <div className={styles.frame}>
+      <div className={styles.frame} ref={setFrameNode}>
         <div className={styles.wrapper} ref={wrapperRef}>
           <table className={styles.table}>
             <PurchaseOrdersBoardTableHeader

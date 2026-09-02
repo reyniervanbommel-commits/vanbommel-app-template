@@ -16,6 +16,7 @@ import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../util
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
 import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
 import { applyCollapsedColumnWidths, isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+import { getPoTableZoom } from '../../utils/poTableZoom';
 
 import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
@@ -280,6 +281,7 @@ export default function PurchaseOrdersSubitemsTable({
               columnKey={column.key}
               width={effectiveColumnWidths[column.key]}
               minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
+              getScale={getPoTableZoom}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',

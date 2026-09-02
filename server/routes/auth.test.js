@@ -255,12 +255,13 @@ describe('POST /reset-password', () => {
 });
 
 describe('GET /me', () => {
-  it('geeft de user uit de sessie terug', async () => {
+  it('geeft de user en globale tabelzoom uit de sessie terug', async () => {
     const session = { userId: 1, user: { id: 1, email: 'a@b.com' } };
 
     await withServer({ session }, async (baseUrl) => {
       const { data } = await getJson(baseUrl, '/api/auth/me');
       expect(data.user.email).toBe('a@b.com');
+      expect(data.poTableZoom).toBe(0.85);
     });
   });
 
