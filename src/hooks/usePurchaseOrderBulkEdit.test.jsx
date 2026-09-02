@@ -147,7 +147,7 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
     await waitFor(() => {
       expect(correctField).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', basedOnValue: 'Open' }));
     });
-    await waitFor(() => expect(result.current.job).toBeNull());
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
   it('stopt bij een fout, toont een samenvatting met updated/skipped/not-attempted en verwerpt de aanroep', async () => {
@@ -264,7 +264,7 @@ describe('usePurchaseOrderBulkEdit — correct-pad achtergrondjob (#AB:295)', ()
     await waitFor(() => expect(result.current.job?.failedRows).toHaveLength(1));
 
     await act(async () => { await result.current.retryRow('USMF|PO2'); });
-    await waitFor(() => expect(result.current.job).toBeNull());
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
   it('weiger een tweede job zolang de eerste loopt', async () => {
@@ -291,6 +291,6 @@ describe('usePurchaseOrderBulkEdit — correct-pad achtergrondjob (#AB:295)', ()
     });
 
     await act(async () => { release(); });
-    await waitFor(() => expect(result.current.job).toBeNull());
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 });

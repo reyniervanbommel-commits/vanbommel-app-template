@@ -10,12 +10,14 @@ import {
   Spinner,
   Text,
   makeStyles,
+  shorthands,
   tokens,
 } from '@fluentui/react-components';
 import { ErrorCircleRegular } from '@fluentui/react-icons';
 import { useBulkWriteBackJob } from '../../context/BulkWriteBackJobContext';
-import { JOB_RUNNING, isJobRunning, jobBadgeLabel } from '../../hooks/bulkWriteBackJobState';
+import { JOB_NEEDS_ATTENTION, JOB_RUNNING, isJobRunning, jobBadgeLabel } from '../../hooks/bulkWriteBackJobState';
 import PurchaseOrderBulkEditFailedRows from '../supplier/PurchaseOrderBulkEditFailedRows';
+import D365LogoIcon from '../supplier/D365LogoIcon';
 
 const useStyles = makeStyles({
   badgeButton: {
@@ -24,7 +26,26 @@ const useStyles = makeStyles({
   failedIcon: {
     color: tokens.colorPaletteRedForeground1,
   },
+  labelRow: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap('6px'),
+  },
 });
+
+function BadgeLabel({ label, styles }) {
+  const text = String(label || '');
+  const idx = text.toLowerCase().indexOf('write-back');
+  if (idx < 0) return text;
+  const end = idx + 'write-back'.length;
+  return (
+    <span className={styles.labelRow}>
+      {text.slice(0, end)}
+      <D365LogoIcon size="small" alt="" />
+      {text.slice(end)}
+    </span>
+  );
+}
 
 /**
  * Header-badge + resultaatpaneel voor de achtergrond D365 bulk-write-back.
@@ -44,6 +65,8 @@ export default function BulkWriteBackJobBadge() {
   } = useBulkWriteBackJob();
   const label = jobBadgeLabel(job);
   const running = isJobRunning(job);
+  const failed = job?.status === JOB_NEEDS_ATTENTION;
+  const displayLabel = retryingBulk && job?.status === JOB_RUNNING ? 'Retrying write-back' : label;
   const handleOpenChange = useCallback((_, data) => {
     if (data.open) {
       openPanel();
@@ -69,12 +92,12 @@ export default function BulkWriteBackJobBadge() {
         icon={
           running
             ? <Spinner size="tiny" />
-            : <ErrorCircleRegular className={styles.failedIcon} />
+            : (failed ? <ErrorCircleRegular className={styles.failedIcon} /> : undefined)
         }
         onClick={openPanel}
-        aria-label={label}
+        aria-label={displayLabel}
       >
-        {retryingBulk && job?.status === JOB_RUNNING ? 'Retrying write-back' : label}
+        <BadgeLabel label={displayLabel} styles={styles} />
       </Button>
       <Dialog open={panelOpen} onOpenChange={handleOpenChange}>
         <DialogSurface>

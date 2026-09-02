@@ -2,7 +2,9 @@ import { rowSelectionKey } from './usePurchaseOrderRowSelection';
 
 export const JOB_RUNNING = 'running';
 export const JOB_NEEDS_ATTENTION = 'needsAttention';
+export const JOB_SUCCESS = 'success';
 export const LARGE_BULK_SELECTION = 25;
+export const SUCCESS_HOLD_MS = 5000;
 
 export function buildCorrectSummaryMessage({ updated, skipped, failedCount }) {
   return `Bulk edit finished. Updated: ${updated}. Skipped: ${skipped}. Failed: ${failedCount}.`;
@@ -39,6 +41,9 @@ export function jobBadgeLabel(job) {
   if (!job) return '';
   if (job.status === JOB_RUNNING) {
     return `Write-back ${job.processed}/${job.total}`;
+  }
+  if (job.status === JOB_SUCCESS) {
+    return 'Write-back complete';
   }
   const failedCount = job.failedRows?.length || 0;
   if (job.status === JOB_NEEDS_ATTENTION && failedCount) {

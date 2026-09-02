@@ -13,6 +13,8 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     minWidth: 0,
     width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
     position: 'relative',
   },
   input: {
@@ -212,6 +214,17 @@ export default function PurchaseOrderWriteBackCell({
     }
   }, [value, column]);
 
+  const showSpinner = status === 'saving' || jobLock.status === 'writing';
+  const showSaved = status === 'saved' && !jobLock.status;
+  const errorMessage = jobLock.status === 'failed' ? (jobLock.errorMessage || error) : error;
+  const statusAfter = showSpinner
+    ? <Spinner size="extra-tiny" aria-label="Write back" />
+    : showSaved
+      ? <span className={styles.saved}>✓</span>
+      : (status === 'error' || jobLock.status === 'failed')
+        ? <ErrorCircleRegular className={styles.errIcon} title={errorMessage || undefined} />
+        : undefined;
+
   const inputControl = isDate ? (
     <WeekNumberCalendarPopover
       open={calendarOpen}
@@ -228,6 +241,7 @@ export default function PurchaseOrderWriteBackCell({
         inputMode="numeric"
         value={local}
         disabled={locked}
+        contentAfter={statusAfter}
         aria-label={`${column.label} (write back to D365)`}
         onChange={(_, data) => setLocal(data.value)}
         onBlur={() => commit(local)}
@@ -244,16 +258,13 @@ export default function PurchaseOrderWriteBackCell({
       type={column.dataType === 'number' ? 'number' : 'text'}
       value={local}
       disabled={locked}
+      contentAfter={statusAfter}
       aria-label={`${column.label} (write back to D365)`}
       onChange={(_, data) => setLocal(data.value)}
       onBlur={() => commit(local)}
       onKeyDown={onKeyDown}
     />
   );
-
-  const showSpinner = status === 'saving' || jobLock.status === 'writing';
-  const showSaved = status === 'saved' && !jobLock.status;
-  const errorMessage = jobLock.status === 'failed' ? (jobLock.errorMessage || error) : error;
 
   return (
     <span className={mergeClasses(styles.cell, jobLock.status === 'queued' ? styles.queued : undefined)}>
@@ -264,11 +275,6 @@ export default function PurchaseOrderWriteBackCell({
       ) : (
         inputControl
       )}
-      {showSpinner ? <Spinner size="extra-tiny" aria-label="Write back" /> : null}
-      {showSaved ? <span className={styles.saved}>✓</span> : null}
-      {status === 'error' || jobLock.status === 'failed' ? (
-        <ErrorCircleRegular className={styles.errIcon} title={errorMessage || undefined} />
-      ) : null}
     </span>
   );
 }

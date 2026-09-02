@@ -3,6 +3,7 @@ import {
   LARGE_BULK_SELECTION,
   JOB_NEEDS_ATTENTION,
   JOB_RUNNING,
+  JOB_SUCCESS,
   buildCorrectSummaryMessage,
   cellLockStatus,
   jobBadgeLabel,
@@ -51,6 +52,10 @@ describe('jobBadgeLabel', () => {
       status: JOB_NEEDS_ATTENTION,
       failedRows: [{ key: 'a' }, { key: 'b' }],
     })).toBe('Write-back: 2 failed');
+  });
+
+  it('toont gelukt in dezelfde badge-slot', () => {
+    expect(jobBadgeLabel({ status: JOB_SUCCESS })).toBe('Write-back complete');
   });
 });
 

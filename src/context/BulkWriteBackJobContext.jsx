@@ -13,6 +13,8 @@ import { usePurchaseOrderBulkEditRetry } from '../hooks/usePurchaseOrderBulkEdit
 import {
   JOB_NEEDS_ATTENTION,
   JOB_RUNNING,
+  JOB_SUCCESS,
+  SUCCESS_HOLD_MS,
   buildCorrectSummaryMessage,
   isJobRunning,
   orderKeysFromCandidates,
@@ -43,18 +45,48 @@ function applyJobUpdate(setJob, jobRef, updater) {
  * Input: children. Output: startCorrectJob, job-state, retry, panel-acties.
  */
 export function BulkWriteBackJobProvider({ children }) {
-  const { notifyError, notifySuccess } = useAppToast();
+  const { notifyError } = useAppToast();
   const [job, setJob] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const jobRef = useRef(null);
   const runSingleUpdateRef = useRef(null);
   const generationRef = useRef(0);
+  const successTimerRef = useRef(null);
+
+  const clearSuccessTimer = useCallback(() => {
+    if (successTimerRef.current) {
+      window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+  }, []);
+
+  const showSuccess = useCallback((baseJob, summaryMessage) => {
+    const next = {
+      ...baseJob,
+      status: JOB_SUCCESS,
+      currentKey: null,
+      failedRows: [],
+      summaryMessage,
+    };
+    jobRef.current = next;
+    setJob(next);
+    setPanelOpen(false);
+    clearSuccessTimer();
+    successTimerRef.current = window.setTimeout(() => {
+      if (jobRef.current?.status === JOB_SUCCESS) {
+        jobRef.current = null;
+        setJob(null);
+      }
+      successTimerRef.current = null;
+    }, SUCCESS_HOLD_MS);
+  }, [clearSuccessTimer]);
 
   const startCorrectJob = useCallback(({ payload, rows, columnLabel, runSingleUpdate }) => {
     if (isJobRunning(jobRef.current)) {
       notifyError('A write-back is already running. Wait until it finishes.');
       return false;
     }
+    clearSuccessTimer();
     runSingleUpdateRef.current = runSingleUpdate;
     const candidates = (Array.isArray(rows) ? rows : []).map((row) => ({
       dataAreaId: row.dataAreaId,
@@ -114,10 +146,7 @@ export function BulkWriteBackJobProvider({ children }) {
         failedCount: failedRows.length,
       });
       if (failedRows.length === 0) {
-        notifySuccess(summaryMessage);
-        jobRef.current = null;
-        setJob(null);
-        setPanelOpen(false);
+        showSuccess(jobRef.current || { updated, skipped }, summaryMessage);
         return;
       }
       applyJobUpdate(setJob, jobRef, (prev) => (prev ? {
@@ -131,21 +160,18 @@ export function BulkWriteBackJobProvider({ children }) {
       } : prev));
     })();
     return true;
-  }, [notifyError, notifySuccess]);
+  }, [clearSuccessTimer, notifyError, showSuccess]);
 
   const handleFailedRowsChange = useCallback((updateFailedRows) => {
     const prev = jobRef.current;
     if (!prev) return;
     const failedRows = updateFailedRows(prev.failedRows || []);
     if (!failedRows.length) {
-      const summaryMessage = buildCorrectSummaryMessage({
+      showSuccess(prev, buildCorrectSummaryMessage({
         updated: prev.updated,
         skipped: prev.skipped,
         failedCount: 0,
-      });
-      jobRef.current = null;
-      setJob(null);
-      notifySuccess(summaryMessage);
+      }));
       return;
     }
     applyJobUpdate(setJob, jobRef, (current) => {
@@ -160,7 +186,7 @@ export function BulkWriteBackJobProvider({ children }) {
         }),
       };
     });
-  }, [notifySuccess]);
+  }, [showSuccess]);
 
   const runSingleUpdate = useCallback(
     (...args) => runSingleUpdateRef.current?.(...args),
@@ -182,7 +208,8 @@ export function BulkWriteBackJobProvider({ children }) {
     } finally {
       applyJobUpdate(setJob, jobRef, (prev) => {
         if (!prev) return null;
-        if (!(prev.failedRows || []).length) return null;
+        if (prev.status === JOB_SUCCESS) return prev;
+        if (!(prev.failedRows || []).length) return prev;
         return { ...prev, status: JOB_NEEDS_ATTENTION, currentKey: null };
       });
     }
@@ -202,10 +229,13 @@ export function BulkWriteBackJobProvider({ children }) {
   const dismissJob = useCallback(() => {
     if (isJobRunning(jobRef.current)) return;
     generationRef.current += 1;
+    clearSuccessTimer();
     jobRef.current = null;
     setJob(null);
     setPanelOpen(false);
-  }, []);
+  }, [clearSuccessTimer]);
+
+  useEffect(() => () => clearSuccessTimer(), [clearSuccessTimer]);
 
   useEffect(() => {
     if (!isJobRunning(job)) return undefined;
