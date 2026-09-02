@@ -18,6 +18,9 @@ import { startTransition, useEffect, useMemo, useState } from 'react';
  * @param {object}   params.columnWidths                   Width per column key (px numbers).
  * @param {number}   [params.overscanCols]                 Extra columns left/right of viewport.
  * @param {boolean}  [params.enabled]                      Disable to render all columns.
+ * @param {() => number} [params.getScale]                 Current visual scale for stored widths.
+ * @param {((listener: () => void) => (() => void)|void)|null} [params.subscribeScale]
+ *                                                           Subscribe to visual scale changes.
  * @returns {{ colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount }}
  */
 
@@ -92,6 +95,8 @@ export function useBoardColumnWindow({
   columnWidths,
   overscanCols = 2,
   enabled = true,
+  getScale = () => 1,
+  subscribeScale = null,
 }) {
   const totalCols = columns.length;
   const pinnedCount = useMemo(() => countLeadingStickyColumns(columns), [columns]);
@@ -122,8 +127,10 @@ export function useBoardColumnWindow({
     }
 
     const update = () => {
+      const scale = typeof getScale === 'function' ? getScale() : 1;
+      const visualOffsets = scale === 1 ? offsets : offsets.map((value) => value * scale);
       const next = computeBoardColumnWindow({
-        offsets,
+        offsets: visualOffsets,
         totalCols,
         scrollLeft: el.scrollLeft,
         viewW: el.clientWidth || 1200,
@@ -148,11 +155,24 @@ export function useBoardColumnWindow({
 
     update();
     el.addEventListener('scroll', scheduleUpdate, { passive: true });
+    const unsubscribe = typeof subscribeScale === 'function'
+      ? subscribeScale(scheduleUpdate)
+      : null;
     return () => {
       el.removeEventListener('scroll', scheduleUpdate);
+      unsubscribe?.();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [enabled, offsets, overscanCols, pinnedCount, scrollRef, totalCols]);
+  }, [
+    enabled,
+    getScale,
+    offsets,
+    overscanCols,
+    pinnedCount,
+    scrollRef,
+    subscribeScale,
+    totalCols,
+  ]);
 
   if (!enabled) {
     return {
