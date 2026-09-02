@@ -35,6 +35,23 @@ describe('PurchaseOrderColumnFilterValuePicker — single mode', () => {
     expect(onChange).toHaveBeenLastCalledWith('Acme');
   });
 
+  it('toont Open order voor Backorder maar committeert de opgeslagen waarde', () => {
+    const onChange = vi.fn();
+    const formatDisplay = (value) => (value === 'Backorder' ? 'Open order' : String(value));
+    renderPicker({
+      mode: 'single',
+      value: '',
+      onChange,
+      uniqueValues: ['Backorder', 'Invoiced'],
+      formatDisplay,
+    });
+    const input = screen.getByLabelText(/Filter value for Vendor/i);
+    fireEvent.focus(input);
+    expect(screen.getByRole('option', { name: 'Open order' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'Open order' }));
+    expect(onChange).toHaveBeenLastCalledWith('Backorder');
+  });
+
   it('neemt bij plakken alleen de eerste regel over', () => {
     const onChange = vi.fn();
     renderPicker({ mode: 'single', value: '', onChange, uniqueValues: [] });

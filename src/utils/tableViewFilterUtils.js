@@ -5,6 +5,7 @@
 
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
 import { dateMatchesFilter } from './dateFilterUtils';
+import { formatPurchStatusDisplay, isPurchaseOrderStatusColumn } from './purchStatusDisplay';
 
 // Kleurfilter (client-only): matcht op de getoonde celkleur (status/conditional
 // formatting). Bewust NIET onderdeel van columnValueMatchesFilter, want kleur wordt
@@ -210,6 +211,10 @@ export function columnValueMatchesFilter(column, rawValue, filter, datePeriodDis
   if (column?.dataType === 'remarks') return true;
   if (isDateColumn(column)) return dateMatchesFilter(rawValue, filter);
   if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) return numberMatchesFilter(rawValue, filter);
+  if (isPurchaseOrderStatusColumn(column)) {
+    const display = formatPurchStatusDisplay(rawValue);
+    return textMatchesFilter(rawValue, filter) || textMatchesFilter(display, filter);
+  }
   return textMatchesFilter(rawValue, filter);
 }
 

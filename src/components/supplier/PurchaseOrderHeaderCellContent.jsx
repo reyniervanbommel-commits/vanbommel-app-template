@@ -231,7 +231,7 @@ function PurchaseOrderHeaderCellContent({
   // Gekoppelde totaal-kolommen staan al in order.values: de waarde komt uit de board-read.
   const display = linkedLineTotalColumnKey
     ? formatCellValue(rawValue, column.dataType)
-    : formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label });
+    : formatCellValue(rawValue, column.dataType, column);
   const rawDisplayNode = isFormulaColumn
     ? (
       <span className={formulaError ? styles.formulaError : undefined} title={formulaError || undefined}>

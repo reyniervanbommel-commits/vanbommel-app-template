@@ -15,6 +15,7 @@ import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFil
 import { getDraftFromFilter, isDateColumn, isNumberColumn, REMARKS_FILTER_OPERATORS } from './purchaseOrderColumnFilterMenuConstants';
 import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
+import { formatColumnUniqueValue } from '../../utils/purchStatusDisplay';
 import { measureSync } from '../../utils/perf';
 import {
   DATE_FILTER_OPERATORS,
@@ -134,6 +135,8 @@ export default function PurchaseOrdersActiveFilterEditor({
     setDraft((prev) => ({ ...prev, value: nextValue }));
   }, []);
 
+  const formatUniqueValue = useCallback((value) => formatColumnUniqueValue(column, value), [column]);
+
   const handleSecondaryValueChange = useCallback((event) => {
     setDraft((prev) => ({ ...prev, secondaryValue: event.target.value }));
   }, []);
@@ -186,6 +189,7 @@ export default function PurchaseOrdersActiveFilterEditor({
             uniqueValues={uniqueColumnValues}
             isNumber={isNumber}
             columnLabel={columnLabel}
+            formatDisplay={formatUniqueValue}
           />
         </Field>
       ) : null}

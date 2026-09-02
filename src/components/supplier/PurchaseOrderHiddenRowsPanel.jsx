@@ -17,6 +17,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { EyeOffRegular, ArrowResetRegular } from '@fluentui/react-icons';
+import { formatCellValue } from '../../utils/purchaseOrderFormat';
 
 const useStyles = makeStyles({
   trigger: {
@@ -73,15 +74,6 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
 });
-
-// Formatteert een celwaarde uit de hidden-rows API voor weergave.
-function formatValue(value, dataType) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (dataType === 'date' && typeof value === 'string' && value.length >= 10) return value.slice(0, 10);
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
 
 // Toont hoeveel verwijderde (verborgen) orders nog binnen de harde D365-filter vallen, in een
 // tabel met de kolommen die admin op de Data model-pagina heeft aangezet (visible at delete),
@@ -146,7 +138,7 @@ function PurchaseOrderHiddenRowsPanel({ hiddenRows, columns = [], count, loading
                   <TableRow key={`${row.dataAreaId}|${row.orderNumber}`}>
                     <TableCell className={styles.orderCell}>{row.orderNumber}</TableCell>
                     {columns.map((column) => {
-                      const text = formatValue(row.values?.[column.key], column.dataType);
+                      const text = formatCellValue(row.values?.[column.key], column.dataType, column);
                       return (
                         <TableCell key={column.key} className={styles.cell} title={text}>
                           {text}

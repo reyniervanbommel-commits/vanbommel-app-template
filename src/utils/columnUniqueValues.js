@@ -37,11 +37,16 @@ export function getUniqueColumnValues(column, items, columns, filterByColumn, da
 
 /**
  * Filtert een al berekende unieke-waardenlijst op een zoekterm en kapt af op `limit`.
+ * `formatDisplay` is optioneel: er wordt ook op het weergavelabel gematcht.
  */
-export function getValueSuggestions(uniqueValues, query, limit = UNIQUE_VALUE_SUGGESTION_LIMIT) {
+export function getValueSuggestions(uniqueValues, query, limit = UNIQUE_VALUE_SUGGESTION_LIMIT, formatDisplay = null) {
   const normalizedQuery = String(query || '').trim().toLowerCase();
   const matches = normalizedQuery
-    ? uniqueValues.filter((value) => String(value).toLowerCase().includes(normalizedQuery))
+    ? uniqueValues.filter((value) => {
+      const raw = String(value).toLowerCase();
+      const display = String(typeof formatDisplay === 'function' ? formatDisplay(value) : value).toLowerCase();
+      return raw.includes(normalizedQuery) || display.includes(normalizedQuery);
+    })
     : uniqueValues;
   return {
     items: matches.slice(0, limit),
