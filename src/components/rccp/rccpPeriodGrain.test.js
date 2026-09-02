@@ -6,6 +6,7 @@ import {
   RCCP_PLANNING_DATE_CONFIRMED,
   RCCP_PLANNING_DATE_REQUESTED,
   monthBucketFromIsoWeek,
+  parseRccpPeriodGrain,
   parseRccpPlanningDateMode,
   resolveRccpChartView,
 } from './rccpPeriodGrain';
@@ -103,6 +104,41 @@ describe('resolveRccpChartView', () => {
     expect(view.cellMap.get('open|2026|3').statusColor).toBe('red');
   });
 
+  it('groups remaining above ordered when weeks roll into a month', () => {
+    const view = resolveRccpChartView({
+      grain: RCCP_PERIOD_GRAIN_MONTH,
+      periods: [
+        { year: 2026, week: 10, key: '2026-W10' },
+        { year: 2026, week: 11, key: '2026-W11' },
+      ],
+      chart: [
+        {
+          key: '2026-W10', year: 2026, week: 10, open: 6,
+          segmentsAbove: [
+            { itemNumber: 'B', qty: 3, status: 'ordered' },
+            { itemNumber: 'B', qty: 2, status: 'open' },
+          ],
+          segmentsBelow: [],
+        },
+        {
+          key: '2026-W11', year: 2026, week: 11, open: 6,
+          segmentsAbove: [
+            { itemNumber: 'A', qty: 4, status: 'ordered' },
+            { itemNumber: 'A', qty: 4, status: 'open' },
+          ],
+          segmentsBelow: [],
+        },
+      ],
+      cells: [],
+    });
+    expect(view.chart[0].segmentsAbove.map((seg) => `${seg.itemNumber}:${seg.status}`)).toEqual([
+      'A:ordered',
+      'B:ordered',
+      'A:open',
+      'B:open',
+    ]);
+  });
+
   it('marks a month overloaded when summed load exceeds summed capacity', () => {
     const view = resolveRccpChartView({
       grain: RCCP_PERIOD_GRAIN_MONTH,
@@ -114,6 +150,16 @@ describe('resolveRccpChartView', () => {
       cells: [],
     });
     expect(view.chart[0].__overloaded__).toBe(true);
+  });
+});
+
+describe('parseRccpPeriodGrain', () => {
+  it('defaults to week and only accepts month', () => {
+    expect(parseRccpPeriodGrain(undefined)).toBe(RCCP_PERIOD_GRAIN_WEEK);
+    expect(parseRccpPeriodGrain('week')).toBe(RCCP_PERIOD_GRAIN_WEEK);
+    expect(parseRccpPeriodGrain('month')).toBe(RCCP_PERIOD_GRAIN_MONTH);
+    expect(parseRccpPeriodGrain('MONTH')).toBe(RCCP_PERIOD_GRAIN_MONTH);
+    expect(parseRccpPeriodGrain('other')).toBe(RCCP_PERIOD_GRAIN_WEEK);
   });
 });
 

@@ -110,7 +110,7 @@ function renderLineCellContent({
     return (
       <span className={showLineBadge ? styles.statusWrap : undefined}>
         <span className={styles.removedText}>
-          {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
+          {formatCellValue(rawValue, column.dataType, column)}
         </span>
         {showLineBadge ? lineBadge : null}
       </span>
@@ -218,7 +218,7 @@ function renderLineCellContent({
         className={line?.isRemoved ? styles.removedText : undefined}
         style={isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined}
       >
-        {formatCellValue(rawValue, column.dataType, { columnKey: column.key, columnLabel: column.label })}
+        {formatCellValue(rawValue, column.dataType, column)}
       </span>
       {showLineBadge ? lineBadge : null}
     </span>

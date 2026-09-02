@@ -37,6 +37,13 @@ describe('usePurchaseOrderGrouping', () => {
     expect(openGroup.entries).toHaveLength(2);
   });
 
+  it('toont Backorder als Open order in de groepnaam', () => {
+    const rows = [row({ status: 'Backorder' }), row({ status: 'Invoiced' })];
+    const { result } = renderHook(() => usePurchaseOrderGrouping({ rows, columns: COLUMNS }));
+    const groupNames = result.current.groupedRows.map((g) => g.groupName).sort();
+    expect(groupNames).toEqual(['Invoiced', 'Open order']);
+  });
+
   it('geeft één ongegroepeerde bucket met alle rijen als er geen status-kolom is', () => {
     const { result } = renderHook(() => usePurchaseOrderGrouping({ rows: ROWS, columns: COLUMNS_WITHOUT_STATUS }));
 

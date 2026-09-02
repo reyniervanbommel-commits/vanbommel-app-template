@@ -1,53 +1,49 @@
 # Performance Review — 2026-09-02
 
 **Modus:** regression (PO-board hot path) — **static only**
-**Omgeving:** local (5178) draait v1.52.126 (niet deze branch); preview timeout
-**Baseline:** niet hermeten
+**Omgeving:** local/preview niet gemeten voor #295; #302 preview niet ingelogd
+**Baseline:** aanwezig — **niet hermeten**
 **Verdict:** NIET MEETBAAR
 
 ---
 
 ## 1. Ranglijst
 
-Geen runtime-meting. Deze run is statische analyse van de #295-diff.
+Geen runtime-meting.
 
 ---
 
 ## 2. Bevindingen
 
-### B1 — Context-updates op elke rij · geschatte winst n.v.t. (bewust)
+### B1 — Context-updates op elke rij (#295)
 
-- **Gemeten:** niet gemeten
-- **Toegerekend aan:** client render
-- **Oorzaak:** `BulkWriteBackJobProvider` zet job-state na elke sequentiële D365-PATCH; alle `useWriteBackCellLock`-cellen hertekenen
+- **Oorzaak:** job-state na elke sequentiële D365-PATCH; write-back-cellen hertekenen
 - **Plek:** `src/context/BulkWriteBackJobContext.jsx`, `src/hooks/useWriteBackCellLock.js`
-- **Voorstel:** acceptabel zolang D365 sequentieel is (netwerk >> render). Virtualisatie ontbreekt al op het board
-- **Afweging:** finer-grained context selectors zouden minder cellen raken, extra complexiteit
+- **Afweging:** netwerk >> render zolang D365 sequentieel blijft
 
-### B2 — Geen extra API-patroon
+### B2 — Sequentiële D365-fan-out per PO (#302)
 
-- Bulk blijft één `correct`-call per rij via bestaande `apiRequest` / `POST /correct`
-- Geen extra fetch in render-loops
-- Save-pad ongewijzigd (blokkerend)
+- **Plek:** `TableDataService.correctAllDetailFields`, bulk `correctAll` blijft blokkerend
+- Geen extra board-read per rij
 
 ---
 
 ## 3. Meetgaten
 
-| Actie / route | Ongemeten deel | Voorgestelde instrumentatie |
-|---------------|---------------:|-----------------------------|
-| Bulk background job | Client-loop duur | optioneel `measure('bulk_writeback_job', …)` rond `runCorrectRows` |
-| `POST /correct` | al via `apiRequest` + Server-Timing `app` | geen |
+| Actie / route | Ongemeten deel |
+|---------------|----------------|
+| Bulk background job | client-loop |
+| POST `…/correct-all-details` | HUD na login |
 
 ---
 
 ## 4. Baseline
 
-Ongewijzigd — geen hermeting.
+`test-reports/perf-baseline.json` — ongewijzigd.
 
 ---
 
 ## 5. Aantekeningen
 
-- Sequentiële D365 is bewust (rate limits); 300 rijen blijven minuten werk
+- Sequentiële D365 is bewust (rate limits)
 - Job overleeft navigatie binnen de SPA; tab-sluiten stopt de lus

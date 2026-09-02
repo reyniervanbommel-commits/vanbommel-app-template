@@ -18,6 +18,8 @@ const {
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
+  isSentinelDate,
+  collectDateSlots,
   collectPlanningSlots,
   parsePlanningDateMode,
   planningDateValue,
@@ -39,6 +41,35 @@ function collectInWindowSlots(details, masterValues, config, window, excludedSet
     masterStatus,
     planningDateMode,
   );
+}
+
+function isDeliveredMeasure(config, measureKey) {
+  const deliveredKey = String(config.deliveredMeasureKey || '').trim();
+  return Boolean(deliveredKey && measureKey === deliveredKey);
+}
+
+/** Receipt week when that date exists; otherwise the planning week (same as the chart stack below). */
+function deliveredBucketDate(lineValues, masterValues, config, plannedDate) {
+  const receiptKey = String(config.receiptDateColumnKey || '').trim();
+  const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
+  if (rawReceipt && !isSentinelDate(rawReceipt)) return rawReceipt;
+  return plannedDate && !isSentinelDate(plannedDate) ? plannedDate : null;
+}
+
+function collectDeliveredSlots(details, masterValues, config, window, excludedSet, masterStatus, dateMode) {
+  const receiptKey = String(config.receiptDateColumnKey || '').trim();
+  const receiptSlots = receiptKey
+    ? collectDateSlots(details, masterValues, receiptKey, null, window, excludedSet, masterStatus)
+    : [];
+  if (receiptSlots.length) return receiptSlots;
+  return collectInWindowSlots(details, masterValues, config, window, excludedSet, masterStatus, dateMode);
+}
+
+function measureSlots(details, masterValues, config, window, excludedSet, masterStatus, dateMode, measureKey) {
+  if (isDeliveredMeasure(config, measureKey)) {
+    return collectDeliveredSlots(details, masterValues, config, window, excludedSet, masterStatus, dateMode);
+  }
+  return collectInWindowSlots(details, masterValues, config, window, excludedSet, masterStatus, dateMode);
 }
 
 function cellKey(vendor, year, week, measureKey) {
@@ -151,10 +182,10 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
         return;
       }
 
-      let dateValue = planningDateValue(
+      const plannedDate = planningDateValue(
         lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode,
       );
-      if (!dateValue) {
+      if (!plannedDate) {
         diagnostics.missingDateLines += 1;
         missingDates.push({
           orderNumber: row.recordKey,
@@ -166,20 +197,29 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
         return;
       }
 
-      const year = getIsoWeekYear(dateValue);
-      const week = getIsoWeek(dateValue);
-      if (!year || !week) return;
+      const plannedYear = getIsoWeekYear(plannedDate);
+      const plannedWeek = getIsoWeek(plannedDate);
+      if (!plannedYear || !plannedWeek) return;
 
-      const inWindow = isIsoWeekInWindow(year, week, window);
+      const plannedInWindow = isIsoWeekInWindow(plannedYear, plannedWeek, window);
       let hasQty = false;
       lineMeasures.forEach((measure) => {
         const qty = measureQty(measure);
         if (qty <= 0) return;
         hasQty = true;
+        const dateValue = isDeliveredMeasure(config, measure.columnKey)
+          ? deliveredBucketDate(lineValues, masterValues, config, plannedDate)
+          : plannedDate;
+        if (!dateValue) return;
+        const year = getIsoWeekYear(dateValue);
+        const week = getIsoWeek(dateValue);
+        if (!year || !week) return;
         noteDataRange(vendor, year, week);
-        if (inWindow) addLoad(vendor, year, week, measure.columnKey, qty);
+        if (isIsoWeekInWindow(year, week, window)) {
+          addLoad(vendor, year, week, measure.columnKey, qty);
+        }
       });
-      if (!inWindow) {
+      if (!plannedInWindow) {
         diagnostics.outOfWindowLines += 1;
         return;
       }
@@ -195,13 +235,14 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
     }
 
     if (!headerOnlyKeys.size) continue;
-    const slots = collectInWindowSlots(
-      details, masterValues, config, window, excludedSet, masterStatus, dateMode,
-    );
     for (const measure of measures) {
       if (!headerOnlyKeys.has(measure.columnKey)) continue;
       const total = toNumber(pickValue(masterValues, measure.columnKey));
-      if (total <= 0 || !slots.length) continue;
+      if (total <= 0) continue;
+      const slots = measureSlots(
+        details, masterValues, config, window, excludedSet, masterStatus, dateMode, measure.columnKey,
+      );
+      if (!slots.length) continue;
       const shareQty = total / slots.length;
       for (const slot of slots) {
         addLoad(vendor, slot.year, slot.week, measure.columnKey, shareQty);
@@ -550,8 +591,8 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
     const share = details.length ? 1 / details.length : 1;
 
     if (isHeaderOnlyMeasure(details, masterValues, measureKey)) {
-      const slots = collectInWindowSlots(
-        details, masterValues, config, window, excludedSet, masterStatus, dateMode,
+      const slots = measureSlots(
+        details, masterValues, config, window, excludedSet, masterStatus, dateMode, measureKey,
       );
       const total = toNumber(pickValue(masterValues, measureKey));
       if (total <= 0 || !slots.length) continue;
@@ -570,6 +611,16 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
       }
       continue;
     }
+
+    const lineBucketDate = (lineValues) => {
+      const plannedDate = planningDateValue(
+        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode,
+      );
+      if (isDeliveredMeasure(config, measureKey)) {
+        return deliveredBucketDate(lineValues, masterValues, config, plannedDate);
+      }
+      return plannedDate;
+    };
 
     const pushLine = (lineNumber, lineValues, dateValue, dateFromHeader) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
@@ -596,23 +647,17 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
     };
 
     if (!details.length) {
-      pushLine(
-        null,
-        masterValues,
-        planningDateValue(masterValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode),
-        true,
-      );
+      pushLine(null, masterValues, lineBucketDate(masterValues), true);
       continue;
     }
 
     for (const detail of details) {
       const lineValues = detail.values || {};
-      const dateValue = planningDateValue(
-        lineValues, masterValues, config.dateColumnKey, config.confirmedDateColumnKey, dateMode,
-      );
+      const dateValue = lineBucketDate(lineValues);
       const dateFromHeader = Boolean(dateValue)
         && !pickValue(lineValues, config.dateColumnKey)
-        && !pickValue(lineValues, config.confirmedDateColumnKey);
+        && !pickValue(lineValues, config.confirmedDateColumnKey)
+        && !pickValue(lineValues, config.receiptDateColumnKey);
       pushLine(detail.detailKey, lineValues, dateValue, dateFromHeader);
     }
   }

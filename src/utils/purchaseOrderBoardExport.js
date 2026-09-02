@@ -22,10 +22,7 @@ export function getExportableColumns(columns) {
 
 function formatExportCell(rawValue, column) {
   if (rawValue === null || rawValue === undefined || rawValue === '') return '';
-  return formatCellValue(rawValue, column.dataType, {
-    columnKey: column.key,
-    columnLabel: column.label,
-  });
+  return formatCellValue(rawValue, column.dataType, column);
 }
 
 /**

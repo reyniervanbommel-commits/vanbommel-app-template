@@ -23,6 +23,7 @@ export default function PurchaseOrderColumnFilterValuePicker({
   uniqueValues = [],
   isNumber = false,
   columnLabel,
+  formatDisplay,
 }) {
   const styles = usePurchaseOrderColumnFilterValuePickerStyles();
   const [inputText, setInputText] = useState('');
@@ -35,15 +36,18 @@ export default function PurchaseOrderColumnFilterValuePicker({
   }, [value, isMulti]);
 
   const chips = isMulti && Array.isArray(value) ? value : [];
+  const displayOf = useCallback((raw) => (
+    typeof formatDisplay === 'function' ? formatDisplay(raw) : String(raw ?? '')
+  ), [formatDisplay]);
 
   // Suggesties alleen tonen als het veld actief gefocust is, zodat bij reopen van
   // de filtermenu de bestaande waarde in het invoerveld staat zonder dropdown.
   const suggestions = useMemo(() => {
     if (!focused) return { items: [], totalMatches: 0, truncated: false };
-    if (inputText.trim()) return getValueSuggestions(uniqueValues, inputText);
-    if (uniqueValues.length) return getValueSuggestions(uniqueValues, '', 10);
+    if (inputText.trim()) return getValueSuggestions(uniqueValues, inputText, 10, formatDisplay);
+    if (uniqueValues.length) return getValueSuggestions(uniqueValues, '', 10, formatDisplay);
     return { items: [], totalMatches: 0, truncated: false };
-  }, [uniqueValues, inputText, focused]);
+  }, [uniqueValues, inputText, focused, formatDisplay]);
 
   const commitSingleValue = useCallback((nextValue) => {
     setIgnoredHint('');
@@ -158,7 +162,7 @@ export default function PurchaseOrderColumnFilterValuePicker({
               role="option"
               onClick={() => handleSuggestionClick(suggestion)}
             >
-              {String(suggestion)}
+              {displayOf(suggestion)}
             </Button>
           ))}
           {suggestions.truncated ? (
@@ -172,7 +176,7 @@ export default function PurchaseOrderColumnFilterValuePicker({
         <div className={styles.pickerChipList}>
           {chips.map((chip, index) => (
             <span key={`${dedupeKeyFor(chip, isNumber)}-${index}`} className={styles.pickerChip}>
-              <span className={styles.pickerChipLabel}>{String(chip)}</span>
+              <span className={styles.pickerChipLabel}>{displayOf(chip)}</span>
               <Button
                 className={styles.pickerChipRemove}
                 appearance="transparent"

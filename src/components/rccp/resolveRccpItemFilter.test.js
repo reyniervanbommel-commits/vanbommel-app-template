@@ -56,6 +56,18 @@ describe('resolveRccpItemsFromFilter', () => {
     )).toEqual({ items: [], active: true, containsTerm: 'cbm' });
   });
 
+  it('reads a startsWith filter on itemNumber', () => {
+    expect(resolveRccpItemsFromFilter({
+      itemNumber: { operator: 'startsWith', value: 'CBM' },
+    })).toEqual({ items: [], active: true, containsTerm: 'cbm' });
+  });
+
+  it('reads a oneOf filter stored as a single string', () => {
+    expect(resolveRccpItemsFromFilter({
+      itemNumber: { operator: 'oneOf', value: 'CBM-1' },
+    })).toEqual({ items: ['CBM-1'], active: true });
+  });
+
   it('does not scan chart items for a contains filter', () => {
     expect(resolveRccpItemsFromFilter(
       { items: { operator: 'contains', value: 'CBM-1' } },

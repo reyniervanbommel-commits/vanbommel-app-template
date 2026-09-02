@@ -79,18 +79,19 @@ function emitSegment(itemNumber, qty, status, late, dataAreaId, flags = {}) {
 
 function emitAbove(itemMap) {
   const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
-  const out = [];
+  const ordered = [];
+  const remaining = [];
   for (const itemNumber of items) {
     const entry = itemMap.get(itemNumber);
     const flags = { planned1900: entry.planned1900 };
     if (entry.ordered > 0) {
-      out.push(emitSegment(itemNumber, entry.ordered, 'ordered', false, entry.dataAreaId, flags));
+      ordered.push(emitSegment(itemNumber, entry.ordered, 'ordered', false, entry.dataAreaId, flags));
     }
     if (entry.open > 0) {
-      out.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
+      remaining.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
     }
   }
-  return out;
+  return [...ordered, ...remaining];
 }
 
 function emitBelow(itemMap) {
@@ -187,6 +188,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
       );
       const rawReceipt = receiptKey ? lineDateValue(lineValues, masterValues, receiptKey) : null;
       const hasReceipt = Boolean(rawReceipt) && !isSentinelDate(rawReceipt);
+      const belowDate = hasReceipt ? rawReceipt : plannedDate;
       const planned1900 = isSentinelDate(plannedDate);
       const share = details.length ? 1 / details.length : 1;
       const openQty = lineOpen ? resolveLineMeasureQty(lineValues, masterValues, openKey, share) : 0;
@@ -211,13 +213,13 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
         }
       }
 
-      if (confirmedDate && hasReceipt && deliveredQty > 0) {
-        const receiptYear = getIsoWeekYear(rawReceipt);
-        const receiptWeek = getIsoWeek(rawReceipt);
+      if (deliveredQty > 0 && belowDate && !isSentinelDate(belowDate)) {
+        const receiptYear = getIsoWeekYear(belowDate);
+        const receiptWeek = getIsoWeek(belowDate);
         if (receiptYear && receiptWeek) {
           const days = plannedDate && !planned1900
-            ? calendarDaysBetween(rawReceipt, plannedDate)
-            : calendarDaysBetween(rawReceipt, confirmedDate);
+            ? calendarDaysBetween(belowDate, plannedDate)
+            : (confirmedDate ? calendarDaysBetween(belowDate, confirmedDate) : 0);
           clipBump(
             below,
             isoWeekKey(receiptYear, receiptWeek),
@@ -262,17 +264,16 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
     }
     if (headerOnlyDelivered) {
       const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
-      const receiptSlots = collectDateSlots(
-        details,
-        masterValues,
-        receiptKey,
-        null,
-        window,
-        excludedSet,
-        masterStatus,
-      ).filter((slot) => Boolean(planningDateValue(
-        slot.lineValues, masterValues, dateKey, config.confirmedDateColumnKey, 'confirmed',
-      )));
+      let receiptSlots = receiptKey
+        ? collectDateSlots(
+          details, masterValues, receiptKey, null, window, excludedSet, masterStatus,
+        )
+        : [];
+      if (!receiptSlots.length) {
+        receiptSlots = collectPlanningSlots(
+          details, masterValues, dateKey, config.confirmedDateColumnKey, window, excludedSet, masterStatus, dateMode,
+        );
+      }
       spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
     }
   }

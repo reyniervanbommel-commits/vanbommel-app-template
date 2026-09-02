@@ -24,6 +24,16 @@ describe('formatLinkedLineValues', () => {
     expect(formatLinkedLineValues(null, 'text')).toBe('-');
   });
 
+  it('keeps numeric zero instead of collapsing it to a dash', () => {
+    expect(formatLinkedLineValues([0], 'number')).toBe('0');
+    expect(formatLinkedLineValues([0, 0], 'number')).toBe('0');
+    expect(getLinkedLineValuePreview([0], 'number')).toEqual({
+      firstValue: '0',
+      additionalCount: 0,
+      allValuesLabel: '0',
+    });
+  });
+
   it('formats ISO datetime line values as dd/mm/yyyy for date and text columns', () => {
     const isoDates = ['2026-08-25T00:00:00.000Z', '2026-08-26T14:30:00'];
     expect(formatLinkedLineValues(isoDates, 'date', 'receiptDate')).toBe('25/08/2026, 26/08/2026');

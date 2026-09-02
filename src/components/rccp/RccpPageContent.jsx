@@ -29,7 +29,13 @@ import { readPoFilterByColumnForRccp } from '../../utils/poVendorFilterHandoff';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalXL) },
-  toolbar: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', ...shorthands.gap(tokens.spacingHorizontalM) },
+  toolbar: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    width: '100%',
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
   hint: { color: tokens.colorNeutralForeground3 },
 });
 

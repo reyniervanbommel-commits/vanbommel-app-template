@@ -108,6 +108,37 @@ describe('PurchaseOrderHeaderCellContent', () => {
     expect(screen.queryByDisplayValue(/2026-08-25T00:00:00/)).toBeNull();
   });
 
+  it('renders a write-back input when the pushed line column is writable', () => {
+    renderHeaderCell({
+      order: {
+        dataAreaId: 'nl01',
+        orderNumber: 'PO-1',
+        linkedLineValues: { colorValues: ['Red'] },
+      },
+      column: { key: 'colorValues', label: 'Color Values', dataType: 'text', source: 'custom' },
+      linkedLineValueMap: {
+        colorValues: {
+          lineColumnKey: 'color',
+          lineColumnId: 44,
+          lineDataType: 'text',
+          lineColumnLabel: 'Color',
+          writableToD365: true,
+          lineColumn: {
+            id: 44,
+            key: 'color',
+            label: 'Color',
+            dataType: 'text',
+            writableToD365: true,
+            d365Field: 'Color',
+          },
+        },
+      },
+      actions: { onCorrectAllLines: () => {} },
+    });
+
+    expect(screen.getByLabelText(/write back to D365 on all lines/)).toBeTruthy();
+  });
+
   it('keeps a custom date column editable instead of rendering it as read-only text', () => {
     renderHeaderCell({
       order: {

@@ -24,6 +24,17 @@ describe('isoWeek', () => {
     expect(getIsoWeekYear('2020-12-31')).toBe(2020);
   });
 
+  it('uses the ISO week-1 Monday (Jan 4 method) when 1 Jan is a Friday', () => {
+    expect(weeksInIsoYear(2021)).toBe(52);
+    expect(isoWeekStartUtc(2021, 1).toISOString().slice(0, 10)).toBe('2021-01-04');
+    expect(getIsoWeek('2021-11-08')).toBe(45);
+    expect(getIsoWeek('2021-11-08T12:00:00.000Z')).toBe(45);
+    expect(getIsoWeek('2021-11-19T12:00:00.000Z')).toBe(46);
+    expect(getIsoWeek('2021-12-10T12:00:00.000Z')).toBe(49);
+    expect(getIsoWeek('2021-12-13T12:00:00.000Z')).toBe(50);
+    expect(isoWeekStartUtc(2021, 45).toISOString().slice(0, 10)).toBe('2021-11-08');
+  });
+
   it('handles year transition at ISO week boundaries', () => {
     expect(getIsoWeekYear('2025-01-01')).toBe(2025);
     expect(getIsoWeek('2025-01-01')).toBe(1);

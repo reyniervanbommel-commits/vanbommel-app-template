@@ -1,8 +1,6 @@
 import React, { createContext, memo, useCallback, useContext } from 'react';
-import { isReceivedPairHighlight, stackRectLayout, weekBarBox } from './rccpPoStack';
+import { isReceivedPairHighlight, poSegmentStroke, stackRectLayout, weekBarBox } from './rccpPoStack';
 
-const LATE_STROKE = '#D13438';
-const PAIR_STROKE = '#323130';
 const ORDERED_ABOVE_OPACITY = 0.45;
 const ORDERED_ABOVE_HIGHLIGHT_OPACITY = 0.9;
 
@@ -69,7 +67,7 @@ function RccpPoSegmentRect({
   const handleMouseDown = useCallback((event) => {
     event.preventDefault();
   }, []);
-  const stroke = segment.late ? LATE_STROKE : (highlighted ? PAIR_STROKE : 'none');
+  const { stroke, strokeWidth } = poSegmentStroke(segment, highlighted);
   return (
     <rect
       x={x}
@@ -79,7 +77,7 @@ function RccpPoSegmentRect({
       fill={fill}
       fillOpacity={segmentFillOpacity(segment.status, highlighted)}
       stroke={stroke}
-      strokeWidth={segment.late || highlighted ? 2.5 : 0}
+      strokeWidth={strokeWidth}
       pointerEvents="all"
       cursor="pointer"
       onMouseEnter={handleEnter}

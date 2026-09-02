@@ -80,17 +80,75 @@ export function formatDatePeriodValue(value, displayMode = DATE_PERIOD_DISPLAY_M
   return String(getIsoWeekNumber(parsed));
 }
 
-export function resolveDatePeriodCellValue(column, rowValues, displayMode) {
+function normalizeColumnDataType(column) {
+  return String(column?.dataType || '').trim().toLowerCase();
+}
+
+function columnDataTypeIsDate(column) {
+  const dataType = normalizeColumnDataType(column);
+  return dataType === 'date' || dataType === 'datetime' || dataType === 'date-time';
+}
+
+function columnNameLooksLikeDate(column) {
+  return /date|datum/i.test(`${column?.key || ''} ${column?.label || ''}`);
+}
+
+function findLineValueLink(headerColumnKey, lineValueHeaderLinks) {
+  const headerKey = String(headerColumnKey || '').trim();
+  if (!headerKey || !Array.isArray(lineValueHeaderLinks)) return null;
+  return lineValueHeaderLinks.find((link) => String(link?.headerColumnKey || '').trim() === headerKey) || null;
+}
+
+/**
+ * True when a header column can be used as the Date W/M source.
+ * Includes native date columns and "Push values to header" columns whose line
+ * source is a date (those headers are stored as text).
+ */
+export function isDateSourceColumn(column, { lineColumns = [], lineValueHeaderLinks = [] } = {}) {
+  if (!column || isDatePeriodColumn(column)) return false;
+  if (columnDataTypeIsDate(column)) return true;
+
+  const dataType = normalizeColumnDataType(column);
+  if (dataType && dataType !== 'text') return false;
+
+  const link = findLineValueLink(column.key, lineValueHeaderLinks);
+  if (link) {
+    const lineColumn = (Array.isArray(lineColumns) ? lineColumns : [])
+      .find((entry) => entry?.key === link.lineColumnKey);
+    if (lineColumn && (columnDataTypeIsDate(lineColumn) || columnNameLooksLikeDate(lineColumn))) {
+      return true;
+    }
+  }
+  return columnNameLooksLikeDate(column);
+}
+
+function firstNonEmptyValue(values) {
+  if (!Array.isArray(values)) return null;
+  return values.find((value) => value != null && value !== '') ?? null;
+}
+
+function pickDatePeriodSourceValue(sourceKey, rowValues, linkedLineValues) {
+  const firstLinked = firstNonEmptyValue(linkedLineValues?.[sourceKey]);
+  if (firstLinked != null) return firstLinked;
+
+  const sourceValue = rowValues?.[sourceKey];
+  if (typeof sourceValue === 'string' && sourceValue.includes(',')) {
+    const firstPart = sourceValue.split(',')[0].trim();
+    if (firstPart) return firstPart;
+  }
+  return sourceValue;
+}
+
+export function resolveDatePeriodCellValue(column, rowValues, displayMode, linkedLineValues) {
   const sourceKey = resolveDatePeriodSourceKey(column);
   if (!sourceKey) return '';
-  const sourceValue = rowValues?.[sourceKey];
+  const sourceValue = pickDatePeriodSourceValue(sourceKey, rowValues, linkedLineValues);
   return formatDatePeriodValue(sourceValue, displayMode);
 }
 
-export function listDateColumns(columns) {
+export function listDateColumns(columns, context = {}) {
   return (Array.isArray(columns) ? columns : [])
-    .filter((column) => String(column?.dataType || '').trim().toLowerCase() === 'date')
-    .filter((column) => !isDatePeriodColumn(column));
+    .filter((column) => isDateSourceColumn(column, context));
 }
 
 /** Date W/M in week mode shows ISO week numbers and uses numeric sort/filter semantics. */

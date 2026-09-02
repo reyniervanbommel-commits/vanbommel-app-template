@@ -1,9 +1,7 @@
 # Perf gebruikersverslag — 2026-09-02
 
-**Verdict:** niet meetbaar op deze branch
+**Verdict:** niet meetbaar op deze merge (#295 + #302/#303)
 
-Localhost draait een andere app-versie (v1.52.126). Preview gaf timeout. Er is geen HUD-meting van de nieuwe achtergrond-write-back.
+Geen HUD-meting van de achtergrond-write-back of header-push. Baseline ongewijzigd.
 
-**Wat testen:** na deploy van v1.53.3: Apply op een D365-kolom, kijk of de header-badge telt zonder dat het board vastloopt.
-
-**HUD:** niet gebruikt deze run.
+**Wat testen op DEV:** Apply op een D365-kolom — badge telt zonder dat het board vastloopt; gepushte header-cel blijft één `correct-all-details` per order.

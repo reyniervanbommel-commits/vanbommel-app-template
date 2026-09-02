@@ -67,6 +67,8 @@ const useStyles = makeStyles({
   },
   menuPopover: {
     minWidth: '240px',
+    maxWidth: '360px',
+    overflowX: 'hidden',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
   empty: {

@@ -19,6 +19,7 @@ import {
   ACTIVITY_FILTERS,
 } from './purchaseOrderActivityFilter';
 import { overlayKpiQtyOnOrders } from '../utils/poBoardKpis';
+import { buildLinkedLineValueByHeaderKey } from '../utils/linkedLineValueMeta';
 
 /**
  * Compositiepunt: filter/sort + grouping + column sums, met één export/apply voor saved views.
@@ -45,19 +46,8 @@ export function usePurchaseOrderBoardView({
   );
 
   const linkedLineValueByHeaderKey = useMemo(
-    () => (Array.isArray(lineValueHeaderLinks)
-      ? lineValueHeaderLinks.reduce((acc, link) => {
-        if (!link?.headerColumnKey || !link?.lineColumnKey) return acc;
-        const lineColumn = lineColumns.find((column) => column.key === link.lineColumnKey);
-        acc[link.headerColumnKey] = {
-          lineColumnKey: link.lineColumnKey,
-          lineDataType: lineColumn?.dataType || 'text',
-          lineColumnLabel: lineColumn?.label || '',
-        };
-        return acc;
-      }, {})
-      : {}),
-    [lineValueHeaderLinks, lineColumns]
+    () => buildLinkedLineValueByHeaderKey(lineValueHeaderLinks, lineColumns),
+    [lineColumns, lineValueHeaderLinks]
   );
 
   // De totalen zet de server al in values (calculateLinkedLineTotal ≡ calculateLineColumnSum);
@@ -116,7 +106,12 @@ export function usePurchaseOrderBoardView({
         const sourceKey = resolveDatePeriodSourceKey(column);
         if (!sourceKey) return;
         const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
-        const derived = resolveDatePeriodCellValue(column, nextValues, displayMode) || null;
+        const derived = resolveDatePeriodCellValue(
+          column,
+          nextValues,
+          displayMode,
+          order?.linkedLineValues,
+        ) || null;
         if (nextValues[column.key] === derived) return;
         if (!changed) {
           nextValues = { ...nextValues };

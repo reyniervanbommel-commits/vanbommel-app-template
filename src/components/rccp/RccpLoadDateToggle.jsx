@@ -1,73 +1,46 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { ToggleButton, makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
+import { Radio, RadioGroup } from '@fluentui/react-components';
 import {
   parseRccpPlanningDateMode,
   RCCP_PLANNING_DATE_CONFIRMED,
   RCCP_PLANNING_DATE_REQUESTED,
 } from './rccpPeriodGrain';
-
-const useStyles = makeStyles({
-  group: {
-    display: 'inline-flex',
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    overflow: 'hidden',
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  button: {
-    minWidth: '92px',
-    ...shorthands.borderRadius('0'),
-    ...shorthands.border('0'),
-  },
-  confirmed: {
-    minWidth: '124px',
-  },
-  split: {
-    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke1),
-  },
-});
+import { useRccpToggleFrameStyles } from './rccpToggleFrameStyles';
 
 export function confirmedToggleLabel(percent) {
+  if (percent == null || !Number.isFinite(Number(percent))) return 'Conf.';
+  return `Conf. ${Math.round(Number(percent))}%`;
+}
+
+function confirmedToggleAriaLabel(percent) {
   if (percent == null || !Number.isFinite(Number(percent))) return 'Confirmed';
   return `Confirmed ${Math.round(Number(percent))}%`;
 }
 
 function RccpLoadDateToggle({ value, onChange, confirmedPercent }) {
-  const styles = useStyles();
+  const styles = useRccpToggleFrameStyles();
   const mode = parseRccpPlanningDateMode(value);
-  const requested = mode === RCCP_PLANNING_DATE_REQUESTED;
   const confirmedLabel = useMemo(() => confirmedToggleLabel(confirmedPercent), [confirmedPercent]);
-  const handleRequested = useCallback(() => {
-    onChange?.(RCCP_PLANNING_DATE_REQUESTED);
-  }, [onChange]);
-  const handleConfirmed = useCallback(() => {
-    onChange?.(RCCP_PLANNING_DATE_CONFIRMED);
+  const confirmedAria = useMemo(
+    () => confirmedToggleAriaLabel(confirmedPercent),
+    [confirmedPercent],
+  );
+  const handleChange = useCallback((_, data) => {
+    onChange?.(data.value);
   }, [onChange]);
 
   return (
-    <div className={styles.group} role="radiogroup" aria-label="Load date">
-      <ToggleButton
-        role="radio"
-        size="small"
-        aria-checked={requested}
-        checked={requested}
-        appearance={requested ? 'primary' : 'subtle'}
-        className={styles.button}
-        onClick={handleRequested}
+    <div className={styles.frame}>
+      <RadioGroup
+        className={styles.group}
+        layout="horizontal"
+        value={mode}
+        onChange={handleChange}
+        aria-label="Load date"
       >
-        Requested
-      </ToggleButton>
-      <ToggleButton
-        role="radio"
-        size="small"
-        aria-checked={!requested}
-        checked={!requested}
-        appearance={requested ? 'subtle' : 'primary'}
-        className={mergeClasses(styles.button, styles.confirmed, styles.split)}
-        onClick={handleConfirmed}
-      >
-        {confirmedLabel}
-      </ToggleButton>
+        <Radio value={RCCP_PLANNING_DATE_REQUESTED} label="Req." aria-label="Requested" />
+        <Radio value={RCCP_PLANNING_DATE_CONFIRMED} label={confirmedLabel} aria-label={confirmedAria} />
+      </RadioGroup>
     </div>
   );
 }

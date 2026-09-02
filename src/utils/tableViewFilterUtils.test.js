@@ -183,3 +183,14 @@ describe('remarks column — value-pass skip and min-2 helper', () => {
     expect(filterItemsByColumnFilters(items, columns, filters)).toHaveLength(1);
   });
 });
+
+describe('purchase-order status display labels', () => {
+  const statusColumn = { key: 'status', dataType: 'text', d365Field: 'PurchaseOrderStatus' };
+
+  it('matcht zowel Backorder als het D365-label Open order', () => {
+    expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'equals', value: 'Backorder' })).toBe(true);
+    expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'equals', value: 'Open order' })).toBe(true);
+    expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'contains', value: 'open' })).toBe(true);
+    expect(columnValueMatchesFilter(statusColumn, 'Invoiced', { operator: 'equals', value: 'Open order' })).toBe(false);
+  });
+});

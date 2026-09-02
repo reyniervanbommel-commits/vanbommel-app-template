@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
-  Button, Popover, PopoverSurface, PopoverTrigger, makeStyles, shorthands, tokens,
+  Button, Popover, PopoverSurface, PopoverTrigger, makeStyles, mergeClasses, shorthands, tokens,
 } from '@fluentui/react-components';
 import { CalendarWeekStart24Regular, ChevronLeftRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import {
@@ -20,6 +20,7 @@ import RccpIsoWeekCalendarGrid from './RccpIsoWeekCalendarGrid';
 
 const useStyles = makeStyles({
   trigger: { minWidth: '220px', maxWidth: '280px' },
+  triggerCompact: { minWidth: '168px', maxWidth: '220px' },
   surface: {
     ...shorthands.padding('8px'),
     width: 'max-content',
@@ -96,7 +97,7 @@ function YearPickerButton({ year, selected, onSelectYear, styles }) {
 }
 
 function RccpIsoWeekRangePicker({
-  window: isoWindow, onReplaceWindow, analysis, onShowDataWindow,
+  window: isoWindow, onReplaceWindow, analysis, onShowDataWindow, compact = false,
 }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
@@ -230,7 +231,8 @@ function RccpIsoWeekRangePicker({
     <Popover open={open} onOpenChange={handleOpenChange} positioning="below-start" trapFocus withArrow>
       <PopoverTrigger disableButtonEnhancement>
         <Button
-          className={styles.trigger}
+          className={mergeClasses(styles.trigger, compact && styles.triggerCompact)}
+          size={compact ? 'small' : 'medium'}
           appearance="outline"
           icon={<CalendarWeekStart24Regular />}
           aria-label={`Period ${label}`}

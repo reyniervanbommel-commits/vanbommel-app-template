@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useMemo } from 'react';
+import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import {
   Button, Tab, TabList, makeStyles, mergeClasses, shorthands, Spinner, tokens,
 } from '@fluentui/react-components';
@@ -6,7 +6,13 @@ import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import AdminInfoHint from '../admin/AdminInfoHint';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { usePoTableZoomNode } from '../../hooks/usePoTableZoomNode';
 import { resolvePoBoardRccpVendor } from '../rccp/resolveRccpVendorFilter';
+import {
+  parseRccpPeriodGrain,
+  RCCP_PERIOD_GRAIN_WEEK,
+} from '../rccp/rccpPeriodGrain';
+import RccpSplitToolbar from '../rccp/RccpSplitToolbar';
 import {
   nextRccpItemTableFilter,
   resolveRccpItemColumnKey,
@@ -20,6 +26,11 @@ import { BOARD_KEY } from './biConstants';
 import { buildTableDataRevision } from './tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import {
+  PO_TABLE_SPLIT_ZOOM_STYLE,
+  PO_TABLE_ZOOM_CSS_VAR,
+  PO_TABLE_ZOOM_DEFAULT,
+} from '../../utils/poTableZoom';
 
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
@@ -29,7 +40,14 @@ const PO_BOARD_KPI_INFO =
   'Values come from the purchase orders currently in the table. Click a tile to filter; quantity columns then show the units counted by that tile.';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    [PO_TABLE_ZOOM_CSS_VAR]: String(PO_TABLE_ZOOM_DEFAULT),
+  },
   tableRegion: {
     flex: 1,
     minHeight: 0,
@@ -74,13 +92,26 @@ export default function BoardSplitView({
   filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, tableFilter, children,
 }) {
   const styles = useStyles();
+  const setSplitRootNode = usePoTableZoomNode();
   const { user } = useAuth();
   const isSupplier = user?.role === ROLES.SUPPLIER;
   // Staff en suppliers krijgen beide de split-view; suppliers zien uitsluitend hun eigen data
   // (RCCP + BI worden server-side op hun leveranciersaccount gescoped).
   const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
-  const { isoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
+  const { isoWindow, setIsoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
+  const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
+  const handlePeriodGrainChange = useCallback((value) => {
+    setPeriodGrain(parseRccpPeriodGrain(value));
+  }, []);
+  const handleWindowReplace = useCallback((next) => {
+    setIsoWindow({
+      fromYear: Number(next.fromYear),
+      fromWeek: Number(next.fromWeek),
+      toYear: Number(next.toYear),
+      toWeek: Number(next.toWeek),
+    });
+  }, [setIsoWindow]);
   const {
     vendors, vendorNames, vendorColumnKey, loading: vendorsLoading,
   } = useRccpVendorOptions();
@@ -148,13 +179,16 @@ export default function BoardSplitView({
   if (!showSplit) return children;
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} ref={setSplitRootNode}>
       <div className={styles.tableRegion}>{children}</div>
       {split.open ? (
         <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
       ) : null}
 
-      <div className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}>
+      <div
+        className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}
+        style={PO_TABLE_SPLIT_ZOOM_STYLE}
+      >
         <Button
           size="small"
           appearance="subtle"
@@ -174,6 +208,17 @@ export default function BoardSplitView({
           <Tab value="kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
+        {split.activeTab === 'rccp' ? (
+          <RccpSplitToolbar
+            isoWindow={isoWindow}
+            onReplaceWindow={handleWindowReplace}
+            periodGrain={periodGrain}
+            onPeriodGrainChange={handlePeriodGrainChange}
+            planningDateMode={planningDateMode}
+            onPlanningDateModeChange={setPlanningDateMode}
+            vendorAccount={vendorAccount}
+          />
+        ) : null}
       </div>
 
       <div
@@ -181,7 +226,7 @@ export default function BoardSplitView({
         style={split.open ? { height: `${split.height}px` } : undefined}
         aria-hidden={!split.open}
       >
-        <div hidden={!showBiPane}>
+        <div hidden={!showBiPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showBiPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
               <BiChartStrip
@@ -194,21 +239,20 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div hidden={!showRccpPane}>
+        <div hidden={!showRccpPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showRccpPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
               {rccpVendorReady ? (
                 <RccpSplitStrip
                   vendorAccount={vendorAccount}
                   refreshKey={rccpRefreshKey}
-                  height={split.height}
                   enabled
                   isoWindow={isoWindow}
                   filterByColumn={filterByColumn}
                   itemColumnKey={itemColumnKey}
                   onItemClick={handleRccpItemClick}
                   planningDateMode={planningDateMode}
-                  onPlanningDateModeChange={setPlanningDateMode}
+                  periodGrain={periodGrain}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />
@@ -216,7 +260,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div hidden={!kpiEnabled}>
+        <div hidden={!kpiEnabled} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {kpiEnabled ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
               <PoBoardKpiStrip

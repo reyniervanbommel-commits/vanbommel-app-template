@@ -1,4 +1,5 @@
 import { HEX_COLOR_PATTERN, getContrastTextColor, getOpacityPercent, normalizeHexColor } from '../../utils/hexColor';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 
 export const FORMATTED_CELL_TEXT_COLOR = '#ffffff';
 
@@ -52,13 +53,14 @@ export function getColumnCellStyle(columnWidths, columnTextStyles, columnKey, ba
     ? String(backgroundColor).toLowerCase()
     : '';
   const hasWidth = Number.isFinite(width);
+  const zoomedWidth = hasWidth ? poTableZoomedPx(Math.round(width)) : undefined;
   if (!hasWidth && !resolvedTextStyle && !resolvedBackgroundColor && !useFormattedTextColor) return undefined;
   return {
     ...(hasWidth
       ? {
-        width: `${Math.round(width)}px`,
-        minWidth: `${Math.round(width)}px`,
-        maxWidth: `${Math.round(width)}px`,
+        width: zoomedWidth,
+        minWidth: zoomedWidth,
+        maxWidth: zoomedWidth,
       }
       : {}),
     ...(resolvedBackgroundColor ? { backgroundColor: resolvedBackgroundColor } : {}),

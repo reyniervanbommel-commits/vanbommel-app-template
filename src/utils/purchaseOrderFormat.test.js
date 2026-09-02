@@ -28,6 +28,11 @@ describe('formatCellValue', () => {
     expect(formatCellValue(12345, 'number')).toBe('12.345');
   });
 
+  it('toont 0 als 0, niet als streepje', () => {
+    expect(formatCellValue(0, 'number')).toBe('0');
+    expect(formatCellValue('0', 'number')).toBe('0');
+  });
+
   it('geeft de ruwe waarde terug als getal-parsing faalt', () => {
     expect(formatCellValue('not-a-number', 'number')).toBe('not-a-number');
   });
@@ -40,6 +45,13 @@ describe('formatCellValue', () => {
   it('valt terug op String(value) voor onbekende/ontbrekende dataTypes', () => {
     expect(formatCellValue('plain text', 'string')).toBe('plain text');
     expect(formatCellValue(42, undefined)).toBe('42');
+  });
+
+  it('toont D365 Backorder als Open order op de statuskolom, niet op andere kolommen', () => {
+    expect(formatCellValue('Backorder', 'text', { columnKey: 'status', d365Field: 'PurchaseOrderStatus' }))
+      .toBe('Open order');
+    expect(formatCellValue('Invoiced', 'text', { key: 'status' })).toBe('Invoiced');
+    expect(formatCellValue('Backorder', 'text', { columnKey: 'vendor' })).toBe('Backorder');
   });
 
   it('formatteert ISO-datums met tijd als dd/mm/yyyy, ook voor dataType text', () => {

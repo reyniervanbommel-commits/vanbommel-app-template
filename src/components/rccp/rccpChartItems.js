@@ -33,18 +33,37 @@ export function matchRccpChartItem(segment, selection) {
   return selected.has(String(segment?.itemNumber || '').trim());
 }
 
+function applyMeasureTotals(points, measureRows) {
+  if (!measureRows?.length) return points;
+  const openKey = measureRows.find((row) => row.isOpen)?.measureKey;
+  const orderedKey = measureRows.find((row) => row.isOrdered)?.measureKey;
+  const deliveredKey = measureRows.find((row) => row.isDelivered)?.measureKey;
+  if (!openKey && !orderedKey && !deliveredKey) return points;
+  return points.map((point) => {
+    const next = { ...point };
+    if (openKey) next[openKey] = sumStatus(point.segmentsAbove, 'open');
+    if (orderedKey) {
+      next[orderedKey] = sumStatus(point.segmentsAbove, 'open')
+        + sumStatus(point.segmentsAbove, 'ordered');
+    }
+    if (deliveredKey) next[deliveredKey] = -sumStatus(point.segmentsBelow, 'received');
+    return next;
+  });
+}
+
 /**
  * Keep only stack segments for the selected unique item(s).
- * Capacity/load series on the point are unchanged.
+ * PO measure keys are rewritten from the remaining stacks when `measureRows` is set.
  * @param {object[]} chart
  * @param {string | string[]} selection
- * @param {{ emptyHidesAll?: boolean, containsTerm?: string }} [options]
+ * @param {{ emptyHidesAll?: boolean, containsTerm?: string, measureRows?: object[] }} [options]
  */
 export function filterRccpChartByItem(chart, selection, options = {}) {
   const points = chart || [];
   const term = String(options.containsTerm || '').trim().toLowerCase();
+  let next = points;
   if (term) {
-    return points.map((point) => ({
+    next = points.map((point) => ({
       ...point,
       segmentsAbove: (point.segmentsAbove || []).filter(
         (seg) => String(seg?.itemNumber || '').toLowerCase().includes(term),
@@ -53,17 +72,20 @@ export function filterRccpChartByItem(chart, selection, options = {}) {
         (seg) => String(seg?.itemNumber || '').toLowerCase().includes(term),
       ),
     }));
+  } else {
+    const selected = selectedItemSet(selection);
+    if (!selected.size) {
+      if (!options.emptyHidesAll) return points;
+      next = points.map((point) => ({ ...point, segmentsAbove: [], segmentsBelow: [] }));
+    } else {
+      next = points.map((point) => ({
+        ...point,
+        segmentsAbove: (point.segmentsAbove || []).filter((seg) => matchRccpChartItem(seg, selected)),
+        segmentsBelow: (point.segmentsBelow || []).filter((seg) => matchRccpChartItem(seg, selected)),
+      }));
+    }
   }
-  const selected = selectedItemSet(selection);
-  if (!selected.size) {
-    if (!options.emptyHidesAll) return points;
-    return points.map((point) => ({ ...point, segmentsAbove: [], segmentsBelow: [] }));
-  }
-  return points.map((point) => ({
-    ...point,
-    segmentsAbove: (point.segmentsAbove || []).filter((seg) => matchRccpChartItem(seg, selected)),
-    segmentsBelow: (point.segmentsBelow || []).filter((seg) => matchRccpChartItem(seg, selected)),
-  }));
+  return applyMeasureTotals(next, options.measureRows);
 }
 
 function periodToken(point) {
@@ -112,7 +134,7 @@ export function filterRccpMatrixByItem(cellMap, options = {}) {
     if (cell.measureKey === openKey) {
       next.set(key, { ...cell, confirmedQty: qty.open });
     } else if (cell.measureKey === orderedKey) {
-      next.set(key, { ...cell, confirmedQty: qty.ordered });
+      next.set(key, { ...cell, confirmedQty: qty.open + qty.ordered });
     } else if (cell.measureKey === deliveredKey) {
       next.set(key, { ...cell, confirmedQty: qty.received });
     } else if (cell.measureKey === overKey) {

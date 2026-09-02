@@ -16,6 +16,8 @@ import { measure } from '../utils/perf';
  * @param {number[]|null} [params.rowHeights]             Optioneel: werkelijke hoogte per slot.
  * @param {number}        [params.overscan]               Extra rijen boven/onder de viewport.
  * @param {boolean}       [params.enabled]                Windowing aan/uit.
+ * @param {() => number}  [params.getScale]               Actuele visuele zoomschaal.
+ * @param {Function|null} [params.subscribeScale]          Abonneert op schaalwijzigingen.
  * @returns {{ start: number, end: number, topPadPx: number, bottomPadPx: number }}
  */
 function buildOffsets(totalCount, rowHeights, rowHeightPx) {
@@ -69,6 +71,8 @@ export function useBoardRowWindow({
   rowHeights = null,
   overscan = 12,
   enabled = true,
+  getScale = () => 1,
+  subscribeScale = null,
 }) {
   const offsets = useMemo(
     () => buildOffsets(totalCount, rowHeights, rowHeightPx),
@@ -99,6 +103,7 @@ export function useBoardRowWindow({
     const update = () => {
       const viewH = el.clientHeight || 600;
       const scrollTop = el.scrollTop;
+      const scale = getScale() || 1;
       // B2: asymmetrische overscan op basis van scrollrichting — D365 F&O VirtualScrollViewer patroon
       // overscanBefore minimaal 4 zodat sticky group headers voldoende in het window blijven
       // voor een vloeiende overgang naar het pin-mechanisme (geen zichtbare sprong).
@@ -107,13 +112,17 @@ export function useBoardRowWindow({
       const overscanBefore = scrollingDown ? 4 : overscan;
       const overscanAfter = scrollingDown ? overscan : 4;
 
-      const first = findStartIndex(offsets, scrollTop);
+      const first = findStartIndex(offsets, scrollTop / scale);
       const start = Math.max(0, first - overscanBefore);
-      const last = findEndIndex(offsets, scrollTop + viewH);
+      const last = findEndIndex(offsets, (scrollTop + viewH) / scale);
       const end = Math.min(totalCount, last + overscanAfter);
       // A3: window-updates zijn niet-urgent — input/animatie krijgt prioriteit
       startTransition(() => {
-        setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+        setRange((prev) => (
+          prev.start === start && prev.end === end && prev.scale === scale
+            ? prev
+            : { start, end, scale }
+        ));
       });
     };
 
@@ -131,12 +140,14 @@ export function useBoardRowWindow({
     el.addEventListener('scroll', scheduleUpdate, { passive: true });
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleUpdate) : null;
     ro?.observe(el);
+    const unsubscribeScale = subscribeScale?.(scheduleUpdate);
     return () => {
       el.removeEventListener('scroll', scheduleUpdate);
       ro?.disconnect();
+      unsubscribeScale?.();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [enabled, overscan, offsets, scrollRef, totalCount]);
+  }, [enabled, getScale, overscan, offsets, scrollRef, subscribeScale, totalCount]);
 
   if (!enabled) {
     return { start: 0, end: totalCount, topPadPx: 0, bottomPadPx: 0 };
@@ -144,10 +155,11 @@ export function useBoardRowWindow({
 
   const start = Math.min(range.start, Math.max(0, totalCount));
   const end = Math.min(Math.max(range.end, start), totalCount);
+  const scale = range.scale ?? 1;
   return {
     start,
     end,
-    topPadPx: offsets[start] || 0,
-    bottomPadPx: Math.max(0, totalHeight - (offsets[end] || 0)),
+    topPadPx: (offsets[start] || 0) * scale,
+    bottomPadPx: Math.max(0, (totalHeight - (offsets[end] || 0)) * scale),
   };
 }
