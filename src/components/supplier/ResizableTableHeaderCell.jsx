@@ -54,6 +54,7 @@ export default function ResizableTableHeaderCell({
   ...cellProps
 }) {
   const styles = useStyles();
+  const cellRef = useRef(null);
   const cleanupRef = useRef(null);
   const latestWidthRef = useRef(null);
   const frameRef = useRef(null);
@@ -101,7 +102,13 @@ export default function ResizableTableHeaderCell({
 
     const rawScale = typeof getScale === 'function' ? getScale() : 1;
     const scale = Number.isFinite(rawScale) && rawScale !== 0 ? rawScale : 1;
-    const startStored = clampWidth(width || minWidth, minWidth, maxWidth);
+    const storedWidth = Number(width);
+    const measuredStoredWidth = cellRef.current?.getBoundingClientRect().width / scale;
+    const startStored = clampWidth(
+      Number.isFinite(storedWidth) ? storedWidth : measuredStoredWidth,
+      minWidth,
+      maxWidth
+    );
     const startX = event.clientX;
     applyDragWidth(startStored);
     setDragging(true);
@@ -163,6 +170,7 @@ export default function ResizableTableHeaderCell({
 
   return (
     <th
+      ref={cellRef}
       className={combineClassNames(styles.cell, className)}
       style={resolvedWidth
         ? {
