@@ -36,4 +36,18 @@ describe('poVisibleRccpScope', () => {
       { values: { vendorAccount: 'V2' } },
     ], { vendors: ['V1', 'V2'], vendorNames: {} })).toBe('');
   });
+
+  it('falls back to values.vendorAccount when top-level vendorAccount is empty', () => {
+    expect(resolveSharedVendorFromOrders(
+      [{ vendorAccount: '', values: { vendorAccount: 'V1' } }],
+      { vendors: ['V1'], vendorNames: {} },
+    )).toBe('V1');
+  });
+
+  it('falls back to values.vendorAccount when custom column key is empty', () => {
+    expect(resolveSharedVendorFromOrders(
+      [{ values: { customVendor: '', vendorAccount: 'V1' } }],
+      { vendors: ['V1'], vendorNames: {}, vendorColumnKey: 'customVendor' },
+    )).toBe('V1');
+  });
 });

@@ -1,8 +1,8 @@
 function getRawVendorFromOrder(order, vendorColumnKey) {
   const key = vendorColumnKey || 'vendorAccount';
   const raw = order.vendorAccount
-    ?? order.values?.[key]
-    ?? order.values?.vendorAccount;
+    || order.values?.[key]
+    || order.values?.vendorAccount;
   if (raw == null) return '';
   return String(raw).trim();
 }
