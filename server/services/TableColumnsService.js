@@ -29,7 +29,8 @@ const {
   buildStatusLabelRenames,
   buildRemovedStatusOptions,
 } = require('../utils/statusColumnOptions');
-const { validateDatePeriodOptions } = require('../utils/datePeriodColumn');
+const { isAllowedDatePeriodSource, validateDatePeriodOptions } = require('../utils/datePeriodColumn');
+const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -57,6 +58,59 @@ async function uniqueKeyForScope(pool, tableId, scope, desiredKey) {
     if (!taken.has(candidate)) return candidate;
   }
   throw Object.assign(new Error('Could not determine a unique column key'), { status: 409 });
+}
+
+async function resolveLinkedLineColumn(pool, tableId, headerColumnKey, userId, boardKey) {
+  const links = await loadRuntimeHeaderLinks(pool, userId, boardKey);
+  const link = (links.lineValueHeaderLinks || [])
+    .find((entry) => String(entry?.headerColumnKey || '').trim() === String(headerColumnKey || '').trim());
+  const lineColumnKey = String(link?.lineColumnKey || '').trim();
+  if (!lineColumnKey) return null;
+  const lineCheck = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('lineColumnKey', sql.NVarChar(64), lineColumnKey)
+    .query(`
+      SELECT [key], label, data_type
+      FROM dbo.tb_columns
+      WHERE table_id = @tableId
+        AND scope = 'detail'
+        AND [key] = @lineColumnKey
+        AND is_active = 1
+    `);
+  const row = lineCheck.recordset[0];
+  if (!row) return { key: lineColumnKey, label: '', dataType: '' };
+  return { key: row.key, label: row.label, dataType: row.data_type };
+}
+
+async function assertDatePeriodSourceColumn(pool, {
+  tableId,
+  tableKey,
+  scope,
+  sourceColumnKey,
+  userId,
+}) {
+  const sourceCheck = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('scope', sql.NVarChar(16), scope)
+    .input('sourceColumnKey', sql.NVarChar(64), sourceColumnKey)
+    .query(`
+      SELECT data_type
+      FROM dbo.tb_columns
+      WHERE table_id = @tableId
+        AND scope = @scope
+        AND [key] = @sourceColumnKey
+        AND is_active = 1
+    `);
+  if (!sourceCheck.recordset.length) {
+    throw Object.assign(new Error('sourceColumnKey does not reference an existing column in this scope'), { status: 400 });
+  }
+  const sourceDataType = String(sourceCheck.recordset[0]?.data_type || '').trim().toLowerCase();
+  const linkedLineColumn = isAllowedDatePeriodSource({ sourceDataType })
+    ? null
+    : await resolveLinkedLineColumn(pool, tableId, sourceColumnKey, userId, tableKey);
+  if (!isAllowedDatePeriodSource({ sourceDataType, linkedLineColumn })) {
+    throw Object.assign(new Error('sourceColumnKey must reference a date column'), { status: 400 });
+  }
 }
 
 const COLUMN_OUTPUT = `
@@ -210,25 +264,13 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
 
   const pool = await getPool();
   if (dataType === 'date_period') {
-    const sourceCheck = await pool.request()
-      .input('tableId', sql.BigInt, table.id)
-      .input('scope', sql.NVarChar(16), scope)
-      .input('sourceColumnKey', sql.NVarChar(64), normalizedDatePeriodOptions.sourceColumnKey)
-      .query(`
-        SELECT data_type
-        FROM dbo.tb_columns
-        WHERE table_id = @tableId
-          AND scope = @scope
-          AND [key] = @sourceColumnKey
-          AND is_active = 1
-      `);
-    if (!sourceCheck.recordset.length) {
-      throw Object.assign(new Error('sourceColumnKey does not reference an existing column in this scope'), { status: 400 });
-    }
-    const sourceDataType = String(sourceCheck.recordset[0]?.data_type || '').trim().toLowerCase();
-    if (sourceDataType !== 'date') {
-      throw Object.assign(new Error('sourceColumnKey must reference a date column'), { status: 400 });
-    }
+    await assertDatePeriodSourceColumn(pool, {
+      tableId: table.id,
+      tableKey: table.key,
+      scope,
+      sourceColumnKey: normalizedDatePeriodOptions.sourceColumnKey,
+      userId,
+    });
   }
   if (dataType === 'image') {
     const sourceCheck = await pool.request()

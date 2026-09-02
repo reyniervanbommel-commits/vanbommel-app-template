@@ -4,6 +4,7 @@ import {
   DATE_PERIOD_DISPLAY_MODES,
   formatDatePeriodValue,
   isDatePeriodColumn,
+  listDateColumns,
   normalizeDatePeriodDisplayMode,
   parseDateValueForPeriod,
   resolveDatePeriodCellValue,
@@ -55,5 +56,64 @@ describe('datePeriodColumnUtils', () => {
     expect(columnUsesNumberSemantics(column, { deliveryWeek: 'week' })).toBe(true);
     expect(columnUsesNumberSemantics(column, { deliveryWeek: 'month' })).toBe(false);
     expect(columnUsesNumberSemantics(column)).toBe(true);
+  });
+
+  it('lists native date columns as Date W/M sources', () => {
+    const columns = [
+      { key: 'leverdatum', label: 'Leverdatum', dataType: 'date' },
+      { key: 'status', label: 'Status', dataType: 'text' },
+      { key: 'weekCol', label: 'Date W/M', dataType: 'date_period', options: { sourceColumnKey: 'leverdatum' } },
+    ];
+    expect(listDateColumns(columns).map((column) => column.key)).toEqual(['leverdatum']);
+  });
+
+  it('lists a push-to-header date column even when the header is stored as text', () => {
+    const columns = [
+      { key: 'leverdatum', label: 'Leverdatum', dataType: 'date' },
+      { key: 'receiptDateValues', label: 'Receipt date', dataType: 'text', source: 'custom' },
+      { key: 'colorValues', label: 'Color Values', dataType: 'text', source: 'custom' },
+    ];
+    const listed = listDateColumns(columns, {
+      lineColumns: [
+        { key: 'receiptDate', label: 'Receipt date', dataType: 'date' },
+        { key: 'color', label: 'Color', dataType: 'text' },
+      ],
+      lineValueHeaderLinks: [
+        { lineColumnKey: 'receiptDate', headerColumnKey: 'receiptDateValues' },
+        { lineColumnKey: 'color', headerColumnKey: 'colorValues' },
+      ],
+    });
+    expect(listed.map((column) => column.key)).toEqual(['leverdatum', 'receiptDateValues']);
+  });
+
+  it('lists a pushed receipt-date header when the line column is text but date-like', () => {
+    const columns = [
+      { key: 'receiptDateValues', label: 'Receipt date (Ontvangstdatum)', dataType: 'text', source: 'custom' },
+    ];
+    const listed = listDateColumns(columns, {
+      lineColumns: [{ key: 'receiptDate', label: 'Receipt date', dataType: 'text' }],
+      lineValueHeaderLinks: [{ lineColumnKey: 'receiptDate', headerColumnKey: 'receiptDateValues' }],
+    });
+    expect(listed.map((column) => column.key)).toEqual(['receiptDateValues']);
+  });
+
+  it('lists a renamed date-like text header even without a push-to-header link', () => {
+    const columns = [
+      { key: 'receipt_date_values', label: 'Receipt date (Ontvangstdatum)', dataType: 'text', source: 'custom' },
+      { key: 'colorValues', label: 'Color Values', dataType: 'text', source: 'custom' },
+    ];
+    expect(listDateColumns(columns).map((column) => column.key)).toEqual(['receipt_date_values']);
+  });
+
+  it('derives week/month from the first unique pushed line date', () => {
+    const column = {
+      dataType: 'date_period',
+      key: 'receiptWeek',
+      options: { sourceColumnKey: 'receiptDateValues' },
+    };
+    const values = { receiptDateValues: '03/08/2026, 05/06/2026' };
+    const linkedLineValues = { receiptDateValues: ['2026-08-03T00:00:00.000Z', '2026-06-05T00:00:00.000Z'] };
+    expect(resolveDatePeriodCellValue(column, values, 'week', linkedLineValues)).toBe('32');
+    expect(resolveDatePeriodCellValue(column, values, 'month', linkedLineValues)).toBe('August');
   });
 });

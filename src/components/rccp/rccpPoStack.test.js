@@ -7,7 +7,13 @@ import {
   RCCP_PO_BAR_SIZE,
   weekBarBox,
   isReceivedPairHighlight,
+  poSegmentStroke,
   isCurrentMatrixPeriod,
+  rccpChartYDomain,
+  rccpNiceYExtent,
+  rccpSymmetricYAxisDomain,
+  rccpPoStackBarFlags,
+  visibleAboveSegments,
 } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 
@@ -90,6 +96,82 @@ describe('rccpPoStack', () => {
     expect(isReceivedPairHighlight({ status: 'open', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(false);
     expect(isReceivedPairHighlight({ status: 'ordered', itemNumber: 'SKU-1' }, 'SKU-1')).toBe(true);
     expect(isReceivedPairHighlight({ status: 'received', itemNumber: 'SKU-1' }, '')).toBe(false);
+  });
+
+  it('does not draw a late outline on received boxes', () => {
+    expect(poSegmentStroke({ status: 'received', late: true }, false)).toEqual({
+      stroke: 'none', strokeWidth: 0,
+    });
+    expect(poSegmentStroke({ status: 'received', late: true }, true).strokeWidth).toBeGreaterThan(0);
+  });
+
+  it('keeps 0 in the Y domain and matches the scale above and below the axis', () => {
+    expect(rccpChartYDomain([
+      { __stackAbove: 1601, __stackBelow: 0, remaining: 21 },
+      { __stackAbove: 0, __stackBelow: -3000, remaining: 0 },
+    ], ['remaining'])).toEqual([-5000, 5000]);
+  });
+
+  it('snaps the Y extent to round steps like 100, 250, 500, 1000', () => {
+    expect(rccpNiceYExtent(100)).toBe(100);
+    expect(rccpNiceYExtent(21)).toBe(50);
+    expect(rccpNiceYExtent(240)).toBe(500);
+    expect(rccpNiceYExtent(501)).toBe(1000);
+    expect(rccpNiceYExtent(1601)).toBe(2000);
+    expect(rccpNiceYExtent(3000)).toBe(5000);
+  });
+
+  it('forces Recharts to keep equal scale when visible series are one-sided', () => {
+    const props = rccpSymmetricYAxisDomain([-3000, 3000]);
+    expect(props.type).toBe('number');
+    expect(props.allowDataOverflow).toBe(true);
+    expect(props.domain).toEqual([-5000, 5000]);
+    expect(props.ticks).toEqual([-5000, -2500, 0, 2500, 5000]);
+    expect(Math.abs(props.domain[0])).toBe(Math.abs(props.domain[1]));
+  });
+
+  it('groups remaining segments together at the top of the week bar', () => {
+    expect(visibleAboveSegments([
+      { itemNumber: 'SKU-A', qty: 4, status: 'ordered' },
+      { itemNumber: 'SKU-A', qty: 6, status: 'open' },
+      { itemNumber: 'SKU-B', qty: 3, status: 'ordered' },
+      { itemNumber: 'SKU-B', qty: 2, status: 'open' },
+    ], { openVisible: true, orderedVisible: true }).map((seg) => `${seg.itemNumber}:${seg.status}`)).toEqual([
+      'SKU-A:ordered',
+      'SKU-B:ordered',
+      'SKU-A:open',
+      'SKU-B:open',
+    ]);
+  });
+
+  it('keeps remaining boxes when quantity is off and remaining stays on', () => {
+    const remaining = visibleAboveSegments([
+      { itemNumber: 'SKU-A', qty: 4, status: 'ordered' },
+      { itemNumber: 'SKU-A', qty: 6, status: 'open' },
+      { itemNumber: 'SKU-B', qty: 2, status: 'open' },
+    ], { openVisible: true, orderedVisible: false });
+    expect(remaining.map((seg) => `${seg.itemNumber}:${seg.status}`)).toEqual([
+      'SKU-A:open',
+      'SKU-B:open',
+    ]);
+    expect(remaining.reduce((sum, seg) => sum + seg.qty, 0)).toBe(8);
+  });
+
+  it('does not collapse to a negative-only axis when quantity sits in the above stack', () => {
+    const domain = rccpChartYDomain([
+      { __stackAbove: 14305, __stackBelow: -12 },
+    ]);
+    expect(domain[0]).toBeLessThan(0);
+    expect(domain[1]).toBeGreaterThan(0);
+  });
+
+  it('shows the above stack when only quantity (ordered) is toggled on', () => {
+    expect(rccpPoStackBarFlags({
+      openVisible: false, orderedVisible: true, deliveredVisible: false,
+    })).toEqual({ showAbove: true, showBelow: false });
+    expect(rccpPoStackBarFlags({
+      openVisible: false, orderedVisible: false, deliveredVisible: true,
+    })).toEqual({ showAbove: true, showBelow: true });
   });
 
   it('detects the current week and month period', () => {

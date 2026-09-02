@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import {
   ComposedChart, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
 } from 'recharts';
@@ -6,7 +6,7 @@ import { makeStyles, tokens } from '@fluentui/react-components';
 import RccpWeekBandCursor from './RccpWeekBandCursor';
 import { RccpPoStackBarAbove, RccpPoStackBarBelow } from './RccpPoStackBar';
 import { brandColor } from '../../styles/brandTokens';
-import { RCCP_PO_BAR_SIZE } from './rccpPoStack';
+import { RCCP_PO_BAR_SIZE, rccpPoStackBarFlags, rccpSymmetricYAxisDomain } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WARNING_MEASURE_KEY } from './rccpUtils';
 
 const useStyles = makeStyles({
@@ -40,11 +40,13 @@ function renderStackBelow(props) {
 function RccpChartPlot({ plot, stack, todayMarker }) {
   const styles = useStyles();
   const {
-    data, width, height, compact, weekBoundaryCoordinates, chartRangeBands, activeRows,
+    data, width, height, compact, weekBoundaryCoordinates, chartRangeBands, activeRows, yDomain,
   } = plot;
   const {
-    openVisible, deliveredVisible, openRow, deliveredRow, receivedColor,
+    openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor,
   } = stack;
+  const stackBars = rccpPoStackBarFlags({ openVisible, orderedVisible, deliveredVisible });
+  const yAxisScale = useMemo(() => rccpSymmetricYAxisDomain(yDomain), [yDomain]);
   const legendPad = compact ? 28 : 36;
   const plotBottom = Math.max(24, height - legendPad);
   const labelOnRight = todayMarker?.todayX != null && (todayMarker.todayX + 48) < width;
@@ -68,7 +70,11 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
           verticalCoordinatesGenerator={weekBoundaryCoordinates}
         />
         <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
-        <YAxis tick={{ fontSize: compact ? 11 : 12 }} width={RCCP_CHART_Y_AXIS_WIDTH} />
+        <YAxis
+          tick={{ fontSize: compact ? 11 : 12 }}
+          width={RCCP_CHART_Y_AXIS_WIDTH}
+          {...yAxisScale}
+        />
         <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
         <Tooltip shared cursor={<RccpWeekBandCursor />} content={EmptyTooltip} />
         <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
@@ -83,22 +89,22 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
             ifOverflow="hidden"
           />
         ))}
-        {(openVisible || deliveredVisible) && (
+        {stackBars.showAbove && (
           <Bar
             dataKey="__stackAbove"
-            name={openRow?.label || deliveredRow?.label}
+            name={openRow?.label || orderedRow?.label || deliveredRow?.label}
             fill={openRow?.color || receivedColor}
             shape={renderStackAbove}
             barSize={RCCP_PO_BAR_SIZE}
-            legendType={openVisible ? 'rect' : 'none'}
+            legendType={(openVisible || orderedVisible) ? 'rect' : 'none'}
             cursor="pointer"
             isAnimationActive={false}
           />
         )}
-        {deliveredVisible && (
+        {stackBars.showBelow && (
           <Bar
             dataKey="__stackBelow"
-            name={deliveredRow.label}
+            name={deliveredRow?.label}
             fill={receivedColor}
             shape={renderStackBelow}
             barSize={RCCP_PO_BAR_SIZE}

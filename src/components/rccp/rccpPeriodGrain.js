@@ -11,6 +11,12 @@ export function parseRccpPlanningDateMode(raw) {
     : RCCP_PLANNING_DATE_REQUESTED;
 }
 
+export function parseRccpPeriodGrain(raw) {
+  return String(raw || '').toLowerCase() === RCCP_PERIOD_GRAIN_MONTH
+    ? RCCP_PERIOD_GRAIN_MONTH
+    : RCCP_PERIOD_GRAIN_WEEK;
+}
+
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
@@ -63,10 +69,9 @@ function mergeSegments(lists) {
     if (!prev.dataAreaId && segment.dataAreaId) prev.dataAreaId = segment.dataAreaId;
   }
   return [...map.values()].sort((a, b) => {
-    const byItem = String(a.itemNumber || '').localeCompare(String(b.itemNumber || ''));
-    if (byItem) return byItem;
-    if (a.status === b.status) return 0;
-    return a.status === 'received' ? -1 : 1;
+    const byStatus = Number(a.status === 'open') - Number(b.status === 'open');
+    if (byStatus) return byStatus;
+    return String(a.itemNumber || '').localeCompare(String(b.itemNumber || ''));
   });
 }
 

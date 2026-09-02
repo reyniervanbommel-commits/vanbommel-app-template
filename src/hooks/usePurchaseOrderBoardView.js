@@ -116,7 +116,12 @@ export function usePurchaseOrderBoardView({
         const sourceKey = resolveDatePeriodSourceKey(column);
         if (!sourceKey) return;
         const displayMode = normalizeDatePeriodDisplayMode(datePeriodDisplayModes[column.key]);
-        const derived = resolveDatePeriodCellValue(column, nextValues, displayMode) || null;
+        const derived = resolveDatePeriodCellValue(
+          column,
+          nextValues,
+          displayMode,
+          order?.linkedLineValues,
+        ) || null;
         if (nextValues[column.key] === derived) return;
         if (!changed) {
           nextValues = { ...nextValues };

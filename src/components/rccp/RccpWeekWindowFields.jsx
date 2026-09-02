@@ -1,16 +1,20 @@
 import React, { memo, useCallback } from 'react';
-import { Field, Radio, RadioGroup, Switch, makeStyles } from '@fluentui/react-components';
-import {
-  RCCP_PERIOD_GRAIN_MONTH,
-  RCCP_PERIOD_GRAIN_WEEK,
-} from './rccpPeriodGrain';
+import { Field, Switch, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpIsoWeekRangePicker from './RccpIsoWeekRangePicker';
 import RccpLoadDateToggle from './RccpLoadDateToggle';
+import RccpPeriodGrainToggle from './RccpPeriodGrainToggle';
 
 const useStyles = makeStyles({
   switchField: { alignSelf: 'flex-end' },
   viewField: { minWidth: '160px', maxWidth: '320px' },
   periodField: { minWidth: '220px', maxWidth: '280px' },
+  toggles: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+    ...shorthands.gap(tokens.spacingHorizontalM),
+    marginLeft: 'auto',
+  },
 });
 
 /**
@@ -24,9 +28,6 @@ function RccpWeekWindowFields({
   const handleToggle = useCallback((_, data) => {
     onKpiWindowOnlyChange(Boolean(data.checked));
   }, [onKpiWindowOnlyChange]);
-  const handleGrain = useCallback((_, data) => {
-    onPeriodGrainChange(data.value);
-  }, [onPeriodGrainChange]);
 
   return (
     <>
@@ -38,25 +39,24 @@ function RccpWeekWindowFields({
           onShowDataWindow={onShowDataWindow}
         />
       </Field>
-      <Field className={styles.viewField} label="View">
-        <RadioGroup layout="horizontal" value={periodGrain} onChange={handleGrain}>
-          <Radio value={RCCP_PERIOD_GRAIN_WEEK} label="Week" />
-          <Radio value={RCCP_PERIOD_GRAIN_MONTH} label="Month" />
-        </RadioGroup>
-      </Field>
-      <Field className={styles.viewField} label="Load date">
-          <RccpLoadDateToggle
-            value={planningDateMode}
-            onChange={onPlanningDateModeChange}
-            confirmedPercent={analysis?.kpis?.confirmedPercent}
-          />
-      </Field>
       <Switch
         className={styles.switchField}
         label="KPIs in selected weeks"
         checked={kpiWindowOnly}
         onChange={handleToggle}
       />
+      <div className={styles.toggles} role="group" aria-label="Week and load date">
+        <Field className={styles.viewField} label="View">
+          <RccpPeriodGrainToggle value={periodGrain} onChange={onPeriodGrainChange} />
+        </Field>
+        <Field className={styles.viewField} label="Load date">
+          <RccpLoadDateToggle
+            value={planningDateMode}
+            onChange={onPlanningDateModeChange}
+            confirmedPercent={analysis?.kpis?.confirmedPercent}
+          />
+        </Field>
+      </div>
     </>
   );
 }

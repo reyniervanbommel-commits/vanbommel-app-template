@@ -396,6 +396,134 @@ describe('RccpAnalysisService', () => {
     expect(result[0].orderNumber).toBe('WSPO-1');
   });
 
+  describe('delivered measure on receipt week', () => {
+    const planned = '2026-03-10T00:00:00.000Z';
+    const received = '2026-03-24T00:00:00.000Z';
+    const plannedWeek = { year: getIsoWeekYear(planned), week: getIsoWeek(planned) };
+    const receivedWeek = { year: getIsoWeekYear(received), week: getIsoWeek(received) };
+    const spanWindow = {
+      fromYear: plannedWeek.year,
+      fromWeek: Math.min(plannedWeek.week, receivedWeek.week),
+      toYear: receivedWeek.year,
+      toWeek: Math.max(plannedWeek.week, receivedWeek.week),
+    };
+    const receivedConfig = {
+      ...config,
+      receiptDateColumnKey: 'productReceiptDate',
+      deliveredMeasureKey: 'receivedPurchaseQuantity',
+      quantityMeasures: [
+        ...config.quantityMeasures,
+        {
+          columnKey: 'receivedPurchaseQuantity',
+          label: 'Received qty',
+          chartType: 'bar',
+          color: '#107C10',
+          showInChart: true,
+        },
+      ],
+    };
+
+    it('puts received qty on the receipt week, not the planning week', () => {
+      const rows = [{
+        recordKey: 'PO-1',
+        values: { vendorAccount: 'V001', status: 'Open' },
+        details: [{
+          detailKey: '1',
+          values: {
+            requestedDeliveryDate: planned,
+            productReceiptDate: received,
+            quantity: 22441,
+            receivedPurchaseQuantity: 21586,
+          },
+        }],
+      }];
+      const { confirmedByCell } = aggregatePoLoad(rows, receivedConfig, spanWindow);
+      expect(confirmedByCell.get(cellKey(
+        'V001', receivedWeek.year, receivedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBe(21586);
+      expect(confirmedByCell.get(cellKey(
+        'V001', plannedWeek.year, plannedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBeUndefined();
+      expect(confirmedByCell.get(cellKey(
+        'V001', plannedWeek.year, plannedWeek.week, 'quantity',
+      ))).toBe(22441);
+    });
+
+    it('falls back received qty to the planning week when receipt date is empty', () => {
+      const rows = [{
+        recordKey: 'PO-1',
+        values: { vendorAccount: 'V001', status: 'Open' },
+        details: [{
+          detailKey: '1',
+          values: {
+            requestedDeliveryDate: planned,
+            productReceiptDate: '',
+            receivedPurchaseQuantity: 80,
+          },
+        }],
+      }];
+      const { confirmedByCell } = aggregatePoLoad(rows, receivedConfig, spanWindow);
+      expect(confirmedByCell.get(cellKey(
+        'V001', plannedWeek.year, plannedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBe(80);
+      expect(confirmedByCell.get(cellKey(
+        'V001', receivedWeek.year, receivedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBeUndefined();
+    });
+
+    it('opens drill-down for received on the receipt week', () => {
+      const rows = [{
+        recordKey: 'PO-1',
+        values: { vendorAccount: 'V001', status: 'Open' },
+        details: [{
+          detailKey: '1',
+          values: {
+            requestedDeliveryDate: planned,
+            productReceiptDate: received,
+            receivedPurchaseQuantity: 50,
+          },
+        }],
+      }];
+      const onReceipt = buildDrillDownRows(rows, receivedConfig, {
+        vendorAccount: 'V001',
+        periodYear: receivedWeek.year,
+        isoWeek: receivedWeek.week,
+        measureKey: 'receivedPurchaseQuantity',
+      }, spanWindow);
+      const onPlanned = buildDrillDownRows(rows, receivedConfig, {
+        vendorAccount: 'V001',
+        periodYear: plannedWeek.year,
+        isoWeek: plannedWeek.week,
+        measureKey: 'receivedPurchaseQuantity',
+      }, spanWindow);
+      expect(onReceipt).toHaveLength(1);
+      expect(onReceipt[0].quantity).toBe(50);
+      expect(onPlanned).toHaveLength(0);
+    });
+
+    it('spreads a header-only received total across receipt weeks', () => {
+      const rows = [{
+        recordKey: 'PO-1',
+        values: {
+          vendorAccount: 'V001',
+          status: 'Open',
+          receivedPurchaseQuantity: 100,
+        },
+        details: [
+          { detailKey: '1', values: { requestedDeliveryDate: planned, productReceiptDate: received } },
+          { detailKey: '2', values: { requestedDeliveryDate: planned, productReceiptDate: received } },
+        ],
+      }];
+      const { confirmedByCell } = aggregatePoLoad(rows, receivedConfig, spanWindow);
+      expect(confirmedByCell.get(cellKey(
+        'V001', receivedWeek.year, receivedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBe(100);
+      expect(confirmedByCell.get(cellKey(
+        'V001', plannedWeek.year, plannedWeek.week, 'receivedPurchaseQuantity',
+      ))).toBeUndefined();
+    });
+  });
+
   it('places load and drill-down on confirmed week when that date is real', () => {
     const requested = '2026-09-14T00:00:00.000Z';
     const confirmed = '2026-09-28T00:00:00.000Z';

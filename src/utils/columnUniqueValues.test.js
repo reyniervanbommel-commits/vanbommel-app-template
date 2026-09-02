@@ -56,4 +56,10 @@ describe('getValueSuggestions', () => {
     expect(result.totalMatches).toBe(150);
     expect(result.truncated).toBe(true);
   });
+
+  it('matcht ook op een weergavelabel als formatDisplay is meegegeven', () => {
+    const formatDisplay = (value) => (value === 'Backorder' ? 'Open order' : String(value));
+    const result = getValueSuggestions(['Backorder', 'Invoiced'], 'open', 10, formatDisplay);
+    expect(result.items).toEqual(['Backorder']);
+  });
 });

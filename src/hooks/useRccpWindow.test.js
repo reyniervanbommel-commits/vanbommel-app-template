@@ -6,6 +6,7 @@ vi.mock('../utils/api', () => ({ apiRequest: vi.fn() }));
 
 import { apiRequest } from '../utils/api';
 import { currentIsoWindow } from '../components/rccp/rccpUtils';
+import { resetRccpWindowSync } from './rccpWindowSync';
 import { useRccpWindow } from './useRccpWindow';
 
 const WIDE = { fromYear: 2021, fromWeek: 46, toYear: 2023, toWeek: 10 };
@@ -17,6 +18,7 @@ const DATA_WEEKS = { fromYear: 2021, fromWeek: 47, toYear: 2022, toWeek: 51 };
 describe('useRccpWindow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRccpWindowSync();
     apiRequest.mockResolvedValue({ settings: {} });
   });
 
@@ -179,5 +181,17 @@ describe('useRccpWindow', () => {
     });
     const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
     expect(patch[1].body.settings.planningDateMode).toBe('requested');
+  });
+
+  it('shares a session-only wide window with a second keep-alive instance', async () => {
+    const first = renderHook(() => useRccpWindow());
+    const second = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(first.result.current.loaded).toBe(true));
+    await waitFor(() => expect(second.result.current.loaded).toBe(true));
+
+    act(() => {
+      first.result.current.setIsoWindow(WIDE, { persist: false });
+    });
+    expect(second.result.current.isoWindow).toEqual(WIDE);
   });
 });

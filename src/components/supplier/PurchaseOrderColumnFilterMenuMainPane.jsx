@@ -167,6 +167,7 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
           {showFilter ? (
             <PurchaseOrderColumnFilterMenuFilterSection
               styles={styles}
+              column={column}
               columnLabel={columnLabel}
               closeSubmenu={closeSubmenu}
               isDate={isDate}

@@ -2,7 +2,21 @@
 // de versheidsindicator. Gehouden in een aparte util zodat tabel en pagina
 // dezelfde formattering delen.
 
+import { formatPurchStatusDisplay, isPurchaseOrderStatusColumn } from './purchStatusDisplay';
+
 const NL_NUMBER = new Intl.NumberFormat('nl-NL');
+
+function resolveColumnMeta(columnMeta) {
+  if (typeof columnMeta === 'string') {
+    return { columnKey: columnMeta, columnLabel: '', d365Field: '' };
+  }
+  const meta = columnMeta && typeof columnMeta === 'object' ? columnMeta : {};
+  return {
+    columnKey: meta.columnKey || meta.key || '',
+    columnLabel: meta.columnLabel || meta.label || '',
+    d365Field: meta.d365Field || '',
+  };
+}
 
 function padDatePart(value) {
   return String(value).padStart(2, '0');
@@ -79,8 +93,7 @@ export function formatCellValue(value, dataType, columnMeta = '') {
     return '-';
   }
 
-  const resolvedColumnKey = typeof columnMeta === 'string' ? columnMeta : columnMeta?.columnKey || '';
-  const resolvedColumnLabel = typeof columnMeta === 'string' ? '' : columnMeta?.columnLabel || '';
+  const { columnKey: resolvedColumnKey, columnLabel: resolvedColumnLabel, d365Field } = resolveColumnMeta(columnMeta);
   const normalizedDataType = String(dataType || '').trim().toLowerCase();
   if (normalizedDataType !== 'date_period') {
     const joinedDates = formatJoinedIsoDateValues(value);
@@ -107,6 +120,10 @@ export function formatCellValue(value, dataType, columnMeta = '') {
 
   if (dataType === 'boolean') {
     return value ? 'Yes' : 'No';
+  }
+
+  if (isPurchaseOrderStatusColumn({ key: resolvedColumnKey, d365Field })) {
+    return formatPurchStatusDisplay(value) || String(value);
   }
 
   return String(value);

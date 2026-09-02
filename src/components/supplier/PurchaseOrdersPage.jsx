@@ -118,6 +118,8 @@ export default function PurchaseOrdersPage() {
     submitDatePeriodColumn,
   } = usePurchaseOrderDatePeriodDialogState({
     availableColumns: visibleHeaderColumns,
+    lineColumns,
+    lineValueHeaderLinks,
     addHeaderColumnAfter,
     setEditingColumnKey,
     setDatePeriodDisplayMode,

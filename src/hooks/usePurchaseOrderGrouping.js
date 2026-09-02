@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCellValue } from '../utils/purchaseOrderFormat';
+import { formatPurchStatusDisplay, isPurchaseOrderStatusColumn } from '../utils/purchStatusDisplay';
 import { isHexColor } from '../utils/hexColor';
 import { toNumeric } from '../utils/purchaseOrderTotals';
 
@@ -54,6 +55,10 @@ function normalizeGroupLabel(value, column) {
       columnLabel: column?.label,
     });
     if (formattedDate && formattedDate !== '-') return formattedDate;
+  }
+  if (isPurchaseOrderStatusColumn(column)) {
+    const mapped = formatPurchStatusDisplay(value);
+    return mapped ? mapped : 'No value';
   }
   const text = String(value).trim();
   return text ? text : 'No value';

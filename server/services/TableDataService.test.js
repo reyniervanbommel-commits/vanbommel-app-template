@@ -7,6 +7,7 @@ const {
   dedupeDetailRows,
   addLookupColumnsByScope,
   applyLookups,
+  fillEmptyNumberFromFallback,
   normalizeExclusionRows,
   computeRevision,
   resolveConfiguredMaxItems,
@@ -279,6 +280,16 @@ describe('TableDataService.normalizeExclusionRows', () => {
 });
 
 describe('TableDataService.formule-evaluatie in read-flow', () => {
+  it('evalueert een regel-formule tot 0', () => {
+    const formulas = compileFormulaColumns([
+      { key: 'deliverRemainderApprox', dataType: 'number', formulaExpr: '(quantity)-(receivedpurchasequantity)' },
+    ]);
+    const values = { quantity: 14, receivedpurchasequantity: 14 };
+    const errors = applyFormulaColumnsToRowValues(values, formulas);
+    expect(values.deliverRemainderApprox).toBe(0);
+    expect(errors).toEqual({});
+  });
+
   it('compileert formulekolommen en evalueert per rij', () => {
     const formulas = compileMasterFormulaColumns([
       { key: 'delta', dataType: 'number', formulaExpr: '(inkoop)-(budget)' },
@@ -1034,6 +1045,40 @@ describe('TableDataService.applyLookups composite', () => {
     applyLookups(detailValues, 'whsl', [compositeLookup], 'detail', detailLookupSource);
     expect(detailValues.receivedPurchaseQuantity).toBeNull();
     expect(detailValues.remainingPurchaseQuantity).toBeNull();
+  });
+
+  it('behoudt 0 als echte resterende hoeveelheid', () => {
+    const detailValues = { itemNumber: 'ART-1' };
+    const detailLookupSource = buildDetailLookupSourceValues(detailValues, 'PO-1', 10);
+    const zeroLookup = {
+      ...compositeLookup,
+      byKey: new Map([
+        ['whsl|PO-1|10', { receivedPurchaseQuantity: 14, remainingPurchaseQuantity: 0 }],
+      ]),
+    };
+    applyLookups(detailValues, 'whsl', [zeroLookup], 'detail', detailLookupSource);
+    expect(detailValues.receivedPurchaseQuantity).toBe(14);
+    expect(detailValues.remainingPurchaseQuantity).toBe(0);
+  });
+});
+
+describe('TableDataService.fillEmptyNumberFromFallback', () => {
+  it('vult deliverRemainder met remaining qty, ook als die 0 is', () => {
+    const values = { deliverRemainder: null, remainingPurchaseQuantity: 0 };
+    fillEmptyNumberFromFallback(values, 'deliverRemainder', 'remainingPurchaseQuantity');
+    expect(values.deliverRemainder).toBe(0);
+  });
+
+  it('overschrijft een bestaande waarde niet', () => {
+    const values = { deliverRemainder: 3, remainingPurchaseQuantity: 0 };
+    fillEmptyNumberFromFallback(values, 'deliverRemainder', 'remainingPurchaseQuantity');
+    expect(values.deliverRemainder).toBe(3);
+  });
+
+  it('voegt de kolom niet toe als die niet in de rij zit', () => {
+    const values = { remainingPurchaseQuantity: 0 };
+    fillEmptyNumberFromFallback(values, 'deliverRemainder', 'remainingPurchaseQuantity');
+    expect(values).not.toHaveProperty('deliverRemainder');
   });
 });
 

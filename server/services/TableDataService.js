@@ -2802,6 +2802,18 @@ function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValu
   }
 }
 
+// Numerieke 0 is een echte waarde. Lege deliver-remainder (D365-veld bestaat niet op
+// PurchaseOrderLineV2) vullen we na de ontvangst-lookup met remaining qty, inclusief 0.
+function fillEmptyNumberFromFallback(valueBag, targetKey, fallbackKey) {
+  if (!valueBag || typeof valueBag !== 'object') return;
+  if (!Object.prototype.hasOwnProperty.call(valueBag, targetKey)) return;
+  const current = valueBag[targetKey];
+  if (current !== null && current !== undefined && current !== '') return;
+  const fallback = toLineNumeric(valueBag[fallbackKey]);
+  if (fallback === null) return;
+  valueBag[targetKey] = fallback;
+}
+
 function isFormulaColumn(column) {
   return Boolean(String(column?.formulaExpr || '').trim());
 }
@@ -3107,6 +3119,11 @@ function buildDetailRow(d, ctx) {
   const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
   const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
   applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+  if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
+    applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+  }
+  fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
+  fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
   const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
   const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
   const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -3589,6 +3606,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     ? await resolveSyncRules(syncRules, { forD365: false })
     : (Array.isArray(syncRules) ? syncRules : []);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
+  const compiledDetailFormulas = compileFormulaColumns(detailCols);
   // Eén keer per read berekend (niet per rij/formule) zodat TODAY() voor alle
   // rijen in deze response identiek is en er geen extra rekenkosten bijkomen.
   const formulaToday = getUtcMidnight();
@@ -3627,6 +3645,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   const detailContext = {
     detailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
+    compiledDetailFormulas, formulaToday,
   };
 
   let newCount = 0;
@@ -4082,9 +4101,11 @@ async function readRowDetails({ tableKey, partitionKey, recordKey, userId = null
     return useViewedBaseline ? valueMs > sinceMs : valueMs >= sinceMs;
   };
 
+  const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const detailContext = {
     detailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow: ledger.hasLedgerWindow,
+    compiledDetailFormulas, formulaToday: getUtcMidnight(),
   };
   const details = detailsResult.recordset.map((d) => {
     const detail = buildDetailRow(d, detailContext);
@@ -5248,6 +5269,7 @@ module.exports = {
   dedupeDetailRows,
   addLookupColumnsByScope,
   applyLookups,
+  fillEmptyNumberFromFallback,
   isFormulaColumn,
   resolveConfiguredMaxItems,
   requiredMasterFieldsFromTable,

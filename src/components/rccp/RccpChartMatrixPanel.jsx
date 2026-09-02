@@ -9,7 +9,7 @@ import {
 import RccpChartPlot from './RccpChartPlot';
 import { RccpSegmentHoverContext } from './RccpPoStackBar';
 import { getRgbHex } from '../../utils/hexColor';
-import { todayBand, RCCP_PO_BAR_SIZE } from './rccpPoStack';
+import { todayBand, RCCP_PO_BAR_SIZE, rccpChartYDomain, visibleAboveSegments } from './rccpPoStack';
 import {
   buildMatrixPeriodHeaders,
   buildRccpChartWeekBoundaryCoordinates,
@@ -171,10 +171,7 @@ function RccpChartMatrixPanel({
   );
 
   const chartRows = useMemo(() => (chart || []).map((point) => {
-    const segmentsAbove = (point.segmentsAbove || []).filter((seg) => (
-      (seg.status === 'open' && openVisible)
-      || (seg.status === 'ordered' && orderedVisible)
-    ));
+    const segmentsAbove = visibleAboveSegments(point.segmentsAbove, { openVisible, orderedVisible });
     const segmentsBelow = deliveredVisible ? (point.segmentsBelow || []) : [];
     return {
       ...point,
@@ -189,6 +186,10 @@ function RccpChartMatrixPanel({
     };
   }), [chart, openVisible, deliveredVisible, orderedVisible, openColor, receivedColor]);
   const todayMarker = useMemo(() => todayBand(periodHeaders), [periodHeaders]);
+  const yDomain = useMemo(
+    () => rccpChartYDomain(chartRows, activeRows.map((row) => row.measureKey)),
+    [chartRows, activeRows],
+  );
   const seriesSignature = useMemo(
     () => `${activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|')}|${openVisible}|${deliveredVisible}|${orderedVisible}`,
     [activeRows, openVisible, deliveredVisible, orderedVisible],
@@ -201,10 +202,11 @@ function RccpChartMatrixPanel({
     weekBoundaryCoordinates,
     chartRangeBands,
     activeRows,
-  }), [chartRows, chartWidth, chartHeight, compact, weekBoundaryCoordinates, chartRangeBands, activeRows]);
+    yDomain,
+  }), [chartRows, chartWidth, chartHeight, compact, weekBoundaryCoordinates, chartRangeBands, activeRows, yDomain]);
   const stack = useMemo(() => ({
-    openVisible, deliveredVisible, orderedVisible, openRow, deliveredRow, receivedColor,
-  }), [openVisible, deliveredVisible, orderedVisible, openRow, deliveredRow, receivedColor]);
+    openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor,
+  }), [openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor]);
   const flashSignature = useMemo(
     () => `${rccpChartFlashSignature(chart)}|${seriesSignature}`,
     [chart, seriesSignature],

@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
+import { listDateColumns } from '../utils/datePeriodColumnUtils';
 
 /**
  * Dialog state for creating Date W/M columns (derived from a date source column).
  */
 export function usePurchaseOrderDatePeriodDialogState({
   availableColumns,
+  lineColumns = [],
+  lineValueHeaderLinks = [],
   addHeaderColumnAfter,
   setEditingColumnKey,
   setDatePeriodDisplayMode,
@@ -23,9 +26,8 @@ export function usePurchaseOrderDatePeriodDialogState({
   }, []);
 
   const dateSourceColumns = useMemo(
-    () => (Array.isArray(availableColumns) ? availableColumns : [])
-      .filter((column) => String(column?.dataType || '').trim().toLowerCase() === 'date'),
-    [availableColumns]
+    () => listDateColumns(availableColumns, { lineColumns, lineValueHeaderLinks }),
+    [availableColumns, lineColumns, lineValueHeaderLinks]
   );
 
   const submitDatePeriodColumn = useCallback(async ({ label, sourceColumnKey }) => {
