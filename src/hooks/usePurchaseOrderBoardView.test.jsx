@@ -221,6 +221,32 @@ describe('usePurchaseOrderBoardView linked line sortering', () => {
     expect(result.current.processedItems).toHaveLength(2);
   });
 
+  it('derives Date W/M week from a pushed line date on the header', () => {
+    const items = [{
+      orderNumber: 'PO-1',
+      dataAreaId: 'nl',
+      values: { receiptDateValues: '03/08/2026, 05/06/2026' },
+      linkedLineValues: { receiptDateValues: ['2026-08-03T00:00:00.000Z', '2026-06-05T00:00:00.000Z'] },
+    }];
+    const columns = [
+      { key: 'receiptDateValues', label: 'Receipt date', dataType: 'text', source: 'custom' },
+      {
+        key: 'receiptWeek',
+        label: 'Receipt week',
+        dataType: 'date_period',
+        options: { sourceColumnKey: 'receiptDateValues' },
+      },
+    ];
+    const { result } = renderHook(() => usePurchaseOrderBoardView({
+      items,
+      columns,
+      lineColumns: [{ key: 'receiptDate', label: 'Receipt date', dataType: 'date' }],
+      lineValueHeaderLinks: [{ lineColumnKey: 'receiptDate', headerColumnKey: 'receiptDateValues' }],
+      datePeriodDisplayModes: { receiptWeek: 'week' },
+    }));
+    expect(result.current.processedItems[0].values.receiptWeek).toBe('32');
+  });
+
   it('shows on-time units in received columns while a KPI filter is active', () => {
     const items = [{
       orderNumber: 'PO-1',

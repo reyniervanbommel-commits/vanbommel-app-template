@@ -56,7 +56,7 @@ export default function PurchaseOrderDatePeriodColumnDialog({
     if (!open) return;
     setLabel(String(initialValue?.label || '').trim() || 'Date W/M');
     const preferredSource = resolveDatePeriodSourceKey(initialValue)
-      || (String(sourceColumn?.dataType || '').trim().toLowerCase() === 'date' ? sourceColumn.key : '')
+      || (sourceOptions.some((entry) => entry.key === sourceColumn?.key) ? sourceColumn.key : '')
       || sourceOptions[0]?.key
       || '';
     setSourceColumnKey(preferredSource);
