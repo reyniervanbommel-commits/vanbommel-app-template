@@ -1,7 +1,7 @@
 import React from 'react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PO_TABLE_ZOOM_DEFAULT,
   getPoTableZoom,
@@ -77,5 +77,18 @@ describe('PurchaseOrderTableZoomControl', () => {
 
     expect(getPoTableZoom()).toBe(1.1);
     expect(zoomIn.disabled).toBe(true);
+  });
+
+  it('uses onChange instead of the module store when controlled', () => {
+    const onChange = vi.fn();
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <PurchaseOrderTableZoomControl value={0.85} onChange={onChange} />
+      </FluentProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(onChange).toHaveBeenCalledWith(0.9);
+    expect(getPoTableZoom()).toBe(PO_TABLE_ZOOM_DEFAULT);
   });
 });

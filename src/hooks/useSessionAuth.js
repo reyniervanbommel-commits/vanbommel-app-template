@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clearCachedBoard } from '../utils/boardSessionStore';
 import { clearBoardPresentationCache } from '../utils/boardPresentationCache';
 import { clearAllPoTableSessions } from '../utils/poTableSessionState';
+import { PO_TABLE_ZOOM_DEFAULT, setPoTableZoom } from '../utils/poTableZoom';
 
 // Leegt alle in-memory board-caches (data + presentatie). Nodig bij een sessiewissel zodat
 // bijv. een supplier niet kortstondig het (ongescopete) bord/totaal van een vorige gebruiker
@@ -25,6 +26,10 @@ async function apiRequest(path, options) {
   return data;
 }
 
+function applySessionPoTableZoom(data) {
+  if (data && data.poTableZoom != null) setPoTableZoom(data.poTableZoom);
+}
+
 export function useSessionAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +40,8 @@ export function useSessionAuth() {
     try {
       const data = await apiRequest('/me');
       setUser(data.user);
+      if (data.user) applySessionPoTableZoom(data);
+      else setPoTableZoom(PO_TABLE_ZOOM_DEFAULT);
       setError(null);
       return data;
     } catch (_) {
@@ -52,18 +59,21 @@ export function useSessionAuth() {
     clearBoardCaches();
     const data = await apiRequest('/login', { method: 'POST', body: { email, password } });
     if (data.user) setUser(data.user);
+    applySessionPoTableZoom(data);
     return data;
   }, []);
 
   const setPassword = useCallback(async (email, password) => {
     const data = await apiRequest('/set-password', { method: 'POST', body: { email, password } });
     if (data.user) setUser(data.user);
+    applySessionPoTableZoom(data);
     return data;
   }, []);
 
   const logout = useCallback(async () => {
     try { await apiRequest('/logout', { method: 'POST', body: {} }); } finally {
       clearBoardCaches();
+      setPoTableZoom(PO_TABLE_ZOOM_DEFAULT);
       setUser(null);
     }
   }, []);

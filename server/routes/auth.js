@@ -9,6 +9,7 @@ const emailService = require('../services/EmailService');
 const { auditLog } = require('../middleware/auditLog');
 const { getSqlPool } = require('../utils/sqlPool');
 const trackChangesService = require('../services/TrackChangesService');
+const poTableZoomSettings = require('../services/PoTableZoomSettings');
 const { getAppBaseUrl, isDevLikeApp } = require('../utils/appEnvironment');
 
 const strictLimiter = rateLimit({
@@ -85,6 +86,14 @@ async function recordLogoutAnalytics(userId, sessionId, loggedInAt) {
   }
 }
 
+async function readPoTableZoomSafe() {
+  try {
+    return await poTableZoomSettings.getZoom();
+  } catch {
+    return poTableZoomSettings.PO_TABLE_ZOOM_DEFAULT;
+  }
+}
+
 router.post('/login', strictLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -99,7 +108,7 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
     await recordLoginAnalytics(result.user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(result.user.role);
-    res.json({ user: result.user });
+    res.json({ user: result.user, poTableZoom: await readPoTableZoomSafe() });
   } catch (err) {
     if (err.message.includes('incorrect') || err.message.includes('locked')) {
       return res.status(401).json({ error: err.message });
@@ -136,7 +145,7 @@ router.post('/set-password', async (req, res, next) => {
     await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
     await recordLoginAnalytics(user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(safeUser.role);
-    res.json({ user: safeUser });
+    res.json({ user: safeUser, poTableZoom: await readPoTableZoomSafe() });
   } catch (err) {
     next(err);
   }
@@ -183,11 +192,18 @@ router.post('/reset-password', async (req, res, next) => {
   }
 });
 
-router.get('/me', (req, res) => {
-  if (req.session && req.session.userId) {
-    return res.json({ user: req.session.user || null });
+router.get('/me', async (req, res, next) => {
+  try {
+    if (req.session && req.session.userId) {
+      return res.json({
+        user: req.session.user || null,
+        poTableZoom: await readPoTableZoomSafe(),
+      });
+    }
+    return res.json({ user: null });
+  } catch (err) {
+    next(err);
   }
-  return res.json({ user: null });
 });
 
 module.exports = router;

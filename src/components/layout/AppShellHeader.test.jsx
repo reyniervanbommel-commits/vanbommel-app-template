@@ -1,14 +1,8 @@
 import React from 'react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { resetPoTableZoomStoreForTests } from '../../utils/poTableZoom';
+import { describe, expect, it } from 'vitest';
 import AppShellHeader from './AppShellHeader';
-
-afterEach(() => {
-  resetPoTableZoomStoreForTests();
-  window.localStorage.clear();
-});
 
 const headerProps = {
   sidebarOpen: true,
@@ -25,16 +19,14 @@ const headerProps = {
 };
 
 describe('AppShellHeader table zoom', () => {
-  it('puts the table zoom control in the avatar menu', () => {
+  it('does not put the table zoom control in the avatar menu', () => {
     render(
       <FluentProvider theme={webLightTheme}>
         <AppShellHeader {...headerProps} />
       </FluentProvider>
     );
 
-    expect(screen.getByText('Table zoom')).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Table zoom' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Zoom out' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Zoom in' })).toBeTruthy();
+    expect(screen.queryByText('Table zoom')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Table zoom' })).toBeNull();
   });
 });

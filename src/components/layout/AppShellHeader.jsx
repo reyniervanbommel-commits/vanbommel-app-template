@@ -17,7 +17,6 @@ import {
 import { APP_DISPLAY_NAME } from '../../config/app';
 import { APP_VERSION } from '../../config/version';
 import { ROLES } from '../../constants/roles';
-import PurchaseOrderTableZoomControl from '../supplier/PurchaseOrderTableZoomControl';
 
 const useStyles = makeStyles({
   header: {
@@ -73,17 +72,6 @@ const useStyles = makeStyles({
     ...shorthands.gap('4px'),
   },
   menuButton: { justifyContent: 'flex-start' },
-  menuZoom: {
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('4px'),
-    paddingBottom: '8px',
-    marginBottom: '4px',
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke1),
-  },
-  menuZoomLabel: {
-    color: tokens.colorNeutralForeground3,
-  },
   menuVersion: {
     marginTop: '8px',
     paddingTop: '8px',
@@ -188,10 +176,6 @@ export default function AppShellHeader({
                     </div>
                   </div>
                   <div className={styles.menuDivider}>
-                    <div className={styles.menuZoom}>
-                      <Text size={200} className={styles.menuZoomLabel}>Table zoom</Text>
-                      <PurchaseOrderTableZoomControl />
-                    </div>
                     {canAccessAdmin && (
                       <Button
                         appearance="subtle"

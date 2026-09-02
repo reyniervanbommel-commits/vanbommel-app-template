@@ -9,6 +9,7 @@ import {
   History24Regular,
   ArrowClockwise24Regular,
   Link24Regular,
+  Options24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
@@ -19,6 +20,7 @@ import ExcelLinkWizard from './datamodel/ExcelLinkWizard';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 import AdminTrackChangesSettings from './AdminTrackChangesSettings';
 import AdminD365Refresh from './AdminD365Refresh';
+import AdminGeneralSettings from './AdminGeneralSettings';
 import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
@@ -63,8 +65,9 @@ export default function AdminPage() {
   const styles = useStyles();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [adminTab, setAdminTab] = useState('users');
+  const [adminTab, setAdminTab] = useState('general');
 
+  const handleTabGeneral = useCallback(() => setAdminTab('general'), []);
   const handleTabUsers = useCallback(() => setAdminTab('users'), []);
   const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
   const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
@@ -77,6 +80,13 @@ export default function AdminPage() {
   return (
     <div className={styles.page}>
       <aside className={styles.sidebar}>
+        <Text as="h2" className={styles.sectionHeading}>App</Text>
+        <SidebarNavItem
+          icon={Options24Regular}
+          label="General"
+          active={adminTab === 'general'}
+          onClick={handleTabGeneral}
+        />
         <Text as="h2" className={styles.sectionHeading}>People</Text>
         <SidebarNavItem
           icon={Person24Regular}
@@ -132,6 +142,7 @@ export default function AdminPage() {
       </aside>
 
       <div className={styles.content}>
+        {adminTab === 'general' && <AdminGeneralSettings />}
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}

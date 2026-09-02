@@ -21,21 +21,24 @@ const useStyles = makeStyles({
   },
 });
 
-function PurchaseOrderTableZoomControl() {
+function PurchaseOrderTableZoomControl({ value, onChange, disabled = false }) {
   const styles = useStyles();
-  const [zoom, setZoom] = useState(() => getPoTableZoom());
+  const [storeZoom, setStoreZoom] = useState(() => getPoTableZoom());
 
-  useEffect(() => subscribePoTableZoom(setZoom), []);
+  useEffect(() => subscribePoTableZoom(setStoreZoom), []);
+
+  const zoom = value ?? storeZoom;
+  const commit = onChange || setPoTableZoom;
 
   const zoomOut = useCallback(() => {
-    setPoTableZoom(stepPoTableZoom(getPoTableZoom(), -1));
-  }, []);
+    commit(stepPoTableZoom(zoom, -1));
+  }, [commit, zoom]);
   const zoomIn = useCallback(() => {
-    setPoTableZoom(stepPoTableZoom(getPoTableZoom(), 1));
-  }, []);
+    commit(stepPoTableZoom(zoom, 1));
+  }, [commit, zoom]);
   const reset = useCallback(() => {
-    setPoTableZoom(PO_TABLE_ZOOM_DEFAULT);
-  }, []);
+    commit(PO_TABLE_ZOOM_DEFAULT);
+  }, [commit]);
 
   return (
     <div className={styles.root} role="group" aria-label="Table zoom">
@@ -45,7 +48,7 @@ function PurchaseOrderTableZoomControl() {
         icon={<SubtractRegular />}
         aria-label="Zoom out"
         title="Zoom out"
-        disabled={zoom === PO_TABLE_ZOOM_MIN}
+        disabled={disabled || zoom === PO_TABLE_ZOOM_MIN}
         onClick={zoomOut}
       />
       <Text>{formatPoTableZoomPercent(zoom)}</Text>
@@ -55,11 +58,11 @@ function PurchaseOrderTableZoomControl() {
         icon={<AddRegular />}
         aria-label="Zoom in"
         title="Zoom in"
-        disabled={zoom === PO_TABLE_ZOOM_MAX}
+        disabled={disabled || zoom === PO_TABLE_ZOOM_MAX}
         onClick={zoomIn}
       />
       {zoom !== PO_TABLE_ZOOM_DEFAULT ? (
-        <Button appearance="subtle" size="small" aria-label="Reset zoom to 85%" title="Reset zoom to 85%" onClick={reset}>
+        <Button appearance="subtle" size="small" aria-label="Reset zoom to 85%" title="Reset zoom to 85%" disabled={disabled} onClick={reset}>
           Reset
         </Button>
       ) : null}

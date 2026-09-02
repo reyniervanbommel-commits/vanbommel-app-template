@@ -3,7 +3,6 @@ export const PO_TABLE_ZOOM_MIN = 0.75;
 export const PO_TABLE_ZOOM_MAX = 1.1;
 export const PO_TABLE_ZOOM_STEP = 0.05;
 export const PO_TABLE_ZOOM_CSS_VAR = '--po-table-zoom';
-export const PO_TABLE_ZOOM_STORAGE_KEY = 'po:tableZoom:purchase-orders';
 
 const subscribers = new Set();
 
@@ -65,34 +64,7 @@ export function visualPxToStored(visualPx, scale) {
   return Math.round(visualPx / scale);
 }
 
-/**
- * @returns {number}
- */
-export function readPoTableZoom() {
-  if (typeof window === 'undefined') return PO_TABLE_ZOOM_DEFAULT;
-  try {
-    const raw = window.localStorage.getItem(PO_TABLE_ZOOM_STORAGE_KEY);
-    if (raw == null) return PO_TABLE_ZOOM_DEFAULT;
-    return parsePoTableZoom(raw);
-  } catch (_) {
-    return PO_TABLE_ZOOM_DEFAULT;
-  }
-}
-
-/**
- * @param {unknown} value
- */
-export function writePoTableZoom(value) {
-  if (typeof window === 'undefined') return;
-  const clamped = parsePoTableZoom(value);
-  try {
-    window.localStorage.setItem(PO_TABLE_ZOOM_STORAGE_KEY, String(clamped));
-  } catch (_) {
-    // Private mode / quota: persist fails silently.
-  }
-}
-
-let current = readPoTableZoom();
+let current = PO_TABLE_ZOOM_DEFAULT;
 
 /**
  * @returns {number}
@@ -102,13 +74,13 @@ export function getPoTableZoom() {
 }
 
 /**
+ * In-memory store. Persist happens via app_settings (admin General tab).
  * @param {unknown} value
  * @returns {number}
  */
 export function setPoTableZoom(value) {
   const clamped = parsePoTableZoom(value);
   current = clamped;
-  writePoTableZoom(clamped);
   subscribers.forEach((listener) => listener(clamped));
   return clamped;
 }

@@ -8,18 +8,15 @@ import {
   getPoTableZoom,
   parsePoTableZoom,
   poTableZoomedPx,
-  readPoTableZoom,
   resetPoTableZoomStoreForTests,
   setPoTableZoom,
   stepPoTableZoom,
   subscribePoTableZoom,
   visualPxToStored,
-  writePoTableZoom,
 } from './poTableZoom';
 
 afterEach(() => {
   resetPoTableZoomStoreForTests();
-  window.localStorage.clear();
 });
 
 describe('parsePoTableZoom', () => {
@@ -48,13 +45,10 @@ describe('css helper', () => {
   });
 });
 
-describe('persist and store', () => {
-  it('never writes raw strings to CSS or storage', () => {
-    writePoTableZoom('1);hack');
-    expect(readPoTableZoom()).toBe(PO_TABLE_ZOOM_DEFAULT);
+describe('store', () => {
+  it('never writes raw strings to CSS', () => {
     setPoTableZoom(0.9);
     expect(getPoTableZoom()).toBe(0.9);
-    expect(window.localStorage.getItem('po:tableZoom:purchase-orders')).toBe('0.9');
     const el = document.createElement('div');
     applyPoTableZoom(el);
     expect(el.style.getPropertyValue('--po-table-zoom')).toBe('0.9');
