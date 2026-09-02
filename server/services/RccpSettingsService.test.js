@@ -137,6 +137,22 @@ describe('RccpSettingsService.validateConfig confirmedDateColumnKey', () => {
     expect(valid).toBe(false);
     expect(error).toBe('confirmedDateColumnKey may only contain letters, numbers and underscores');
   });
+
+  it('accepts a scoped PO header or PO line key', () => {
+    const { valid, config } = validateConfig({
+      ...base,
+      dateColumnKey: 'detail:requestedDeliveryDate',
+      vendorColumnKey: 'master:vendorAccount',
+      confirmedDateColumnKey: 'master:confirmedDeliveryDate',
+      openMeasureKey: 'detail:remainingPurchaseQuantity',
+      deliveredMeasureKey: 'detail:receivedPurchaseQuantity',
+      orderedMeasureKey: 'master:quantity',
+    });
+    expect(valid).toBe(true);
+    expect(config.dateColumnKey).toBe('detail:requestedDeliveryDate');
+    expect(config.vendorColumnKey).toBe('master:vendorAccount');
+    expect(config.orderedMeasureKey).toBe('master:quantity');
+  });
 });
 
 describe('RccpSettingsService.validateConfig itemPickerColumnKeys', () => {

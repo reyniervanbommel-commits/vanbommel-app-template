@@ -3,7 +3,7 @@ import { Button, Field, Input, Select, Text, makeStyles, shorthands, tokens } fr
 import { ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import { rccpFieldLabel } from './rccpFieldLabel';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
-import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
+import { buildRccpColumnOption, matchRccpColumn, rccpColumnOptionValue } from '../../utils/rccpColumnGroups';
 import { isRccpDateColumn, isRccpVendorColumn } from '../../utils/rccpQuantityColumns';
 
 const useStyles = makeStyles({
@@ -23,16 +23,6 @@ const useStyles = makeStyles({
   toggle: { alignSelf: 'flex-start' },
 });
 
-function columnOption(col) {
-  const label = col.label || col.key;
-  return {
-    value: col.key,
-    text: label === col.key ? label : `${label} (${col.key})`,
-    shortText: label,
-    group: rccpColumnGroupLabel(col),
-  };
-}
-
 const EMPTY_COLUMN = '__none__';
 
 function ColumnSelect({
@@ -40,12 +30,16 @@ function ColumnSelect({
 }) {
   const styles = useStyles();
   const options = useMemo(() => {
-    const mapped = columns.map(columnOption);
+    const mapped = columns.map(buildRccpColumnOption);
     return allowEmpty
       ? [{ value: EMPTY_COLUMN, text: 'None', shortText: 'None' }, ...mapped]
       : mapped;
   }, [allowEmpty, columns]);
-  const selected = options.find((opt) => opt.value === (value || (allowEmpty ? EMPTY_COLUMN : value)));
+  const matched = matchRccpColumn(columns, value);
+  const resolvedValue = value
+    ? (matched ? rccpColumnOptionValue(matched) : value)
+    : (allowEmpty ? EMPTY_COLUMN : value);
+  const selected = options.find((opt) => opt.value === resolvedValue);
   const handleSelect = useCallback((key) => {
     onChange({ target: { value: key === EMPTY_COLUMN ? '' : key } });
   }, [onChange]);
@@ -55,7 +49,7 @@ function ColumnSelect({
       <Field label={rccpFieldLabel(label, info)}>
         <RccpNarrowDropdown
           size={compact ? 'small' : 'medium'}
-          selectedValue={value || (allowEmpty ? EMPTY_COLUMN : value)}
+          selectedValue={resolvedValue}
           selectedText={selected?.shortText || value}
           options={options}
           onSelect={handleSelect}
@@ -152,7 +146,7 @@ function RccpSettingsDataFields({
         <ColumnSelect
           compact={compact}
           label="Requested delivery date"
-          info="Line date first; the order header is the fallback. Used when confirmed date is empty."
+          info="PO header or PO line date for this slot. Used when confirmed date is empty."
           value={config.dateColumnKey}
           onChange={handleDate}
           columns={dateColumns}
@@ -160,7 +154,7 @@ function RccpSettingsDataFields({
         <ColumnSelect
           compact={compact}
           label="Confirmed delivery date"
-          info="Line date first; header fallback. When filled, this week is used for open and ordered load. Empty or 1-1-1900 falls back to requested."
+          info="PO header or PO line date. When filled, this week is used for open and ordered load. Empty or 1-1-1900 falls back to requested."
           value={config.confirmedDateColumnKey || ''}
           onChange={handleConfirmed}
           columns={dateColumns}
@@ -169,7 +163,7 @@ function RccpSettingsDataFields({
         <ColumnSelect
           compact={compact}
           label="Receipt date"
-          info="Date used to place received quantity below the axis. If empty, the delivery date is used."
+          info="PO header or PO line date used to place received quantity below the axis. If empty, the delivery date is used."
           value={config.receiptDateColumnKey || ''}
           onChange={handleReceipt}
           columns={dateColumns}

@@ -9,6 +9,7 @@ const { getIsoWeek, getIsoWeekYear, isoWeekKey, buildWeekRange } = require('./is
 const {
   toNumber,
   pickValue,
+  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
@@ -161,7 +162,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
 
   for (const row of rows || []) {
     const masterValues = row.values || {};
-    const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
+    const vendor = String(pickConfiguredValue(masterValues, vendorCol) || '').trim();
     if (!vendor) continue;
     if (vendorAccount && vendor !== vendorAccount) continue;
     const dataAreaId = resolveDataAreaId(row, masterValues);
@@ -252,18 +253,18 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
         plannedSlots,
         masterValues,
         'open',
-        toNumber(pickValue(masterValues, openKey)),
+        toNumber(pickConfiguredValue(masterValues, openKey)),
         (slot) => Boolean(nowYear && nowWeek && compareIsoWeek(slot.year, slot.week, nowYear, nowWeek) < 0),
         dataAreaId,
       );
     }
     if (headerOnlyOrdered) {
-      const orderedTotal = toNumber(pickValue(masterValues, orderedKey));
-      const openTotal = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) : 0;
+      const orderedTotal = toNumber(pickConfiguredValue(masterValues, orderedKey));
+      const openTotal = headerOnlyOpen ? toNumber(pickConfiguredValue(masterValues, openKey)) : 0;
       spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId);
     }
     if (headerOnlyDelivered) {
-      const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
+      const deliveredTotal = toNumber(pickConfiguredValue(masterValues, deliveredKey));
       let receiptSlots = receiptKey
         ? collectDateSlots(
           details, masterValues, receiptKey, null, window, excludedSet, masterStatus,

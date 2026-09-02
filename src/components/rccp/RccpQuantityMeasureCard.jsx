@@ -4,17 +4,12 @@ import {
 } from '@fluentui/react-components';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
-import { rccpColumnGroupLabel } from '../../utils/rccpColumnGroups';
+import { buildRccpColumnOption, matchRccpColumn, rccpColumnOptionValue } from '../../utils/rccpColumnGroups';
 
 const CHART_TYPES = [
   { value: 'line', label: 'Line' },
   { value: 'bar', label: 'Bar' },
 ];
-
-function optionText(col) {
-  const label = col.label || col.key;
-  return label === col.key ? label : `${label} (${col.key})`;
-}
 
 const useStyles = makeStyles({
   card: {
@@ -53,24 +48,23 @@ function RccpQuantityMeasureCard({
   measure, index, numberCols, slotTitle, showChartType, onUpdate,
 }) {
   const styles = useStyles();
-  const isUnavailable = !numberCols.some((c) => c.key === measure.columnKey);
-  const columnLabel = measure.label || measure.columnKey;
+  const matched = matchRccpColumn(numberCols, measure.columnKey);
+  const isUnavailable = Boolean(measure.columnKey) && !matched;
+  const option = matched ? buildRccpColumnOption(matched) : null;
+  const columnLabel = option?.shortText || measure.label || measure.columnKey;
+  const selectedValue = matched ? rccpColumnOptionValue(matched) : measure.columnKey;
 
   const columnOptions = useMemo(() => {
     const list = [];
     if (isUnavailable) {
       list.push({ value: measure.columnKey, text: `${columnLabel} — unavailable` });
     }
-    numberCols.forEach((col) => list.push({
-      value: col.key,
-      text: optionText(col),
-      group: rccpColumnGroupLabel(col),
-    }));
+    numberCols.forEach((col) => list.push(buildRccpColumnOption(col)));
     return list;
   }, [isUnavailable, measure.columnKey, columnLabel, numberCols]);
 
   const handleColumn = useCallback((key) => {
-    const col = numberCols.find((c) => c.key === key);
+    const col = matchRccpColumn(numberCols, key);
     onUpdate(index, { columnKey: key, label: col?.label || key });
   }, [index, numberCols, onUpdate]);
 
@@ -98,7 +92,7 @@ function RccpQuantityMeasureCard({
           validationMessage={isUnavailable ? 'This column has no value in RCCP. Pick another one.' : undefined}
         >
           <RccpNarrowDropdown
-            selectedValue={measure.columnKey}
+            selectedValue={selectedValue}
             selectedText={columnLabel}
             options={columnOptions}
             onSelect={handleColumn}
