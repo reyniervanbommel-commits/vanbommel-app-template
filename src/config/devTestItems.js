@@ -4,16 +4,17 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'bulk-writeback-conflicts-295',
-    title: 'Bulk write-back per-row outcome and retry (#295)',
+    id: 'feature-295-bulk-writeback-conflicts-v1-53-3',
+    title: 'Feature 295 - Bulk write-back background job (v1.53.3)',
     checks: [
-      'Apply to selected rows on a D365 column closes the confirm dialog immediately; a header badge shows Write-back n/total',
-      'Locked cells are only the selected rows in that one column (queued tint, writing spinner); other columns stay editable',
+      'Apply to selected rows on a D365 column closes the confirm dialog immediately; header badge shows Write-back n/total with the D365 icon',
+      'Locked cells are only the selected rows in that one column (queued tint, writing spinner inside the cell); other columns stay editable',
       'A second bulk write-back is blocked until the first job finishes',
-      'When every row succeeds the badge disappears and a green toast appears',
+      'When every row succeeds the header badge shows Write-back complete, then disappears',
       'When a row fails the badge stays, the result panel lists the PO and D365 error, and Retry / Retry all failed work',
       'Selecting 25+ rows shows the one-by-one warning in the confirm dialog',
       'Bulk-edit on a non-D365 column still blocks the dialog and stops on first error (no background job)',
+      'Going to Settings while a job runs keeps the badge and the batch going; closing the tab stops it',
     ],
   },
 ];
