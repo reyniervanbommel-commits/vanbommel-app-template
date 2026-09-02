@@ -4,11 +4,9 @@ import { PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX } from '../components/supp
 const CONTROL_COLUMN_WIDTH = PURCHASE_ORDER_BOARD_CONTROL_COLUMN_WIDTH_PX;
 const FALLBACK_COLUMN_WIDTH = 80;
 
-function pickColumnWidth(columnKey, explicitWidths, measuredWidths) {
+function pickColumnWidth(columnKey, explicitWidths) {
   const explicit = Number(explicitWidths?.[columnKey]);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  const measured = Number(measuredWidths?.[columnKey]);
-  if (Number.isFinite(measured) && measured > 0) return measured;
   return FALLBACK_COLUMN_WIDTH;
 }
 
@@ -29,7 +27,6 @@ export function useSequentialStickyColumns({
 }) {
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
   const [uncontrolledStickyColumnKeys, setUncontrolledStickyColumnKeys] = useState([]);
-  const [measuredStickyWidths, setMeasuredStickyWidths] = useState({});
   const [measuredOffsetsByKey, setMeasuredOffsetsByKey] = useState({});
   const stickyColumnKeys = Array.isArray(controlledStickyColumnKeys)
     ? controlledStickyColumnKeys
@@ -46,9 +43,6 @@ export function useSequentialStickyColumns({
       }
       return next;
     });
-    setMeasuredStickyWidths((current) => Object.fromEntries(
-      Object.entries(current).filter(([key]) => safeColumns.some((column) => column.key === key))
-    ));
   }, [safeColumns]);
 
   const firstNonStickyColumnKey = useMemo(
@@ -69,10 +63,10 @@ export function useSequentialStickyColumns({
     let left = CONTROL_COLUMN_WIDTH * scale;
     stickyColumnKeys.forEach((key) => {
       offsets[key] = left;
-      left += pickColumnWidth(key, headerColumnWidths, measuredStickyWidths) * scale;
+      left += pickColumnWidth(key, headerColumnWidths) * scale;
     });
     return offsets;
-  }, [stickyColumnKeys, headerColumnWidths, measuredStickyWidths, getScale]);
+  }, [stickyColumnKeys, headerColumnWidths, getScale]);
 
   // Meet de werkelijke render-breedtes (border-box, dus incl. padding + border)
   // van de control-kolom en elke sticky-kolom, en tel ze cumulatief op tot
@@ -84,9 +78,11 @@ export function useSequentialStickyColumns({
     if (!head) return;
     const controlCell = head.querySelector('th');
     const controlWidth = controlCell?.getBoundingClientRect?.().width;
+    const rawScale = typeof getScale === 'function' ? getScale() : 1;
+    const scale = Number.isFinite(rawScale) && rawScale !== 0 ? rawScale : 1;
     let left = Number.isFinite(controlWidth) && controlWidth > 0
       ? controlWidth
-      : CONTROL_COLUMN_WIDTH;
+      : CONTROL_COLUMN_WIDTH * scale;
     const next = {};
     for (const key of stickyColumnKeys) {
       next[key] = left;
@@ -96,7 +92,7 @@ export function useSequentialStickyColumns({
       left += width;
     }
     setMeasuredOffsetsByKey((current) => (offsetsShallowEqual(current, next) ? current : next));
-  }, [stickyColumnKeys, wrapperRef]);
+  }, [getScale, stickyColumnKeys, wrapperRef]);
 
   useLayoutEffect(() => {
     measureOffsets();
@@ -122,24 +118,15 @@ export function useSequentialStickyColumns({
     const key = String(columnKey || '').trim();
     if (!key) return false;
     if (key === firstNonStickyColumnKey) {
-      const measuredWidth = wrapperRef.current?.querySelector(`[data-col-key="${key}"]`)?.getBoundingClientRect?.().width;
-      if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
-        setMeasuredStickyWidths((current) => ({ ...current, [key]: Math.round(measuredWidth) }));
-      }
       setStickyColumnKeys((current) => (current.includes(key) ? current : [...current, key]));
       return true;
     }
     if (key === lastStickyColumnKey) {
       setStickyColumnKeys((current) => current.slice(0, -1));
-      setMeasuredStickyWidths((current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      });
       return true;
     }
     return false;
-  }, [firstNonStickyColumnKey, lastStickyColumnKey, wrapperRef]);
+  }, [firstNonStickyColumnKey, lastStickyColumnKey]);
 
   return {
     decoratedColumns,
