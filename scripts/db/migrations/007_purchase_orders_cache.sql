@@ -132,7 +132,7 @@ USING (VALUES
   ('vendorName',             'Leveranciersnaam','header', 'text',   'PurchaseOrderName',       30),
   ('status',                 'Status',          'header', 'text',   'PurchaseOrderStatus',     40),
   ('currencyCode',           'Valuta',          'header', 'text',   'CurrencyCode',            50),
-  ('requestedDeliveryDate',  'Leverdatum',      'header', 'date',   'RequestedDeliveryDate',   60),
+  ('requestedDeliveryDate',  'Gevraagde leverdatum', 'header', 'date',   'RequestedDeliveryDate',   60),
   ('createdDateTime',        'Aangemaakt',      'header', 'date',   'CreatedDateTime',         70),
   -- regel-niveau
   ('lineNumber',             'Regel',           'line',   'number', 'LineNumber',              10),
@@ -141,7 +141,7 @@ USING (VALUES
   ('quantity',               'Aantal',          'line',   'number', 'OrderedPurchaseQuantity', 40),
   ('unit',                   'Eenheid',         'line',   'text',   'PurchaseUnitSymbol',      50),
   ('lineAmount',             'Regelbedrag',     'line',   'number', 'LineAmount',              60),
-  ('requestedDeliveryDate',  'Leverdatum',      'line',   'date',   'RequestedReceiptDate',    70)
+  ('requestedDeliveryDate',  'Gevraagde leverdatum', 'line',   'date',   'RequestedReceiptDate',    70)
 ) AS src ([key], label, [level], data_type, d365_field, sort_order)
 ON target.[level] = src.[level] AND target.[key] = src.[key]
 WHEN NOT MATCHED THEN

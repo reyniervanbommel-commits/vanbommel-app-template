@@ -35,11 +35,13 @@ function getIsoWeekYear(date) {
 function getIsoWeek(date) {
   const thursday = isoWeekThursday(date);
   if (!thursday) return null;
-  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
-  const day = yearStart.getUTCDay() || 7;
-  yearStart.setUTCDate(yearStart.getUTCDate() + 4 - day);
-  const diff = thursday.getTime() - yearStart.getTime();
-  return 1 + Math.round(diff / (7 * 24 * 60 * 60 * 1000));
+  const year = thursday.getUTCFullYear();
+  const week1Monday = isoWeekStartUtc(year, 1);
+  const week1Thursday = new Date(week1Monday);
+  week1Thursday.setUTCDate(week1Monday.getUTCDate() + 3);
+  return 1 + Math.round(
+    (thursday.getTime() - week1Thursday.getTime()) / (7 * 24 * 60 * 60 * 1000),
+  );
 }
 
 function isoWeekKey(year, week) {

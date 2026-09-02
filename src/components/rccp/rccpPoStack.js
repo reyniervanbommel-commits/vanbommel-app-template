@@ -1,4 +1,5 @@
 import {
+  isoWeekStartUtc,
   RCCP_CHART_Y_AXIS_WIDTH,
   RCCP_WEEK_COL_WIDTH,
 } from './rccpUtils';
@@ -23,10 +24,10 @@ export function isoWeekPartsUtc(date) {
   const weekday = utc.getUTCDay() || 7;
   utc.setUTCDate(utc.getUTCDate() + 4 - weekday);
   const year = utc.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(year, 0, 1));
-  const yearStartDay = yearStart.getUTCDay() || 7;
-  yearStart.setUTCDate(yearStart.getUTCDate() + 4 - yearStartDay);
-  const week = 1 + Math.round((utc - yearStart) / (7 * 24 * 60 * 60 * 1000));
+  const week1Monday = isoWeekStartUtc(year, 1);
+  const week1Thursday = new Date(week1Monday);
+  week1Thursday.setUTCDate(week1Monday.getUTCDate() + 3);
+  const week = 1 + Math.round((utc - week1Thursday) / (7 * 24 * 60 * 60 * 1000));
   return { year, week, key: `${year}-W${String(week).padStart(2, '0')}`, weekday };
 }
 
