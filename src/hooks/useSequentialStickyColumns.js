@@ -25,6 +25,7 @@ export function useSequentialStickyColumns({
   wrapperRef,
   stickyColumnKeys: controlledStickyColumnKeys,
   onStickyColumnKeysChange,
+  getScale = () => 1,
 }) {
   const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
   const [uncontrolledStickyColumnKeys, setUncontrolledStickyColumnKeys] = useState([]);
@@ -63,13 +64,15 @@ export function useSequentialStickyColumns({
   // vóórdat de echte DOM-breedtes (incl. padding + border) gemeten zijn.
   const fallbackOffsetsByKey = useMemo(() => {
     const offsets = {};
-    let left = CONTROL_COLUMN_WIDTH;
+    const rawScale = typeof getScale === 'function' ? getScale() : 1;
+    const scale = Number.isFinite(rawScale) && rawScale !== 0 ? rawScale : 1;
+    let left = CONTROL_COLUMN_WIDTH * scale;
     stickyColumnKeys.forEach((key) => {
       offsets[key] = left;
-      left += pickColumnWidth(key, headerColumnWidths, measuredStickyWidths);
+      left += pickColumnWidth(key, headerColumnWidths, measuredStickyWidths) * scale;
     });
     return offsets;
-  }, [stickyColumnKeys, headerColumnWidths, measuredStickyWidths]);
+  }, [stickyColumnKeys, headerColumnWidths, measuredStickyWidths, getScale]);
 
   // Meet de werkelijke render-breedtes (border-box, dus incl. padding + border)
   // van de control-kolom en elke sticky-kolom, en tel ze cumulatief op tot

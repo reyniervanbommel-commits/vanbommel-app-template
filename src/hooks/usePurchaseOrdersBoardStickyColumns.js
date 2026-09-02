@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import useAxisLockedScroll from './useAxisLockedScroll';
 import { useSequentialStickyColumns } from './useSequentialStickyColumns';
+import { getPoTableZoom } from '../utils/poTableZoom';
 
 /**
  * Koppelt de horizontale board-scrollcontainer aan serialiseerbare sticky kolommen.
@@ -19,6 +20,7 @@ export function usePurchaseOrdersBoardStickyColumns({
     wrapperRef,
     stickyColumnKeys,
     onStickyColumnKeysChange,
+    getScale: getPoTableZoom,
   });
 
   return { wrapperRef, ...stickyColumns };
