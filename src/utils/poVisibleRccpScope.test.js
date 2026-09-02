@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+import {
+  collectOrderNumbers,
+  orderNumbersFingerprint,
+  resolveSharedVendorFromOrders,
+} from './poVisibleRccpScope';
+
+describe('poVisibleRccpScope', () => {
+  it('collects unique sorted order numbers', () => {
+    expect(collectOrderNumbers([
+      { orderNumber: 'PO-B' }, { orderNumber: 'PO-A' }, { orderNumber: 'PO-A' }, { orderNumber: '  ' },
+    ])).toEqual(['PO-A', 'PO-B']);
+  });
+
+  it('joins order numbers with null separator for fingerprint', () => {
+    expect(orderNumbersFingerprint(['PO-A', 'PO-B'])).toBe('PO-A\0PO-B');
+  });
+
+  it('returns one vendor when all visible rows share an account', () => {
+    expect(resolveSharedVendorFromOrders([
+      { values: { vendorAccount: 'V1' } },
+      { vendorAccount: 'V1' },
+    ], { vendors: ['V1', 'V2'], vendorNames: { V1: 'Acme' } })).toBe('V1');
+  });
+
+  it('maps a display name to the account', () => {
+    expect(resolveSharedVendorFromOrders(
+      [{ values: { vendorAccount: 'Acme' } }],
+      { vendors: ['V1'], vendorNames: { V1: 'Acme' } },
+    )).toBe('V1');
+  });
+
+  it('returns empty when two vendors are visible', () => {
+    expect(resolveSharedVendorFromOrders([
+      { values: { vendorAccount: 'V1' } },
+      { values: { vendorAccount: 'V2' } },
+    ], { vendors: ['V1', 'V2'], vendorNames: {} })).toBe('');
+  });
+});
