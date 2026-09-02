@@ -57,6 +57,9 @@ describe('persist and store', () => {
     const el = document.createElement('div');
     applyPoTableZoom(el);
     expect(el.style.getPropertyValue('--po-table-zoom')).toBe('0.9');
+    const unsafeEl = document.createElement('div');
+    applyPoTableZoom(unsafeEl, '1);hack');
+    expect(unsafeEl.style.getPropertyValue('--po-table-zoom')).toBe(String(PO_TABLE_ZOOM_DEFAULT));
     const seen = [];
     const unsub = subscribePoTableZoom((value) => seen.push(value));
     setPoTableZoom(0.95);

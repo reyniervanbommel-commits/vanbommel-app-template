@@ -121,11 +121,11 @@ export function subscribePoTableZoom(listener) {
 
 /**
  * @param {HTMLElement|null|undefined} el
- * @param {number} [value]
+ * @param {unknown} [value]
  */
 export function applyPoTableZoom(el, value = current) {
   if (!el) return;
-  el.style.setProperty(PO_TABLE_ZOOM_CSS_VAR, String(clampPoTableZoom(value)));
+  el.style.setProperty(PO_TABLE_ZOOM_CSS_VAR, String(parsePoTableZoom(value)));
 }
 
 export function resetPoTableZoomStoreForTests() {
