@@ -1,0 +1,82 @@
+import { renderHook, act } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { usePurchaseOrderBulkEditRetry } from './usePurchaseOrderBulkEditRetry';
+
+const ROW_PO1 = {
+  key: 'USMF|PO1',
+  dataAreaId: 'USMF',
+  orderNumber: 'PO1',
+  columnId: 9,
+  columnKey: 'status',
+  value: 'Closed',
+  basedOnValue: 'Open',
+  errorMessage: 'first fail',
+};
+const ROW_PO2 = {
+  ...ROW_PO1,
+  key: 'USMF|PO2',
+  orderNumber: 'PO2',
+  errorMessage: 'second fail',
+};
+
+function setup(initialRows, runSingleUpdate) {
+  let failedRows = initialRows;
+  const onFailedRowsChange = vi.fn((updater) => {
+    failedRows = updater(failedRows);
+  });
+  const { result } = renderHook(() => usePurchaseOrderBulkEditRetry({
+    get failedRows() { return failedRows; },
+    onFailedRowsChange,
+    runSingleUpdate,
+  }));
+  return { result, getFailedRows: () => failedRows, onFailedRowsChange };
+}
+
+describe('usePurchaseOrderBulkEditRetry', () => {
+  it('retryRow verwijdert de rij bij succes', async () => {
+    const runSingleUpdate = vi.fn().mockResolvedValue();
+    const { result, getFailedRows } = setup([ROW_PO1, ROW_PO2], runSingleUpdate);
+
+    await act(async () => { await result.current.retryRow('USMF|PO1'); });
+
+    expect(runSingleUpdate).toHaveBeenCalledTimes(1);
+    expect(getFailedRows()).toEqual([expect.objectContaining({ key: 'USMF|PO2' })]);
+  });
+
+  it('retryAllFailed verwerkt de hele lijst via runCorrectRows', async () => {
+    const runSingleUpdate = vi.fn().mockResolvedValue();
+    const { result, getFailedRows } = setup([ROW_PO1, ROW_PO2], runSingleUpdate);
+
+    await act(async () => { await result.current.retryAllFailed(); });
+
+    expect(runSingleUpdate).toHaveBeenCalledTimes(2);
+    expect(getFailedRows()).toEqual([]);
+  });
+
+  it('rij die opnieuw faalt houdt de nieuwe errorMessage', async () => {
+    const runSingleUpdate = vi.fn().mockRejectedValue(new Error('still locked'));
+    const { result, getFailedRows } = setup([ROW_PO1], runSingleUpdate);
+
+    await act(async () => { await result.current.retryRow('USMF|PO1'); });
+
+    expect(getFailedRows()).toEqual([
+      expect.objectContaining({ key: 'USMF|PO1', errorMessage: 'still locked' }),
+    ]);
+  });
+
+  it('retryingBulk is true tijdens de aanroep en false erna', async () => {
+    let resolveUpdate;
+    const runSingleUpdate = vi.fn(() => new Promise((resolve) => { resolveUpdate = resolve; }));
+    const { result } = setup([ROW_PO1], runSingleUpdate);
+
+    let pending;
+    act(() => { pending = result.current.retryRow('USMF|PO1'); });
+    expect(result.current.retryingBulk).toBe(true);
+
+    await act(async () => {
+      resolveUpdate();
+      await pending;
+    });
+    expect(result.current.retryingBulk).toBe(false);
+  });
+});

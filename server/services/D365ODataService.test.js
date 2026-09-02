@@ -514,6 +514,41 @@ describe('D365ODataService', () => {
       })).rejects.toMatchObject({ status: 409 });
     });
 
+    it('geeft D365-validatiedetail door i.p.v. generieke PATCH-tekst', async () => {
+      global.fetch = vi.fn(async (_url, options) => {
+        if (options.method === 'GET') {
+          return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ PurchaseOrderName: 'oud', '@odata.etag': 'W/"1"' }) };
+        }
+        return {
+          ok: false, status: 400, headers: { get: () => null },
+          text: async () => JSON.stringify({ error: { message: { value: 'PurchaseOrderName cannot be empty' } } }),
+        };
+      });
+      await expect(writeBackField({
+        level: 'header', dataAreaId: 'WHSL', orderNumber: 'PO-1',
+        d365Field: 'PurchaseOrderName', newValue: '', basedOnValue: 'oud',
+      })).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining('PurchaseOrderName cannot be empty'),
+      });
+    });
+
+    it('houdt e.status op 502 als D365-PATCH 401 teruggeeft', async () => {
+      global.fetch = vi.fn(async (_url, options) => {
+        if (options.method === 'GET') {
+          return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ PurchaseOrderName: 'oud', '@odata.etag': 'W/"1"' }) };
+        }
+        return { ok: false, status: 401, headers: { get: () => null }, text: async () => JSON.stringify({ error: { message: 'Token expired' } }) };
+      });
+      await expect(writeBackField({
+        level: 'header', dataAreaId: 'WHSL', orderNumber: 'PO-1',
+        d365Field: 'PurchaseOrderName', newValue: 'x', basedOnValue: 'oud',
+      })).rejects.toMatchObject({
+        status: 502,
+        message: expect.stringContaining('Token expired'),
+      });
+    });
+
     it('gebruikt de regel-entiteit + LineNumber-sleutel op regelniveau', async () => {
       const calls = [];
       global.fetch = vi.fn(async (url, options) => {

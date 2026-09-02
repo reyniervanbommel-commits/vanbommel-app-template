@@ -10,21 +10,31 @@ import {
   Spinner,
   Text,
 } from '@fluentui/react-components';
+import PurchaseOrderBulkEditFailedRows from './PurchaseOrderBulkEditFailedRows';
 
-export default function PurchaseOrderBulkEditDialog({
-  open,
-  mode,
-  columnLabel,
-  selectedCount,
-  processedCount,
-  busy,
-  summaryMessage,
-  onOpenChange,
-  onChooseSingleCell,
-  onChooseBulk,
-  onCloseSummary,
-}) {
-  const title = mode === 'summary' ? 'Bulk edit stopped' : 'Update multiple rows?';
+export default function PurchaseOrderBulkEditDialog({ dialogState, dialogActions }) {
+  const {
+    open,
+    mode,
+    columnLabel,
+    selectedCount,
+    processedCount,
+    busy,
+    summaryMessage,
+    failedRows = [],
+    retryingBulk,
+  } = dialogState || {};
+  const {
+    onOpenChange,
+    onChooseSingleCell,
+    onChooseBulk,
+    onCloseSummary,
+    onRetryRow,
+    onRetryAllFailed,
+  } = dialogActions || {};
+  const hasFailedRows = mode === 'summary' && failedRows.length > 0;
+  const title = hasFailedRows ? 'Bulk edit finished' : (mode === 'summary' ? 'Bulk edit stopped' : 'Update multiple rows?');
+
   return (
     <Dialog modalType="alert" open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
       <DialogSurface>
@@ -32,7 +42,17 @@ export default function PurchaseOrderBulkEditDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogContent>
             {mode === 'summary' ? (
-              <Text>{summaryMessage}</Text>
+              <>
+                <Text>{summaryMessage}</Text>
+                {hasFailedRows ? (
+                  <PurchaseOrderBulkEditFailedRows
+                    rows={failedRows}
+                    retrying={retryingBulk}
+                    onRetryRow={onRetryRow}
+                    onRetryAllFailed={onRetryAllFailed}
+                  />
+                ) : null}
+              </>
             ) : (
               <>
                 <Text>
@@ -48,7 +68,7 @@ export default function PurchaseOrderBulkEditDialog({
           </DialogContent>
           <DialogActions>
             {mode === 'summary' ? (
-              <Button appearance="primary" onClick={onCloseSummary}>
+              <Button appearance="primary" onClick={onCloseSummary} disabled={retryingBulk}>
                 Close
               </Button>
             ) : (

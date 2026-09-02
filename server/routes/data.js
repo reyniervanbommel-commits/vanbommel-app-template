@@ -503,6 +503,8 @@ router.post('/:tableKey/correct', async (req, res, next) => {
     );
     return res.json(result);
   } catch (err) {
+    // Productie-errorHandler verbergt err.message; deze route moet D365-detail tonen (#AB:295).
+    if (err.status) return res.status(err.status).json({ error: err.message });
     return next(err);
   }
 });

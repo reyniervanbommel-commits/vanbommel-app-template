@@ -166,3 +166,98 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
     expect(saveValue).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('usePurchaseOrderBulkEdit — correct-pad verzamelt fouten (#AB:295)', () => {
+  it('gaat door na een fout op rij 2 van 3 (mode correct)', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('conflict on PO2'))
+      .mockResolvedValueOnce();
+    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+      visibleHeaderColumns: COLUMNS,
+      visibleOrders: ORDERS,
+      selection: makeSelection(['USMF|PO1', 'USMF|PO2', 'USMF|PO3']),
+      saveValue: vi.fn(),
+      correctField,
+    }));
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+
+    expect(correctField).toHaveBeenCalledTimes(3);
+    expect(result.current.dialogState.mode).toBe('summary');
+    expect(result.current.dialogState.failedRows).toEqual([
+      expect.objectContaining({ orderNumber: 'PO2', basedOnValue: 'Open', errorMessage: 'conflict on PO2' }),
+    ]);
+    expect(result.current.dialogState.summaryMessage).toMatch(/Failed: 1/);
+    expect(result.current.dialogState.summaryMessage).toMatch(/Updated: 2/);
+  });
+
+  it('reject als de initiërende rij zelf faalt, ook als andere rijen slagen', async () => {
+    const correctField = vi.fn()
+      .mockRejectedValueOnce(new Error('locked PO1'))
+      .mockResolvedValueOnce();
+    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+      visibleHeaderColumns: COLUMNS,
+      visibleOrders: ORDERS,
+      selection: makeSelection(['USMF|PO1', 'USMF|PO2']),
+      saveValue: vi.fn(),
+      correctField,
+    }));
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => {
+      await expect(pending).rejects.toThrow('locked PO1');
+    });
+    expect(result.current.dialogState.failedRows).toEqual([
+      expect.objectContaining({ orderNumber: 'PO1' }),
+    ]);
+  });
+
+  it('resolved wanneer alléén andere rijen falen, niet de initiërende rij', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('locked PO2'));
+    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+      visibleHeaderColumns: COLUMNS,
+      visibleOrders: ORDERS,
+      selection: makeSelection(['USMF|PO1', 'USMF|PO2']),
+      saveValue: vi.fn(),
+      correctField,
+    }));
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+    expect(result.current.dialogState.failedRows[0].orderNumber).toBe('PO2');
+  });
+
+  it('retryRow haalt een geslaagde rij uit failedRows', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('conflict on PO2'))
+      .mockResolvedValueOnce();
+    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+      visibleHeaderColumns: COLUMNS,
+      visibleOrders: ORDERS,
+      selection: makeSelection(['USMF|PO1', 'USMF|PO2']),
+      saveValue: vi.fn(),
+      correctField,
+    }));
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+
+    expect(result.current.dialogState.failedRows).toHaveLength(1);
+    await act(async () => { await result.current.dialogActions.onRetryRow('USMF|PO2'); });
+    expect(result.current.dialogState.failedRows).toHaveLength(0);
+    expect(result.current.dialogState.summaryMessage).toMatch(/Failed: 0/);
+  });
+});

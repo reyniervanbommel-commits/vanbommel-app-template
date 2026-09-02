@@ -9,6 +9,8 @@ const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
 const remarksService = require('../services/RowRemarksService');
 
+const errorHandler = require('../middleware/errorHandler');
+
 const originalRead = dataService.read;
 const originalGetAsync = settingsService.getAsync;
 const originalSetReaction = remarksService.setReaction;
@@ -154,6 +156,48 @@ describe('refresh progress en viewed-rechten', () => {
       });
     } finally {
       dataService.markViewed = original;
+    }
+  });
+});
+
+describe('POST /:tableKey/correct — D365-foutdetail (#AB:295)', () => {
+  const originalCorrect = dataService.correctField;
+  const originalAppEnv = process.env.APP_ENV;
+
+  afterEach(() => {
+    dataService.correctField = originalCorrect;
+    process.env.APP_ENV = originalAppEnv;
+  });
+
+  it('geeft err.message door met err.status, ook als errorHandler in productie draait', async () => {
+    process.env.APP_ENV = 'production';
+    const err = new Error('D365 OData request failed (400): PurchaseOrderName is locked');
+    err.status = 400;
+    dataService.correctField = vi.fn().mockRejectedValue(err);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.user = { id: 1, role: 'employee' }; next(); });
+    app.use('/api/data', dataRouter);
+    app.use(errorHandler);
+
+    const server = await new Promise((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.address().port}/api/data/purchase-orders/correct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          columnId: 1, partitionKey: 'WHSL', recordKey: 'PO-1', value: 'x', basedOnValue: 'oud',
+        }),
+      });
+      const body = await res.json();
+      expect(res.status).toBe(400);
+      expect(body.error).toBe('D365 OData request failed (400): PurchaseOrderName is locked');
+      expect(body.error).not.toBe('An error occurred');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
     }
   });
 });

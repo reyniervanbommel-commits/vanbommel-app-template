@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { resolveOrderSelectionKey, rowSelectionKey } from './usePurchaseOrderRowSelection';
+import { valuesEqual, runCorrectRows } from './purchaseOrderBulkEditRun';
+import { usePurchaseOrderBulkEditRetry } from './usePurchaseOrderBulkEditRetry';
 
 const EMPTY_DIALOG_STATE = {
   open: false,
@@ -9,22 +11,21 @@ const EMPTY_DIALOG_STATE = {
   processedCount: 0,
   busy: false,
   summaryMessage: '',
+  failedRows: [],
+  updated: 0,
+  skipped: 0,
 };
 
 function isHeaderCellUpdate(payload) {
   return payload?.lineNumber === null || payload?.lineNumber === undefined;
 }
 
-function valuesEqual(left, right) {
-  if (Object.is(left, right)) return true;
-  const normalizedLeft = left === undefined ? null : left;
-  const normalizedRight = right === undefined ? null : right;
-  if (Object.is(normalizedLeft, normalizedRight)) return true;
-  return String(normalizedLeft ?? '') === String(normalizedRight ?? '');
-}
-
 function createBulkErrorMessage({ updated, skipped, notTried }) {
   return `Bulk edit stopped due to an error. Updated: ${updated}. Skipped (already equal): ${skipped}. Not attempted (after error): ${notTried}.`;
+}
+
+function buildCorrectSummaryMessage({ updated, skipped, failedCount }) {
+  return `Bulk edit finished. Updated: ${updated}. Skipped: ${skipped}. Failed: ${failedCount}.`;
 }
 
 /**
@@ -66,17 +67,34 @@ export function usePurchaseOrderBulkEdit({
     await saveValue(payload);
   }, [correctField, saveValue]);
 
+  const handleFailedRowsChange = useCallback((updateFailedRows) => setDialogState((prev) => {
+    const failedRows = updateFailedRows(prev.failedRows || []);
+    return {
+      ...prev,
+      failedRows,
+      summaryMessage: buildCorrectSummaryMessage({
+        updated: prev.updated,
+        skipped: prev.skipped,
+        failedCount: failedRows.length,
+      }),
+    };
+  }), []);
+
+  const retry = usePurchaseOrderBulkEditRetry({
+    failedRows: dialogState.failedRows,
+    onFailedRowsChange: handleFailedRowsChange,
+    runSingleUpdate,
+  });
+
   const showDecisionDialog = useCallback(({ columnLabel, selectedCount }) => (
     new Promise((resolve) => {
       decisionResolverRef.current = resolve;
       setDialogState({
+        ...EMPTY_DIALOG_STATE,
         open: true,
         mode: 'confirm',
         columnLabel,
         selectedCount,
-        processedCount: 0,
-        busy: false,
-        summaryMessage: '',
       });
     })
   ), []);
@@ -146,6 +164,42 @@ export function usePurchaseOrderBulkEdit({
     closeDialog();
   }, [closeDialog, openSummaryDialog, runSingleUpdate]);
 
+  const runBulkUpdateCorrect = useCallback(async (payload, rows, activeOrderKey) => {
+    const candidates = rows.map((row) => ({
+      dataAreaId: row.dataAreaId,
+      orderNumber: row.orderNumber,
+      currentValue: row?.values?.[payload.columnKey],
+    }));
+    let processed = 0;
+    const { updated, skipped, failedRows } = await runCorrectRows({
+      candidates,
+      payload,
+      runSingleUpdate,
+      onSettled: () => {
+        processed += 1;
+        setDialogState((previous) => ({ ...previous, processedCount: processed }));
+      },
+    });
+    if (failedRows.length === 0) {
+      closeDialog();
+      return;
+    }
+    setDialogState((previous) => ({
+      ...previous,
+      open: true,
+      mode: 'summary',
+      busy: false,
+      failedRows,
+      updated,
+      skipped,
+      summaryMessage: buildCorrectSummaryMessage({ updated, skipped, failedCount: failedRows.length }),
+    }));
+    const matching = failedRows.find((row) => row.key === activeOrderKey);
+    if (matching) {
+      throw new Error(matching.errorMessage);
+    }
+  }, [closeDialog, runSingleUpdate]);
+
   const executeWithBulkOption = useCallback(async (mode, payload) => {
     if (!isHeaderCellUpdate(payload)) {
       await runSingleUpdate(mode, payload);
@@ -164,10 +218,15 @@ export function usePurchaseOrderBulkEdit({
       await runSingleUpdate(mode, payload);
       return;
     }
+    if (mode === 'correct') {
+      await runBulkUpdateCorrect(payload, selectedVisibleOrders, activeOrderKey);
+      return;
+    }
     await runBulkUpdate({ mode, payload, rows: selectedVisibleOrders });
   }, [
     columnLabelByKey,
     runBulkUpdate,
+    runBulkUpdateCorrect,
     runSingleUpdate,
     selectedVisibleKeys,
     selectedVisibleOrders,
@@ -191,22 +250,31 @@ export function usePurchaseOrderBulkEdit({
     closeDialog();
   }, [closeDialog, dialogState.mode, resolveDialogDecision]);
 
+  const exposedDialogState = useMemo(
+    () => ({ ...dialogState, retryingBulk: retry.retryingBulk }),
+    [dialogState, retry.retryingBulk],
+  );
+
   return useMemo(() => ({
     handleSaveValue,
     handleCorrectField,
-    dialogState,
+    dialogState: exposedDialogState,
     dialogActions: {
       onOpenChange: handleDialogOpenChange,
       onChooseSingleCell: () => resolveDialogDecision('single'),
       onChooseBulk: () => resolveDialogDecision('bulk'),
       onCloseSummary: closeDialog,
+      onRetryRow: retry.retryRow,
+      onRetryAllFailed: retry.retryAllFailed,
     },
   }), [
     closeDialog,
-    dialogState,
+    exposedDialogState,
     handleCorrectField,
     handleDialogOpenChange,
     handleSaveValue,
     resolveDialogDecision,
+    retry.retryAllFailed,
+    retry.retryRow,
   ]);
 }
