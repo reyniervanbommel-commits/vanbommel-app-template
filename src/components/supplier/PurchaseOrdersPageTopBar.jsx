@@ -16,6 +16,7 @@ import { ALL_TAB_ID, hasExtraViewTabs, inferGroupColumnKey } from '../../utils/v
 import PurchaseOrderHiddenRowsPanel from './PurchaseOrderHiddenRowsPanel';
 import PurchaseOrderErrorDialog from './PurchaseOrderErrorDialog';
 import PurchaseOrderChangeActivityBar from './PurchaseOrderChangeActivityBar';
+import PurchaseOrderTableZoomControl from './PurchaseOrderTableZoomControl';
 import { useAuth } from '../../context/AuthContext';
 
 const useStyles = makeStyles({
@@ -179,6 +180,7 @@ export default function PurchaseOrdersPageTopBar({
         </div>
 
         <div className={styles.headerRight}>
+          <PurchaseOrderTableZoomControl />
           {hiddenRowsState ? (
             <PurchaseOrderHiddenRowsPanel
               hiddenRows={hiddenRowsState.hiddenRows}

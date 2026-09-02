@@ -11,6 +11,7 @@ import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardL
 import { usePurchaseOrdersBoardStickyColumns } from '../../hooks/usePurchaseOrdersBoardStickyColumns';
 import { usePurchaseOrderRowLocate } from '../../hooks/usePurchaseOrderRowLocate';
 import { applyCollapsedColumnWidths } from '../../utils/collapsedColumnUtils';
+import { applyPoTableZoom, subscribePoTableZoom } from '../../utils/poTableZoom';
 
 function PurchaseOrdersBoardTable({
   data,
@@ -207,6 +208,20 @@ function PurchaseOrdersBoardTable({
   const handleClearAllFilters = useCallback(() => {
     clearAllFilters?.();
   }, [clearAllFilters]);
+  const frameRef = useRef(null);
+  const frameUnsubRef = useRef(null);
+  const setFrameNode = useCallback((node) => {
+    if (frameRef.current && frameUnsubRef.current) frameUnsubRef.current();
+    frameUnsubRef.current = null;
+    frameRef.current = node;
+    if (!node) return;
+    applyPoTableZoom(node);
+    frameUnsubRef.current = subscribePoTableZoom(() => applyPoTableZoom(node));
+  }, []);
+  useEffect(() => () => {
+    frameUnsubRef.current?.();
+    frameUnsubRef.current = null;
+  }, []);
 
   if (!items.length) {
     return <div className={styles.empty}>No data found</div>;
@@ -214,7 +229,7 @@ function PurchaseOrdersBoardTable({
 
   return (
     <>
-      <div className={styles.frame}>
+      <div className={styles.frame} ref={setFrameNode}>
         <div className={styles.wrapper} ref={wrapperRef}>
           <table className={styles.table}>
             <PurchaseOrdersBoardTableHeader
