@@ -30,6 +30,7 @@ describe('AdminGeneralSettings', () => {
     await waitFor(() => {
       expect(screen.getByText('90%')).toBeTruthy();
     });
+    expect(screen.getByRole('button', { name: /Table zoom/i })).toBeTruthy();
     expect(apiRequest).toHaveBeenCalledWith('/admin/settings/general');
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
   });
