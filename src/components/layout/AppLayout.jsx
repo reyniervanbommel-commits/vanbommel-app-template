@@ -13,6 +13,7 @@ import { ROLES } from '../../constants/roles';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
 import AppNavItem from './AppNavItem';
 import AppShellHeader from './AppShellHeader';
+import BulkWriteBackJobBadge from './BulkWriteBackJobBadge';
 import { kickDataPagesPrefetch } from '../../utils/dataPagesPrefetch';
 
 // Rail-items die de idle-prefetch mogen versnellen bij hover (toont intentie om te navigeren).
@@ -219,6 +220,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
         vendorCompanyName={vendorCompanyName}
         onNavigateAdmin={handleNavigateAdmin}
         onLogout={handleLogout}
+        endSlot={<BulkWriteBackJobBadge />}
       />
 
       <div className={styles.body}>

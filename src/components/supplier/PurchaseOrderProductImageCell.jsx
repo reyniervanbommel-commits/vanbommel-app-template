@@ -7,6 +7,7 @@ import {
   PRODUCT_IMAGE_LOAD_DELAY_MS,
 } from '../../utils/purchaseOrderProductImageColumn';
 import { hasFailedProductImage, markProductImageFailed } from '../../utils/productImageFailureCache';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 
 const HOVER_PREVIEW_CHROME_PX = 48;
 
@@ -15,8 +16,8 @@ const useStyles = makeStyles({
     display: 'block',
     position: 'relative',
     width: '100%',
-    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
-    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    height: poTableZoomedPx(PRODUCT_IMAGE_CELL_HEIGHT),
+    maxHeight: poTableZoomedPx(PRODUCT_IMAGE_CELL_HEIGHT),
     overflow: 'hidden',
   },
   imageButton: {
@@ -24,8 +25,8 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
-    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    height: poTableZoomedPx(PRODUCT_IMAGE_CELL_HEIGHT),
+    maxHeight: poTableZoomedPx(PRODUCT_IMAGE_CELL_HEIGHT),
     ...shorthands.padding(0),
     ...shorthands.border('none'),
     borderRadius: 0,
@@ -41,7 +42,7 @@ const useStyles = makeStyles({
     width: '100%',
     height: '100%',
     maxWidth: '100%',
-    maxHeight: `${PRODUCT_IMAGE_CELL_HEIGHT}px`,
+    maxHeight: poTableZoomedPx(PRODUCT_IMAGE_CELL_HEIGHT),
     objectFit: 'contain',
   },
   // Kept invisible (but still laid out) until `onLoad` fires, so a failing image

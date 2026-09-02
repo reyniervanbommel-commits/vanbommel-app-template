@@ -19,6 +19,7 @@ const { getSecretExpiryStatus } = require('../utils/secretExpiry');
 const { expandRetentionSettings } = require('../utils/syncRetentionSettings');
 const refreshRunService = require('../services/RefreshRunService');
 const { parseAlertEmails, serializeAlertEmails } = require('../utils/alertEmails');
+const poTableZoomSettings = require('../services/PoTableZoomSettings');
 
 function getPool() {
   return getSqlPool();
@@ -499,6 +500,32 @@ router.delete('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, n
       result,
     );
     res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── General app settings (PO table zoom, all users) ────────────────────────
+
+router.get('/settings/general', async (req, res, next) => {
+  try {
+    const poTableZoom = await poTableZoomSettings.getZoom();
+    res.json({ poTableZoom });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/settings/general', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    if (req.body?.poTableZoom === undefined) {
+      return res.status(400).json({ error: 'poTableZoom is required' });
+    }
+    const poTableZoom = await poTableZoomSettings.setZoom(req.body.poTableZoom, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_GENERAL_SETTINGS', 'app_settings', null, {
+      poTableZoom,
+    });
+    res.json({ success: true, poTableZoom });
   } catch (err) {
     next(err);
   }

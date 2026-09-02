@@ -1,6 +1,16 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { BulkWriteBackJobProvider, useBulkWriteBackJob } from '../context/BulkWriteBackJobContext';
 import { usePurchaseOrderBulkEdit } from './usePurchaseOrderBulkEdit';
+
+vi.mock('./useAppToast', () => ({
+  useAppToast: () => ({
+    notify: vi.fn(),
+    notifyError: vi.fn(),
+    notifySuccess: vi.fn(),
+  }),
+}));
+vi.mock('../utils/api', () => ({ apiRequest: vi.fn() }));
 
 const COLUMNS = [{ key: 'status', label: 'Status' }];
 const ORDERS = [
@@ -14,17 +24,27 @@ function makeSelection(selectedKeys) {
   return { isSelected: (key) => keys.has(key) };
 }
 
-function setup({ selectedKeys = ['USMF|PO1', 'USMF|PO2'] } = {}) {
-  const saveValue = vi.fn().mockResolvedValue();
-  const correctField = vi.fn().mockResolvedValue();
-  const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+function wrapper({ children }) {
+  return <BulkWriteBackJobProvider>{children}</BulkWriteBackJobProvider>;
+}
+
+function useCombined(props) {
+  const bulk = usePurchaseOrderBulkEdit(props);
+  const jobCtx = useBulkWriteBackJob();
+  return { ...bulk, job: jobCtx.job, retryRow: jobCtx.retryRow, retryAllFailed: jobCtx.retryAllFailed };
+}
+
+function setup({ selectedKeys = ['USMF|PO1', 'USMF|PO2'], saveValue, correctField } = {}) {
+  const resolvedSave = saveValue || vi.fn().mockResolvedValue();
+  const resolvedCorrect = correctField || vi.fn().mockResolvedValue();
+  const { result } = renderHook(() => useCombined({
     visibleHeaderColumns: COLUMNS,
     visibleOrders: ORDERS,
     selection: makeSelection(selectedKeys),
-    saveValue,
-    correctField,
-  }));
-  return { result, saveValue, correctField };
+    saveValue: resolvedSave,
+    correctField: resolvedCorrect,
+  }), { wrapper });
+  return { result, saveValue: resolvedSave, correctField: resolvedCorrect };
 }
 
 describe('usePurchaseOrderBulkEdit — geen dialoog nodig', () => {
@@ -89,7 +109,6 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
 
   it('"bulk" past de wijziging toe op alle geselecteerde rijen, slaat rijen over die al gelijk zijn', async () => {
     const { result, saveValue } = setup({ selectedKeys: ['USMF|PO1', 'USMF|PO2'] });
-    // PO1 en PO2 staan beide al op 'Open' — payload.value='Open' betekent: geen van beide wijzigt.
     const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Open' };
 
     let pending;
@@ -97,13 +116,12 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
     act(() => result.current.dialogActions.onChooseBulk());
     await act(async () => { await pending; });
 
-    expect(saveValue).not.toHaveBeenCalled(); // beide rijen al gelijk → geskipt
+    expect(saveValue).not.toHaveBeenCalled();
     expect(result.current.dialogState.open).toBe(false);
   });
 
   it('"bulk" schrijft alleen rijen weg die daadwerkelijk wijzigen', async () => {
     const { result, saveValue } = setup({ selectedKeys: ['USMF|PO1', 'USMF|PO3'] });
-    // PO1='Open'→'Closed' (wijzigt), PO3='Closed'→'Closed' (skip).
     const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Closed' };
 
     let pending;
@@ -115,31 +133,32 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
     expect(saveValue).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', value: 'Closed' }));
   });
 
-  it('handleCorrectField gebruikt correctField i.p.v. saveValue en geeft basedOnValue mee', async () => {
+  it('handleCorrectField start een achtergrondjob en sluit de dialoog meteen', async () => {
     const { result, correctField, saveValue } = setup({ selectedKeys: ['USMF|PO1', 'USMF|PO3'] });
     const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Closed' };
 
     let pending;
     act(() => { pending = result.current.handleCorrectField(payload); });
     act(() => result.current.dialogActions.onChooseBulk());
-    await act(async () => { await pending; });
+    const returned = await act(async () => pending);
 
+    expect(returned).toEqual({ background: true });
+    expect(result.current.dialogState.open).toBe(false);
     expect(saveValue).not.toHaveBeenCalled();
-    expect(correctField).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', basedOnValue: 'Open' }));
+    await waitFor(() => {
+      expect(correctField).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', basedOnValue: 'Open' }));
+    });
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
   it('stopt bij een fout, toont een samenvatting met updated/skipped/not-attempted en verwerpt de aanroep', async () => {
     const saveValue = vi.fn()
       .mockResolvedValueOnce()
       .mockRejectedValueOnce(new Error('write failed'));
-    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
-      visibleHeaderColumns: COLUMNS,
-      visibleOrders: ORDERS,
-      selection: makeSelection(['USMF|PO1', 'USMF|PO2', 'USMF|PO3']),
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2', 'USMF|PO3'],
       saveValue,
-      correctField: vi.fn(),
-    }));
-    // Alle 3 rijen wijzigen (geen 'Open'-waarde), dus geen skips vóór de fout.
+    });
     const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
 
     let pending;
@@ -164,5 +183,198 @@ describe('usePurchaseOrderBulkEdit — bulk-beslissingsdialoog', () => {
     await act(async () => { await pending; });
 
     expect(saveValue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('usePurchaseOrderBulkEdit — correct-pad achtergrondjob (#AB:295)', () => {
+  it('gaat door na een fout op rij 2 van 3 en houdt failedRows in de job', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('conflict on PO2'))
+      .mockResolvedValueOnce();
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2', 'USMF|PO3'],
+      correctField,
+    });
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+
+    expect(result.current.dialogState.open).toBe(false);
+    await waitFor(() => expect(correctField).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.job?.status).toBe('needsAttention'));
+    expect(result.current.job.failedRows).toEqual([
+      expect.objectContaining({ orderNumber: 'PO2', basedOnValue: 'Open', errorMessage: 'conflict on PO2' }),
+    ]);
+    expect(result.current.job.summaryMessage).toMatch(/Failed: 1/);
+    expect(result.current.job.summaryMessage).toMatch(/Updated: 2/);
+  });
+
+  it('resolved zonder throw als de initiërende rij zelf faalt', async () => {
+    const correctField = vi.fn()
+      .mockRejectedValueOnce(new Error('locked PO1'))
+      .mockResolvedValueOnce();
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2'],
+      correctField,
+    });
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+    await waitFor(() => expect(result.current.job?.failedRows?.length).toBe(1));
+    expect(result.current.job.failedRows).toEqual([
+      expect.objectContaining({ orderNumber: 'PO1' }),
+    ]);
+  });
+
+  it('houdt failedRows van andere rijen in de job, niet in de dialoog', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('locked PO2'));
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2'],
+      correctField,
+    });
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+    await waitFor(() => expect(result.current.job?.failedRows?.[0]?.orderNumber).toBe('PO2'));
+    expect(result.current.dialogState.open).toBe(false);
+  });
+
+  it('retryRow haalt een geslaagde rij uit de job', async () => {
+    const correctField = vi.fn()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('conflict on PO2'))
+      .mockResolvedValueOnce();
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2'],
+      correctField,
+    });
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+    let pending;
+    act(() => { pending = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+    await waitFor(() => expect(result.current.job?.failedRows).toHaveLength(1));
+
+    await act(async () => { await result.current.retryRow('USMF|PO2'); });
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
+  });
+
+  it('weiger een tweede job zolang de eerste loopt', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const correctField = vi.fn(() => gate);
+    const { result } = setup({
+      selectedKeys: ['USMF|PO1', 'USMF|PO2'],
+      correctField,
+    });
+    const payload = { dataAreaId: 'USMF', orderNumber: 'PO1', lineNumber: null, columnKey: 'status', value: 'Shipped' };
+
+    let first;
+    act(() => { first = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await first; });
+    await waitFor(() => expect(result.current.job?.status).toBe('running'));
+
+    let second;
+    act(() => { second = result.current.handleCorrectField(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => {
+      await expect(second).rejects.toThrow(/already running/);
+    });
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
+  });
+});
+
+describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
+  const LINKED_COLUMNS = [{ key: 'colorValues', label: 'Color' }];
+  const LINKED_ORDERS = [
+    { dataAreaId: 'USMF', orderNumber: 'PO1', linkedLineValues: { colorValues: ['Red'] } },
+    { dataAreaId: 'USMF', orderNumber: 'PO2', linkedLineValues: { colorValues: ['Red'] } },
+    { dataAreaId: 'USMF', orderNumber: 'PO3', linkedLineValues: { colorValues: ['Blue', 'Green'] } },
+  ];
+  const PUSHED_PAYLOAD = {
+    dataAreaId: 'USMF',
+    orderNumber: 'PO1',
+    headerColumnKey: 'colorValues',
+    columnKey: 'colorValues',
+    lineColumnId: 44,
+    lineColumnKey: 'color',
+    value: 'Green',
+  };
+
+  function setupLinked({ selectedKeys = ['USMF|PO1', 'USMF|PO2'] } = {}) {
+    const correctAllLines = vi.fn().mockResolvedValue();
+    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+      visibleHeaderColumns: LINKED_COLUMNS,
+      visibleOrders: LINKED_ORDERS,
+      selection: makeSelection(selectedKeys),
+      saveValue: vi.fn(),
+      correctField: vi.fn(),
+      correctAllLines,
+    }), { wrapper });
+    return { result, correctAllLines };
+  }
+
+  it('opent de dialoog bij een gepushte header-cel op een multi-selectie', async () => {
+    const { result } = setupLinked();
+
+    act(() => { result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
+
+    expect(result.current.dialogState).toMatchObject({
+      open: true,
+      mode: 'confirm',
+      columnLabel: 'Color',
+      selectedCount: 2,
+    });
+  });
+
+  it('"single" schrijft alleen de actieve order terug', async () => {
+    const { result, correctAllLines } = setupLinked();
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
+    act(() => result.current.dialogActions.onChooseSingleCell());
+    await act(async () => { await pending; });
+
+    expect(correctAllLines).toHaveBeenCalledTimes(1);
+    expect(correctAllLines).toHaveBeenCalledWith(PUSHED_PAYLOAD);
+    expect(result.current.dialogState.open).toBe(false);
+  });
+
+  it('"bulk" schrijft elke geselecteerde order terug en slaat unieke gelijke waarden over', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1', 'USMF|PO2', 'USMF|PO3'] });
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+
+    expect(correctAllLines).toHaveBeenCalledTimes(3);
+    expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', value: 'Green' }));
+    expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO2', value: 'Green' }));
+    expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO3', value: 'Green' }));
+  });
+
+  it('"bulk" slaat een order over waarvan de unieke linked waarde al gelijk is', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1', 'USMF|PO2'] });
+    const payload = { ...PUSHED_PAYLOAD, value: 'Red' };
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(payload); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await act(async () => { await pending; });
+
+    expect(correctAllLines).not.toHaveBeenCalled();
   });
 });

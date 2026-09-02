@@ -148,11 +148,13 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     onSaveValue: bulkEdit.handleSaveValue,
     // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
     onCorrect: isStaff ? bulkEdit.handleCorrectField : undefined,
+    onCorrectAllLines: isStaff ? bulkEdit.handleCorrectAllLines : undefined,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
     isStaff: tableContext.isStaff,
     showHistoryIndicators: tableContext.showHistoryIndicators !== false,
   }), [
+    bulkEdit.handleCorrectAllLines,
     bulkEdit.handleCorrectField,
     bulkEdit.handleSaveValue,
     isStaff,

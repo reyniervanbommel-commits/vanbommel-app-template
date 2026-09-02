@@ -20,4 +20,11 @@ describe('columnTextStyleUtils', () => {
     const style = getFormattedCellContentStyle(true, '#e2445c1a');
     expect(style.color).toBe('#323130');
   });
+
+  it('schrijft kolombreedte als calc maal CSS-var', () => {
+    const style = getColumnCellStyle({ amount: 200 }, {}, 'amount');
+    expect(style.width).toBe('calc(200px * var(--po-table-zoom, 0.85))');
+    expect(style.minWidth).toBe(style.width);
+    expect(style.maxWidth).toBe(style.width);
+  });
 });
