@@ -25,6 +25,7 @@ const {
 const { searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
+const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
 const { getSupplierAccount } = require('../utils/supplierScope');
 const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
 const settingsService = require('../services/SettingsService');
@@ -34,6 +35,15 @@ const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
 const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
 
 const router = express.Router();
+const PAV_TABLE_KEY = 'product-attribute-values';
+
+function requirePavAdmin(req, res, next) {
+  const tableKey = String(req.params.tableKey || '').trim();
+  if (tableKey !== PAV_TABLE_KEY) return next();
+  return requireRole(ROLES.ADMIN)(req, res, next);
+}
+
+router.use('/:tableKey', requirePavAdmin);
 
 function remarksActor(req) {
   return { id: req.user?.id, role: req.user?.role, vendor_account: req.user?.vendor_account || null };
@@ -252,6 +262,25 @@ router.post('/:tableKey/viewed', viewedRoleGuard, async (req, res, next) => {
   }
 });
 
+router.get('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    if (req.params.tableKey !== PAV_TABLE_KEY) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    return res.json({ names: await pavBoardColumns.listBoardAttributeNames() });
+  } catch (err) { return next(err); }
+});
+
+router.post('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    if (req.params.tableKey !== PAV_TABLE_KEY) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const body = pavBoardColumns.normalizeBoardColumnBody(req.body);
+    return res.json(await pavBoardColumns.setBoardAttributeVisible(body, req.user.id));
+  } catch (err) { return next(err); }
+});
+
 // GET /api/data/:tableKey/columns?scope=&includeInactive=&enriched=
 router.get('/:tableKey/columns', async (req, res, next) => {
   try {
@@ -408,6 +437,7 @@ router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
       columnId,
       { writable: req.body?.writable, mechanism: req.body?.mechanism },
       req.user.id,
+      req.params.tableKey,
     );
     return res.json({ column });
   } catch (err) {

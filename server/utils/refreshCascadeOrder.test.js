@@ -15,6 +15,16 @@ describe('refreshCascadeOrder', () => {
     expect(ordered).toEqual(['vendors', 'items', 'product-receipt-lines', 'excel-map1']);
   });
 
+  it('zet product-attribute-values ná items', async () => {
+    const loadTable = async (key) => ({ key, source: { providerType: 'd365-odata' } });
+    const ordered = await orderLookupTargetKeys(
+      ['product-attribute-values', 'vendors', 'items'],
+      loadTable,
+    );
+    expect(ordered.indexOf('items')).toBeLessThan(ordered.indexOf('product-attribute-values'));
+    expect(ordered[0]).toBe('vendors');
+  });
+
   it('herkent excel-provider case-insensitive', () => {
     expect(isExcelTable({ source: { providerType: 'Excel' } })).toBe(true);
     expect(isExcelTable({ source: { providerType: 'd365-odata' } })).toBe(false);

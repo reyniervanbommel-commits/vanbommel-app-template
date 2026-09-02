@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   MessageBar,
   MessageBarBody,
@@ -15,6 +15,8 @@ import DataPreviewTables from './DataPreviewTables';
 import AdminInfoHint from './AdminInfoHint';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import { useDataModelAdmin } from '../../../hooks/useDataModelAdmin';
+import { useProductAttributeBoardColumns } from '../../../hooks/useProductAttributeBoardColumns';
+import ProductAttributeBoardColumnsPanel from './ProductAttributeBoardColumnsPanel';
 
 const useStyles = makeStyles({
   root: { width: '100%', maxWidth: 'none', display: 'flex', flexDirection: 'column', ...shorthands.gap('20px') },
@@ -56,14 +58,22 @@ export default function AdminDataModel() {
   const vendors = useDataModelAdmin('vendors');
   const items = useDataModelAdmin('items');
   const productReceiptLines = useDataModelAdmin('product-receipt-lines');
+  const productAttributeValues = useDataModelAdmin('product-attribute-values');
+  const pavBoardColumns = useProductAttributeBoardColumns(
+    selectedTab === 'product-attribute-values',
+  );
   const modelByTab = {
     'purchase-orders': purchaseOrders,
     vendors,
     items,
     'product-receipt-lines': productReceiptLines,
+    'product-attribute-values': productAttributeValues,
   };
   const selectedModel = modelByTab[selectedTab];
   const discoveryMessage = formatDiscoveryMessage(selectedModel?.discovery);
+  const handleTabSelect = useCallback((_, data) => {
+    setSelectedTab(data.value);
+  }, []);
 
   return (
     <div className={styles.root}>
@@ -77,11 +87,12 @@ export default function AdminDataModel() {
         </Text>
       </div>
 
-      <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)}>
+      <TabList selectedValue={selectedTab} onTabSelect={handleTabSelect}>
         <Tab value="purchase-orders">Purchase orders</Tab>
         <Tab value="vendors">Vendors</Tab>
         <Tab value="items">Items</Tab>
         <Tab value="product-receipt-lines">Product receipt lines</Tab>
+        <Tab value="product-attribute-values">Product attribute values</Tab>
       </TabList>
 
       {selectedModel.loading ? (
@@ -116,6 +127,15 @@ export default function AdminDataModel() {
             onDeleteColumn={selectedModel.deleteColumn}
             onDiscoverFields={selectedModel.discoverFields}
           />
+          {selectedTab === 'product-attribute-values' ? (
+            <ProductAttributeBoardColumnsPanel
+              names={pavBoardColumns.names}
+              loading={pavBoardColumns.loading}
+              error={pavBoardColumns.error}
+              togglingName={pavBoardColumns.togglingName}
+              onSetVisible={pavBoardColumns.setVisible}
+            />
+          ) : null}
         </>
       )}
     </div>

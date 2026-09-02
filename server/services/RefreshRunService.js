@@ -25,6 +25,7 @@ const ENTITY_LABELS = {
   vendors: 'Vendors',
   items: 'Items',
   'product-receipt-lines': 'Product receipt lines',
+  'product-attribute-values': 'Product attribute values',
 };
 
 let activeRun = null;

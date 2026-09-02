@@ -21,7 +21,7 @@ const {
   escapeODataLiteral,
   writeBackField,
 } = require('./D365ODataService');
-const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache } = require('./TableRegistryService');
+const { getPool, getTableByKey, listColumns, getLookups, invalidateTableCache, listRefreshCascadeTargets } = require('./TableRegistryService');
 const trackChangesService = require('./TrackChangesService');
 const { MARK_COUNT, buildMarkPattern } = require('../utils/trackChangeMarks');
 const {
@@ -55,6 +55,10 @@ const { time } = require('../utils/timing');
 const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
 const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
 const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
+const { chunkList, combineODataFilters, buildOneOfFilterClause } = require('../utils/odataFilterCombine');
+const { productAttributeValuesFetch } = require('./productAttributeValuesFetch');
+const { applyProductAttributePivot, loadProductAttributePivot } = require('./productAttributePivot');
+const { assertNotPavWritable } = require('../utils/productAttributeValues');
 const { accumulateChunkFetchProgress } = require('../utils/refreshProgress');
 const {
   FORBIDDEN_HEADER_D365_FIELDS,
@@ -142,10 +146,7 @@ function isRefreshRunning(tableKey) {
 async function resolveCascadeEntityKeys() {
   try {
     const table = await getTableByKey('purchase-orders');
-    const lookups = await getLookups(table.id);
-    const targets = [...new Set(
-      lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean)
-    )];
+    const targets = await listRefreshCascadeTargets(table.id);
     const ordered = await orderLookupTargetKeys(targets, getTableByKey);
     return ['purchase-orders', ...ordered];
   } catch {
@@ -701,36 +702,6 @@ function resolveConfiguredMaxItems(settingValue, tableMaxRows, fallbackMax = 200
   return fallbackMax;
 }
 
-function chunkList(values, size) {
-  const safeSize = Number.isFinite(size) && size > 0 ? Math.floor(size) : 20;
-  const list = Array.isArray(values) ? values : [];
-  const chunks = [];
-  for (let index = 0; index < list.length; index += safeSize) {
-    chunks.push(list.slice(index, index + safeSize));
-  }
-  return chunks;
-}
-
-function combineODataFilters(baseFilter, extraFilter) {
-  const base = String(baseFilter || '').trim();
-  const extra = String(extraFilter || '').trim();
-  if (!base) return extra;
-  if (!extra) return base;
-  return `(${base}) and (${extra})`;
-}
-
-function buildOneOfFilterClause(field, values) {
-  const normalizedField = String(field || '').trim();
-  const list = [...new Set((Array.isArray(values) ? values : [])
-    .map((value) => String(value || '').trim())
-    .filter(Boolean))];
-  if (!normalizedField || !list.length) return '';
-  if (list.length === 1) {
-    return `${normalizedField} eq '${escapeODataLiteral(list[0])}'`;
-  }
-  return `(${list.map((value) => `${normalizedField} eq '${escapeODataLiteral(value)}'`).join(' or ')})`;
-}
-
 async function listDistinctCacheFieldValues({ tableId, scope, sourceField }) {
   const normalizedScope = scope === 'detail' ? 'detail' : 'master';
   const normalizedField = String(sourceField || '').trim();
@@ -1193,6 +1164,7 @@ const FETCH_ADAPTERS = {
   vendors: vendorsFetch,
   items: itemsFetch,
   'product-receipt-lines': genericMasterD365Fetch,
+  'product-attribute-values': productAttributeValuesFetch,
 };
 
 function getFetchAdapter(table) {
@@ -2147,9 +2119,8 @@ async function persistRecordsChunk(pool, table, chunk, refreshStart, masterSourc
 // ---------------------------------------------------------------------------
 async function refreshLookupTargetsAfterPurchaseOrders(table, visitedTables) {
   if (!table || table.key !== 'purchase-orders') return;
-  const lookups = await getLookups(table.id);
   const targetKeys = await orderLookupTargetKeys(
-    lookups.map((lookup) => String(lookup?.targetTableKey || '').trim()).filter(Boolean),
+    await listRefreshCascadeTargets(table.id),
     getTableByKey,
   );
   const refreshFailures = [];
@@ -2232,7 +2203,8 @@ async function refresh(tableKey, options = {}) {
   };
 
   try {
-    const { records, total, truncated } = await adapter(table, { onProgress: handleFetchProgress });
+    const { records, total, truncated, noticeText } = await adapter(table, { onProgress: handleFetchProgress });
+    if (noticeText) refreshRunService.updateEntity(table.key, { notice_text: noticeText });
     const progressBeforeSave = getRefreshProgress(tableKey);
     const totalToFetch = Number.isFinite(Number(progressBeforeSave.totalToFetch))
       ? Number(progressBeforeSave.totalToFetch)
@@ -3119,6 +3091,12 @@ function buildDetailRow(d, ctx) {
   const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
   const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
   applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+  const pavExtras = applyProductAttributePivot(
+    detailValues,
+    detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
+    ctx.pavPivot,
+    ctx.pavColumns,
+  );
   if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
     applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
   }
@@ -3149,6 +3127,7 @@ function buildDetailRow(d, ctx) {
     isRemoved,
     hasRemovalChange,
     changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
+    ...(pavExtras ? { pavExtras } : {}),
   };
 }
 
@@ -3607,6 +3586,8 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     : (Array.isArray(syncRules) ? syncRules : []);
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const compiledDetailFormulas = compileFormulaColumns(detailCols);
+  const pavColumns = (detailCols || []).filter((column) => column?.options?.kind === 'product-attribute');
+  const pavPivot = await loadProductAttributePivot(detailCols);
   // Eén keer per read berekend (niet per rij/formule) zodat TODAY() voor alle
   // rijen in deze response identiek is en er geen extra rekenkosten bijkomen.
   const formulaToday = getUtcMidnight();
@@ -3645,7 +3626,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   const detailContext = {
     detailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
-    compiledDetailFormulas, formulaToday,
+    compiledDetailFormulas, formulaToday, pavPivot, pavColumns,
   };
 
   let newCount = 0;
@@ -4102,10 +4083,13 @@ async function readRowDetails({ tableKey, partitionKey, recordKey, userId = null
   };
 
   const compiledDetailFormulas = compileFormulaColumns(detailCols);
+  const pavColumns = (detailCols || []).filter((column) => column?.options?.kind === 'product-attribute');
+  const pavPivot = await loadProductAttributePivot(detailCols);
   const detailContext = {
     detailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow: ledger.hasLedgerWindow,
     compiledDetailFormulas, formulaToday: getUtcMidnight(),
+    pavPivot, pavColumns,
   };
   const details = detailsResult.recordset.map((d) => {
     const detail = buildDetailRow(d, detailContext);
@@ -4240,6 +4224,7 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   if (!column || !column.isActive || column.tableId !== table.id) {
     throw Object.assign(new Error('Column not found'), { status: 404 });
   }
+  assertNotPavWritable(tableKey, column);
   assertCustomColumnWritable(column);
 
   const part = String(partitionKey || '').trim();
@@ -4610,6 +4595,7 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   if (!column || !column.isActive || column.tableId !== table.id) {
     throw Object.assign(new Error('Column not found'), { status: 404 });
   }
+  assertNotPavWritable(tableKey, column);
   if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
     throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
   }

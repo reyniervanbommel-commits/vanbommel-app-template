@@ -1,6 +1,6 @@
 'use strict';
 
-const { mapColumnRow } = require('./TableRegistryService');
+const { mapColumnRow, mergeCascadeTargetKeys } = require('./TableRegistryService');
 
 describe('TableRegistryService.mapColumnRow', () => {
   it('mapt formula_expr naar formulaExpr', () => {
@@ -53,3 +53,11 @@ describe('TableRegistryService.mapColumnRow', () => {
     expect(mapped.formulaExpr).toBeNull();
   });
 });
+
+describe('TableRegistryService.mergeCascadeTargetKeys', () => {
+  it('uniet lookup- en pivot-keys zonder duplicaten', () => {
+    expect(mergeCascadeTargetKeys(['vendors', 'items'], ['items', 'product-attribute-values']))
+      .toEqual(['vendors', 'items', 'product-attribute-values']);
+  });
+});
+
