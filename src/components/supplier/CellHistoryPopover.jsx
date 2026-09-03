@@ -12,6 +12,7 @@ import {
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
 import { brandColor, interaction } from '../../styles/brandTokens';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 import {
   formatHistoryDate,
   formatHistoryStatus,
@@ -19,7 +20,7 @@ import {
   historyStatusColor,
 } from '../../utils/cellHistoryFormat';
 
-const FOLD_SIZE = '10px';
+const FOLD_SIZE = poTableZoomedPx(10);
 
 const useStyles = makeStyles({
   wrapper: {

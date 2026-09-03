@@ -49,8 +49,8 @@ describe('CellHistoryPopover', () => {
     const trigger = screen.getByRole('button', { name: 'View cell history' });
     const style = window.getComputedStyle(trigger);
     expect(style.position).toBe('absolute');
-    expect(style.width).toBe('10px');
-    expect(style.height).toBe('10px');
+    expect(style.width).toContain('--po-table-zoom');
+    expect(style.height).toContain('--po-table-zoom');
     expect(style.top.includes('calc') || style.top === '0px').toBe(true);
     expect(style.right.includes('calc') || style.right === '0px').toBe(true);
   });

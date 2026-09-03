@@ -153,11 +153,11 @@ export const usePurchaseOrdersBoardRowsStyles = makeStyles({
     minWidth: 0,
     maxWidth: '100%',
     height: '100%',
-    maxHeight: `calc(${purchaseOrderBoardRowHeight} - 4px)`,
+    maxHeight: `calc(${purchaseOrderBoardRowHeight} - ${poTableZoomedPx(4)})`,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    lineHeight: `calc(${purchaseOrderBoardRowHeight} - 6px)`,
+    lineHeight: `calc(${purchaseOrderBoardRowHeight} - ${poTableZoomedPx(6)})`,
     ':has([data-cell-history-trigger="true"])': {
       overflow: 'visible',
     },
