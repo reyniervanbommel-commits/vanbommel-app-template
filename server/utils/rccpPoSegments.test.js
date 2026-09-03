@@ -57,6 +57,7 @@ describe('buildPoSegments', () => {
   function seg(itemNumber, qty, status, late, extra = {}) {
     return {
       itemNumber,
+      poNumber: extra.poNumber || 'PO-A',
       qty,
       status,
       late,
@@ -154,13 +155,14 @@ describe('buildPoSegments', () => {
     ]);
   });
 
-  it('merges the same item from different POs into one segment', () => {
+  it('emits one stack per PO when the same item appears on two orders', () => {
     const second = row();
     second.recordKey = 'PO-B';
     const byWeek = buildPoSegments([row(), second], baseConfig, window, { now: nowCurrent });
-    expect(byWeek.get(plannedWeek.key).segmentsAbove).toEqual([
-      seg('SKU-1', 8, 'ordered', false),
-      seg('SKU-1', 20, 'open', false),
+    const above = byWeek.get(plannedWeek.key).segmentsAbove;
+    expect(above.filter((s) => s.itemNumber === 'SKU-1' && s.status === 'open')).toEqual([
+      seg('SKU-1', 10, 'open', false, { poNumber: 'PO-A' }),
+      seg('SKU-1', 10, 'open', false, { poNumber: 'PO-B' }),
     ]);
   });
 

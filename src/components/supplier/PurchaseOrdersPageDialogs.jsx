@@ -22,7 +22,7 @@ export default function PurchaseOrdersPageDialogs({ formula, datePeriod, bulkEdi
         sourceColumn={datePeriod.state.sourceColumn}
         dateSourceColumns={datePeriod.dateSourceColumns}
       />
-      <PurchaseOrderBulkEditDialog {...bulkEdit.dialogState} {...bulkEdit.dialogActions} />
+      <PurchaseOrderBulkEditDialog dialogState={bulkEdit.dialogState} dialogActions={bulkEdit.dialogActions} />
     </>
   );
 }

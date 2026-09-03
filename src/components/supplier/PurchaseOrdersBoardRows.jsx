@@ -15,6 +15,7 @@ import {
   findActiveGroupSlotIndex,
 } from '../../utils/purchaseOrderBoardRowSlots';
 import { orderLocateKeyFromOrder } from '../../utils/purchaseOrderRowLocate';
+import { getPoTableZoom, subscribePoTableZoom } from '../../utils/poTableZoom';
 
 // Geschatte extra hoogte van een opengeklapte order zolang die (nog) niet gemeten is:
 // subregel-tabelkop + één rij per regel + wat padding. Wordt na mount vervangen door de
@@ -130,10 +131,11 @@ function PurchaseOrdersBoardRows({
   // op de opengeklapte rij. Houdt de virtualisatie kloppend bij variabele rijhoogtes.
   const [expandedHeights, setExpandedHeights] = useState(() => ({}));
   const handleMeasureExpanded = useCallback((rowId, heightPx) => {
+    const scale = getPoTableZoom() || 1;
+    const stored = Math.max(0, Math.round(heightPx / scale));
     setExpandedHeights((prev) => {
-      const next = Math.max(0, Math.round(heightPx));
-      if (Math.abs((prev[rowId] || 0) - next) < 1) return prev;
-      return { ...prev, [rowId]: next };
+      if (Math.abs((prev[rowId] || 0) - stored) < 1) return prev;
+      return { ...prev, [rowId]: stored };
     });
   }, []);
   // Per-slot hoogte: opengeklapte orders krijgen basis + (gemeten of geschatte) subtabel-hoogte.
@@ -157,6 +159,8 @@ function PurchaseOrdersBoardRows({
     rowHeights,
     overscan: 8,
     enabled: windowEnabled,
+    getScale: getPoTableZoom,
+    subscribeScale: subscribePoTableZoom,
   });
   // B1: Horizontale kolom-virtualisatie — alleen zichtbare kolommen renderen per rij
   const { colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount } = useBoardColumnWindow({
@@ -165,6 +169,8 @@ function PurchaseOrdersBoardRows({
     columnWidths: formatting.headerColumnWidths ?? {},
     overscanCols: 2,
     enabled: windowEnabled,
+    getScale: getPoTableZoom,
+    subscribeScale: subscribePoTableZoom,
   });
   const colWindow = useMemo(
     () => ({ colStart, colEnd, leftSpanCount, rightSpanCount, stickyCount }),

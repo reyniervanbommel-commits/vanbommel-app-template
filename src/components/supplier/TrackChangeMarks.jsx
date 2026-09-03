@@ -1,5 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { tokens } from '@fluentui/react-components';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 
 /**
  * TrackChangeMarks — pure weergave van maximaal vijf "track changes"-stippen onderin een cel.
@@ -39,11 +40,11 @@ function TrackChangeMarks({ pattern, mode }) {
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: '1px',
+        bottom: poTableZoomedPx(2),
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '3px',
+        gap: poTableZoomedPx(3),
         pointerEvents: 'none',
       }}
     >
@@ -51,8 +52,8 @@ function TrackChangeMarks({ pattern, mode }) {
         <span
           key={i}
           style={{
-            width: `${DOT_SIZE}px`,
-            height: `${DOT_SIZE}px`,
+            width: poTableZoomedPx(DOT_SIZE),
+            height: poTableZoomedPx(DOT_SIZE),
             borderRadius: '50%',
             backgroundColor: COLOR_BY_MARK[mark] || COLOR_BY_MARK.g,
           }}

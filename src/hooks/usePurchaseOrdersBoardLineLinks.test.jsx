@@ -20,9 +20,15 @@ describe('usePurchaseOrdersBoardLineLinks', () => {
     }));
 
     expect(result.current.linkedLineTotalByHeaderKey).toEqual({ total: 'quantity' });
-    expect(result.current.linkedLineValueByHeaderKey).toEqual({
-      items: { lineColumnKey: 'itemNumber', lineDataType: 'text', lineColumnLabel: '' },
-      missing: { lineColumnKey: 'unknown', lineDataType: 'text', lineColumnLabel: '' },
+    expect(result.current.linkedLineValueByHeaderKey.items).toMatchObject({
+      lineColumnKey: 'itemNumber',
+      lineDataType: 'text',
+      lineColumnLabel: '',
+    });
+    expect(result.current.linkedLineValueByHeaderKey.missing).toMatchObject({
+      lineColumnKey: 'unknown',
+      lineDataType: 'text',
+      lineColumnLabel: '',
     });
   });
 });

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
+import { poTableZoomedPx } from '../../utils/poTableZoom';
 
 const MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 1000;
@@ -46,6 +47,7 @@ export default function ResizableTableHeaderCell({
   className,
   minWidth = MIN_COLUMN_WIDTH,
   maxWidth = MAX_COLUMN_WIDTH,
+  getScale = () => 1,
   onResizeEnd,
   cellStyle,
   children,
@@ -98,14 +100,17 @@ export default function ResizableTableHeaderCell({
     event.stopPropagation();
     if (cleanupRef.current) cleanupRef.current();
 
-    const cellRect = cellRef.current?.getBoundingClientRect();
-    const startWidth = clampWidth(
-      cellRect?.width || width || minWidth,
+    const rawScale = typeof getScale === 'function' ? getScale() : 1;
+    const scale = Number.isFinite(rawScale) && rawScale !== 0 ? rawScale : 1;
+    const storedWidth = Number(width);
+    const measuredStoredWidth = cellRef.current?.getBoundingClientRect().width / scale;
+    const startStored = clampWidth(
+      Number.isFinite(storedWidth) ? storedWidth : measuredStoredWidth,
       minWidth,
       maxWidth
     );
     const startX = event.clientX;
-    applyDragWidth(startWidth);
+    applyDragWidth(startStored);
     setDragging(true);
 
     const previousUserSelect = document.body.style.userSelect;
@@ -131,7 +136,7 @@ export default function ResizableTableHeaderCell({
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
-      const nextWidth = clampWidth(startWidth + deltaX, minWidth, maxWidth);
+      const nextWidth = clampWidth(startStored + deltaX / scale, minWidth, maxWidth);
       if (nextWidth === latestWidthRef.current && !Number.isFinite(pendingWidthRef.current)) return;
       schedulePreviewWidth(nextWidth);
     };
@@ -159,7 +164,7 @@ export default function ResizableTableHeaderCell({
       document.body.style.userSelect = previousUserSelect;
       document.body.style.cursor = previousCursor;
     };
-  }, [applyDragWidth, finishDrag, maxWidth, minWidth, width]);
+  }, [applyDragWidth, finishDrag, getScale, maxWidth, minWidth, width]);
 
   useEffect(() => () => finishDrag(false), [finishDrag]);
 
@@ -168,8 +173,13 @@ export default function ResizableTableHeaderCell({
       ref={cellRef}
       className={combineClassNames(styles.cell, className)}
       style={resolvedWidth
-        ? { ...(cellStyle || {}), width: `${resolvedWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${resolvedWidth}px` }
-        : { ...(cellStyle || {}), minWidth: `${minWidth}px` }}
+        ? {
+          ...(cellStyle || {}),
+          width: poTableZoomedPx(resolvedWidth),
+          minWidth: poTableZoomedPx(minWidth),
+          maxWidth: poTableZoomedPx(resolvedWidth),
+        }
+        : { ...(cellStyle || {}), minWidth: poTableZoomedPx(minWidth) }}
       {...cellProps}
     >
       <div className={styles.content}>

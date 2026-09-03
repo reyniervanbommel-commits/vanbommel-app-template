@@ -1,16 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { makeStyles, tokens, shorthands, Text } from '@fluentui/react-components';
-import {
-  Person24Regular,
-  Table24Regular,
-  CloudLink24Regular,
-  Mail24Regular,
-  Flowchart24Regular,
-  History24Regular,
-  ArrowClockwise24Regular,
-  Link24Regular,
-} from '@fluentui/react-icons';
-import SidebarNavItem from '../shared/SidebarNavItem';
 import UsersManagement from './UsersManagement';
 import UserAnalytics from './UserAnalytics';
 import AdminODataSettings from './AdminODataSettings';
@@ -19,7 +8,10 @@ import ExcelLinkWizard from './datamodel/ExcelLinkWizard';
 import PasswordResetEmailTemplateSettings from './PasswordResetEmailTemplateSettings';
 import AdminTrackChangesSettings from './AdminTrackChangesSettings';
 import AdminD365Refresh from './AdminD365Refresh';
+import AdminGeneralSettings from './AdminGeneralSettings';
+import AdminSettingsSidebar from './AdminSettingsSidebar';
 import { useAuth } from '../../context/AuthContext';
+import { formatAudience, getSettingsTabRoles, getVisibleSettingsSections } from '../../utils/settingsAudience';
 
 const useStyles = makeStyles({
   page: {
@@ -29,26 +21,6 @@ const useStyles = makeStyles({
     height: '100%',
     overflow: 'hidden',
   },
-  sidebar: {
-    width: '220px',
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke1),
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    display: 'flex',
-    flexDirection: 'column',
-    flexShrink: 0,
-    overflowY: 'auto',
-  },
-  sectionHeading: {
-    ...shorthands.margin(0),
-    ...shorthands.padding('12px', '14px', '4px', '16px'),
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground3,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
   content: {
     flex: 1,
     minWidth: 0,
@@ -57,81 +29,43 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
   },
+  audience: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    marginBottom: tokens.spacingVerticalM,
+  },
 });
 
 export default function AdminPage() {
   const styles = useStyles();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const [adminTab, setAdminTab] = useState('users');
+  const userRole = user?.role;
+  const [adminTab, setAdminTab] = useState('general');
 
-  const handleTabUsers = useCallback(() => setAdminTab('users'), []);
-  const handleTabAnalytics = useCallback(() => setAdminTab('analytics'), []);
-  const handleTabOdata = useCallback(() => setAdminTab('odata'), []);
-  const handleTabDataModel = useCallback(() => setAdminTab('datamodel'), []);
-  const handleTabExternalLinks = useCallback(() => setAdminTab('external-links'), []);
-  const handleTabMailTemplate = useCallback(() => setAdminTab('mail-template'), []);
-  const handleTabTrackChanges = useCallback(() => setAdminTab('track-changes'), []);
-  const handleTabD365Refresh = useCallback(() => setAdminTab('d365-refresh'), []);
+  useEffect(() => {
+    const visible = getVisibleSettingsSections(userRole).flatMap((section) => section.items);
+    if (!visible.some((item) => item.id === adminTab)) {
+      setAdminTab(visible[0]?.id || 'general');
+    }
+  }, [adminTab, userRole]);
+
+  const handleSelectTab = useCallback((tabId) => {
+    setAdminTab(tabId);
+  }, []);
 
   return (
     <div className={styles.page}>
-      <aside className={styles.sidebar}>
-        <Text as="h2" className={styles.sectionHeading}>People</Text>
-        <SidebarNavItem
-          icon={Person24Regular}
-          label="Users"
-          active={adminTab === 'users'}
-          onClick={handleTabUsers}
-        />
-        <SidebarNavItem
-          icon={Table24Regular}
-          label="Analytics"
-          active={adminTab === 'analytics'}
-          onClick={handleTabAnalytics}
-        />
-        <SidebarNavItem
-          icon={Mail24Regular}
-          label="Mail template"
-          active={adminTab === 'mail-template'}
-          onClick={handleTabMailTemplate}
-        />
-        <Text as="h2" className={styles.sectionHeading}>Data</Text>
-        <SidebarNavItem
-          icon={CloudLink24Regular}
-          label="OData"
-          active={adminTab === 'odata'}
-          onClick={handleTabOdata}
-        />
-        <SidebarNavItem
-          icon={Flowchart24Regular}
-          label="Data model"
-          active={adminTab === 'datamodel'}
-          onClick={handleTabDataModel}
-        />
-        <SidebarNavItem
-          icon={Link24Regular}
-          label="External links"
-          active={adminTab === 'external-links'}
-          onClick={handleTabExternalLinks}
-        />
-        <SidebarNavItem
-          icon={History24Regular}
-          label="Track changes"
-          active={adminTab === 'track-changes'}
-          onClick={handleTabTrackChanges}
-        />
-        {isAdmin ? (
-          <SidebarNavItem
-            icon={ArrowClockwise24Regular}
-            label="D365 refresh"
-            active={adminTab === 'd365-refresh'}
-            onClick={handleTabD365Refresh}
-          />
-        ) : null}
-      </aside>
+      <AdminSettingsSidebar
+        userRole={userRole}
+        activeTab={adminTab}
+        onSelect={handleSelectTab}
+      />
 
       <div className={styles.content}>
+        <Text className={styles.audience}>
+          Visible to: {formatAudience(getSettingsTabRoles(adminTab))}
+        </Text>
+        {adminTab === 'general' && <AdminGeneralSettings />}
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}
         {adminTab === 'mail-template' && <PasswordResetEmailTemplateSettings />}
@@ -139,7 +73,7 @@ export default function AdminPage() {
         {adminTab === 'datamodel' && <AdminDataModel />}
         {adminTab === 'external-links' && <ExcelLinkWizard />}
         {adminTab === 'track-changes' && <AdminTrackChangesSettings />}
-        {isAdmin && adminTab === 'd365-refresh' && <AdminD365Refresh />}
+        {adminTab === 'd365-refresh' && <AdminD365Refresh />}
       </div>
     </div>
   );

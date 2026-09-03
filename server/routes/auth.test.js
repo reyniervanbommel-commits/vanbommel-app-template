@@ -255,12 +255,13 @@ describe('POST /reset-password', () => {
 });
 
 describe('GET /me', () => {
-  it('geeft de user uit de sessie terug', async () => {
+  it('geeft de user en persoonlijke tabelzoom uit de sessie terug', async () => {
     const session = { userId: 1, user: { id: 1, email: 'a@b.com' } };
 
     await withServer({ session }, async (baseUrl) => {
       const { data } = await getJson(baseUrl, '/api/auth/me');
       expect(data.user.email).toBe('a@b.com');
+      expect(data.poTableZoom).toBe(0.85);
     });
   });
 
@@ -269,5 +270,36 @@ describe('GET /me', () => {
       const { data } = await getJson(baseUrl, '/api/auth/me');
       expect(data).toEqual({ user: null });
     });
+  });
+});
+
+describe('PO table zoom voorkeur', () => {
+  it('GET /po-table-zoom geeft 401 zonder sessie', async () => {
+    await withServer({ session: {} }, async (baseUrl) => {
+      const { status } = await getJson(baseUrl, '/api/auth/po-table-zoom');
+      expect(status).toBe(401);
+    });
+  });
+
+  it('PATCH /po-table-zoom slaat de zoom van de sessie-gebruiker op', async () => {
+    const poTableZoomSettings = require('../services/PoTableZoomSettings');
+    const originalSetZoom = poTableZoomSettings.setZoom;
+    poTableZoomSettings.setZoom = vi.fn().mockResolvedValue(1);
+    const session = { userId: 4, user: { id: 4, email: 'v@b.com' } };
+
+    try {
+      await withServer({ session }, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/api/auth/po-table-zoom`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poTableZoom: 1 }),
+        });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ success: true, poTableZoom: 1 });
+      });
+      expect(poTableZoomSettings.setZoom).toHaveBeenCalledWith(1, 4);
+    } finally {
+      poTableZoomSettings.setZoom = originalSetZoom;
+    }
   });
 });

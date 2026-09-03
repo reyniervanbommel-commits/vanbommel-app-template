@@ -24,6 +24,9 @@ const useStyles = makeStyles({
     maxHeight: '100%',
     overflow: 'hidden',
     position: 'relative',
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   control: {
     minWidth: 0,

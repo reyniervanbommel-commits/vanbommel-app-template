@@ -16,6 +16,12 @@ import { isProductImageColumn, PRODUCT_IMAGE_MIN_COLUMN_WIDTH } from '../../util
 import { useSubitemConnectorStyles } from './purchaseOrderSubitemConnectorStyles';
 import { PurchaseOrderCollapsedColumnHeaderCell } from './PurchaseOrderCollapsedColumnCell';
 import { applyCollapsedColumnWidths, isColumnCollapsed } from '../../utils/collapsedColumnUtils';
+import {
+  getPoTableZoom,
+  PO_TABLE_ZOOM_CSS_VAR,
+  PO_TABLE_ZOOM_DEFAULT,
+  poTableZoomedPx,
+} from '../../utils/poTableZoom';
 
 import { purchaseOrderSubRowHeight } from './purchaseOrderBoardLayout';
 
@@ -48,8 +54,8 @@ const useStyles = makeStyles({
     position: 'relative',
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px', '8px'),
-    fontSize: tokens.fontSizeBase300,
+    ...shorthands.padding(poTableZoomedPx(2), poTableZoomedPx(8)),
+    fontSize: `calc(${tokens.fontSizeBase300} * var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT}))`,
     fontWeight: tokens.fontWeightRegular,
     color: tokens.colorNeutralForeground1,
     backgroundColor: tokens.colorNeutralBackground3,
@@ -71,7 +77,7 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     minWidth: 0,
     overflow: 'hidden',
-    ...shorthands.gap('6px'),
+    ...shorthands.gap(poTableZoomedPx(6)),
   },
   headerCellLabel: {
     flexGrow: 1,
@@ -104,14 +110,14 @@ const useStyles = makeStyles({
     },
   },
   subCell: {
-    '--po-cell-padding-y': '2px',
-    '--po-cell-padding-x': '8px',
+    '--po-cell-padding-y': poTableZoomedPx(2),
+    '--po-cell-padding-x': poTableZoomedPx(8),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('2px', '8px'),
+    ...shorthands.padding(poTableZoomedPx(2), poTableZoomedPx(8)),
     height: purchaseOrderSubRowHeight,
     maxHeight: purchaseOrderSubRowHeight,
-    fontSize: tokens.fontSizeBase200,
+    fontSize: `calc(${tokens.fontSizeBase200} * var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT}))`,
     color: tokens.colorNeutralForeground1,
     boxSizing: 'border-box',
     overflow: 'hidden',
@@ -124,11 +130,11 @@ const useStyles = makeStyles({
     minWidth: 0,
     maxWidth: '100%',
     height: '100%',
-    maxHeight: `calc(${purchaseOrderSubRowHeight} - 4px)`,
+    maxHeight: `calc(${purchaseOrderSubRowHeight} - ${poTableZoomedPx(4)})`,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    lineHeight: `calc(${purchaseOrderSubRowHeight} - 6px)`,
+    lineHeight: `calc(${purchaseOrderSubRowHeight} - ${poTableZoomedPx(6)})`,
     ':has([data-cell-history-trigger="true"])': {
       overflow: 'visible',
     },
@@ -144,7 +150,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
-  totalsCell: { ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1), ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2), ...shorthands.padding('4px', '8px'), fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold, backgroundColor: tokens.colorNeutralBackground2 },
+  totalsCell: { ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1), ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2), ...shorthands.padding(poTableZoomedPx(4), poTableZoomedPx(8)), fontSize: `calc(${tokens.fontSizeBase200} * var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT}))`, fontWeight: tokens.fontWeightSemibold, backgroundColor: tokens.colorNeutralBackground2 },
 });
 
 export default function PurchaseOrdersSubitemsTable({
@@ -280,6 +286,7 @@ export default function PurchaseOrdersSubitemsTable({
               columnKey={column.key}
               width={effectiveColumnWidths[column.key]}
               minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
+              getScale={getPoTableZoom}
               className={[
                 styles.subHeaderCell,
                 lineColumnDrag.canDrag ? styles.dragDropCell : '',

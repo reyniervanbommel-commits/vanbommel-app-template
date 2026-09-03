@@ -1,9 +1,15 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import {
+  PO_TABLE_ZOOM_CSS_VAR,
+  PO_TABLE_ZOOM_DEFAULT,
+  poTableZoomedPx,
+} from '../../utils/poTableZoom';
 import { SUBITEM_CONNECTOR_COLOR } from './purchaseOrderSubitemConnectorStyles';
 import { purchaseOrderBoardControlColumnWidth } from './purchaseOrderBoardLayout';
 
 export const usePurchaseOrdersBoardTableStyles = makeStyles({
   frame: {
+    [PO_TABLE_ZOOM_CSS_VAR]: String(PO_TABLE_ZOOM_DEFAULT),
     position: 'relative',
     height: '100%',
     minHeight: 0,
@@ -33,10 +39,10 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     zIndex: 2,
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('10px', '12px'),
+    ...shorthands.padding(poTableZoomedPx(10), poTableZoomedPx(12)),
     textAlign: 'left',
     fontWeight: tokens.fontWeightRegular,
-    fontSize: tokens.fontSizeBase300,
+    fontSize: `calc(${tokens.fontSizeBase300} * var(--po-table-zoom, 0.85))`,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     ':hover [data-column-menu-trigger="true"]': {
@@ -94,8 +100,8 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     zIndex: 1,
     backgroundColor: tokens.colorNeutralBackground2,
     fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase300,
-    lineHeight: tokens.lineHeightBase300,
+    fontSize: `calc(${tokens.fontSizeBase300} * var(--po-table-zoom, 0.85))`,
+    lineHeight: `calc(${tokens.lineHeightBase300} * var(--po-table-zoom, 0.85))`,
     ...shorthands.borderTop('2px', 'solid', tokens.colorNeutralStroke1),
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('4px', '8px'),
