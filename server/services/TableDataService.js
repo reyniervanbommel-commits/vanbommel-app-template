@@ -2251,23 +2251,18 @@ async function refresh(tableKey, options = {}) {
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: true }),
       getLookups(table.id),
     ]);
-    const masterSource = table.key === 'product-receipt-lines'
-      ? ensureKeyFieldColumnsInProjection(
-        resolveLookupProjectionColumns({
-          activeColumns: masterCols,
-          allColumns: allMasterCols,
-          lookups: lookupDefs,
-          scope: 'master',
-        }),
-        allMasterCols,
-        table.keyFields
-      )
-      : resolveLookupProjectionColumns({
-        activeColumns: masterCols,
-        allColumns: allMasterCols,
-        lookups: lookupDefs,
-        scope: 'master',
-      });
+    const projectedMaster = resolveLookupProjectionColumns({
+      activeColumns: masterCols,
+      allColumns: allMasterCols,
+      lookups: lookupDefs,
+      scope: 'master',
+    });
+    const persistKeyFields = table.key === 'product-attribute-values'
+      ? [...(Array.isArray(table.keyFields) ? table.keyFields : []), 'TextValue']
+      : table.keyFields;
+    const masterSource = (table.key === 'product-receipt-lines' || table.key === 'product-attribute-values')
+      ? ensureKeyFieldColumnsInProjection(projectedMaster, allMasterCols, persistKeyFields)
+      : projectedMaster;
     const detailSource = resolveLookupProjectionColumns({
       activeColumns: detailCols,
       allColumns: allDetailCols,

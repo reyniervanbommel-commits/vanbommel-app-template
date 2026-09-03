@@ -4,6 +4,8 @@ const {
   attributeDisplayValue,
   displayValueFromCacheRow,
   displayValueFromRecordKey,
+  attributeNameFromRecordKey,
+  uniqueAttributeNamesFromCacheRows,
   buildPavRecordKey,
   uniqueSortedValues,
   firstValueAndExtra,
@@ -20,6 +22,15 @@ describe('productAttributeValues', () => {
     expect(attributeDisplayValue({ AttributeValue: 'SS26', TextValue: 'x' })).toBe('SS26');
     expect(attributeDisplayValue({ TextValue: 'Nova' })).toBe('Nova');
     expect(attributeDisplayValue({})).toBe('');
+  });
+
+  it('leest de attribuutnaam uit JSON of uit de record-key', () => {
+    expect(attributeNameFromRecordKey('SBM-10002-24-01|Sole name|Nova')).toBe('Sole name');
+    expect(uniqueAttributeNamesFromCacheRows([
+      { data_json: JSON.stringify({ textValue: 'Nova' }), record_key: 'SBM-1|Sole name|Nova' },
+      { data_json: JSON.stringify({ attributeName: 'Season' }), record_key: 'SBM-1|Season|SS26' },
+      { data_json: JSON.stringify({ textValue: 'x' }), record_key: 'SBM-2|Sole name|x' },
+    ]).sort()).toEqual(['Season', 'Sole name']);
   });
 
   it('leest Text value uit cache-rij of uit de record-key', () => {

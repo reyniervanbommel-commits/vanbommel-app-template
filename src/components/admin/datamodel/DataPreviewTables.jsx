@@ -36,6 +36,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
         exportSheetName: 'PurchaseOrderHeaders',
         exportFileName: 'purchase-order-headers-example.xlsx',
         relationHint: 'Yellow-highlighted rows mark the join keys between Purchase Order Headers and Purchase Order Lines.',
+        collapsible: true,
       },
       {
         scope: 'line',
@@ -46,6 +47,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
         exportSheetName: 'PurchaseOrderLines',
         exportFileName: 'purchase-order-lines-example.xlsx',
         relationHint: '',
+        collapsible: true,
       },
     ];
   }
@@ -78,6 +80,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
       exportSheetName: tableLabel.replace(/\s+/g, '').slice(0, 31) || 'Entity',
       exportFileName: `${tableKey || 'entity'}-example.xlsx`,
       relationHint: '',
+      collapsible: true,
     },
   ];
 }
@@ -151,7 +154,7 @@ function DataPreviewTables({
           onDeleteColumn={onDeleteColumn}
           onExportExcel={handleExportExcel}
           onSetColumnToggleState={onSetColumnToggleState}
-          collapsible={Boolean(section.collapsible)}
+          collapsible={section.collapsible !== false}
         />
       ))}
     </>

@@ -24,13 +24,13 @@ describe('productAttributePivot', () => {
     ]);
     expect(fromText.pav_sole_name).toBe('Nova');
 
-    const fromKey = {};
-    applyProductAttributePivot(fromKey, 'SHOE-41', buildPivotIndex([
-      { productNumber: 'SHOE-41', attributeName: 'Sole name', attributeValue: null, recordKey: 'SHOE-41|Sole name|Nova' },
+    const fromKeyOnly = {};
+    applyProductAttributePivot(fromKeyOnly, 'SHOE-41', buildPivotIndex([
+      { textValue: 'Nova', recordKey: 'SHOE-41|Sole name|Nova' },
     ]), [
       { key: 'pav_sole_name', options: { kind: 'product-attribute', attributeName: 'Sole name' } },
     ]);
-    expect(fromKey.pav_sole_name).toBe('Nova');
+    expect(fromKeyOnly.pav_sole_name).toBe('Nova');
   });
 
   it('zet null bij geen match, geen 0', () => {

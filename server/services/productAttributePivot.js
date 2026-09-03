@@ -2,7 +2,7 @@
 
 const sql = require('mssql');
 const { getPool, getTableByKey } = require('./TableRegistryService');
-const { firstValueAndExtra, displayValueFromCacheRow } = require('../utils/productAttributeValues');
+const { firstValueAndExtra, displayValueFromCacheRow, attributeNameFromCacheRow } = require('../utils/productAttributeValues');
 const { time } = require('../utils/timing');
 
 function isProductAttributeColumn(column) {
@@ -20,8 +20,9 @@ function jsonField(row, camel, pascal) {
 function buildPivotIndex(rows) {
   const index = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
-    const productNumber = jsonField(row, 'productNumber', 'ProductNumber');
-    const attributeName = jsonField(row, 'attributeName', 'AttributeName');
+    const productNumber = jsonField(row, 'productNumber', 'ProductNumber')
+      || String(row?.recordKey || row?.record_key || '').split('|')[0] || '';
+    const attributeName = attributeNameFromCacheRow(row, row?.recordKey || row?.record_key);
     const attributeValue = displayValueFromCacheRow(row, row?.recordKey || row?.record_key);
     if (!productNumber || !attributeName || !attributeValue) continue;
     if (!index.has(productNumber)) index.set(productNumber, new Map());
@@ -78,7 +79,19 @@ async function loadProductAttributePivot(detailColumns) {
       WHERE table_id = @tableId
         AND ISNULL(removed_at_source, 0) = 0
         AND (detail_key IS NULL OR detail_key = -1)
-        AND JSON_VALUE(data_json, '$.attributeName') IN (${placeholders.join(', ')})
+        AND (
+          JSON_VALUE(data_json, '$.attributeName') IN (${placeholders.join(', ')})
+          OR JSON_VALUE(data_json, '$.AttributeName') IN (${placeholders.join(', ')})
+          OR (
+            CHARINDEX('|', record_key) > 0
+            AND CHARINDEX('|', record_key, CHARINDEX('|', record_key) + 1) > CHARINDEX('|', record_key)
+            AND SUBSTRING(
+              record_key,
+              CHARINDEX('|', record_key) + 1,
+              CHARINDEX('|', record_key, CHARINDEX('|', record_key) + 1) - CHARINDEX('|', record_key) - 1
+            ) IN (${placeholders.join(', ')})
+          )
+        )
     `);
     const rows = (result.recordset || []).map((row) => {
       let data = {};

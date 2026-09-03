@@ -3,6 +3,8 @@
 const sql = require('mssql');
 const { getPool, getTableByKey, listColumns, invalidateTableCache } = require('./TableRegistryService');
 const { slugify, uniqueKeyForScope } = require('./TableColumnsService');
+const { uniqueAttributeNamesFromCacheRows } = require('../utils/productAttributeValues');
+const { time } = require('../utils/timing');
 
 const PAV_TABLE_KEY = 'product-attribute-values';
 const PO_TABLE_KEY = 'purchase-orders';
@@ -28,21 +30,19 @@ function columnKeyForAttribute(attributeName) {
 
 async function listCacheAttributeNames(pavTableId) {
   if (!pavTableId) return [];
-  const pool = await getPool();
-  const result = await pool.request()
-    .input('tableId', sql.BigInt, pavTableId)
-    .query(`
-      SELECT DISTINCT LTRIM(RTRIM(JSON_VALUE(data_json, '$.attributeName'))) AS attribute_name
-      FROM dbo.tb_cache WITH (NOLOCK)
-      WHERE table_id = @tableId
-        AND ISNULL(removed_at_source, 0) = 0
-        AND (detail_key IS NULL OR detail_key = -1)
-        AND JSON_VALUE(data_json, '$.attributeName') IS NOT NULL
-        AND LTRIM(RTRIM(JSON_VALUE(data_json, '$.attributeName'))) <> ''
-    `);
-  return (result.recordset || [])
-    .map((row) => String(row.attribute_name || '').trim())
-    .filter(Boolean);
+  return time('pav_board_attr_names', async () => {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('tableId', sql.BigInt, pavTableId)
+      .query(`
+        SELECT record_key, data_json
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId
+          AND ISNULL(removed_at_source, 0) = 0
+          AND (detail_key IS NULL OR detail_key = -1)
+      `);
+    return uniqueAttributeNamesFromCacheRows(result.recordset);
+  });
 }
 
 async function listExistingPavColumns(poTableId) {

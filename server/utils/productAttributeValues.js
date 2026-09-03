@@ -30,6 +30,40 @@ function displayValueFromRecordKey(recordKey) {
   return parts.slice(2).join('|').trim();
 }
 
+function attributeNameFromRecordKey(recordKey) {
+  const parts = String(recordKey || '').split('|');
+  if (parts.length < 2) return '';
+  return String(parts[1] || '').trim();
+}
+
+function attributeNameFromCacheRow(row, recordKey) {
+  return firstNonEmptyString([
+    row?.attributeName,
+    row?.AttributeName,
+    attributeNameFromRecordKey(recordKey || row?.recordKey || row?.record_key),
+  ]);
+}
+
+function uniqueAttributeNamesFromCacheRows(rows) {
+  const names = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    let parsed = row;
+    if (typeof row?.data_json === 'string') {
+      try {
+        parsed = JSON.parse(row.data_json);
+      } catch {
+        parsed = {};
+      }
+    }
+    const name = attributeNameFromCacheRow(
+      parsed,
+      row?.record_key || row?.recordKey || parsed?.recordKey,
+    );
+    if (name) names.add(name);
+  }
+  return [...names];
+}
+
 function displayValueFromCacheRow(row, recordKey) {
   return firstNonEmptyString([
     attributeDisplayValue(row),
@@ -76,6 +110,9 @@ module.exports = {
   attributeNameFromRaw,
   attributeDisplayValue,
   displayValueFromRecordKey,
+  attributeNameFromRecordKey,
+  attributeNameFromCacheRow,
+  uniqueAttributeNamesFromCacheRows,
   displayValueFromCacheRow,
   buildPavRecordKey,
   uniqueSortedValues,
