@@ -63,6 +63,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
         relationHint: 'Yellow row: Product number joins Items (ItemNumber) and purchase-order lines (ItemNumber).',
         relationFields: new Set(['productnumber']),
         relationBadgeLabel: 'Items · ItemNumber',
+        collapsible: true,
       },
     ];
   }
@@ -150,6 +151,7 @@ function DataPreviewTables({
           onDeleteColumn={onDeleteColumn}
           onExportExcel={handleExportExcel}
           onSetColumnToggleState={onSetColumnToggleState}
+          collapsible={Boolean(section.collapsible)}
         />
       ))}
     </>

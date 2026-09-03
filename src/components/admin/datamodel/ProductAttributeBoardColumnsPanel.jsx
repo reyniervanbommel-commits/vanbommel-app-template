@@ -1,11 +1,11 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Spinner, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import AdminInfoHint from './AdminInfoHint';
+import DataModelCollapsibleSection from './DataModelCollapsibleSection';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
+import { sortFlaggedFirst } from './entityConfigTableUtils';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', ...shorthands.gap('12px') },
-  titleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('4px') },
   list: { display: 'flex', flexDirection: 'column', ...shorthands.gap('8px') },
   row: {
     display: 'flex',
@@ -52,22 +52,25 @@ function ProductAttributeBoardColumnsPanel({
   onSetVisible,
 }) {
   const styles = useStyles();
+  const sortedNames = useMemo(
+    () => sortFlaggedFirst(names, (entry) => entry.visible),
+    [names],
+  );
   return (
-    <div className={styles.root}>
-      <div className={styles.titleRow}>
-        <Text weight="semibold">PO board columns</Text>
-        <AdminInfoHint text={DATA_MODEL_INFO.pavBoardColumns} label="About PO board columns" />
-      </div>
+    <DataModelCollapsibleSection
+      title="PO board columns"
+      titleExtra={<AdminInfoHint text={DATA_MODEL_INFO.pavBoardColumns} label="About PO board columns" />}
+    >
       <Text className={styles.hint} block>
         Board cells use Text value when Attribute value is empty. Product number matches Items ItemNumber and the PO line ItemNumber.
       </Text>
       {loading ? <Spinner label="Loading attribute names..." /> : null}
       {error ? <Text className={styles.error} block>{error}</Text> : null}
-      {!loading && !names.length ? (
+      {!loading && !sortedNames.length ? (
         <Text className={styles.empty} block>No attribute names yet. Sync this entity first.</Text>
       ) : (
         <div className={styles.list}>
-          {names.map((entry) => (
+          {sortedNames.map((entry) => (
             <PavBoardColumnRow
               key={entry.name}
               name={entry.name}
@@ -78,7 +81,7 @@ function ProductAttributeBoardColumnsPanel({
           ))}
         </div>
       )}
-    </div>
+    </DataModelCollapsibleSection>
   );
 }
 

@@ -15,7 +15,6 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import DataPreviewColumnConfigRow from './DataPreviewColumnConfigRow';
-import AdminInfoHint from './AdminInfoHint';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 import {
   BULK_TOGGLE_CONFIG,
@@ -24,20 +23,13 @@ import {
   createSampleByField,
   getExampleRowValues,
   lookupSampleValue,
+  sortFlaggedFirst,
   toExcelCellValue,
 } from './entityConfigTableUtils';
+import DataModelCollapsibleSection from './DataModelCollapsibleSection';
+import EntityConfigBulkToggleHeader from './EntityConfigBulkToggleHeader';
 
 const useStyles = makeStyles({
-  section: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRadius('8px'),
-    ...shorthands.padding('16px', '20px'),
-    display: 'flex',
-    flexDirection: 'column',
-    ...shorthands.gap('12px'),
-    width: '100%',
-  },
-  titleRow: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px'), flexWrap: 'wrap' },
   mono: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200 },
   muted: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   tableWrap: {
@@ -65,58 +57,7 @@ const useStyles = makeStyles({
   },
   filterInput: { maxWidth: '420px' },
   exportButton: { marginLeft: 'auto' },
-  headerBulkCell: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    ...shorthands.gap('4px'),
-  },
-  headerLabel: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    ...shorthands.gap('2px'),
-  },
-  headerBulkButtons: { display: 'flex', ...shorthands.gap('4px') },
-  headerBulkButton: { minWidth: 'auto' },
 });
-
-// Kolomkop met een "alles aan / alles uit"-bulkschakelaar voor de bijbehorende toggle-kolom.
-// De knoppen werken op de op dat moment gefilterde kolommen (net als de rij-toggles).
-function BulkToggleHeaderCell({ label, info, action, className }) {
-  const styles = useStyles();
-  return (
-    <TableHeaderCell className={className}>
-      <div className={styles.headerBulkCell}>
-        <span className={styles.headerLabel}>
-          {label}
-          {info ? <AdminInfoHint text={info} label={`About ${label}`} /> : null}
-        </span>
-        {action ? (
-          <div className={styles.headerBulkButtons} title={`${action.affectedCount} columns affected`}>
-            <Button
-              size="small"
-              appearance="subtle"
-              className={styles.headerBulkButton}
-              disabled={action.disableEnable}
-              onClick={action.onEnable}
-            >
-              All on
-            </Button>
-            <Button
-              size="small"
-              appearance="subtle"
-              className={styles.headerBulkButton}
-              disabled={action.disableDisable}
-              onClick={action.onDisable}
-            >
-              All off
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </TableHeaderCell>
-  );
-}
 
 export default function EntityConfigTable({
   title,
@@ -135,6 +76,7 @@ export default function EntityConfigTable({
   onDeleteColumn,
   onExportExcel,
   onSetColumnToggleState,
+  collapsible = false,
 }) {
   const styles = useStyles();
   const visibleCount = columns.filter((item) => item.isActive).length;
@@ -142,10 +84,13 @@ export default function EntityConfigTable({
   const sampleByField = useMemo(() => createSampleByField(preview), [preview]);
   const [columnFilter, setColumnFilter] = useState('');
   const handleColumnFilter = useCallback((_, data) => setColumnFilter(data.value), []);
-  const filteredColumns = useMemo(() => columns.filter((column) => {
-    const sampleValue = lookupSampleValue(sampleByField, column.d365Field, column.key, column.label);
-    return columnMatchesFilter(column, columnFilter, sampleValue);
-  }), [columns, sampleByField, columnFilter]);
+  const filteredColumns = useMemo(() => {
+    const matched = columns.filter((column) => {
+      const sampleValue = lookupSampleValue(sampleByField, column.d365Field, column.key, column.label);
+      return columnMatchesFilter(column, columnFilter, sampleValue);
+    });
+    return sortFlaggedFirst(matched, (column) => column.isActive);
+  }, [columns, sampleByField, columnFilter]);
   const exportColumnNames = useMemo(
     () => columns.map((column) => column.label || column.d365Field),
     [columns],
@@ -195,16 +140,18 @@ export default function EntityConfigTable({
     return map;
   }, [bulkToggleActions]);
 
+  const titleExtra = (
+    <>
+      <span className={styles.mono}>{entityName}</span>
+      <Badge appearance="tint" color="brand" size="small">{visibleCount} visible · {columns.length} registered</Badge>
+      <Button className={styles.exportButton} appearance="secondary" onClick={handleExport}>
+        Export Excel
+      </Button>
+    </>
+  );
+
   return (
-    <div className={styles.section}>
-      <div className={styles.titleRow}>
-        <Text weight="semibold">{title}</Text>
-        <span className={styles.mono}>{entityName}</span>
-        <Badge appearance="tint" color="brand" size="small">{visibleCount} visible · {columns.length} registered</Badge>
-        <Button className={styles.exportButton} appearance="secondary" onClick={handleExport}>
-          Export Excel
-        </Button>
-      </div>
+    <DataModelCollapsibleSection title={title} titleExtra={titleExtra} collapsible={collapsible}>
       <Text className={styles.muted}>
         Sample values come from synced rows, or from a live D365 sample when the cache has no value yet
         ({sampledRows.toLocaleString('nl-NL')} cache rows sampled).
@@ -227,19 +174,19 @@ export default function EntityConfigTable({
               <TableHeaderCell className={styles.headerCell}>D365 field</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Type</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Sample value</TableHeaderCell>
-              <BulkToggleHeaderCell
+              <EntityConfigBulkToggleHeader
                 label="Visible in table"
                 info={DATA_MODEL_INFO.visibleInTable}
                 action={bulkActionByKey.visibility}
                 className={styles.headerCell}
               />
-              <BulkToggleHeaderCell
+              <EntityConfigBulkToggleHeader
                 label="Visible at delete"
                 info={DATA_MODEL_INFO.visibleAtDelete}
                 action={bulkActionByKey.visibleAtDelete}
                 className={styles.headerCell}
               />
-              <BulkToggleHeaderCell
+              <EntityConfigBulkToggleHeader
                 label="Write-back to D365"
                 info={DATA_MODEL_INFO.writeBack}
                 action={bulkActionByKey.writeback}
@@ -278,6 +225,6 @@ export default function EntityConfigTable({
         </Table>
       </div>
       {relationHint ? <Text className={styles.muted}>{relationHint}</Text> : null}
-    </div>
+    </DataModelCollapsibleSection>
   );
 }
