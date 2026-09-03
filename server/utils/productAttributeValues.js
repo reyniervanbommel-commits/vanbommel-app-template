@@ -19,6 +19,21 @@ function attributeDisplayValue(raw) {
     raw?.AttributeValue, raw?.TextValue, raw?.attributeValue, raw?.textValue,
     raw?.IntegerValue, raw?.DecimalValue, raw?.BooleanValue,
     raw?.DateTimeValue, raw?.CurrencyValue,
+    raw?.integerValue, raw?.decimalValue, raw?.booleanValue,
+    raw?.dateTimeValue, raw?.currencyValue,
+  ]);
+}
+
+function displayValueFromRecordKey(recordKey) {
+  const parts = String(recordKey || '').split('|');
+  if (parts.length < 3) return '';
+  return parts.slice(2).join('|').trim();
+}
+
+function displayValueFromCacheRow(row, recordKey) {
+  return firstNonEmptyString([
+    attributeDisplayValue(row),
+    displayValueFromRecordKey(recordKey),
   ]);
 }
 
@@ -60,6 +75,8 @@ function assertNotPavWritable(tableKey, column) {
 module.exports = {
   attributeNameFromRaw,
   attributeDisplayValue,
+  displayValueFromRecordKey,
+  displayValueFromCacheRow,
   buildPavRecordKey,
   uniqueSortedValues,
   firstValueAndExtra,

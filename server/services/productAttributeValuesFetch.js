@@ -41,7 +41,13 @@ function toPavCacheRecord(raw) {
     recordKey: keys.recordKey,
     modifiedAt: raw?.ModifiedDateTime || raw?.modifiedDateTime || null,
     masterRaw: raw,
-    master: {},
+    master: {
+      productNumber,
+      attributeName,
+      attributeValue: displayValue || null,
+      attributeTypeName: String(raw?.AttributeTypeName || raw?.attributeTypeName || '').trim() || null,
+      textValue: String(raw?.TextValue || raw?.textValue || displayValue || '').trim() || null,
+    },
     details: [],
   };
 }

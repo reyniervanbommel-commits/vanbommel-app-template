@@ -15,6 +15,24 @@ describe('productAttributePivot', () => {
     expect(extras.pav_season).toEqual({ additionalCount: 1, allValuesLabel: 'FW26, SS26' });
   });
 
+  it('leest Text value als Attribute value leeg is, ook via record-key', () => {
+    const fromText = {};
+    applyProductAttributePivot(fromText, 'SHOE-41', buildPivotIndex([
+      { productNumber: 'SHOE-41', attributeName: 'Sole name', attributeValue: null, textValue: 'Nova' },
+    ]), [
+      { key: 'pav_sole_name', options: { kind: 'product-attribute', attributeName: 'Sole name' } },
+    ]);
+    expect(fromText.pav_sole_name).toBe('Nova');
+
+    const fromKey = {};
+    applyProductAttributePivot(fromKey, 'SHOE-41', buildPivotIndex([
+      { productNumber: 'SHOE-41', attributeName: 'Sole name', attributeValue: null, recordKey: 'SHOE-41|Sole name|Nova' },
+    ]), [
+      { key: 'pav_sole_name', options: { kind: 'product-attribute', attributeName: 'Sole name' } },
+    ]);
+    expect(fromKey.pav_sole_name).toBe('Nova');
+  });
+
   it('zet null bij geen match, geen 0', () => {
     const values = {};
     applyProductAttributePivot(values, 'MISSING', buildPivotIndex([]), [

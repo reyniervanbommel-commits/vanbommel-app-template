@@ -52,9 +52,28 @@ describe('productAttributeValuesFetch', () => {
       partitionKey: 'shared',
       recordKey: 'SHOE-41|Season|SS26',
       masterRaw: { ProductNumber: 'SHOE-41', AttributeName: 'Season', AttributeValue: 'SS26' },
-      master: {},
+      master: {
+        productNumber: 'SHOE-41',
+        attributeName: 'Season',
+        attributeValue: 'SS26',
+        attributeTypeName: null,
+        textValue: 'SS26',
+      },
       details: [],
     });
+  });
+
+  it('zet TextValue in attributeValue als AttributeValue leeg is', async () => {
+    mockItemsCache(['SHOE-41']);
+    d365OData.fetchEntityRecords.mockResolvedValue({
+      items: [{ ProductNumber: 'SHOE-41', AttributeName: 'Sole name', TextValue: 'Nova' }],
+      truncated: false,
+      pagesFetched: 1,
+    });
+    const result = await productAttributeValuesFetch(table);
+    expect(result.records[0].recordKey).toBe('SHOE-41|Sole name|Nova');
+    expect(result.records[0].master.attributeValue).toBe('Nova');
+    expect(result.records[0].master.textValue).toBe('Nova');
   });
 
   it('AND-t ProductNumber-chunk altijd, ook mét admin-filter, company-filter uit', async () => {

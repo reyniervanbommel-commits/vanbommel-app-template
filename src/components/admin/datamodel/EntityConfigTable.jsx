@@ -127,6 +127,7 @@ export default function EntityConfigTable({
   exportFileName,
   relationFields,
   relationHint = '',
+  relationBadgeLabel = 'Header-Line link key',
   togglingKey,
   onToggleVisibility,
   onToggleVisibleAtDelete,
@@ -259,6 +260,7 @@ export default function EntityConfigTable({
                   typeLabel={DATA_TYPE_LABELS[column.dataType] || column.dataType}
                   sampleValue={sampleValue}
                   isRelationField={isRelationField}
+                  relationBadgeLabel={relationBadgeLabel}
                   togglingKey={togglingKey}
                   onToggleVisibility={onToggleVisibility}
                   onToggleVisibleAtDelete={onToggleVisibleAtDelete}

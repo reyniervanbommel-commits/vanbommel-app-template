@@ -2,6 +2,8 @@
 const {
   attributeNameFromRaw,
   attributeDisplayValue,
+  displayValueFromCacheRow,
+  displayValueFromRecordKey,
   buildPavRecordKey,
   uniqueSortedValues,
   firstValueAndExtra,
@@ -16,7 +18,14 @@ describe('productAttributeValues', () => {
   it('kiest de eerste niet-lege displaywaarde in keten-volgorde', () => {
     expect(attributeDisplayValue({ IntegerValue: 7 })).toBe('7');
     expect(attributeDisplayValue({ AttributeValue: 'SS26', TextValue: 'x' })).toBe('SS26');
+    expect(attributeDisplayValue({ TextValue: 'Nova' })).toBe('Nova');
     expect(attributeDisplayValue({})).toBe('');
+  });
+
+  it('leest Text value uit cache-rij of uit de record-key', () => {
+    expect(displayValueFromRecordKey('SBM-10002-24-01|Sole name|Nova')).toBe('Nova');
+    expect(displayValueFromCacheRow({ attributeValue: null, textValue: 'Nova' })).toBe('Nova');
+    expect(displayValueFromCacheRow({ attributeValue: null }, 'SBM-10002-24-01|Sole name|Nova')).toBe('Nova');
   });
 
   it('bouwt een 1:N cache-sleutel van max 128 tekens', () => {

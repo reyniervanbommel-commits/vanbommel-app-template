@@ -2,7 +2,7 @@
 
 const sql = require('mssql');
 const { getPool, getTableByKey } = require('./TableRegistryService');
-const { firstValueAndExtra } = require('../utils/productAttributeValues');
+const { firstValueAndExtra, displayValueFromCacheRow } = require('../utils/productAttributeValues');
 const { time } = require('../utils/timing');
 
 function isProductAttributeColumn(column) {
@@ -22,7 +22,7 @@ function buildPivotIndex(rows) {
   for (const row of Array.isArray(rows) ? rows : []) {
     const productNumber = jsonField(row, 'productNumber', 'ProductNumber');
     const attributeName = jsonField(row, 'attributeName', 'AttributeName');
-    const attributeValue = jsonField(row, 'attributeValue', 'AttributeValue');
+    const attributeValue = displayValueFromCacheRow(row, row?.recordKey || row?.record_key);
     if (!productNumber || !attributeName || !attributeValue) continue;
     if (!index.has(productNumber)) index.set(productNumber, new Map());
     const byName = index.get(productNumber);
@@ -73,7 +73,7 @@ async function loadProductAttributePivot(detailColumns) {
       return `@${param}`;
     });
     const result = await request.query(`
-      SELECT data_json
+      SELECT record_key, data_json
       FROM dbo.tb_cache WITH (NOLOCK)
       WHERE table_id = @tableId
         AND ISNULL(removed_at_source, 0) = 0
@@ -81,11 +81,13 @@ async function loadProductAttributePivot(detailColumns) {
         AND JSON_VALUE(data_json, '$.attributeName') IN (${placeholders.join(', ')})
     `);
     const rows = (result.recordset || []).map((row) => {
+      let data = {};
       try {
-        return JSON.parse(row.data_json || '{}');
+        data = JSON.parse(row.data_json || '{}');
       } catch {
-        return {};
+        data = {};
       }
+      return { ...data, recordKey: row.record_key };
     });
     return buildPivotIndex(rows);
   });

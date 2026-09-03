@@ -18,6 +18,7 @@ const useStyles = makeStyles({
     overflowWrap: 'anywhere',
     color: tokens.colorNeutralForeground1,
   },
+  hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1 },
   empty: { color: tokens.colorNeutralForeground3 },
 });
@@ -57,6 +58,9 @@ function ProductAttributeBoardColumnsPanel({
         <Text weight="semibold">PO board columns</Text>
         <AdminInfoHint text={DATA_MODEL_INFO.pavBoardColumns} label="About PO board columns" />
       </div>
+      <Text className={styles.hint} block>
+        Board cells use Text value when Attribute value is empty. Product number matches Items ItemNumber and the PO line ItemNumber.
+      </Text>
       {loading ? <Spinner label="Loading attribute names..." /> : null}
       {error ? <Text className={styles.error} block>{error}</Text> : null}
       {!loading && !names.length ? (

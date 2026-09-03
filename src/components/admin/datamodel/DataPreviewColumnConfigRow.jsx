@@ -55,6 +55,7 @@ export default function DataPreviewColumnConfigRow({
   onToggleVisibleAtDelete,
   onToggleWriteback,
   onDeleteColumn,
+  relationBadgeLabel = 'Header-Line link key',
 }) {
   const styles = useStyles();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -90,7 +91,7 @@ export default function DataPreviewColumnConfigRow({
         <TableCell className={styles.valueCell}>
           {isRelationField ? (
             <Badge appearance="filled" color="warning" icon={<LinkRegular />}>
-              Header-Line link key
+              {relationBadgeLabel}
             </Badge>
           ) : (
             <Text size={200} className={styles.muted}>—</Text>

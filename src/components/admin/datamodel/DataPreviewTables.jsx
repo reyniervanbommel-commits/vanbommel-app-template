@@ -50,6 +50,23 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
     ];
   }
 
+  if (tableKey === 'product-attribute-values') {
+    return [
+      {
+        scope: 'header',
+        title: `${tableLabel} columns`,
+        entityName: headerName,
+        columns: columns.header,
+        preview: previewTables?.header,
+        exportSheetName: tableLabel.replace(/\s+/g, '').slice(0, 31) || 'Entity',
+        exportFileName: `${tableKey || 'entity'}-example.xlsx`,
+        relationHint: 'Yellow row: Product number joins Items (ItemNumber) and purchase-order lines (ItemNumber).',
+        relationFields: new Set(['productnumber']),
+        relationBadgeLabel: 'Items · ItemNumber',
+      },
+    ];
+  }
+
   return [
     {
       scope: 'header',
@@ -123,8 +140,9 @@ function DataPreviewTables({
           preview={section.preview}
           exportSheetName={section.exportSheetName}
           exportFileName={section.exportFileName}
-          relationFields={section.scope === 'header' ? relationFields : new Set()}
+          relationFields={section.relationFields || (section.scope === 'header' ? relationFields : new Set())}
           relationHint={section.relationHint}
+          relationBadgeLabel={section.relationBadgeLabel}
           togglingKey={togglingKey}
           onToggleVisibility={onToggleVisibility}
           onToggleVisibleAtDelete={onToggleVisibleAtDelete}
