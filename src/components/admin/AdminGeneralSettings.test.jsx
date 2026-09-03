@@ -20,7 +20,7 @@ describe('AdminGeneralSettings', () => {
     apiRequest.mockResolvedValue({ poTableZoom: 0.9 });
   });
 
-  it('loads the global table zoom for admins', async () => {
+  it('loads the personal table zoom for the signed-in user', async () => {
     render(
       <FluentProvider theme={webLightTheme}>
         <AdminGeneralSettings />
@@ -31,7 +31,7 @@ describe('AdminGeneralSettings', () => {
       expect(screen.getByText('90%')).toBeTruthy();
     });
     expect(screen.getByRole('button', { name: /Table zoom/i })).toBeTruthy();
-    expect(apiRequest).toHaveBeenCalledWith('/admin/settings/general');
+    expect(apiRequest).toHaveBeenCalledWith('/auth/po-table-zoom');
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
   });
 });

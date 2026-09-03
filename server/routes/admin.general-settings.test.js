@@ -37,26 +37,30 @@ async function withServer(user, fn) {
 }
 
 describe('GET /api/admin/settings/general', () => {
-  it('laat employee de globale zoom lezen', async () => {
+  it('leest de zoom van de ingelogde gebruiker', async () => {
     poTableZoomSettings.getZoom = vi.fn().mockResolvedValue(0.9);
     await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/admin/settings/general`);
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ poTableZoom: 0.9 });
     });
+    expect(poTableZoomSettings.getZoom).toHaveBeenCalledWith(2);
   });
 });
 
 describe('PATCH /api/admin/settings/general', () => {
-  it('geeft employee 403', async () => {
-    await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
+  it('laat employee de eigen zoom opslaan', async () => {
+    poTableZoomSettings.setZoom = vi.fn().mockResolvedValue(1);
+    await withServer({ id: 2, role: 'employee', email: 'e@b.com' }, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/admin/settings/general`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ poTableZoom: 1 }),
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, poTableZoom: 1 });
     });
+    expect(poTableZoomSettings.setZoom).toHaveBeenCalledWith(1, 2);
   });
 
   it('geeft 400 zonder poTableZoom', async () => {

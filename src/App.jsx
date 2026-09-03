@@ -88,7 +88,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
           <Route
             path="/admin"
             element={
-              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE]}>
+              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
                 <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                   <AdminPage />
                 </AppLayout>

@@ -9,7 +9,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import RccpNavIcon from '../rccp/RccpNavIcon';
 import { useVendorCompanyName } from '../../hooks/useVendorCompanyName';
-import { ROLES } from '../../constants/roles';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
 import AppNavItem from './AppNavItem';
 import AppShellHeader from './AppShellHeader';
@@ -148,7 +147,6 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const isAdminLike = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
   const vendorCompanyName = useVendorCompanyName(user);
   const isPurchaseOrdersRoute = location.pathname === '/';
   const isAdminRoute = location.pathname === '/admin';
@@ -159,12 +157,10 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
       { id: 'rccp', label: 'RCCP', icon: RccpNavIcon, path: '/rccp' },
       // BI is voor alle rollen zichtbaar; suppliers zien uitsluitend hun eigen (server-gescopete) data.
       { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
-      ...(isAdminLike ? [
-        { type: 'divider' },
-        { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
-      ] : []),
+      { type: 'divider' },
+      { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
     ],
-    [isAdminLike]
+    []
   );
 
   const handleNavigate = useCallback(
@@ -216,7 +212,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
         userMenuOpen={userMenuOpen}
         onToggleUserMenu={handleToggleUserMenu}
         onCloseUserMenu={handleCloseUserMenu}
-        canAccessAdmin={isAdminLike}
+        canAccessAdmin
         vendorCompanyName={vendorCompanyName}
         onNavigateAdmin={handleNavigateAdmin}
         onLogout={handleLogout}

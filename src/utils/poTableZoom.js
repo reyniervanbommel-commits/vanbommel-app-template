@@ -74,7 +74,7 @@ export function getPoTableZoom() {
 }
 
 /**
- * In-memory store. Persist happens via app_settings (admin General tab).
+ * In-memory store. Persist happens per user via /api/auth/po-table-zoom.
  * @param {unknown} value
  * @returns {number}
  */

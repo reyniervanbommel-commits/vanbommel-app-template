@@ -1,10 +1,12 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@fluentui/react-components';
 import PurchaseOrderCellContextMenu from './PurchaseOrderCellContextMenu';
+import PurchaseOrdersBoardColGroup from './PurchaseOrdersBoardColGroup';
+import PurchaseOrdersBoardEmptyFilter from './PurchaseOrdersBoardEmptyFilter';
 import PurchaseOrdersBoardRows from './PurchaseOrdersBoardRows';
 import PurchaseOrdersBoardTableHeader from './PurchaseOrdersBoardTableHeader';
 import PurchaseOrdersBoardTotalsRow from './PurchaseOrdersBoardTotalsRow';
 import { usePurchaseOrdersBoardTableStyles } from './purchaseOrdersBoardTableStyles';
+import { fillHeaderColumnWidths } from './purchaseOrderColumnWidthUtils';
 import { usePurchaseOrderBoardView } from '../../hooks/usePurchaseOrderBoardView';
 import { usePurchaseOrdersBoardExpansion } from '../../hooks/usePurchaseOrdersBoardExpansion';
 import { usePurchaseOrdersBoardLinks } from '../../hooks/usePurchaseOrdersBoardLinks';
@@ -63,8 +65,11 @@ function PurchaseOrdersBoardTable({
   } = linkActions;
   const styles = usePurchaseOrdersBoardTableStyles();
   const effectiveHeaderColumnWidths = useMemo(
-    () => applyCollapsedColumnWidths(headerColumnWidths, collapsedHeaderColumnKeys),
-    [collapsedHeaderColumnKeys, headerColumnWidths]
+    () => applyCollapsedColumnWidths(
+      fillHeaderColumnWidths(columns, headerColumnWidths),
+      collapsedHeaderColumnKeys
+    ),
+    [collapsedHeaderColumnKeys, columns, headerColumnWidths]
   );
   const effectiveLineColumnWidths = useMemo(
     () => applyCollapsedColumnWidths(lineColumnWidths, collapsedLineColumnKeys),
@@ -205,6 +210,14 @@ function PurchaseOrdersBoardTable({
     linkedLineTotalByHeaderKey,
     linkedLineValueByHeaderKey,
   }), [lineTotalColumns, linkedLineTotalByHeaderKey, linkedLineValueByHeaderKey]);
+  const rowsFormatting = useMemo(
+    () => ({
+      ...formatting,
+      headerColumnWidths: effectiveHeaderColumnWidths,
+      lineColumnWidths: effectiveLineColumnWidths,
+    }),
+    [effectiveHeaderColumnWidths, effectiveLineColumnWidths, formatting]
+  );
   const hasFilteredEmptyState = processedItems.length === 0;
   const handleClearAllFilters = useCallback(() => {
     clearAllFilters?.();
@@ -220,6 +233,10 @@ function PurchaseOrdersBoardTable({
       <div className={styles.frame} ref={setFrameNode}>
         <div className={styles.wrapper} ref={wrapperRef}>
           <table className={styles.table}>
+            <PurchaseOrdersBoardColGroup
+              columns={decoratedColumns}
+              columnWidths={effectiveHeaderColumnWidths}
+            />
             <PurchaseOrdersBoardTableHeader
               styles={styles}
               selection={selection}
@@ -240,7 +257,7 @@ function PurchaseOrdersBoardTable({
               <PurchaseOrdersBoardRows
                 data={rowsData}
                 layout={rowsLayout}
-                formatting={formatting}
+                formatting={rowsFormatting}
                 actions={rowsActions}
                 links={rowsLinks}
                 selection={selection}
@@ -261,18 +278,13 @@ function PurchaseOrdersBoardTable({
             ) : null}
           </table>
         </div>
-        {hasFilteredEmptyState ? (
-          <div className={styles.emptyFilterOverlay}>
-            <div className={styles.emptyFilterContent}>
-              <span>No rows match the active filters</span>
-              {activeFilterCount > 0 ? (
-                <Button appearance="subtle" onClick={handleClearAllFilters}>
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        <PurchaseOrdersBoardEmptyFilter
+          visible={hasFilteredEmptyState}
+          activeFilterCount={activeFilterCount}
+          onClearAllFilters={handleClearAllFilters}
+          overlayClassName={styles.emptyFilterOverlay}
+          contentClassName={styles.emptyFilterContent}
+        />
       </div>
       <PurchaseOrderCellContextMenu
         context={cellContext}

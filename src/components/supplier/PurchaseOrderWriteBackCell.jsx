@@ -23,6 +23,9 @@ const useStyles = makeStyles({
     maxWidth: '100%',
     overflow: 'hidden',
     position: 'relative',
+    ':has([data-cell-history-trigger="true"])': {
+      overflow: 'visible',
+    },
   },
   input: {
     minWidth: 0,

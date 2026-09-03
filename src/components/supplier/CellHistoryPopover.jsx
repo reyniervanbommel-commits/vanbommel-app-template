@@ -12,7 +12,11 @@ import {
 } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
 import { brandColor, interaction } from '../../styles/brandTokens';
-import { poTableZoomedPx } from '../../utils/poTableZoom';
+import {
+  CELL_HISTORY_FOLD_SIZE,
+  cellHistoryFoldPaperClip,
+  cellHistoryFoldShadowClip,
+} from '../../utils/cellHistoryFold';
 import {
   formatHistoryDate,
   formatHistoryStatus,
@@ -20,7 +24,9 @@ import {
   historyStatusColor,
 } from '../../utils/cellHistoryFormat';
 
-const FOLD_SIZE = poTableZoomedPx(10);
+const FOLD_SIZE = CELL_HISTORY_FOLD_SIZE;
+const FOLD_SHADOW_CLIP = cellHistoryFoldShadowClip();
+const FOLD_PAPER_CLIP = cellHistoryFoldPaperClip();
 
 const useStyles = makeStyles({
   wrapper: {
@@ -50,10 +56,10 @@ const useStyles = makeStyles({
       top: 0,
       right: 0,
       zIndex: 0,
-      width: FOLD_SIZE,
-      height: FOLD_SIZE,
+      width: '100%',
+      height: '100%',
       backgroundColor: interaction.cellHistoryFoldShadow,
-      clipPath: 'polygon(0 0, 0 100%, 100% 100%)',
+      clipPath: FOLD_SHADOW_CLIP,
       mixBlendMode: 'multiply',
       pointerEvents: 'none',
     },
@@ -64,10 +70,10 @@ const useStyles = makeStyles({
       top: 0,
       right: 0,
       zIndex: 0,
-      width: FOLD_SIZE,
-      height: FOLD_SIZE,
+      width: '100%',
+      height: '100%',
       backgroundColor: brandColor.cellHistoryFoldPaper,
-      clipPath: 'polygon(0 0, 100% 0, 100% 100%)',
+      clipPath: FOLD_PAPER_CLIP,
       pointerEvents: 'none',
     },
     ':hover::before': {

@@ -39,7 +39,7 @@ export default function AdminGeneralSettings() {
         <Text as="h1" size={600} weight="semibold">General</Text>
         <AdminInfoHint
           label="About general settings"
-          text="App-wide settings that apply to every user. Open a section to change it."
+          text="Personal settings for your account. Table zoom is stored per user and does not change the scale for anyone else."
         />
       </div>
 

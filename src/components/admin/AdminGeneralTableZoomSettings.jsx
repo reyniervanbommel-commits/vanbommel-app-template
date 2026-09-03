@@ -9,8 +9,6 @@ import {
   shorthands,
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
-import { useAuth } from '../../context/AuthContext';
-import { ROLES } from '../../constants/roles';
 import { apiRequest } from '../../utils/api';
 import {
   PO_TABLE_ZOOM_DEFAULT,
@@ -34,8 +32,6 @@ const useStyles = makeStyles({
 
 export default function AdminGeneralTableZoomSettings() {
   const styles = useStyles();
-  const { user } = useAuth();
-  const isAdmin = user?.role === ROLES.ADMIN;
   const [zoom, setZoom] = useState(PO_TABLE_ZOOM_DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,7 +42,7 @@ export default function AdminGeneralTableZoomSettings() {
     let active = true;
     setLoading(true);
     setError('');
-    apiRequest('/admin/settings/general')
+    apiRequest('/auth/po-table-zoom')
       .then((data) => {
         if (!active) return;
         setZoom(parsePoTableZoom(data?.poTableZoom));
@@ -71,14 +67,14 @@ export default function AdminGeneralTableZoomSettings() {
     setFeedback('');
     setError('');
     try {
-      const data = await apiRequest('/admin/settings/general', {
+      const data = await apiRequest('/auth/po-table-zoom', {
         method: 'PATCH',
         body: { poTableZoom: zoom },
       });
       const saved = parsePoTableZoom(data?.poTableZoom ?? zoom);
       setZoom(saved);
       setPoTableZoom(saved);
-      setFeedback('Settings saved. This scale applies to all users.');
+      setFeedback('Settings saved. This scale applies only to your account.');
     } catch (err) {
       setError(err?.message || 'Failed to save settings');
     } finally {
@@ -92,32 +88,27 @@ export default function AdminGeneralTableZoomSettings() {
     <div className={styles.panel}>
       <Field
         label="Scale"
-        hint="75% to 110%, in steps of 5%. Default 85%. Applies to the purchase orders table, charts, RCCP and KPIs."
+        hint="75% to 110%, in steps of 5%. Default 85%. Applies to the purchase orders table, charts, RCCP and KPIs for your account only."
       >
         <PurchaseOrderTableZoomControl
           value={zoom}
           onChange={handleZoomChange}
-          disabled={!isAdmin}
         />
       </Field>
       <Text className={styles.hint}>
-        {isAdmin
-          ? 'Save to apply this scale for all users.'
-          : 'Only an admin can change this setting.'}
+        Save to apply this scale for you. Other users keep their own setting.
       </Text>
-      {isAdmin ? (
-        <div className={styles.actions}>
-          <Button
-            appearance="primary"
-            icon={<Save24Regular />}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            Save
-          </Button>
-          {saving ? <Spinner size="tiny" /> : null}
-        </div>
-      ) : null}
+      <div className={styles.actions}>
+        <Button
+          appearance="primary"
+          icon={<Save24Regular />}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          Save
+        </Button>
+        {saving ? <Spinner size="tiny" /> : null}
+      </div>
       {feedback ? <Text className={styles.feedback}>{feedback}</Text> : null}
       {error ? <Text className={styles.error}>{error}</Text> : null}
     </div>

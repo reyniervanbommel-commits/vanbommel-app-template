@@ -61,6 +61,16 @@ export const devTestItems = [
       'Retry / Retry all failed on a failed pushed-header job writes all lines of that PO again, not a header D365 field',
     ],
   },
+  {
+    id: 'feature-settings-zoom-board-layout-v1-53-10',
+    title: 'Per-user table zoom, vendor Settings, PO board layout (v1.53.10)',
+    checks: [
+      'Admin, employee and vendor can each save their own table zoom; it does not change the scale for other users',
+      'Vendor can open Settings and sees only General; each tab caption lists which roles can see it',
+      'History fold on header and line cells stays visible and scales with table zoom',
+      'Sticky columns and empty-filter overlay still line up after zoom',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

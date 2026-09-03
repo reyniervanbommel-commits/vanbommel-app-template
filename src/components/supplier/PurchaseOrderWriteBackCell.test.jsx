@@ -18,6 +18,17 @@ function renderCell(props) {
 }
 
 describe('PurchaseOrderWriteBackCell', () => {
+  it('does not clip the history fold when a cell has history', () => {
+    renderCell({
+      hasHistory: true,
+      cellKeys: { columnId: 1, dataAreaId: 'whsl', orderNumber: 'PO-1', lineNumber: null },
+    });
+    const trigger = screen.getByRole('button', { name: 'View cell history' });
+    const cell = trigger.closest('span');
+    expect(cell).toBeTruthy();
+    expect(window.getComputedStyle(cell).overflow).toBe('visible');
+  });
+
   it('uses remainingDisplayValue on reject instead of the pre-edit value', async () => {
     const onCorrect = vi.fn().mockRejectedValue(
       Object.assign(new Error('Write-back failed on 1 of 2 lines.'), {

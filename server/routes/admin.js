@@ -505,24 +505,24 @@ router.delete('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, n
   }
 });
 
-// ─── General app settings (PO table zoom, all users) ────────────────────────
+// ─── General settings (PO table zoom, per user) ──────────────────────────────
 
 router.get('/settings/general', async (req, res, next) => {
   try {
-    const poTableZoom = await poTableZoomSettings.getZoom();
+    const poTableZoom = await poTableZoomSettings.getZoom(req.user?.id ?? null);
     res.json({ poTableZoom });
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/settings/general', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.patch('/settings/general', async (req, res, next) => {
   try {
     if (req.body?.poTableZoom === undefined) {
       return res.status(400).json({ error: 'poTableZoom is required' });
     }
     const poTableZoom = await poTableZoomSettings.setZoom(req.body.poTableZoom, req.user?.id ?? null);
-    await auditLog(req.user.id, req.user.email, 'UPDATE_GENERAL_SETTINGS', 'app_settings', null, {
+    await auditLog(req.user.id, req.user.email, 'UPDATE_GENERAL_SETTINGS', 'user_board_settings', req.user.id, {
       poTableZoom,
     });
     res.json({ success: true, poTableZoom });

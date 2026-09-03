@@ -86,9 +86,9 @@ async function recordLogoutAnalytics(userId, sessionId, loggedInAt) {
   }
 }
 
-async function readPoTableZoomSafe() {
+async function readPoTableZoomSafe(userId = null) {
   try {
-    return await poTableZoomSettings.getZoom();
+    return await poTableZoomSettings.getZoom(userId);
   } catch {
     return poTableZoomSettings.PO_TABLE_ZOOM_DEFAULT;
   }
@@ -108,7 +108,7 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
     await recordLoginAnalytics(result.user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(result.user.role);
-    res.json({ user: result.user, poTableZoom: await readPoTableZoomSafe() });
+    res.json({ user: result.user, poTableZoom: await readPoTableZoomSafe(result.user.id) });
   } catch (err) {
     if (err.message.includes('incorrect') || err.message.includes('locked')) {
       return res.status(401).json({ error: err.message });
@@ -145,7 +145,7 @@ router.post('/set-password', async (req, res, next) => {
     await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
     await recordLoginAnalytics(user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(safeUser.role);
-    res.json({ user: safeUser, poTableZoom: await readPoTableZoomSafe() });
+    res.json({ user: safeUser, poTableZoom: await readPoTableZoomSafe(safeUser.id) });
   } catch (err) {
     next(err);
   }
@@ -197,10 +197,37 @@ router.get('/me', async (req, res, next) => {
     if (req.session && req.session.userId) {
       return res.json({
         user: req.session.user || null,
-        poTableZoom: await readPoTableZoomSafe(),
+        poTableZoom: await readPoTableZoomSafe(req.session.userId),
       });
     }
     return res.json({ user: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/po-table-zoom', async (req, res, next) => {
+  try {
+    if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated' });
+    const poTableZoom = await readPoTableZoomSafe(req.session.userId);
+    res.json({ poTableZoom });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/po-table-zoom', async (req, res, next) => {
+  try {
+    if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated' });
+    if (req.body?.poTableZoom === undefined) {
+      return res.status(400).json({ error: 'poTableZoom is required' });
+    }
+    const poTableZoom = await poTableZoomSettings.setZoom(req.body.poTableZoom, req.session.userId);
+    const email = req.session.user?.email || null;
+    await auditLog(req.session.userId, email, 'UPDATE_PO_TABLE_ZOOM', 'user_board_settings', req.session.userId, {
+      poTableZoom,
+    });
+    res.json({ success: true, poTableZoom });
   } catch (err) {
     next(err);
   }

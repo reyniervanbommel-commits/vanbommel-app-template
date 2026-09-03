@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useMemo, useState } from 'react';
+import { DEFAULT_HEADER_COLUMN_WIDTH } from '../components/supplier/purchaseOrderColumnWidthUtils';
 
 /**
  * Viewport window for board columns (horizontal virtualization).
@@ -106,7 +107,7 @@ export function useBoardColumnWindow({
     const result = new Array(totalCols + 1);
     result[0] = 0;
     for (let i = 0; i < totalCols; i += 1) {
-      const w = columnWidths[columns[i]?.key] ?? 120;
+      const w = columnWidths[columns[i]?.key] ?? DEFAULT_HEADER_COLUMN_WIDTH;
       result[i + 1] = result[i] + w;
     }
     return result;
