@@ -315,7 +315,7 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
 
   function setupLinked({ selectedKeys = ['USMF|PO1', 'USMF|PO2'] } = {}) {
     const correctAllLines = vi.fn().mockResolvedValue();
-    const { result } = renderHook(() => usePurchaseOrderBulkEdit({
+    const { result } = renderHook(() => useCombined({
       visibleHeaderColumns: LINKED_COLUMNS,
       visibleOrders: LINKED_ORDERS,
       selection: makeSelection(selectedKeys),
@@ -339,31 +339,43 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
     });
   });
 
-  it('"single" schrijft alleen de actieve order terug', async () => {
+  it('"single" start een achtergrondjob voor alleen de actieve order', async () => {
     const { result, correctAllLines } = setupLinked();
 
     let pending;
     act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
     act(() => result.current.dialogActions.onChooseSingleCell());
-    await act(async () => { await pending; });
+    const returned = await act(async () => pending);
 
-    expect(correctAllLines).toHaveBeenCalledTimes(1);
-    expect(correctAllLines).toHaveBeenCalledWith(PUSHED_PAYLOAD);
+    expect(returned).toEqual({ background: true });
     expect(result.current.dialogState.open).toBe(false);
+    await waitFor(() => {
+      expect(correctAllLines).toHaveBeenCalledTimes(1);
+    });
+    expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({
+      orderNumber: 'PO1',
+      lineColumnId: 44,
+      value: 'Green',
+    }));
+    expect(correctAllLines).not.toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO2' }));
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
-  it('"bulk" schrijft elke geselecteerde order terug en slaat unieke gelijke waarden over', async () => {
+  it('"bulk" start een achtergrondjob voor elke geselecteerde order', async () => {
     const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1', 'USMF|PO2', 'USMF|PO3'] });
 
     let pending;
     act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
     act(() => result.current.dialogActions.onChooseBulk());
-    await act(async () => { await pending; });
+    const returned = await act(async () => pending);
 
-    expect(correctAllLines).toHaveBeenCalledTimes(3);
+    expect(returned).toEqual({ background: true });
+    expect(result.current.dialogState.open).toBe(false);
+    await waitFor(() => expect(correctAllLines).toHaveBeenCalledTimes(3));
     expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO1', value: 'Green' }));
     expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO2', value: 'Green' }));
     expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO3', value: 'Green' }));
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
   it('"bulk" slaat een order over waarvan de unieke linked waarde al gelijk is', async () => {
@@ -376,5 +388,22 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
     await act(async () => { await pending; });
 
     expect(correctAllLines).not.toHaveBeenCalled();
+  });
+
+  it('één PO zonder multi-select start ook een achtergrondjob', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1'] });
+
+    const returned = await act(async () => result.current.handleCorrectAllLines(PUSHED_PAYLOAD));
+
+    expect(returned).toEqual({ background: true });
+    expect(result.current.dialogState.open).toBe(false);
+    await waitFor(() => {
+      expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({
+        orderNumber: 'PO1',
+        lineColumnId: 44,
+        value: 'Green',
+      }));
+    });
+    await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 });

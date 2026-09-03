@@ -64,6 +64,34 @@ describe('usePurchaseOrderBulkEditRetry', () => {
     ]);
   });
 
+  it('retry van een correctAll-rij roept runSingleUpdate met correctAll aan', async () => {
+    const runSingleUpdate = vi.fn().mockResolvedValue();
+    const { result } = setup([{
+      key: 'USMF|PO1',
+      dataAreaId: 'USMF',
+      orderNumber: 'PO1',
+      columnId: 44,
+      columnKey: 'colorValues',
+      lineColumnId: 44,
+      lineColumnKey: 'color',
+      headerColumnKey: 'colorValues',
+      mode: 'correctAll',
+      value: 'Green',
+      basedOnValue: 'Red',
+      errorMessage: 'fail',
+    }], runSingleUpdate);
+
+    await act(async () => { await result.current.retryRow('USMF|PO1'); });
+
+    expect(runSingleUpdate).toHaveBeenCalledWith('correctAll', expect.objectContaining({
+      orderNumber: 'PO1',
+      lineColumnId: 44,
+      lineColumnKey: 'color',
+      headerColumnKey: 'colorValues',
+      value: 'Green',
+    }));
+  });
+
   it('retryingBulk is true tijdens de aanroep en false erna', async () => {
     let resolveUpdate;
     const runSingleUpdate = vi.fn(() => new Promise((resolve) => { resolveUpdate = resolve; }));

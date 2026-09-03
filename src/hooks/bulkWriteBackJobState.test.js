@@ -7,6 +7,8 @@ import {
   buildCorrectSummaryMessage,
   cellLockStatus,
   jobBadgeLabel,
+  jobCandidateCurrentValue,
+  jobLockColumnKeys,
   orderKeysFromCandidates,
 } from './bulkWriteBackJobState';
 
@@ -39,6 +41,49 @@ describe('cellLockStatus', () => {
     };
     expect(cellLockStatus(done, 'USMF|PO2', 'status')).toBe('failed');
     expect(cellLockStatus(done, 'USMF|PO3', 'status')).toBe(null);
+  });
+
+  it('lockt header- én line-kolom bij lockColumnKeys van een push-job', () => {
+    const pushJob = {
+      ...job,
+      columnKey: 'colorValues',
+      lockColumnKeys: ['colorValues', 'color'],
+    };
+    expect(cellLockStatus(pushJob, 'USMF|PO3', 'colorValues')).toBe('queued');
+    expect(cellLockStatus(pushJob, 'USMF|PO3', 'color')).toBe('queued');
+    expect(cellLockStatus(pushJob, 'USMF|PO3', 'status')).toBe(null);
+  });
+});
+
+describe('jobLockColumnKeys', () => {
+  it('voegt de bron-line-kolom toe bij correctAll', () => {
+    expect(jobLockColumnKeys({
+      columnKey: 'colorValues',
+      headerColumnKey: 'colorValues',
+      lineColumnKey: 'color',
+    }, 'correctAll')).toEqual(['colorValues', 'color']);
+  });
+
+  it('blijft bij één key voor gewone header-correct', () => {
+    expect(jobLockColumnKeys({ columnKey: 'status' }, 'correct')).toEqual(['status']);
+  });
+});
+
+describe('jobCandidateCurrentValue', () => {
+  it('leest de unieke linked waarde bij correctAll', () => {
+    const row = { linkedLineValues: { colorValues: ['Red'] } };
+    expect(jobCandidateCurrentValue(row, {
+      headerColumnKey: 'colorValues',
+      columnKey: 'colorValues',
+    }, 'correctAll')).toBe('Red');
+  });
+
+  it('geeft undefined bij mixed +N zodat de rij niet wordt overgeslagen', () => {
+    const row = { linkedLineValues: { colorValues: ['Blue', 'Green'] } };
+    expect(jobCandidateCurrentValue(row, {
+      headerColumnKey: 'colorValues',
+      columnKey: 'colorValues',
+    }, 'correctAll')).toBeUndefined();
   });
 });
 

@@ -17,6 +17,8 @@ import {
   SUCCESS_HOLD_MS,
   buildCorrectSummaryMessage,
   isJobRunning,
+  jobCandidateCurrentValue,
+  jobLockColumnKeys,
   orderKeysFromCandidates,
 } from '../hooks/bulkWriteBackJobState';
 
@@ -81,7 +83,7 @@ export function BulkWriteBackJobProvider({ children }) {
     }, SUCCESS_HOLD_MS);
   }, [clearSuccessTimer]);
 
-  const startCorrectJob = useCallback(({ payload, rows, columnLabel, runSingleUpdate }) => {
+  const startCorrectJob = useCallback(({ payload, rows, columnLabel, runSingleUpdate, mode = 'correct' }) => {
     if (isJobRunning(jobRef.current)) {
       notifyError('A write-back is already running. Wait until it finishes.');
       return false;
@@ -91,15 +93,17 @@ export function BulkWriteBackJobProvider({ children }) {
     const candidates = (Array.isArray(rows) ? rows : []).map((row) => ({
       dataAreaId: row.dataAreaId,
       orderNumber: row.orderNumber,
-      currentValue: row?.values?.[payload.columnKey],
+      currentValue: jobCandidateCurrentValue(row, payload, mode),
     }));
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     const nextJob = {
       status: JOB_RUNNING,
-      columnKey: payload.columnKey,
+      columnKey: payload.columnKey || payload.headerColumnKey,
+      lockColumnKeys: jobLockColumnKeys(payload, mode),
       columnLabel: columnLabel || payload.columnKey,
       payload,
+      mode,
       rowKeys: orderKeysFromCandidates(candidates),
       currentKey: null,
       processed: 0,
@@ -117,6 +121,7 @@ export function BulkWriteBackJobProvider({ children }) {
       const result = await runCorrectRows({
         candidates,
         payload,
+        mode,
         runSingleUpdate: (...args) => runSingleUpdateRef.current?.(...args),
         onRowStart: (key) => {
           if (generationRef.current !== generation) return;

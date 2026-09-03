@@ -77,4 +77,29 @@ describe('runCorrectRows', () => {
     expect(onSettled).toHaveBeenNthCalledWith(1, { key: 'USMF|PO1', outcome: 'skipped' });
     expect(onSettled).toHaveBeenNthCalledWith(2, { key: 'USMF|PO2', outcome: 'updated' });
   });
+
+  it('stuurt correctAll met line-payload door naar runSingleUpdate', async () => {
+    const runSingleUpdate = vi.fn().mockResolvedValue();
+    const pushPayload = {
+      columnKey: 'colorValues',
+      headerColumnKey: 'colorValues',
+      lineColumnId: 44,
+      lineColumnKey: 'color',
+      value: 'Green',
+    };
+    await runCorrectRows({
+      mode: 'correctAll',
+      candidates: [{ dataAreaId: 'USMF', orderNumber: 'PO1', currentValue: 'Red' }],
+      payload: pushPayload,
+      runSingleUpdate,
+    });
+    expect(runSingleUpdate).toHaveBeenCalledWith('correctAll', expect.objectContaining({
+      dataAreaId: 'USMF',
+      orderNumber: 'PO1',
+      headerColumnKey: 'colorValues',
+      lineColumnId: 44,
+      lineColumnKey: 'color',
+      value: 'Green',
+    }));
+  });
 });

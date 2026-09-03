@@ -16,13 +16,38 @@ export function orderKeysFromCandidates(candidates) {
   ));
 }
 
+export function jobLockColumnKeys(payload = {}, mode = 'correct') {
+  const headerKey = payload.columnKey || payload.headerColumnKey;
+  if (mode === 'correctAll' && payload.lineColumnKey && payload.lineColumnKey !== headerKey) {
+    return [headerKey, payload.lineColumnKey].filter(Boolean);
+  }
+  return headerKey ? [headerKey] : [];
+}
+
+export function jobCandidateCurrentValue(row, payload = {}, mode = 'correct') {
+  if (mode === 'correctAll') {
+    const key = payload.headerColumnKey || payload.columnKey;
+    const vals = row?.linkedLineValues?.[key];
+    if (!Array.isArray(vals) || vals.length !== 1) return undefined;
+    return vals[0];
+  }
+  return row?.values?.[payload.columnKey];
+}
+
+function jobMatchesColumn(job, columnKey) {
+  const keys = Array.isArray(job.lockColumnKeys) && job.lockColumnKeys.length
+    ? job.lockColumnKeys
+    : (job.columnKey ? [job.columnKey] : []);
+  return keys.includes(columnKey);
+}
+
 /**
  * Lock voor één write-back-cel: queued / writing / failed, of null.
  * Alleen de kolom van de lopende job, alleen geselecteerde rijen.
  */
 export function cellLockStatus(job, rowKey, columnKey) {
   if (!job || !rowKey || !columnKey) return null;
-  if (job.columnKey !== columnKey) return null;
+  if (!jobMatchesColumn(job, columnKey)) return null;
   const rowKeys = job.rowKeys || [];
   if (!rowKeys.includes(rowKey)) return null;
   if ((job.failedRows || []).some((row) => row.key === rowKey)) return 'failed';

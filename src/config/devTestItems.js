@@ -52,6 +52,15 @@ export const devTestItems = [
       'Matrix click does not open a drill-down panel',
     ],
   },
+  {
+    id: 'feature-302-header-push-background-job-v1-53-9',
+    title: 'Feature 302 - Header-push write-back uses background job (v1.53.9)',
+    checks: [
+      'Editing one Push values to header cell locks that header (and expanded line cells of the source column) and shows the Write-back badge; the board stays usable',
+      'Apply to selected rows on a pushed header column closes the confirm dialog immediately and runs in the background like a normal D365 bulk write-back',
+      'Retry / Retry all failed on a failed pushed-header job writes all lines of that PO again, not a header D365 field',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */

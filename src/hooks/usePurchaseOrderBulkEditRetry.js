@@ -19,8 +19,21 @@ export function usePurchaseOrderBulkEditRetry({ failedRows, onFailedRowsChange, 
         orderNumber: e.orderNumber,
         currentValue: e.basedOnValue,
       }));
-      const payload = { columnId: entries[0].columnId, columnKey: entries[0].columnKey, value: entries[0].value };
-      const { failedRows: stillFailed } = await runCorrectRows({ candidates, payload, runSingleUpdate });
+      const first = entries[0];
+      const payload = {
+        columnId: first.columnId,
+        columnKey: first.columnKey,
+        value: first.value,
+        lineColumnId: first.lineColumnId,
+        lineColumnKey: first.lineColumnKey,
+        headerColumnKey: first.headerColumnKey,
+      };
+      const { failedRows: stillFailed } = await runCorrectRows({
+        candidates,
+        payload,
+        runSingleUpdate,
+        mode: first.mode || 'correct',
+      });
       const stillFailedKeys = new Set(stillFailed.map((r) => r.key));
       const retriedKeys = new Set(entries.map((e) => e.key));
       onFailedRowsChange((prevFailedRows) => prevFailedRows

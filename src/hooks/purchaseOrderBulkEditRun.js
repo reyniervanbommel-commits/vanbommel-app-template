@@ -12,8 +12,28 @@ export function valuesEqual(left, right) {
  * Sequentiële D365-correcties: gaat door na een fout en verzamelt failedRows.
  * I/O via geïnjecteerde runSingleUpdate; onSettled vuurt na elke kandidaat.
  */
+function buildRowPayload(mode, payload, candidate) {
+  if (mode === 'correctAll') {
+    return {
+      ...payload,
+      dataAreaId: candidate.dataAreaId,
+      orderNumber: candidate.orderNumber,
+      value: payload.value,
+    };
+  }
+  return {
+    columnId: payload.columnId,
+    columnKey: payload.columnKey,
+    dataAreaId: candidate.dataAreaId,
+    orderNumber: candidate.orderNumber,
+    lineNumber: null,
+    value: payload.value,
+    basedOnValue: candidate.currentValue,
+  };
+}
+
 export async function runCorrectRows({
-  candidates, payload, runSingleUpdate, onSettled, onRowStart,
+  candidates, payload, runSingleUpdate, onSettled, onRowStart, mode = 'correct',
 }) {
   let updated = 0;
   let skipped = 0;
@@ -27,15 +47,7 @@ export async function runCorrectRows({
     }
     onRowStart?.(key);
     try {
-      await runSingleUpdate('correct', {
-        columnId: payload.columnId,
-        columnKey: payload.columnKey,
-        dataAreaId: candidate.dataAreaId,
-        orderNumber: candidate.orderNumber,
-        lineNumber: null,
-        value: payload.value,
-        basedOnValue: candidate.currentValue,
-      });
+      await runSingleUpdate(mode, buildRowPayload(mode, payload, candidate));
       updated += 1;
       onSettled?.({ key, outcome: 'updated' });
       continue;
@@ -44,8 +56,12 @@ export async function runCorrectRows({
         key,
         dataAreaId: candidate.dataAreaId,
         orderNumber: candidate.orderNumber,
-        columnId: payload.columnId,
+        columnId: payload.columnId ?? payload.lineColumnId,
         columnKey: payload.columnKey,
+        lineColumnId: payload.lineColumnId,
+        lineColumnKey: payload.lineColumnKey,
+        headerColumnKey: payload.headerColumnKey,
+        mode,
         value: payload.value,
         basedOnValue: candidate.currentValue,
         errorMessage: err.message || 'Write-back failed',
