@@ -12,7 +12,7 @@ import {
   Options24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
-import { formatAudience, getVisibleSettingsSections } from '../../utils/settingsAudience';
+import { getVisibleSettingsSections } from '../../utils/settingsAudience';
 
 const ICONS = {
   general: Options24Regular,
@@ -55,7 +55,6 @@ function SettingsNavButton({ item, active, onSelect }) {
     <SidebarNavItem
       icon={ICONS[item.id]}
       label={item.label}
-      caption={`Visible to: ${formatAudience(item.roles)}`}
       active={active}
       onClick={handleClick}
     />

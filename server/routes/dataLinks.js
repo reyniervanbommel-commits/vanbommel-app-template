@@ -1,7 +1,7 @@
 'use strict';
 
-// Admin-only API voor Excel-koppelingen naar hoofdtabellen (#AB:162). Gemonteerd op /api/data-links
-// achter requireSession + requireRole('admin') (zie server.js). Upload -> parse/snapshot; publish -> fk_join-lookup.
+// Staff-only API (admin/employee) voor Excel-koppelingen naar hoofdtabellen (#AB:162). Gemonteerd op /api/data-links
+// achter requireSession + requireAnyRole([admin, employee]) (zie server.js). Upload -> parse/snapshot; publish -> fk_join-lookup.
 
 const express = require('express');
 const multer = require('multer');

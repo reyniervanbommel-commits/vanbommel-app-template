@@ -3,11 +3,11 @@ import { apiRequest } from '../../../utils/api';
 import { rowKey } from './remarksFormatters';
 
 /**
- * Fetches remarks search match keys for a column filter.
- * @param {{ query: string, enabled: boolean, tableKey?: string }} params
+ * Fetches remarks match keys for a column filter (`search` or `hasComment`).
+ * @param {{ query: string, enabled: boolean, tableKey?: string, mode?: 'search'|'hasComment' }} params
  * @returns {{ matchKeys: Set<string>|null, loading: boolean, error: string }}
  */
-export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-orders' }) {
+export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-orders', mode = 'search' }) {
   const [matchKeys, setMatchKeys] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,10 +31,10 @@ export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-or
 
     (async () => {
       try {
-        const data = await apiRequest(
-          `/data/${encodeURIComponent(tableKey)}/remarks/search?q=${encodeURIComponent(query)}`,
-          { signal: controller.signal }
-        );
+        const path = mode === 'hasComment'
+          ? `/data/${encodeURIComponent(tableKey)}/remarks/has-comment`
+          : `/data/${encodeURIComponent(tableKey)}/remarks/search?q=${encodeURIComponent(query)}`;
+        const data = await apiRequest(path, { signal: controller.signal });
         if (controller.signal.aborted) return;
         const keys = Array.isArray(data?.keys)
           ? new Set(data.keys.map((item) => rowKey(item.partitionKey, item.recordKey)))
@@ -55,7 +55,7 @@ export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-or
     return () => {
       controller.abort();
     };
-  }, [query, enabled, tableKey]);
+  }, [query, enabled, tableKey, mode]);
 
   return useMemo(
     () => ({ matchKeys, loading, error }),

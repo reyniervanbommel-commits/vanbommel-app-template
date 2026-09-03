@@ -1,5 +1,5 @@
 import { startTransition, useCallback } from 'react';
-import { isRemarksSearchTermValid } from '../utils/tableViewFilterUtils';
+import { isRemarksFilterOperatorReady } from '../utils/tableViewFilterUtils';
 
 function persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue) {
   onSetValue(columnKey, draft.value);
@@ -59,18 +59,24 @@ export function usePurchaseOrderSortFilterActions({
   }, [setDraft]);
 
   const handleApplyFilter = useCallback(() => {
-    if (columnDataType === 'remarks' && !isRemarksSearchTermValid(draft.value)) return;
+    if (columnDataType === 'remarks' && !isRemarksFilterOperatorReady(draft.operator, draft.value)) return;
+    const isHasComment = columnDataType === 'remarks' && draft.operator === 'hasComment';
     const patch = {
       operator: draft.operator,
-      value: draft.value,
-      secondaryValue: draft.secondaryValue,
+      value: isHasComment ? '' : draft.value,
+      secondaryValue: isHasComment ? '' : draft.secondaryValue,
     };
     startTransition(() => {
       if (typeof onApplyFilter === 'function') {
         onApplyFilter(columnKey, patch);
       } else {
         onSetOperator(columnKey, draft.operator);
-        persistDraftValues(columnKey, draft, onSetValue, onSetSecondaryValue);
+        persistDraftValues(
+          columnKey,
+          isHasComment ? { ...draft, value: '', secondaryValue: '' } : draft,
+          onSetValue,
+          onSetSecondaryValue
+        );
       }
     });
     setOpen(false);

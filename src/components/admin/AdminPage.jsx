@@ -11,7 +11,7 @@ import AdminD365Refresh from './AdminD365Refresh';
 import AdminGeneralSettings from './AdminGeneralSettings';
 import AdminSettingsSidebar from './AdminSettingsSidebar';
 import { useAuth } from '../../context/AuthContext';
-import { formatAudience, getSettingsTabRoles, getVisibleSettingsSections } from '../../utils/settingsAudience';
+import { getSettingsTabRoles, getVisibleSettingsSections } from '../../utils/settingsAudience';
 
 const useStyles = makeStyles({
   page: {
@@ -28,11 +28,6 @@ const useStyles = makeStyles({
     ...shorthands.padding('28px', '32px'),
     backgroundColor: tokens.colorNeutralBackground1,
     overflowY: 'auto',
-  },
-  audience: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    marginBottom: tokens.spacingVerticalM,
   },
 });
 
@@ -62,9 +57,6 @@ export default function AdminPage() {
       />
 
       <div className={styles.content}>
-        <Text className={styles.audience}>
-          Visible to: {formatAudience(getSettingsTabRoles(adminTab))}
-        </Text>
         {adminTab === 'general' && <AdminGeneralSettings />}
         {adminTab === 'users' && <UsersManagement />}
         {adminTab === 'analytics' && <UserAnalytics />}

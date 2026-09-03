@@ -12,6 +12,7 @@ import {
   numberMatchesFilter,
   filterItemsByColumnFilters,
   isRemarksSearchTermValid,
+  isRemarksFilterOperatorReady,
 } from './tableViewFilterUtils';
 
 describe('tableViewFilterUtils', () => {
@@ -175,6 +176,12 @@ describe('remarks column — value-pass skip and min-2 helper', () => {
   it('isRemarksSearchTermValid requires 2–200 trimmed chars', () => {
     expect(isRemarksSearchTermValid(' a ')).toBe(false);
     expect(isRemarksSearchTermValid('ab')).toBe(true);
+  });
+  it('hasComment is active without a search term and ready to apply', () => {
+    expect(hasActiveFilter(remarks, { operator: 'hasComment', value: '' })).toBe(true);
+    expect(isRemarksFilterOperatorReady('hasComment', '')).toBe(true);
+    expect(isRemarksFilterOperatorReady('contains', 'a')).toBe(false);
+    expect(isRemarksFilterOperatorReady('contains', 'ab')).toBe(true);
   });
   it('filterItemsByColumnFilters ignores remarks cell values', () => {
     const items = [{ values: { vendor: 'Acme' } }];

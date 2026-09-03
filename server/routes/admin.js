@@ -32,7 +32,7 @@ function normalizeVendorAccount(value) {
   return trimmed ? trimmed.slice(0, 64) : null;
 }
 
-router.get('/users', async (req, res, next) => {
+router.get('/users', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { page, pageSize } = parsePaginationParams(req.query);
     const offset = (page - 1) * pageSize;
@@ -52,7 +52,7 @@ router.get('/users', async (req, res, next) => {
   }
 });
 
-router.post('/users', async (req, res, next) => {
+router.post('/users', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { email, role, display_name, vendor_account } = req.body;
     if (!email) return res.status(400).json({ error: 'Email address is required' });
@@ -77,7 +77,7 @@ router.post('/users', async (req, res, next) => {
   }
 });
 
-router.patch('/users/:id', async (req, res, next) => {
+router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { role, is_locked, mfa_required, vendor_account } = req.body;
@@ -113,7 +113,7 @@ router.patch('/users/:id', async (req, res, next) => {
   }
 });
 
-router.post('/users/:id/force-reset', async (req, res, next) => {
+router.post('/users/:id/force-reset', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { id } = req.params;
     const pool = await getPool();
@@ -133,7 +133,7 @@ router.post('/users/:id/force-reset', async (req, res, next) => {
   }
 });
 
-router.delete('/users/:id', async (req, res, next) => {
+router.delete('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { id } = req.params;
     if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
@@ -151,7 +151,7 @@ router.delete('/users/:id', async (req, res, next) => {
 
 // ─── Permissions ────────────────────────────────────────────────────────────
 
-router.get('/users/:id/permissions', async (req, res, next) => {
+router.get('/users/:id/permissions', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await pool.request()
@@ -161,7 +161,7 @@ router.get('/users/:id/permissions', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch('/users/:id/permissions', async (req, res, next) => {
+router.patch('/users/:id/permissions', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id);
     const { permissions = [] } = req.body;
@@ -291,7 +291,7 @@ router.get('/analytics/click-stats', async (req, res, next) => {
 
 // ─── OData settings ──────────────────────────────────────────────────────────
 
-router.get('/settings/odata', async (req, res, next) => {
+router.get('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const config = await settingsService.getODataConfig();
 
@@ -321,7 +321,7 @@ router.get('/settings/odata', async (req, res, next) => {
   }
 });
 
-router.post('/settings/odata', async (req, res, next) => {
+router.post('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const allowed = [...settingsService.ODATA_KEYS];
     const incoming = req.body || {};
@@ -347,7 +347,7 @@ router.post('/settings/odata', async (req, res, next) => {
 
 // ─── Password reset email template (admin only) ─────────────────────────────
 
-router.get('/settings/password-reset-email-template', async (req, res, next) => {
+router.get('/settings/password-reset-email-template', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const template = await passwordResetEmailTemplateService.getPasswordResetTemplate();
     res.json({ template });
@@ -356,7 +356,7 @@ router.get('/settings/password-reset-email-template', async (req, res, next) => 
   }
 });
 
-router.patch('/settings/password-reset-email-template', async (req, res, next) => {
+router.patch('/settings/password-reset-email-template', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const template = await passwordResetEmailTemplateService.updatePasswordResetTemplate(req.body || {}, req.user?.id ?? null);
     await auditLog(

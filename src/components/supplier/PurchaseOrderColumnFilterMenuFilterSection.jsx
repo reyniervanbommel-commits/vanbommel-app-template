@@ -56,6 +56,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
     (isDate && draft.operator === 'between')
     || (isNumber && draft.operator === 'between')
     || (isDate && draft.operator === 'nextWeek')
+    || draft.operator === 'hasComment'
   );
 
   const usesValuePicker = draft.operator === 'equals' || draft.operator === 'oneOf';

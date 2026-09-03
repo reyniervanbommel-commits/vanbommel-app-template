@@ -60,4 +60,33 @@ describe('usePurchaseOrderSortFilterActions — handleApplyFilter', () => {
     expect(onApplyFilter).not.toHaveBeenCalled();
     expect(setOpen).not.toHaveBeenCalled();
   });
+
+  it('applies hasComment without a search term and clears leftover values', () => {
+    const onApplyFilter = vi.fn();
+    const setOpen = vi.fn();
+    const { result } = renderHook(() => usePurchaseOrderSortFilterActions({
+      columnKey: 'remarks',
+      columnDataType: 'remarks',
+      draft: { operator: 'hasComment', value: 'leftover', secondaryValue: 'x' },
+      onSetSortDirection: vi.fn(),
+      onSetOperator: vi.fn(),
+      onSetValue: vi.fn(),
+      onSetSecondaryValue: vi.fn(),
+      onApplyFilter,
+      onClearFilter: vi.fn(),
+      setDraft: vi.fn(),
+      setOpen,
+    }));
+
+    act(() => {
+      result.current.handleApplyFilter();
+    });
+
+    expect(onApplyFilter).toHaveBeenCalledWith('remarks', {
+      operator: 'hasComment',
+      value: '',
+      secondaryValue: '',
+    });
+    expect(setOpen).toHaveBeenCalledWith(false);
+  });
 });

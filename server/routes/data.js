@@ -22,7 +22,7 @@ const {
   normalizeSearchQuery,
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
-const { searchRemarks } = require('../services/RowRemarksSearchService');
+const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 const { getSupplierAccount } = require('../utils/supplierScope');
@@ -61,6 +61,17 @@ router.get('/:tableKey/remarks/search', async (req, res, next) => {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const query = normalizeSearchQuery(req.query.q);
     return res.json(await searchRemarks(tableKey, query, remarksActor(req)));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/remarks/has-comment — sleutels van rijen met minstens één actieve
+// remark, voor de Remarks-kolomfilter-operator "has a comment" (geen zoekterm).
+router.get('/:tableKey/remarks/has-comment', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    return res.json(await hasRemarks(tableKey, remarksActor(req)));
   } catch (err) {
     return next(err);
   }
