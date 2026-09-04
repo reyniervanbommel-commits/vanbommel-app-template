@@ -1100,5 +1100,6 @@ describe('TableDataService.usesMasterRecordKeysForInheritedLookup', () => {
 describe('TableDataService.FETCH_ADAPTERS', () => {
   it('registreert product-receipt-lines op genericMasterD365Fetch', () => {
     expect(typeof FETCH_ADAPTERS['product-receipt-lines']).toBe('function');
+    expect(typeof FETCH_ADAPTERS['product-attribute-values']).toBe('function');
   });
 });

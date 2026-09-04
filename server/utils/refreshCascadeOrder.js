@@ -4,6 +4,22 @@ function isExcelTable(table) {
   return String(table?.source?.providerType || '').toLowerCase() === 'excel';
 }
 
+const REFRESH_AFTER = {
+  'product-attribute-values': 'items',
+};
+
+function applyRefreshAfter(keys) {
+  const list = [...keys];
+  Object.entries(REFRESH_AFTER).forEach(([child, parent]) => {
+    const childIdx = list.indexOf(child);
+    const parentIdx = list.indexOf(parent);
+    if (childIdx === -1 || parentIdx === -1 || parentIdx < childIdx) return;
+    list.splice(childIdx, 1);
+    list.splice(list.indexOf(parent) + 1, 0, child);
+  });
+  return list;
+}
+
 /**
  * D365-lookups eerst, Excel-doeltabellen altijd achteraan (zelfde volgorde binnen elke groep).
  */
@@ -20,10 +36,10 @@ async function orderLookupTargetKeys(targetKeys, loadTable) {
       entries.push({ key, excel: false });
     }
   }
-  return [
+  return applyRefreshAfter([
     ...entries.filter((entry) => !entry.excel).map((entry) => entry.key),
     ...entries.filter((entry) => entry.excel).map((entry) => entry.key),
-  ];
+  ]);
 }
 
 function formatEntityRefreshError(_tableKey, err) {

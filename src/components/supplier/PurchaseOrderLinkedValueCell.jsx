@@ -26,6 +26,7 @@ function PurchaseOrderLinkedValueCell({
   additionalCount = 0,
   allValuesLabel = '-',
   isConditionalFormat = false,
+  hover = 'tooltip',
 }) {
   const styles = useStyles();
   const textStyle = isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined;
@@ -34,19 +35,25 @@ function PurchaseOrderLinkedValueCell({
     return <span style={textStyle}>{firstValue}</span>;
   }
 
+  const content = (
+    <span className={styles.root} title={hover === 'title' ? allValuesLabel : undefined}>
+      <span className={styles.firstValue} style={textStyle}>{firstValue}</span>
+      <Badge
+        appearance="tint"
+        color="informative"
+        size="small"
+        aria-label={`${additionalCount} additional unique values`}
+      >
+        +{additionalCount}
+      </Badge>
+    </span>
+  );
+
+  if (hover === 'title') return content;
+
   return (
     <Tooltip content={allValuesLabel} relationship="description" positioning="above">
-      <span className={styles.root}>
-        <span className={styles.firstValue} style={textStyle}>{firstValue}</span>
-        <Badge
-          appearance="tint"
-          color="informative"
-          size="small"
-          aria-label={`${additionalCount} additional unique values`}
-        >
-          +{additionalCount}
-        </Badge>
-      </span>
+      {content}
     </Tooltip>
   );
 }

@@ -9,6 +9,7 @@ const { getIsoWeek, getIsoWeekYear, isIsoWeekInWindow } = require('./isoWeek');
 const {
   toNumber,
   pickValue,
+  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
@@ -184,7 +185,7 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
 
   for (const row of rows || []) {
     const masterValues = row.values || {};
-    const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
+    const vendor = String(pickConfiguredValue(masterValues, vendorCol) || '').trim();
     if (!vendor) continue;
     if (vendorAccount && vendor !== vendorAccount) continue;
     const poNumber = row.recordKey;
@@ -243,9 +244,9 @@ function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWind
         details, masterValues, dateKey, null, slotWindow, excludedSet, masterStatus,
       );
       if (plannedSlots.length) {
-        const openShare = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) / plannedSlots.length : 0;
+        const openShare = headerOnlyOpen ? toNumber(pickConfiguredValue(masterValues, openKey)) / plannedSlots.length : 0;
         const deliveredShare = headerOnlyDelivered
-          ? toNumber(pickValue(masterValues, deliveredKey)) / plannedSlots.length
+          ? toNumber(pickConfiguredValue(masterValues, deliveredKey)) / plannedSlots.length
           : 0;
         for (const slot of plannedSlots) {
           emit(slot.lineValues, headerOnlyOpen ? openShare : 0, headerOnlyDelivered ? deliveredShare : 0);

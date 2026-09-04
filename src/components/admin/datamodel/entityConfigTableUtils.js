@@ -64,6 +64,13 @@ export function customColumnDeleteMessage(column) {
   return `Delete custom column "${label}"? This permanently removes the column and all related values from SQL.`;
 }
 
+export function sortFlaggedFirst(items, isFlagged) {
+  const list = Array.isArray(items) ? items : [];
+  return [...list].sort((left, right) => (
+    Number(Boolean(isFlagged(right))) - Number(Boolean(isFlagged(left)))
+  ));
+}
+
 export function columnMatchesFilter(column, columnFilter, sampleValue) {
   return matchesText(column?.label, columnFilter)
     || matchesText(column?.d365Field, columnFilter)

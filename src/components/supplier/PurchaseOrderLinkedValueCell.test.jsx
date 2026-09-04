@@ -27,4 +27,14 @@ describe('PurchaseOrderLinkedValueCell', () => {
     const badge = screen.getByLabelText('2 additional unique values');
     expect(badge.textContent).toBe('+2');
   });
+
+  it('uses a title attribute instead of a tooltip when hover is title', () => {
+    renderCell({
+      firstValue: 'SS26',
+      additionalCount: 1,
+      allValuesLabel: 'SS26, FW26',
+      hover: 'title',
+    });
+    expect(screen.getByTitle('SS26, FW26')).toBeTruthy();
+  });
 });
