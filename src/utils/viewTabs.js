@@ -9,6 +9,7 @@ import {
   isDateColumn,
   isNumberColumn,
   NUMBER_FILTER_OPERATORS,
+  REMARKS_FILTER_OPERATORS,
   resolveFilterModel,
   TEXT_FILTER_OPERATORS,
 } from './tableViewFilterUtils';
@@ -289,6 +290,7 @@ export function upsertGroup(groups, columnKey, color) {
 
 function operatorPhrase(column, operator) {
   if (operator === COLOR_FILTER_OPERATOR) return 'color is';
+  if (column?.dataType === 'remarks') return REMARKS_FILTER_OPERATORS[operator] || operator;
   if (isDateColumn(column)) return DATE_FILTER_OPERATORS[operator] || operator;
   if (isNumberColumn(column)) return NUMBER_FILTER_OPERATORS[operator] || operator;
   return TEXT_FILTER_OPERATORS[operator] || operator;

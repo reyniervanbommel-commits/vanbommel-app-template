@@ -195,3 +195,10 @@ describe('PurchaseOrdersBoardTable empty filter state', () => {
     expect(message.closest('table')).toBeNull();
   });
 });
+
+describe('PurchaseOrdersBoardTable column widths', () => {
+  it('renders a colgroup so column widths stay fixed while rows virtualize', () => {
+    renderTable();
+    expect(document.querySelectorAll('table colgroup col').length).toBe(2);
+  });
+});

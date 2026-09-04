@@ -50,6 +50,24 @@ describe('useRemarksColumnFilter', () => {
     expect(result.current.error).toBe('');
   });
 
+  it('loads match keys from GET remarks/has-comment', async () => {
+    apiRequest.mockResolvedValueOnce({
+      keys: [{ partitionKey: 'nl', recordKey: 'PO-3' }],
+    });
+
+    const { result } = renderHook(() =>
+      useRemarksColumnFilter({ query: '', enabled: true, mode: 'hasComment' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.matchKeys).toEqual(new Set([rowKey('nl', 'PO-3')]));
+    });
+    expect(apiRequest).toHaveBeenCalledWith(
+      '/data/purchase-orders/remarks/has-comment',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
+
   it('keeps the previous Set when a later request fails', async () => {
     apiRequest
       .mockResolvedValueOnce({ keys: [{ partitionKey: 'nl', recordKey: 'PO-1' }] })

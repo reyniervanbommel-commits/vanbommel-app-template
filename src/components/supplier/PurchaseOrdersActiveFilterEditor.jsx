@@ -21,7 +21,7 @@ import {
   DATE_FILTER_OPERATORS,
   NUMBER_FILTER_OPERATORS,
   TEXT_FILTER_OPERATORS,
-  isRemarksSearchTermValid,
+  isRemarksFilterOperatorReady,
 } from '../../utils/tableViewFilterUtils';
 
 const FIELD_CONTAINER_STYLE = { maxWidth: '520px' };
@@ -142,11 +142,12 @@ export default function PurchaseOrdersActiveFilterEditor({
   }, []);
 
   const handleApply = useCallback(() => {
-    if (isRemarks && !isRemarksSearchTermValid(draft.value)) return;
+    if (isRemarks && !isRemarksFilterOperatorReady(draft.operator, draft.value)) return;
+    const isHasComment = draft.operator === 'hasComment';
     const patch = {
       operator: draft.operator,
-      value: draft.value,
-      secondaryValue: draft.secondaryValue,
+      value: isHasComment ? '' : draft.value,
+      secondaryValue: isHasComment ? '' : draft.secondaryValue,
     };
     startTransition(() => {
       applyColumnFilter(columnKey, patch);
@@ -154,14 +155,17 @@ export default function PurchaseOrdersActiveFilterEditor({
   }, [applyColumnFilter, columnKey, draft, isRemarks]);
 
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
-  const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek');
+  const isHasComment = isRemarks && draft.operator === 'hasComment';
+  const showSingleValue = !usesValuePicker && !showBetween && !(isDate && draft.operator === 'nextWeek') && !isHasComment;
   const inputType = getValueInputType(isDate, isNumber, draft.operator);
-  const remarksTermLength = isRemarks ? String(draft.value ?? '').trim().length : 0;
-  const searchHint = remarksTermLength > 200
-    ? 'Enter at most 200 characters'
-    : remarksTermLength < 2 && isRemarks
-      ? 'Enter at least 2 characters'
-      : '';
+  const remarksTermLength = isRemarks && !isHasComment ? String(draft.value ?? '').trim().length : 0;
+  const searchHint = isHasComment
+    ? 'Matches rows with at least one comment.'
+    : remarksTermLength > 200
+      ? 'Enter at most 200 characters'
+      : remarksTermLength < 2 && isRemarks
+        ? 'Enter at least 2 characters'
+        : '';
 
   return (
     <div className={styles.root}>

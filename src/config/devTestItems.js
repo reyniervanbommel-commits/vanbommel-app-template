@@ -4,8 +4,8 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
-    id: 'feature-311-product-attribute-values-v1-52-131',
-    title: 'Feature 311 - Product attribute values (v1.52.131)',
+    id: 'feature-311-product-attribute-values-v1-53-15',
+    title: 'Feature 311 - Product attribute values (v1.53.15)',
     checks: [
       'Data model tab Product attribute values syncs rows for items already in the Items cache',
       'PO Board columns lists all attribute names (not only Sole name) with switches',

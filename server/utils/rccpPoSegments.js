@@ -9,7 +9,6 @@ const { getIsoWeek, getIsoWeekYear, isoWeekKey, buildWeekRange } = require('./is
 const {
   toNumber,
   pickValue,
-  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
@@ -47,7 +46,11 @@ function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId =
     itemMap = emptyWeekBucket();
     weekMap.set(week, itemMap);
   }
-  const current = itemMap.get(itemNumber) || {
+  const poNumber = flags.poNumber || '';
+  const key = `${poNumber}\0${itemNumber}`;
+  const current = itemMap.get(key) || {
+    poNumber,
+    itemNumber,
     open: 0, received: 0, ordered: 0, late: false, receivedLate: false, receivedOnTime: false,
     planned1900: false, dataAreaId: '',
   };
@@ -63,12 +66,13 @@ function bump(weekMap, week, itemNumber, status, qty, late = false, dataAreaId =
     current.receivedLate = current.receivedLate || Boolean(late);
     current.receivedOnTime = current.receivedOnTime || Boolean(flags.onTime);
   }
-  itemMap.set(itemNumber, current);
+  itemMap.set(key, current);
 }
 
 function emitSegment(itemNumber, qty, status, late, dataAreaId, flags = {}) {
   return {
     itemNumber,
+    poNumber: flags.poNumber || '',
     qty,
     status,
     late: Boolean(late),
@@ -79,42 +83,42 @@ function emitSegment(itemNumber, qty, status, late, dataAreaId, flags = {}) {
 }
 
 function emitAbove(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
+  const keys = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
   const ordered = [];
   const remaining = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
-    const flags = { planned1900: entry.planned1900 };
+  for (const key of keys) {
+    const entry = itemMap.get(key);
+    const flags = { planned1900: entry.planned1900, poNumber: entry.poNumber };
     if (entry.ordered > 0) {
-      ordered.push(emitSegment(itemNumber, entry.ordered, 'ordered', false, entry.dataAreaId, flags));
+      ordered.push(emitSegment(entry.itemNumber, entry.ordered, 'ordered', false, entry.dataAreaId, flags));
     }
     if (entry.open > 0) {
-      remaining.push(emitSegment(itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
+      remaining.push(emitSegment(entry.itemNumber, entry.open, 'open', Boolean(entry.late), entry.dataAreaId, flags));
     }
   }
   return [...ordered, ...remaining];
 }
 
 function emitBelow(itemMap) {
-  const items = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
+  const keys = [...itemMap.keys()].sort((a, b) => String(a).localeCompare(String(b)));
   const out = [];
-  for (const itemNumber of items) {
-    const entry = itemMap.get(itemNumber);
+  for (const key of keys) {
+    const entry = itemMap.get(key);
     if (entry.received > 0) {
       out.push(emitSegment(
-        itemNumber,
+        entry.itemNumber,
         entry.received,
         'received',
         Boolean(entry.receivedLate),
         entry.dataAreaId,
-        { onTime: entry.receivedOnTime, planned1900: entry.planned1900 },
+        { onTime: entry.receivedOnTime, planned1900: entry.planned1900, poNumber: entry.poNumber },
       ));
     }
   }
   return out;
 }
 
-function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlot, dataAreaId) {
+function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlot, dataAreaId, poNumber) {
   if (!(total > 0) || !slots.length) return;
   const shareQty = total / slots.length;
   for (const slot of slots) {
@@ -127,6 +131,7 @@ function spreadHeaderQty(weekMap, slots, masterValues, status, total, lateForSlo
       shareQty,
       late,
       dataAreaId,
+      { poNumber },
     );
   }
 }
@@ -162,7 +167,8 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
 
   for (const row of rows || []) {
     const masterValues = row.values || {};
-    const vendor = String(pickConfiguredValue(masterValues, vendorCol) || '').trim();
+    const poNumber = String(row.recordKey || '').trim();
+    const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
     if (!vendor) continue;
     if (vendorAccount && vendor !== vendorAccount) continue;
     const dataAreaId = resolveDataAreaId(row, masterValues);
@@ -209,8 +215,8 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
           const late = Boolean(
             nowYear && nowWeek && compareIsoWeek(plannedYear, plannedWeek, nowYear, nowWeek) < 0,
           );
-          clipBump(above, plannedKey, itemNumber, 'ordered', orderedFilled, false, dataAreaId, { planned1900 });
-          clipBump(above, plannedKey, itemNumber, 'open', openQty, late, dataAreaId, { planned1900 });
+          clipBump(above, plannedKey, itemNumber, 'ordered', orderedFilled, false, dataAreaId, { planned1900, poNumber });
+          clipBump(above, plannedKey, itemNumber, 'open', openQty, late, dataAreaId, { planned1900, poNumber });
         }
       }
 
@@ -229,7 +235,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
             deliveredQty,
             days > 0,
             dataAreaId,
-            { onTime: days !== null && days <= 0, planned1900 },
+            { onTime: days !== null && days <= 0, planned1900, poNumber },
           );
         }
       }
@@ -253,18 +259,19 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
         plannedSlots,
         masterValues,
         'open',
-        toNumber(pickConfiguredValue(masterValues, openKey)),
+        toNumber(pickValue(masterValues, openKey)),
         (slot) => Boolean(nowYear && nowWeek && compareIsoWeek(slot.year, slot.week, nowYear, nowWeek) < 0),
         dataAreaId,
+        poNumber,
       );
     }
     if (headerOnlyOrdered) {
-      const orderedTotal = toNumber(pickConfiguredValue(masterValues, orderedKey));
-      const openTotal = headerOnlyOpen ? toNumber(pickConfiguredValue(masterValues, openKey)) : 0;
-      spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId);
+      const orderedTotal = toNumber(pickValue(masterValues, orderedKey));
+      const openTotal = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) : 0;
+      spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId, poNumber);
     }
     if (headerOnlyDelivered) {
-      const deliveredTotal = toNumber(pickConfiguredValue(masterValues, deliveredKey));
+      const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
       let receiptSlots = receiptKey
         ? collectDateSlots(
           details, masterValues, receiptKey, null, window, excludedSet, masterStatus,
@@ -275,7 +282,7 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
           details, masterValues, dateKey, config.confirmedDateColumnKey, window, excludedSet, masterStatus, dateMode,
         );
       }
-      spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId);
+      spreadHeaderQty(below, receiptSlots, masterValues, 'received', deliveredTotal, false, dataAreaId, poNumber);
     }
   }
 

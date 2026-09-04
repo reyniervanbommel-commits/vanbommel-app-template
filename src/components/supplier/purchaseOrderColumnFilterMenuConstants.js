@@ -1,6 +1,6 @@
 import { columnUsesNumberSemantics } from '../../utils/datePeriodColumnUtils';
 import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
-import { COLOR_FILTER_OPERATOR, hasActiveFilter } from '../../utils/tableViewFilterUtils';
+import { COLOR_FILTER_OPERATOR, hasActiveFilter, REMARKS_FILTER_OPERATORS } from '../../utils/tableViewFilterUtils';
 import { formatColumnOriginTooltip, getColumnOriginMeta } from '../../utils/columnOriginMeta';
 import {
   FORMAT_RULE_COLOR_PALETTE,
@@ -8,9 +8,7 @@ import {
   normalizeColumnFormatRuleSet,
 } from './columnFormatRuleUtils';
 
-export { HEX_COLOR_PATTERN };
-
-export const REMARKS_FILTER_OPERATORS = { contains: 'contains' };
+export { HEX_COLOR_PATTERN, REMARKS_FILTER_OPERATORS };
 
 export const NEW_COLUMN_TYPES = [
   { key: 'status', label: 'Status', dataType: 'status' },

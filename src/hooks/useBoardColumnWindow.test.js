@@ -1,7 +1,9 @@
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   computeBoardColumnWindow,
   resolveBoardRowColumnSlices,
+  useBoardColumnWindow,
 } from './useBoardColumnWindow';
 
 function offsetsFor(widths) {
@@ -13,6 +15,29 @@ function offsetsFor(widths) {
 }
 
 const TEN_COLS = Array(10).fill(100);
+
+describe('useBoardColumnWindow', () => {
+  it('applies getScale to offsets so scrollLeft maps to visual columns', () => {
+    const el = {
+      scrollLeft: 170,
+      clientWidth: 200,
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    const columns = Array.from({ length: 10 }, (_, i) => ({ key: `c${i}` }));
+    const columnWidths = Object.fromEntries(columns.map((column) => [column.key, 100]));
+    const { result } = renderHook(() => useBoardColumnWindow({
+      scrollRef: { current: el },
+      columns,
+      columnWidths,
+      overscanCols: 0,
+      enabled: true,
+      getScale: () => 0.85,
+    }));
+
+    expect(result.current.colStart).toBe(2);
+  });
+});
 
 describe('computeBoardColumnWindow', () => {
   it('starts the window after pinned columns so sticky cells stay mounted', () => {

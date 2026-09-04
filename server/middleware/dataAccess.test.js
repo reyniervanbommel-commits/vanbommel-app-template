@@ -57,7 +57,7 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(0);
   });
 
-  it.each(['/purchase-orders/history', '/purchase-orders/remarks/summary', '/purchase-orders/remarks/search', '/purchase-orders/remarks', '/purchase-orders/activity'])(
+  it.each(['/purchase-orders/history', '/purchase-orders/remarks/summary', '/purchase-orders/remarks/search', '/purchase-orders/remarks/has-comment', '/purchase-orders/remarks', '/purchase-orders/activity'])(
     'laat supplier GET op %s door',
     (path) => {
       const { next } = callMiddleware({ user: { role: 'supplier' }, path, method: 'GET' });
@@ -125,8 +125,13 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(0);
   });
 
-  it('normaliseert een trailing slash voordat het pad gematcht wordt', () => {
-    const { next } = callMiddleware({ user: { role: 'supplier' }, path: '/purchase-orders/', method: 'GET' });
-    expect(next.calls).toHaveLength(1);
+  it('weigert supplier POST op /purchase-orders/correct-all-details met 403', () => {
+    const { res, next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/correct-all-details',
+      method: 'POST',
+    });
+    expect(res.statusCode).toBe(403);
+    expect(next.calls).toHaveLength(0);
   });
 });

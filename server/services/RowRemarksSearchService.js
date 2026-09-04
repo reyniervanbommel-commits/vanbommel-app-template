@@ -42,22 +42,23 @@ function normalizeActor(actor) {
   return { id, role: actor.role, isAdmin: actor.role === ROLES.ADMIN, isSupplier: false };
 }
 
-async function searchRemarks(tableKey, query, actor) {
+// Voert de gedeelde remarks-rowkey-query uit (base where-clause: actieve remark op de masterrij)
+// en past daarna, indien nodig, de supplier-vendor-scope toe. `applyInputs`/`extraCondition` laten
+// searchRemarks (contains) en hasRemarks (has a comment) dezelfde basis + supplier-scope delen.
+async function queryRemarkRowKeys(tableKey, actor, { extraCondition = '', applyInputs = () => {} } = {}) {
   const normalizedActor = normalizeActor(actor);
   const table = await dependencies.getTable(normalizeTableKey(tableKey));
   const pool = await dependencies.getPool();
-  const normalizedQuery = normalizeSearchQuery(query);
-  const request = pool.request()
-    .input('tableId', sql.BigInt, table.id)
-    .input('q', sql.NVarChar(200), normalizedQuery);
-  const result = await time('remarks_search_sql', () => request.query(`
+  const request = pool.request().input('tableId', sql.BigInt, table.id);
+  applyInputs(request);
+  const result = await request.query(`
     SELECT DISTINCT r.partition_key, r.record_key
     FROM dbo.tb_row_remarks r
     WHERE r.table_id = @tableId
       AND r.detail_key = -1
       AND r.is_deleted = 0
-      AND CHARINDEX(@q, r.body COLLATE Latin1_General_CI_AS) > 0;
-  `));
+      ${extraCondition};
+  `);
   let rows = result.recordset;
   if (normalizedActor.isSupplier) {
     const supplierFilterColumn = await getSupplierFilterColumnKey();
@@ -76,7 +77,22 @@ async function searchRemarks(tableKey, query, actor) {
   };
 }
 
+async function searchRemarks(tableKey, query, actor) {
+  const normalizedQuery = normalizeSearchQuery(query);
+  return time('remarks_search_sql', () => queryRemarkRowKeys(tableKey, actor, {
+    extraCondition: 'AND CHARINDEX(@q, r.body COLLATE Latin1_General_CI_AS) > 0',
+    applyInputs: (request) => request.input('q', sql.NVarChar(200), normalizedQuery),
+  }));
+}
+
+// Rijen die minstens één actieve remark hebben (los van de tekst) — voedt de operator
+// "has a comment" van het Remarks-kolommenu.
+async function hasRemarks(tableKey, actor) {
+  return time('remarks_has_comment_sql', () => queryRemarkRowKeys(tableKey, actor));
+}
+
 module.exports = {
+  hasRemarks,
   searchRemarks,
   setTestDependencies,
 };

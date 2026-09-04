@@ -23,6 +23,7 @@ class FakeRequest {
 }
 
 const {
+  hasRemarks,
   searchRemarks,
   setTestDependencies,
 } = require('./RowRemarksSearchService');
@@ -103,5 +104,36 @@ describe('searchRemarks', () => {
     const search = mocks.queries.find(({ text }) => text.includes('CHARINDEX'));
     expect(search.inputs.q).toBe('ab');
     expect(typeof search.inputs.q).toBe('string');
+  });
+});
+
+describe('hasRemarks', () => {
+  it('staff: lists distinct keys without a search term', async () => {
+    const response = await hasRemarks('purchase-orders', employee);
+    expect(mocks.queries).toHaveLength(1);
+    expect(mocks.queries[0].text).not.toMatch(/CHARINDEX/);
+    expect(mocks.queries[0].inputs.q).toBeUndefined();
+    expect(mocks.queries[0].text).toMatch(/is_deleted\s*=\s*0/);
+    expect(mocks.queries[0].text).toMatch(/detail_key\s*=\s*-1/);
+    expect(response).toEqual({
+      keys: [{ partitionKey: 'whsl', recordKey: 'PO-1' }],
+    });
+  });
+
+  it('supplier: drops keys outside visibleKeys after SQL (IDOR)', async () => {
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    rememberSupplierVisibleRowKeys('V000583', 'vendorAccount', [
+      { partitionKey: 'whsl', recordKey: 'PO-OWN' },
+    ]);
+    mocks.queryHandler = () => result([
+      { partition_key: 'whsl', record_key: 'PO-OWN' },
+      { partition_key: 'whsl', record_key: 'PO-OTHER' },
+    ]);
+
+    const response = await hasRemarks('purchase-orders', supplier);
+
+    expect(response).toEqual({
+      keys: [{ partitionKey: 'whsl', recordKey: 'PO-OWN' }],
+    });
   });
 });

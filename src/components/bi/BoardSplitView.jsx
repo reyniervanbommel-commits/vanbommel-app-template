@@ -6,6 +6,7 @@ import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import AdminInfoHint from '../admin/AdminInfoHint';
 import { useRccpWindow } from '../../hooks/useRccpWindow';
 import { useRccpVendorOptions } from '../../hooks/useRccpVendorOptions';
+import { usePoTableZoomNode } from '../../hooks/usePoTableZoomNode';
 import { resolvePoBoardRccpVendor } from '../rccp/resolveRccpVendorFilter';
 import {
   parseRccpPeriodGrain,
@@ -25,6 +26,11 @@ import { BOARD_KEY } from './biConstants';
 import { buildTableDataRevision } from './tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import {
+  PO_TABLE_SPLIT_ZOOM_STYLE,
+  PO_TABLE_ZOOM_CSS_VAR,
+  PO_TABLE_ZOOM_DEFAULT,
+} from '../../utils/poTableZoom';
 
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
@@ -34,7 +40,14 @@ const PO_BOARD_KPI_INFO =
   'Values come from the purchase orders currently in the table. Click a tile to filter; quantity columns then show the units counted by that tile.';
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    [PO_TABLE_ZOOM_CSS_VAR]: String(PO_TABLE_ZOOM_DEFAULT),
+  },
   tableRegion: {
     flex: 1,
     minHeight: 0,
@@ -77,8 +90,10 @@ const useStyles = makeStyles({
 
 export default function BoardSplitView({
   filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, tableFilter, children,
+  orderNumbers, derivedVendor,
 }) {
   const styles = useStyles();
+  const setSplitRootNode = usePoTableZoomNode();
   const { user } = useAuth();
   const isSupplier = user?.role === ROLES.SUPPLIER;
   // Staff en suppliers krijgen beide de split-view; suppliers zien uitsluitend hun eigen data
@@ -127,8 +142,9 @@ export default function BoardSplitView({
       vendorNames,
       vendorColumnKey: vendorColumnKey || 'vendorAccount',
       vendorsReady: !vendorsLoading,
+      derivedVendor,
     }),
-    [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading],
+    [isSupplier, user?.vendor_account, filterByColumn, vendors, vendorNames, vendorColumnKey, vendorsLoading, derivedVendor],
   );
   const rccpVendorReady = isSupplier || !vendorsLoading;
   // Item-filters blijven client-side op de al geladen analysis. Alleen vendor of
@@ -165,13 +181,16 @@ export default function BoardSplitView({
   if (!showSplit) return children;
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} ref={setSplitRootNode}>
       <div className={styles.tableRegion}>{children}</div>
       {split.open ? (
         <SplitPaneResizeHandle height={split.height} onResize={split.setHeight} />
       ) : null}
 
-      <div className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}>
+      <div
+        className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}
+        style={PO_TABLE_SPLIT_ZOOM_STYLE}
+      >
         <Button
           size="small"
           appearance="subtle"
@@ -209,7 +228,7 @@ export default function BoardSplitView({
         style={split.open ? { height: `${split.height}px` } : undefined}
         aria-hidden={!split.open}
       >
-        <div hidden={!showBiPane}>
+        <div hidden={!showBiPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showBiPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading charts…" />}>
               <BiChartStrip
@@ -222,7 +241,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div hidden={!showRccpPane}>
+        <div hidden={!showRccpPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showRccpPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
               {rccpVendorReady ? (
@@ -236,6 +255,7 @@ export default function BoardSplitView({
                   onItemClick={handleRccpItemClick}
                   planningDateMode={planningDateMode}
                   periodGrain={periodGrain}
+                  orderNumbers={orderNumbers}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />
@@ -243,7 +263,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div hidden={!kpiEnabled}>
+        <div hidden={!kpiEnabled} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {kpiEnabled ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading KPIs…" />}>
               <PoBoardKpiStrip

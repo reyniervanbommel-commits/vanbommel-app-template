@@ -14,19 +14,20 @@
 - Delen de zichtbare rijen één vendor, dan laadt RCCP die vendor automatisch — ook zonder apart vendor-filter.
 - Delen ze meerdere vendors, dan geen auto-vendor; RCCP volgt het PO-filter pas als er wél één vendor is (gekozen of gedeeld).
 - Bij openen van `/rccp` geldt dezelfde vendor-handoff (kolomfilter of auto-vendor uit de zichtbare rijen). Geen stille PO-subset op die pagina (zelfde patroon als item: subset alleen live in de strip). Geen extra label of picker.
-- Geen klik op een PO-vakje die de tabel terugfiltert.
+- Geen nieuwe klik op een grafiekvakje die de tabel op inkooporder zet. Bestaande item-klik (SKU → kolomfilter) blijft.
 
 **Non-goals:**
 - Geen extra PO-picker op de tabel of op `/rccp`.
-- Geen klik van grafiekvakje → tabel (v1).
+- Geen nieuwe klik van grafiekvakje → tabel-filter op ordernummer (v1). Item-klik blijft.
 - Geen zoektocht over alle vendors.
 - Geen extra item-handoff naar `/rccp` (blijft zoals nu: item volgt alleen live in de strip).
-- Geen nieuwe analysis-API of extra `/rccp/analysis`-call per order.
+- Geen nieuw analysis-endpoint en geen extra `/rccp/analysis`-call per order. Bestaande analysis-payload mag `poNumber` op segmenten krijgen (zelfde route).
 - BI-charts en KPI-tegels niet extra ontwerpen (KPI’s volgen al `visibleOrders`; BI gebruikt al `filterByColumn`).
+- `GET /api/rccp/drill-down` niet slopen in deze feature (restschuld, geen UI-consumer).
 
 **Constraints:**
 - Hergebruik `filterByColumn` en `savePoFilterByColumnForRccp` / `readPoFilterByColumnForRccp`.
-- Client-side segmentfilter, zelfde patroon als item (`resolveRccpItemsFromFilter` / `filterRccpChartByItem`).
+- Client-side segmentfilter ná analysis, zelfde patroon als item.
 - Capaciteit- en warning-lijnen blijven vendor-niveau (zoals bij item-filter).
 - Engelse UI, Fluent v9, component ≤ 300 regels, OTAP local-first.
 
@@ -34,11 +35,11 @@
 
 **Gekozen approach:** B — de **strip** volgt de zichtbare tabelrijen (niet alleen Order; ook status/datum/KPI). Item-filter blijft AND op segmenten. Delen die rijen één vendor, dan laadt de strip die vendor. `/rccp` krijgt alleen auto-vendor (zichtbaar in het bestaande vendor-veld), geen stille orderlijst — zelfde patroon als item. Matrix-drill-down verdwijnt.
 
-**Review-correctie:** stille PO-subset op `/rccp` is afgewezen (geen zichtbare staat naast vendor/item).
+**Review-correctie:** stille PO-subset op `/rccp` is afgewezen (geen zichtbare staat naast vendor/item). Analysis-segmenten krijgen `poNumber` en mergen niet langer dezelfde SKU over meerdere POs (anders is client-filter onmogelijk).
 
 **Afgewezen:**
 - A — alleen `orderNumber` uit `filterByColumn`, zelfde patroon als item: voldoet aan de oorspronkelijke wens, maar volgt status/datum/KPI niet.
-- C — `/rccp/analysis` extra scoped op ordernummers: extra API-call, botst met de BRD-non-goal.
+- C — extra `/rccp/analysis`-parameter of nieuw endpoint scoped op ordernummers: extra round-trip, botst met de BRD-non-goal.
 
 **Happy path**
 1. Planner (of leverancier op eigen orders) filtert de PO-tabel: Order, vendor, item, status, datum, of een KPI-tegel.
@@ -48,7 +49,7 @@
 5. Staat er ook een item-filter: extra AND op `itemNumber` van het vakje (zelfde operators als nu).
 6. Planner opent `/rccp`: het bestaande vendor-veld is voor-ingevuld (filter of auto-vendor). De grafiek is de volle vendor-load; de lokale item-picker blijft. Geen PO-subset.
 7. Filters wissen of KPI-tegel uitzetten: de strip toont weer de volle vendor-load.
-8. Klik op een matrixcel doet niets; het drill-down-panel is verwijderd. Week-matrix heeft geen pointer/button-aria meer. PO-vakjes mogen item-klik naar de tabel houden.
+8. Klik op een matrixcel doet niets; het drill-down-panel is verwijderd. Week-matrix heeft geen pointer/button-aria meer. Klik op een PO-vakje filtert nog steeds op **item** (bestaand), niet op inkooporder.
 
 **Rollen**
 - Employee/admin: volle tabel + RCCP-strip + `/rccp`.
@@ -56,7 +57,7 @@
 - Geen nieuwe auth of rechten.
 
 **Leeg**
-- Zichtbare set leeg, of geen vakjes voor die orders in het venster: lege PO-stapels, capaciteit-/warning-lijnen blijven vendor-breed. Geen extra empty-copy.
+- Zichtbare set leeg, of geen vakjes voor die orders in het venster: lege PO-stapels; capaciteit-/warning-lijnen blijven vendor-breed. Geen nieuwe chip. Als alle PO-measures 0 zijn: bestaande matrix-empty *No matrix data for the selected window.*
 - Zichtbare rijen met meerdere vendors: geen auto-vendor. Strip wacht op één vendor (filter of keuze). `/rccp` opent zonder vendor, bestaande hint: *Search for a vendor above…*
 - SessionStorage onleesbaar: huidige fallback (geen vendor uit handoff).
 
@@ -79,6 +80,7 @@
 
 **Hergebruik**
 - Live: `BoardSplitView` + `RccpSplitStrip` (zichtbare rijen + bestaande item-resolve).
+- Payload: `server/utils/rccpPoSegments.js` — `poNumber` per vak, geen merge over POs.
 - Handoff: `filterByColumn` + `derivedVendor` (geen ordernummers).
 - `/rccp`: bestaande vendor-resolve + `derivedVendor`; geen PO-segmentfilter.
 - Segmentfilter (strip): één compositor in `rccpChartItems.js` (item AND PO, `applyMeasureTotals` één keer).
@@ -90,17 +92,19 @@
 - Eén gedeelde vendor zonder vendor-filter → strip laadt die vendor.
 - Twee vendors in beeld → geen auto-vendor.
 - Item + Order → alleen vakjes die beide matchen.
+- Zelfde SKU op twee POs → twee vakjes; filter op één order houdt één vak.
 - `/rccp` na tabel-filter → dezelfde vendor in het zoekveld; grafiek is vendor-breed (geen stille PO-set).
 - Matrixklik opent geen panel.
 
 ## TD
 
-**Geen nieuwe routes, geen SQL.** Client-side op de bestaande `/rccp/analysis`. Handoff blijft `sessionStorage` (geen localStorage, geen board-settings). PO-subset alleen in de strip; `/rccp` alleen auto-vendor.
+**Geen nieuwe routes, geen SQL.** Zelfde `GET /rccp/analysis`. Handoff blijft `sessionStorage`. PO-subset alleen in de strip; `/rccp` alleen auto-vendor.
 
 ### Hergebruik
 
 | Stuk | Pad |
 |------|-----|
+| Segmentpayload | `server/utils/rccpPoSegments.js` (+ `.test.js`) |
 | Live strip | `src/components/bi/BoardSplitView.jsx`, `src/components/rccp/RccpSplitStrip.jsx` |
 | Zichtbare rijen | `boardView.processedItems` (ná kolomfilters **en** KPI-tegel). `kpiSourceItems` blijft alleen voor de KPI-strip. |
 | Scope-helpers | nieuw `src/utils/poVisibleRccpScope.js` — `collectOrderNumbers`, `resolveSharedVendorFromOrders`. Niet in `resolveRccpVendorFilter.js` stoppen. |
@@ -111,12 +115,16 @@
 | Prefetch | `src/utils/dataPagesPrefetch.js` |
 | Save-punt | `src/components/supplier/PurchaseOrdersPageContent.jsx` |
 
+### Segmentpayload
+
+`server/utils/rccpPoSegments.js`: week-bucket key = `` `${recordKey}\0${itemNumber}` ``; `emitSegment` krijgt `poNumber` (`row.recordKey`). Zelfde SKU op twee POs = twee vakjes (herstelt “één vak per PO”). Geen nieuw endpoint. Client-filter op `orderNumbers` houdt alleen matching vakjes.
+
 ### Dataflow
 
 1. **Tabel** — `processedItems` = wat de planner ziet.
 2. **Scope** — uit die rijen: unieke `orderNumbers` + `derivedVendor` (één `vendorAccount` ná naam-mapping, anders `''`). Fingerprint = gesorteerde join van ordernummers, niet de array-identiteit (sort/KPI-qty-overlay mag geen extra writes geven).
 3. **Strip-vendor** — kolomfilter eerst, anders `derivedVendor`. Supplier ongewijzigd. `hadPoFilterHandoff` / autofocus: waar als filter-vendor **of** `derivedVendor` gezet is. `rccpRefreshKey` blijft `vendor|planningDateMode`.
-4. **Strip-grafiek** — compositor op de geladen chart. Matrix-PO-measures `active` als item **of** PO-subset. Capaciteit/warning vendor-breed. `orderNumbers` via één extra prop (strip heeft nu 9 props; 10 is het max). Geen `tableMatch`-bag. Scope uitrekenen in `poVisibleRccpScope.js`, niet als derde row-lijst door `BoardSplitView` duwen: geef `orderNumbers` + `derivedVendor` (strings) door, of laat de strip `processedItems` alleen gebruiken om die twee waarden intern te maken via de helper in de parent met `useMemo`.
+4. **Strip-props (één route)** — `BoardSplitView` rekent met `useMemo` (fingerprint) `collectOrderNumbers` + `resolveSharedVendorFromOrders`. Geeft `orderNumbers` (stabiele array) door aan `RccpSplitStrip` als 10e prop (nu 9; max 10). `derivedVendor` alleen in `resolvePoBoardRccpVendor`, niet als extra strip-prop. Geen `processedItems` / `tableOrders` / `tableMatch`-bag door de split-view. Compositor op de geladen chart. Matrix-PO-measures `active` als item **of** PO-subset. Capaciteit/warning vendor-breed.
 5. **Handoff-payload** `{ v: 1, filterByColumn, derivedVendor }`. Geen `orderNumbers` in storage.
    - `readPoFilterByColumnForRccp()` unwrapt v1 én legacy.
    - Parse-guard: object, `filterByColumn` object of legacy-kolommap, `derivedVendor` string, max lengte; ongeldig → `null` + `removeItem`.
@@ -139,11 +147,12 @@
 ### Perf
 
 - Geen extra `apiRequest`. Client-`useMemo` op de al geladen chart.
-- `orderNumbers` + `tableMatch`-achtige objecten: `useMemo` op fingerprint, anders is `memo(RccpSplitStrip)` waardeloos.
+- `orderNumbers`-array: `useMemo` op fingerprint, anders is `memo(RccpSplitStrip)` waardeloos.
 - Optioneel `measure('rccp_po_subset')` rond de compositor, zelfde stijl als bestaande chart-helpers.
 
 ### Tests
 
+- `server/utils/rccpPoSegments.test.js` — `poNumber` op segment; zelfde SKU op twee POs = twee vakjes.
 - `rccpChartItems.test.js` — `poNumber`; AND item; lege set + `emptyHidesAll`; matrix.
 - `poVisibleRccpScope.test.js` — ordernummers; gedeelde vendor; conflict → `''`.
 - `poVendorFilterHandoff.test.js` — v1 zonder orderNumbers, legacy unwrap, ongeldige payload, derivedVendor, clear.
@@ -151,13 +160,24 @@
 - `dataPagesPrefetch.test.js` — `derivedVendor` zonder kolomfilter-vendor.
 - `resolveRccpVendorFilter.test.js` — `derivedVendor` ná filter, supplier ongewijzigd.
 
+### Bouwvolgorde
+
+1. `rccpPoSegments` + `poNumber` (geen merge over POs)
+2. `poVisibleRccpScope` + tests
+3. compositor in `rccpChartItems`
+4. strip + vendor-derive (`BoardSplitView` / `RccpSplitStrip`)
+5. handoff `derivedVendor` + prefetch
+6. `/rccp` vendor-only; drill-down UI weg
+7. `src/config/version.js` PATCH +1
+
 ### Versie
 
-- `src/config/version.js` PATCH +1 bij implementatie.
+- `src/config/version.js` PATCH +1 bij implementatie. `devTestItems.js` blijft leeg tot push-naar-dev.
 
 ### Aantoonbaar
 
 - PO-tabel: filter Order/KPI → RCCP-strip alleen die vakjes; één vendor in beeld → strip laadt zonder vendor-kolomfilter.
+- Zelfde SKU, twee orders: twee vakjes; filter op één order houdt er één.
 - `/rccp` in hetzelfde tabblad: vendor-veld gevuld; grafiek vendor-breed; bestaande item-picker.
 - Matrixklik opent geen panel, geen pointer op weekcellen.
 - `http://localhost:5178` (geen push).

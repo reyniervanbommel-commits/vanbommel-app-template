@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, makeStyles, tokens } from '@fluentui/react-components';
+import { Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   item: {
@@ -38,6 +38,12 @@ const useStyles = makeStyles({
   iconActive: {
     color: tokens.colorBrandForeground1,
   },
+  labelWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    flex: 1,
+  },
   label: {
     fontSize: tokens.fontSizeBase300,
     fontWeight: tokens.fontWeightRegular,
@@ -48,6 +54,13 @@ const useStyles = makeStyles({
   labelActive: {
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorBrandForeground1,
+  },
+  caption: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   // Compacte rail-versie (alleen icoon)
   itemCompact: {
@@ -62,24 +75,41 @@ const useStyles = makeStyles({
   },
 });
 
-export default function SidebarNavItem({ icon: Icon, label, active = false, onClick, compact = false }) {
+export default function SidebarNavItem({
+  icon: Icon,
+  label,
+  caption = '',
+  active = false,
+  onClick,
+  compact = false,
+}) {
   const styles = useStyles();
-
-  const itemClass = [
+  const ariaLabel = caption ? `${label}. ${caption}` : label;
+  const itemClass = mergeClasses(
     styles.item,
-    compact ? styles.itemCompact : '',
-    active ? (compact ? styles.itemCompactActive : styles.itemActive) : '',
-  ].filter(Boolean).join(' ');
+    compact && styles.itemCompact,
+    active && (compact ? styles.itemCompactActive : styles.itemActive),
+  );
 
   return (
-    <button type="button" className={itemClass} onClick={onClick} aria-label={label} aria-current={active ? 'page' : undefined}>
-      <span className={`${styles.icon} ${active ? styles.iconActive : ''}`}>
+    <button
+      type="button"
+      className={itemClass}
+      onClick={onClick}
+      aria-label={ariaLabel}
+      title={compact ? ariaLabel : undefined}
+      aria-current={active ? 'page' : undefined}
+    >
+      <span className={mergeClasses(styles.icon, active && styles.iconActive)}>
         <Icon />
       </span>
       {!compact && (
-        <Text className={`${styles.label} ${active ? styles.labelActive : ''}`}>
-          {label}
-        </Text>
+        <span className={styles.labelWrap}>
+          <Text className={mergeClasses(styles.label, active && styles.labelActive)}>
+            {label}
+          </Text>
+          {caption ? <Text className={styles.caption}>{caption}</Text> : null}
+        </span>
       )}
     </button>
   );

@@ -32,4 +32,14 @@ describe('TrackChangeMarks', () => {
     expect(node.getAttribute('aria-label')).toContain('2');
     expect(node.getAttribute('aria-label')).toContain('week');
   });
+
+  it('scales dot size, gap and bottom offset with table zoom', () => {
+    const { container } = renderMarks({ pattern: 'yyyyy' });
+    const wrapper = container.querySelector('div[aria-label]');
+    expect(wrapper.style.bottom).toBe('calc(2px * var(--po-table-zoom, 0.85))');
+    expect(wrapper.style.gap).toBe('calc(3px * var(--po-table-zoom, 0.85))');
+    const dot = wrapper.querySelector('span');
+    expect(dot.style.width).toBe('calc(8px * var(--po-table-zoom, 0.85))');
+    expect(dot.style.height).toBe('calc(8px * var(--po-table-zoom, 0.85))');
+  });
 });

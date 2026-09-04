@@ -10,9 +10,15 @@ import { useAppToast } from './useAppToast';
  */
 export function usePurchaseOrderRemarksFilterBridge(filterByColumn) {
   const { notifyError } = useAppToast();
+  const operator = filterByColumn?.remarks?.operator;
   const query = String(filterByColumn?.remarks?.value || '').trim();
-  const enabled = filterByColumn?.remarks?.operator === 'contains' && isRemarksSearchTermValid(query);
-  const result = useRemarksColumnFilter({ query, enabled });
+  const isHasComment = operator === 'hasComment';
+  const enabled = isHasComment || (operator === 'contains' && isRemarksSearchTermValid(query));
+  const result = useRemarksColumnFilter({
+    query: isHasComment ? '' : query,
+    enabled,
+    mode: isHasComment ? 'hasComment' : 'search',
+  });
 
   useEffect(() => {
     if (result.error) notifyError(result.error);

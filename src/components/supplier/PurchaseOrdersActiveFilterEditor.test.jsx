@@ -101,7 +101,7 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
     expect(getUniqueColumnValues).toHaveBeenCalledTimes(1);
   });
 
-  it('restricts remarks filters to contains without a unique picker', () => {
+  it('restricts remarks filters to contains and has a comment without a unique picker', () => {
     const column = { key: 'remarks', label: 'Remarks', dataType: 'remarks' };
     const { applyColumnFilter } = renderEditor({
       item: {
@@ -115,7 +115,10 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
     });
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter operator for Remarks' }));
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['contains']);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'contains',
+      'has a comment',
+    ]);
     expect(getUniqueColumnValues).not.toHaveBeenCalled();
     expect(screen.queryByText('Filter by color')).toBeNull();
 
@@ -123,6 +126,28 @@ describe('PurchaseOrdersActiveFilterEditor', () => {
     expect(applyColumnFilter).toHaveBeenCalledWith('remarks', {
       operator: 'contains',
       value: 'ab',
+      secondaryValue: '',
+    });
+  });
+
+  it('applies has a comment without a value field', () => {
+    const column = { key: 'remarks', label: 'Remarks', dataType: 'remarks' };
+    const { applyColumnFilter } = renderEditor({
+      item: {
+        columnKey: 'remarks',
+        column,
+        filter: { operator: 'hasComment', value: '', secondaryValue: '' },
+      },
+      headerColumns: [column],
+      filterByColumn: { remarks: { operator: 'hasComment', value: '' } },
+    });
+
+    expect(screen.queryByLabelText('Filter value for Remarks')).toBeNull();
+    expect(screen.getByText('Matches rows with at least one comment.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(applyColumnFilter).toHaveBeenCalledWith('remarks', {
+      operator: 'hasComment',
+      value: '',
       secondaryValue: '',
     });
   });

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { apiRequest } from '../../utils/api';
+import { cellHistoryFoldPaperClip, cellHistoryFoldShadowClip } from '../../utils/cellHistoryFold';
 import CellHistoryPopover from './CellHistoryPopover';
 
 vi.mock('../../utils/api', () => ({ apiRequest: vi.fn() }));
@@ -49,10 +50,15 @@ describe('CellHistoryPopover', () => {
     const trigger = screen.getByRole('button', { name: 'View cell history' });
     const style = window.getComputedStyle(trigger);
     expect(style.position).toBe('absolute');
-    expect(style.width).toBe('10px');
-    expect(style.height).toBe('10px');
+    expect(style.width).toContain('--po-table-zoom');
+    expect(style.height).toContain('--po-table-zoom');
     expect(style.top.includes('calc') || style.top === '0px').toBe(true);
     expect(style.right.includes('calc') || style.right === '0px').toBe(true);
+  });
+
+  it('knipt de vouw met zoom-lengtes in plaats van percentages', () => {
+    expect(cellHistoryFoldShadowClip()).not.toMatch(/100%/);
+    expect(cellHistoryFoldPaperClip()).toContain('--po-table-zoom');
   });
 
   it('opent de geschiedenis en gebruikt de actieve tb-route na een klik', async () => {

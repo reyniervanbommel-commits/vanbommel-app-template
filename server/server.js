@@ -164,7 +164,7 @@ app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
 // leveranciersaccount gescoped en schrijf-routes worden voor suppliers geweigerd.
 app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), biRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
-app.use('/api/data-links', requireSession, requireRole(ROLES.ADMIN), dataLinksRouter);
+app.use('/api/data-links', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataLinksRouter);
 app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);
 app.use('/api/media', createMediaRouter());
 

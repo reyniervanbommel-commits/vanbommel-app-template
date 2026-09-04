@@ -27,7 +27,7 @@ const {
   vendorCanSeeView,
 } = require('../utils/viewTabs');
 const { normalizeKpiCardStyles } = require('../utils/kpiCardStyles');
-const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=']);
+const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=', 'contains']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
 function isValidSupplierAccount(value) {

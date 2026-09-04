@@ -87,12 +87,15 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   const showFilter = showSortAndFilter;
   const groupingEnabled = showGrouping && !isRemarks;
   const showColorFilter = Boolean(colorFilter?.supported) && !isRemarks;
-  const remarksTermLength = isRemarks ? String(draft?.value ?? '').trim().length : 0;
-  const searchHint = remarksTermLength > 200
-    ? 'Enter at most 200 characters'
-    : remarksTermLength < 2 && isRemarks
-      ? 'Enter at least 2 characters'
-      : '';
+  const isHasComment = isRemarks && draft?.operator === 'hasComment';
+  const remarksTermLength = isRemarks && !isHasComment ? String(draft?.value ?? '').trim().length : 0;
+  const searchHint = isHasComment
+    ? 'Matches rows with at least one comment.'
+    : remarksTermLength > 200
+      ? 'Enter at most 200 characters'
+      : remarksTermLength < 2 && isRemarks
+        ? 'Enter at least 2 characters'
+        : '';
 
   const showColumnSection = useMemo(
     () => Boolean(

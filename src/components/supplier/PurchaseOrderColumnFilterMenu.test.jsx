@@ -236,6 +236,8 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     expect(screen.queryByText('Filter by color')).toBeNull();
     expect(screen.getByText('Filter')).toBeTruthy();
     expect(screen.getByText('contains')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Filter operator for Remarks/i }));
+    expect(screen.getByRole('option', { name: 'has a comment' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Delete column/i }).disabled).toBe(false);
 
     const valueInput = screen.getByLabelText(/Filter value for Remarks/i);
@@ -254,6 +256,25 @@ describe('PurchaseOrderColumnFilterMenu conditional formatting', () => {
     fireEvent.change(valueInput, { target: { value: 'a'.repeat(201) } });
     expect(screen.getByText('Enter at most 200 characters')).toBeTruthy();
     expect(screen.queryByText('Enter at least 2 characters')).toBeNull();
+  });
+
+  it('past has a comment toe zonder zoekterm', async () => {
+    const onApplyFilter = vi.fn();
+    renderMenu({
+      column: { ...COLUMN, key: 'remarks', label: 'Remarks', dataType: 'remarks', source: 'custom' },
+      onApplyFilter,
+    });
+    openColumnMenu();
+    fireEvent.click(screen.getByRole('button', { name: /Filter operator for Remarks/i }));
+    fireEvent.click(screen.getByRole('option', { name: 'has a comment' }));
+    expect(screen.queryByLabelText(/Filter value for Remarks/i)).toBeNull();
+    expect(screen.getByText('Matches rows with at least one comment.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/i }));
+    expect(onApplyFilter).toHaveBeenCalledWith('remarks', {
+      operator: 'hasComment',
+      value: '',
+      secondaryValue: '',
+    });
   });
 
   it('past filter operator en waarde pas op bij Apply', async () => {

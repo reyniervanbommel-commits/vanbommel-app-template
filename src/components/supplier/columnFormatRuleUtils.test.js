@@ -112,6 +112,22 @@ describe('columnFormatRuleUtils.evalFormatRules', () => {
     expect(color).toBe('#fff4ce');
   });
 
+  it('ondersteunt contains (case-insensitive)', () => {
+    const color = evalFormatRules('Hello World', {
+      target: 'cell',
+      rules: [{ op: 'contains', value: 'heLLo', color: '#FFF4CE' }],
+    });
+    expect(color).toBe('#fff4ce');
+  });
+
+  it('ondersteunt contains met valueRef vergelijking', () => {
+    const color = evalFormatRules('Acme Corporation', {
+      target: 'cell',
+      rules: [{ op: 'contains', valueRef: 'vendor', color: '#E6F4FF' }],
+    }, { vendor: 'Corp' });
+    expect(color).toBe('#e6f4ff');
+  });
+
   it('matcht statuswaarden op stabiele option id na label-rename', () => {
     const statusOptions = [{ id: 'done', label: 'Completed', color: '#00c875' }];
     const color = evalFormatRules('Completed', {

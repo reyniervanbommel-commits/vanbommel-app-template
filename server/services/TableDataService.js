@@ -52,6 +52,13 @@ const {
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
 const { time } = require('../utils/timing');
+const { valuesEqualForConcurrency } = require('../utils/odataValueEquals');
+const {
+  planFanout,
+  remainingValuesAfterPass,
+  isBusinessWriteBackError,
+} = require('../utils/detailCorrectionFanout');
+const { ROLES } = require('../constants/roles');
 const { resolveLedgerSinceMs, usesViewedBaseline } = require('../utils/ledgerWindow');
 const { countMergeActions, countSoftDeleted } = require('../utils/refreshRunCounts');
 const { orderLookupTargetKeys, formatEntityRefreshError } = require('../utils/refreshCascadeOrder');
@@ -4723,6 +4730,125 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   };
 }
 
+const GENERIC_DETAIL_WRITEBACK_FAIL = 'Write-back to D365 failed';
+
+async function loadDetailLinesFromCache({ tableId, partitionKey, recordKey }) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .input('partitionKey', sql.NVarChar(32), partitionKey)
+    .input('recordKey', sql.NVarChar(128), recordKey)
+    .query(`
+      SELECT detail_key, data_json, removed_at_source
+      FROM dbo.tb_cache
+      WHERE table_id = @tableId AND scope = 'detail'
+        AND partition_key = @partitionKey AND record_key = @recordKey
+      ORDER BY detail_key
+    `);
+  return (result.recordset || []).map((row) => ({
+    detailKey: row.detail_key,
+    values: parseJson(row.data_json),
+    removed: row.removed_at_source === true || row.removed_at_source === 1,
+  }));
+}
+
+// Fan-out vanaf een gepushte header-cel: alle detailregels van één PO via bestaand correctField.
+async function correctAllDetailFields(
+  { tableKey, columnId, partitionKey, recordKey, value },
+  user,
+  deps = {},
+) {
+  const role = String(user?.role || '');
+  if (role !== ROLES.ADMIN && role !== ROLES.EMPLOYEE) {
+    throw Object.assign(new Error('Access denied — insufficient permissions'), { status: 403 });
+  }
+
+  return time('tb_correct_all_details', async () => {
+    if (tableKey !== 'purchase-orders') {
+      throw Object.assign(new Error('Header write-back is only supported for purchase orders'), { status: 400 });
+    }
+
+    const resolveTable = deps.getTableByKey || getTableByKey;
+    const { getColumnById } = require('./TableRegistryService');
+    const resolveColumn = deps.getColumnById || getColumnById;
+    const table = await resolveTable(tableKey);
+    const column = await resolveColumn(columnId);
+    if (!column || !column.isActive || column.tableId !== table.id) {
+      throw Object.assign(new Error('Column not found'), { status: 404 });
+    }
+    if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
+      throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
+    }
+    if (column.scope !== 'detail') {
+      throw Object.assign(new Error('Header write-back requires a writable line column'), { status: 400 });
+    }
+
+    const part = String(partitionKey || '').trim();
+    const record = String(recordKey || '').trim();
+    if (!part || !record) {
+      throw Object.assign(new Error('partitionKey and recordKey are required'), { status: 400 });
+    }
+
+    const loadLines = deps.loadDetailLines || loadDetailLinesFromCache;
+    const lines = await loadLines({ tableId: table.id, partitionKey: part, recordKey: record });
+    const plan = planFanout({
+      lines,
+      columnKey: column.key,
+      targetValue: value,
+      valuesEqual: (current, target) => valuesEqualForConcurrency(current, target, column.dataType),
+    });
+    if (plan.tooMany) {
+      throw Object.assign(new Error('Too many lines to write back from the header.'), { status: 400 });
+    }
+
+    const correctOne = deps.correctOne || correctField;
+    const updatedDetailKeys = [];
+    const failures = [];
+
+    for (const line of plan.toPatch) {
+      try {
+        await correctOne({
+          tableKey,
+          columnId,
+          partitionKey: part,
+          recordKey: record,
+          detailKey: line.detailKey,
+          value,
+          basedOnValue: line.values?.[column.key],
+        }, user?.id);
+        updatedDetailKeys.push(line.detailKey);
+      } catch (err) {
+        if (isBusinessWriteBackError(err)) {
+          failures.push({
+            detailKey: line.detailKey,
+            message: err.message || GENERIC_DETAIL_WRITEBACK_FAIL,
+          });
+          continue;
+        }
+        if (updatedDetailKeys.length === 0) throw err;
+        failures.push({ detailKey: line.detailKey, message: GENERIC_DETAIL_WRITEBACK_FAIL });
+        break;
+      }
+    }
+
+    return {
+      attempted: plan.toPatch.length,
+      updated: updatedDetailKeys.length,
+      skipped: plan.skipped.length,
+      failed: failures.length,
+      failures: failures.slice(0, 200),
+      remainingValues: remainingValuesAfterPass({
+        lines,
+        columnKey: column.key,
+        targetValue: value,
+        updatedDetailKeys,
+        failedDetailKeys: failures.map((entry) => entry.detailKey),
+      }),
+      updatedDetailKeys,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cel-geschiedenis (#AB:173, cutover Fase 4): verenigde per-cel tijdlijn van eigen-kolom-edits
 // (tb_cell_history) + D365-veldcorrecties (tb_field_corrections). Generalisatie van po_ getCellHistory.
@@ -5233,6 +5359,7 @@ module.exports = {
   invalidateLookupEnrichmentCache,
   saveCustomValue,
   correctField,
+  correctAllDetailFields,
   getCellHistory,
   getDataModel,
   getBoardColumnDefinitions,

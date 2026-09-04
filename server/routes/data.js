@@ -22,7 +22,7 @@ const {
   normalizeSearchQuery,
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
-const { searchRemarks } = require('../services/RowRemarksSearchService');
+const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
@@ -71,6 +71,17 @@ router.get('/:tableKey/remarks/search', async (req, res, next) => {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const query = normalizeSearchQuery(req.query.q);
     return res.json(await searchRemarks(tableKey, query, remarksActor(req)));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// GET /api/data/:tableKey/remarks/has-comment — sleutels van rijen met minstens één actieve
+// remark, voor de Remarks-kolomfilter-operator "has a comment" (geen zoekterm).
+router.get('/:tableKey/remarks/has-comment', async (req, res, next) => {
+  try {
+    const tableKey = normalizeTableKey(req.params.tableKey);
+    return res.json(await hasRemarks(tableKey, remarksActor(req)));
   } catch (err) {
     return next(err);
   }
@@ -530,6 +541,24 @@ router.post('/:tableKey/correct', async (req, res, next) => {
     const result = await dataService.correctField(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
       req.user.id,
+    );
+    return res.json(result);
+  } catch (err) {
+    // Productie-errorHandler verbergt err.message; deze route moet D365-detail tonen (#AB:295).
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/correct-all-details — header-fan-out naar alle D365-regels van één PO. #AB:302
+router.post('/:tableKey/correct-all-details', async (req, res, next) => {
+  try {
+    const { columnId, partitionKey, recordKey, value } = req.body || {};
+    const id = toColumnId(columnId);
+    if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    const result = await dataService.correctAllDetailFields(
+      { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, value },
+      req.user,
     );
     return res.json(result);
   } catch (err) {
