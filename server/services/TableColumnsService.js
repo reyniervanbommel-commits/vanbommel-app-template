@@ -31,6 +31,7 @@ const {
 } = require('../utils/statusColumnOptions');
 const { isAllowedDatePeriodSource, validateDatePeriodOptions } = require('../utils/datePeriodColumn');
 const { loadRuntimeHeaderLinks } = require('../utils/runtimeHeaderLinks');
+const { assertNotPavWritable } = require('../utils/productAttributeValues');
 
 const MAX_LABEL_LENGTH = 128;
 const MAX_KEY_LENGTH = 64;
@@ -712,9 +713,10 @@ function resolveRccpQuantityEligibility(column) {
 }
 
 // Write-back-config (admin): welke kolommen naar de bron terugschrijfbaar zijn en via welk mechanisme.
-async function setWriteBackConfig(columnId, config, userId) {
+async function setWriteBackConfig(columnId, config, userId, tableKey = null) {
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  assertNotPavWritable(tableKey, existing);
   if (existing.dataType === 'remarks') {
     throw Object.assign(new Error('The Remarks column is read-only'), { status: 400 });
   }
@@ -739,6 +741,7 @@ module.exports = {
   SCOPES,
   DATA_TYPES,
   slugify,
+  uniqueKeyForScope,
   resolveWriteback,
   validateImageOptions,
   validateDatePeriodOptions,

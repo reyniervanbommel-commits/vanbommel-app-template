@@ -1,4 +1,5 @@
-export const COLLAPSED_COLUMN_WIDTH = 12;
+/** Excel-style hidden column: no spacer width; header draws two boundary lines. */
+export const COLLAPSED_COLUMN_WIDTH = 0;
 
 export function normalizeCollapsedColumnKeys(rawKeys, allowedKeys) {
   if (!Array.isArray(rawKeys) || !rawKeys.length) return [];

@@ -29,7 +29,7 @@ const useStyles = makeStyles({
     gridTemplateColumns: '40px 80px 64px',
     alignItems: 'center',
     justifyContent: 'start',
-    columnGap: tokens.spacingHorizontalM,
+    columnGap: tokens.spacingHorizontalS,
     rowGap: tokens.spacingVerticalS,
     width: 'max-content',
   },

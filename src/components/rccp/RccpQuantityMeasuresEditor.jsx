@@ -23,14 +23,10 @@ function RccpQuantityMeasuresEditor({
   measures, columns, hideIntro, openMeasureKey, deliveredMeasureKey, orderedMeasureKey, onChange, onUpdateField,
 }) {
   const styles = useStyles();
-  const numberCols = useMemo(() => {
-    const byKey = new Map();
-    for (const col of columns) {
-      if (!isRccpQuantityColumn(col)) continue;
-      if (!byKey.has(col.key) || col.scope === 'detail') byKey.set(col.key, col);
-    }
-    return [...byKey.values()];
-  }, [columns]);
+  const numberCols = useMemo(
+    () => columns.filter(isRccpQuantityColumn),
+    [columns],
+  );
 
   const slotMeasures = useMemo(
     () => SLOTS.map((slot, index) => {

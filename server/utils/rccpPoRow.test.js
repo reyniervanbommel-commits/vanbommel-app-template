@@ -1,6 +1,11 @@
 'use strict';
 
-const { isSentinelDate, planningDateValue } = require('./rccpPoRow');
+const {
+  isSentinelDate,
+  lineDateValue,
+  planningDateValue,
+  resolveLineMeasureQty,
+} = require('./rccpPoRow');
 
 describe('isSentinelDate', () => {
   it('is false voor leeg', () => {
@@ -63,5 +68,35 @@ describe('planningDateValue', () => {
   it('default is requested (geen automatische fallback naar confirmed)', () => {
     expect(planningDateValue(line, {}, 'requestedDeliveryDate', 'confirmedDeliveryDate'))
       .toBe(requested);
+  });
+});
+
+describe('lineDateValue scoped keys', () => {
+  const lineValues = { requestedDeliveryDate: '2021-11-19' };
+  const masterValues = { requestedDeliveryDate: '2021-11-08' };
+
+  it('gebruikt bij een ongeprefixte key eerst de regel', () => {
+    expect(lineDateValue(lineValues, masterValues, 'requestedDeliveryDate')).toBe('2021-11-19');
+  });
+
+  it('gebruikt alleen de header bij master-prefix', () => {
+    expect(lineDateValue(lineValues, masterValues, 'master:requestedDeliveryDate')).toBe('2021-11-08');
+  });
+
+  it('gebruikt alleen de regel bij detail-prefix', () => {
+    expect(lineDateValue(lineValues, masterValues, 'detail:requestedDeliveryDate')).toBe('2021-11-19');
+  });
+});
+
+describe('resolveLineMeasureQty scoped keys', () => {
+  const lineValues = { quantity: 10 };
+  const masterValues = { quantity: 100 };
+
+  it('neemt het headertotaal bij master-prefix', () => {
+    expect(resolveLineMeasureQty(lineValues, masterValues, 'master:quantity', 0.5)).toBe(50);
+  });
+
+  it('neemt de regelwaarde bij detail-prefix', () => {
+    expect(resolveLineMeasureQty(lineValues, masterValues, 'detail:quantity', 0.5)).toBe(10);
   });
 });

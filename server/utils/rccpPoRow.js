@@ -6,6 +6,7 @@
  */
 
 const { getIsoWeek, getIsoWeekYear, isoWeekKey, isIsoWeekInWindow } = require('./isoWeek');
+const { parseRccpColumnRef } = require('./rccpColumnRef');
 
 function toNumber(value) {
   if (value === null || value === undefined || value === '') return 0;
@@ -19,22 +20,44 @@ function pickValue(values, key) {
   return v === undefined || v === null || v === '' ? null : v;
 }
 
+function pickConfiguredValue(values, storedKey) {
+  const { key } = parseRccpColumnRef(storedKey);
+  return pickValue(values, key);
+}
+
 function resolveLineMeasureQty(lineValues, masterValues, measureKey, share = 1) {
-  const lineRaw = pickValue(lineValues, measureKey);
-  const masterQty = toNumber(pickValue(masterValues, measureKey));
+  const { key, scope } = parseRccpColumnRef(measureKey);
+  if (!key) return 0;
+  if (scope === 'master') return toNumber(pickValue(masterValues, key)) * share;
+  if (scope === 'detail') return toNumber(pickValue(lineValues, key));
+  const lineRaw = pickValue(lineValues, key);
+  const masterQty = toNumber(pickValue(masterValues, key));
   return lineRaw !== null ? toNumber(lineRaw) : masterQty * share;
 }
 
 /** Header-totaal: de key staat op de order, niet op de regels. */
 function isHeaderOnlyMeasure(details, masterValues, measureKey) {
-  if (!measureKey || pickValue(masterValues, measureKey) === null) return false;
+  const { key, scope } = parseRccpColumnRef(measureKey);
+  if (!key) return false;
+  if (scope === 'detail') return false;
+  if (pickValue(masterValues, key) === null) return false;
+  if (scope === 'master') return true;
   if (!details.length) return true;
-  return details.every((detail) => pickValue(detail.values || {}, measureKey) === null);
+  return details.every((detail) => pickValue(detail.values || {}, key) === null);
 }
 
 function lineDateValue(lineValues, masterValues, dateColumnKey) {
-  if (!dateColumnKey) return null;
-  return pickValue(lineValues, dateColumnKey) || pickValue(masterValues, dateColumnKey);
+  const { key, scope } = parseRccpColumnRef(dateColumnKey);
+  if (!key) return null;
+  if (scope === 'master') return pickValue(masterValues, key);
+  if (scope === 'detail') return pickValue(lineValues, key);
+  return pickValue(lineValues, key) || pickValue(masterValues, key);
+}
+
+function hasLineDate(lineValues, storedKey) {
+  const { key, scope } = parseRccpColumnRef(storedKey);
+  if (!key || scope === 'master') return false;
+  return pickValue(lineValues, key) !== null;
 }
 
 function isSentinelDate(value) {
@@ -96,7 +119,7 @@ function collectDateSlots(
       year,
       week,
       key: isoWeekKey(year, week),
-      dateFromHeader: !pickValue(source.lineValues, primaryKey),
+      dateFromHeader: !hasLineDate(source.lineValues, primaryKey),
     });
   }
   return slots;
@@ -125,8 +148,8 @@ function collectPlanningSlots(
       year,
       week,
       key: isoWeekKey(year, week),
-      dateFromHeader: !lineDateValue(source.lineValues, {}, requestedKey)
-        && !lineDateValue(source.lineValues, {}, confirmedKey),
+      dateFromHeader: !hasLineDate(source.lineValues, requestedKey)
+        && !hasLineDate(source.lineValues, confirmedKey),
     });
   }
   return slots;
@@ -135,6 +158,7 @@ function collectPlanningSlots(
 module.exports = {
   toNumber,
   pickValue,
+  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,

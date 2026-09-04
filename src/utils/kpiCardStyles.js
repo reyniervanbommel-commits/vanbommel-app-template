@@ -1,29 +1,39 @@
-import { applyOpacity } from './hexColor';
+import { isHexColor, normalizeHexColor } from './hexColor';
 
 export const KPI_STYLE_KEYS = Object.freeze(['delivered', 'open', 'lateDelivery', 'onTime']);
 export const KPI_CARDS_BOARD_KEY = 'kpi-cards';
 
-/** Palette red / green / gray (same swatches as the app color picker). */
-export const KPI_THRESHOLD_RED = '#e2445c';
-export const KPI_THRESHOLD_GREEN = '#00c875';
+/**
+ * Neutral, fully opaque grays for the pie's uncolored slice. Solid (not
+ * transparent) so an accent color on the other slice never bleeds through.
+ */
 export const KPI_PIE_GRAY = '#c4c4c4';
+export const KPI_PIE_GRAY_LIGHT = '#e6e6e6';
 
-const DEFAULT_STYLE = Object.freeze({ threshold: null });
+/** Which of the 2 pie values gets the picked color; the other one stays gray. */
+export const KPI_COLOR_TARGET_VALUE = 'value';
+export const KPI_COLOR_TARGET_OTHER = 'other';
+
+const DEFAULT_STYLE = Object.freeze({ color: null, colorTarget: KPI_COLOR_TARGET_VALUE });
 
 export function defaultKpiCardStyle() {
   return DEFAULT_STYLE;
 }
 
-function thresholdValue(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  return Math.min(100, Math.max(0, numeric));
+function colorTargetValue(value) {
+  return value === KPI_COLOR_TARGET_OTHER ? KPI_COLOR_TARGET_OTHER : KPI_COLOR_TARGET_VALUE;
+}
+
+function colorValue(value) {
+  return isHexColor(value) ? normalizeHexColor(value) : null;
 }
 
 export function normalizeKpiCardStyle(raw) {
   const input = raw && typeof raw === 'object' ? raw : {};
-  return { threshold: thresholdValue(input.threshold) };
+  return {
+    color: colorValue(input.color),
+    colorTarget: colorTargetValue(input.colorTarget),
+  };
 }
 
 export function normalizeKpiCardStyles(raw) {
@@ -36,21 +46,19 @@ export function normalizeKpiCardStyles(raw) {
 }
 
 /**
- * Fill color for pie and % label. Threshold is inclusive (≥).
- * No threshold: gray at 80% transparency. Below: opaque red. At/above: opaque green.
+ * Pie colors for the 2 KPI slices (this value vs. the other value).
+ * No color picked: both slices stay gray, neither is raised. With a color:
+ * the chosen side (`colorTarget`, default `value`) gets the picked color and
+ * is visually raised above the other slice, which always stays a solid gray
+ * (never a tint of the accent color).
  */
-export function resolveKpiAccentColor(percent, style) {
-  if (style?.threshold === null || style?.threshold === undefined) {
-    return applyOpacity(KPI_PIE_GRAY, 20);
+export function resolveKpiPieColors(style) {
+  const accent = style?.color || null;
+  if (!accent) {
+    return { fill: KPI_PIE_GRAY_LIGHT, rest: KPI_PIE_GRAY, elevated: null };
   }
-  const value = Number(percent);
-  if (!Number.isFinite(value) || value < style.threshold) return KPI_THRESHOLD_RED;
-  return KPI_THRESHOLD_GREEN;
-}
-
-export function resolveKpiPieColors(percent, style) {
-  return {
-    fill: resolveKpiAccentColor(percent, style),
-    rest: applyOpacity(KPI_PIE_GRAY, 50),
-  };
+  if (style.colorTarget === KPI_COLOR_TARGET_OTHER) {
+    return { fill: KPI_PIE_GRAY, rest: accent, elevated: 'rest' };
+  }
+  return { fill: accent, rest: KPI_PIE_GRAY, elevated: 'fill' };
 }

@@ -60,4 +60,36 @@ describe('RccpChartMatrixPanel (PO-board split)', () => {
     const { container } = renderWithFluent(<FlashProbe />);
     expect(container.textContent).toContain('flash-ok');
   });
+
+  it('pins the Y-axis to the left edge of the week scroller so it tracks scroll position', () => {
+    const { container } = renderWithFluent(
+      <RccpChartMatrixPanel
+        chart={chart}
+        measureRows={measureRows}
+        periods={periods}
+        cellMap={cellMap}
+        compact
+        chartHeight={180}
+      />,
+    );
+    const axis = container.querySelector('[data-testid="rccp-sticky-y-axis"]');
+    const weekBar = container.querySelector('[aria-label="Scroll weeks"]');
+    const scrollRoot = weekBar?.parentElement;
+    expect(axis).toBeTruthy();
+    expect(scrollRoot).toBeTruthy();
+    // The axis lives inside the same horizontally scrolling pane as the chart
+    // bars, anchored via a zero-width `position: sticky` wrapper — so it
+    // tracks the pane's own scrollLeft instead of staying fixed on screen.
+    expect(scrollRoot.contains(axis)).toBe(true);
+    let node = axis.parentElement;
+    let stickyFound = false;
+    while (node && node !== scrollRoot) {
+      if (node.style.position === 'sticky') {
+        stickyFound = true;
+        break;
+      }
+      node = node.parentElement;
+    }
+    expect(stickyFound).toBe(true);
+  });
 });

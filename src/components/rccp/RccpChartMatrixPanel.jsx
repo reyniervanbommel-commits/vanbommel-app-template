@@ -20,6 +20,7 @@ import {
 } from './rccpUtils';
 import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
 import RccpLinkedHScroll from './RccpLinkedHScroll';
+import RccpStickyChartYAxis from './RccpStickyChartYAxis';
 import { rccpChartFlashSignature } from './rccpChartFlash';
 import { useRccpChartFlash } from './useRccpChartFlash';
 
@@ -66,6 +67,7 @@ function RccpChartMatrixPanel({
   interactive = false,
   visibility = null,
   itemFocus = null,
+  matrixColorFill = true,
 }) {
   const styles = useStyles();
   const orderedRows = useMemo(() => sortRccpMatrixRows(measureRows), [measureRows]);
@@ -221,21 +223,27 @@ function RccpChartMatrixPanel({
       top={(
         <div
           ref={flashRef}
-          style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}
         >
-          <div key={seriesSignature}>
-            <RccpSegmentHoverContext.Provider value={hoverValue}>
-              <RccpChartPlot
-                plot={plot}
-                stack={stack}
-                todayMarker={todayMarker}
+          <RccpStickyChartYAxis
+            height={chartHeight}
+            compact={compact}
+            yDomain={yDomain}
+          />
+          <div style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}>
+            <div key={seriesSignature}>
+              <RccpSegmentHoverContext.Provider value={hoverValue}>
+                <RccpChartPlot
+                  plot={plot}
+                  stack={stack}
+                  todayMarker={todayMarker}
+                />
+              </RccpSegmentHoverContext.Provider>
+              <RccpPoSegmentHoverCard
+                hover={hoveredSegment}
+                boxRef={hoverBoxRef}
+                fallbackDataAreaId={fallbackDataAreaId}
               />
-            </RccpSegmentHoverContext.Provider>
-            <RccpPoSegmentHoverCard
-              hover={hoveredSegment}
-              boxRef={hoverBoxRef}
-              fallbackDataAreaId={fallbackDataAreaId}
-            />
+            </div>
           </div>
         </div>
       )}
@@ -250,6 +258,7 @@ function RccpChartMatrixPanel({
           interactive={interactive}
           gridWidth={gridWidth}
           kpiHighlight={visibility?.kpiHighlight}
+          colorFillEnabled={matrixColorFill}
         />
       )}
     />

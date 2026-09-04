@@ -1,6 +1,6 @@
 ---
 description: Stel automatisch een ADR voor na afgeronde architectuurbeslissingen
-alwaysApply: true
+alwaysApply: false
 ---
 
 # ADR vastlegging

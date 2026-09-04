@@ -1,15 +1,23 @@
-const KPI_STYLE_KEYS = ['delivered', 'open', 'lateDelivery', 'onTime'];
+const { HEX_COLOR_PATTERN } = require('./hexColor');
 
-function thresholdValue(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  return Math.min(100, Math.max(0, numeric));
+const KPI_STYLE_KEYS = ['delivered', 'open', 'lateDelivery', 'onTime'];
+const KPI_COLOR_TARGET_VALUE = 'value';
+const KPI_COLOR_TARGET_OTHER = 'other';
+
+function colorValue(value) {
+  return HEX_COLOR_PATTERN.test(String(value || '')) ? String(value).toLowerCase() : null;
+}
+
+function colorTargetValue(value) {
+  return value === KPI_COLOR_TARGET_OTHER ? KPI_COLOR_TARGET_OTHER : KPI_COLOR_TARGET_VALUE;
 }
 
 function normalizeKpiCardStyle(raw) {
   const input = raw && typeof raw === 'object' ? raw : {};
-  return { threshold: thresholdValue(input.threshold) };
+  return {
+    color: colorValue(input.color),
+    colorTarget: colorTargetValue(input.colorTarget),
+  };
 }
 
 function normalizeKpiCardStyles(raw) {

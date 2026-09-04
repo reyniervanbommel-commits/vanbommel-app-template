@@ -102,6 +102,7 @@ export default function BoardSplitView({
   const split = useSplitPane();
   const { isoWindow, setIsoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
+  const [rccpAnalysis, setRccpAnalysis] = useState(null);
   const handlePeriodGrainChange = useCallback((value) => {
     setPeriodGrain(parseRccpPeriodGrain(value));
   }, []);
@@ -113,6 +114,12 @@ export default function BoardSplitView({
       toWeek: Number(next.toWeek),
     });
   }, [setIsoWindow]);
+  const handleRccpAnalysisChange = useCallback((next) => {
+    setRccpAnalysis(next);
+  }, []);
+  const handleShowDataWindow = useCallback(() => {
+    if (rccpAnalysis?.dataWindow) setIsoWindow(rccpAnalysis.dataWindow);
+  }, [rccpAnalysis, setIsoWindow]);
   const {
     vendors, vendorNames, vendorColumnKey, loading: vendorsLoading,
   } = useRccpVendorOptions();
@@ -210,7 +217,7 @@ export default function BoardSplitView({
           <Tab value="kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
-        {split.activeTab === 'rccp' ? (
+        {showRccpPane ? (
           <RccpSplitToolbar
             isoWindow={isoWindow}
             onReplaceWindow={handleWindowReplace}
@@ -219,6 +226,8 @@ export default function BoardSplitView({
             planningDateMode={planningDateMode}
             onPlanningDateModeChange={setPlanningDateMode}
             vendorAccount={vendorAccount}
+            analysis={rccpAnalysis}
+            onShowDataWindow={handleShowDataWindow}
           />
         ) : null}
       </div>
@@ -256,6 +265,7 @@ export default function BoardSplitView({
                   planningDateMode={planningDateMode}
                   periodGrain={periodGrain}
                   orderNumbers={orderNumbers}
+                  onAnalysisChange={handleRccpAnalysisChange}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading RCCP…" />

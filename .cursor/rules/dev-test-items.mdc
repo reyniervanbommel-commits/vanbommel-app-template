@@ -1,3 +1,8 @@
+---
+description: Dev test-items checklist vóór een push naar develop of een feature branch
+alwaysApply: false
+---
+
 # Dev test-items
 
 ## Altijd bij elke push naar develop of feature branch

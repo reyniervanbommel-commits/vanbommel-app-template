@@ -1,3 +1,8 @@
+---
+description: Azure-infrastructuurregels — alle omgevingen draaien als Container Apps
+alwaysApply: false
+---
+
 # Azure infrastructuur — Container Apps only
 
 ## ⚠️ Kritieke regel

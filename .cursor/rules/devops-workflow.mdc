@@ -1,6 +1,6 @@
 ---
 description: Azure DevOps workflow — work items, comments en commit-koppeling
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Azure DevOps Workflow

@@ -15,6 +15,7 @@ const { computeRccpStatus } = require('../utils/rccpStatus');
 const {
   toNumber,
   pickValue,
+  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
@@ -27,6 +28,7 @@ const {
 const { buildPoSegments, mergeSegmentsIntoChart } = require('../utils/rccpPoSegments');
 const { buildRccpPoKpisPair, buildRccpPoKpiByOrder, buildRccpCapacityKpis } = require('../utils/rccpKpis');
 const { buildItemPickerLookupMap } = require('../utils/rccpItemPickerLookup');
+const { storageColumnKey } = require('../utils/rccpColumnRef');
 
 const PO_TABLE_KEY = 'purchase-orders';
 
@@ -151,7 +153,7 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
 
   for (const row of rows) {
     const masterValues = row.values || {};
-    const vendor = String(pickValue(masterValues, config.vendorColumnKey) || '').trim();
+    const vendor = String(pickConfiguredValue(masterValues, config.vendorColumnKey) || '').trim();
     if (!vendor) {
       diagnostics.missingVendorOrders += 1;
       continue;
@@ -169,12 +171,9 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
     const processLine = (lineNumber, lineValues) => {
       diagnostics.lineCount += 1;
       const share = details.length ? 1 / details.length : 1;
-      const measureQty = (measure) => {
-        const lineRaw = pickValue(lineValues, measure.columnKey);
-        return lineRaw !== null
-          ? toNumber(lineRaw)
-          : resolveLineMeasureQty(lineValues, masterValues, measure.columnKey, share);
-      };
+      const measureQty = (measure) => (
+        resolveLineMeasureQty(lineValues, masterValues, measure.columnKey, share)
+      );
 
       const status = pickValue(lineValues, 'status') ?? masterStatus;
       if (status && excludedSet.has(String(status).toLowerCase())) {
@@ -237,7 +236,7 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
     if (!headerOnlyKeys.size) continue;
     for (const measure of measures) {
       if (!headerOnlyKeys.has(measure.columnKey)) continue;
-      const total = toNumber(pickValue(masterValues, measure.columnKey));
+      const total = toNumber(pickConfiguredValue(masterValues, measure.columnKey));
       if (total <= 0) continue;
       const slots = measureSlots(
         details, masterValues, config, window, excludedSet, masterStatus, dateMode, measure.columnKey,
@@ -245,6 +244,7 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
       if (!slots.length) continue;
       const shareQty = total / slots.length;
       for (const slot of slots) {
+        noteDataRange(vendor, slot.year, slot.week);
         addLoad(vendor, slot.year, slot.week, measure.columnKey, shareQty);
       }
     }
@@ -583,7 +583,7 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
 
   for (const row of rows) {
     const masterValues = row.values || {};
-    const vendor = String(pickValue(masterValues, config.vendorColumnKey) || '').trim();
+    const vendor = String(pickConfiguredValue(masterValues, config.vendorColumnKey) || '').trim();
     if (vendor !== cell.vendorAccount) continue;
 
     const masterStatus = pickValue(masterValues, 'status') ?? pickValue(masterValues, 'purchaseOrderStatus');
@@ -594,7 +594,7 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
       const slots = measureSlots(
         details, masterValues, config, window, excludedSet, masterStatus, dateMode, measureKey,
       );
-      const total = toNumber(pickValue(masterValues, measureKey));
+      const total = toNumber(pickConfiguredValue(masterValues, measureKey));
       if (total <= 0 || !slots.length) continue;
       const shareQty = total / slots.length;
       for (const slot of slots) {
@@ -655,9 +655,9 @@ function buildDrillDownRows(rows, config, cell, window, planningDateMode) {
       const lineValues = detail.values || {};
       const dateValue = lineBucketDate(lineValues);
       const dateFromHeader = Boolean(dateValue)
-        && !pickValue(lineValues, config.dateColumnKey)
-        && !pickValue(lineValues, config.confirmedDateColumnKey)
-        && !pickValue(lineValues, config.receiptDateColumnKey);
+        && !pickConfiguredValue(lineValues, config.dateColumnKey)
+        && !pickConfiguredValue(lineValues, config.confirmedDateColumnKey)
+        && !pickConfiguredValue(lineValues, config.receiptDateColumnKey);
       pushLine(detail.detailKey, lineValues, dateValue, dateFromHeader);
     }
   }
@@ -692,7 +692,7 @@ async function getDrillDown(params) {
 function extractVendorsFromRows(rows, vendorColumnKey) {
   const vendors = new Set();
   for (const row of rows || []) {
-    const vendor = String(pickValue(row.values, vendorColumnKey) || '').trim();
+    const vendor = String(pickConfiguredValue(row.values, vendorColumnKey) || '').trim();
     if (vendor) vendors.add(vendor);
   }
   return [...vendors].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -706,7 +706,7 @@ function extractVendorsFromRows(rows, vendorColumnKey) {
 function extractVendorNamesFromRows(rows, vendorColumnKey) {
   const names = {};
   for (const row of rows || []) {
-    const vendor = String(pickValue(row.values, vendorColumnKey) || '').trim();
+    const vendor = String(pickConfiguredValue(row.values, vendorColumnKey) || '').trim();
     if (!vendor || names[vendor]) continue;
     const name = String(pickValue(row.values, 'vendorName') || '').trim();
     if (name) names[vendor] = name;
@@ -738,17 +738,18 @@ async function listMainTableVendors({ supplierAccount = null } = {}) {
     revision = null;
   }
 
+  const vendorStorageKey = storageColumnKey(config.vendorColumnKey) || config.vendorColumnKey;
   const rows = await time('rccp_vendor_list', () => tableDataService.listVendorValues({
     tableKey: PO_TABLE_KEY,
-    valueColumnKeys: [config.vendorColumnKey, 'vendorName'],
+    valueColumnKeys: [vendorStorageKey, 'vendorName'],
   }));
   const scoped = supplierAccount
-    ? rows.filter((r) => String(pickValue(r.values, config.vendorColumnKey) || '').trim()
+    ? rows.filter((r) => String(pickConfiguredValue(r.values, config.vendorColumnKey) || '').trim()
         === String(supplierAccount).trim())
     : rows;
 
   const payload = {
-    vendorColumnKey: config.vendorColumnKey,
+    vendorColumnKey: vendorStorageKey,
     vendors: extractVendorsFromRows(scoped, config.vendorColumnKey),
     vendorNames: extractVendorNamesFromRows(scoped, config.vendorColumnKey),
   };

@@ -6,6 +6,7 @@ import {
   clampWeekPickerListHeight,
   compareIsoWeekParts,
   groupIsoWeeksByMonth,
+  isIsoWeekInPickerRange,
 } from './rccpUtils';
 
 const useStyles = makeStyles({
@@ -173,7 +174,7 @@ function IsoMonthWeekGroup({ group, from, to, now, locked, onSelectWeek, styles 
           <IsoWeekButton
             key={`${item.year}-W${item.week}`}
             item={item}
-            selected={compareIsoWeekParts(item, from) >= 0 && compareIsoWeekParts(item, to) <= 0}
+            selected={isIsoWeekInPickerRange(item, from, to)}
             current={compareIsoWeekParts(item, now) === 0}
             locked={Boolean(locked && compareIsoWeekParts(item, locked) === 0)}
             onSelectWeek={onSelectWeek}

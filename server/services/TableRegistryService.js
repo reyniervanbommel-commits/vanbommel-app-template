@@ -184,6 +184,33 @@ async function getLookups(tableId) {
   })).filter((l) => l.sourceField && l.targetTableKey);
 }
 
+function mergeCascadeTargetKeys(lookupKeys, pivotKeys) {
+  return [...new Set([
+    ...(lookupKeys || []).map((k) => String(k || '').trim()).filter(Boolean),
+    ...(pivotKeys || []).map((k) => String(k || '').trim()).filter(Boolean),
+  ])];
+}
+
+async function listRefreshCascadeTargets(tableId) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT target_table_key, relation_role
+      FROM dbo.tb_relations
+      WHERE table_id = @tableId AND relation_role IN ('lookup', 'pivot')
+    `);
+  const lookupKeys = [];
+  const pivotKeys = [];
+  for (const row of result.recordset) {
+    const key = String(row.target_table_key || '').trim();
+    if (!key) continue;
+    if (String(row.relation_role || '') === 'pivot') pivotKeys.push(key);
+    else lookupKeys.push(key);
+  }
+  return mergeCascadeTargetKeys(lookupKeys, pivotKeys);
+}
+
 module.exports = {
   SCOPES,
   DATA_TYPES,
@@ -193,5 +220,7 @@ module.exports = {
   listColumns,
   getColumnById,
   getLookups,
+  listRefreshCascadeTargets,
+  mergeCascadeTargetKeys,
   mapColumnRow,
 };

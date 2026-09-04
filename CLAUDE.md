@@ -96,7 +96,10 @@ Volledige regel: `.cursor/rules/otap-local-first.mdc`.
 ## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
 
 Bij **elke feature en elke snelle fix** in `src/` of `server/` — ook buiten `develop-from-devops` —
-doorloop je vóór het klaarmelden van het werk:
+doorloop je vóór het klaarmelden van het werk, **geschaald naar de wijziging**: bij een triviale
+fix (kleine diff, geen nieuwe route/auth/SQL/UI-flow, geen hot-path-impact) volstaan de eigen
+checks van `final-check-feature` (stap 1) — sla `browser-feature-test` en de zware
+perf-`regression`-modus dan over. Bij twijfel: behandel als feature/risicovol.
 
 1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
    Daarna `final-check-feature` (die `ui-design-review` aanroept).

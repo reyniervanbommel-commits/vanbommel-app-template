@@ -1,3 +1,9 @@
+---
+description: Bekende Fluent UI v9-valkuilen (tooltips, portals, form fields)
+globs: ["src/**/*.jsx", "src/**/*.js"]
+alwaysApply: false
+---
+
 # Fluent UI — Bekende valkuilen
 
 ## 🚨 Tooltip portal pre-rendering (KRITIEK)

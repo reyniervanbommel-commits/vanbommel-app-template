@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import {
   Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
@@ -28,7 +28,7 @@ const useStyles = makeStyles({
 
 function RccpSplitStrip({
   vendorAccount, refreshKey, enabled, isoWindow, filterByColumn, itemColumnKey, onItemClick,
-  planningDateMode, periodGrain: periodGrainProp, orderNumbers,
+  planningDateMode, periodGrain: periodGrainProp, orderNumbers, onAnalysisChange,
 }) {
   const styles = useStyles();
   const periodGrain = parseRccpPeriodGrain(periodGrainProp);
@@ -42,6 +42,11 @@ function RccpSplitStrip({
     refreshKey,
     planningDateMode,
   });
+
+  useEffect(() => {
+    onAnalysisChange?.(analysis || null);
+  }, [analysis, onAnalysisChange]);
+  useEffect(() => () => onAnalysisChange?.(null), [onAnalysisChange]);
 
   const chartView = useMemo(() => resolveRccpChartView({
     grain: periodGrain,
@@ -97,6 +102,7 @@ function RccpSplitStrip({
             compact
             chartHeight={RCCP_SPLIT_CHART_HEIGHT}
             itemFocus={itemFocus}
+            matrixColorFill={analysis.config?.matrixColorFill !== false}
           />
         </div>
       )}

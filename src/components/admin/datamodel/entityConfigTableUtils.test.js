@@ -6,6 +6,7 @@ import {
   lookupSampleValue,
   mergeDiscoverySamples,
   mergeSampleByField,
+  sortFlaggedFirst,
 } from './entityConfigTableUtils';
 
 describe('entityConfigTableUtils samples', () => {
@@ -61,5 +62,17 @@ describe('entityConfigTableUtils linked-from-line', () => {
     expect(columnMatchesFilter(column, 'linked', '—')).toBe(true);
     expect(columnMatchesFilter(column, 'custom column', '—')).toBe(true);
     expect(columnMatchesFilter({ ...column, linkedFromLine: undefined }, 'linked', '—')).toBe(false);
+  });
+});
+
+describe('sortFlaggedFirst', () => {
+  it('zet aangevinkte items bovenaan en houdt de rest in dezelfde volgorde', () => {
+    const rows = [
+      { name: 'A', on: false },
+      { name: 'B', on: true },
+      { name: 'C', on: false },
+      { name: 'D', on: true },
+    ];
+    expect(sortFlaggedFirst(rows, (row) => row.on).map((row) => row.name)).toEqual(['B', 'D', 'A', 'C']);
   });
 });

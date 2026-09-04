@@ -21,7 +21,6 @@ function PurchaseOrdersBoardTotalsCell({
     return (
       <PurchaseOrderCollapsedColumnCell
         columnKey={column.key}
-        className={totalsCellClassName}
         cellStyle={cellStyle}
       />
     );

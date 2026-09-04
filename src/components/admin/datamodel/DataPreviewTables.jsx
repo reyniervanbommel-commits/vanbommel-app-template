@@ -36,6 +36,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
         exportSheetName: 'PurchaseOrderHeaders',
         exportFileName: 'purchase-order-headers-example.xlsx',
         relationHint: 'Yellow-highlighted rows mark the join keys between Purchase Order Headers and Purchase Order Lines.',
+        collapsible: true,
       },
       {
         scope: 'line',
@@ -46,6 +47,25 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
         exportSheetName: 'PurchaseOrderLines',
         exportFileName: 'purchase-order-lines-example.xlsx',
         relationHint: '',
+        collapsible: true,
+      },
+    ];
+  }
+
+  if (tableKey === 'product-attribute-values') {
+    return [
+      {
+        scope: 'header',
+        title: `${tableLabel} columns`,
+        entityName: headerName,
+        columns: columns.header,
+        preview: previewTables?.header,
+        exportSheetName: tableLabel.replace(/\s+/g, '').slice(0, 31) || 'Entity',
+        exportFileName: `${tableKey || 'entity'}-example.xlsx`,
+        relationHint: 'Yellow row: Product number joins Items (ItemNumber) and purchase-order lines (ItemNumber).',
+        relationFields: new Set(['productnumber']),
+        relationBadgeLabel: 'Items · ItemNumber',
+        collapsible: true,
       },
     ];
   }
@@ -60,6 +80,7 @@ function buildSections({ tableKey, entities, columns, previewTables }) {
       exportSheetName: tableLabel.replace(/\s+/g, '').slice(0, 31) || 'Entity',
       exportFileName: `${tableKey || 'entity'}-example.xlsx`,
       relationHint: '',
+      collapsible: true,
     },
   ];
 }
@@ -116,15 +137,16 @@ function DataPreviewTables({
       ) : null}
       {sections.map((section) => (
         <EntityConfigTable
-          key={section.scope}
+          key={`${tableKey}-${section.scope}`}
           title={section.title}
           entityName={section.entityName}
           columns={section.columns || []}
           preview={section.preview}
           exportSheetName={section.exportSheetName}
           exportFileName={section.exportFileName}
-          relationFields={section.scope === 'header' ? relationFields : new Set()}
+          relationFields={section.relationFields || (section.scope === 'header' ? relationFields : new Set())}
           relationHint={section.relationHint}
+          relationBadgeLabel={section.relationBadgeLabel}
           togglingKey={togglingKey}
           onToggleVisibility={onToggleVisibility}
           onToggleVisibleAtDelete={onToggleVisibleAtDelete}
@@ -132,6 +154,7 @@ function DataPreviewTables({
           onDeleteColumn={onDeleteColumn}
           onExportExcel={handleExportExcel}
           onSetColumnToggleState={onSetColumnToggleState}
+          collapsible={section.collapsible !== false}
         />
       ))}
     </>

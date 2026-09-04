@@ -1,6 +1,5 @@
 import React, { memo, useCallback } from 'react';
 import { Field, Input, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
 import RccpItemPickerColumnsEditor from './RccpItemPickerColumnsEditor';
 import { rccpFieldLabel, RccpInfoLabel, RccpHoverHint } from './rccpFieldLabel';
 
@@ -95,8 +94,26 @@ function ChartOverlaySwitches({ config, onUpdateField }) {
   );
 }
 
+function MatrixColorFillSwitch({ config, onUpdateField }) {
+  const styles = useStyles();
+  const handleChange = useCallback(
+    (_, data) => onUpdateField('matrixColorFill', data.checked),
+    [onUpdateField],
+  );
+  return (
+    <div className={styles.switchRow}>
+      <Switch
+        checked={config.matrixColorFill !== false}
+        onChange={handleChange}
+        label="Show colors in matrix"
+      />
+      <RccpHoverHint info="Colors the whole matrix cell instead of only the number." />
+    </div>
+  );
+}
+
 function RccpSettingsDisplayFields({
-  config, compact, itemColumns = [], onUpdateField, onRanges, onGreen, onOrange, onItemPickerColumns,
+  config, compact, itemColumns = [], onUpdateField, onGreen, onOrange, onItemPickerColumns,
 }) {
   const styles = useStyles();
 
@@ -125,23 +142,11 @@ function RccpSettingsDisplayFields({
       </div>
       <div className={styles.group}>
         <Text weight="semibold" className={styles.groupTitle}>
-          <RccpInfoLabel info="Colored week bands behind the capacity chart.">
-            Week highlights
-          </RccpInfoLabel>
-        </Text>
-        <RccpChartWeekRangesEditor
-          ranges={config.chartWeekRanges || []}
-          compact={compact}
-          hideIntro
-          onChange={onRanges}
-        />
-      </div>
-      <div className={styles.group}>
-        <Text weight="semibold" className={styles.groupTitle}>
           <RccpInfoLabel info="Color bands for capacity load in the matrix.">
             Matrix colors
           </RccpInfoLabel>
         </Text>
+        <MatrixColorFillSwitch config={config} onUpdateField={onUpdateField} />
         <ThresholdInputs
           compact={compact}
           green={config.thresholds?.greenMax ?? 80}

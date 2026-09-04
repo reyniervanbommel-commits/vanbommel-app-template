@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { Card, Text, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
-import { KPI_STYLE_KEYS, resolveKpiAccentColor } from '../../utils/kpiCardStyles';
+import { KPI_STYLE_KEYS, resolveKpiPieColors } from '../../utils/kpiCardStyles';
 import { KPI_FORMULAS } from './rccpKpiFormulas';
 import KpiFormulaFold from './KpiFormulaFold';
 import KpiPctPie from './KpiPctPie';
@@ -115,10 +115,9 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
   const markBefore = mark === 'Ø';
   const piePercent = pct ? kpiPiePercent(Number.parseFloat(pct)) : null;
   const { style } = useKpiCardStyle(kpiKey);
-  const accent = piePercent == null || !KPI_STYLE_KEYS.includes(kpiKey)
-    ? null
-    : resolveKpiAccentColor(piePercent, style);
-  const pctStyle = useMemo(() => (accent ? { color: accent } : undefined), [accent]);
+  const showStyle = piePercent != null && KPI_STYLE_KEYS.includes(kpiKey);
+  // Only the pie gets the accent color; the percentage text always stays neutral.
+  const pieColors = showStyle ? resolveKpiPieColors(style) : null;
   return (
     <div className={styles.wrap}>
       <Card
@@ -129,7 +128,12 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
         onClick={clickable ? handleClick : undefined}
         onKeyDown={clickable ? handleKeyDown : undefined}
       >
-        <KpiPctPie percent={piePercent} fillColor={accent} />
+        <KpiPctPie
+          percent={piePercent}
+          fillColor={pieColors?.fill}
+          restColor={pieColors?.rest}
+          elevated={pieColors?.elevated}
+        />
         <div className={styles.front}>
           <Text className={styles.label}>{label}</Text>
           <div className={styles.valueRow}>
@@ -138,7 +142,7 @@ function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, click
             {showMark && !markBefore ? <Text className={styles.hash}>{mark}</Text> : null}
             {aside ? <Text className={styles.aside}>{aside}</Text> : null}
           </div>
-          {pct ? <Text className={styles.pct} style={pctStyle}>{pct}</Text> : null}
+          {pct ? <Text className={styles.pct}>{pct}</Text> : null}
           {detail ? <Text className={styles.detail}>{detail}</Text> : null}
         </div>
       </Card>

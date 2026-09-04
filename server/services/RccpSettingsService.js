@@ -8,6 +8,7 @@ const settingsService = require('./SettingsService');
 const dataService = require('./TableDataService');
 const { resolveRccpQuantityEligibility } = require('./TableColumnsService');
 const { isHexColor } = require('../utils/hexColor');
+const { findScopedColumn, toScopedColumnKey } = require('../utils/rccpColumnRef');
 
 const CONFIG_KEY = 'RCCP_CONFIG';
 const PO_TABLE_KEY = 'purchase-orders';
@@ -59,7 +60,7 @@ function parseOptionalKey(raw, fieldName) {
   if (value.length > 128) {
     return { error: `${fieldName} must be at most 128 characters` };
   }
-  if (value && !/^[A-Za-z0-9_]+$/.test(value)) {
+  if (value && !/^(?:(?:master|detail):)?[A-Za-z0-9_]+$/.test(value)) {
     return { error: `${fieldName} may only contain letters, numbers and underscores` };
   }
   return { value };
@@ -116,6 +117,7 @@ function defaultConfig() {
     orderedMeasureKey: SLOT_DEFAULT_KEYS.ordered,
     showCapacityLine: true,
     showWarningLine: true,
+    matrixColorFill: true,
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     itemPickerColumnKeys: [],
@@ -231,6 +233,7 @@ function validateConfig(raw) {
 
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
+  const matrixColorFill = raw.matrixColorFill !== false;
 
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
@@ -265,6 +268,7 @@ function validateConfig(raw) {
       orderedMeasureKey,
       showCapacityLine,
       showWarningLine,
+      matrixColorFill,
       chartWeekRanges,
       excludedStatuses,
       itemPickerColumnKeys,
@@ -288,8 +292,23 @@ async function getConfig() {
   }
 }
 
-function findColumn(columns, key) {
-  return columns.find((col) => col?.key === key) || null;
+function applyScopedColumnKeys(config, defs) {
+  const all = [...(defs.master || []), ...(defs.detail || [])];
+  const scopeKey = (stored) => toScopedColumnKey(stored, all);
+  return {
+    ...config,
+    dateColumnKey: scopeKey(config.dateColumnKey),
+    receiptDateColumnKey: scopeKey(config.receiptDateColumnKey),
+    confirmedDateColumnKey: scopeKey(config.confirmedDateColumnKey),
+    vendorColumnKey: scopeKey(config.vendorColumnKey),
+    openMeasureKey: scopeKey(config.openMeasureKey),
+    deliveredMeasureKey: scopeKey(config.deliveredMeasureKey),
+    orderedMeasureKey: scopeKey(config.orderedMeasureKey),
+    quantityMeasures: (config.quantityMeasures || []).map((entry) => ({
+      ...entry,
+      columnKey: scopeKey(entry.columnKey),
+    })),
+  };
 }
 
 async function assertSlotsExist(config) {
@@ -297,7 +316,7 @@ async function assertSlotsExist(config) {
   const master = defs.master || [];
   const all = [...master, ...(defs.detail || [])];
 
-  const vendorCol = findColumn(master, config.vendorColumnKey);
+  const vendorCol = findScopedColumn(master, config.vendorColumnKey);
   if (!vendorCol || vendorCol.dataType !== 'text' || vendorCol.isActive === false) {
     const err = new Error(`Vendor column is not an active header text field: ${config.vendorColumnKey}`);
     err.status = 400;
@@ -306,7 +325,7 @@ async function assertSlotsExist(config) {
 
   const assertDate = (key, label) => {
     if (!key) return;
-    const col = findColumn(all, key);
+    const col = findScopedColumn(all, key);
     const ok = col && col.isActive !== false
       && (col.dataType === 'date' || col.dataType === 'date_period');
     if (!ok) {
@@ -321,7 +340,7 @@ async function assertSlotsExist(config) {
 
   const qtyKeys = [config.openMeasureKey, config.deliveredMeasureKey, config.orderedMeasureKey];
   for (const key of qtyKeys) {
-    const col = findColumn(all, key);
+    const col = findScopedColumn(all, key);
     const { eligible, reason } = resolveRccpQuantityEligibility(col);
     if (!eligible) {
       const err = new Error(reason || `Quantity column is not eligible: ${key}`);
@@ -329,6 +348,8 @@ async function assertSlotsExist(config) {
       throw err;
     }
   }
+
+  return defs;
 }
 
 async function saveConfig(raw, userId = null) {
@@ -338,9 +359,10 @@ async function saveConfig(raw, userId = null) {
     err.status = 400;
     throw err;
   }
-  await assertSlotsExist(result.config);
-  await settingsService.set(CONFIG_KEY, JSON.stringify(result.config), userId);
-  return result.config;
+  const defs = await assertSlotsExist(result.config);
+  const scoped = applyScopedColumnKeys(result.config, defs);
+  await settingsService.set(CONFIG_KEY, JSON.stringify(scoped), userId);
+  return scoped;
 }
 
 module.exports = {
