@@ -50,6 +50,24 @@ describe('usePurchaseOrderRemarksFilterBridge', () => {
     expect(apiRequest.mock.calls[0][0]).toBe('/data/purchase-orders/remarks/search?q=delay');
   });
 
+  it('enables hasComment without a search term', async () => {
+    apiRequest.mockResolvedValueOnce({
+      keys: [{ partitionKey: 'nl', recordKey: 'PO-1' }],
+    });
+
+    const { result } = renderHook(() =>
+      usePurchaseOrderRemarksFilterBridge({
+        remarks: { operator: 'hasComment', value: '' },
+      })
+    );
+
+    expect(result.current.enabled).toBe(true);
+    await waitFor(() => {
+      expect(result.current.matchKeys).toEqual(new Set([rowKey('nl', 'PO-1')]));
+    });
+    expect(apiRequest.mock.calls[0][0]).toBe('/data/purchase-orders/remarks/has-comment');
+  });
+
   it('toasts non-abort errors and skips AbortError', async () => {
     const abortError = new Error('Aborted');
     abortError.name = 'AbortError';

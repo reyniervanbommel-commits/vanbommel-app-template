@@ -24,17 +24,17 @@ export const SETTINGS_NAV_SECTIONS = Object.freeze([
     id: 'people',
     heading: 'People',
     items: Object.freeze([
-      { id: 'users', label: 'Users', roles: SETTINGS_AUDIENCE.STAFF },
+      { id: 'users', label: 'Users', roles: SETTINGS_AUDIENCE.ADMIN },
       { id: 'analytics', label: 'Analytics', roles: SETTINGS_AUDIENCE.STAFF },
-      { id: 'mail-template', label: 'Mail template', roles: SETTINGS_AUDIENCE.STAFF },
+      { id: 'mail-template', label: 'Mail template', roles: SETTINGS_AUDIENCE.ADMIN },
     ]),
   },
   {
     id: 'data',
     heading: 'Data',
     items: Object.freeze([
-      { id: 'odata', label: 'OData', roles: SETTINGS_AUDIENCE.STAFF },
-      { id: 'datamodel', label: 'Data model', roles: SETTINGS_AUDIENCE.STAFF },
+      { id: 'odata', label: 'OData', roles: SETTINGS_AUDIENCE.ADMIN },
+      { id: 'datamodel', label: 'Data model', roles: SETTINGS_AUDIENCE.ADMIN },
       { id: 'external-links', label: 'External links', roles: SETTINGS_AUDIENCE.STAFF },
       { id: 'track-changes', label: 'Track changes', roles: SETTINGS_AUDIENCE.ADMIN },
       { id: 'd365-refresh', label: 'D365 refresh', roles: SETTINGS_AUDIENCE.ADMIN },

@@ -2,6 +2,7 @@ import {
   COLOR_FILTER_OPERATOR,
   DATE_FILTER_OPERATORS,
   NUMBER_FILTER_OPERATORS,
+  REMARKS_FILTER_OPERATORS,
   TEXT_FILTER_OPERATORS,
 } from '../../utils/tableViewFilterUtils';
 import {
@@ -17,6 +18,7 @@ function stringifyFilterValue(value) {
 
 function getOperatorLabel(column, operator, datePeriodDisplayModes) {
   if (!operator || operator === COLOR_FILTER_OPERATOR) return '';
+  if (column?.dataType === 'remarks') return REMARKS_FILTER_OPERATORS[operator] || operator;
   if (isDateColumn(column)) return DATE_FILTER_OPERATORS[operator] || operator;
   if (isNumberColumn(column, datePeriodDisplayModes)) return NUMBER_FILTER_OPERATORS[operator] || operator;
   return TEXT_FILTER_OPERATORS[operator] || operator;

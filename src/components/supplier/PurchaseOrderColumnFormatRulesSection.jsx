@@ -21,7 +21,7 @@ import ColorPalettePicker from '../shared/ColorPalettePicker';
 import { FORMAT_RULE_OPERATORS } from './columnFormatRuleUtils';
 
 const RULE_TARGET_LABELS = { cell: 'Cell', row: 'Row' };
-const RULE_OPERATOR_LABELS = { '=': '=', '<>': '!=', '>': '>', '<': '<', '>=': '>=', '<=': '<=' };
+const RULE_OPERATOR_LABELS = { '=': '=', '<>': '!=', '>': '>', '<': '<', '>=': '>=', '<=': '<=', contains: 'contains' };
 
 const useStyles = makeStyles({
   pickerWrap: {

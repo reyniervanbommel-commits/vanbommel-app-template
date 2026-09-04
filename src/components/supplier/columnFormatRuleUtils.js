@@ -3,7 +3,7 @@ import { STATUS_COLOR_PALETTE, normalizeStatusCompareKey } from '../../utils/sta
 
 const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_]{1,64}$/;
 
-export const FORMAT_RULE_OPERATORS = ['=', '<>', '>', '<', '>=', '<='];
+export const FORMAT_RULE_OPERATORS = ['=', '<>', '>', '<', '>=', '<=', 'contains'];
 export const FORMAT_RULE_TARGETS = ['cell', 'row'];
 export const FORMAT_RULE_COLOR_PALETTE = STATUS_COLOR_PALETTE.slice(1);
 
@@ -101,6 +101,14 @@ function compareValues(left, right, op, statusOptions) {
 }
 
 function compareScalarValues(left, right, op) {
+  if (op === 'contains') {
+    const leftText = String(left ?? '').trim().toLowerCase();
+    const rightText = String(right ?? '').trim().toLowerCase();
+    // Bij lege query geen match (anders highlight je alles bij een lege input).
+    if (!leftText || !rightText) return false;
+    return leftText.includes(rightText);
+  }
+
   const leftDate = toDateOrNull(left);
   const rightDate = toDateOrNull(right);
   if (leftDate && rightDate) {

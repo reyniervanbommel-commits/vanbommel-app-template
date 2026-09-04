@@ -21,6 +21,11 @@ export const TEXT_FILTER_OPERATORS = {
   oneOf: 'is one of',
 };
 
+export const REMARKS_FILTER_OPERATORS = {
+  contains: 'contains',
+  hasComment: 'has a comment',
+};
+
 export const DATE_FILTER_OPERATORS = {
   equals: 'is exactly',
   before: 'is before',
@@ -150,6 +155,7 @@ export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
     if (filter.operator === 'between') return Boolean(filter.value !== '' && filter.secondaryValue !== '');
     return filter.value !== '' && filter.value !== null && filter.value !== undefined;
   }
+  if (column?.dataType === 'remarks' && filter.operator === 'hasComment') return true;
   if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);
 }
@@ -204,6 +210,13 @@ export function numberMatchesFilter(rawValue, filter) {
 export function isRemarksSearchTermValid(value) {
   const term = String(value ?? '').trim();
   return term.length >= 2 && term.length <= 200;
+}
+
+// De Remarks-kolom kent twee operators: 'contains' (zoekterm van 2-200 tekens verplicht) en
+// 'hasComment' (geen zoekterm nodig — matcht rijen met minstens één actieve remark).
+export function isRemarksFilterOperatorReady(operator, value) {
+  if (operator === 'hasComment') return true;
+  return isRemarksSearchTermValid(value);
 }
 
 // Dispatcht op kolomtype naar de juiste match-functie.

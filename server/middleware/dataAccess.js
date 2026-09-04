@@ -24,6 +24,7 @@ function isSupplierAllowedDataRequest(req) {
     if (rel === '/purchase-orders/history') return true;
     if (rel === '/purchase-orders/remarks/summary') return true;
     if (rel === '/purchase-orders/remarks/search') return true;
+    if (rel === '/purchase-orders/remarks/has-comment') return true;
     if (rel === '/purchase-orders/remarks') return true;
     if (rel === '/purchase-orders/activity') return true;
     // Sublijnen bij openklappen: rij-scope wordt in de route afgedwongen via

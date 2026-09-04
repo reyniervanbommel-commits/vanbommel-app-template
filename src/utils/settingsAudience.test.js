@@ -23,7 +23,7 @@ describe('settingsAudience', () => {
 
   it('hides admin-only data tabs from employees', () => {
     const data = getVisibleSettingsSections(ROLES.EMPLOYEE).find((section) => section.id === 'data');
-    expect(data.items.map((item) => item.id)).toEqual(['odata', 'datamodel', 'external-links']);
+    expect(data.items.map((item) => item.id)).toEqual(['external-links']);
   });
 
   it('lets admins see every tab', () => {
@@ -36,7 +36,7 @@ describe('settingsAudience', () => {
 
   it('resolves audience for a tab id', () => {
     expect(getSettingsTabRoles('general')).toEqual(SETTINGS_AUDIENCE.ALL);
-    expect(getSettingsTabRoles('users')).toEqual(SETTINGS_AUDIENCE.STAFF);
+    expect(getSettingsTabRoles('users')).toEqual(SETTINGS_AUDIENCE.ADMIN);
     expect(canSeeSettingsTab(SETTINGS_AUDIENCE.ADMIN, ROLES.EMPLOYEE)).toBe(false);
   });
 });

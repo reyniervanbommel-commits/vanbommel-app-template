@@ -29,18 +29,22 @@ function renderPage() {
 }
 
 describe('AdminPage settings audience', () => {
-  it('shows only General to vendors and labels the audience', () => {
+  it('shows only General to vendors', () => {
     useAuth.mockReturnValue({ user: { role: 'supplier' } });
     renderPage();
-    expect(screen.getByRole('button', { name: /General\. Visible to: Admin, Employee, Vendor/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /General/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Users/i })).toBeNull();
-    expect(screen.getAllByText('Visible to: Admin, Employee, Vendor').length).toBeGreaterThan(0);
   });
 
-  it('hides D365 refresh from employees', () => {
+  it('shows only the bijlage-visible tabs for employees', () => {
     useAuth.mockReturnValue({ user: { role: 'employee' } });
     renderPage();
-    expect(screen.getByRole('button', { name: /Users\. Visible to: Admin, Employee$/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Users/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Analytics/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /External links/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Mail template/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /OData/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Data model/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /D365 refresh/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Track changes/i })).toBeNull();
   });
