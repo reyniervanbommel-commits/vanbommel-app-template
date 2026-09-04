@@ -30,26 +30,34 @@ Geen nieuwe snelheid-skill. Snelheid meten = `perf-review`. Niet `perf-pipeline`
 **Niet** bij pure docs/rules zonder `src/` / `server/` / app-equivalent, tenzij de
 gebruiker het expliciet vraagt.
 
-## Stap 0 — Scope en skill-catalogus
+## Stap 0 — Scope, schaalniveau en skill-catalogus
 
 1. Diff: `git diff --name-only` tegen de integratiebranch (`main` of `develop` als die
    bestaat), plus unstaged/staged. Alleen die bestanden.
-2. Lees [reference.md](reference.md) en bouw de catalogus: welke sibling-skills bestaan
+2. Bepaal het **schaalniveau** (zie `.cursor/rules/kwaliteitspoort.mdc` als die bestaat,
+   anders onderstaande vuistregel):
+   - **Triviaal**: kleine diff (richtlijn <~30 regels, 1-2 bestanden), geen nieuwe
+     route/auth/SQL, geen nieuwe UI-flow, geen hot-path-impact (board, tab-switch,
+     grote lijst) → alleen Stap 1, Stap 2 t/m 5 overslaan (één regel per stap in het
+     rapport: "triviaal — overgeslagen").
+   - **Feature / risicovol**: alles wat niet triviaal is, of twijfel → volledige poort
+     (Stap 1 t/m 6).
+3. Lees [reference.md](reference.md) en bouw de catalogus: welke sibling-skills bestaan
    in dit project of in persoonlijke skill-mappen.
-3. Sla een skill **niet** over omdat die “te zwaar” is. Wel de **lichtste modus** die
-   de skill zelf toestaat (bijv. ui-design-review `light`, perf-review `regression`
-   vs `screening`).
+4. Bij feature/risicovol: sla een skill **niet** over omdat die "te zwaar" is. Wel de
+   **lichtste modus** die de skill zelf toestaat (bijv. ui-design-review `light`,
+   perf-review `regression` vs `screening`).
 
 Kopieer en vink af:
 
 ```
 Final check:
-- [ ] Stap 0: Scope + catalogus
+- [ ] Stap 0: Scope + schaalniveau + catalogus
 - [ ] Stap 1: Eigen checks (grootte, dode code, tests, versie, statische snelheid)
-- [ ] Stap 2: ui-design-review (of fallback)
-- [ ] Stap 3: perf-review (of fallback) — geen extra snelheid-skill
-- [ ] Stap 4: security-review (of fallback)
-- [ ] Stap 5: browser-feature-test (of fallback)
+- [ ] Stap 2: ui-design-review (of fallback) — alleen bij feature/risicovol
+- [ ] Stap 3: perf-review (of fallback) — alleen bij feature/risicovol, geen extra snelheid-skill
+- [ ] Stap 4: security-review (of fallback) — alleen bij feature/risicovol
+- [ ] Stap 5: browser-feature-test (of fallback) — alleen bij feature/risicovol
 - [ ] Stap 6: project-cleanup (alleen deze wijziging)
 - [ ] Stap 7: Veilige fixes + kort rapport
 ```

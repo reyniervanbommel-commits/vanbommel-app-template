@@ -71,6 +71,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
         />
         <XAxis dataKey="key" scale="band" padding={{ left: 0, right: 0 }} hide />
         <YAxis
+          hide
           tick={{ fontSize: compact ? 11 : 12 }}
           width={RCCP_CHART_Y_AXIS_WIDTH}
           {...yAxisScale}

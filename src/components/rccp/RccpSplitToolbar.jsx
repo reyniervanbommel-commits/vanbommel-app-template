@@ -43,6 +43,8 @@ function RccpSplitToolbar({
   planningDateMode,
   onPlanningDateModeChange,
   vendorAccount,
+  analysis,
+  onShowDataWindow,
 }) {
   const styles = useStyles();
   const vendorLabel = vendorAccount ? `Vendor: ${vendorAccount}` : 'All vendors';
@@ -55,6 +57,8 @@ function RccpSplitToolbar({
         <RccpIsoWeekRangePicker
           window={isoWindow}
           onReplaceWindow={onReplaceWindow}
+          analysis={analysis}
+          onShowDataWindow={onShowDataWindow}
           compact
         />
         <RccpPeriodGrainToggle value={periodGrain} onChange={onPeriodGrainChange} />

@@ -26,8 +26,31 @@ import {
   resolveRccpDashboardKpis,
   hasRccpDataWindow,
   isSameIsoWindow,
+  isIsoWeekInPickerRange,
+  isRccpDataWeeksActionDisabled,
+  rccpIsoWeekPickerBounds,
   shouldOfferRccpDataWindow,
+  statusToken,
+  statusForegroundToken,
+  formatMatrixCellValue,
+  RCCP_WEEK_COL_WIDTH,
 } from './rccpUtils';
+
+describe('statusToken', () => {
+  it('returns distinct background tokens per load color', () => {
+    expect(statusToken('green')).not.toBe(statusToken('orange'));
+    expect(statusToken('red')).not.toBe(statusToken('green'));
+    expect(statusToken('grey')).toBe(statusToken('unknown'));
+  });
+});
+
+describe('statusForegroundToken', () => {
+  it('returns distinct foreground tokens per load color', () => {
+    expect(statusForegroundToken('green')).not.toBe(statusForegroundToken('orange'));
+    expect(statusForegroundToken('red')).not.toBe(statusForegroundToken('green'));
+    expect(statusForegroundToken('grey')).toBe(statusForegroundToken('unknown'));
+  });
+});
 
 describe('matrix period headers', () => {
   it('shows week numbers only within a single year', () => {
@@ -272,7 +295,12 @@ describe('resolveChartWeekRangeBounds', () => {
 describe('buildRccpChartWeekBoundaryCoordinates', () => {
   it('includes the Y-axis offset so lines align with week band edges', () => {
     const coordinates = buildRccpChartWeekBoundaryCoordinates(3)({ offset: { left: 42 } });
-    expect(coordinates).toEqual([42, 110, 178, 246]);
+    expect(coordinates).toEqual([
+      42,
+      42 + RCCP_WEEK_COL_WIDTH,
+      42 + 2 * RCCP_WEEK_COL_WIDTH,
+      42 + 3 * RCCP_WEEK_COL_WIDTH,
+    ]);
   });
 });
 
@@ -291,6 +319,22 @@ describe('isMatrixCellEmpty', () => {
       availableQty: 0,
       confirmedQty: 5,
     })).toBe(false);
+  });
+});
+
+describe('formatMatrixCellValue', () => {
+  it('leaves non-capacity cells blank when the value is zero', () => {
+    expect(formatMatrixCellValue(0, false)).toBe('');
+    expect(formatMatrixCellValue(null, false)).toBe('');
+  });
+
+  it('shows a dash for a zero available-capacity cell', () => {
+    expect(formatMatrixCellValue(0, true)).toBe('-');
+  });
+
+  it('formats non-zero values the same for every row', () => {
+    expect(formatMatrixCellValue(12, false)).toBe('12');
+    expect(formatMatrixCellValue(12.5, true)).toBe('12.5');
   });
 });
 
@@ -360,6 +404,31 @@ describe('hasRccpDataWindow', () => {
   it('detects when the selected weeks already match the load window', () => {
     expect(isSameIsoWindow(dataWindow, { ...dataWindow })).toBe(true);
     expect(isSameIsoWindow(dataWindow, { ...dataWindow, toWeek: 10 })).toBe(false);
+  });
+
+  it('keeps Show weeks with data available when those weeks are already selected', () => {
+    expect(isRccpDataWeeksActionDisabled({ dataWindow }, dataWindow)).toBe(false);
+    expect(isRccpDataWeeksActionDisabled({ dataWindow }, {
+      fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 8,
+    })).toBe(false);
+    expect(isRccpDataWeeksActionDisabled({}, dataWindow)).toBe(true);
+  });
+});
+
+describe('iso week picker range', () => {
+  it('selects no weeks after Clear all', () => {
+    const wide = { fromYear: 2021, fromWeek: 47, toYear: 2022, toWeek: 51 };
+    expect(rccpIsoWeekPickerBounds(wide, true)).toEqual({ from: null, to: null });
+    expect(isIsoWeekInPickerRange({ year: 2021, week: 47 }, null, null)).toBe(false);
+    expect(isIsoWeekInPickerRange({ year: 2022, week: 10 }, null, null)).toBe(false);
+  });
+
+  it('selects weeks inside an active range', () => {
+    const { from, to } = rccpIsoWeekPickerBounds({
+      fromYear: 2026, fromWeek: 10, toYear: 2026, toWeek: 12,
+    });
+    expect(isIsoWeekInPickerRange({ year: 2026, week: 11 }, from, to)).toBe(true);
+    expect(isIsoWeekInPickerRange({ year: 2026, week: 13 }, from, to)).toBe(false);
   });
 });
 

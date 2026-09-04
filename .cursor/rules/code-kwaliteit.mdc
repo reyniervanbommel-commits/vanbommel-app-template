@@ -1,6 +1,7 @@
 ---
 description: Code kwaliteitsregels voor React componenten en hooks
-alwaysApply: true
+globs: ["src/**/*.jsx", "src/**/*.js"]
+alwaysApply: false
 ---
 
 # Component grootte (kritiek)

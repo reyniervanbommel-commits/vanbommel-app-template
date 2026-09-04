@@ -9,7 +9,7 @@ import {
 import IdleSessionWarningDialog from './IdleSessionWarningDialog';
 
 /**
- * Idle timeout (45 min) plus 401 session-expiry redirect.
+ * Idle timeout (2 h) plus 401 session-expiry redirect.
  */
 export default function IdleSessionGuard() {
   const { isAuthenticated, logout } = useAuth();

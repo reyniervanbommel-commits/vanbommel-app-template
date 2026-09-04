@@ -1,6 +1,6 @@
 ---
-description: Scan alle beschikbare skills bij het begin van elke sessie
-alwaysApply: true
+description: Scan alle beschikbare skills bij het begin van een taak (nieuwe feature/skill/refactor/plan)
+alwaysApply: false
 ---
 
 # Skills discovery

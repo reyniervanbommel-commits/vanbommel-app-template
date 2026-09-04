@@ -1,6 +1,10 @@
 import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
-import { kpiPieColors, kpiPiePercent, pieSlicePath } from './kpiPctPieUtils';
+import { arcSlicePath, kpiPiePercent, pieBisectorAngle, pieSliceOffset } from './kpiPctPieUtils';
+
+/** How far the colored slice pops out from the pie's center, in viewBox units. */
+const POP_DISTANCE = 5;
+const POP_SHADOW = 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3))';
 
 const useStyles = makeStyles({
   root: {
@@ -13,25 +17,55 @@ const useStyles = makeStyles({
     width: 'auto',
     pointerEvents: 'none',
     zIndex: 0,
+    overflow: 'visible',
   },
   svg: {
     display: 'block',
     width: '100%',
     height: '100%',
+    overflow: 'visible',
   },
 });
 
-function KpiPctPie({ percent, fillColor }) {
+/**
+ * 2-slice KPI pie. When one slice carries the picked accent color (`elevated`),
+ * it's nudged outward from the center and gets its own small shadow, so it
+ * visually pops out above the flat, uncolored slice.
+ */
+function KpiPctPie({ percent, fillColor, restColor, elevated }) {
   const styles = useStyles();
   const share = kpiPiePercent(percent);
   if (share === null) return null;
-  const { fill, rest } = kpiPieColors(fillColor);
-  const slice = pieSlicePath(share);
+
+  const valuePath = arcSlicePath(0, share);
+  const otherPath = arcSlicePath(share, 100);
+  const valueAngle = pieBisectorAngle(0, share);
+  const otherAngle = pieBisectorAngle(share, 100);
+
+  const slices = [
+    { key: 'fill', path: valuePath, color: fillColor, angle: valueAngle },
+    { key: 'rest', path: otherPath, color: restColor, angle: otherAngle },
+  ].sort((a, b) => (a.key === elevated ? 1 : b.key === elevated ? -1 : 0));
+
   return (
     <div className={styles.root} data-kpi-pct-pie="" aria-hidden="true">
-      <svg viewBox="0 0 100 100" className={styles.svg} focusable="false">
-        <circle cx="50" cy="50" r="50" fill={rest} />
-        {slice ? <path d={slice} fill={fill} /> : null}
+      <svg viewBox="-10 -10 120 120" className={styles.svg} focusable="false">
+        {slices.map(({ key, path, color, angle }) => {
+          if (!path) return null;
+          const isElevated = key === elevated;
+          const offset = isElevated ? pieSliceOffset(angle, POP_DISTANCE) : null;
+          return (
+            <path
+              key={key}
+              d={path}
+              fill={color}
+              style={offset ? {
+                transform: `translate(${offset.x}px, ${offset.y}px)`,
+                filter: POP_SHADOW,
+              } : undefined}
+            />
+          );
+        })}
       </svg>
     </div>
   );

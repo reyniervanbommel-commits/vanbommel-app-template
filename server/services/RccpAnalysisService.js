@@ -244,6 +244,7 @@ function aggregatePoLoad(rows, config, window, planningDateMode) {
       if (!slots.length) continue;
       const shareQty = total / slots.length;
       for (const slot of slots) {
+        noteDataRange(vendor, slot.year, slot.week);
         addLoad(vendor, slot.year, slot.week, measure.columnKey, shareQty);
       }
     }

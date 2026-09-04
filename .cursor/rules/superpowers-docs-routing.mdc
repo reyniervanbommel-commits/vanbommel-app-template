@@ -1,6 +1,6 @@
 ---
 description: Koppelt superpowers skills aan de juiste docs/ mappen en documentatie-pipeline
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Superpowers documentatie-routing

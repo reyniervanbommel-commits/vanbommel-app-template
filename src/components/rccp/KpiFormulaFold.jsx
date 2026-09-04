@@ -118,7 +118,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * Folded-corner trigger. Opens formula; percentage cards also get a threshold field.
+ * Folded-corner trigger. Opens formula; percentage cards also get color settings.
  */
 function KpiFormulaFold({ formula, kpiKey }) {
   const styles = useStyles();

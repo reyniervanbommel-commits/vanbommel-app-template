@@ -5,6 +5,7 @@ import {
 } from '@fluentui/react-components';
 import {
   buildMatrixPeriodHeaders,
+  formatMatrixCellValue,
   formatMatrixPeriodAria,
   formatMatrixQty,
   matrixPeriodToken,
@@ -43,9 +44,14 @@ const useStyles = makeStyles({
     maxWidth: `${RCCP_ROW_LABEL_WIDTH}px`,
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('8px', '10px'),
+    ...shorthands.padding('4px', '8px'),
     textAlign: 'left',
     verticalAlign: 'middle',
+  },
+  bodySticky: {
+    ...shorthands.padding('1px', '8px'),
+    height: '22px',
+    maxHeight: '22px',
   },
   headerSticky: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -58,11 +64,16 @@ const useStyles = makeStyles({
     minWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     maxWidth: `${RCCP_WEEK_COL_WIDTH}px`,
     boxSizing: 'border-box',
-    ...shorthands.padding('8px', '4px'),
+    ...shorthands.padding('4px', '2px'),
     textAlign: 'center',
     verticalAlign: 'middle',
     ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  bodyWeekCol: {
+    ...shorthands.padding('1px', '2px'),
+    height: '22px',
+    maxHeight: '22px',
   },
   weekHeader: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -100,7 +111,11 @@ const useStyles = makeStyles({
     transformOrigin: 'center left',
     marginRight: '-10px',
   },
-  qty: { fontWeight: tokens.fontWeightSemibold, fontSize: tokens.fontSizeBase200, lineHeight: 1 },
+  qty: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: 1,
+  },
   cellInteractive: { cursor: 'pointer' },
   highlightCell: {
     boxShadow: `inset 0 0 0 2px ${tokens.colorBrandStroke1}`,
@@ -140,6 +155,7 @@ function RccpMatrixTable({
   interactive,
   gridWidth,
   kpiHighlight = null,
+  colorFillEnabled = true,
 }) {
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
@@ -196,7 +212,7 @@ function RccpMatrixTable({
           const isDerived = isCapacity || isOvercapacity;
           return (
             <TableRow key={row.measureKey} className={styles.bodyRow}>
-              <TableCell className={styles.sticky}>
+              <TableCell className={mergeClasses(styles.sticky, styles.bodySticky)}>
                 <div className={styles.rowLabel}>
                   {onToggleVisible ? (
                     <MatrixVisibilitySwitch
@@ -215,9 +231,13 @@ function RccpMatrixTable({
                 const cell = cellMap.get(`${row.measureKey}|${period.year}|${periodToken}`);
                 const periodLabel = formatMatrixPeriodAria(period);
                 const value = isCapacity ? (cell?.availableQty ?? 0) : (cell?.confirmedQty ?? 0);
+                const statusColor = cell ? cell.statusColor : 'grey';
+                const canColor = colorFillEnabled && row.isOrdered && value;
                 const bg = isCapacity
-                  ? tokens.colorNeutralBackground3
-                  : statusToken(cell ? cell.statusColor : 'grey');
+                  ? (value ? tokens.colorNeutralBackground3 : undefined)
+                  : (canColor
+                    ? statusToken(statusColor)
+                    : (value ? tokens.colorNeutralBackground3 : undefined));
                 const clickable = isInteractive && !isDerived && !period.month;
                 const highlighted = highlightWeeks.has(period.key)
                   && highlightMeasures.has(row.measureKey);
@@ -226,10 +246,11 @@ function RccpMatrixTable({
                     key={period.key}
                     className={mergeClasses(
                       styles.weekCol,
+                      styles.bodyWeekCol,
                       clickable && styles.cellInteractive,
                       highlighted && styles.highlightCell,
                     )}
-                    style={{ backgroundColor: bg }}
+                    style={bg ? { backgroundColor: bg } : undefined}
                     {...(clickable ? {
                       role: 'button',
                       tabIndex: 0,
@@ -243,7 +264,7 @@ function RccpMatrixTable({
                       },
                     } : {})}
                   >
-                    <Text className={styles.qty}>{formatMatrixQty(value)}</Text>
+                    <span className={styles.qty}>{formatMatrixCellValue(value, isCapacity)}</span>
                   </TableCell>
                 );
               })}

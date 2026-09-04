@@ -1,6 +1,7 @@
 ---
 description: Versie- en Git-beheer regels voor dit project
-alwaysApply: true
+globs: ["src/**/*.jsx", "src/**/*.js", "server/**/*.js"]
+alwaysApply: false
 ---
 
 # Versiebeheer

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+test-results/
+.worktrees/
+.claude/worktrees/
+
+# Generated test/perf reports — historical, not needed for day-to-day context
+test-reports/
+playwright/screenshots/
+playwright/videos/
+playwright/mcp/

@@ -1,5 +1,6 @@
 import { tokens } from '@fluentui/react-components';
 
+/** Fluent background token for matrix load-percentage cell fill. */
 export function statusToken(color) {
   switch (color) {
     case 'green':
@@ -10,6 +11,20 @@ export function statusToken(color) {
       return tokens.colorPaletteRedBackground2;
     default:
       return tokens.colorNeutralBackground4;
+  }
+}
+
+/** Fluent foreground token for matrix load-percentage text (used when cell fill is off). */
+export function statusForegroundToken(color) {
+  switch (color) {
+    case 'green':
+      return tokens.colorPaletteGreenForeground1;
+    case 'orange':
+      return tokens.colorPaletteDarkOrangeForeground1;
+    case 'red':
+      return tokens.colorPaletteRedForeground1;
+    default:
+      return tokens.colorNeutralForeground3;
   }
 }
 
@@ -162,6 +177,16 @@ export function formatMatrixQty(value) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+/**
+ * Matrix cell display text: blank for a zero/empty value, except the Available
+ * capacity row which shows a dash for zero so an empty week stays legible.
+ */
+export function formatMatrixCellValue(value, isCapacityRow) {
+  const n = Number(value) || 0;
+  if (n === 0) return isCapacityRow ? '-' : '';
+  return formatMatrixQty(n);
+}
+
 export function formatIsoWindowLabel(window) {
   if (!window) return '';
   return `${formatWeekLabel(window.fromYear, window.fromWeek)} → ${formatWeekLabel(window.toYear, window.toWeek)}`;
@@ -186,6 +211,21 @@ export function clampIsoWeek(year, week) {
 export function compareIsoWeekParts(a, b) {
   return (Number(a?.year) || 0) * 100 + (Number(a?.week) || 0)
     - ((Number(b?.year) || 0) * 100 + (Number(b?.week) || 0));
+}
+
+/** True when the week sits inside the picker highlight; a cleared range selects nothing. */
+export function isIsoWeekInPickerRange(item, from, to) {
+  if (!from?.year || !to?.year) return false;
+  return compareIsoWeekParts(item, from) >= 0 && compareIsoWeekParts(item, to) <= 0;
+}
+
+/** `{ from, to }` for the calendar highlight. `cleared` drops every selected week. */
+export function rccpIsoWeekPickerBounds(window, cleared = false) {
+  if (cleared || !window?.fromYear || !window?.toYear) return { from: null, to: null };
+  return {
+    from: { year: window.fromYear, week: window.fromWeek },
+    to: { year: window.toYear, week: window.toWeek },
+  };
 }
 
 /** Local calendar date → ISO week-year (avoids timezone shift). */
@@ -348,7 +388,7 @@ export function clampWeekPickerListHeight(height) {
   return Math.min(RCCP_WEEK_PICKER_MAX_HEIGHT, Math.max(RCCP_WEEK_PICKER_MIN_HEIGHT, Math.round(n)));
 }
 
-export const RCCP_WEEK_COL_WIDTH = 68;
+export const RCCP_WEEK_COL_WIDTH = 52;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
 export const RCCP_CAPACITY_MEASURE_KEY = '__capacity__';
@@ -445,6 +485,11 @@ export function resolveRccpDashboardKpis(analysis, kpiWindowOnly) {
 /** True when the analysis includes a vendor load window, regardless of the selected weeks. */
 export function hasRccpDataWindow(analysis) {
   return Boolean(analysis?.dataWindow?.fromYear && analysis?.dataWindow?.fromWeek);
+}
+
+/** Disable Show weeks with data only when there is no vendor load window to jump to. */
+export function isRccpDataWeeksActionDisabled(analysis) {
+  return !hasRccpDataWindow(analysis);
 }
 
 export function isSameIsoWindow(a, b) {

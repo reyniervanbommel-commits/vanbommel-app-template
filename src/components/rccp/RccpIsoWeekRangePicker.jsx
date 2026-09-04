@@ -9,14 +9,15 @@ import {
   currentIsoWindow,
   currentIsoWeekParts,
   formatIsoWindowLabel,
-  hasRccpDataWindow,
-  isSameIsoWindow,
+  isRccpDataWeeksActionDisabled,
   isoYearPickerYears,
   isoWeekPickerYearBounds,
+  rccpIsoWeekPickerBounds,
   RCCP_WEEK_PICKER_DEFAULT_HEIGHT,
   clampWeekPickerListHeight,
 } from './rccpUtils';
 import RccpIsoWeekCalendarGrid from './RccpIsoWeekCalendarGrid';
+import RccpIsoWeekYearPicker from './RccpIsoWeekYearPicker';
 
 const useStyles = makeStyles({
   trigger: { minWidth: '220px', maxWidth: '280px' },
@@ -64,38 +65,6 @@ const useStyles = makeStyles({
   },
 });
 
-function YearPickerGrid({ years, viewYear, onSelectYear, styles }) {
-  return (
-    <div className={styles.yearGrid} role="listbox" aria-label="Choose year">
-      {years.map((year) => (
-        <YearPickerButton
-          key={year}
-          year={year}
-          selected={year === viewYear}
-          onSelectYear={onSelectYear}
-          styles={styles}
-        />
-      ))}
-    </div>
-  );
-}
-
-function YearPickerButton({ year, selected, onSelectYear, styles }) {
-  const handleClick = useCallback(() => onSelectYear(year), [onSelectYear, year]);
-  return (
-    <Button
-      appearance={selected ? 'primary' : 'subtle'}
-      size="small"
-      className={styles.yearButton}
-      aria-label={String(year)}
-      aria-selected={selected}
-      onClick={handleClick}
-    >
-      {year}
-    </Button>
-  );
-}
-
 function RccpIsoWeekRangePicker({
   window: isoWindow, onReplaceWindow, analysis, onShowDataWindow, compact = false,
 }) {
@@ -106,13 +75,13 @@ function RccpIsoWeekRangePicker({
   const [pickingYear, setPickingYear] = useState(false);
   const [pending, setPending] = useState(null);
   const [locked, setLocked] = useState(null);
+  const [cleared, setCleared] = useState(false);
   const [listHeight, setListHeight] = useState(RCCP_WEEK_PICKER_DEFAULT_HEIGHT);
   const [scrollYear, setScrollYear] = useState(null);
   const displayWindow = isoWindow;
-  const label = formatIsoWindowLabel(isoWindow);
+  const label = cleared ? 'Select weeks' : formatIsoWindowLabel(isoWindow);
   const now = currentIsoWeekParts();
-  const canShowDataWeeks = hasRccpDataWindow(analysis);
-  const alreadyOnDataWeeks = isSameIsoWindow(isoWindow, analysis?.dataWindow);
+  const canShowDataWeeks = !isRccpDataWeeksActionDisabled(analysis);
   const yearSpan = useMemo(() => isoWeekPickerYearBounds({
     focusYear: isoWindow.fromYear,
     viewYear,
@@ -121,13 +90,9 @@ function RccpIsoWeekRangePicker({
     dataToYear: analysis?.dataWindow?.toYear,
   }), [isoWindow.fromYear, viewYear, now.year, analysis?.dataWindow?.fromYear, analysis?.dataWindow?.toYear]);
   const years = useMemo(() => isoYearPickerYears(yearAnchor), [yearAnchor]);
-  const from = useMemo(
-    () => ({ year: displayWindow.fromYear, week: displayWindow.fromWeek }),
-    [displayWindow.fromYear, displayWindow.fromWeek],
-  );
-  const to = useMemo(
-    () => ({ year: displayWindow.toYear, week: displayWindow.toWeek }),
-    [displayWindow.toYear, displayWindow.toWeek],
+  const { from, to } = useMemo(
+    () => rccpIsoWeekPickerBounds(displayWindow, cleared),
+    [cleared, displayWindow.fromYear, displayWindow.fromWeek, displayWindow.toYear, displayWindow.toWeek],
   );
   const focusWeek = useMemo(
     () => ({ year: isoWindow.fromYear, week: isoWindow.fromWeek }),
@@ -186,17 +151,21 @@ function RccpIsoWeekRangePicker({
 
   const handleSelectWeek = useCallback((parts) => {
     const result = applyIsoWeekPickerClick({
-      pending, locked, window: displayWindow,
+      pending, locked, window: cleared ? null : displayWindow,
     }, parts);
     setPending(result.pending);
     setLocked(result.locked);
-    if (result.apply && result.window) onReplaceWindow(result.window);
-  }, [pending, locked, displayWindow, onReplaceWindow]);
+    if (result.apply && result.window) {
+      setCleared(false);
+      onReplaceWindow(result.window);
+    }
+  }, [pending, locked, cleared, displayWindow, onReplaceWindow]);
 
   const handleNow = useCallback(() => {
     const nextTo = currentIsoWeekParts();
     const pinned = locked || from;
-    const nextFrom = compareIsoWeekParts(pinned, nextTo) <= 0 ? pinned : nextTo;
+    const nextFrom = pinned && compareIsoWeekParts(pinned, nextTo) <= 0 ? pinned : nextTo;
+    setCleared(false);
     onReplaceWindow({
       fromYear: nextFrom.year,
       fromWeek: nextFrom.week,
@@ -209,6 +178,7 @@ function RccpIsoWeekRangePicker({
   }, [from, locked, onReplaceWindow, showYear]);
 
   const handleShowDataWeeks = useCallback(() => {
+    setCleared(false);
     onShowDataWindow?.();
     setPending(null);
     setLocked(null);
@@ -216,6 +186,7 @@ function RccpIsoWeekRangePicker({
 
   const handleClearAll = useCallback(() => {
     const next = currentIsoWindow(8);
+    setCleared(true);
     onReplaceWindow(next);
     setPending(null);
     setLocked(null);
@@ -256,7 +227,13 @@ function RccpIsoWeekRangePicker({
           {pickingYear ? 'Select a year.' : 'Click a week twice to lock it, then pick the other end.'}
         </div>
         {pickingYear ? (
-          <YearPickerGrid years={years} viewYear={viewYear} onSelectYear={handleSelectYear} styles={styles} />
+          <RccpIsoWeekYearPicker
+            years={years}
+            viewYear={viewYear}
+            onSelectYear={handleSelectYear}
+            gridClassName={styles.yearGrid}
+            buttonClassName={styles.yearButton}
+          />
         ) : (
           <RccpIsoWeekCalendarGrid
             yearSpan={yearSpan}
@@ -275,7 +252,7 @@ function RccpIsoWeekRangePicker({
           <div className={styles.presets}>
             <Button
               size="small"
-              disabled={!canShowDataWeeks || alreadyOnDataWeeks}
+              disabled={!canShowDataWeeks}
               title={canShowDataWeeks ? undefined : 'No weeks with data for this vendor'}
               onClick={handleShowDataWeeks}
             >

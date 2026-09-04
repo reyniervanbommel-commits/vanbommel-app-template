@@ -117,9 +117,12 @@ describe('RccpAnalysisService', () => {
       ],
     }];
 
-    const { confirmedByCell, diagnostics } = aggregatePoLoad(rows, headerConfig, testWindow);
+    const { confirmedByCell, diagnostics, dataRangeByVendor } = aggregatePoLoad(rows, headerConfig, testWindow);
     expect(confirmedByCell.get(cellKey('V001', year, week, 'ordered_qty_ontvangstregels_total'))).toBe(100);
     expect(diagnostics.totalConfirmedQty).toBe(100);
+    expect(dataRangeByVendor.get('V001')).toEqual({
+      fromYear: year, fromWeek: week, toYear: year, toWeek: week,
+    });
   });
 
   it('spreads an order-level total across its lines', () => {

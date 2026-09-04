@@ -1,13 +1,25 @@
 ---
-description: Verplichte poort — UI/Fluent, snelheid en security bij elke wijziging
-alwaysApply: true
+description: Verplichte poort — UI/Fluent, snelheid en security bij elke wijziging in src/ of server/
+globs: ["src/**", "server/**"]
+alwaysApply: false
 ---
 
 # UI, snelheid & security — verplichte poort bij elke wijziging
 
 Bij **elke feature en elke snelle fix** — ook los van `develop-from-devops` of enige skill-trigger —
-doorloopt de agent vóór het klaarmelden van het werk de drie checks hieronder. Dit geldt voor
-iedere wijziging in `src/` of `server/`, niet alleen wanneer de gebruiker er expliciet om vraagt.
+doorloopt de agent vóór het klaarmelden van het werk de checks hieronder. Dit geldt voor iedere
+wijziging in `src/` of `server/`, niet alleen wanneer de gebruiker er expliciet om vraagt.
+**Schaal de zwaarte naar de wijziging** — zie "Schaalniveau" hieronder; dit is geen vrijbrief om de
+poort over te slaan, wel om 'm niet voor een triviale fix voluit te draaien.
+
+## Schaalniveau
+
+| Niveau | Wanneer | Wat draait |
+|---|---|---|
+| **Triviaal** | Kleine diff (richtlijn: <~30 regels, 1-2 bestanden), geen nieuwe route/auth/SQL, geen nieuwe UI-flow, geen hot path (board, tab-switch, grote lijst) | Alleen **Stap 1** (eigen checks). Sla `browser-feature-test` en de zware perf-`regression`-modus over. Vermeld in het rapport: "triviaal — zware checks overgeslagen". |
+| **Feature / risicovolle fix** | Nieuwe/gewijzigde route, auth, SQL, nieuwe UI-flow of -component, hot-path-impact, of diff groter dan het triviaal-niveau | Volledige poort: Stap 1 t/m 6 (UI, snelheid, security, browser, cleanup). |
+
+Twijfel over het niveau → behandel als feature/risicovol (niet overslaan bij twijfel).
 
 ## 1. UI & Fluent design-consistentie
 

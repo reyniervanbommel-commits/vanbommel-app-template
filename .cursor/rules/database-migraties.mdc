@@ -1,6 +1,7 @@
 ---
 description: Database migraties altijd op zowel dev als prod uitvoeren
-alwaysApply: true
+globs: ["scripts/db/migrations/**"]
+alwaysApply: false
 ---
 
 # Database migraties — dev én prod tegelijk

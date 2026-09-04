@@ -1,6 +1,7 @@
 ---
 description: App UI-taal — alle gebruikerszichtbare teksten in het Engels
-alwaysApply: true
+globs: ["src/**/*.jsx", "src/**/*.js", "server/**/*.js"]
+alwaysApply: false
 ---
 
 # App-taal (UI) — Engels

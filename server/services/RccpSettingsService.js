@@ -117,6 +117,7 @@ function defaultConfig() {
     orderedMeasureKey: SLOT_DEFAULT_KEYS.ordered,
     showCapacityLine: true,
     showWarningLine: true,
+    matrixColorFill: true,
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     itemPickerColumnKeys: [],
@@ -232,6 +233,7 @@ function validateConfig(raw) {
 
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
+  const matrixColorFill = raw.matrixColorFill !== false;
 
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
@@ -266,6 +268,7 @@ function validateConfig(raw) {
       orderedMeasureKey,
       showCapacityLine,
       showWarningLine,
+      matrixColorFill,
       chartWeekRanges,
       excludedStatuses,
       itemPickerColumnKeys,

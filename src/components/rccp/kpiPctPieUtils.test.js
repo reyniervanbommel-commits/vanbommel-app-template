@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOpacity } from '../../utils/hexColor';
-import { KPI_PIE_GRAY } from '../../utils/kpiCardStyles';
-import { kpiPieColors, kpiPiePercent, pieSlicePath } from './kpiPctPieUtils';
+import { arcSlicePath, kpiPiePercent, pieBisectorAngle, pieSliceOffset, pieSlicePath } from './kpiPctPieUtils';
 
 describe('kpiPiePercent', () => {
   it('clamps a numeric percent into 0–100', () => {
@@ -18,20 +16,6 @@ describe('kpiPiePercent', () => {
   });
 });
 
-describe('kpiPieColors', () => {
-  it('uses 80% transparent gray fill and 50% transparent gray rest by default', () => {
-    const { fill, rest } = kpiPieColors();
-    expect(fill).toBe(applyOpacity(KPI_PIE_GRAY, 20));
-    expect(rest).toBe(applyOpacity(KPI_PIE_GRAY, 50));
-  });
-
-  it('keeps the rest gray when a fill override is set', () => {
-    const { fill, rest } = kpiPieColors('#e2445c');
-    expect(fill).toBe('#e2445c');
-    expect(rest).toBe(applyOpacity(KPI_PIE_GRAY, 50));
-  });
-});
-
 describe('pieSlicePath', () => {
   it('returns an empty path at 0%', () => {
     expect(pieSlicePath(0)).toBe('');
@@ -44,5 +28,41 @@ describe('pieSlicePath', () => {
   it('uses a large-arc flag above 50%', () => {
     expect(pieSlicePath(25)).toMatch(/A 50 50 0 0 1 /);
     expect(pieSlicePath(75)).toMatch(/A 50 50 0 1 1 /);
+  });
+});
+
+describe('arcSlicePath', () => {
+  it('returns an empty path when the range is empty', () => {
+    expect(arcSlicePath(40, 40)).toBe('');
+    expect(arcSlicePath(60, 40)).toBe('');
+  });
+
+  it('draws the complementary slice for the remaining share', () => {
+    expect(arcSlicePath(25, 100)).toContain('M 50 50');
+  });
+
+  it('draws a full circle when the range spans 100%', () => {
+    expect(arcSlicePath(0, 100)).toContain('A 50 50');
+  });
+});
+
+describe('pieBisectorAngle', () => {
+  it('returns the midpoint angle in degrees', () => {
+    expect(pieBisectorAngle(0, 50)).toBe(90);
+    expect(pieBisectorAngle(50, 100)).toBe(270);
+  });
+});
+
+describe('pieSliceOffset', () => {
+  it('pushes straight up at 0 degrees', () => {
+    const { x, y } = pieSliceOffset(0, 5);
+    expect(x).toBeCloseTo(0);
+    expect(y).toBeCloseTo(-5);
+  });
+
+  it('pushes straight right at 90 degrees', () => {
+    const { x, y } = pieSliceOffset(90, 5);
+    expect(x).toBeCloseTo(5);
+    expect(y).toBeCloseTo(0);
   });
 });

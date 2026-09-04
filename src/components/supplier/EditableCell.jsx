@@ -13,6 +13,9 @@ import {
 import CellHistoryPopover from './CellHistoryPopover';
 import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
 import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
+import { PO_TABLE_ZOOM_CSS_VAR, PO_TABLE_ZOOM_DEFAULT } from '../../utils/poTableZoom';
+
+const CELL_FONT_SIZE = `calc(${tokens.fontSizeBase200} * var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT}))`;
 
 const useStyles = makeStyles({
   cell: {
@@ -34,8 +37,10 @@ const useStyles = makeStyles({
     maxHeight: '100%',
     overflow: 'hidden',
     color: tokens.colorBrandForeground1,
+    fontSize: CELL_FONT_SIZE,
     '> input': {
       color: tokens.colorBrandForeground1,
+      fontSize: CELL_FONT_SIZE,
     },
     '> button': {
       color: tokens.colorBrandForeground1,

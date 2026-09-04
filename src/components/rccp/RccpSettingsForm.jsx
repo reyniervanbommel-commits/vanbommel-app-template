@@ -3,6 +3,7 @@ import {
   Button, Spinner, Tab, TabList, Text, makeStyles, tokens, shorthands,
 } from '@fluentui/react-components';
 import { Save24Regular } from '@fluentui/react-icons';
+import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 import RccpSettingsDataFields from './RccpSettingsDataFields';
 import RccpSettingsDisplayFields from './RccpSettingsDisplayFields';
@@ -12,6 +13,7 @@ const TABS = [
   { value: 'data', label: 'Data' },
   { value: 'quantities', label: 'Quantities' },
   { value: 'display', label: 'Display' },
+  { value: 'highlights', label: 'Highlights' },
 ];
 
 const useStyles = makeStyles({
@@ -71,10 +73,16 @@ function RccpSettingsForm({
           compact={isFlyout}
           itemColumns={itemColumns}
           onUpdateField={onUpdateField}
-          onRanges={handlers.handleRanges}
           onGreen={handlers.handleGreen}
           onOrange={handlers.handleOrange}
           onItemPickerColumns={handlers.handleItemPickerColumns}
+        />
+      )}
+      {tab === 'highlights' && (
+        <RccpChartWeekRangesEditor
+          ranges={config.chartWeekRanges || []}
+          compact={isFlyout}
+          onChange={handlers.handleRanges}
         />
       )}
       {!isFlyout && (

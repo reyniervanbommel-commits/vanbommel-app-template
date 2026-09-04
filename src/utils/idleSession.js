@@ -1,4 +1,4 @@
-export const IDLE_TIMEOUT_MS = 45 * 60 * 1000;
+export const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 export const IDLE_WARNING_LEAD_MS = 2 * 60 * 1000;
 export const ACTIVITY_EVENTS = Object.freeze(['pointerdown', 'keydown', 'scroll', 'touchstart']);
 

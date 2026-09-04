@@ -5,6 +5,7 @@ import CellHistoryPopover from './CellHistoryPopover';
 import WeekNumberCalendarPopover from './WeekNumberCalendarPopover';
 import { getFormattedCellControlStyle, FORMATTED_CELL_TEXT_COLOR } from './columnTextStyleUtils';
 import { useWriteBackCellLock } from '../../hooks/useWriteBackCellLock';
+import { PO_TABLE_ZOOM_CSS_VAR, PO_TABLE_ZOOM_DEFAULT } from '../../utils/poTableZoom';
 import {
   isDateLikeColumn,
   normalizeDateValue,
@@ -12,6 +13,8 @@ import {
   toDisplayDateValue,
   toInputValue,
 } from '../../utils/writeBackDateUtils';
+
+const CELL_FONT_SIZE = `calc(${tokens.fontSizeBase200} * var(${PO_TABLE_ZOOM_CSS_VAR}, ${PO_TABLE_ZOOM_DEFAULT}))`;
 
 const useStyles = makeStyles({
   cell: {
@@ -31,8 +34,10 @@ const useStyles = makeStyles({
     minWidth: 0,
     width: '100%',
     color: tokens.colorBrandForeground1,
+    fontSize: CELL_FONT_SIZE,
     '> input': {
       color: tokens.colorBrandForeground1,
+      fontSize: CELL_FONT_SIZE,
     },
   },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase300, whiteSpace: 'nowrap' },

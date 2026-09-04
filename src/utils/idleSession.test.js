@@ -7,12 +7,12 @@ import {
 } from './idleSession';
 
 describe('idleSession helpers', () => {
-  it('zet de idle-timeout op 45 minuten met 2 minuten waarschuwing', () => {
-    expect(IDLE_TIMEOUT_MS).toBe(45 * 60 * 1000);
+  it('zet de idle-timeout op 2 uur met 2 minuten waarschuwing', () => {
+    expect(IDLE_TIMEOUT_MS).toBe(2 * 60 * 60 * 1000);
     expect(IDLE_WARNING_LEAD_MS).toBe(2 * 60 * 1000);
     expect(getIdleSchedule(IDLE_TIMEOUT_MS, IDLE_WARNING_LEAD_MS)).toEqual({
-      warningAt: 43 * 60 * 1000,
-      idleAt: 45 * 60 * 1000,
+      warningAt: (2 * 60 * 60 - 2 * 60) * 1000,
+      idleAt: 2 * 60 * 60 * 1000,
     });
   });
 

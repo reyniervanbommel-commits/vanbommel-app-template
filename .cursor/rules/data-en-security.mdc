@@ -1,6 +1,7 @@
 ---
 description: Data opslag, SQL backend en security regels
-alwaysApply: true
+globs: ["src/**/*.jsx", "src/**/*.js", "server/**/*.js"]
+alwaysApply: false
 ---
 
 # Data opslag & SQL backend

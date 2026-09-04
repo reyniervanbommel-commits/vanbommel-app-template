@@ -1,7 +1,7 @@
 ---
 description: Verplichte mappenstructuur en regels voor Playwright-tests en testrapporten
 globs: ["playwright/**", "test-reports/**", ".vscode/mcp.json"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Playwright — testopslag

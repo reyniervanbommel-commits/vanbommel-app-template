@@ -4,7 +4,7 @@ import {
   RCCP_WEEK_COL_WIDTH,
 } from './rccpUtils';
 
-export const RCCP_PO_BAR_SIZE = Math.round(RCCP_WEEK_COL_WIDTH * 0.8);
+export const RCCP_PO_BAR_SIZE = Math.round(RCCP_WEEK_COL_WIDTH * 0.75);
 
 /** Center a bar of `barWidth` inside the ISO-week band at `index`. */
 export function weekBarBox(index, barWidth) {

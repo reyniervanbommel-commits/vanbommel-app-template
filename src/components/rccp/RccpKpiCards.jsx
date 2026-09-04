@@ -69,16 +69,6 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         onActivate={handleActivate}
       />
       <KpiCard
-        kpiKey="lateItems"
-        label="Average days late"
-        qty={kpis.lateDeliveryAvgDays}
-        hash="Ø"
-        aside="days late"
-        selected={selectedKey === 'lateItems'}
-        clickable={clickableSet.has('lateItems')}
-        onActivate={handleActivate}
-      />
-      <KpiCard
         kpiKey="onTime"
         label="On time delivery"
         qty={kpis.onTimeUnits}
@@ -98,6 +88,16 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         detail={formatDays(kpis.openLateAvgDays)}
         selected={selectedKey === 'openLate'}
         clickable={clickableSet.has('openLate')}
+        onActivate={handleActivate}
+      />
+      <KpiCard
+        kpiKey="lateItems"
+        label="Average days late"
+        qty={kpis.lateDeliveryAvgDays}
+        hash="Ø"
+        aside="days late"
+        selected={selectedKey === 'lateItems'}
+        clickable={clickableSet.has('lateItems')}
         onActivate={handleActivate}
       />
       <KpiCard
