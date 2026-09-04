@@ -7,7 +7,6 @@ import {
   TableCell,
   TableRow,
   Text,
-  Tooltip,
   makeStyles,
   shorthands,
   tokens,
@@ -125,12 +124,10 @@ export default function DataPreviewColumnConfigRow({
               aria-label={`Show or hide column ${column.label}`}
             />
           ) : (
-            <Tooltip content="Key column: cannot be hidden" relationship="label">
-              <span className={styles.cellCenter}>
-                <LockClosedRegular fontSize={14} />
-                <Text size={200}>Always visible</Text>
-              </span>
-            </Tooltip>
+            <span className={styles.cellCenter} title="Key column: cannot be hidden">
+              <LockClosedRegular fontSize={14} />
+              <Text size={200}>Always visible</Text>
+            </span>
           )}
         </TableCell>
         <TableCell className={styles.valueCell}>
@@ -159,14 +156,15 @@ export default function DataPreviewColumnConfigRow({
               )}
             </span>
           ) : (
-            <Tooltip
-              content={column.source === 'custom'
-                ? 'Custom columns only exist in this app and are never written to D365'
-                : 'Key or system field: write-back is not allowed'}
-              relationship="label"
+            <span
+              title={
+                column.source === 'custom'
+                  ? 'Custom columns only exist in this app and are never written to D365'
+                  : 'Key or system field: write-back is not allowed'
+              }
             >
               <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-            </Tooltip>
+            </span>
           )}
         </TableCell>
         <TableCell className={styles.valueCell}>

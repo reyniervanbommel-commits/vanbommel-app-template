@@ -137,7 +137,7 @@ function DataPreviewTables({
       ) : null}
       {sections.map((section) => (
         <EntityConfigTable
-          key={section.scope}
+          key={`${tableKey}-${section.scope}`}
           title={section.title}
           entityName={section.entityName}
           columns={section.columns || []}
