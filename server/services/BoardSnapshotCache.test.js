@@ -1,6 +1,6 @@
 'use strict';
 
-const { readBoardSnapshot, readRccpPoRows } = require('./BoardSnapshotCache');
+const { readBoardSnapshot, readRccpPoRows, invalidateBoardSnapshots } = require('./BoardSnapshotCache');
 // BoardSnapshotCache.js gebruikt het gedeelde dataService-object (niet gedestructureerd),
 // dus getRevision/read direct op dat object vervangen is genoeg — geen module-reset nodig.
 const dataService = require('./TableDataService');
@@ -58,16 +58,99 @@ describe('readBoardSnapshot', () => {
     expect(dataService.read).toHaveBeenCalledTimes(2);
   });
 
-  it('doet een verse read() zodra de TTL (5 min) verstreken is, ook bij een ongewijzigde signatuur', async () => {
+  // BL-007: versheid komt van de content-signatuur, niet van een klok. Een cache die na 5 minuten
+  // verviel liet de eerstvolgende bezoeker de volledige koude read betalen (18,2 s tegen 8-13 ms
+  // warm, gemeten op Azure DEV). Beleid: cache.crossPageTtlPolicy = "unlimited-until-revision".
+  it('houdt het snapshot vast ruim voorbij de oude TTL van 5 minuten zolang de signatuur gelijk blijft', async () => {
     vi.useFakeTimers();
     mockDataService({ parts: { syncedAt: 'same' } });
 
     await readBoardSnapshot({ tableKey: 'snapshot-test-5' });
-    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+    vi.advanceTimersByTime(60 * 60 * 1000); // een uur — twaalf keer de oude TTL
     await readBoardSnapshot({ tableKey: 'snapshot-test-5' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('doet alsnog een verse read() zodra het veiligheidsnet (12 uur) verstreken is', async () => {
+    vi.useFakeTimers();
+    mockDataService({ parts: { syncedAt: 'same' } });
+
+    await readBoardSnapshot({ tableKey: 'snapshot-test-6' });
+    vi.advanceTimersByTime(12 * 60 * 60 * 1000 + 1);
+    await readBoardSnapshot({ tableKey: 'snapshot-test-6' });
 
     expect(dataService.read).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+
+  // Regressiebescherming bij het vervallen van de 5-minuten-TTL: saveSyncFilters() markeert rijen
+  // out-of-scope zonder content_changed_at of last_full_sync_at te raken. Zonder settingsAt in de
+  // signatuur zou zo'n scope-wijziging tot 12 uur onzichtbaar blijven in BI/RCCP.
+  it('invalideert wanneer de sync-filterregels wijzigen (settingsAt wijzigt)', async () => {
+    mockDataService({ parts: { syncedAt: 'same', settingsAt: 'rules-v1' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-scope-1' });
+
+    mockDataService({ parts: { syncedAt: 'same', settingsAt: 'rules-v2' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-scope-1' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+  });
+
+  it('laat een per-gebruiker-veld het gedeelde snapshot juist NIET invalideren', async () => {
+    mockDataService({ parts: { syncedAt: 'same', userViewedAt: 'user-a' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-scope-2' });
+
+    mockDataService({ parts: { syncedAt: 'same', userViewedAt: 'user-b' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-scope-2' });
+
+    expect(dataService.read).not.toHaveBeenCalled();
+  });
+
+  it('invalideert nog steeds direct bij een gebruikersbewerking (maxCustomValueAt wijzigt)', async () => {
+    mockDataService({ parts: { syncedAt: 'same', maxCustomValueAt: 'edit-1' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-test-7' });
+
+    mockDataService({ parts: { syncedAt: 'same', maxCustomValueAt: 'edit-2' } });
+    await readBoardSnapshot({ tableKey: 'snapshot-test-7' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('invalidateBoardSnapshots', () => {
+  it('gooit het snapshot van één tabel weg zodat de volgende read vers is', async () => {
+    mockDataService({ parts: { syncedAt: 'same' } });
+    await readBoardSnapshot({ tableKey: 'invalidate-1' });
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+
+    invalidateBoardSnapshots({ tableKey: 'invalidate-1' });
+    await readBoardSnapshot({ tableKey: 'invalidate-1' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(2);
+  });
+
+  it('laat snapshots van andere tabellen ongemoeid', async () => {
+    mockDataService({ parts: { syncedAt: 'same' } });
+    await readBoardSnapshot({ tableKey: 'invalidate-keep' });
+    dataService.read.mockClear();
+
+    invalidateBoardSnapshots({ tableKey: 'invalidate-other' });
+    await readBoardSnapshot({ tableKey: 'invalidate-keep' });
+
+    expect(dataService.read).not.toHaveBeenCalled();
+  });
+
+  it('raakt ook de kpi-cache van die tabel, niet alleen het board-snapshot', async () => {
+    mockDataService({ parts: { syncedAt: 'same' }, rows: [{ recordKey: 'PO-1', details: [] }] });
+    await readRccpPoRows({ tableKey: 'invalidate-kpi' });
+    expect(dataService.read).toHaveBeenCalledTimes(1);
+
+    invalidateBoardSnapshots({ tableKey: 'invalidate-kpi' });
+    await readRccpPoRows({ tableKey: 'invalidate-kpi' });
+
+    expect(dataService.read).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,24 +1,32 @@
 {
-  "runId": "perf-2026-07-22T0920Z",
+  "runId": "perf-2026-09-04T-scout",
   "status": "paused",
-  "runMode": "full",
+  "runMode": "scout-only",
   "iteration": 1,
   "maxIterations": 10,
   "l5ExperimentsUsed": 0,
-  "currentPhase": "push",
-  "backlogItemId": "BL-006",
+  "currentPhase": "awaiting-decision",
+  "backlogItemId": "BL-007",
   "lastCompletedItemId": "BL-006",
   "environmentUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
   "azureDevUrl": "https://vendorportal-dev.graysand-65442c41.northeurope.azurecontainerapps.io",
-  "pausedReason": "Lokale verify PASS (proxy-harnas, ~36% winst J8). Push + preview-deploy + Azure DEV her-meting vereisen menselijke goedkeuring (git-regel) en preview-deploy credentials.",
+  "pausedReason": "Scout-only afgerond. Nieuwe bevindingen BL-007/008/009: board-load is niet traag (85ms ervaren); RCCP koude cache 18.2s vs warm 8-13ms door TTL die policy Q6 tegenspreekt. Wacht op akkoord gebruiker voor fix-fase (geen commit/push gedaan).",
   "autonomy": {
     "askUserBetweenPhases": false,
     "commitLocally": true,
     "pushAfterGreen": true,
     "deployPreviewBeforeAzureVerify": true
   },
-  "completedItems": ["BL-006 (done-local, Azure-verify pending)"],
-  "skippedItems": ["BL-001", "BL-002", "BL-003", "BL-004", "BL-005"],
+  "completedItems": [
+    "BL-006 (done-local, Azure-verify pending)"
+  ],
+  "skippedItems": [
+    "BL-001",
+    "BL-002",
+    "BL-003",
+    "BL-004",
+    "BL-005"
+  ],
   "skipped": {
     "BL-001": "elapsedWall 178ms < skipIf 500ms",
     "BL-002": "elapsedWall null (ruis)",
@@ -27,19 +35,29 @@
     "BL-005": "al geoptimaliseerd (v1.3 windowing); binnen meetruis"
   },
   "scoutFindings": {
-    "J1_boardLoad_ms": 178,
-    "J2_rccp": null,
-    "J3_return": null,
-    "J4_scroll": "no overflow container",
-    "J7_filterApply_ms": {"M": 404, "L": 572},
-    "J8_textStyle_ms_azureDev": {"M": 891, "L": 799}
+    "J1_boardLoad_elapsedWall_ms": 85,
+    "J1_app_ms": 1809,
+    "J2_app_ms": 21497,
+    "J2_sql_ms": 1670,
+    "rccp_board_kpis_cold_ms": 18245,
+    "rccp_board_kpis_warm_ms": 9,
+    "devColdStart_ms": 23982
   },
   "localHarness": {
     "method": "vite dev-build -> Azure DEV backend via proxy (VITE_PROXY_STRIP_SECURE)",
-    "J8_textStyleApplyMs": {"before": 2941, "afterIter1": 3331, "afterIter2": 1938, "afterIter2Confirm": 1821},
-    "J7_filterApplyMs": {"before": 830, "afterIter2": 843, "afterIter2Confirm": 805}
+    "J8_textStyleApplyMs": {
+      "before": 2941,
+      "afterIter1": 3331,
+      "afterIter2": 1938,
+      "afterIter2Confirm": 1821
+    },
+    "J7_filterApplyMs": {
+      "before": 830,
+      "afterIter2": 843,
+      "afterIter2Confirm": 805
+    }
   },
   "startedAt": "2026-07-22T09:20:00.000Z",
-  "updatedAt": "2026-07-22T10:32:00.000Z",
-  "appVersion": "v1.30.35"
+  "updatedAt": "2026-09-04T20:25:47.162Z",
+  "appVersion": "v1.54.10"
 }

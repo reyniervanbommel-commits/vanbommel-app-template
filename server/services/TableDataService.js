@@ -5275,6 +5275,11 @@ async function saveSyncFilters(tableKey, rules) {
     }
   }
   await saveTableDefaultFilter(table.id, list);
+  // Deze actie verandert wélke rijen in scope zijn (removed_at_source / sync_retained) zonder
+  // content_changed_at of last_full_sync_at te raken. De gedeelde BI/RCCP-snapshots moeten dus
+  // expliciet weg, anders tonen die tot de volgende signatuurwijziging out-of-scope rijen.
+  // eslint-disable-next-line global-require
+  require('./BoardSnapshotCache').invalidateBoardSnapshots({ tableKey: table.key });
   return { rules: list, compiled };
 }
 

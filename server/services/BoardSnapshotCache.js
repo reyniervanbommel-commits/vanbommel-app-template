@@ -3,14 +3,25 @@
 // Gedeelde board-snapshotcache (rows + columns) voor features die dezelfde tb_cache-rijen nodig
 // hebben als het board zelf, maar zonder er zelf op te schrijven: BI-aggregatie en RCCP-analyse.
 // Eén zware TableDataService.read() wordt hergebruikt zolang de content-signatuur (dezelfde parts
-// als de board-revision) niet wijzigt — dus tot de eerstvolgende sync/refresh/edit. Voorheen had
+// als de board-revision) niet wijzigt — dus tot de eerstvolgende sync/refresh/edit. Tot v1.54.11
+// gold daarnaast een TTL van 5 minuten, waardoor een geldige cache toch werd weggegooid en de
+// eerstvolgende bezoeker de volledige koude read betaalde; die TTL is vervangen door een ruim
+// veiligheidsnet (zie SNAPSHOT_SAFETY_TTL_MS). Voorheen had
 // alleen BI dit (lokaal in routes/bi.js); RCCP deed bij elke analyse/drill-down/vendor-hover een
 // verse volledige read(). Uitgetild zodat beide features hetzelfde snapshot delen.
 
 const { time } = require('../utils/timing');
 const dataService = require('./TableDataService');
 
-const SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+// Veiligheidsnet, géén versheidsmechanisme. De versheid komt volledig van de content-signatuur
+// (zie contentSignature): elke schrijfweg die de board-inhoud raakt verandert minstens één
+// signatuur-onderdeel, dus een ongewijzigde signatuur betekent ongewijzigde data. Beleid
+// `perf-optimize-policy.json` → cache.crossPageTtlPolicy = "unlimited-until-revision".
+// Deze ruime TTL vangt alleen het theoretische geval af dat er ooit een schrijfweg bijkomt die
+// buiten de signatuur valt; hij verloopt in de praktijk nooit vóór een sync dat al doet.
+// Was 5 minuten — dat verwierp een geldige cache ~1.400x te vroeg: koude RCCP-read 18,2 s
+// tegen 8-13 ms warm (gemeten Azure DEV 2026-09-04, backlog BL-007).
+const SNAPSHOT_SAFETY_TTL_MS = 12 * 60 * 60 * 1000;
 const snapshotCache = new Map();
 const kpiRowCache = new Map();
 
@@ -23,7 +34,7 @@ function kpiCacheKey(tableKey, supplierAccount) {
 }
 
 function liveCache(entry) {
-  return Boolean(entry) && (Date.now() - entry.cachedAt) < SNAPSHOT_TTL_MS;
+  return Boolean(entry) && (Date.now() - entry.cachedAt) < SNAPSHOT_SAFETY_TTL_MS;
 }
 
 function contentSignature(parts = {}) {
@@ -36,7 +47,34 @@ function contentSignature(parts = {}) {
     maxColumnsAt: parts.maxColumnsAt ?? null,
     exclusionCount: parts.exclusionCount ?? 0,
     maxExclusionAt: parts.maxExclusionAt ?? null,
+    // Sync-filterregels (PO_SYNC_RULES) leven in app_settings. Een admin die de scope aanpast
+    // markeert rijen out-of-scope zónder content_changed_at of last_full_sync_at te raken, dus
+    // zonder dit veld zou de snapshot die rijen blijven tonen. Bewust NIET opgenomen: userViewedAt
+    // en userBoardSettingsAt — dat zijn per-gebruiker-velden die een gedeeld snapshot niet mogen
+    // invalideren.
+    settingsAt: parts.settingsAt ?? null,
   });
+}
+
+/**
+ * Gooit de gedeelde snapshots weg voor één tabel (of alles). Nodig bij schrijfwegen die de
+ * zichtbaarheid van rijen wijzigen zonder een signatuur-veld te raken — zie saveSyncFilters.
+ * De signatuur is de eerste verdediging; dit is de expliciete, zelfdocumenterende tweede.
+ */
+function invalidateBoardSnapshots({ tableKey = null } = {}) {
+  if (!tableKey) {
+    snapshotCache.clear();
+    kpiRowCache.clear();
+    return;
+  }
+  const prefix = `${tableKey}::`;
+  const kpiPrefix = `kpi::${tableKey}::`;
+  for (const key of snapshotCache.keys()) {
+    if (key.startsWith(prefix)) snapshotCache.delete(key);
+  }
+  for (const key of kpiRowCache.keys()) {
+    if (key.startsWith(kpiPrefix)) kpiRowCache.delete(key);
+  }
 }
 
 // Een header-only board-read (includeDetails: false) heeft geen `details`-array op de rijen.
@@ -127,4 +165,5 @@ module.exports = {
   readRccpPoRows,
   rememberKpiPoRows,
   contentSignature,
+  invalidateBoardSnapshots,
 };
