@@ -175,6 +175,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
               stroke={row.color}
               strokeWidth={row.measureKey === RCCP_WARNING_MEASURE_KEY ? 1.5 : 2}
               dot={false}
+              activeDot={false}
               strokeDasharray={row.isDashed ? '6 3' : undefined}
             />
           )

@@ -7,8 +7,11 @@ import { KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT } from '../../utils/kpiCardStyles';
 const GRAY_TONES = [KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT];
 
 /** How far the colored slice pops out from the pie's center, in viewBox units. */
-const POP_DISTANCE = 5;
+const POP_DISTANCE = 2;
 const POP_SHADOW = 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3))';
+/** Gray slice gets a smaller radius so it visually sits behind the colored slice. */
+const GRAY_RADIUS = 46;
+const FULL_RADIUS = 50;
 
 const useStyles = makeStyles({
   root: {
@@ -41,10 +44,12 @@ function KpiPctPie({ percent, fillColor, restColor, elevated }) {
   const share = kpiPiePercent(percent);
   if (share === null) return null;
 
-  const valuePath = arcSlicePath(0, share);
-  const otherPath = arcSlicePath(share, 100);
   const valueAngle = pieBisectorAngle(0, share);
   const otherAngle = pieBisectorAngle(share, 100);
+  const fillIsGray = GRAY_TONES.includes(fillColor);
+  const restIsGray = GRAY_TONES.includes(restColor);
+  const valuePath = arcSlicePath(0, share, { r: fillIsGray ? GRAY_RADIUS : FULL_RADIUS });
+  const otherPath = arcSlicePath(share, 100, { r: restIsGray ? GRAY_RADIUS : FULL_RADIUS });
 
   const slices = [
     { key: 'fill', path: valuePath, color: fillColor, angle: valueAngle },
