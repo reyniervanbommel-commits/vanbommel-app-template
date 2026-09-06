@@ -21,8 +21,8 @@ describe('RccpSplitToolbar', () => {
           onReplaceWindow={vi.fn()}
           periodGrain="week"
           onPeriodGrainChange={vi.fn()}
-          planningDateMode="requested"
-          onPlanningDateModeChange={vi.fn()}
+          planningDateModes="requested"
+          onPlanningDateModesChange={vi.fn()}
           vendorAccount="V000356"
         />
       </MemoryRouter>,
@@ -30,8 +30,8 @@ describe('RccpSplitToolbar', () => {
     expect(getByRole('button', { name: /Period / })).toBeTruthy();
     expect(getByRole('radio', { name: 'Week' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Month' })).toBeTruthy();
-    expect(getByRole('radio', { name: 'Requested' })).toBeTruthy();
-    expect(getByRole('radio', { name: 'Confirmed' })).toBeTruthy();
+    expect(getByRole('checkbox', { name: 'Requested' })).toBeTruthy();
+    expect(getByRole('checkbox', { name: 'Confirmed' })).toBeTruthy();
     expect(getByRole('button', { name: 'Open RCCP page' })).toBeTruthy();
     expect(getByRole('group', { name: 'RCCP controls' }).textContent).toContain('Vendor: V000356');
   });
@@ -44,8 +44,8 @@ describe('RccpSplitToolbar', () => {
           onReplaceWindow={vi.fn()}
           periodGrain="week"
           onPeriodGrainChange={vi.fn()}
-          planningDateMode="requested"
-          onPlanningDateModeChange={vi.fn()}
+          planningDateModes="requested"
+          onPlanningDateModesChange={vi.fn()}
           vendorAccount="V000356"
           analysis={{ dataWindow: { fromYear: 2021, fromWeek: 47, toYear: 2022, toWeek: 51 } }}
           onShowDataWindow={vi.fn()}

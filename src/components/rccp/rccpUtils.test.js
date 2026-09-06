@@ -18,7 +18,9 @@ import {
   isoWeekPartsFromLocalDate,
   isoWindowFromWeekClicks,
   applyIsoWeekPickerClick,
+  rccpHoverCenterX,
   isoWeeksInYear,
+  clampRccpChartHeight,
   clampWeekPickerListHeight,
   currentIsoWeekParts,
   isMatrixCellEmpty,
@@ -164,6 +166,15 @@ describe('clampWeekPickerListHeight', () => {
   });
 });
 
+describe('clampRccpChartHeight', () => {
+  it('keeps the chart height between 120px and 560px', () => {
+    expect(clampRccpChartHeight(40)).toBe(120);
+    expect(clampRccpChartHeight(300)).toBe(300);
+    expect(clampRccpChartHeight(900)).toBe(560);
+    expect(clampRccpChartHeight('x', 180)).toBe(180);
+  });
+});
+
 describe('isoWindowFromWeekClicks', () => {
   it('starts a single-week range then completes to the later week', () => {
     const first = isoWindowFromWeekClicks(null, { year: 2026, week: 10 });
@@ -293,7 +304,7 @@ describe('resolveChartWeekRangeBounds', () => {
 });
 
 describe('buildRccpChartWeekBoundaryCoordinates', () => {
-  it('includes the Y-axis offset so lines align with week band edges', () => {
+  it('uses the fixed chart Y-axis width so lines align with the week bands', () => {
     const coordinates = buildRccpChartWeekBoundaryCoordinates(3)({ offset: { left: 42 } });
     expect(coordinates).toEqual([
       42,
@@ -301,6 +312,11 @@ describe('buildRccpChartWeekBoundaryCoordinates', () => {
       42 + 2 * RCCP_WEEK_COL_WIDTH,
       42 + 3 * RCCP_WEEK_COL_WIDTH,
     ]);
+  });
+
+  it('ignores a Recharts plot offset that does not match the bar geometry', () => {
+    expect(buildRccpChartWeekBoundaryCoordinates(1)({ offset: { left: 5 } }))
+      .toEqual(buildRccpChartWeekBoundaryCoordinates(1)({ offset: { left: 42 } }));
   });
 });
 
@@ -490,5 +506,29 @@ describe('isoWindowWeekCount / persistable RCCP window', () => {
     const quarter = { fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 16 };
     expect(isPersistableRccpIsoWindow(quarter)).toBe(true);
     expect(compactIsoWindowForPrefetch(quarter)).toEqual(currentIsoWindow(8));
+  });
+});
+
+describe('rccpHoverCenterX', () => {
+  it('returns the centre of the hovered period, on the fixed week grid', () => {
+    // Y-axis width 42, week width 52: period 0 spans [42,94), centre 68.
+    expect(rccpHoverCenterX(42, 10)).toBe(68);
+    expect(rccpHoverCenterX(68, 10)).toBe(68);
+    expect(rccpHoverCenterX(93, 10)).toBe(68);
+    // Period 1 spans [94,146), centre 120.
+    expect(rccpHoverCenterX(94, 10)).toBe(120);
+    expect(rccpHoverCenterX(145, 10)).toBe(120);
+  });
+
+  it('returns null outside the plot area (over the row labels or past the last period)', () => {
+    expect(rccpHoverCenterX(41, 10)).toBeNull();
+    expect(rccpHoverCenterX(0, 10)).toBeNull();
+    expect(rccpHoverCenterX(42 + 10 * 52, 10)).toBeNull();
+  });
+
+  it('returns null without a finite position or period count', () => {
+    expect(rccpHoverCenterX(NaN, 10)).toBeNull();
+    expect(rccpHoverCenterX(68, 0)).toBeNull();
+    expect(rccpHoverCenterX(68, null)).toBeNull();
   });
 });

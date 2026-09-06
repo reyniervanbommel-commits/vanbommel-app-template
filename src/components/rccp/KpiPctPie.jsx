@@ -1,6 +1,10 @@
 import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import { arcSlicePath, kpiPiePercent, pieBisectorAngle, pieSliceOffset } from './kpiPctPieUtils';
+import { KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT } from '../../utils/kpiCardStyles';
+
+/** Gray tones used for the uncolored slice — these must always render at the bottom. */
+const GRAY_TONES = [KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT];
 
 /** How far the colored slice pops out from the pie's center, in viewBox units. */
 const POP_DISTANCE = 5;
@@ -45,7 +49,14 @@ function KpiPctPie({ percent, fillColor, restColor, elevated }) {
   const slices = [
     { key: 'fill', path: valuePath, color: fillColor, angle: valueAngle },
     { key: 'rest', path: otherPath, color: restColor, angle: otherAngle },
-  ].sort((a, b) => (a.key === elevated ? 1 : b.key === elevated ? -1 : 0));
+  ].sort((a, b) => {
+    // Gray slice always renders first (bottom); the colored slice always last (top),
+    // regardless of which one is "elevated".
+    const aGray = GRAY_TONES.includes(a.color);
+    const bGray = GRAY_TONES.includes(b.color);
+    if (aGray === bGray) return 0;
+    return aGray ? -1 : 1;
+  });
 
   return (
     <div className={styles.root} data-kpi-pct-pie="" aria-hidden="true">

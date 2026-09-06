@@ -8,7 +8,14 @@ import {
   monthBucketFromIsoWeek,
   parseRccpPeriodGrain,
   parseRccpPlanningDateMode,
+  parseRccpPlanningDateModes,
+  primaryRccpPlanningDateMode,
+  rccpPlanningDateMarker,
+  rccpPlanningDateModeList,
+  isRccpDualPlanningDate,
   resolveRccpChartView,
+  secondaryRccpPlanningDateMode,
+  toggleRccpPlanningDateMode,
 } from './rccpPeriodGrain';
 
 describe('monthBucketFromIsoWeek', () => {
@@ -170,5 +177,61 @@ describe('parseRccpPlanningDateMode', () => {
     expect(parseRccpPlanningDateMode('confirmed')).toBe(RCCP_PLANNING_DATE_CONFIRMED);
     expect(parseRccpPlanningDateMode('CONFIRMED')).toBe(RCCP_PLANNING_DATE_CONFIRMED);
     expect(parseRccpPlanningDateMode('other')).toBe(RCCP_PLANNING_DATE_REQUESTED);
+  });
+});
+
+describe('parseRccpPlanningDateModes', () => {
+  it('reads the legacy single mode string', () => {
+    expect(parseRccpPlanningDateModes('requested')).toEqual({ requested: true, confirmed: false });
+    expect(parseRccpPlanningDateModes('confirmed')).toEqual({ requested: false, confirmed: true });
+  });
+
+  it('reads an array or flag object and keeps at least one mode on', () => {
+    expect(parseRccpPlanningDateModes(['requested', 'confirmed']))
+      .toEqual({ requested: true, confirmed: true });
+    expect(parseRccpPlanningDateModes({ requested: false, confirmed: true }))
+      .toEqual({ requested: false, confirmed: true });
+    expect(parseRccpPlanningDateModes([])).toEqual({ requested: true, confirmed: false });
+    expect(parseRccpPlanningDateModes({ requested: false, confirmed: false }))
+      .toEqual({ requested: true, confirmed: false });
+  });
+
+  it('lists active modes with requested first', () => {
+    expect(rccpPlanningDateModeList({ requested: true, confirmed: true }))
+      .toEqual([RCCP_PLANNING_DATE_REQUESTED, RCCP_PLANNING_DATE_CONFIRMED]);
+    expect(rccpPlanningDateModeList('confirmed')).toEqual([RCCP_PLANNING_DATE_CONFIRMED]);
+    expect(primaryRccpPlanningDateMode({ requested: false, confirmed: true }))
+      .toBe(RCCP_PLANNING_DATE_CONFIRMED);
+    expect(secondaryRccpPlanningDateMode({ requested: true, confirmed: true }))
+      .toBe(RCCP_PLANNING_DATE_CONFIRMED);
+    expect(secondaryRccpPlanningDateMode('requested')).toBeNull();
+    expect(isRccpDualPlanningDate({ requested: true, confirmed: true })).toBe(true);
+    expect(isRccpDualPlanningDate('confirmed')).toBe(false);
+  });
+});
+
+describe('toggleRccpPlanningDateMode', () => {
+  it('turns a mode on and off', () => {
+    expect(toggleRccpPlanningDateMode('requested', 'confirmed', true))
+      .toEqual({ requested: true, confirmed: true });
+    expect(toggleRccpPlanningDateMode({ requested: true, confirmed: true }, 'requested', false))
+      .toEqual({ requested: false, confirmed: true });
+  });
+
+  it('refuses to switch off the last active mode', () => {
+    expect(toggleRccpPlanningDateMode('requested', 'requested', false))
+      .toEqual({ requested: true, confirmed: false });
+  });
+
+  it('ignores an unknown mode', () => {
+    expect(toggleRccpPlanningDateMode('requested', 'other', true))
+      .toEqual({ requested: true, confirmed: false });
+  });
+});
+
+describe('rccpPlanningDateMarker', () => {
+  it('marks requested with R and confirmed with C', () => {
+    expect(rccpPlanningDateMarker(RCCP_PLANNING_DATE_REQUESTED)).toBe('R');
+    expect(rccpPlanningDateMarker(RCCP_PLANNING_DATE_CONFIRMED)).toBe('C');
   });
 });

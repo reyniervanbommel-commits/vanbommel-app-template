@@ -20,7 +20,7 @@ function compactByOrder(byOrder) {
     if (
       !entry.openQty && !entry.deliveredQty && !entry.lateCount
       && !entry.openLateCount && !entry.onTimeUnits && !entry.openSkus.size
-      && !entry.planned1900Units
+      && !entry.planned1900Units && !entry.unconfirmedUnits
     ) continue;
     const row = {};
     if (entry.openQty) row.o = entry.openQty;
@@ -49,6 +49,11 @@ function compactByOrder(byOrder) {
       row.yu = entry.planned1900Units;
       const indexes = internSet(sku, skuIndex, entry.planned1900Skus);
       if (indexes.length) row.yk = indexes;
+    }
+    if (entry.unconfirmedUnits) {
+      row.uu = entry.unconfirmedUnits;
+      const indexes = internSet(sku, skuIndex, entry.unconfirmedSkus);
+      if (indexes.length) row.uk = indexes;
     }
     orders[poNumber] = row;
   }

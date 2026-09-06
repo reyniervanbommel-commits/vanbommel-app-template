@@ -9,6 +9,7 @@ const { getIsoWeek, getIsoWeekYear, isoWeekKey, buildWeekRange } = require('./is
 const {
   toNumber,
   pickValue,
+  pickConfiguredValue,
   resolveLineMeasureQty,
   isHeaderOnlyMeasure,
   lineDateValue,
@@ -168,7 +169,10 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
   for (const row of rows || []) {
     const masterValues = row.values || {};
     const poNumber = String(row.recordKey || '').trim();
-    const vendor = String(pickValue(masterValues, vendorCol) || '').trim();
+    // pickConfiguredValue, niet pickValue: config-keys zijn scoped opgeslagen ("master:vendorAccount")
+    // zodra de RCCP-instellingen een keer bewaard zijn. Met de rauwe key vindt niets meer een vendor
+    // en verdwijnen alle PO-staven uit de grafiek.
+    const vendor = String(pickConfiguredValue(masterValues, vendorCol) || '').trim();
     if (!vendor) continue;
     if (vendorAccount && vendor !== vendorAccount) continue;
     const dataAreaId = resolveDataAreaId(row, masterValues);
@@ -259,19 +263,19 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
         plannedSlots,
         masterValues,
         'open',
-        toNumber(pickValue(masterValues, openKey)),
+        toNumber(pickConfiguredValue(masterValues, openKey)),
         (slot) => Boolean(nowYear && nowWeek && compareIsoWeek(slot.year, slot.week, nowYear, nowWeek) < 0),
         dataAreaId,
         poNumber,
       );
     }
     if (headerOnlyOrdered) {
-      const orderedTotal = toNumber(pickValue(masterValues, orderedKey));
-      const openTotal = headerOnlyOpen ? toNumber(pickValue(masterValues, openKey)) : 0;
+      const orderedTotal = toNumber(pickConfiguredValue(masterValues, orderedKey));
+      const openTotal = headerOnlyOpen ? toNumber(pickConfiguredValue(masterValues, openKey)) : 0;
       spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId, poNumber);
     }
     if (headerOnlyDelivered) {
-      const deliveredTotal = toNumber(pickValue(masterValues, deliveredKey));
+      const deliveredTotal = toNumber(pickConfiguredValue(masterValues, deliveredKey));
       let receiptSlots = receiptKey
         ? collectDateSlots(
           details, masterValues, receiptKey, null, window, excludedSet, masterStatus,

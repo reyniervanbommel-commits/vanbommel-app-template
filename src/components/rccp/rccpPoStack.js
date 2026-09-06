@@ -6,11 +6,49 @@ import {
 
 export const RCCP_PO_BAR_SIZE = Math.round(RCCP_WEEK_COL_WIDTH * 0.75);
 
-/** Center a bar of `barWidth` inside the ISO-week band at `index`. */
-export function weekBarBox(index, barWidth) {
+/**
+ * De balk onder de as (received) houdt altijd deze vaste breedte — 65% van de weekkolom —
+ * los van de boven-de-as-layout (normaal of dual/requested+confirmed smaller).
+ */
+export const RCCP_PO_BAR_SIZE_BELOW = Math.round(RCCP_WEEK_COL_WIDTH * 0.65);
+
+/** Requested and confirmed bars overlap by a quarter of their width. */
+export const RCCP_DUAL_BAR_OVERLAP = 0.25;
+
+/**
+ * Bar width used when both load dates are drawn side by side: two bars that overlap by
+ * RCCP_DUAL_BAR_OVERLAP fit inside one ISO-week column, met dezelfde marge langs de weekgrens
+ * als een enkele balk (RCCP_PO_BAR_SIZE is 75% van de kolom).
+ */
+export const RCCP_DUAL_PO_BAR_SIZE = Math.floor(
+  RCCP_PO_BAR_SIZE / (2 - RCCP_DUAL_BAR_OVERLAP),
+);
+
+/**
+ * Center a bar of `barWidth` inside the ISO-week band at `index`, shifted by `offset` pixels
+ * (used to lay the confirmed series next to the requested one).
+ */
+export function weekBarBox(index, barWidth, offset = 0) {
   const bandX = RCCP_CHART_Y_AXIS_WIDTH + Number(index) * RCCP_WEEK_COL_WIDTH;
   const width = Math.min(Math.max(0, Number(barWidth) || 0), RCCP_WEEK_COL_WIDTH);
-  return { x: bandX + (RCCP_WEEK_COL_WIDTH - width) / 2, width };
+  const shift = Number(offset) || 0;
+  return { x: bandX + (RCCP_WEEK_COL_WIDTH - width) / 2 + shift, width };
+}
+
+/**
+ * Bar width and per-series x-offset for the load-date series. One active mode keeps the full
+ * centred bar; two active modes shrink the bars and pull them apart until they overlap by
+ * exactly RCCP_DUAL_BAR_OVERLAP of their width, requested on the left.
+ * @param {boolean} dual
+ * @returns {{ barSize: number, primaryOffset: number, secondaryOffset: number }}
+ */
+export function rccpLoadDateBarLayout(dual) {
+  // Bij één balk boven de as (requested óf confirmed) krijgt die dezelfde 65%-breedte als de
+  // balk onder de as, zodat boven en onder altijd gelijk breed zijn wanneer er niets dual is.
+  if (!dual) return { barSize: RCCP_PO_BAR_SIZE_BELOW, primaryOffset: 0, secondaryOffset: 0 };
+  const barSize = RCCP_DUAL_PO_BAR_SIZE;
+  const shift = (barSize * (1 - RCCP_DUAL_BAR_OVERLAP)) / 2;
+  return { barSize, primaryOffset: -shift, secondaryOffset: shift };
 }
 
 function utcDayDate(value) {
@@ -122,6 +160,10 @@ export function isReceivedPairHighlight(segment, highlightItem) {
 
 const PAIR_STROKE = '#323130';
 
+/** Confirmed load is drawn as a dark grey outline instead of a filled bar. */
+export const RCCP_OUTLINE_STROKE_COLOR = '#605E5C';
+export const RCCP_OUTLINE_STROKE_WIDTH = 1.5;
+
 /** Hover pair outline only — late receipts have no extra frame. */
 export function poSegmentStroke(_segment, highlighted) {
   if (highlighted) return { stroke: PAIR_STROKE, strokeWidth: 2.5 };
@@ -146,8 +188,15 @@ export function visibleAboveSegments(segments, { openVisible, orderedVisible } =
 }
 
 /**
- * Snap a magnitude up to 1-2-5 × 10^n (100, 200, 500, 1000, …).
- * Mid-ticks then land on round values including 250 and 2500.
+ * Steps the Y extent may snap to, as a mantissa of 10^n. Finer than 1-2-5 so the axis stays
+ * close to the highest bar (1600 → 2000 instead of 5000), while every step still halves into a
+ * readable mid-tick.
+ */
+const NICE_Y_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+
+/**
+ * Snap a magnitude up to the next round step (100, 150, 200, 250, 300, 400, 500, 600, 800, …),
+ * so the scale follows the data instead of jumping to the next power of ten.
  */
 export function rccpNiceYExtent(value) {
   const n = Math.abs(Number(value) || 0);
@@ -155,28 +204,60 @@ export function rccpNiceYExtent(value) {
   const exp = Math.floor(Math.log10(n));
   const base = 10 ** exp;
   const mantissa = n / base;
-  let nice = 10;
-  if (mantissa <= 1) nice = 1;
-  else if (mantissa <= 2) nice = 2;
-  else if (mantissa <= 5) nice = 5;
-  return nice * base;
+  const step = NICE_Y_STEPS.find((candidate) => mantissa <= candidate + 1e-9) || 10;
+  return step * base;
 }
 
-function rccpYAxisTicks(extent) {
-  const half = extent / 2;
-  return [-extent, -half, 0, half, extent];
+/** Mantissas that read as a round tick step (300, 1250, 4000, …). */
+const NICE_STEP_MANTISSAS = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10];
+
+function isNiceStep(value) {
+  const n = Math.abs(Number(value) || 0);
+  if (!n) return false;
+  const base = 10 ** Math.floor(Math.log10(n));
+  const mantissa = n / base;
+  return NICE_STEP_MANTISSAS.some((candidate) => Math.abs(candidate - mantissa) < 1e-9);
+}
+
+/** Splits `extent` into the first candidate count that lands on a round step. */
+function niceTickStep(extent, counts) {
+  for (const count of counts) {
+    const step = extent / count;
+    if (isNiceStep(step)) return step;
+  }
+  return extent / counts[0];
+}
+
+/**
+ * Gridline and label values for the Y-axis. One list feeds both the chart's horizontal lines
+ * and the sticky axis labels, so every line carries a number. Aims for four steps on a
+ * zero-based axis and two per side on a symmetric one, always on round values.
+ * @returns {{ extent: number, negative: boolean, step: number, ticks: number[] }}
+ */
+export function rccpChartYTicks(yDomain) {
+  const rawMin = Number(yDomain?.[0]) || 0;
+  const rawMax = Number(yDomain?.[1]) || 0;
+  const extent = rccpNiceYExtent(Math.max(Math.abs(rawMin), Math.abs(rawMax)));
+  const negative = rawMin < 0;
+  const step = niceTickStep(extent, negative ? [2, 3, 4] : [4, 5, 3, 6]);
+  const to = Math.round(extent / step);
+  const from = negative ? -to : 0;
+  const ticks = [];
+  for (let i = to; i >= from; i -= 1) ticks.push(Math.round(i * step * 1e6) / 1e6);
+  return { extent, negative, step, ticks };
 }
 
 /**
  * Y-domain for Capacity vs load. Custom PO-stack bars are ignored by Recharts 3,
  * so a negative-only received series would otherwise hide quantity above the axis.
- * Positive and negative sides share the same absolute scale, snapped to round ticks.
+ * With load below the axis (received) the two sides share the same absolute scale; without it
+ * the axis starts at zero, so the bars use the full chart height instead of half of it.
  */
 export function rccpChartYDomain(points, measureKeys = []) {
   let min = 0;
   let max = 0;
   for (const point of points || []) {
-    max = Math.max(max, Number(point.__stackAbove) || 0);
+    max = Math.max(max, Number(point.__stackAbove) || 0, Number(point.__stackAboveAlt) || 0);
     min = Math.min(min, Number(point.__stackBelow) || 0);
     for (const key of measureKeys) {
       const value = Number(point[key]) || 0;
@@ -186,30 +267,33 @@ export function rccpChartYDomain(points, measureKeys = []) {
   }
   if (min === 0 && max === 0) return [0, 1];
   const extent = rccpNiceYExtent(Math.max(Math.abs(min), Math.abs(max)));
-  return [-extent, extent];
+  return min < 0 ? [-extent, extent] : [0, extent];
 }
 
 /**
  * Recharts 3 discards a numeric Y domain unless allowDataOverflow is set.
  * Without that, custom PO bars are ignored and the axis falls back to [0, auto].
+ * An all-positive domain keeps the zero line at the bottom — no empty scale below the axis.
  */
-export function rccpSymmetricYAxisDomain(yDomain) {
-  const raw = Math.max(
-    Math.abs(Number(yDomain?.[0]) || 0),
-    Math.abs(Number(yDomain?.[1]) || 0),
-  );
-  const extent = rccpNiceYExtent(raw);
+export function rccpChartYAxisScale(yDomain) {
+  const { extent, negative, ticks } = rccpChartYTicks(yDomain);
   return {
     type: 'number',
-    domain: [-extent, extent],
+    domain: negative ? [-extent, extent] : [0, extent],
     allowDataOverflow: true,
-    ticks: rccpYAxisTicks(extent),
+    ticks: [...ticks].reverse(),
   };
 }
 
-export function rccpPoStackBarFlags({ openVisible, orderedVisible, deliveredVisible }) {
+export function rccpPoStackBarFlags({
+  openVisible, orderedVisible, deliveredVisible, dual = false,
+}) {
+  const showAbove = Boolean(openVisible || orderedVisible || deliveredVisible);
   return {
-    showAbove: Boolean(openVisible || orderedVisible || deliveredVisible),
+    showAbove,
+    // Tweede load-date-serie (confirmed naast requested); received onder de as blijft één reeks,
+    // die volgt de ontvangstweek en niet de gekozen leverdatum.
+    showAboveAlt: showAbove && Boolean(dual),
     showBelow: Boolean(deliveredVisible),
   };
 }

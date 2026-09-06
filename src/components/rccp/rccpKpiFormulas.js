@@ -7,6 +7,7 @@ export const KPI_FORMULAS = {
   onTime: 'delivered where receipt date ≤ planned date\n1-1-1900 and missing receipt dates are excluded\nitems = unique item numbers\n% = on time / ordered × 100',
   openLate: 'open where planned ISO week < current ISO week\nitems = unique item numbers on those lines\nØ days late = average of (today − planned date)',
   planned1900: 'open + delivered where planned date is 1-1-1900\n(D365 empty date)\nitems = unique item numbers on those lines',
+  unconfirmed: 'open + delivered on lines without a confirmed date\nitems = unique item numbers on those lines\n% = unconfirmed / ordered × 100',
   capacityShortfall: 'sum of (open load − capacity)\nin weeks where load > capacity\nnot available on the purchase-order board',
   overloadedWeeks: 'count of weeks where open load > capacity\nnot available on the purchase-order board',
 };

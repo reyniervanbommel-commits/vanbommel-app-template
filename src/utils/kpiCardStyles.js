@@ -1,6 +1,6 @@
 import { isHexColor, normalizeHexColor } from './hexColor';
 
-export const KPI_STYLE_KEYS = Object.freeze(['delivered', 'open', 'lateDelivery', 'onTime']);
+export const KPI_STYLE_KEYS = Object.freeze(['delivered', 'open', 'lateDelivery', 'onTime', 'unconfirmed']);
 export const KPI_CARDS_BOARD_KEY = 'kpi-cards';
 
 /**

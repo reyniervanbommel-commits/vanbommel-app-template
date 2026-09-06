@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { prefetchRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
+import { rccpPlanningDateModeList } from '../components/rccp/rccpPeriodGrain';
 
 const PREFETCH_DEBOUNCE_MS = 250;
 
@@ -13,7 +14,7 @@ const PREFETCH_DEBOUNCE_MS = 250;
  * Input: het actieve ISO-weekvenster (fromYear/fromWeek/toYear/toWeek).
  * Output: `highlightVendor(vendorAccount)` — aanroepen bij hover/highlight/exacte match.
  */
-export function useRccpVendorPrefetch(window, planningDateMode) {
+export function useRccpVendorPrefetch(window, planningDateModes) {
   const timeoutRef = useRef(null);
   const pendingVendorRef = useRef('');
 
@@ -24,9 +25,11 @@ export function useRccpVendorPrefetch(window, planningDateMode) {
     pendingVendorRef.current = vendorAccount;
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      prefetchRccpAnalysis(window, pendingVendorRef.current, planningDateMode);
+      rccpPlanningDateModeList(planningDateModes).forEach((mode) => {
+        prefetchRccpAnalysis(window, pendingVendorRef.current, mode);
+      });
     }, PREFETCH_DEBOUNCE_MS);
-  }, [window, planningDateMode]);
+  }, [window, planningDateModes]);
 
   return highlightVendor;
 }

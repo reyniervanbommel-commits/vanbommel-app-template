@@ -40,7 +40,10 @@ describe('useRccpSplitAnalysis', () => {
       refreshKey: '1',
     }));
 
-    await waitFor(() => expect(result.current.measureRows[0]?.chartType).toBe('line'), { timeout: 15000 });
+    // Ruime timeout: de eerste test in dit bestand betaalt de eenmalige cold-start compile van
+    // de volledige module-graaf (incl. Fluent UI); op een zwaarbelaste/parallelle testrun kan dat
+    // (zeer) lang duren — machine-belasting, geen logica-probleem (zie losse run: ~5s).
+    await waitFor(() => expect(result.current.measureRows[0]?.chartType).toBe('line'), { timeout: 100000 });
     const callsBeforeSave = apiRequest.mock.calls.length;
     apiRequest.mockImplementation(() => new Promise(() => {}));
 
@@ -55,7 +58,7 @@ describe('useRccpSplitAnalysis', () => {
     expect(result.current.measureRows[0].chartType).toBe('bar');
     expect(clearRccpAnalysisPrefetchCache).toHaveBeenCalled();
     expect(apiRequest.mock.calls.length).toBeGreaterThan(callsBeforeSave);
-  }, 20000);
+  }, 120000);
 
   it('reuses a warm prefetched analysis for the selected vendor instead of firing a duplicate apiRequest', async () => {
     const { apiRequest } = await import('../utils/api');
@@ -75,7 +78,7 @@ describe('useRccpSplitAnalysis', () => {
     }));
 
     await waitFor(() => expect(result.current.analysis).toBe(prefetched), { timeout: 15000 });
-    expect(getCachedRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V000583', undefined);
+    expect(getCachedRccpAnalysis).toHaveBeenCalledWith(WINDOW, 'V000583', 'requested');
     expect(apiRequest).not.toHaveBeenCalled();
   }, 20000);
 
@@ -93,7 +96,7 @@ describe('useRccpSplitAnalysis', () => {
       isoWindow: WINDOW,
       enabled: true,
       refreshKey: '1',
-      planningDateMode: 'confirmed',
+      planningDateModes: 'confirmed',
     }));
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled(), { timeout: 15000 });

@@ -14,6 +14,7 @@ import {
 } from '../utils/purchaseOrdersBoardMapping';
 import { usePurchaseOrderLineDetails } from './usePurchaseOrderLineDetails';
 import { filterSummableLineColumnKeys, isSummableLineColumn } from '../utils/purchaseOrderTotals';
+import { isDateSourceColumn } from '../utils/datePeriodColumnUtils';
 import {
   arraysEqual,
   mergeColumnTextStyle,
@@ -764,6 +765,21 @@ export function usePurchaseOrdersPage() {
     [lineValueHeaderLinks, defaultLineKeys, defaultHeaderKeys]
   );
 
+  // "Push values to header"-kolommen zijn zelf dataType 'text', ook als de gekoppelde
+  // line-kolom een datum is. Zonder deze annotatie herkent de filter-UI ze niet als datum
+  // (isDateColumn kijkt naar filterDataType) — zie #AB:date-filter.
+  const visibleHeaderColumnsWithFilterMeta = useMemo(
+    () => orderedHeaderColumns.map((column) => (
+      column.dataType !== 'date' && isDateSourceColumn(column, {
+        lineColumns,
+        lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+      })
+        ? { ...column, filterDataType: 'date' }
+        : column
+    )),
+    [orderedHeaderColumns, lineColumns, effectiveLineValueHeaderLinks]
+  );
+
   const effectiveHeaderColumnWidths = useMemo(
     () => mergeProductImageColumnWidths(
       normalizeColumnWidths(headerColumnWidths, defaultHeaderKeys)
@@ -1295,7 +1311,7 @@ export function usePurchaseOrdersPage() {
     headerColumns,
     lineColumns: orderedLineColumns,
     // Header-kolommen met board-settings (zichtbaarheid/volgorde) toegepast.
-    visibleHeaderColumns: orderedHeaderColumns,
+    visibleHeaderColumns: visibleHeaderColumnsWithFilterMeta,
     syncedAt,
     stale,
     hasCache,

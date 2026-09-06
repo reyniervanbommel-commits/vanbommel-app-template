@@ -22,7 +22,7 @@ const useStyles = makeStyles({
  */
 function RccpWeekWindowFields({
   window, onWindowReplace, kpiWindowOnly, onKpiWindowOnlyChange, periodGrain, onPeriodGrainChange,
-  analysis, onShowDataWindow, planningDateMode, onPlanningDateModeChange,
+  analysis, onShowDataWindow, planningDateModes, onPlanningDateModesChange,
 }) {
   const styles = useStyles();
   const handleToggle = useCallback((_, data) => {
@@ -51,8 +51,8 @@ function RccpWeekWindowFields({
         </Field>
         <Field className={styles.viewField} label="Load date">
           <RccpLoadDateToggle
-            value={planningDateMode}
-            onChange={onPlanningDateModeChange}
+            value={planningDateModes}
+            onChange={onPlanningDateModesChange}
             confirmedPercent={analysis?.kpis?.confirmedPercent}
           />
         </Field>

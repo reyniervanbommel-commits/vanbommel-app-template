@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiRequest } from '../utils/api';
-import { applyRccpChartSettings, buildAnalysisQuery } from '../components/rccp/rccpUtils';
-import { clearRccpAnalysisPrefetchCache, getCachedRccpAnalysis } from '../utils/rccpAnalysisPrefetch';
+import { applyRccpChartSettings } from '../components/rccp/rccpUtils';
+import { clearRccpAnalysisPrefetchCache } from '../utils/rccpAnalysisPrefetch';
 import { subscribeRccpSettingsSaved } from './rccpSettingsSync';
 import { useRccpWindow } from './useRccpWindow';
+import { useRccpAnalysisModes } from './useRccpAnalysisModes';
 import { usePageActive } from './usePageActive';
 import { useBoardRevisionGate } from './useBoardRevisionGate';
 
@@ -11,57 +11,36 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
   const {
     isoWindow, setIsoWindow, lastVendor, setLastVendor, loaded: windowLoaded,
     kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
-    planningDateMode, setPlanningDateMode,
+    planningDateModes, setPlanningDateModes,
   } = useRccpWindow();
-  const [analysis, setAnalysis] = useState(null);
-  // false, niet true: zolang er geen vendor gekozen is (enabled=false) mag er geen spinner
-  // getoond worden — de dashboard toont dan een "kies een vendor"-lege-staat.
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [readOnly, setReadOnly] = useState(false);
-  const requestIdRef = useRef(0);
+  // Elke reload (settings-save, Refresh, nieuwe PO-revisie) is een nieuwe scope: de per-load-date
+  // geladen analyses vervallen dan en worden opnieuw opgehaald.
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const load = useCallback(async ({ bypassCache = false, skipLoading = false } = {}) => {
-    if (!windowLoaded || !enabled) {
-      // Geen vendor (nog) gekozen: leegmaken zodat een vorige selectie niet blijft hangen.
-      setAnalysis(null);
-      setError('');
-      return;
-    }
+  const {
+    byMode: analysisByMode, analysis, loading, error, patch, refetch,
+  } = useRccpAnalysisModes({
+    vendorAccount,
+    isoWindow,
+    modes: planningDateModes,
+    enabled,
+    ready: windowLoaded,
+    reloadToken,
+    useCache: reloadToken === 0,
+  });
 
-    const requestId = ++requestIdRef.current;
-    if (!skipLoading) setLoading(true);
-    setError('');
-    try {
-      // Was deze vendor al op de achtergrond aan het laden (hover/highlight in de zoeklijst)?
-      // Hergebruik die call in plaats van een dubbele apiRequest te vuren — behalve na een
-      // expliciete reload (settings/refresh/PO-revisie), anders blijft de grafiek op de oude
-      // chartType hangen.
-      if (bypassCache) clearRccpAnalysisPrefetchCache();
-      const cached = (!bypassCache && vendorAccount)
-        ? getCachedRccpAnalysis(isoWindow, vendorAccount, planningDateMode)
-        : null;
-      const data = await (cached || apiRequest(buildAnalysisQuery(isoWindow, vendorAccount || undefined, planningDateMode)));
-      if (requestId !== requestIdRef.current) return;
-      setAnalysis(data);
-      setReadOnly(Boolean(data.readOnly));
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      setError(err.message || 'Failed to load RCCP analysis');
-      setAnalysis(null);
-    } finally {
-      if (requestId === requestIdRef.current && !skipLoading) setLoading(false);
-    }
-  }, [isoWindow, vendorAccount, windowLoaded, enabled, planningDateMode]);
-
-  const reload = useCallback(() => load({ bypassCache: true }), [load]);
-
-  useEffect(() => { load(); }, [load]);
+  const reload = useCallback(() => {
+    clearRccpAnalysisPrefetchCache();
+    setReloadToken((prev) => prev + 1);
+  }, []);
 
   useEffect(() => subscribeRccpSettingsSaved((config) => {
-    setAnalysis((prev) => applyRccpChartSettings(prev, config));
-    load({ bypassCache: true, skipLoading: true });
-  }), [load]);
+    // Direct toepassen op alle geladen load-dates zodat de grafiek meteen de nieuwe kleuren en
+    // chart-types toont, daarna een verse fetch op de achtergrond.
+    patch((prev) => applyRccpChartSettings(prev, config));
+    clearRccpAnalysisPrefetchCache();
+    refetch();
+  }), [patch, refetch]);
 
   // Keep-alive: bij terugkeer naar de (verborgen gehouden) RCCP-pagina checkt de gate de
   // PO-revisie. Alleen PO muteert data die de RCCP-analyse raakt, dus bij een gewijzigde revisie
@@ -76,9 +55,9 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     }
     if (rev !== seenRevisionRef.current) {
       seenRevisionRef.current = rev;
-      load({ bypassCache: true });
+      reload();
     }
-  }, [load]);
+  }, [reload]);
   useBoardRevisionGate({ active: pageActive, onRevision: handleRevision, runOnMount: true });
 
   const measureRows = useMemo(() => analysis?.measureRows || [], [analysis]);
@@ -103,12 +82,13 @@ export function useRccpPage({ vendorAccount = '', enabled = true } = {}) {
     setKpiWindowOnly,
     chartVisibleKeys,
     setChartVisibleKeys,
-    planningDateMode,
-    setPlanningDateMode,
+    planningDateModes,
+    setPlanningDateModes,
     analysis,
+    analysisByMode,
     loading,
     error,
-    readOnly,
+    readOnly: Boolean(analysis?.readOnly),
     measureRows,
     periods,
     cells,

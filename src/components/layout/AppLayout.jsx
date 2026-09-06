@@ -1,7 +1,6 @@
 ﻿import React, { useCallback, useMemo, useState } from 'react';
 import { makeStyles, mergeClasses, shorthands, tokens } from '@fluentui/react-components';
 import {
-  ChartMultiple24Regular,
   Settings24Regular,
   Table24Regular,
 } from '@fluentui/react-icons';
@@ -16,7 +15,7 @@ import BulkWriteBackJobBadge from './BulkWriteBackJobBadge';
 import { kickDataPagesPrefetch } from '../../utils/dataPagesPrefetch';
 
 // Rail-items die de idle-prefetch mogen versnellen bij hover (toont intentie om te navigeren).
-const PREFETCH_ON_HOVER_IDS = new Set(['rccp', 'bi']);
+const PREFETCH_ON_HOVER_IDS = new Set(['rccp']);
 
 const RAIL_WIDTH = appLayoutTokens.railWidth;
 const PANEL_WIDTH = appLayoutTokens.panelWidth;
@@ -155,8 +154,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
       { id: 'rccp', label: 'RCCP', icon: RccpNavIcon, path: '/rccp' },
-      // BI is voor alle rollen zichtbaar; suppliers zien uitsluitend hun eigen (server-gescopete) data.
-      { id: 'bi', label: 'BI', icon: ChartMultiple24Regular, path: '/bi' },
+      // BI-nav-item verborgen op verzoek (pagina + route blijven bestaan, alleen niet in de nav).
       { type: 'divider' },
       { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },
     ],

@@ -1,12 +1,14 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
 import { filterRccpChartBySegments, filterRccpMatrixByItem } from './rccpChartItems';
+import { clampRccpChartHeight } from './rccpUtils';
 import {
   parseRccpPeriodGrain,
   resolveRccpChartView,
+  secondaryRccpPlanningDateMode,
 } from './rccpPeriodGrain';
 import { resolveRccpItemsFromFilter } from './resolveRccpItemFilter';
 import { useRccpSplitAnalysis } from '../../hooks/useRccpSplitAnalysis';
@@ -22,25 +24,36 @@ const useStyles = makeStyles({
     height: '100%',
     width: '100%',
   },
-  body: { flex: 1, minHeight: 0, overflow: 'hidden' },
+  // 'auto' (niet 'hidden'): zodra de grafiek via de resize-handle meer hoogte krijgt, moet de
+  // matrix binnen dit vak alsnog scrollbaar blijven in plaats van afgekapt te worden.
+  body: { flex: 1, minHeight: 0, overflow: 'auto' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
 function RccpSplitStrip({
   vendorAccount, refreshKey, enabled, isoWindow, filterByColumn, itemColumnKey, onItemClick,
-  planningDateMode, periodGrain: periodGrainProp, orderNumbers, onAnalysisChange,
+  planningDateModes, periodGrain: periodGrainProp, orderNumbers, onAnalysisChange,
 }) {
   const styles = useStyles();
   const periodGrain = parseRccpPeriodGrain(periodGrainProp);
+  // Sessie-only: hoogte van de grafiek t.o.v. de matrix, versleepbaar via de hover-only
+  // scheidingslijn tussen beide (RccpChartResizeHandle).
+  const [chartHeight, setChartHeight] = useState(RCCP_SPLIT_CHART_HEIGHT);
+  const handleChartHeightChange = useCallback((next) => {
+    setChartHeight((prev) => {
+      const clamped = clampRccpChartHeight(next, prev);
+      return clamped === prev ? prev : clamped;
+    });
+  }, []);
 
   const {
-    analysis, loading, error, measureRows, periods, chart, chartWeekRanges,
+    analysis, analysisByMode, loading, error, measureRows, periods, chart, chartWeekRanges,
   } = useRccpSplitAnalysis({
     vendorAccount,
     isoWindow,
     enabled,
     refreshKey,
-    planningDateMode,
+    planningDateModes,
   });
 
   useEffect(() => {
@@ -80,6 +93,46 @@ function RccpSplitStrip({
     }),
     [chartView.cellMap, filteredChart, measureRows, itemFilter, orderNumbers],
   );
+  // Tweede load-date-serie: dezelfde grain en dezelfde PO-/item-filter op de al geladen
+  // analyse van de andere leverdatum.
+  const secondaryMode = secondaryRccpPlanningDateMode(planningDateModes);
+  const secondaryAnalysis = secondaryMode ? analysisByMode?.[secondaryMode] : null;
+  const secondaryChartView = useMemo(
+    () => (secondaryAnalysis
+      ? resolveRccpChartView({
+        grain: periodGrain,
+        periods: secondaryAnalysis.periods,
+        chart: secondaryAnalysis.chart,
+        cells: secondaryAnalysis.cells,
+      })
+      : null),
+    [secondaryAnalysis, periodGrain],
+  );
+  const secondaryFilteredChart = useMemo(
+    () => {
+      if (!secondaryChartView) return null;
+      const filterOptions = {
+        emptyHidesAll: itemFilter.active || Array.isArray(orderNumbers),
+        orderNumbers,
+        containsTerm: itemFilter.containsTerm,
+        measureRows,
+      };
+      if (itemFilter.active) filterOptions.items = itemFilter.items;
+      return filterRccpChartBySegments(secondaryChartView.chart, filterOptions);
+    },
+    [secondaryChartView, itemFilter, orderNumbers, measureRows],
+  );
+  const secondaryFilteredCellMap = useMemo(
+    () => (secondaryChartView
+      ? filterRccpMatrixByItem(secondaryChartView.cellMap, {
+        chart: secondaryFilteredChart,
+        measureRows,
+        active: itemFilter.active || Array.isArray(orderNumbers),
+      })
+      : null),
+    [secondaryChartView, secondaryFilteredChart, measureRows, itemFilter, orderNumbers],
+  );
+
   const focusItem = itemFilter.items.length === 1 ? itemFilter.items[0] : '';
   const itemFocus = useMemo(
     () => ({ item: focusItem, onSelect: onItemClick }),
@@ -95,12 +148,16 @@ function RccpSplitStrip({
         <div className={styles.body}>
           <RccpChartMatrixPanel
             chart={filteredChart}
+            chartSecondary={secondaryFilteredChart}
             measureRows={measureRows}
             periods={chartView.periods}
             cellMap={filteredCellMap}
+            cellMapSecondary={secondaryFilteredCellMap}
+            planningDateModes={planningDateModes}
             chartWeekRanges={chartWeekRanges}
             compact
-            chartHeight={RCCP_SPLIT_CHART_HEIGHT}
+            chartHeight={chartHeight}
+            onChartHeightChange={handleChartHeightChange}
             itemFocus={itemFocus}
             matrixColorFill={analysis.config?.matrixColorFill !== false}
           />

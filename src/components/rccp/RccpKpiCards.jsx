@@ -101,13 +101,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         onActivate={handleActivate}
       />
       <KpiCard
-        kpiKey="planned1900"
-        label="1-1-1900"
-        qty={kpis.planned1900Units}
+        kpiKey="unconfirmed"
+        label="Not confirmed"
+        qty={kpis.unconfirmedUnits}
         hash
-        aside={formatItems(kpis.planned1900ItemCount)}
-        selected={selectedKey === 'planned1900'}
-        clickable={clickableSet.has('planned1900')}
+        aside={formatItems(kpis.unconfirmedItemCount)}
+        pct={formatPct(kpis.unconfirmedPercent)}
+        selected={selectedKey === 'unconfirmed'}
+        clickable={clickableSet.has('unconfirmed')}
         onActivate={handleActivate}
       />
       <KpiCard

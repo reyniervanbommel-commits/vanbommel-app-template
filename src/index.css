@@ -11,6 +11,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* Standaard geen tekstselectie op UI-chrome (tabs, headers, legenda's, knoppen).
+     Voorkomt dat labels als "Measure"/"Remaining" per ongeluk blauw oplichten bij
+     klikken/slepen. Data die je wilt kunnen kopiëren, wordt hieronder expliciet
+     weer selecteerbaar gemaakt (td, input, pre/code, .editable-cell, [data-selectable]). */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 #root {
@@ -34,13 +42,12 @@ nav img,
   pointer-events: none;
 }
 
-/* Behoud selectie voor interactieve elementen */
+/* Behoud selectie voor interactieve elementen en echte data (geen headers/labels) */
 input,
 textarea,
 select,
 [contenteditable="true"],
 td,
-th,
 pre,
 code,
 .editable-cell,

@@ -46,8 +46,10 @@ export const NUMBER_FILTER_OPERATORS = {
   between: 'is between',
 };
 
+// filterDataType wordt gezet voor "Push values to header"-kolommen wiens gekoppelde
+// line-kolom een datum is (die headers zijn zelf dataType 'text' — #AB:date-filter).
 export function isDateColumn(column) {
-  return column?.dataType === 'date';
+  return column?.dataType === 'date' || column?.filterDataType === 'date';
 }
 
 export function isNumberColumn(column) {

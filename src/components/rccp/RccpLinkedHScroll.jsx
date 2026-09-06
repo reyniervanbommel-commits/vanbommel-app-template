@@ -38,9 +38,11 @@ const useStyles = makeStyles({
     '::-webkit-scrollbar-button': { display: 'none', width: 0, height: 0 },
   },
   spacer: { height: '1px', pointerEvents: 'none' },
+  // Buiten de scroll-panes: blijft gecentreerd op de zichtbare breedte, scrollt niet mee.
+  middle: { width: '100%', flexShrink: 0 },
 });
 
-function RccpLinkedHScroll({ contentWidth, top, bottom }) {
+function RccpLinkedHScroll({ contentWidth, top, middle = null, bottom }) {
   const styles = useStyles();
   const topRef = useRef(null);
   const barRef = useRef(null);
@@ -59,6 +61,7 @@ function RccpLinkedHScroll({ contentWidth, top, bottom }) {
       <div className={styles.pane} ref={topRef} onScroll={handleScroll}>
         <div className={styles.inner} style={{ width: contentWidth, minWidth: contentWidth }}>{top}</div>
       </div>
+      {middle ? <div className={styles.middle}>{middle}</div> : null}
       <div
         className={styles.scrollbar}
         ref={barRef}

@@ -1,8 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
-  Field, Select, Switch, Text, makeStyles, shorthands, tokens,
+  Field, Input, Select, Switch, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import ColorPalettePicker, { SELECTABLE_STATUS_COLORS } from '../shared/ColorPalettePicker';
+import { rccpFieldLabel } from './rccpFieldLabel';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
 import { buildRccpColumnOption, matchRccpColumn, rccpColumnOptionValue } from '../../utils/rccpColumnGroups';
 
@@ -68,6 +69,10 @@ function RccpQuantityMeasureCard({
     onUpdate(index, { columnKey: key, label: col?.label || key });
   }, [index, numberCols, onUpdate]);
 
+  const handleLabel = useCallback((_, data) => {
+    onUpdate(index, { label: data.value });
+  }, [index, onUpdate]);
+
   const handleChart = useCallback((e) => {
     onUpdate(index, { chartType: e.target.value });
   }, [index, onUpdate]);
@@ -96,6 +101,22 @@ function RccpQuantityMeasureCard({
             selectedText={columnLabel}
             options={columnOptions}
             onSelect={handleColumn}
+          />
+        </Field>
+      </div>
+      <div className={styles.field}>
+        <Field
+          label={rccpFieldLabel(
+            'Label',
+            'Name shown in the chart legend and as the matrix row name.',
+          )}
+        >
+          <Input
+            size="small"
+            value={measure.label || ''}
+            onChange={handleLabel}
+            placeholder={measure.columnKey}
+            aria-label={`${slotTitle} chart label`}
           />
         </Field>
       </div>
