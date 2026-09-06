@@ -24,6 +24,19 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
     overflow: 'auto',
     overflowX: 'scroll',
     scrollbarGutter: 'stable',
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${tokens.colorNeutralStrokeAccessible} ${tokens.colorNeutralBackground3}`,
+    '::-webkit-scrollbar': {
+      width: '8px',
+      height: '8px',
+    },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStrokeAccessible,
+      ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    },
+    '::-webkit-scrollbar-track': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
   },
   table: {
     width: 'max-content',

@@ -1,28 +1,23 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpMatrixTable from './RccpMatrixTable';
-import {
-  RccpPoSegmentHoverCard,
-  firstChartDataAreaId,
-  isSameRccpHover,
-} from './RccpPoSegmentTooltip';
+import { RccpPoSegmentHoverCard } from './RccpPoSegmentTooltip';
 import RccpChartPlot from './RccpChartPlot';
 import { RccpSegmentHoverContext } from './RccpPoStackBar';
-import { getRgbHex } from '../../utils/hexColor';
-import { todayBand, RCCP_PO_BAR_SIZE, rccpChartYDomain, visibleAboveSegments } from './rccpPoStack';
 import {
-  buildMatrixPeriodHeaders,
-  buildRccpChartWeekBoundaryCoordinates,
   RCCP_CHART_Y_AXIS_WIDTH,
   RCCP_ROW_LABEL_WIDTH,
-  RCCP_WEEK_COL_WIDTH,
-  resolveChartWeekRangeBounds,
 } from './rccpUtils';
-import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
 import RccpLinkedHScroll from './RccpLinkedHScroll';
+import RccpChartLegend from './RccpChartLegend';
+import RccpChartResizeHandle from './RccpChartResizeHandle';
 import RccpStickyChartYAxis from './RccpStickyChartYAxis';
 import { rccpChartFlashSignature } from './rccpChartFlash';
 import { useRccpChartFlash } from './useRccpChartFlash';
+import { useRccpChartRowsLayout } from '../../hooks/useRccpChartRowsLayout';
+import { useRccpChartVisibility } from '../../hooks/useRccpChartVisibility';
+import { useRccpChartHoverSegment } from '../../hooks/useRccpChartHoverSegment';
+import { useRccpChartSeriesData } from '../../hooks/useRccpChartSeriesData';
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 },
@@ -51,18 +46,18 @@ const useStyles = makeStyles({
   },
 });
 
-function isStackRow(row) {
-  return Boolean(row?.isOpen || row?.isDelivered || row?.isOrdered);
-}
-
 function RccpChartMatrixPanel({
   chart,
+  chartSecondary = null,
   measureRows,
   periods,
   cellMap,
+  cellMapSecondary = null,
+  planningDateModes = null,
   chartWeekRanges = [],
   compact = false,
   chartHeight = 240,
+  onChartHeightChange = null,
   onCellClick,
   interactive = false,
   visibility = null,
@@ -70,145 +65,21 @@ function RccpChartMatrixPanel({
   matrixColorFill = true,
 }) {
   const styles = useStyles();
-  const orderedRows = useMemo(() => sortRccpMatrixRows(measureRows), [measureRows]);
-  const matrixRows = useMemo(
-    () => orderedRows.filter((row) => !row.isWarning),
-    [orderedRows],
-  );
-  const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
-  const gridWidth = useMemo(
-    () => matrixRows.length && periodHeaders.length
-      ? RCCP_ROW_LABEL_WIDTH + periodHeaders.length * RCCP_WEEK_COL_WIDTH
-      : 0,
-    [matrixRows.length, periodHeaders.length],
-  );
-  const chartRangeBands = useMemo(
-    () => (chartWeekRanges || [])
-      .map((range) => resolveChartWeekRangeBounds(range, periods))
-      .filter(Boolean),
-    [chartWeekRanges, periods],
-  );
-  const plotWidth = periodHeaders.length * RCCP_WEEK_COL_WIDTH;
-  const chartWidth = RCCP_CHART_Y_AXIS_WIDTH + plotWidth;
-  const weekBoundaryCoordinates = useMemo(
-    () => buildRccpChartWeekBoundaryCoordinates(periodHeaders.length),
-    [periodHeaders.length],
-  );
+  const {
+    orderedRows, matrixRows, periodHeaders, gridWidth, chartWidth,
+    weekBoundaryCoordinates, chartRangeBands,
+  } = useRccpChartRowsLayout({ measureRows, periods, chartWeekRanges });
+  const { visibleKeys, handleToggle } = useRccpChartVisibility({ orderedRows, visibility });
+  const {
+    hoveredSegment, hoverBoxRef, hoverValue, fallbackDataAreaId,
+  } = useRccpChartHoverSegment({ chart, itemFocus });
+  const {
+    plot, stack, legendItems, seriesSignature, todayMarker, yAxis,
+  } = useRccpChartSeriesData({
+    orderedRows, visibleKeys, chart, chartSecondary, planningDateModes, compact, chartHeight,
+    chartWidth, weekBoundaryCoordinates, chartRangeBands, periodHeaders,
+  });
 
-  const [visibleKeys, setVisibleKeys] = useState({});
-  const [hoveredSegment, setHoveredSegment] = useState(null);
-  const hoverBoxRef = useRef(null);
-  const hydratedRef = useRef(false);
-  const fallbackDataAreaId = useMemo(() => firstChartDataAreaId(chart), [chart]);
-
-  useEffect(() => {
-    const ready = !visibility || visibility.ready !== false;
-    if (!ready) {
-      hydratedRef.current = false;
-      setVisibleKeys(mergeChartVisibleKeys(orderedRows, {}, {}));
-      return;
-    }
-    const preferStored = Boolean(visibility) && !hydratedRef.current;
-    hydratedRef.current = true;
-    setVisibleKeys((prev) => mergeChartVisibleKeys(
-      orderedRows,
-      prev,
-      visibility?.savedKeys || {},
-      { preferStored },
-    ));
-  }, [orderedRows, visibility, visibility?.savedKeys, visibility?.ready]);
-
-  const handleToggle = useCallback((measureKey, checked) => {
-    setVisibleKeys((prev) => {
-      const next = { ...prev, [measureKey]: checked };
-      visibility?.onChange?.(next);
-      return next;
-    });
-  }, [visibility]);
-  const handleSegmentHover = useCallback((next) => {
-    if (!next) {
-      setHoveredSegment(null);
-      return;
-    }
-    if (hoverBoxRef.current) {
-      hoverBoxRef.current.style.left = `${next.x + 12}px`;
-      hoverBoxRef.current.style.top = `${next.y + 12}px`;
-    }
-    setHoveredSegment((prev) => (isSameRccpHover(prev, next) ? prev : next));
-  }, []);
-  const handleSegmentClick = useCallback((itemNumber) => {
-    itemFocus?.onSelect?.(itemNumber);
-  }, [itemFocus]);
-  const hoverHighlight = (
-    hoveredSegment?.segment?.status === 'received'
-    || hoveredSegment?.segment?.status === 'ordered'
-  )
-    ? (hoveredSegment.segment.itemNumber || '')
-    : '';
-  const highlightItem = hoverHighlight || itemFocus?.item || '';
-  const hoverValue = useMemo(() => ({
-    onHover: handleSegmentHover,
-    onClick: handleSegmentClick,
-    highlightItem,
-  }), [handleSegmentHover, handleSegmentClick, highlightItem]);
-
-  const openRow = useMemo(() => orderedRows.find((row) => row.isOpen), [orderedRows]);
-  const deliveredRow = useMemo(() => orderedRows.find((row) => row.isDelivered), [orderedRows]);
-  const orderedRow = useMemo(() => orderedRows.find((row) => row.isOrdered), [orderedRows]);
-  const receivedColor = useMemo(
-    () => getRgbHex(deliveredRow?.color) || '#0078D4',
-    [deliveredRow],
-  );
-  const openColor = useMemo(
-    () => getRgbHex(openRow?.color) || receivedColor,
-    [openRow, receivedColor],
-  );
-  const openVisible = Boolean(openRow && visibleKeys[openRow.measureKey]);
-  const deliveredVisible = Boolean(deliveredRow && visibleKeys[deliveredRow.measureKey]);
-  const orderedVisible = Boolean(orderedRow && visibleKeys[orderedRow.measureKey]);
-
-  const activeRows = useMemo(
-    () => orderedRows.filter((row) => visibleKeys[row.measureKey] && !isStackRow(row)),
-    [orderedRows, visibleKeys],
-  );
-
-  const chartRows = useMemo(() => (chart || []).map((point) => {
-    const segmentsAbove = visibleAboveSegments(point.segmentsAbove, { openVisible, orderedVisible });
-    const segmentsBelow = deliveredVisible ? (point.segmentsBelow || []) : [];
-    return {
-      ...point,
-      segmentsAbove,
-      segmentsBelow,
-      __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
-      __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
-      __openColor: openColor,
-      __receivedColor: receivedColor,
-      __barWidthAbove: RCCP_PO_BAR_SIZE,
-      __barWidthBelow: RCCP_PO_BAR_SIZE,
-    };
-  }), [chart, openVisible, deliveredVisible, orderedVisible, openColor, receivedColor]);
-  const todayMarker = useMemo(() => todayBand(periodHeaders), [periodHeaders]);
-  const yDomain = useMemo(
-    () => rccpChartYDomain(chartRows, activeRows.map((row) => row.measureKey)),
-    [chartRows, activeRows],
-  );
-  const seriesSignature = useMemo(
-    () => `${activeRows.map((row) => `${row.measureKey}:${row.chartType}`).join('|')}|${openVisible}|${deliveredVisible}|${orderedVisible}`,
-    [activeRows, openVisible, deliveredVisible, orderedVisible],
-  );
-  const plot = useMemo(() => ({
-    data: chartRows,
-    width: chartWidth,
-    height: chartHeight,
-    compact,
-    weekBoundaryCoordinates,
-    chartRangeBands,
-    activeRows,
-    yDomain,
-  }), [chartRows, chartWidth, chartHeight, compact, weekBoundaryCoordinates, chartRangeBands, activeRows, yDomain]);
-  const stack = useMemo(() => ({
-    openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor,
-  }), [openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor]);
   const flashSignature = useMemo(
     () => `${rccpChartFlashSignature(chart)}|${seriesSignature}`,
     [chart, seriesSignature],
@@ -225,9 +96,13 @@ function RccpChartMatrixPanel({
           ref={flashRef}
         >
           <RccpStickyChartYAxis
-            height={chartHeight}
+            height={yAxis.plotHeight}
             compact={compact}
-            yDomain={yDomain}
+            yDomain={yAxis.domain}
+            dragHandlers={yAxis.dragHandlers}
+            isDragging={yAxis.isDragging}
+            isScaled={yAxis.isScaled}
+            zoomPercent={yAxis.zoomPercent}
           />
           <div style={{ marginLeft: RCCP_ROW_LABEL_WIDTH - RCCP_CHART_Y_AXIS_WIDTH }}>
             <div key={seriesSignature}>
@@ -247,11 +122,21 @@ function RccpChartMatrixPanel({
           </div>
         </div>
       )}
+      middle={(
+        <>
+          <RccpChartLegend items={legendItems} compact={compact} />
+          {onChartHeightChange ? (
+            <RccpChartResizeHandle height={chartHeight} onResize={onChartHeightChange} />
+          ) : null}
+        </>
+      )}
       bottom={(
         <RccpMatrixTable
           measureRows={matrixRows}
           periods={periods}
           cellMap={cellMap}
+          cellMapSecondary={stack.dual ? cellMapSecondary : null}
+          planningDateModes={planningDateModes}
           visibleKeys={visibleKeys}
           onToggleVisible={handleToggle}
           onCellClick={onCellClick}

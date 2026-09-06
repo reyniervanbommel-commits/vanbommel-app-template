@@ -1,11 +1,39 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { Radio, RadioGroup } from '@fluentui/react-components';
+import { Checkbox, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import {
-  parseRccpPlanningDateMode,
+  isRccpDualPlanningDate,
+  parseRccpPlanningDateModes,
+  toggleRccpPlanningDateMode,
   RCCP_PLANNING_DATE_CONFIRMED,
   RCCP_PLANNING_DATE_REQUESTED,
 } from './rccpPeriodGrain';
 import { useRccpToggleFrameStyles } from './rccpToggleFrameStyles';
+
+const useStyles = makeStyles({
+  group: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: tokens.spacingHorizontalXS,
+  },
+  checkbox: {
+    '& .fui-Checkbox__indicator': {
+      marginTop: 0,
+      marginBottom: 0,
+      marginLeft: tokens.spacingHorizontalXXS,
+      marginRight: tokens.spacingHorizontalXXS,
+      width: '14px',
+      height: '14px',
+    },
+    '& .fui-Checkbox__label': {
+      paddingTop: 0,
+      paddingBottom: 0,
+      paddingLeft: tokens.spacingHorizontalXXS,
+      paddingRight: tokens.spacingHorizontalXS,
+      fontSize: tokens.fontSizeBase200,
+      lineHeight: tokens.lineHeightBase200,
+    },
+  },
+});
 
 export function confirmedToggleLabel(percent) {
   if (percent == null || !Number.isFinite(Number(percent))) return 'Conf.';
@@ -17,30 +45,52 @@ function confirmedToggleAriaLabel(percent) {
   return `Confirmed ${Math.round(Number(percent))}%`;
 }
 
+const LAST_MODE_HINT = 'At least one load date stays on';
+
+/**
+ * Requested and confirmed load date as two independent toggles. Both on shows both series in
+ * the chart and both quantities in the matrix; the last active one cannot be switched off.
+ */
 function RccpLoadDateToggle({ value, onChange, confirmedPercent }) {
-  const styles = useRccpToggleFrameStyles();
-  const mode = parseRccpPlanningDateMode(value);
+  const frameStyles = useRccpToggleFrameStyles();
+  const styles = useStyles();
+  const modes = useMemo(() => parseRccpPlanningDateModes(value), [value]);
+  const both = isRccpDualPlanningDate(modes);
   const confirmedLabel = useMemo(() => confirmedToggleLabel(confirmedPercent), [confirmedPercent]);
   const confirmedAria = useMemo(
     () => confirmedToggleAriaLabel(confirmedPercent),
     [confirmedPercent],
   );
-  const handleChange = useCallback((_, data) => {
-    onChange?.(data.value);
-  }, [onChange]);
+
+  const handleRequested = useCallback((_, data) => {
+    onChange?.(toggleRccpPlanningDateMode(modes, RCCP_PLANNING_DATE_REQUESTED, data.checked));
+  }, [modes, onChange]);
+  const handleConfirmed = useCallback((_, data) => {
+    onChange?.(toggleRccpPlanningDateMode(modes, RCCP_PLANNING_DATE_CONFIRMED, data.checked));
+  }, [modes, onChange]);
 
   return (
-    <div className={styles.frame}>
-      <RadioGroup
-        className={styles.group}
-        layout="horizontal"
-        value={mode}
-        onChange={handleChange}
-        aria-label="Load date"
-      >
-        <Radio value={RCCP_PLANNING_DATE_REQUESTED} label="Req." aria-label="Requested" />
-        <Radio value={RCCP_PLANNING_DATE_CONFIRMED} label={confirmedLabel} aria-label={confirmedAria} />
-      </RadioGroup>
+    <div className={frameStyles.frame}>
+      <div className={mergeClasses(styles.group)} role="group" aria-label="Load date">
+        <Checkbox
+          className={styles.checkbox}
+          checked={modes.requested}
+          disabled={modes.requested && !both}
+          title={modes.requested && !both ? LAST_MODE_HINT : undefined}
+          onChange={handleRequested}
+          label="Req."
+          aria-label="Requested"
+        />
+        <Checkbox
+          className={styles.checkbox}
+          checked={modes.confirmed}
+          disabled={modes.confirmed && !both}
+          title={modes.confirmed && !both ? LAST_MODE_HINT : undefined}
+          onChange={handleConfirmed}
+          label={confirmedLabel}
+          aria-label={confirmedAria}
+        />
+      </div>
     </div>
   );
 }

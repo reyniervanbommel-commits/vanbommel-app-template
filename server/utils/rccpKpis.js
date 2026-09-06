@@ -71,7 +71,14 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
   const pairQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
-  if (line.hasConfirmedDate && pairQty > 0) acc.confirmedUnits += pairQty;
+  if (pairQty > 0) {
+    if (line.hasConfirmedDate) {
+      acc.confirmedUnits += pairQty;
+    } else {
+      acc.unconfirmedUnits += pairQty;
+      addSku(acc.unconfirmedSkus, line.itemNumber);
+    }
+  }
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
   if (isSentinelDate(line.plannedDate)) {
@@ -117,6 +124,8 @@ function emptyAcc(now) {
     planned1900Units: 0,
     planned1900Skus: new Set(),
     confirmedUnits: 0,
+    unconfirmedUnits: 0,
+    unconfirmedSkus: new Set(),
   };
 }
 
@@ -137,6 +146,8 @@ function emptyOrderStats() {
     openLateSkus: new Set(),
     planned1900Units: 0,
     planned1900Skus: new Set(),
+    unconfirmedUnits: 0,
+    unconfirmedSkus: new Set(),
   };
 }
 
@@ -145,6 +156,11 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   entry.deliveredQty += line.deliveredQty;
   const sku = String(line.itemNumber || '').trim();
   if (line.openQty > 0 && sku) entry.openSkus.add(sku);
+  const pairQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
+  if (pairQty > 0 && !line.hasConfirmedDate) {
+    entry.unconfirmedUnits += pairQty;
+    if (sku) entry.unconfirmedSkus.add(sku);
+  }
   if (isSentinelDate(line.plannedDate)) {
     const qty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
     if (qty > 0) {
@@ -281,6 +297,9 @@ function summarizeAcc(acc) {
     planned1900ItemCount: acc.planned1900Skus.size,
     confirmedUnits: acc.confirmedUnits,
     confirmedPercent: percentOf(acc.confirmedUnits, totalOrdered),
+    unconfirmedUnits: acc.unconfirmedUnits,
+    unconfirmedItemCount: acc.unconfirmedSkus.size,
+    unconfirmedPercent: percentOf(acc.unconfirmedUnits, totalOrdered),
   };
 }
 

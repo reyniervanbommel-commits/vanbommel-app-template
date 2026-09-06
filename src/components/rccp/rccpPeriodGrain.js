@@ -202,3 +202,76 @@ export function resolveRccpChartView({ grain, periods, chart, cells }) {
 
   return { periods: nextPeriods, chart: nextChart, cellMap: buildCellMap(nextCells) };
 }
+
+/** Both load-date modes, requested first — the order the chart and matrix render them in. */
+export const RCCP_PLANNING_DATE_MODES = [
+  RCCP_PLANNING_DATE_REQUESTED,
+  RCCP_PLANNING_DATE_CONFIRMED,
+];
+
+/**
+ * Active load-date modes as a `{ requested, confirmed }` flag pair. Accepts the legacy single
+ * mode string, an array of modes, or an already-parsed flag object. At least one mode stays on:
+ * an empty selection falls back to requested.
+ * @returns {{ requested: boolean, confirmed: boolean }}
+ */
+export function parseRccpPlanningDateModes(raw) {
+  let requested = false;
+  let confirmed = false;
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      const mode = String(entry || '').toLowerCase();
+      if (mode === RCCP_PLANNING_DATE_REQUESTED) requested = true;
+      if (mode === RCCP_PLANNING_DATE_CONFIRMED) confirmed = true;
+    }
+  } else if (raw && typeof raw === 'object') {
+    requested = Boolean(raw.requested);
+    confirmed = Boolean(raw.confirmed);
+  } else if (raw) {
+    const mode = parseRccpPlanningDateMode(raw);
+    requested = mode === RCCP_PLANNING_DATE_REQUESTED;
+    confirmed = mode === RCCP_PLANNING_DATE_CONFIRMED;
+  }
+  if (!requested && !confirmed) return { requested: true, confirmed: false };
+  return { requested, confirmed };
+}
+
+/** Active modes as a list, requested first. Never empty. */
+export function rccpPlanningDateModeList(modes) {
+  const flags = parseRccpPlanningDateModes(modes);
+  return RCCP_PLANNING_DATE_MODES.filter((mode) => flags[mode]);
+}
+
+/** The mode that drives KPIs, capacity rows and the primary chart series. */
+export function primaryRccpPlanningDateMode(modes) {
+  return rccpPlanningDateModeList(modes)[0];
+}
+
+/** The overlay mode, or null when only one mode is active. */
+export function secondaryRccpPlanningDateMode(modes) {
+  return rccpPlanningDateModeList(modes)[1] || null;
+}
+
+/** True when both series must be drawn side by side. */
+export function isRccpDualPlanningDate(modes) {
+  const flags = parseRccpPlanningDateModes(modes);
+  return flags.requested && flags.confirmed;
+}
+
+/**
+ * Flip one mode on or off. Turning off the last active mode is ignored — the chart always
+ * shows at least one load date.
+ */
+export function toggleRccpPlanningDateMode(modes, mode, on) {
+  const flags = parseRccpPlanningDateModes(modes);
+  const key = String(mode || '').toLowerCase();
+  if (key !== RCCP_PLANNING_DATE_REQUESTED && key !== RCCP_PLANNING_DATE_CONFIRMED) return flags;
+  const next = { ...flags, [key]: Boolean(on) };
+  if (!next.requested && !next.confirmed) return flags;
+  return next;
+}
+
+/** Superscript marker shown behind a matrix quantity for its load-date mode. */
+export function rccpPlanningDateMarker(mode) {
+  return parseRccpPlanningDateMode(mode) === RCCP_PLANNING_DATE_CONFIRMED ? 'C' : 'R';
+}

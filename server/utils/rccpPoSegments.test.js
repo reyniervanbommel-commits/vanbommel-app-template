@@ -243,6 +243,41 @@ describe('buildPoSegments', () => {
     expect(above.every((seg) => seg.planned1900)).toBe(true);
   });
 
+  it('reads scoped config keys, as stored after saving the RCCP settings', () => {
+    // Na een settings-save staan de keys scoped in de config ("master:vendorAccount"). Met de
+    // rauwe key vond buildPoSegments geen vendor meer en verdwenen alle staven uit de grafiek.
+    const scopedConfig = {
+      ...baseConfig,
+      vendorColumnKey: 'master:vendorAccount',
+      dateColumnKey: 'detail:requestedDeliveryDate',
+      confirmedDateColumnKey: 'detail:confirmedDeliveryDate',
+      receiptDateColumnKey: 'detail:productReceiptDate',
+      openMeasureKey: 'detail:openQty',
+      deliveredMeasureKey: 'detail:deliveredQty',
+      orderedMeasureKey: 'detail:orderedQty',
+    };
+    const byWeek = buildPoSegments([row()], scopedConfig, window, { now: nowCurrent });
+    expect(byWeek.get(plannedWeek.key)?.segmentsAbove.find((s) => s.status === 'open')?.qty).toBe(10);
+    expect(byWeek.get(receivedWeek.key)?.segmentsBelow.find((s) => s.status === 'received')?.qty).toBe(4);
+  });
+
+  it('reads a scoped header-only measure from the order values', () => {
+    const scopedConfig = {
+      ...baseConfig,
+      vendorColumnKey: 'master:vendorAccount',
+      openMeasureKey: 'master:openQty',
+      deliveredMeasureKey: 'master:deliveredQty',
+      orderedMeasureKey: 'master:orderedQty',
+    };
+    const byWeek = buildPoSegments(
+      [row({ values: { openQty: 8, deliveredQty: 0, orderedQty: 8 }, line: { openQty: null, deliveredQty: null, orderedQty: null } })],
+      scopedConfig,
+      window,
+      { now: nowCurrent },
+    );
+    expect(byWeek.get(plannedWeek.key)?.segmentsAbove.find((s) => s.status === 'open')?.qty).toBe(8);
+  });
+
   it('places open on confirmed week when that date is real', () => {
     const requested = '2026-09-14T00:00:00.000Z';
     const confirmed = '2026-09-28T00:00:00.000Z';

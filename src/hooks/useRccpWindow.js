@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../utils/api';
 import { currentIsoWindow, isPersistableRccpIsoWindow } from '../components/rccp/rccpUtils';
 import {
-  RCCP_PLANNING_DATE_REQUESTED,
-  parseRccpPlanningDateMode,
+  parseRccpPlanningDateModes,
+  primaryRccpPlanningDateMode,
+  rccpPlanningDateModeList,
 } from '../components/rccp/rccpPeriodGrain';
 import {
   getRccpWindowSnapshot,
@@ -18,7 +19,7 @@ const RCCP_BOARD_KEY = 'rccp';
  * vendor, KPI-window en grafiek-toggles. Keep-alive pagina's delen dezelfde sessie-state
  * via rccpWindowSync, zodat de PO-tabel de Period van /rccp overneemt.
  *
- * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, planningDateMode, setPlanningDateMode, loaded }}
+ * @returns {{ isoWindow, setIsoWindow, lastVendor, setLastVendor, kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys, planningDateModes, setPlanningDateModes, loaded }}
  */
 export function useRccpWindow() {
   const seeded = getRccpWindowSnapshot();
@@ -28,8 +29,8 @@ export function useRccpWindow() {
     typeof seeded?.kpiWindowOnly === 'boolean' ? seeded.kpiWindowOnly : true
   ));
   const [chartVisibleKeys, setChartVisibleKeysState] = useState(() => seeded?.chartVisibleKeys || {});
-  const [planningDateMode, setPlanningDateModeState] = useState(() => (
-    parseRccpPlanningDateMode(seeded?.planningDateMode)
+  const [planningDateModes, setPlanningDateModesState] = useState(() => (
+    parseRccpPlanningDateModes(seeded?.planningDateModes || seeded?.planningDateMode)
   ));
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);
@@ -46,12 +47,12 @@ export function useRccpWindow() {
   const lastVendorRef = useRef(lastVendor);
   const kpiWindowOnlyRef = useRef(kpiWindowOnly);
   const chartVisibleKeysRef = useRef(chartVisibleKeys);
-  const planningDateModeRef = useRef(planningDateMode);
+  const planningDateModesRef = useRef(planningDateModes);
   useEffect(() => { isoWindowRef.current = isoWindow; }, [isoWindow]);
   useEffect(() => { lastVendorRef.current = lastVendor; }, [lastVendor]);
   useEffect(() => { kpiWindowOnlyRef.current = kpiWindowOnly; }, [kpiWindowOnly]);
   useEffect(() => { chartVisibleKeysRef.current = chartVisibleKeys; }, [chartVisibleKeys]);
-  useEffect(() => { planningDateModeRef.current = planningDateMode; }, [planningDateMode]);
+  useEffect(() => { planningDateModesRef.current = planningDateModes; }, [planningDateModes]);
 
   const publishSnapshot = useCallback(() => {
     if (applyingPeerRef.current) return;
@@ -61,7 +62,7 @@ export function useRccpWindow() {
       lastVendor: lastVendorRef.current,
       kpiWindowOnly: kpiWindowOnlyRef.current,
       chartVisibleKeys: chartVisibleKeysRef.current,
-      planningDateMode: planningDateModeRef.current,
+      planningDateModes: planningDateModesRef.current,
     });
   }, []);
 
@@ -77,7 +78,9 @@ export function useRccpWindow() {
             lastVendorAccount: lastVendorRef.current,
             kpiWindowOnly: kpiWindowOnlyRef.current,
             chartVisibleKeys: chartVisibleKeysRef.current,
-            planningDateMode: planningDateModeRef.current,
+            // planningDateMode blijft meegaan zodat een oudere client de primaire load-date leest.
+            planningDateMode: primaryRccpPlanningDateMode(planningDateModesRef.current),
+            planningDateModes: rccpPlanningDateModeList(planningDateModesRef.current),
           },
         },
       }).catch(() => { /* stil falen; lokale state blijft leidend */ });
@@ -122,10 +125,11 @@ export function useRccpWindow() {
           setChartVisibleKeysState(storedKeys);
           chartVisibleKeysRef.current = storedKeys;
         }
-        if (data?.settings?.planningDateMode && !isoWindowTouchedRef.current) {
-          const mode = parseRccpPlanningDateMode(data.settings.planningDateMode);
-          setPlanningDateModeState(mode);
-          planningDateModeRef.current = mode;
+        const storedModes = data?.settings?.planningDateModes || data?.settings?.planningDateMode;
+        if (storedModes && !isoWindowTouchedRef.current) {
+          const modes = parseRccpPlanningDateModes(storedModes);
+          setPlanningDateModesState(modes);
+          planningDateModesRef.current = modes;
         }
         publishSnapshot();
       })
@@ -153,10 +157,10 @@ export function useRccpWindow() {
       setChartVisibleKeysState(next.chartVisibleKeys);
       chartVisibleKeysRef.current = next.chartVisibleKeys;
     }
-    if (next.planningDateMode) {
-      const mode = parseRccpPlanningDateMode(next.planningDateMode);
-      setPlanningDateModeState(mode);
-      planningDateModeRef.current = mode;
+    if (next.planningDateModes || next.planningDateMode) {
+      const modes = parseRccpPlanningDateModes(next.planningDateModes || next.planningDateMode);
+      setPlanningDateModesState(modes);
+      planningDateModesRef.current = modes;
     }
     applyingPeerRef.current = false;
   }), []);
@@ -210,11 +214,11 @@ export function useRccpWindow() {
     });
   }, [schedulePersist, publishSnapshot]);
 
-  const setPlanningDateMode = useCallback((value) => {
-    const next = parseRccpPlanningDateMode(value);
-    setPlanningDateModeState((prev) => {
-      if (prev === next) return prev;
-      planningDateModeRef.current = next;
+  const setPlanningDateModes = useCallback((value) => {
+    const next = parseRccpPlanningDateModes(value);
+    setPlanningDateModesState((prev) => {
+      if (prev.requested === next.requested && prev.confirmed === next.confirmed) return prev;
+      planningDateModesRef.current = next;
       schedulePersist();
       publishSnapshot();
       return next;
@@ -229,12 +233,12 @@ export function useRccpWindow() {
     () => ({
       isoWindow, setIsoWindow, lastVendor, setLastVendor,
       kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
-      planningDateMode, setPlanningDateMode, loaded,
+      planningDateModes, setPlanningDateModes, loaded,
     }),
     [
       isoWindow, setIsoWindow, lastVendor, setLastVendor,
       kpiWindowOnly, setKpiWindowOnly, chartVisibleKeys, setChartVisibleKeys,
-      planningDateMode, setPlanningDateMode, loaded,
+      planningDateModes, setPlanningDateModes, loaded,
     ],
   );
 }

@@ -161,7 +161,7 @@ describe('useRccpWindow', () => {
     expect(result.current.lastVendor).toBe('V1');
   });
 
-  it('loads and persists the confirmed load-date mode', async () => {
+  it('loads the legacy single load-date mode as a flag pair', async () => {
     apiRequest.mockImplementation((path) => {
       if (String(path).includes('/supplier/board-settings/rccp')) {
         return Promise.resolve({ settings: { planningDateMode: 'confirmed' } });
@@ -171,16 +171,40 @@ describe('useRccpWindow', () => {
 
     const { result } = renderHook(() => useRccpWindow());
     await waitFor(() => expect(result.current.loaded).toBe(true));
-    expect(result.current.planningDateMode).toBe('confirmed');
+    expect(result.current.planningDateModes).toEqual({ requested: false, confirmed: true });
 
     act(() => {
-      result.current.setPlanningDateMode('requested');
+      result.current.setPlanningDateModes({ requested: true, confirmed: false });
     });
     await waitFor(() => {
       expect(apiRequest.mock.calls.some((call) => call[1]?.method === 'PATCH')).toBe(true);
     });
     const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
     expect(patch[1].body.settings.planningDateMode).toBe('requested');
+    expect(patch[1].body.settings.planningDateModes).toEqual(['requested']);
+  });
+
+  it('loads and persists both load-date modes at once', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (String(path).includes('/supplier/board-settings/rccp')) {
+        return Promise.resolve({ settings: { planningDateModes: ['requested', 'confirmed'] } });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useRccpWindow());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.planningDateModes).toEqual({ requested: true, confirmed: true });
+
+    act(() => {
+      result.current.setPlanningDateModes({ requested: false, confirmed: true });
+    });
+    await waitFor(() => {
+      expect(apiRequest.mock.calls.some((call) => call[1]?.method === 'PATCH')).toBe(true);
+    });
+    const patch = apiRequest.mock.calls.find((call) => call[1]?.method === 'PATCH');
+    expect(patch[1].body.settings.planningDateMode).toBe('confirmed');
+    expect(patch[1].body.settings.planningDateModes).toEqual(['confirmed']);
   });
 
   it('shares a session-only wide window with a second keep-alive instance', async () => {

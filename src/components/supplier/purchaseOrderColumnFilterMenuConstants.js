@@ -50,8 +50,12 @@ export function getColumnTypeMeta(column) {
   return COLUMN_TYPE_META[typeKey] || COLUMN_TYPE_META.text;
 }
 
+// Connected/pushed header-kolommen ("Push values to header") worden altijd als
+// dataType 'text' opgeslagen, ook als de gekoppelde line-kolom een datum is (#AB:date-filter).
+// filterDataType wordt éénmalig berekend in usePurchaseOrdersPage (orderedHeaderColumns) via
+// isDateSourceColumn, zodat de datum-filter-UI ook op deze kolommen verschijnt.
 export function isDateColumn(column) {
-  return column?.dataType === 'date';
+  return column?.dataType === 'date' || column?.filterDataType === 'date';
 }
 
 export function isNumberColumn(column, datePeriodDisplayModes = {}) {

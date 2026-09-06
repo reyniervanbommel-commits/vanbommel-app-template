@@ -115,3 +115,96 @@ describe('RccpMatrixTable', () => {
     expect(cellFor(container, 'Quantity', 2).textContent).toBe('');
   });
 });
+
+describe('RccpMatrixTable load-date markers', () => {
+  const loadDateRows = [
+    { measureKey: 'ordered', label: 'Quantity', isOrdered: true },
+    { measureKey: 'open', label: 'Remaining', isOpen: true },
+    { measureKey: RCCP_CAPACITY_MEASURE_KEY, label: 'Available capacity', isCapacity: true },
+  ];
+  const requestedCells = new Map([
+    ['ordered|2026|10', { confirmedQty: 120, availableQty: 200, statusColor: 'green' }],
+    ['open|2026|10', { confirmedQty: 40, availableQty: 200, statusColor: 'green' }],
+  ]);
+  const confirmedCells = new Map([
+    ['ordered|2026|10', { confirmedQty: 80, availableQty: 200, statusColor: 'green' }],
+  ]);
+
+  it('marks a single active load date with its superscript', () => {
+    const { container } = renderWithFluent(
+      <RccpMatrixTable
+        measureRows={loadDateRows}
+        periods={periods}
+        cellMap={requestedCells}
+        planningDateModes="requested"
+      />,
+    );
+    expect(cellFor(container, 'Quantity').textContent).toBe('120R');
+    expect(cellFor(container, 'Remaining').textContent).toBe('40R');
+    expect(cellFor(container, 'Available capacity').textContent).toBe('-');
+  });
+
+  it('stacks both load dates: requested first, confirmed after it', () => {
+    const { container } = renderWithFluent(
+      <RccpMatrixTable
+        measureRows={loadDateRows}
+        periods={periods}
+        cellMap={requestedCells}
+        cellMapSecondary={confirmedCells}
+        planningDateModes={{ requested: true, confirmed: true }}
+      />,
+    );
+    // Requested linksboven, confirmed rechtsonder — twee regels, geen scheidingsteken.
+    const cell = cellFor(container, 'Quantity');
+    expect(cell.textContent).toBe('120R80C');
+    const lines = cell.querySelectorAll('span > span.fui-text, span > span');
+    expect(cell.textContent.indexOf('120R')).toBeLessThan(cell.textContent.indexOf('80C'));
+    expect(lines.length).toBeGreaterThan(1);
+  });
+
+  it('shows only the load date that has a value in that period', () => {
+    const { container } = renderWithFluent(
+      <RccpMatrixTable
+        measureRows={loadDateRows}
+        periods={periods}
+        cellMap={requestedCells}
+        cellMapSecondary={confirmedCells}
+        planningDateModes={{ requested: true, confirmed: true }}
+      />,
+    );
+    expect(cellFor(container, 'Remaining').textContent).toBe('40R');
+  });
+});
+
+describe('RccpMatrixTable row visibility', () => {
+  it('greys out a row that is toggled off in the chart', () => {
+    const { container } = renderWithFluent(
+      <RccpMatrixTable
+        measureRows={measureRows}
+        periods={periods}
+        cellMap={cellMap}
+        visibleKeys={{ ordered: false, received: true, [RCCP_CAPACITY_MEASURE_KEY]: true }}
+        colorFillEnabled
+      />,
+    );
+    const hidden = cellFor(container, 'Quantity');
+    // Waarde blijft leesbaar, maar grijs en zonder statuskleur — de reeks staat uit.
+    expect(hidden.textContent).not.toBe('');
+    expect(hidden.style.backgroundColor).toBe('');
+    expect(hidden.querySelector('span').className)
+      .not.toBe(cellFor(container, 'Received').querySelector('span').className);
+  });
+
+  it('keeps values for rows without an explicit toggle state', () => {
+    const { container } = renderWithFluent(
+      <RccpMatrixTable
+        measureRows={measureRows}
+        periods={periods}
+        cellMap={cellMap}
+        visibleKeys={{}}
+        colorFillEnabled
+      />,
+    );
+    expect(cellFor(container, 'Quantity').textContent).not.toBe('');
+  });
+});

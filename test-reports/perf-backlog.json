@@ -143,8 +143,72 @@
       "priorityScore": 0,
       "status": "skipped",
       "note": "elapsedWall null; duplicate PO-fetch = 0 (cache-fix v1.3 houdt stand)"
+    },
+    {
+      "id": "BL-007",
+      "journey": "J2-cold",
+      "action": "RCCP /api/rccp/board-kpis — koude snapshotcache",
+      "profile": "current",
+      "measuredAppMsCold": 18245,
+      "measuredAppMsWarm": 9,
+      "dominantPost": "server",
+      "targetAppMsCold": 1000,
+      "routeFrequencyWeight": 1.5,
+      "priorityScore": 25868,
+      "status": "open",
+      "note": "Direct gemeten 2026-09-04 op Azure DEV: koud 18245ms, warm 8-13ms (factor ~1400x). Oorzaak: SNAPSHOT_TTL_MS=5min in BoardSnapshotCache.js:13 verwerpt de cache ook als de content-signatuur ongewijzigd is. Dit is in strijd met policy cache.crossPageTtlPolicy=unlimited-until-revision + requireRevisionInvalidation=true (Q6). Signatuur-invalidatie is al geimplementeerd (regel 73,107). Voorstel-tier L1: TTL-guard laten vervallen of sterk verhogen, signatuur blijft leidend."
+    },
+    {
+      "id": "BL-008",
+      "journey": "infra",
+      "action": "Azure DEV container cold start (minReplicas=0)",
+      "profile": "n.v.t.",
+      "measuredColdStartMs": 23982,
+      "measuredWarmMs": 110,
+      "dominantPost": "infra",
+      "routeFrequencyWeight": 3,
+      "priorityScore": 70000,
+      "status": "open",
+      "note": "Gemeten 2026-09-04: eerste request na idle 23.98s, warm 0.10s. vendorportal-dev heeft minReplicas=0. PROD (vendorportal-prod) heeft minReplicas=1 dus geen cold start, maar maxReplicas=1 (geen scale-out onder belasting). Raakt vooral de ervaren snelheid op DEV/preview; PROD-risico zit in ontbrekende scale-out."
+    },
+    {
+      "id": "BL-009",
+      "journey": "J2-cold",
+      "action": "Kosten van de koude read zelf (tb_read_details / lookups / build_rows)",
+      "profile": "current",
+      "dominantPost": "sql+cpu",
+      "breakdownMs": {
+        "kpi_po_read": 17239,
+        "tb_read_details": 7916,
+        "tb_lookups": 5844,
+        "tb_lookup_pav_pivot": 5143,
+        "tb_lookup_product_receipt_lines": 4560,
+        "tb_build_rows": 4029,
+        "tb_read_cols": 1218,
+        "tb_revision": 1091,
+        "tb_sync_state": 1039,
+        "tb_read_custom": 1011
+      },
+      "targetAppMsCold": 9000,
+      "routeFrequencyWeight": 1.5,
+      "priorityScore": 13859,
+      "status": "open",
+      "note": "Server-Timing breakdown van de koude /api/rccp/board-kpis (18245ms). Relevant NA BL-007: bepaalt hoe duur de achtergrond-refresh en de eerste load na een datawijziging/deploy zijn. Hier landen de eerder gevonden code-punten: full-table read zonder paginering (TableDataService readCacheRows), lookup-scopes per lookup (getInheritedPoLookupScopes), ontbrekende indexdekking op removed_at_source/sync_retained, en tb_build_rows als pure CPU-post."
+    },
+    {
+      "id": "BL-010",
+      "journey": "n.v.t.",
+      "action": "Kapotte test: useRccpSplitAnalysis > applies a saved chart type immediately and refetches analysis",
+      "profile": "n.v.t.",
+      "dominantPost": "test",
+      "routeFrequencyWeight": 0,
+      "priorityScore": 0,
+      "status": "open",
+      "note": "Pre-existent op develop (2026-09-04). Test loopt in timeout (52s, ook in isolatie, ook onder lage belasting). Niet veroorzaakt door BL-007 (server-side) noch door lopende rccpPoStack/rccpPeriodGrain-edits: de hook mockt apiRequest en rccpUtils importeert alleen Fluent-tokens. Suite verder groen: 1 failed / 1870 passed. Los oppakken - blokkeert BL-007 niet, maar houdt de suite rood."
     }
   ],
   "boardActionsMeasuredAt": "2026-07-22T10:30:21.473Z",
-  "scrollMeasuredAt": "2026-08-13T17:39:39.392Z"
+  "scrollMeasuredAt": "2026-08-13T17:39:39.392Z",
+  "directMeasurementAt": "2026-09-04",
+  "directMeasurementNote": "BL-007/008/009 toegevoegd via directe endpoint-meting (curl + Server-Timing) op Azure DEV, huidige dataset, v1.54.10 — niet via de journey-harnas."
 }

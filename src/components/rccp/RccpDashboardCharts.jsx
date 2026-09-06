@@ -1,7 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { Spinner, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { resolveRccpDashboardKpis, shouldOfferRccpDataWindow } from './rccpUtils';
-import { RCCP_CLICKABLE_KPI_KEYS } from './rccpKpiChartFilter';
+import { RCCP_CLICKABLE_KPI_KEYS, filterRccpChartByKpi } from './rccpKpiChartFilter';
 import { useRccpKpiFilter } from './useRccpKpiFilter';
 import RccpKpiCards from './RccpKpiCards';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
@@ -14,13 +14,17 @@ const useStyles = makeStyles({
 });
 
 function RccpDashboardCharts({
-  loading, error, analysis, kpiWindowOnly, chart, matrix,
-  visibility, interactive, onCellClick, onShowDataWindow,
+  loading, error, analysis, kpiWindowOnly, chart, chartSecondary = null, matrix,
+  visibility, interactive, onCellClick, onShowDataWindow, planningDateModes = null,
 }) {
   const styles = useStyles();
   const { selectedKey, onSelect, filteredChart, highlight } = useRccpKpiFilter(
     chart,
     matrix?.measureRows,
+  );
+  const filteredChartSecondary = useMemo(
+    () => (chartSecondary ? filterRccpChartByKpi(chartSecondary, selectedKey) : null),
+    [chartSecondary, selectedKey],
   );
   const kpis = resolveRccpDashboardKpis(analysis, kpiWindowOnly);
   const chartVisibility = useMemo(
@@ -45,9 +49,12 @@ function RccpDashboardCharts({
       />
       <RccpChartMatrixPanel
         chart={filteredChart}
+        chartSecondary={filteredChartSecondary}
         measureRows={matrix?.measureRows}
         periods={matrix?.periods}
         cellMap={matrix?.cellMap}
+        cellMapSecondary={matrix?.cellMapSecondary}
+        planningDateModes={planningDateModes}
         chartWeekRanges={analysis.config?.chartWeekRanges}
         onCellClick={onCellClick}
         interactive={interactive}

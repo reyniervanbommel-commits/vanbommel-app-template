@@ -11,9 +11,14 @@ import {
   isCurrentMatrixPeriod,
   rccpChartYDomain,
   rccpNiceYExtent,
-  rccpSymmetricYAxisDomain,
+  rccpChartYAxisScale,
+  rccpChartYTicks,
   rccpPoStackBarFlags,
   visibleAboveSegments,
+  rccpLoadDateBarLayout,
+  RCCP_DUAL_BAR_OVERLAP,
+  RCCP_DUAL_PO_BAR_SIZE,
+  RCCP_PO_BAR_SIZE_BELOW,
 } from './rccpPoStack';
 import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WEEK_COL_WIDTH } from './rccpUtils';
 
@@ -30,6 +35,30 @@ describe('rccpPoStack', () => {
     expect(weekBarBox(1, RCCP_PO_BAR_SIZE).x).toBe(
       RCCP_CHART_Y_AXIS_WIDTH + RCCP_WEEK_COL_WIDTH + (RCCP_WEEK_COL_WIDTH - RCCP_PO_BAR_SIZE) / 2,
     );
+  });
+
+  it('shifts a bar by the given offset', () => {
+    const centered = weekBarBox(0, RCCP_PO_BAR_SIZE);
+    expect(weekBarBox(0, RCCP_PO_BAR_SIZE, 6).x).toBe(centered.x + 6);
+    expect(weekBarBox(0, RCCP_PO_BAR_SIZE, -6).x).toBe(centered.x - 6);
+  });
+
+  it('keeps one centered bar at the same width as the below-axis bar when a single load date is active', () => {
+    expect(rccpLoadDateBarLayout(false))
+      .toEqual({ barSize: RCCP_PO_BAR_SIZE_BELOW, primaryOffset: 0, secondaryOffset: 0 });
+  });
+
+  it('overlaps the two load-date bars by 25% and keeps them inside the week column', () => {
+    const { barSize, primaryOffset, secondaryOffset } = rccpLoadDateBarLayout(true);
+    const requested = weekBarBox(0, barSize, primaryOffset);
+    const confirmed = weekBarBox(0, barSize, secondaryOffset);
+    const overlap = (requested.x + requested.width) - confirmed.x;
+    expect(overlap).toBeCloseTo(barSize * RCCP_DUAL_BAR_OVERLAP, 6);
+    expect(requested.x).toBeGreaterThanOrEqual(RCCP_CHART_Y_AXIS_WIDTH);
+    expect(confirmed.x + confirmed.width)
+      .toBeLessThanOrEqual(RCCP_CHART_Y_AXIS_WIDTH + RCCP_WEEK_COL_WIDTH);
+    expect(barSize).toBe(RCCP_DUAL_PO_BAR_SIZE);
+    expect(barSize).toBeLessThan(RCCP_PO_BAR_SIZE);
   });
 
   it('returns null for todayLineX when the current week is outside the window', () => {
@@ -116,25 +145,62 @@ describe('rccpPoStack', () => {
     expect(rccpChartYDomain([
       { __stackAbove: 1601, __stackBelow: 0, remaining: 21 },
       { __stackAbove: 0, __stackBelow: -3000, remaining: 0 },
-    ], ['remaining'])).toEqual([-5000, 5000]);
+    ], ['remaining'])).toEqual([-3000, 3000]);
   });
 
-  it('snaps the Y extent to round steps like 100, 250, 500, 1000', () => {
+  it('snaps the Y extent to the next round step instead of the next power of ten', () => {
     expect(rccpNiceYExtent(100)).toBe(100);
-    expect(rccpNiceYExtent(21)).toBe(50);
-    expect(rccpNiceYExtent(240)).toBe(500);
-    expect(rccpNiceYExtent(501)).toBe(1000);
+    expect(rccpNiceYExtent(21)).toBe(25);
+    expect(rccpNiceYExtent(240)).toBe(250);
+    expect(rccpNiceYExtent(501)).toBe(600);
     expect(rccpNiceYExtent(1601)).toBe(2000);
-    expect(rccpNiceYExtent(3000)).toBe(5000);
+    expect(rccpNiceYExtent(3000)).toBe(3000);
+  });
+
+  it('keeps the axis close to the highest bar', () => {
+    // Een top van 1600 mag niet op een as van 5000 uitkomen: hooguit 25% lucht boven de balk.
+    for (const peak of [180, 640, 1601, 2400, 4200, 9100]) {
+      const [, max] = rccpChartYDomain([{ __stackAbove: peak, __stackBelow: 0 }]);
+      expect(max).toBeGreaterThanOrEqual(peak);
+      expect(max).toBeLessThanOrEqual(peak * 1.25);
+    }
   });
 
   it('forces Recharts to keep equal scale when visible series are one-sided', () => {
-    const props = rccpSymmetricYAxisDomain([-3000, 3000]);
+    const props = rccpChartYAxisScale([-3000, 3000]);
     expect(props.type).toBe('number');
     expect(props.allowDataOverflow).toBe(true);
-    expect(props.domain).toEqual([-5000, 5000]);
-    expect(props.ticks).toEqual([-5000, -2500, 0, 2500, 5000]);
+    expect(props.domain).toEqual([-3000, 3000]);
+    expect(props.ticks).toEqual([-3000, -1500, 0, 1500, 3000]);
     expect(Math.abs(props.domain[0])).toBe(Math.abs(props.domain[1]));
+  });
+
+  it('starts the axis at zero when nothing is drawn below it', () => {
+    expect(rccpChartYDomain([{ __stackAbove: 1601, __stackBelow: 0 }])).toEqual([0, 2000]);
+    const props = rccpChartYAxisScale([0, 2000]);
+    expect(props.domain).toEqual([0, 2000]);
+    expect(props.ticks).toEqual([0, 500, 1000, 1500, 2000]);
+  });
+
+  it('labels every gridline on round steps', () => {
+    // Vier stappen op een as vanaf nul, twee per kant op een symmetrische as.
+    expect(rccpChartYTicks([0, 8000]).ticks).toEqual([8000, 6000, 4000, 2000, 0]);
+    expect(rccpChartYTicks([-8000, 8000]).ticks).toEqual([8000, 4000, 0, -4000, -8000]);
+    expect(rccpChartYTicks([-3000, 3000]).ticks).toEqual([3000, 1500, 0, -1500, -3000]);
+    expect(rccpChartYTicks([0, 2400]).ticks).toEqual([2500, 2000, 1500, 1000, 500, 0]);
+  });
+
+  it('keeps the outer values on the axis and never leaves a gridline unlabelled', () => {
+    for (const peak of [180, 640, 1601, 2400, 4200, 9100, 14305]) {
+      for (const domain of [[0, peak], [-peak, peak]]) {
+        const { ticks, extent, step } = rccpChartYTicks(domain);
+        expect(ticks[0]).toBe(extent);
+        expect(ticks[ticks.length - 1]).toBe(domain[0] < 0 ? -extent : 0);
+        expect(ticks.length).toBeGreaterThanOrEqual(3);
+        // Elke tick is een veelvoud van de stap: geen 1/3-waarden op de as.
+        ticks.forEach((tick) => expect(Math.abs(tick % step)).toBeLessThan(1e-6));
+      }
+    }
   });
 
   it('groups remaining segments together at the top of the week bar', () => {
@@ -175,10 +241,19 @@ describe('rccpPoStack', () => {
   it('shows the above stack when only quantity (ordered) is toggled on', () => {
     expect(rccpPoStackBarFlags({
       openVisible: false, orderedVisible: true, deliveredVisible: false,
-    })).toEqual({ showAbove: true, showBelow: false });
+    })).toEqual({ showAbove: true, showAboveAlt: false, showBelow: false });
     expect(rccpPoStackBarFlags({
       openVisible: false, orderedVisible: false, deliveredVisible: true,
-    })).toEqual({ showAbove: true, showBelow: true });
+    })).toEqual({ showAbove: true, showAboveAlt: false, showBelow: true });
+  });
+
+  it('adds the second load-date stack only when both load dates are on', () => {
+    expect(rccpPoStackBarFlags({
+      openVisible: true, orderedVisible: false, deliveredVisible: false, dual: true,
+    })).toEqual({ showAbove: true, showAboveAlt: true, showBelow: false });
+    expect(rccpPoStackBarFlags({
+      openVisible: false, orderedVisible: false, deliveredVisible: false, dual: true,
+    })).toEqual({ showAbove: false, showAboveAlt: false, showBelow: false });
   });
 
   it('detects the current week and month period', () => {

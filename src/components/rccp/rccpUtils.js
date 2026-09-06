@@ -174,7 +174,11 @@ export function isMatrixCellEmpty(cell) {
 
 export function formatMatrixQty(value) {
   const n = Number(value) || 0;
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  const rounded = Number.isInteger(n) ? n : Math.round(n * 10) / 10;
+  const [intPart, decPart] = String(Math.abs(rounded)).split('.');
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const sign = rounded < 0 ? '-' : '';
+  return decPart ? `${sign}${withThousands}.${decPart}` : `${sign}${withThousands}`;
 }
 
 /**
@@ -388,6 +392,16 @@ export function clampWeekPickerListHeight(height) {
   return Math.min(RCCP_WEEK_PICKER_MAX_HEIGHT, Math.max(RCCP_WEEK_PICKER_MIN_HEIGHT, Math.round(n)));
 }
 
+export const RCCP_CHART_HEIGHT_MIN = 120;
+export const RCCP_CHART_HEIGHT_MAX = 560;
+
+/** Clamps the (resizable) chart height between chart and matrix to a sane range. */
+export function clampRccpChartHeight(height, fallback = 180) {
+  const n = Number(height);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(RCCP_CHART_HEIGHT_MAX, Math.max(RCCP_CHART_HEIGHT_MIN, Math.round(n)));
+}
+
 export const RCCP_WEEK_COL_WIDTH = 52;
 export const RCCP_ROW_LABEL_WIDTH = 148;
 export const RCCP_CHART_Y_AXIS_WIDTH = 42;
@@ -396,11 +410,54 @@ export const RCCP_OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
 export const RCCP_WARNING_MEASURE_KEY = '__warning__';
 
 /** Recharts CartesianGrid: vertical dashed lines at ISO week band edges (in chart coordinates). */
+/** Chart margin above the bars and the legend strip below them (Recharts layout). */
+export const RCCP_CHART_TOP_MARGIN = 4;
+export const RCCP_CHART_LEGEND_HEIGHT = 36;
+export const RCCP_CHART_LEGEND_HEIGHT_COMPACT = 28;
+
+/**
+ * Vertical band the bars are actually drawn in, so the sticky Y-axis labels, the Today marker
+ * and the plot itself use one and the same zero line. `height` is the plot height only — the
+ * legend lives outside the chart (see rccpChartLegendHeight).
+ * @returns {{ top: number, bottom: number, height: number }}
+ */
+export function rccpChartPlotArea(height) {
+  const top = RCCP_CHART_TOP_MARGIN;
+  const bottom = Math.max(top + 1, Number(height) || 0);
+  return { top, bottom, height: bottom - top };
+}
+
+/** Height reserved below the chart for the always-visible legend. */
+export function rccpChartLegendHeight(compact = false) {
+  return compact ? RCCP_CHART_LEGEND_HEIGHT_COMPACT : RCCP_CHART_LEGEND_HEIGHT;
+}
+
+/**
+ * Centre-x of the period under the mouse, computed from its position relative to the plot —
+ * not from Recharts' own band scale. Recharts' tooltip axis ignores the hidden Y-axis width
+ * when it builds that scale, so its usual cursor coordinate lands well right of the period's
+ * true centre. Every other element (grid, bars, matrix columns) is already positioned from
+ * the fixed `RCCP_CHART_Y_AXIS_WIDTH` + `RCCP_WEEK_COL_WIDTH` offsets above, so we derive the
+ * hovered period the same way and skip Recharts' scale entirely.
+ * @returns {number|null} pixel x of the period's centre, or null when outside the plot area
+ */
+export function rccpHoverCenterX(relativeX, periodCount) {
+  if (!Number.isFinite(relativeX) || !Number.isFinite(periodCount) || periodCount <= 0) return null;
+  const plotX = relativeX - RCCP_CHART_Y_AXIS_WIDTH;
+  const plotWidth = periodCount * RCCP_WEEK_COL_WIDTH;
+  if (plotX < 0 || plotX >= plotWidth) return null;
+  const index = Math.floor(plotX / RCCP_WEEK_COL_WIDTH);
+  return RCCP_CHART_Y_AXIS_WIDTH + index * RCCP_WEEK_COL_WIDTH + RCCP_WEEK_COL_WIDTH / 2;
+}
+
 export function buildRccpChartWeekBoundaryCoordinates(periodCount) {
-  return ({ offset }) => {
-    const left = offset?.left ?? RCCP_CHART_Y_AXIS_WIDTH;
-    return Array.from({ length: periodCount + 1 }, (_, index) => left + index * RCCP_WEEK_COL_WIDTH);
-  };
+  // Vast op RCCP_CHART_Y_AXIS_WIDTH, niet op Recharts' eigen plot-offset: de PO-balken tekenen
+  // hun x zelf vanaf dezelfde constante, en de matrixkolommen starten op RCCP_ROW_LABEL_WIDTH.
+  // Met de Recharts-offset (die bij een verborgen Y-as afwijkt) lopen grafiek en matrix uiteen.
+  return () => Array.from(
+    { length: periodCount + 1 },
+    (_, index) => RCCP_CHART_Y_AXIS_WIDTH + index * RCCP_WEEK_COL_WIDTH,
+  );
 }
 
 export function currentIsoWindow(size = 8) {

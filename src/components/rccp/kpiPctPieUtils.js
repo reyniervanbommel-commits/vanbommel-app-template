@@ -17,7 +17,8 @@ function polarPoint(cx, cy, r, angleDeg) {
  * SVG path for a pie wedge between 2 percent positions (0–100), starting at
  * 12 o'clock, clockwise. Used to draw both the value slice and the other slice.
  */
-export function arcSlicePath(startPercent, endPercent, { cx = 50, cy = 50, r = 50 } = {}) {
+export function arcSlicePath(startPercent, endPercent, options = {}) {
+  const { cx = 50, cy = 50, r = 50 } = options;
   const start = Math.max(0, Math.min(100, startPercent));
   const end = Math.max(0, Math.min(100, endPercent));
   if (end <= start) return '';

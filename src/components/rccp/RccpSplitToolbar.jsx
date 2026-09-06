@@ -40,8 +40,8 @@ function RccpSplitToolbar({
   onReplaceWindow,
   periodGrain,
   onPeriodGrainChange,
-  planningDateMode,
-  onPlanningDateModeChange,
+  planningDateModes,
+  onPlanningDateModesChange,
   vendorAccount,
   analysis,
   onShowDataWindow,
@@ -62,7 +62,11 @@ function RccpSplitToolbar({
           compact
         />
         <RccpPeriodGrainToggle value={periodGrain} onChange={onPeriodGrainChange} />
-        <RccpLoadDateToggle value={planningDateMode} onChange={onPlanningDateModeChange} />
+        <RccpLoadDateToggle
+          value={planningDateModes}
+          onChange={onPlanningDateModesChange}
+          confirmedPercent={analysis?.kpis?.confirmedPercent}
+        />
         <Button
           as={Link}
           to="/rccp"

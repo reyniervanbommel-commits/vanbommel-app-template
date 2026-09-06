@@ -16,6 +16,14 @@ import {
   statusToken,
 } from './rccpUtils';
 import { isCurrentMatrixPeriod } from './rccpPoStack';
+import { rccpPlanningDateModeList } from './rccpPeriodGrain';
+import {
+  isRccpLoadDateRow,
+  rccpMatrixCellAriaValue,
+  rccpMatrixCellFontSize,
+  rccpMatrixCellLength,
+  rccpMatrixCellParts,
+} from './rccpMatrixLoadDateCells';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -75,6 +83,7 @@ const useStyles = makeStyles({
     height: '22px',
     maxHeight: '22px',
   },
+  bodyWeekColTall: { height: 'auto', maxHeight: 'none' },
   weekHeader: {
     backgroundColor: tokens.colorNeutralBackground2,
     fontWeight: tokens.fontWeightRegular,
@@ -115,6 +124,25 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     lineHeight: 1,
+    whiteSpace: 'nowrap',
+  },
+  qtyMuted: { color: tokens.colorNeutralForegroundDisabled },
+  // Beide leverdatums: requested linksboven, confirmed rechtsonder — zo blijft de oorspronkelijke
+  // lettergrootte leesbaar zonder dat de twee getallen elkaar in de weg zitten.
+  dualStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    lineHeight: 1.05,
+  },
+  dualFirst: { textAlign: 'left' },
+  dualSecond: { textAlign: 'right' },
+  marker: {
+    fontSize: '0.7em',
+    fontWeight: tokens.fontWeightRegular,
+    verticalAlign: 'super',
+    lineHeight: 0,
+    marginLeft: '1px',
   },
   cellInteractive: { cursor: 'pointer' },
   highlightCell: {
@@ -145,10 +173,48 @@ function MatrixVisibilitySwitch({ styles, measureKey, label, checked, onToggle }
   );
 }
 
+function MatrixQuantity({ styles, part, muted, className }) {
+  return (
+    <span
+      className={mergeClasses(styles.qty, muted && styles.qtyMuted, className)}
+      style={{ fontSize: `${rccpMatrixCellFontSize(rccpMatrixCellLength([part]))}px` }}
+    >
+      {part.text}
+      <span className={styles.marker}>{part.marker}</span>
+    </span>
+  );
+}
+
+/**
+ * Quantity with its load-date superscript. With both load dates on, requested sits top-left and
+ * confirmed bottom-right so both keep their normal size.
+ */
+function MatrixLoadDateValue({ styles, parts, muted }) {
+  if (!parts.length) return null;
+  if (parts.length === 1) {
+    return <MatrixQuantity styles={styles} part={parts[0]} muted={muted} />;
+  }
+  return (
+    <span className={styles.dualStack}>
+      {parts.map((part, index) => (
+        <MatrixQuantity
+          key={part.mode}
+          styles={styles}
+          part={part}
+          muted={muted}
+          className={index === 0 ? styles.dualFirst : styles.dualSecond}
+        />
+      ))}
+    </span>
+  );
+}
+
 function RccpMatrixTable({
   measureRows,
   periods,
   cellMap,
+  cellMapSecondary = null,
+  planningDateModes = null,
   visibleKeys,
   onToggleVisible,
   onCellClick,
@@ -159,6 +225,10 @@ function RccpMatrixTable({
 }) {
   const styles = useStyles();
   const isInteractive = interactive ?? Boolean(onCellClick);
+  const [primaryMode, secondaryMode] = useMemo(
+    () => rccpPlanningDateModeList(planningDateModes),
+    [planningDateModes],
+  );
   const highlightWeeks = useMemo(() => new Set(kpiHighlight?.weeks || []), [kpiHighlight]);
   const highlightMeasures = useMemo(() => new Set(kpiHighlight?.measureKeys || []), [kpiHighlight]);
   const periodHeaders = useMemo(() => buildMatrixPeriodHeaders(periods), [periods]);
@@ -210,6 +280,9 @@ function RccpMatrixTable({
           const isCapacity = row.measureKey === RCCP_CAPACITY_MEASURE_KEY;
           const isOvercapacity = row.measureKey === RCCP_OVERCAPACITY_MEASURE_KEY;
           const isDerived = isCapacity || isOvercapacity;
+          // Rij uitgezet met de toggle: die reeks staat ook niet in de grafiek, dus toont de
+          // matrix er geen waarden (en geen kleurvlak) voor.
+          const rowHidden = visibleKeys ? visibleKeys[row.measureKey] === false : false;
           return (
             <TableRow key={row.measureKey} className={styles.bodyRow}>
               <TableCell className={mergeClasses(styles.sticky, styles.bodySticky)}>
@@ -228,17 +301,35 @@ function RccpMatrixTable({
               </TableCell>
               {periodHeaders.map((period) => {
                 const periodToken = matrixPeriodToken(period);
-                const cell = cellMap.get(`${row.measureKey}|${period.year}|${periodToken}`);
+                const cellKey = `${row.measureKey}|${period.year}|${periodToken}`;
+                const cell = cellMap.get(cellKey);
+                const isLoadDateRow = isRccpLoadDateRow(row);
+                const secondaryCell = (isLoadDateRow && secondaryMode)
+                  ? cellMapSecondary?.get(cellKey)
+                  : null;
+                const parts = isLoadDateRow
+                  ? rccpMatrixCellParts(
+                    {
+                      [primaryMode]: cell?.confirmedQty ?? 0,
+                      ...(secondaryMode ? { [secondaryMode]: secondaryCell?.confirmedQty ?? 0 } : {}),
+                    },
+                    secondaryCell ? planningDateModes : primaryMode,
+                  )
+                  : [];
                 const periodLabel = formatMatrixPeriodAria(period);
-                const value = isCapacity ? (cell?.availableQty ?? 0) : (cell?.confirmedQty ?? 0);
+                const rawValue = isCapacity ? (cell?.availableQty ?? 0) : (cell?.confirmedQty ?? 0);
+                const value = isLoadDateRow
+                  ? Math.max(rawValue, Number(secondaryCell?.confirmedQty) || 0)
+                  : rawValue;
                 const statusColor = cell ? cell.statusColor : 'grey';
                 const canColor = colorFillEnabled && row.isOrdered && value;
-                const bg = isCapacity
+                const fill = isCapacity
                   ? (value ? tokens.colorNeutralBackground3 : undefined)
                   : (canColor
                     ? statusToken(statusColor)
                     : (value ? tokens.colorNeutralBackground3 : undefined));
-                const clickable = isInteractive && !isDerived && !period.month;
+                const bg = rowHidden ? undefined : fill;
+                const clickable = isInteractive && !isDerived && !period.month && !rowHidden;
                 const highlighted = highlightWeeks.has(period.key)
                   && highlightMeasures.has(row.measureKey);
                 return (
@@ -247,6 +338,7 @@ function RccpMatrixTable({
                     className={mergeClasses(
                       styles.weekCol,
                       styles.bodyWeekCol,
+                      parts.length > 1 && styles.bodyWeekColTall,
                       clickable && styles.cellInteractive,
                       highlighted && styles.highlightCell,
                     )}
@@ -254,7 +346,7 @@ function RccpMatrixTable({
                     {...(clickable ? {
                       role: 'button',
                       tabIndex: 0,
-                      'aria-label': `${row.label}, ${periodLabel}: ${formatMatrixQty(cell?.confirmedQty ?? 0)} of ${formatMatrixQty(cell?.availableQty ?? 0)}. Show purchase order lines.`,
+                      'aria-label': `${row.label}, ${periodLabel}: ${isLoadDateRow ? rccpMatrixCellAriaValue(parts) : formatMatrixQty(cell?.confirmedQty ?? 0)} of ${formatMatrixQty(cell?.availableQty ?? 0)}. Show purchase order lines.`,
                       onClick: () => handleClick(cell),
                       onKeyDown: (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -264,7 +356,20 @@ function RccpMatrixTable({
                       },
                     } : {})}
                   >
-                    <span className={styles.qty}>{formatMatrixCellValue(value, isCapacity)}</span>
+                    {isLoadDateRow ? (
+                      <MatrixLoadDateValue styles={styles} parts={parts} muted={rowHidden} />
+                    ) : (
+                      <span
+                        className={mergeClasses(styles.qty, rowHidden && styles.qtyMuted)}
+                        style={{
+                          fontSize: `${rccpMatrixCellFontSize(
+                            formatMatrixCellValue(value, isCapacity).length,
+                          )}px`,
+                        }}
+                      >
+                        {formatMatrixCellValue(value, isCapacity)}
+                      </span>
+                    )}
                   </TableCell>
                 );
               })}

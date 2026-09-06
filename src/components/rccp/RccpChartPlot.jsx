@@ -1,18 +1,28 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
-  ComposedChart, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine,
+  ComposedChart, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, ReferenceArea, ReferenceLine,
 } from 'recharts';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import RccpWeekBandCursor from './RccpWeekBandCursor';
-import { RccpPoStackBarAbove, RccpPoStackBarBelow } from './RccpPoStackBar';
+import { RccpPoStackBarAbove, RccpPoStackBarAboveAlt, RccpPoStackBarBelow } from './RccpPoStackBar';
 import { brandColor } from '../../styles/brandTokens';
-import { RCCP_PO_BAR_SIZE, rccpPoStackBarFlags, rccpSymmetricYAxisDomain } from './rccpPoStack';
-import { RCCP_CHART_Y_AXIS_WIDTH, RCCP_WARNING_MEASURE_KEY } from './rccpUtils';
+import { RCCP_PO_BAR_SIZE, rccpPoStackBarFlags, rccpChartYAxisScale } from './rccpPoStack';
+import {
+  RCCP_CHART_TOP_MARGIN,
+  RCCP_CHART_Y_AXIS_WIDTH,
+  RCCP_WARNING_MEASURE_KEY,
+  rccpChartPlotArea,
+  rccpHoverCenterX,
+} from './rccpUtils';
 
 const useStyles = makeStyles({
   plot: {
     position: 'relative',
     outline: 'none',
+    // Manual Y-axis zoom (see useRccpChartYScale) lets bars run past the domain on purpose —
+    // clip them cleanly at the plot edge instead of letting them bleed into the row labels
+    // or the matrix table below.
+    overflow: 'hidden',
     '& .recharts-wrapper': { outline: 'none', boxShadow: 'none' },
     '& .recharts-surface': { outline: 'none', boxShadow: 'none' },
     '& svg:focus': { outline: 'none', boxShadow: 'none' },
@@ -21,16 +31,16 @@ const useStyles = makeStyles({
   todaySvg: { position: 'absolute', inset: 0, pointerEvents: 'none' },
 });
 
-function EmptyTooltip() {
-  return null;
-}
-
 function preventChartFocus(event) {
   event.preventDefault();
 }
 
 function renderStackAbove(props) {
   return <RccpPoStackBarAbove {...props} />;
+}
+
+function renderStackAboveAlt(props) {
+  return <RccpPoStackBarAboveAlt {...props} />;
 }
 
 function renderStackBelow(props) {
@@ -44,20 +54,37 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
   } = plot;
   const {
     openVisible, deliveredVisible, orderedVisible, openRow, orderedRow, deliveredRow, receivedColor,
+    dual, barSize, primaryLabel, secondaryLabel,
   } = stack;
-  const stackBars = rccpPoStackBarFlags({ openVisible, orderedVisible, deliveredVisible });
-  const yAxisScale = useMemo(() => rccpSymmetricYAxisDomain(yDomain), [yDomain]);
-  const legendPad = compact ? 28 : 36;
-  const plotBottom = Math.max(24, height - legendPad);
+  const stackBars = rccpPoStackBarFlags({
+    openVisible, orderedVisible, deliveredVisible, dual,
+  });
+  const stackBarSize = Number(barSize) || RCCP_PO_BAR_SIZE;
+  const yAxisScale = useMemo(() => rccpChartYAxisScale(yDomain), [yDomain]);
+  const plotBottom = rccpChartPlotArea(height).bottom;
   const labelOnRight = todayMarker?.todayX != null && (todayMarker.todayX + 48) < width;
 
+  const [hoverX, setHoverX] = useState(null);
+  const periodCount = data.length;
+  const handleMouseMove = useCallback((event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHoverX(rccpHoverCenterX(event.clientX - rect.left, periodCount));
+  }, [periodCount]);
+  const handleMouseLeave = useCallback(() => setHoverX(null), []);
+
   return (
-    <div className={styles.plot} style={{ width, height }} onMouseDown={preventChartFocus}>
+    <div
+      className={styles.plot}
+      style={{ width, height }}
+      onMouseDown={preventChartFocus}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
       <ComposedChart
         width={width}
         height={height}
         data={data}
-        margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+        margin={{ top: RCCP_CHART_TOP_MARGIN, right: 0, left: 0, bottom: 0 }}
         barCategoryGap={0}
         barGap={0}
         style={{ outline: 'none' }}
@@ -77,8 +104,6 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
           {...yAxisScale}
         />
         <ReferenceLine y={0} stroke={tokens.colorNeutralStroke1} strokeWidth={1} />
-        <Tooltip shared cursor={<RccpWeekBandCursor />} content={EmptyTooltip} />
-        <Legend wrapperStyle={{ fontSize: compact ? '11px' : '12px' }} />
         {chartRangeBands.map((band, index) => (
           <ReferenceArea
             key={`${band.x1}-${band.x2}-${index}`}
@@ -93,11 +118,21 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
         {stackBars.showAbove && (
           <Bar
             dataKey="__stackAbove"
-            name={openRow?.label || orderedRow?.label || deliveredRow?.label}
+            name={primaryLabel || openRow?.label || orderedRow?.label || deliveredRow?.label}
             fill={openRow?.color || receivedColor}
             shape={renderStackAbove}
-            barSize={RCCP_PO_BAR_SIZE}
-            legendType={(openVisible || orderedVisible) ? 'rect' : 'none'}
+            barSize={stackBarSize}
+            cursor="pointer"
+            isAnimationActive={false}
+          />
+        )}
+        {stackBars.showAboveAlt && (
+          <Bar
+            dataKey="__stackAboveAlt"
+            name={secondaryLabel}
+            fill={openRow?.color || receivedColor}
+            shape={renderStackAboveAlt}
+            barSize={stackBarSize}
             cursor="pointer"
             isAnimationActive={false}
           />
@@ -108,7 +143,7 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
             name={deliveredRow?.label}
             fill={receivedColor}
             shape={renderStackBelow}
-            barSize={RCCP_PO_BAR_SIZE}
+            barSize={stackBarSize}
             cursor="pointer"
             isAnimationActive={false}
           />
@@ -140,11 +175,15 @@ function RccpChartPlot({ plot, stack, todayMarker }) {
               stroke={row.color}
               strokeWidth={row.measureKey === RCCP_WARNING_MEASURE_KEY ? 1.5 : 2}
               dot={false}
+              activeDot={false}
               strokeDasharray={row.isDashed ? '6 3' : undefined}
             />
           )
         ))}
       </ComposedChart>
+      <svg className={styles.todaySvg} width={width} height={plotBottom} aria-hidden>
+        <RccpWeekBandCursor x={hoverX} top={RCCP_CHART_TOP_MARGIN} height={plotBottom - RCCP_CHART_TOP_MARGIN} />
+      </svg>
       {todayMarker?.todayX != null && (
         <svg className={styles.todaySvg} width={width} height={plotBottom} aria-hidden>
           <rect

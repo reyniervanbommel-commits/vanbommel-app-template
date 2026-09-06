@@ -2,17 +2,11 @@ import React from 'react';
 import { tokens } from '@fluentui/react-components';
 
 /**
- * Tooltip cursor: vertical line at the centre of the hovered period.
- * Recharts spreads chart offset as top-level left/top/height props — not as `offset`.
+ * Vertical line at the centre of the hovered period. Purely presentational — the position
+ * (`x`) is computed by the caller via `rccpHoverCenterX` (rccpUtils), from the real mouse
+ * position, not from Recharts' own (mis-offset) band scale.
  */
-export function hoverCursorX(points) {
-  if (!points?.length) return null;
-  return points[0].x;
-}
-
-export function RccpWeekBandCursor(props) {
-  const { points, top, height } = props;
-  const x = hoverCursorX(points);
+export function RccpWeekBandCursor({ x, top, height }) {
   if (x == null || top == null || height == null) return null;
 
   return (

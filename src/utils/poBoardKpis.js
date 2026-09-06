@@ -12,6 +12,7 @@ export const PO_BOARD_CLICKABLE_KPI_KEYS = [
   'onTime',
   'openLate',
   'planned1900',
+  'unconfirmed',
 ];
 
 function percentOf(part, whole) {
@@ -29,6 +30,7 @@ function emptyMatchByKey() {
     onTime: new Set(),
     openLate: new Set(),
     planned1900: new Set(),
+    unconfirmed: new Set(),
   };
 }
 
@@ -44,7 +46,7 @@ function kpiQtyFamily(kpiKey) {
     return 'delivered';
   }
   if (kpiKey === 'open' || kpiKey === 'openLate') return 'open';
-  if (kpiKey === 'ordered' || kpiKey === 'planned1900') return 'ordered';
+  if (kpiKey === 'ordered' || kpiKey === 'planned1900' || kpiKey === 'unconfirmed') return 'ordered';
   return null;
 }
 
@@ -71,6 +73,7 @@ export function kpiQtyForKey(entry, kpiKey) {
   if (kpiKey === 'delivered') return Number(entry.d) || 0;
   if (kpiKey === 'ordered') return (Number(entry.o) || 0) + (Number(entry.d) || 0);
   if (kpiKey === 'planned1900') return Number(entry.yu) || 0;
+  if (kpiKey === 'unconfirmed') return Number(entry.uu) || 0;
   return null;
 }
 
@@ -121,11 +124,13 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
   let openLateCount = 0;
   let openLateUnits = 0;
   let planned1900Units = 0;
+  let unconfirmedUnits = 0;
   const lateDeliverySkus = new Set();
   const onTimeSkus = new Set();
   const openSkus = new Set();
   const openLateSkus = new Set();
   const planned1900Skus = new Set();
+  const unconfirmedSkus = new Set();
 
   for (const orderNumber of visibleOrderNumbers || []) {
     const entry = orders[orderNumber];
@@ -163,6 +168,11 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       addIndexedSkus(planned1900Skus, sku, entry.yk);
       matchByKey.planned1900.add(orderNumber);
     }
+    if (entry.uu || (entry.uk && entry.uk.length)) {
+      unconfirmedUnits += Number(entry.uu) || 0;
+      addIndexedSkus(unconfirmedSkus, sku, entry.uk);
+      matchByKey.unconfirmed.add(orderNumber);
+    }
   }
 
   const totalOrdered = totalOpen + totalDelivered;
@@ -186,6 +196,9 @@ export function aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers) {
       openLateAvgDays: openLateCount ? openLateSum / openLateCount : null,
       planned1900Units,
       planned1900ItemCount: planned1900Skus.size,
+      unconfirmedUnits,
+      unconfirmedItemCount: unconfirmedSkus.size,
+      unconfirmedPercent: percentOf(unconfirmedUnits, totalOrdered),
       capacityShortfall: null,
       overloadedWeeks: null,
     },

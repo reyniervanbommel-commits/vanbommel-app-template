@@ -10,10 +10,13 @@ import {
 // Split-screen-voorkeuren (#AB:222) leven in user_board_settings.settings_json onder een eigen
 // board-key, zodat we de kolominstellingen van het PO-board niet raken. Geen nieuwe SQL-kolom.
 const SPLIT_BOARD_KEY = 'bi-split';
+// 'bi'-tab (Charts) is verborgen op verzoek; blijft in de set zodat opgeslagen voorkeuren
+// niet crashen, maar wordt hieronder nooit als (fallback-)default gebruikt.
 const SPLIT_TABS = new Set(['bi', 'rccp', 'kpis']);
+const VISIBLE_SPLIT_TABS = new Set(['rccp', 'kpis']);
 
 function normalizeSplitTab(tab) {
-  return SPLIT_TABS.has(tab) ? tab : 'bi';
+  return VISIBLE_SPLIT_TABS.has(tab) ? tab : 'rccp';
 }
 
 /**
@@ -25,7 +28,7 @@ export function useSplitPane() {
     open: false,
     heightByTab: { ...DEFAULT_PANE_HEIGHTS },
     chartIds: [],
-    activeTab: 'bi',
+    activeTab: 'rccp',
   });
   const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef(null);

@@ -100,7 +100,7 @@ export default function BoardSplitView({
   // (RCCP + BI worden server-side op hun leveranciersaccount gescoped).
   const showSplit = isStaff || isSupplier;
   const split = useSplitPane();
-  const { isoWindow, setIsoWindow, planningDateMode, setPlanningDateMode } = useRccpWindow();
+  const { isoWindow, setIsoWindow, planningDateModes, setPlanningDateModes } = useRccpWindow();
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
   const [rccpAnalysis, setRccpAnalysis] = useState(null);
   const handlePeriodGrainChange = useCallback((value) => {
@@ -156,10 +156,9 @@ export default function BoardSplitView({
   const rccpVendorReady = isSupplier || !vendorsLoading;
   // Item-filters blijven client-side op de al geladen analysis. Alleen vendor of
   // load-date mag een nieuwe /rccp/analysis-call triggeren — niet de PO-tabel-fingerprint.
-  const rccpRefreshKey = useMemo(
-    () => `${vendorAccount || ''}|${planningDateMode}`,
-    [vendorAccount, planningDateMode],
-  );
+  // De load-date zit niet in de refresh-key: beide leverdatums worden per vendor/venster
+  // ingeladen, zodat de toggle client-side is en geen nieuwe /rccp/analysis-call triggert.
+  const rccpRefreshKey = useMemo(() => `${vendorAccount || ''}`, [vendorAccount]);
   const itemColumnKey = useMemo(
     () => resolveRccpItemColumnKey(tableFilter?.columns, tableFilter?.lineValueLinks),
     [tableFilter],
@@ -212,7 +211,7 @@ export default function BoardSplitView({
           selectedValue={split.activeTab}
           onTabSelect={handleTabSelect}
         >
-          <Tab value="bi">Charts</Tab>
+          {/* BI/Charts-tab verborgen op verzoek */}
           <Tab value="rccp">RCCP</Tab>
           <Tab value="kpis">KPIs</Tab>
         </TabList>
@@ -223,8 +222,8 @@ export default function BoardSplitView({
             onReplaceWindow={handleWindowReplace}
             periodGrain={periodGrain}
             onPeriodGrainChange={handlePeriodGrainChange}
-            planningDateMode={planningDateMode}
-            onPlanningDateModeChange={setPlanningDateMode}
+            planningDateModes={planningDateModes}
+            onPlanningDateModesChange={setPlanningDateModes}
             vendorAccount={vendorAccount}
             analysis={rccpAnalysis}
             onShowDataWindow={handleShowDataWindow}
@@ -262,7 +261,7 @@ export default function BoardSplitView({
                   filterByColumn={filterByColumn}
                   itemColumnKey={itemColumnKey}
                   onItemClick={handleRccpItemClick}
-                  planningDateMode={planningDateMode}
+                  planningDateModes={planningDateModes}
                   periodGrain={periodGrain}
                   orderNumbers={orderNumbers}
                   onAnalysisChange={handleRccpAnalysisChange}
